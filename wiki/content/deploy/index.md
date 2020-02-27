@@ -2193,7 +2193,7 @@ Alternatively, you could:
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
 - Start an [export]({{< relref "#export-database">}})
-- Ensure it's successful
+- Ensure it is successful
 - Bring down the cluster
 - Run Dgraph using new data directories.
 - Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
