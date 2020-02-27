@@ -1237,7 +1237,7 @@ to learn more.
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 {{% notice "warning" %}}
-These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoints.
+These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
 {{% /notice %}}
 
 * `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
@@ -1250,19 +1250,24 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 ### More about /health endpoint
 
-You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about the running worker.
+You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
 ```graphql
 query {
   health {
     instance
+    address
     version
+    status
+    lastEcho
+    group
     uptime
+    
   }
 }
 ```
 
-Here’s an example of JSON returned from the above mutation:
+Here’s an example of JSON returned from the above query:
 
 ```json
 {
@@ -1270,13 +1275,21 @@ Here’s an example of JSON returned from the above mutation:
     "health": [
       {
         "instance": "zero",
-        "version": "v2.0.0-rc1-36-gfbcf732d",
-        "uptime": 7365
+        "address": "localhost:5080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "0",
+        "uptime": 1504
       },
       {
         "instance": "alpha",
-        "version": "v2.0.0-rc1-36-gfbcf732d",
-        "uptime": 7291
+        "address": "localhost:7080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "1",
+        "uptime": 1505
       }
     ]
   }
@@ -2111,13 +2124,14 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ### Export Database
 
-An export of all nodes is started by locally accessing the export endpoint of any Alpha in the cluster. Execute the following mutation using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
+An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 ```graphql
 mutation {
   export(input: {format: "rdf"}) {
     response {
       message
+      code
     }
   }
 }
@@ -2146,9 +2160,10 @@ The data is exported in RDF format by default. A different output format may be 
 
 ```graphql
 mutation {
-  export(input: {format: "rdf"}) {
+  export(input: {format: "json"}) {
     response {
       message
+      code
     }
   }
 }
@@ -2158,7 +2173,7 @@ Currently, "rdf" and "json" are the only formats supported.
 
 ### Shutdown Database
 
-A clean exit of a single Dgraph node is initiated by running the following command on that node.
+A clean exit of a single Dgraph node is initiated bby running the following GraphQL mutation on /admin endpoint.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
 {{% /notice %}}
 
@@ -2167,6 +2182,7 @@ mutation {
   shutdown {
     response {
       message
+      code
     }
   }
 }
