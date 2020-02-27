@@ -240,6 +240,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			progressed := false
 			o.doneUntilMutex.Lock()
 			for namespace := range deltas {
+				fmt.Printf("\n\n\n tciker done until %d\n\n\n", o.doneUntil[namespace].DoneUntil())
 				if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
 					continue
 				}
@@ -271,6 +272,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		batch := []*pb.OracleDelta{}
 		o.doneUntilMutex.Lock()
 		for namespace, delta := range deltas {
+			fmt.Printf("\n\n\n sending done until %d\n\n\n", o.doneUntil[namespace].DoneUntil())
 			if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
 				continue
 			}
@@ -339,12 +341,14 @@ func (o *Oracle) storePending(namespace string, ids *pb.AssignedIds) {
 	o.doneUntilMutex.Lock()
 	wm := o.doneUntil[namespace]
 	o.doneUntilMutex.Unlock()
+	fmt.Printf("\n\n\nwaiting for %d \n\n\n", max)
 	if err := wm.WaitForMark(context.Background(), max); err != nil {
 		glog.Errorf("Error while waiting for mark: %+v", err)
 	}
 
 	// Now send it out to updates.
 	o.updates <- &pb.OracleDelta{MaxAssigned: max, Namespace: namespace}
+	fmt.Printf("\n\n\nwaiting for done %d \n\n\n", max)
 	o.Lock()
 	defer o.Unlock()
 	o.maxAssigned[namespace] = x.Max(o.maxAssigned[namespace], max)

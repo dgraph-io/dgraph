@@ -197,10 +197,11 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 }
 
 type mutationResponse struct {
-	keys    []string
-	preds   []string
-	startTs uint64
-	data    json.RawMessage
+	keys      []string
+	preds     []string
+	startTs   uint64
+	namespace string
+	data      json.RawMessage
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -230,6 +231,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	mr.namespace = r.Extensions.Txn.Namespace
 	sort.Strings(mr.preds)
 
 	var d map[string]interface{}
@@ -314,10 +316,14 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	return qr, body, nil
 }
 
-func commitWithTs(keys, preds []string, ts uint64) error {
+func commitWithTs(keys, preds []string, namespace string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
+	}
+
+	if namespace != "" {
+		url += "&namespace=" + namespace
 	}
 
 	m := make(map[string]interface{})
@@ -383,6 +389,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 	require.Equal(t, 2, len(mr.preds))
+	require.Equal(t, "default", mr.namespace)
 	var parsedPreds []string
 	for _, pred := range mr.preds {
 		_, attr, _ := x.ParseNamespaceAttr(strings.Join(strings.Split(pred, "-")[1:], "-"))
@@ -402,7 +409,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.namespace, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -448,7 +455,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, mr.namespace, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)

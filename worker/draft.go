@@ -140,7 +140,7 @@ func detectPendingTxns(attr string) error {
 	if len(tctxs) == 0 {
 		return nil
 	}
-	go tryAbortTransactions(tctxs)
+	go tryAbortTransactions(namespace, tctxs)
 	return errHasPendingTxns
 }
 
@@ -544,9 +544,11 @@ func (n *node) processApplyCh() {
 }
 
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
+	fmt.Printf("\n\n\n MAX ASSIGNED %d \n\n", delta.MaxAssigned)
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
+		fmt.Printf("\n\nto disk  STARTTS %d ENDTS %d\n\n\n", start, commit)
 		txn := posting.Oracle().GetTxn(delta.Namespace, start)
 		if txn == nil {
 			return

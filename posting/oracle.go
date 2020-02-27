@@ -18,6 +18,7 @@ package posting
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -202,6 +203,7 @@ func (o *oracle) addToWaiters(namespace string, startTs uint64) (chan struct{}, 
 	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
 	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
 	// moved past startTs. Caller should take care of thread safety.
+	fmt.Printf("\n\n\n\nWAIT FOR NAMESPACE %s max assigend %d STARTTS %d \n\n\n", namespace, o.MaxAssigned(namespace), startTs)
 	if startTs <= o.MaxAssigned(namespace) {
 		return nil, false
 	}

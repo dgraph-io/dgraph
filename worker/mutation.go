@@ -748,9 +748,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)
 }
 
-func tryAbortTransactions(startTimestamps []uint64) {
+func tryAbortTransactions(namespace string, startTimestamps []uint64) {
 	// Aborts if not already committed.
-	req := &pb.TxnTimestamps{Ts: startTimestamps}
+	req := &pb.TxnTimestamps{Ts: startTimestamps, Namespace: namespace}
 
 	err := groups().Node.blockingAbort(req)
 	glog.Infof("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)

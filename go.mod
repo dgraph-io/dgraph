@@ -17,7 +17,7 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-0.20191220102048-ab4352b00a17
-	github.com/dgraph-io/dgo/v2 v2.1.1-0.20200120030639-f2209d5eabd0
+	github.com/dgraph-io/dgo/v2 v2.1.1-0.20200227043328-5d4a95f24d35
 	github.com/dgraph-io/ristretto v0.0.1 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
@@ -28,7 +28,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.3.3
+	github.com/golang/protobuf v1.3.4
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.3.1
