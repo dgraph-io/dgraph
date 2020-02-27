@@ -2188,20 +2188,20 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
-* delete (maybe do an export first) the `p` and `w` directories, then
-* restart Dgraph.
+* [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+* Delete (maybe do an export first) the `p` and `w` directories, then
+* Restart Dgraph.
 
 ### Upgrade Database
 
-Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
+Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps to safely export and restart.
 
 1. Start an [export]({{< relref "#export-database">}})
 2. Ensure it is successful
-3. [shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+3. [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
-5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
-6. If all looks good, you can delete the old directories (export serves as an insurance)
+5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
