@@ -67,6 +67,54 @@ const (
 		lastEcho: Int
 	}
 
+	type MembershipState {
+		counter: Int
+		groups: [ClusterGroup]
+		zeros: [Member]
+		maxLeaseId: Int
+		maxTxnTs: Int
+		maxRaftId: Int
+		removed: [Member]
+		cid: String
+		license: License
+	}
+
+	type ClusterGroup {
+		id: Int
+		members: [Member]
+		tablets: [Tablet]
+		snapshotTs: Int
+		checksum: Int
+	}
+
+	type Member {
+		id: Int
+		groupId: Int
+		addr: String
+		leader: Boolean
+		amDead: Boolean
+		lastUpdate: Int
+		clusterInfoOnly: Boolean
+		forceGroupId: Boolean
+	}
+
+	type Tablet {
+		groupId: Int
+		predicate: String
+		force: Boolean
+		space: Int
+		remove: Boolean
+		readOnly: Boolean
+		moveTs: Int
+	}
+
+	type License {
+		user: String
+		maxNodes: Int
+		expiryTs: Int
+		enabled: Boolean
+	}
+
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 	directive @id on FIELD_DEFINITION
 
@@ -117,6 +165,7 @@ const (
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
+		state: MembershipState
 
 		` + adminQueries + `
 	}
@@ -268,15 +317,22 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
-		WithQueryResolver("health",
-			func(q schema.Query) resolve.QueryResolver {
-				health := &healthResolver{}
+		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
+			health := &healthResolver{}
 
-				return resolve.NewQueryResolver(
-					health,
-					health,
-					resolve.AliasQueryCompletion())
-			}).
+			return resolve.NewQueryResolver(
+				health,
+				health,
+				resolve.AliasQueryCompletion())
+		}).
+		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
+			state := &stateResolver{}
+
+			return resolve.NewQueryResolver(
+				state,
+				state,
+				resolve.AliasQueryCompletion())
+		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
