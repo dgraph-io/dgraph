@@ -165,7 +165,7 @@ curl localhost:8080/alter -XPOST -d $'
 ```
 
 {{% notice "tip" %}}
-You can also submit the schema from the Ratel UI. Go to Schema page,
+To submit the schema from the Ratel UI, go to Schema page,
 click on **Bulk Edit**, and paste the schema.
 {{% /notice %}}
 
@@ -182,6 +182,10 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
 }
 ' | python -m json.tool | less
 ```
+
+{{% notice "tip" %}}
+You can also run the GraphQL+- query from the Ratel UI's query tab.
+{{% /notice %}}
 
 ### Get all movies released after "1980"
 Run this query to get "Star Wars" movies released after "1980".
