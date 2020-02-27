@@ -20,9 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -48,20 +46,8 @@ func dropPredicate(pred string) {
 	}
 }
 
-func runQueryWithRetry(ctx context.Context, query string) (*api.Response, error) {
-	for {
-		response, err := client.NewReadOnlyTxn().Query(ctx, query)
-		if err != nil && (strings.Contains(err.Error(), "is not indexed") || strings.Contains(err.Error(), "doesn't have reverse edge")) {
-			time.Sleep(time.Millisecond * 100)
-			continue
-		}
-
-		return response, err
-	}
-}
-
 func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
-	res, err := runQueryWithRetry(ctx, query)
+	res, err := testutil.RetryQuery(ctx, client, query)
 	if err != nil {
 		return "", err
 	}
