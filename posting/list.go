@@ -1218,7 +1218,7 @@ func (out *rollupOutput) recursiveSplit() {
 			if shouldSplit(part) {
 				needsSplit = true
 			}
-		} 
+		}
 
 		if !needsSplit {
 			return
