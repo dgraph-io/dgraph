@@ -57,7 +57,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 	*http.Response, error) {
 
 	client := &http.Client{}
-	numRetries := 2
+	numRetries := 3
 
 	var resp *http.Response
 	var err error
@@ -263,6 +263,7 @@ func runWithRetries(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
 
 	retries := 0
+	maxRetries := 20
 	for {
 		retries++
 		req, err := createRequest(method, contentType, url, body)
@@ -276,7 +277,7 @@ func runWithRetries(method, contentType, url string, body string) (
 		}
 
 		switch {
-		case retries > 20:
+		case retries > maxRetries:
 			return qr, respBody, err
 		case strings.Contains(err.Error(), "already being modified"):
 			time.Sleep(time.Second)
