@@ -542,6 +542,12 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		}
 	}
 
+	// if there is no mutation being performed as a result of some specific input,
+	// then we don't need to do the upsertQuery for group
+	if len(mutSet) == 0 && len(mutDel) == 0 {
+		return nil, nil, nil
+	}
+
 	return &gql.GraphQuery{Children: queries}, append(mutSet, mutDel...), nil
 }
 
