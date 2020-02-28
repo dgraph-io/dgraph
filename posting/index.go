@@ -450,9 +450,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, 
 	}
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
-	if (pstore != nil) && (edge.ValueId != 0) &&
-		schema.State().IsReversed(ctx, edge.Attr) {
-
+	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(ctx, edge.Attr) {
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
@@ -702,12 +700,14 @@ const (
 	indexRebuild         = iota // Index should be deleted and rebuilt.
 )
 
-// GetInterimSchema returns the scheme that can be served while indexes are getting built.
-func (rb *IndexRebuild) GetInterimSchema() *pb.SchemaUpdate {
-	interimUpdate := *rb.CurrentSchema
+// GetQuerySchema returns the schema that can be served while indexes are getting built.
+// Query schema is defined as current schema minus tokens to delete from current schema.
+func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
+	// copy the current schema
+	querySchema := *rb.CurrentSchema
 	info := rb.needsIndexRebuild()
 
-	// compute old.Tokenizer - info.tokenizersToDelete
+	// compute old.Tokenizer minus info.tokenizersToDelete
 	interimTokenizers := make([]string, 0)
 	for _, t1 := range rb.OldSchema.Tokenizer {
 		found := false
@@ -721,15 +721,15 @@ func (rb *IndexRebuild) GetInterimSchema() *pb.SchemaUpdate {
 			interimTokenizers = append(interimTokenizers, t1)
 		}
 	}
-	interimUpdate.Tokenizer = interimTokenizers
+	querySchema.Tokenizer = interimTokenizers
 
 	if rb.needsCountIndexRebuild() == indexRebuild {
-		interimUpdate.Count = false
+		querySchema.Count = false
 	}
 	if rb.needsReverseEdgesRebuild() == indexRebuild {
-		interimUpdate.Directive = pb.SchemaUpdate_NONE
+		querySchema.Directive = pb.SchemaUpdate_NONE
 	}
-	return &interimUpdate
+	return &querySchema
 }
 
 // DropIndexes drops indexes.

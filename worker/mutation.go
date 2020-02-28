@@ -118,10 +118,12 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	// wait until schema modification for this predicate is complete.
+	// We cannot have two background tasks running for the same predicate.
 	for {
 		if !schema.State().IsBeingModified(update.Predicate) {
 			break
 		}
+		glog.Infof("waiting for indexing to complete for predicate %v", update.Predicate)
 		time.Sleep(time.Second * 2)
 	}
 
@@ -144,9 +146,9 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		OldSchema:     &old,
 		CurrentSchema: update,
 	}
-	interimUpdate := rebuild.GetInterimSchema()
-	schema.State().Set(update.Predicate, interimUpdate)
-	schema.State().SetWrite(update.Predicate, update)
+	querySchema := rebuild.GetQuerySchema()
+	schema.State().Set(update.Predicate, querySchema)
+	schema.State().SetMutSchema(update.Predicate, update)
 
 	if err := rebuild.DropIndexes(ctx); err != nil {
 		return err
@@ -192,7 +194,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate) error {
 	schema.State().Set(s.Predicate, s)
-	schema.State().DeleteWrite(s.Predicate)
+	schema.State().DeleteMutSchema(s.Predicate)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()

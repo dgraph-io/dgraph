@@ -9270,7 +9270,7 @@ func Test1Million(t *testing.T) {
 
 	for _, tt := range tc {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		resp, err := runQueryWithRetry(ctx, dg, tt.query)
+		resp, err := testutil.RetryQuery(ctx, dg, tt.query)
 		cancel()
 
 		if ctx.Err() == context.DeadlineExceeded {
