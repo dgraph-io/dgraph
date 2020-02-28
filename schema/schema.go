@@ -55,7 +55,7 @@ func (s *state) init() {
 	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.types = make(map[string]*pb.TypeUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
-	s.writePred = make(map[string]*pb.SchemaUpdate)
+	s.mutSchema = make(map[string]*pb.SchemaUpdate)
 }
 
 type state struct {
@@ -64,7 +64,8 @@ type state struct {
 	predicate map[string]*pb.SchemaUpdate
 	types     map[string]*pb.TypeUpdate
 	elog      trace.EventLog
-	writePred map[string]*pb.SchemaUpdate
+	// mutSchema holds the schema update that is being applied in the background.
+	mutSchema map[string]*pb.SchemaUpdate
 }
 
 // State returns the struct holding the current schema.
@@ -84,8 +85,8 @@ func (s *state) DeleteAll() {
 		delete(s.types, typ)
 	}
 
-	for pred := range s.writePred {
-		delete(s.writePred, pred)
+	for pred := range s.mutSchema {
+		delete(s.mutSchema, pred)
 	}
 }
 
@@ -105,7 +106,7 @@ func (s *state) Delete(attr string) error {
 	}
 
 	delete(s.predicate, attr)
-	delete(s.writePred, attr)
+	delete(s.mutSchema, attr)
 	return nil
 }
 
@@ -158,18 +159,18 @@ func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
-// SetWrite sets the in memory schema for the predicate that has indexing going on in background.
-func (s *state) SetWrite(pred string, schema *pb.SchemaUpdate) {
+// SetMutSchema sets the in memory schema for the predicate that has indexing going on in background.
+func (s *state) SetMutSchema(pred string, schema *pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
-	s.writePred[pred] = schema
+	s.mutSchema[pred] = schema
 }
 
-// DeleteWrite deletes the schema for given predicate from writePred.
-func (s *state) DeleteWrite(pred string) {
+// DeleteMutSchema deletes the schema for given predicate from mutSchema.
+func (s *state) DeleteMutSchema(pred string) {
 	s.Lock()
 	defer s.Unlock()
-	delete(s.writePred, pred)
+	delete(s.mutSchema, pred)
 }
 
 // SetType sets the type for the given predicate in memory.
@@ -187,7 +188,7 @@ func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {
-		schema, has := s.writePred[pred]
+		schema, has := s.mutSchema[pred]
 		if has {
 			return *schema, true
 		}
@@ -227,7 +228,7 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 	defer s.RUnlock()
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
-		if schema, ok := s.writePred[pred]; ok && len(schema.Tokenizer) > 0 {
+		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
 			return true
 		}
 	}
@@ -269,7 +270,7 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 
 	var su *pb.SchemaUpdate
 	if isWrite {
-		schema, ok := s.writePred[pred]
+		schema, ok := s.mutSchema[pred]
 		if ok {
 			su = schema
 		}
@@ -317,7 +318,7 @@ func (s *state) IsReversed(ctx context.Context, pred string) bool {
 	defer s.RUnlock()
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
-		if schema, ok := s.writePred[pred]; ok && schema.Directive == pb.SchemaUpdate_REVERSE {
+		if schema, ok := s.mutSchema[pred]; ok && schema.Directive == pb.SchemaUpdate_REVERSE {
 			return true
 		}
 	}
@@ -333,7 +334,7 @@ func (s *state) HasCount(ctx context.Context, pred string) bool {
 	defer s.RUnlock()
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
-		if schema, ok := s.writePred[pred]; ok && schema.Count {
+		if schema, ok := s.mutSchema[pred]; ok && schema.Count {
 			return true
 		}
 	}
@@ -381,7 +382,7 @@ func (s *state) HasNoConflict(pred string) bool {
 func (s *state) IsBeingModified(pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
-	_, ok := s.writePred[pred]
+	_, ok := s.mutSchema[pred]
 	return ok
 }
 
@@ -416,7 +417,7 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
-	delete(State().writePred, predicate)
+	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }

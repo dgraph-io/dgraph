@@ -255,6 +255,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return nil, err
 		}
 
+		// If a background task for this predicate is already running,
+		// we should reject all the new alter requests.
 		if schema.State().IsBeingModified(update.Predicate) {
 			return nil, fmt.Errorf("schema for %v is already being modified", update.Predicate)
 		}
