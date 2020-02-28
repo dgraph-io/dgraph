@@ -51,13 +51,6 @@ func GetWriteContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, isWrite, true)
 }
 
-var (
-	// WriteCtx is used to get the schema used for writing.
-	WriteCtx = GetWriteContext(context.Background())
-	// ReadCtx is used to get the schema used for reading.
-	ReadCtx = context.Background()
-)
-
 func (s *state) init() {
 	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.types = make(map[string]*pb.TypeUpdate)
