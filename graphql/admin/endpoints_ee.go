@@ -41,10 +41,8 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User {
+	type User @secret(field: "password", pred: "dgraph.password") {
 		name: String! @id @dgraph(pred: "dgraph.xid")
-		# TODO - Update this to actual secret after password PR is merged here.
-		password: String! @dgraph(pred: "dgraph.password")
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
