@@ -562,8 +562,14 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
+	if x.WorkerConfig.LudicrousMode {
+		go func() {
+			writer.Flush()
+		}()
+	} else {
+		if err := writer.Flush(); err != nil {
+			return errors.Wrapf(err, "while flushing to disk")
+		}
 	}
 
 	g := groups()
