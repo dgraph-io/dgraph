@@ -898,16 +898,16 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	out := new(pb.Result)
 	attr := q.Attr
 
-	srcFn, err := parseSrcFn(q)
+	srcFn, err := parseSrcFn(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 
-	if q.Reverse && !schema.State().IsReversed(schema.ReadCtx, attr) {
+	if q.Reverse && !schema.State().IsReversed(ctx, attr) {
 		return nil, errors.Errorf("Predicate %s doesn't have reverse edge", attr)
 	}
 
-	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(schema.ReadCtx, q.Attr) {
+	if needsIndex(srcFn.fnType, q.UidList) && !schema.State().IsIndexed(ctx, q.Attr) {
 		return nil, errors.Errorf("Predicate %s is not indexed", q.Attr)
 	}
 
@@ -968,7 +968,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 
 	if srcFn.fnType == compareScalarFn && srcFn.isFuncAtRoot {
 		span.Annotate(nil, "handleCompareScalarFunction")
-		if err := qs.handleCompareScalarFunction(args); err != nil {
+		if err := qs.handleCompareScalarFunction(ctx, args); err != nil {
 			return nil, err
 		}
 	}
@@ -1034,9 +1034,9 @@ func needsStringFiltering(srcFn *functionContext, langs []string, attr string) b
 			srcFn.fnType == customIndexFn)
 }
 
-func (qs *queryState) handleCompareScalarFunction(arg funcArgs) error {
+func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcArgs) error {
 	attr := arg.q.Attr
-	if ok := schema.State().HasCount(schema.ReadCtx, attr); !ok {
+	if ok := schema.State().HasCount(ctx, attr); !ok {
 		return errors.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
 			attr, arg.srcFn.fname)
 	}
@@ -1069,7 +1069,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 	if typ != types.StringID {
 		return errors.Errorf("Got non-string type. Regex match is allowed only on string type.")
 	}
-	useIndex := schema.State().HasTokenizer(schema.ReadCtx, tok.IdentTrigram, attr)
+	useIndex := schema.State().HasTokenizer(ctx, tok.IdentTrigram, attr)
 	span.Annotatef(nil, "Trigram index found: %t, func at root: %t",
 		useIndex, arg.srcFn.isFuncAtRoot)
 
@@ -1172,7 +1172,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 
 	attr := arg.q.Attr
 	span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
-	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
+	tokenizer, err := pickTokenizer(ctx, attr, arg.srcFn.fname)
 	if err != nil {
 		return err
 	}
@@ -1311,7 +1311,7 @@ func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) err
 	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
 		uids = arg.q.UidList
 
-	case schema.State().HasTokenizer(schema.ReadCtx, tok.IdentTrigram, attr):
+	case schema.State().HasTokenizer(ctx, tok.IdentTrigram, attr):
 		var err error
 		uids, err = uidsForMatch(attr, arg)
 		if err != nil {
@@ -1613,11 +1613,11 @@ func langForFunc(langs []string) string {
 	return langs[0]
 }
 
-func parseSrcFn(q *pb.Query) (*functionContext, error) {
+func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	fnType, f := parseFuncType(q.SrcFunc)
 	attr := q.Attr
 	fc := &functionContext{fnType: fnType, fname: f}
-	isIndexedAttr := schema.State().IsIndexed(schema.ReadCtx, attr)
+	isIndexedAttr := schema.State().IsIndexed(ctx, attr)
 	var err error
 
 	t, err := schema.State().TypeOf(attr)
@@ -1673,7 +1673,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			}
 
 			// Get tokens ge / le ineqValueToken.
-			if tokens, fc.ineqValueToken, err = getInequalityTokens(q.ReadTs, attr, f, lang,
+			if tokens, fc.ineqValueToken, err = getInequalityTokens(ctx, q.ReadTs, attr, f, lang,
 				fc.ineqValue); err != nil {
 				return nil, err
 			}
@@ -1727,7 +1727,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
-		required, found := verifyStringIndex(attr, fnType)
+		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
 			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
@@ -1740,7 +1740,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
-		required, found := verifyStringIndex(attr, fnType)
+		required, found := verifyStringIndex(ctx, attr, fnType)
 		if !found {
 			return nil, errors.Errorf("Attribute %s is not indexed with type %s", attr, required)
 		}
@@ -1763,7 +1763,7 @@ func parseSrcFn(q *pb.Query) (*functionContext, error) {
 			return nil, err
 		}
 		tokerName := q.SrcFunc.Args[0]
-		if !verifyCustomIndex(q.Attr, tokerName) {
+		if !verifyCustomIndex(ctx, q.Attr, tokerName) {
 			return nil, errors.Errorf("Attribute %s is not indexed with custom tokenizer %s",
 				q.Attr, tokerName)
 		}

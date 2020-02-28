@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -191,9 +192,9 @@ func TestSchemaIndexCustom(t *testing.T) {
 			List:      true,
 		}},
 	})
-	require.True(t, State().IsIndexed(ReadCtx, "name"))
-	require.False(t, State().IsReversed(ReadCtx, "name"))
-	require.Equal(t, "int", State().Tokenizer(ReadCtx, "age")[0].Name())
+	require.True(t, State().IsIndexed(context.Background(), "name"))
+	require.False(t, State().IsReversed(context.Background(), "name"))
+	require.Equal(t, "int", State().Tokenizer(context.Background(), "age")[0].Name())
 }
 
 func TestParse(t *testing.T) {
