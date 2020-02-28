@@ -520,7 +520,7 @@ func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
-	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
 				name: {
@@ -1044,7 +1044,7 @@ func TestNewACLPredicates(t *testing.T) {
 }
 
 func removeRuleFromGroup(t *testing.T, accessToken, group string, rulePredicate string) []byte {
-	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [String]) {
+	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [String!]!) {
 		updateGroup(input: {
 			filter: {
 				name: {
