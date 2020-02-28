@@ -119,6 +119,10 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
 	// wait until schema modification for this predicate is complete.
 	// We cannot have two background tasks running for the same predicate.
+	// This is a race condition, we typically won't propose an index update
+	// if an index update is already going on. In this case, looks like the
+	// receiver of the update had probably finished the previous index update,
+	// but some follower (or perhaps leader) had not finished it.
 	for {
 		if !schema.State().IsBeingModified(update.Predicate) {
 			break
