@@ -253,7 +253,9 @@ func (n *node) handleTabletProposal(tablet *pb.Tablet) error {
 			// get the latest checksum that we calculated above. Otherwise, if all the queries are
 			// best effort queries which don't create any transaction, then the OracleDelta never
 			// gets sent to Alphas, causing their group checksum to mismatch and never converge.
-			n.server.orc.updates <- &pb.OracleDelta{}
+
+			// TODO: do research on it.
+			n.server.orc.updates <- &pb.OracleDelta{Namespace: x.DefaultNamespace}
 		}
 	}()
 

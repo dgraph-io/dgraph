@@ -170,6 +170,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	namespace := r.URL.Query().Get("namespace")
 
 	body := readRequest(w, r)
 	if body == nil {
@@ -208,9 +209,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := api.Request{
-		Vars:    params.Variables,
-		Query:   params.Query,
-		StartTs: startTs,
+		Vars:      params.Variables,
+		Query:     params.Query,
+		StartTs:   startTs,
+		Namespace: namespace,
 	}
 
 	if req.StartTs == 0 {
@@ -290,6 +292,8 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
+	namespace := r.URL.Query().Get("namespace")
+
 	body := readRequest(w, r)
 	if body == nil {
 		return
@@ -387,6 +391,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	req.StartTs = startTs
 	req.CommitNow = commitNow
+	req.Namespace = namespace
 
 	ctx := x.AttachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
@@ -448,9 +453,15 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	namespace := r.URL.Query().Get("namespace")
+
+	if namespace == "" {
+		namespace = x.DefaultNamespace
+	}
+
 	var response map[string]interface{}
 	if abort {
-		response, err = handleAbort(startTs)
+		response, err = handleAbort(namespace, startTs)
 	} else {
 		// Keys are sent as an array in the body.
 		reqText := readRequest(w, r)
@@ -458,7 +469,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response, err = handleCommit(startTs, reqText)
+		response, err = handleCommit(namespace, startTs, reqText)
 	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
@@ -474,10 +485,11 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = x.WriteResponse(w, r, js)
 }
 
-func handleAbort(startTs uint64) (map[string]interface{}, error) {
+func handleAbort(namespace string, startTs uint64) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
-		StartTs: startTs,
-		Aborted: true,
+		StartTs:   startTs,
+		Aborted:   true,
+		Namespace: namespace,
 	}
 
 	_, err := worker.CommitOverNetwork(context.Background(), tc)
@@ -494,9 +506,10 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 	}
 }
 
-func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+func handleCommit(namespace string, startTs uint64, reqText []byte) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
-		StartTs: startTs,
+		StartTs:   startTs,
+		Namespace: namespace,
 	}
 
 	var reqList []string

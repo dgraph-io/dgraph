@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
@@ -434,7 +435,7 @@ func Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, error) {
 }
 
 func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
-	if txn := posting.Oracle().GetTxn(startTs); txn != nil {
+	if txn := posting.Oracle().GetTxn(tctx.Namespace, startTs); txn != nil {
 		txn.FillContext(tctx, groups().groupId())
 	}
 	// We do not need to fill linread mechanism anymore, because transaction
@@ -446,7 +447,9 @@ func fillTxnContext(tctx *api.TxnContext, startTs uint64) {
 func proposeOrSend(ctx context.Context, gid uint32, m *pb.Mutations, chr chan res) {
 	res := res{}
 	if groups().ServesGroup(gid) {
-		res.ctx = &api.TxnContext{}
+		res.ctx = &api.TxnContext{
+			Namespace: m.Namespace,
+		}
 		res.err = (&grpcWorker{}).proposeAndWait(ctx, res.ctx, m)
 		chr <- res
 		return
@@ -493,7 +496,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 
 		mu := mm[gid]
 		if mu == nil {
-			mu = &pb.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 			mm[gid] = mu
 		}
 		mu.Edges = append(mu.Edges, edge)
@@ -508,7 +511,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 
 		mu := mm[gid]
 		if mu == nil {
-			mu = &pb.Mutations{GroupId: gid}
+			mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 			mm[gid] = mu
 		}
 		mu.Schema = append(mu.Schema, schema)
@@ -518,7 +521,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
-				mu = &pb.Mutations{GroupId: gid}
+				mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 				mm[gid] = mu
 			}
 			mu.DropOp = src.DropOp
@@ -531,7 +534,7 @@ func populateMutationMap(src *pb.Mutations) (map[uint32]*pb.Mutations, error) {
 		for _, gid := range groups().KnownGroups() {
 			mu := mm[gid]
 			if mu == nil {
-				mu = &pb.Mutations{GroupId: gid}
+				mu = &pb.Mutations{GroupId: gid, Namespace: src.Namespace}
 				mm[gid] = mu
 			}
 			mu.Types = src.Types
@@ -549,10 +552,11 @@ type res struct {
 // MutateOverNetwork checks which group should be running the mutations
 // according to the group config and sends it to that instance.
 func MutateOverNetwork(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	y.AssertTrue(m.Namespace != "")
 	ctx, span := otrace.StartSpan(ctx, "worker.MutateOverNetwork")
 	defer span.End()
 
-	tctx := &api.TxnContext{StartTs: m.StartTs}
+	tctx := &api.TxnContext{StartTs: m.StartTs, Namespace: m.Namespace}
 	if err := verifyTypes(ctx, m); err != nil {
 		return tctx, err
 	}
@@ -716,7 +720,7 @@ func (w *grpcWorker) proposeAndWait(ctx context.Context, txnCtx *api.TxnContext,
 	// might be wrong because we might be missing out a commit which has updated the value. This
 	// wait here ensures that the proposal would only be registered after seeing txn status of all
 	// pending transactions. Thus, the ordering would be correct.
-	if err := posting.Oracle().WaitForTs(ctx, m.StartTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, m.Namespace, m.StartTs); err != nil {
 		return err
 	}
 
@@ -731,7 +735,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	ctx, span := otrace.StartSpan(ctx, "worker.Mutate")
 	defer span.End()
 
-	txnCtx := &api.TxnContext{}
+	txnCtx := &api.TxnContext{
+		Namespace: m.Namespace,
+	}
 	if ctx.Err() != nil {
 		return txnCtx, ctx.Err()
 	}
@@ -742,9 +748,9 @@ func (w *grpcWorker) Mutate(ctx context.Context, m *pb.Mutations) (*api.TxnConte
 	return txnCtx, w.proposeAndWait(ctx, txnCtx, m)
 }
 
-func tryAbortTransactions(startTimestamps []uint64) {
+func tryAbortTransactions(namespace string, startTimestamps []uint64) {
 	// Aborts if not already committed.
-	req := &pb.TxnTimestamps{Ts: startTimestamps}
+	req := &pb.TxnTimestamps{Ts: startTimestamps, Namespace: namespace}
 
 	err := groups().Node.blockingAbort(req)
 	glog.Infof("tryAbortTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
