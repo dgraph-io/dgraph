@@ -361,7 +361,7 @@ func TestMakeNode(t *testing.T) {
 		expected *dot.Config
 	}{
 		{"node from config (norpc)", []string{"config", "genesis"}, []interface{}{tempFile.Name(), genesisPath}, cfgClone},
-		{"default node (norpc)", []string{"genesis"}, []interface{}{genesisPath}, cfgClone},
+		{"default node (norpc)", []string{"genesis", "key"}, []interface{}{genesisPath, "alice"}, cfgClone},
 	}
 
 	for _, c := range tc {

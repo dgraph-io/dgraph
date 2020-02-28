@@ -32,7 +32,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
-	"github.com/ChainSafe/gossamer/lib/keyring"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -83,18 +82,6 @@ func NewService(cfg *Config) (*Service, error) {
 
 	keys := cfg.Keystore.Sr25519Keypairs()
 
-	// TODO: move this to cli, allow user to specify which test key to use
-	// no validator keypair found, use test keyring
-	if len(keys) == 0 {
-		ring, err := keyring.NewKeyring()
-		if err != nil {
-			return nil, fmt.Errorf("cannot create test keyring")
-		}
-
-		cfg.Keystore.Insert(ring.Alice)
-		keys = cfg.Keystore.Sr25519Keypairs()
-	}
-
 	if cfg.NewBlocks == nil {
 		cfg.NewBlocks = make(chan types.Block)
 	}
@@ -102,6 +89,10 @@ func NewService(cfg *Config) (*Service, error) {
 	var srv = &Service{}
 
 	if cfg.IsBabeAuthority {
+		if cfg.Keystore.NumSr25519Keys() == 0 {
+			return nil, fmt.Errorf("no keys provided for authority node")
+		}
+
 		epochDone := make(chan struct{})
 
 		srv = &Service{

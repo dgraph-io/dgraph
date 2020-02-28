@@ -34,6 +34,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/keyring"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -66,14 +67,9 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 		return nil, nil, fmt.Errorf("cannot start db service: %s", err)
 	}
 
-	// load all static keys from keystore directory
-	ks := keystore.NewKeystore()
-	// unlock keys, if specified
-	if keyindices := ctx.String(UnlockFlag.Name); keyindices != "" {
-		err = unlockKeys(ctx, dataDir, ks)
-		if err != nil {
-			return nil, nil, fmt.Errorf("could not unlock keys: %s", err)
-		}
+	ks, err := loadKeystore(ctx, dataDir)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Trie, runtime: load most recent state from DB, load runtime code from trie and create runtime executor
@@ -97,6 +93,10 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 	// BABE authority configuration; flag overwrites config option
 	if auth := ctx.GlobalBool(AuthorityFlag.Name); auth && !currentConfig.Global.Authority {
 		currentConfig.Global.Authority = true
+		// if authority, should have at least 1 key in keystore
+		if ks.NumSr25519Keys() == 0 {
+			return nil, nil, fmt.Errorf("no keys provided for authority node")
+		}
 	} else if ctx.IsSet(AuthorityFlag.Name) && !auth && currentConfig.Global.Authority {
 		currentConfig.Global.Authority = false
 	}
@@ -114,7 +114,12 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 		MsgSend:          networkMsgRec,  // message channel from core service to network service
 		IsBabeAuthority:  currentConfig.Global.Authority,
 	}
-	coreSrvc := createCoreService(coreConfig)
+
+	coreSrvc, err := createCoreService(coreConfig)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating core service: %s", err)
+	}
+
 	srvcs = append(srvcs, coreSrvc)
 
 	// RPC
@@ -124,6 +129,49 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 	}
 
 	return dot.NewNode(gendata.Name, srvcs), currentConfig, nil
+}
+
+func loadKeystore(ctx *cli.Context, dataDir string) (*keystore.Keystore, error) {
+	ks := keystore.NewKeystore()
+
+	// load test keys if specified
+	if key := ctx.String(KeyFlag.Name); key != "" {
+		ring, err := keyring.NewKeyring()
+		if err != nil {
+			return nil, fmt.Errorf("cannot create test keyring")
+		}
+
+		switch strings.ToLower(key) {
+		case "alice":
+			ks.Insert(ring.Alice)
+		case "bob":
+			ks.Insert(ring.Bob)
+		case "charlie":
+			ks.Insert(ring.Charlie)
+		case "dave":
+			ks.Insert(ring.Dave)
+		case "eve":
+			ks.Insert(ring.Eve)
+		case "fred":
+			ks.Insert(ring.Fred)
+		case "george":
+			ks.Insert(ring.George)
+		case "heather":
+			ks.Insert(ring.Heather)
+		default:
+			log.Error(fmt.Sprintf("unknown test key %s: options: alice | bob | charlie | dave | eve | fred | george | heather", key))
+		}
+	}
+
+	// unlock keys, if specified
+	if keyindices := ctx.String(UnlockFlag.Name); keyindices != "" {
+		err := unlockKeys(ctx, dataDir, ks)
+		if err != nil {
+			return nil, fmt.Errorf("could not unlock keys: %s", err)
+		}
+	}
+
+	return ks, nil
 }
 
 func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
@@ -274,14 +322,14 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 }
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(coreConfig *core.Config) *core.Service {
+func createCoreService(coreConfig *core.Config) (*core.Service, error) {
 	coreService, err := core.NewService(coreConfig)
 	if err != nil {
 		log.Crit("Failed to create new core service", "err", err)
-		os.Exit(0)
+		return nil, err
 	}
 
-	return coreService
+	return coreService, nil
 }
 
 func setRPCConfig(ctx *cli.Context, fig *dot.RPCConfig) {

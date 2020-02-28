@@ -41,6 +41,11 @@ func NewKeystore() *Keystore {
 	}
 }
 
+// NumSr25519Keys returns the number of sr25519 keys in the keystore
+func (ks *Keystore) NumSr25519Keys() int {
+	return len(ks.Sr25519Keypairs())
+}
+
 // Insert crypto.Keypai into Keystore
 func (ks *Keystore) Insert(kp crypto.Keypair) {
 	ks.lock.Lock()
