@@ -153,7 +153,11 @@ func (s *Service) handleConn(conn network.Conn) {
 	if !s.noStatus {
 
 		// get latest block header from block state
-		latestBlock := s.cfg.BlockState.LatestHeader()
+		latestBlock, err := s.cfg.BlockState.BestBlockHeader()
+		if err != nil {
+			log.Error("[network] could not get chain head", "err", err)
+			return
+		}
 
 		// update host status message
 		msg := &StatusMessage{

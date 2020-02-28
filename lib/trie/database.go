@@ -69,6 +69,21 @@ func (db *Database) LoadLatestStorageHash() (common.Hash, error) {
 	return common.NewHash(hashbytes), nil
 }
 
+// StoreHash stores the current root hash in the database at LatestStorageHashKey
+func (t *Trie) StoreHash() error {
+	hash, err := t.Hash()
+	if err != nil {
+		return err
+	}
+
+	return t.db.StoreLatestStorageHash(hash[:])
+}
+
+// LoadHash retrieves the hash stored at LatestStorageHashKey from the DB
+func (t *Trie) LoadHash() (common.Hash, error) {
+	return t.db.LoadLatestStorageHash()
+}
+
 // StoreGenesisData stores the given genesis data at the known GenesisDataKey.
 func (db *Database) StoreGenesisData(gen *genesis.Data) error {
 	enc, err := scale.Encode(gen)
@@ -226,19 +241,4 @@ func (t *Trie) LoadFromDB(root common.Hash) error {
 	}
 
 	return t.decode(enctrie)
-}
-
-// StoreHash stores the current root hash in the database at `LatestHashKey`
-func (t *Trie) StoreHash() error {
-	hash, err := t.Hash()
-	if err != nil {
-		return err
-	}
-
-	return t.db.StoreLatestStorageHash(hash[:])
-}
-
-// LoadHash retrieves the hash stored at `LatestHashKey` from the DB
-func (t *Trie) LoadHash() (common.Hash, error) {
-	return t.db.LoadLatestStorageHash()
 }

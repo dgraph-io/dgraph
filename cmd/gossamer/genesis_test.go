@@ -85,13 +85,17 @@ func TestStoreGenesisInfo(t *testing.T) {
 		t.Fatalf("Fail to get genesis data: got %s expected %s", gendata, expected)
 	}
 
-	stateRoot := dbSrv.Block.LatestHeader().StateRoot
+	genesisHeader, err := dbSrv.Block.BestBlockHeader()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	stateRoot := genesisHeader.StateRoot
 	expectedHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), stateRoot, trie.EmptyHash, [][]byte{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	genesisHeader := dbSrv.Block.LatestHeader()
 	if !genesisHeader.Hash().Equal(expectedHeader.Hash()) {
 		t.Fatalf("Fail: got %v expected %v", genesisHeader, expectedHeader)
 	}

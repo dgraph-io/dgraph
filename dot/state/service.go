@@ -21,6 +21,7 @@ import (
 	"path/filepath"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -77,7 +78,14 @@ func (s *Service) Initialize(genesisHeader *types.Header, t *trie.Trie) error {
 
 	// load genesis hash into db
 	hash := genesisHeader.Hash()
-	err = db.Put(common.LatestHeaderHashKey, hash[:])
+	err = db.Put(common.BestBlockHashKey, hash[:])
+	if err != nil {
+		return err
+	}
+
+	log.Trace("[state] initialize", "genesis hash", hash)
+
+	err = initializeBlockTree(db, genesisHeader)
 	if err != nil {
 		return err
 	}
@@ -89,6 +97,17 @@ func (s *Service) Initialize(genesisHeader *types.Header, t *trie.Trie) error {
 	}
 
 	return db.Close()
+}
+
+// initializeBlockTree creates a new block tree from genesis and stores it in the db
+func initializeBlockTree(db database.Database, genesisHeader *types.Header) error {
+	bt := blocktree.NewBlockTreeFromGenesis(genesisHeader, db)
+	err := bt.Store()
+	if err != nil {
+		return fmt.Errorf("cannot store block tree in db: %s", err)
+	}
+
+	return nil
 }
 
 // Start initializes the Storage database and the Block database.
@@ -111,12 +130,12 @@ func (s *Service) Start() error {
 	s.db = db
 
 	// retrieve latest header
-	latestHeaderHash, err := s.db.Get(common.LatestHeaderHashKey)
+	bestHash, err := s.db.Get(common.BestBlockHashKey)
 	if err != nil {
 		return fmt.Errorf("cannot get latest hash: %s", err)
 	}
 
-	log.Trace("state service", "latestHeaderHash", latestHeaderHash)
+	log.Trace("[state] start", "best block hash", fmt.Sprintf("0x%x", bestHash))
 
 	// create storage state
 	s.Storage, err = NewStorageState(db, trie.NewEmptyTrie(nil))
@@ -124,14 +143,28 @@ func (s *Service) Start() error {
 		return fmt.Errorf("cannot make storage state: %s", err)
 	}
 
+	// load blocktree
+	bt := blocktree.NewEmptyBlockTree(db)
+	err = bt.Load()
+	if err != nil {
+		return err
+	}
+
 	// create block state
-	s.Block, err = NewBlockState(db, common.BytesToHash(latestHeaderHash))
+	s.Block, err = NewBlockState(db, bt)
 	if err != nil {
 		return fmt.Errorf("cannot make block state: %s", err)
 	}
 
+	headBlock, err := s.Block.GetHeader(s.Block.BestBlockHash())
+	if err != nil {
+		return fmt.Errorf("cannot get chain head from db: %s", err)
+	}
+
+	log.Trace("[state] start", "best block state root", headBlock.StateRoot)
+
 	// load current storage state
-	err = s.Storage.LoadFromDB(s.Block.latestHeader.StateRoot)
+	err = s.Storage.LoadFromDB(headBlock.StateRoot)
 	if err != nil {
 		return fmt.Errorf("cannot load state from DB: %s", err)
 	}
@@ -154,6 +187,18 @@ func (s *Service) Stop() error {
 	if err != nil {
 		return err
 	}
+
+	err = s.Block.bt.Store()
+	if err != nil {
+		return err
+	}
+
+	hash := s.Block.BestBlockHash()
+	err = s.db.Put(common.BestBlockHashKey, hash[:])
+	if err != nil {
+		return err
+	}
+	log.Trace("[state] stop", "best block hash", hash)
 
 	return s.db.Close()
 }

@@ -22,7 +22,7 @@ import (
 
 // BlockState interface for block state methods
 type BlockState interface {
-	LatestHeader() *types.Header
+	BestBlockHeader() (*types.Header, error)
 }
 
 // NetworkState interface for network state methods

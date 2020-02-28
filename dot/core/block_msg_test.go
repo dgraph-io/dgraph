@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessBlockRequestMsgType(t *testing.T) {
+func TestProcessBlockRequestAndBlockAnnounce(t *testing.T) {
 	testCases := []struct {
 		name          string
 		blockAnnounce *network.BlockAnnounceMessage
@@ -25,7 +25,7 @@ func TestProcessBlockRequestMsgType(t *testing.T) {
 		msgTypeString string
 	}{
 		{
-			name: "should respond with a BlockRequestMsgType",
+			name: "should respond with a BlockRequestMessage",
 			blockAnnounce: &network.BlockAnnounceMessage{
 				Number:         big.NewInt(1),
 				ParentHash:     common.Hash{},
@@ -66,10 +66,12 @@ func TestProcessBlockRequestMsgType(t *testing.T) {
 
 			blockState := state.NewService(dataDir)
 
-			err = blockState.Initialize(&types.Header{
+			genesisHeader := &types.Header{
 				Number:    big.NewInt(0),
 				StateRoot: trie.EmptyHash,
-			}, trie.NewEmptyTrie(nil))
+			}
+
+			err = blockState.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
 			require.Nil(t, err)
 
 			err = blockState.Start()
@@ -77,7 +79,8 @@ func TestProcessBlockRequestMsgType(t *testing.T) {
 
 			// Create header
 			header0 := &types.Header{
-				Number: big.NewInt(0),
+				Number:     big.NewInt(1),
+				ParentHash: genesisHeader.Hash(),
 			}
 
 			// BlockBody with fake extrinsics
@@ -125,12 +128,15 @@ func TestProcessBlockRequestMsgType(t *testing.T) {
 				// simulate block sent from BABE session
 				newBlocks <- types.Block{
 					Header: &types.Header{
-						Number: big.NewInt(1),
+						Number:     big.NewInt(2),
+						ParentHash: header0.Hash(),
 					},
+					Body: types.NewBody([]byte{}),
 				}
 			} else if localTest.msgType == network.BlockRequestMsgType {
 				blockAnnounce := &network.BlockAnnounceMessage{
-					Number: big.NewInt(2),
+					Number:     big.NewInt(2),
+					ParentHash: header0.Hash(),
 				}
 				// simulate message sent from network service
 				msgRec <- blockAnnounce

@@ -74,26 +74,6 @@ func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) 
 	}, nil
 }
 
-// SetLatestHeaderHash sets the LatestHeaderHashKey in the DB to the given hash
-func (s *StorageState) SetLatestHeaderHash(hash []byte) error {
-	err := s.db.Put(common.LatestHeaderHashKey, hash)
-	if err != nil {
-		return fmt.Errorf("cannot get latest hash: %s", err)
-	}
-
-	return nil
-}
-
-// GetLatestHeaderHash retrieves the value stored in the DB at LatestHeaderHashKey
-func (s *StorageState) GetLatestHeaderHash() ([]byte, error) {
-	latestHeaderHash, err := s.db.Get(common.LatestHeaderHashKey)
-	if err != nil {
-		return nil, fmt.Errorf("cannot get latest hash: %s", err)
-	}
-
-	return latestHeaderHash, err
-}
-
 // ExistsStorage check if the key exists in the storage trie
 func (s *StorageState) ExistsStorage(key []byte) (bool, error) {
 	s.lock.RLock()

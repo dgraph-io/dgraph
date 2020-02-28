@@ -128,8 +128,8 @@ func NewService(cfg *Config) (*Service, error) {
 		// create a new BABE session
 		bs, err := babe.NewSession(bsConfig)
 		if err != nil {
-			log.Error("[core] could not start babe session", "error", err)
 			srv.isBabeAuthority = false
+			log.Error("[core] could not start babe session", "error", err)
 			return srv, nil
 		}
 
@@ -259,7 +259,7 @@ func (s *Service) receiveBlocks() {
 		// receive block from BABE session
 		block, ok := <-s.blkRec
 		if ok {
-			err := s.handleReceivedBlock(block)
+			err := s.handleReceivedBlock(&block)
 			if err != nil {
 				log.Error("[core] failed to handle block from BABE session", "err", err)
 			}
@@ -284,12 +284,12 @@ func (s *Service) receiveMessages() {
 }
 
 // handleReceivedBlock handles blocks from the BABE session
-func (s *Service) handleReceivedBlock(block types.Block) (err error) {
+func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 	if s.blockState == nil {
 		return fmt.Errorf("blockState is nil")
 	}
 
-	err = s.blockState.SetHeader(block.Header)
+	err = s.blockState.AddBlock(block)
 	if err != nil {
 		return err
 	}
@@ -341,11 +341,30 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		return errors.New("could not cast network.Message to BlockAnnounceMessage")
 	}
 
-	if s.blockState == nil {
-		return errors.New("ProcessBlockAnnounceMessage error: blockState is nil")
+	header, err := types.NewHeader(blockAnnounceMessage.ParentHash, blockAnnounceMessage.Number, blockAnnounceMessage.StateRoot, blockAnnounceMessage.ExtrinsicsRoot, blockAnnounceMessage.Digest)
+	if err != nil {
+		return err
 	}
 
-	latestBlockNum := s.blockState.LatestHeader().Number
+	_, err = s.blockState.GetHeader(header.Hash())
+	if err != nil && err.Error() == "Key not found" {
+		err = s.blockState.SetHeader(header)
+		if err != nil {
+			return err
+		}
+
+		log.Info("[core] imported block", "number", header.Number, "hash", header.Hash())
+
+	} else {
+		return err
+	}
+
+	chainHead, err := s.blockState.BestBlockHeader()
+	if err != nil {
+		return err
+	}
+
+	latestBlockNum := chainHead.Number
 	messageBlockNumMinusOne := big.NewInt(0).Sub(blockAnnounceMessage.Number, big.NewInt(1))
 
 	// check if we should send block request message
@@ -356,13 +375,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		seed := rand.New(s1).Uint64()
 		randomID := mrand.New(mrand.NewSource(int64(seed))).Uint64()
 
-		currentHash := s.blockState.LatestHeader().Hash()
-
-		header, err := types.NewHeader(blockAnnounceMessage.ParentHash, blockAnnounceMessage.Number, blockAnnounceMessage.StateRoot, blockAnnounceMessage.ExtrinsicsRoot, blockAnnounceMessage.Digest)
-		if err != nil {
-			log.Error("failed to create NewHeader from blockAnnounceMessage fields")
-			return err
-		}
+		currentHash := chainHead.Hash()
 
 		blockRequest := &network.BlockRequestMessage{
 			ID:            randomID, // random

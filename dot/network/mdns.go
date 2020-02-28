@@ -65,6 +65,7 @@ func (m *mdns) start() {
 	)
 	if err != nil {
 		log.Error("Failed to start mDNS discovery service", "err", err)
+		return
 	}
 
 	// register Notifee on service

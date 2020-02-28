@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -30,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBlockState(t *testing.T) *BlockState {
+func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
 	datadir, err := ioutil.TempDir("", "./test_data")
 	require.Nil(t, err)
 
@@ -39,13 +40,20 @@ func newTestBlockState(t *testing.T) *BlockState {
 	blockDb := NewBlockDB(db)
 	require.Nil(t, err)
 
+	if header == nil {
+		return &BlockState{
+			db: blockDb,
+		}
+	}
+
 	return &BlockState{
 		db: blockDb,
+		bt: blocktree.NewBlockTreeFromGenesis(header, db),
 	}
 }
 
 func TestSetAndGetHeader(t *testing.T) {
-	bs := newTestBlockState(t)
+	bs := newTestBlockState(t, nil)
 	defer bs.db.db.Close()
 
 	header := &types.Header{
@@ -69,7 +77,7 @@ func TestSetAndGetHeader(t *testing.T) {
 }
 
 func TestGetBlockByNumber(t *testing.T) {
-	bs := newTestBlockState(t)
+	bs := newTestBlockState(t, nil)
 	defer bs.db.db.Close()
 
 	// Create a header & blockData
@@ -111,16 +119,20 @@ func TestGetBlockByNumber(t *testing.T) {
 }
 
 func TestAddBlock(t *testing.T) {
-	bs := newTestBlockState(t)
+	genesisHeader := &types.Header{
+		Number: big.NewInt(0),
+	}
+
+	bs := newTestBlockState(t, genesisHeader)
 	defer bs.db.db.Close()
 
 	// Create header
 	header0 := &types.Header{
-		Number: big.NewInt(0),
+		Number:     big.NewInt(0),
+		ParentHash: genesisHeader.Hash(),
 	}
 	// Create blockHash
 	blockHash0 := header0.Hash()
-
 	// BlockBody with fake extrinsics
 	blockBody0 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 
@@ -135,7 +147,8 @@ func TestAddBlock(t *testing.T) {
 
 	// Create header & blockData for block 1
 	header1 := &types.Header{
-		Number: big.NewInt(1),
+		ParentHash: blockHash0,
+		Number:     big.NewInt(1),
 	}
 	blockHash1 := header1.Hash()
 
@@ -154,17 +167,6 @@ func TestAddBlock(t *testing.T) {
 	// Get the blocks & check if it's the same as the added blocks
 	retBlock, err := bs.GetBlockByHash(blockHash0)
 	require.Nil(t, err)
-
-	// this will panic if not successful, so catch and fail it so
-	func() {
-		hash := retBlock.Header.Hash()
-		defer func() {
-			if r := recover(); r != nil {
-				t.Fatal("got panic when processing retBlock.Header.Hash() ", r)
-			}
-		}()
-		require.NotEqual(t, hash, common.Hash{})
-	}()
 
 	require.Equal(t, block0, retBlock, "Could not validate returned block0 as expected")
 
@@ -185,6 +187,5 @@ func TestAddBlock(t *testing.T) {
 	require.Equal(t, block1, retBlock, "Could not validate returned block1 as expected")
 
 	// Check if latestBlock is set correctly
-	require.Equal(t, block1.Header, bs.latestHeader, "Latest Header Block Check Fail")
-
+	require.Equal(t, block1.Header.Hash(), bs.BestBlockHash(), "Latest Header Block Check Fail")
 }

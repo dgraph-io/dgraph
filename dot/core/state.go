@@ -17,6 +17,8 @@
 package core
 
 import (
+	"math/big"
+
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/transaction"
@@ -24,13 +26,18 @@ import (
 
 // BlockState interface for block state methods
 type BlockState interface {
-	LatestHeader() *types.Header
-	GetBlockData(hash common.Hash) (*types.BlockData, error)
-	SetBlockData(blockData *types.BlockData) error
+	BestBlockHash() common.Hash
+	BestBlockHeader() (*types.Header, error)
+	SubChain(start, end common.Hash) []common.Hash
+	ComputeSlotForBlock(*types.Block, uint64) uint64
 	AddBlock(*types.Block) error
 	SetBlock(*types.Block) error
-	GetHeader(common.Hash) (*types.Header, error)
 	SetHeader(*types.Header) error
+	GetHeader(common.Hash) (*types.Header, error)
+	GetBlockByNumber(*big.Int) (*types.Block, error)
+	GetBlockByHash(common.Hash) (*types.Block, error)
+	GetBlockData(hash common.Hash) (*types.BlockData, error)
+	SetBlockData(blockData *types.BlockData) error
 }
 
 // StorageState interface for storage state methods

@@ -18,14 +18,63 @@ package babe
 
 import (
 	"errors"
+	"math/big"
 	"sort"
+
+	"github.com/ChainSafe/gossamer/dot/core/types"
 )
 
 // slotTime calculates the slot time in the form of miliseconds since the unix epoch
 // for a given slot in miliseconds, returns 0 and an error if it can't be calculated
-func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) { //nolint
-	// TODO: broken by blocktree updates, has been fixed in next PR
-	return 0, nil
+func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) {
+	var at []uint64
+
+	head := b.blockState.BestBlockHash()
+	bn := new(big.Int).SetUint64(slotTail)
+
+	deepestBlock, err := b.blockState.GetBlockByHash(head)
+	if err != nil {
+		return 0, err
+	}
+
+	nf := bn.Sub(deepestBlock.Header.Number, bn)
+	// check to make sure we have enough blocks before the deepest block to accurately calculate slot time
+	if deepestBlock.Header.Number.Cmp(bn) <= 0 {
+		return 0, errors.New("Cannot calculate slot time, deepest leaf block number less than or equal to Slot Tail")
+	}
+
+	s, err := b.blockState.GetBlockByNumber(nf)
+	if err != nil {
+		return 0, err
+	}
+
+	err = b.configurationFromRuntime()
+	if err != nil {
+		return 0, err
+	}
+
+	sd := b.config.SlotDuration
+
+	var block *types.Block
+	for _, hash := range b.blockState.SubChain(s.Header.Hash(), deepestBlock.Header.Hash()) {
+		block, err = b.blockState.GetBlockByHash(hash)
+		if err != nil {
+			return 0, err
+		}
+
+		so, offsetErr := slotOffset(b.blockState.ComputeSlotForBlock(block, sd), slot)
+		if offsetErr != nil {
+			return 0, err
+		}
+		st := block.GetBlockArrivalTime() + (so * sd)
+		at = append(at, st)
+	}
+
+	st, err := median(at)
+	if err != nil {
+		return 0, err
+	}
+	return st, nil
 }
 
 // median calculates the median of a uint64 slice

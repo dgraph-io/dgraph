@@ -176,11 +176,18 @@ func TestAnnounceBlock(t *testing.T) {
 	}
 	defer s.Stop()
 
+	parent := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
 	// simulate block sent from BABE session
 	newBlocks <- types.Block{
 		Header: &types.Header{
-			Number: big.NewInt(0),
+			ParentHash: parent.Hash(),
+			Number:     big.NewInt(1),
 		},
+		Body: &types.Body{},
 	}
 
 	select {

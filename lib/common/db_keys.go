@@ -17,8 +17,8 @@
 package common
 
 var (
-	// LatestHeaderHashKey is the db location the hash of the latest block header.
-	LatestHeaderHashKey = []byte("latest_hash")
+	// BestBlockHashKey is the db location the hash of the best block header.
+	BestBlockHashKey = []byte("best_hash")
 	// LatestStorageHashKey is the db location of the hash of the latest storage trie.
 	LatestStorageHashKey = []byte("latest_storage_hash")
 	// GenesisDataKey is the db location of the genesis data.
