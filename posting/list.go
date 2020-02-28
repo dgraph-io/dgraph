@@ -75,6 +75,17 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
+// NewList returns a new list with an immutable layer set to plist and the
+// timestamp of the immutable layer set to minTs.
+func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
+	return &List{
+		key:         key,
+		plist:       plist,
+		mutationMap: make(map[uint64]*pb.PostingList),
+		minTs:       minTs,
+	}
+}
+
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -730,6 +741,9 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		kv := out.marshalPostingListPart(l.key, startUid, plist)
 		kvs = append(kvs, kv)
 	}
+	sort.Slice(kvs, func(i, j int) bool {
+		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
+	})
 
 	return kvs, nil
 }

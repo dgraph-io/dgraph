@@ -408,8 +408,6 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 	var currentKey []byte
 	var uids []uint64
 	pl := new(pb.PostingList)
-
-	userMeta := []byte{posting.BitCompletePosting}
 	writeVersionTs := r.state.writeTs
 
 	countEntries := []*countIndexEntry{}
@@ -475,15 +473,18 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		}
 
 		pl.Pack = codec.Encode(uids, 256)
-		val, err := pl.Marshal()
+		l := posting.NewList(y.Copy(currentKey), pl, writeVersionTs)
+		kvs, err := l.Rollup()
 		x.Check(err)
-		kv := &bpb.KV{
-			Key:      y.Copy(currentKey),
-			Value:    val,
-			UserMeta: userMeta,
-			Version:  writeVersionTs,
+
+		if len(kvs) > 1 {
+			keys := make([][]byte, 0)
+			for _, kv := range kvs {
+				keys = append(keys, kv.Key)
+			}
+			fmt.Printf("keys %+v\n", keys)
 		}
-		list.Kv = append(list.Kv, kv)
+		list.Kv = append(list.Kv, kvs...)
 
 		uids = uids[:0]
 		pl.Reset()
