@@ -138,11 +138,11 @@ const adminTypes = `
 	}
 
 	input SetGroupPatch {
-		rules: [RuleRef]
+		rules: [RuleRef!]!
 	}
 
 	input RemoveGroupPatch {
-		rules: [String]
+		rules: [String!]!
 	}
 
 	input UpdateGroupInput {
@@ -177,14 +177,14 @@ const adminMutations = `
 	# 3. If user exists and group doesn't exist, then two errors are returned i.e. User exists
 	# and group doesn't exist.
 	# 4. If user and group exists, then error that user exists.
-	addUser(input: [AddUserInput]): AddUserPayload
-	addGroup(input: [AddGroupInput]): AddGroupPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
 	# update user allows updating a user's password or updating their groups. If the group
 	# doesn't exist, then it is created, otherwise linked to the user. If the user filter
 	# doesn't return anything then nothing happens.
 	updateUser(input: UpdateUserInput!): AddUserPayload
-	# update group only allows adding rules to a group.
+	# update group only allows adding/removing rules to a group.
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload

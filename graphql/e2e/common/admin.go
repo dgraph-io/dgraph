@@ -434,7 +434,7 @@ func testAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	require.ElementsMatch(t, []rule{updatedRules[0], addedRules[2], updatedRules[2]},
 		updatedGroup.Rules)
 
-	updatedGroup1 := updateGroup(t, groupName, nil, []string{"test1"})
+	updatedGroup1 := updateGroup(t, groupName, nil, []string{"test1", "test1", "test3"})
 
 	require.Equal(t, groupName, updatedGroup1.Name)
 	require.Len(t, updatedGroup1.Rules, 2)
@@ -486,19 +486,16 @@ func addGroup(t *testing.T, name string, rules []rule) *group {
 
 func updateGroup(t *testing.T, name string, setRules []rule, removeRules []string) *group {
 	queryParams := &GraphQLParams{
-		Query: `mutation updateGroup($name: String!, $setRules: [RuleRef], $removeRules: [String]){
+		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch, 
+$remove: RemoveGroupPatch){
 			updateGroup(input: {
 				filter: {
 					name: {
 						eq: $name
 					}
 				}
-				set: {
-					rules: $setRules
-				}
-				remove: {
-					rules: $removeRules
-				}
+				set: $set
+				remove: $remove
 			}) {
 				group {
 					name
@@ -510,10 +507,20 @@ func updateGroup(t *testing.T, name string, setRules []rule, removeRules []strin
 			}
 		}`,
 		Variables: map[string]interface{}{
-			"name":        name,
-			"setRules":    setRules,
-			"removeRules": removeRules,
+			"name":   name,
+			"set":    nil,
+			"remove": nil,
 		},
+	}
+	if len(setRules) != 0 {
+		queryParams.Variables["set"] = map[string]interface{}{
+			"rules": setRules,
+		}
+	}
+	if len(removeRules) != 0 {
+		queryParams.Variables["remove"] = map[string]interface{}{
+			"rules": removeRules,
+		}
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
 	requireNoGQLErrors(t, gqlResponse)

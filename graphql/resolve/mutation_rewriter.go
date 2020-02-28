@@ -454,8 +454,6 @@ func (urw *updateRewriter) FromMutationResult(
 // name as another rule.
 func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 	[]*dgoapi.Mutation, error) {
-	mutatedType := m.MutatedType()
-
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	setArg := inp["set"]
 	delArg := inp["remove"]
@@ -467,13 +465,10 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 	upsertQuery := rewriteUpsertQueryFromMutation(m)
 	srcUID := mutationQueryVarUID
 
-	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := variableGenerator(0)
-
 	queries := []*gql.GraphQuery{upsertQuery}
-	ruleField := mutatedType.Field("rules")
-	ruleType := ruleField.Type()
+	varGen := variableGenerator(0)
+	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
 		rules, _ := setArg.(map[string]interface{})["rules"].([]interface{})
@@ -487,38 +482,35 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
 			queries = append(queries, ruleQuery)
 
-			nonExistentFrag := newFragment(map[string]interface{}{
-				"uid": srcUID,
-				"dgraph.acl.rule": []map[string]interface{}{
+			nonExistentJson := []byte(fmt.Sprintf(`
+			{
+				"uid": "%s",
+				"dgraph.acl.rule": [
 					{
-						"uid":                    fmt.Sprintf("_:%s", variable),
-						"dgraph.type":            ruleType.DgraphName(),
-						"dgraph.rule.predicate":  predicate,
-						"dgraph.rule.permission": permission,
-					},
-				},
-			})
-			nonExistentFrag.conditions = append(nonExistentFrag.conditions, "eq(len("+variable+"),0)")
+						"uid":                    "_:%s",
+						"dgraph.type":            "%s",
+						"dgraph.rule.predicate":  "%s",
+						"dgraph.rule.permission": %v
+					}
+				]
+			}`, srcUID, variable, ruleType.DgraphName(), predicate, permission))
 
-			existsFrag := newFragment(map[string]interface{}{
-				"uid":                    `uid(` + variable + `)`,
-				"dgraph.rule.permission": permission,
+			existsJson := []byte(fmt.Sprintf(`
+			{
+				"uid":                    "uid(%s)",
+				"dgraph.rule.permission": %v
+			}`, variable, permission))
+
+			mutSet = append(mutSet, &dgoapi.Mutation{
+				SetJson: nonExistentJson,
+				Cond: fmt.Sprintf(`@if(gt(len(%s),0) AND eq(len(%s),0))`, mutationQueryVar,
+					variable),
+			}, &dgoapi.Mutation{
+				SetJson: existsJson,
+				Cond: fmt.Sprintf(`@if(gt(len(%s),0) AND gt(len(%s),0))`, mutationQueryVar,
+					variable),
 			})
-			existsFrag.conditions = append(existsFrag.conditions, "gt(len("+variable+"),0)")
-			urw.setFrags = append(urw.setFrags, nonExistentFrag, existsFrag)
 		}
-		addUpdateCondition(urw.setFrags)
-		mutSet, errSet = mutationsFromFragments(
-			urw.setFrags,
-			func(frag *mutationFragment) ([]byte, error) {
-				return json.Marshal(frag.fragment)
-			},
-			func(frag *mutationFragment) ([]byte, error) {
-				if len(frag.deletes) > 0 {
-					return json.Marshal(frag.deletes)
-				}
-				return nil, nil
-			})
 	}
 
 	if delArg != nil {
@@ -529,44 +521,28 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
 			queries = append(queries, ruleQuery)
 
-			delFrag := newFragment(map[string]interface{}{
-				"uid": srcUID,
-				"dgraph.acl.rule": []map[string]interface{}{
+			deleteJson := []byte(fmt.Sprintf(`
+			{
+				"uid": "%s",
+				"dgraph.acl.rule": [
 					{
-						"uid":                    `uid(` + variable + `)`,
+						"uid":                    "uid(%s)",
 						"dgraph.type":            "",
 						"dgraph.rule.predicate":  "",
-						"dgraph.rule.permission": "",
-					},
-				},
+						"dgraph.rule.permission": ""
+					}
+				]
+			}`, srcUID, variable))
+
+			mutDel = append(mutDel, &dgoapi.Mutation{
+				DeleteJson: deleteJson,
+				Cond: fmt.Sprintf(`@if(gt(len(%s),0) AND gt(len(%s),0))`, mutationQueryVar,
+					variable),
 			})
-			delFrag.conditions = append(delFrag.conditions, "gt(len("+variable+"),0)")
-			urw.delFrags = append(urw.delFrags, delFrag)
 		}
-		addUpdateCondition(urw.delFrags)
-		mutDel, errDel = mutationsFromFragments(
-			urw.delFrags,
-			func(frag *mutationFragment) ([]byte, error) {
-				return nil, nil
-			},
-			func(frag *mutationFragment) ([]byte, error) {
-				return json.Marshal(frag.fragment)
-			})
 	}
 
-	q1 := queryFromFragments(urw.setFrags)
-	if q1 != nil {
-		queries = append(queries, q1.Children...)
-	}
-
-	q2 := queryFromFragments(urw.delFrags)
-	if q2 != nil {
-		queries = append(queries, q2.Children...)
-	}
-
-	return &gql.GraphQuery{Children: queries},
-		append(mutSet, mutDel...),
-		schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
+	return &gql.GraphQuery{Children: queries}, append(mutSet, mutDel...), nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
