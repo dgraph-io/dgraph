@@ -55,10 +55,11 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
+	ctx = schema.GetWriteContext(ctx)
+
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
-
-	su, ok := schema.State().Get(schema.WriteCtx, edge.Attr)
+	su, ok := schema.State().Get(ctx, edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
@@ -134,8 +135,7 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		return err
 	}
 
-	// TODO: careful here, what if indexing is already going on
-	old, _ := schema.State().Get(schema.ReadCtx, update.Predicate)
+	old, _ := schema.State().Get(ctx, update.Predicate)
 	// Sets only in memory, we will update it on disk only after schema mutations
 	// are successful and written to disk.
 	rebuild := posting.IndexRebuild{
@@ -144,8 +144,8 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		OldSchema:     &old,
 		CurrentSchema: update,
 	}
-	intermUpdate := rebuild.GetInterimSchema()
-	schema.State().Set(update.Predicate, intermUpdate)
+	interimUpdate := rebuild.GetInterimSchema()
+	schema.State().Set(update.Predicate, interimUpdate)
 	schema.State().SetWrite(update.Predicate, update)
 
 	if err := rebuild.DropIndexes(ctx); err != nil {
@@ -172,7 +172,8 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 			}
 		}()
 
-		if err := rebuild.BuildIndexes(context.Background()); err != nil {
+		ctx := schema.GetWriteContext(context.Background())
+		if err := rebuild.BuildIndexes(ctx); err != nil {
 			glog.Errorf("error in building indexes in background, aborting :: %v\n", err)
 			return
 		}
@@ -208,9 +209,11 @@ func updateSchema(s *pb.SchemaUpdate) error {
 }
 
 func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
+	ctx := schema.GetWriteContext(context.Background())
+
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
-	s, ok := schema.State().Get(schema.WriteCtx, attr)
+	s, ok := schema.State().Get(ctx, attr)
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {

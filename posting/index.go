@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
-	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -54,7 +53,7 @@ type indexMutationInfo struct {
 
 // indexTokens return tokens, without the predicate prefix and
 // index rune, for specific tokenizers.
-func indexTokens(info *indexMutationInfo) ([]string, error) {
+func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error) {
 	attr := info.edge.Attr
 	lang := info.edge.GetLang()
 
@@ -63,7 +62,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
 	}
 
-	if !schema.State().IsIndexed(schema.WriteCtx, attr) {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 	sv, err := types.Convert(info.val, schemaType)
@@ -87,13 +86,13 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 // TODO - See if we need to pass op as argument as t should already have Op.
 func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) error {
 	if info.tokenizers == nil {
-		info.tokenizers = schema.State().Tokenizer(schema.WriteCtx, info.edge.Attr)
+		info.tokenizers = schema.State().Tokenizer(ctx, info.edge.Attr)
 	}
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
 	x.AssertTrue(uid != 0)
-	tokens, err := indexTokens(info)
+	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
 		return err
@@ -114,10 +113,8 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 	return nil
 }
 
-func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge,
-	token string) error {
+func (txn *Txn) addIndexMutation(ctx context.Context, edge *pb.DirectedEdge, token string) error {
 	key := x.IndexKey(edge.Attr, token)
-
 	plist, err := txn.cache.GetFromDelta(key)
 	if err != nil {
 		return err
@@ -197,7 +194,7 @@ func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) erro
 
 func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
-	hasCountIndex := schema.State().HasCount(schema.WriteCtx, t.Attr)
+	hasCountIndex := schema.State().HasCount(ctx, t.Attr)
 
 	var getFn func(key []byte) (*List, error)
 	if hasCountIndex {
@@ -238,9 +235,9 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 }
 
 func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
-	isReversed := schema.State().IsReversed(schema.WriteCtx, edge.Attr)
-	isIndexed := schema.State().IsIndexed(schema.WriteCtx, edge.Attr)
-	hasCount := schema.State().HasCount(schema.WriteCtx, edge.Attr)
+	isReversed := schema.State().IsReversed(ctx, edge.Attr)
+	isIndexed := schema.State().IsIndexed(ctx, edge.Attr)
+	hasCount := schema.State().HasCount(ctx, edge.Attr)
 	delEdge := &pb.DirectedEdge{
 		Attr:   edge.Attr,
 		Op:     edge.Op,
@@ -262,7 +259,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge, txn *
 				Value: p.Value,
 			}
 			return txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(schema.WriteCtx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
@@ -402,8 +399,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 // AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
-func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
-	txn *Txn) error {
+func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
 	if len(edge.Attr) == 0 {
 		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
@@ -413,8 +409,8 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 		return l.handleDeleteAll(ctx, edge, txn)
 	}
 
-	doUpdateIndex := pstore != nil && schema.State().IsIndexed(schema.WriteCtx, edge.Attr)
-	hasCountIndex := schema.State().HasCount(schema.WriteCtx, edge.Attr)
+	doUpdateIndex := pstore != nil && schema.State().IsIndexed(ctx, edge.Attr)
+	hasCountIndex := schema.State().HasCount(ctx, edge.Attr)
 	val, found, cp, err := txn.addMutationHelper(ctx, l, doUpdateIndex, hasCountIndex, edge)
 	if err != nil {
 		return err
@@ -429,7 +425,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 		// Exact matches.
 		if found && val.Value != nil {
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(schema.WriteCtx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_DEL,
@@ -443,7 +439,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 				Value: edge.Value,
 			}
 			if err := txn.addIndexMutations(ctx, &indexMutationInfo{
-				tokenizers: schema.State().Tokenizer(schema.WriteCtx, edge.Attr),
+				tokenizers: schema.State().Tokenizer(ctx, edge.Attr),
 				edge:       edge,
 				val:        val,
 				op:         pb.DirectedEdge_SET,
@@ -455,7 +451,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (edge.ValueId != 0) &&
-		schema.State().IsReversed(schema.WriteCtx, edge.Attr) {
+		schema.State().IsReversed(ctx, edge.Attr) {
 
 		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
@@ -539,18 +535,10 @@ type rebuilder struct {
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
-	// All the temp indexes go into the following directory. We delete the whole
-	// directory after the indexing step is complete. This deletes any other temp
-	// indexes that may have been left around in case defer wasn't executed.
-	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
-	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
-	if err := os.MkdirAll(tmpParentDir, os.ModePerm); err != nil {
-		return errors.Wrap(err, "error creating in base temp dir for reindexing")
-	}
-
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
-	tmpIndexDir, err := ioutil.TempDir(tmpParentDir, "")
+	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
+	tmpIndexDir, err := ioutil.TempDir("", "dgraph_index_")
 	if err != nil {
 		return errors.Wrap(err, "error creating temp dir for reindexing")
 	}
