@@ -407,7 +407,6 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 
 	var currentKey []byte
 	var uids []uint64
-	var size int
 	pl := new(pb.PostingList)
 
 	userMeta := []byte{posting.BitCompletePosting}
@@ -484,7 +483,6 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 			UserMeta: userMeta,
 			Version:  writeVersionTs,
 		}
-		size += kv.Size()
 		list.Kv = append(list.Kv, kv)
 
 		uids = uids[:0]
