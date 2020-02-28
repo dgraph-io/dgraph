@@ -152,6 +152,10 @@ func (txn *Txn) RemoveCachedKeys() {
 	}
 }
 
+func WaitForCache() {
+	lCache.Wait()
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {

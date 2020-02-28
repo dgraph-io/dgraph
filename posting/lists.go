@@ -187,6 +187,7 @@ func Cleanup() {
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
 // It does not store the list in any cache.
 func GetNoStore(key []byte) (rlist *List, err error) {
+	fmt.Println("getting for key", string(key))
 	return getNew(key, pstore)
 }
 
@@ -245,6 +246,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	if lc == nil {
+		fmt.Printf("getting for key %s \n", string(key))
 		return getNew(key, pstore)
 	}
 	skey := string(key)
@@ -255,6 +257,8 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	var pl *List
 	if readFromDisk {
 		var err error
+
+		fmt.Printf("getting for key %s with start ts %d \n", string(key), lc.startTs)
 		pl, err = getNew(key, pstore)
 		if err != nil {
 			return nil, err
