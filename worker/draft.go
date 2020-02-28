@@ -326,7 +326,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
-
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
 			return err
@@ -350,10 +349,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		if x.WorkerConfig.LudicrousMode {
 			txnTimeStamp := proposal.Mutations.StartTs
-			maxTs := posting.Oracle().MaxAssigned()
-			n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
 				Txns: []*pb.TxnStatus{
-					{StartTs: txnTimeStamp, CommitTs: maxTs},
+					{StartTs: txnTimeStamp, CommitTs: txnTimeStamp},
 				},
 			})
 		}
@@ -1162,9 +1160,6 @@ func (n *node) rollupLists(readTs uint64) error {
 var errNoConnection = errors.New("No connection exists")
 
 func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
-	if x.WorkerConfig.LudicrousMode {
-		return nil
-	}
 	pl := groups().Leader(0)
 	if pl == nil {
 		return errNoConnection
@@ -1208,9 +1203,6 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
-	if x.WorkerConfig.LudicrousMode {
-		return
-	}
 	// Aborts if not already committed.
 	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
