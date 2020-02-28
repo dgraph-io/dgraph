@@ -46,7 +46,7 @@ const (
 	isWrite contextKey = iota
 )
 
-// GetWriteContext returns a context that sets the schema context for writting.
+// GetWriteContext returns a context that sets the schema context for writing.
 func GetWriteContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, isWrite, true)
 }
@@ -224,9 +224,9 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 
 // IsIndexed returns whether the predicate is indexed or not
 func (s *state) IsIndexed(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
 		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
 			return true
@@ -267,7 +267,6 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-
 	var su *pb.SchemaUpdate
 	if isWrite {
 		schema, ok := s.mutSchema[pred]
@@ -314,9 +313,9 @@ func (s *state) HasTokenizer(ctx context.Context, id byte, pred string) bool {
 
 // IsReversed returns whether the predicate has reverse edge or not
 func (s *state) IsReversed(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
 		if schema, ok := s.mutSchema[pred]; ok && schema.Directive == pb.SchemaUpdate_REVERSE {
 			return true
@@ -330,9 +329,9 @@ func (s *state) IsReversed(ctx context.Context, pred string) bool {
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
 func (s *state) HasCount(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-	isWrite, _ := ctx.Value(isWrite).(bool)
 	if isWrite {
 		if schema, ok := s.mutSchema[pred]; ok && schema.Count {
 			return true
