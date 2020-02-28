@@ -205,7 +205,6 @@ func (o *Oracle) sendDeltasToSubscribers() {
 
 	// updateDelta will batch the incoming delta for the given namespace.
 	updateDelta := func(update *pb.OracleDelta) {
-		fmt.Printf("update %+v \n", update)
 		y.AssertTrue(update.Namespace != "")
 		delta, ok := deltas[update.GetNamespace()]
 		if !ok {
@@ -240,7 +239,6 @@ func (o *Oracle) sendDeltasToSubscribers() {
 			progressed := false
 			o.doneUntilMutex.Lock()
 			for namespace := range deltas {
-				fmt.Printf("\n\n\n tciker done until %d\n\n\n", o.doneUntil[namespace].DoneUntil())
 				if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
 					continue
 				}
@@ -272,7 +270,6 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		batch := []*pb.OracleDelta{}
 		o.doneUntilMutex.Lock()
 		for namespace, delta := range deltas {
-			fmt.Printf("\n\n\n sending done until %d\n\n\n", o.doneUntil[namespace].DoneUntil())
 			if o.doneUntil[namespace].DoneUntil() < waitForNamespace(namespace) {
 				continue
 			}
@@ -465,11 +462,11 @@ func (s *Server) commit(ctx context.Context, src *api.TxnContext) error {
 	}
 	src.CommitTs = assigned.StartId
 	// Mark the transaction as done, irrespective of whether the proposal succeeded or not.
-	defer func() {
-		s.orc.doneUntilMutex.Lock()
-		s.orc.doneUntil[src.Namespace].Done(src.CommitTs)
-		s.orc.doneUntilMutex.Unlock()
-	}()
+	s.orc.doneUntilMutex.Lock()
+	wm := s.orc.doneUntil[src.Namespace]
+	s.orc.doneUntilMutex.Unlock()
+	defer wm.Done(src.CommitTs)
+
 	span.Annotatef([]otrace.Attribute{otrace.Int64Attribute("commitTs", int64(src.CommitTs))},
 		"Node Id: %d. Proposing TxnContext: %+v", s.Node.Id, src)
 
@@ -600,8 +597,9 @@ func (s *Server) Timestamps(ctx context.Context, num *pb.Num) (*pb.AssignedIds, 
 	switch err {
 	case nil:
 		s.orc.doneUntilMutex.Lock()
-		s.orc.doneUntil[num.Namespace].Done(x.Max(reply.EndId, reply.ReadOnly))
+		wm := s.orc.doneUntil[num.Namespace]
 		s.orc.doneUntilMutex.Unlock()
+		wm.Done(x.Max(reply.EndId, reply.ReadOnly))
 		go s.orc.storePending(num.Namespace, reply)
 	case errServedFromMemory:
 		// Avoid calling doneUntil.Done, and storePending.

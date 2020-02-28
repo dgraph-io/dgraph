@@ -2021,6 +2021,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				rch <- err
 				return
 			}
+			fmt.Printf("\n\n\ntask namespace  %s \n\n\n", taskQuery.Namespace)
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
 			switch {
 			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
@@ -2172,6 +2173,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					Alias:        it.Alias,
 					IgnoreResult: true,
 					Langs:        it.Langs,
+					Namespace:    sg.Params.Namespace,
 				},
 			})
 		}

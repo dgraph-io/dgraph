@@ -352,10 +352,11 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	och := make(chan orderResult, len(ts.Order)-1)
 	for i := 1; i < len(ts.Order); i++ {
 		in := &pb.Query{
-			Attr:    ts.Order[i].Attr,
-			UidList: dest,
-			Langs:   ts.Order[i].Langs,
-			ReadTs:  ts.ReadTs,
+			Attr:      ts.Order[i].Attr,
+			UidList:   dest,
+			Langs:     ts.Order[i].Langs,
+			ReadTs:    ts.ReadTs,
+			Namespace: ts.Namespace,
 		}
 		go fetchValues(ctx, in, i, och)
 	}

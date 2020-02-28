@@ -18,7 +18,6 @@ package posting
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -203,8 +202,7 @@ func (o *oracle) addToWaiters(namespace string, startTs uint64) (chan struct{}, 
 	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
 	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
 	// moved past startTs. Caller should take care of thread safety.
-	fmt.Printf("\n\n\n\nWAIT FOR NAMESPACE %s max assigend %d STARTTS %d \n\n\n", namespace, o.MaxAssigned(namespace), startTs)
-	if startTs <= o.MaxAssigned(namespace) {
+	if startTs <= o.maxAssigned[namespace] {
 		return nil, false
 	}
 	waiters, ok := o.waiters[namespace]
@@ -218,7 +216,8 @@ func (o *oracle) addToWaiters(namespace string, startTs uint64) (chan struct{}, 
 }
 
 func (o *oracle) MaxAssigned(namespace string) uint64 {
-	// caller should take care of lock
+	o.Lock()
+	defer o.Unlock()
 	return o.maxAssigned[namespace]
 }
 
@@ -274,7 +273,7 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	for _, txn := range delta.Txns {
 		delete(o.pendingTxns[delta.Namespace], txn.StartTs)
 	}
-	curMax := o.MaxAssigned(delta.GetNamespace())
+	curMax := o.maxAssigned[delta.GetNamespace()]
 	if delta.MaxAssigned < curMax {
 		return
 	}
