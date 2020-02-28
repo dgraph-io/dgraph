@@ -72,12 +72,6 @@ func NewTxn(startTs uint64) *Txn {
 	}
 }
 
-func (txn *Txn) ClearCache() {
-	txn.Lock()
-	defer txn.Unlock()
-	txn.cache = NewLocalCache(txn.StartTs)
-}
-
 // Get retrieves the posting list for the given list from the local cache.
 func (txn *Txn) Get(key []byte) (*List, error) {
 	return txn.cache.Get(key)

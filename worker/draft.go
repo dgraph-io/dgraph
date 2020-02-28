@@ -426,26 +426,22 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return nil
 	}
-
 	numGo, width := x.DivideAndRule(len(m.Edges))
 	span.Annotatef(nil, "To apply: %d edges. NumGo: %d. Width: %d", len(m.Edges), numGo, width)
 
 	if numGo == 1 {
 		return process(m.Edges)
 	}
-
 	errCh := make(chan error, numGo)
-	var wg sync.WaitGroup
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
 		if end > len(m.Edges) {
 			end = len(m.Edges)
 		}
-		wg.Add(1)
-		go func(start, end int, wg *sync.WaitGroup) {
+		go func(start, end int) {
 			errCh <- process(m.Edges[start:end])
-		}(start, end, &wg)
+		}(start, end)
 	}
 
 	for i := 0; i < numGo; i++ {
@@ -617,16 +613,6 @@ func (n *node) processApplyCh() {
 		}
 	}
 
-	handleCh := make(chan []*pb.Proposal, 10)
-
-	if x.WorkerConfig.LudicrousMode {
-		go func() {
-			for proposal := range handleCh {
-				handle(proposal)
-			}
-		}()
-	}
-
 	maxAge := 10 * time.Minute
 	tick := time.NewTicker(maxAge / 2)
 	defer tick.Stop()
@@ -637,11 +623,7 @@ func (n *node) processApplyCh() {
 			if !ok {
 				return
 			}
-			if x.WorkerConfig.LudicrousMode {
-				handleCh <- entries
-			} else {
-				handle(entries)
-			}
+			handle(entries)
 		case <-tick.C:
 			// We use this ticker to clear out previous map.
 			now := time.Now()
@@ -688,17 +670,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-<<<<<<< HEAD
 	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
-||||||| merged common ancestors
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
-=======
-	if delta.GroupChecksums != nil {
-		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
-	}
->>>>>>> Skip group checksum
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -1102,11 +1076,15 @@ func (n *node) Run() {
 					}
 					if pctx := n.Proposals.Get(proposal.Key); pctx != nil {
 						atomic.AddUint32(&pctx.Found, 1)
+						if span := otrace.FromContext(pctx.Ctx); span != nil {
+							span.Annotate(nil, "Proposal found in CommittedEntries")
+						}
 						if x.WorkerConfig.LudicrousMode {
 							// Assuming that there will be no error
 							// while proposing.
 							n.Proposals.Done(proposal.Key, nil)
 						}
+<<<<<<< HEAD
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
@@ -1114,6 +1092,12 @@ func (n *node) Run() {
 							// Assuming that there will be no error while proposing.
 							n.Proposals.Done(proposal.Key, nil)
 						}
+||||||| merged common ancestors
+						if span := otrace.FromContext(pctx.Ctx); span != nil {
+							span.Annotate(nil, "Proposal found in CommittedEntries")
+						}
+=======
+>>>>>>> Some cleanup
 					}
 					proposal.Index = entry.Index
 					proposals = append(proposals, proposal)
