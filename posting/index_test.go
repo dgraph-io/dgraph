@@ -40,8 +40,8 @@ func uids(l *List, readTs uint64) []uint64 {
 
 // indexTokensForTest is just a wrapper around indexTokens used for convenience.
 func indexTokensForTest(attr, lang string, val types.Val) ([]string, error) {
-	return indexTokens(&indexMutationInfo{
-		tokenizers: schema.State().Tokenizer(schema.ReadCtx, attr),
+	return indexTokens(context.Background(), &indexMutationInfo{
+		tokenizers: schema.State().Tokenizer(context.Background(), attr),
 		edge: &pb.DirectedEdge{
 			Attr: attr,
 			Lang: lang,
@@ -263,13 +263,14 @@ func TestRebuildIndex(t *testing.T) {
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
+	currentSchema, _ := schema.State().Get(context.Background(), "name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
+	require.NoError(t, dropIndex(context.Background(), &rb))
 	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
@@ -313,24 +314,26 @@ func TestRebuildIndexWithDeletion(t *testing.T) {
 	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
+	currentSchema, _ := schema.State().Get(context.Background(), "name2")
 	rb := IndexRebuild{
 		Attr:          "name2",
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
+	require.NoError(t, dropIndex(context.Background(), &rb))
 	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
 	require.NoError(t, schema.ParseBytes([]byte(mutatedSchemaVal), 1))
-	newSchema, _ := schema.State().Get(schema.ReadCtx, "name2")
+	newSchema, _ := schema.State().Get(context.Background(), "name2")
 	rb = IndexRebuild{
 		Attr:          "name2",
 		StartTs:       6,
 		OldSchema:     &currentSchema,
 		CurrentSchema: &newSchema,
 	}
+	require.NoError(t, dropIndex(context.Background(), &rb))
 	require.NoError(t, rebuildIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
@@ -368,7 +371,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	addEdgeToUID(t, "friend", 2, 23, uint64(14), uint64(15))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get(schema.ReadCtx, "friend")
+	currentSchema, _ := schema.State().Get(context.Background(), "friend")
 	rb := IndexRebuild{
 		Attr:          "friend",
 		StartTs:       16,
