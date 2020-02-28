@@ -405,7 +405,7 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchemaWithRetry(s2))
+	require.Error(t, alterSchema(s2))
 }
 
 // add index
