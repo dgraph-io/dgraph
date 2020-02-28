@@ -33,7 +33,6 @@ type BlockState interface {
 type StorageState interface {
 	StorageRoot() (common.Hash, error)
 	SetStorage([]byte, []byte) error
-	SetLatestHeaderHash(hash []byte) error
 }
 
 // TransactionQueue is the interface for transaction queue methods

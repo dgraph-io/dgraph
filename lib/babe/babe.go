@@ -213,12 +213,6 @@ func (b *Session) handleSlot(slotNum uint64) {
 			if err != nil {
 				log.Error("[babe] block authoring", "error", err)
 			}
-
-			err = b.storageState.SetLatestHeaderHash(hash[:])
-			if err != nil {
-				log.Error("[babe] block authoring", "error", err)
-			}
-
 		}
 	}
 

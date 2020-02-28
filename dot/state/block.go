@@ -290,7 +290,12 @@ func (bs *BlockState) AddBlock(newBlock *types.Block) error {
 	if err != nil {
 		return err
 	}
+
 	hash := newBlock.Header.Hash()
+	err = bs.setLatestHeaderKey(hash)
+	if err != nil {
+		return err
+	}
 
 	// Create BlockData
 	bd := &types.BlockData{
@@ -300,6 +305,10 @@ func (bs *BlockState) AddBlock(newBlock *types.Block) error {
 	}
 	err = bs.SetBlockData(bd)
 	return err
+}
+
+func (bs *BlockState) setLatestHeaderKey(hash common.Hash) error {
+	return bs.db.db.Put(common.LatestHeaderHashKey, hash[:])
 }
 
 // babeHeaderKey = babeHeaderPrefix || epoch || slice
