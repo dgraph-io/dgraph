@@ -443,7 +443,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			errCh <- process(m.Edges[start:end])
 		}(start, end)
 	}
-
 	for i := 0; i < numGo; i++ {
 		if err := <-errCh; err != nil {
 			return err
@@ -1080,24 +1079,9 @@ func (n *node) Run() {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
 						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error
-							// while proposing.
-							n.Proposals.Done(proposal.Key, nil)
-						}
-<<<<<<< HEAD
-						if span := otrace.FromContext(pctx.Ctx); span != nil {
-							span.Annotate(nil, "Proposal found in CommittedEntries")
-						}
-						if x.WorkerConfig.LudicrousMode {
 							// Assuming that there will be no error while proposing.
 							n.Proposals.Done(proposal.Key, nil)
 						}
-||||||| merged common ancestors
-						if span := otrace.FromContext(pctx.Ctx); span != nil {
-							span.Annotate(nil, "Proposal found in CommittedEntries")
-						}
-=======
->>>>>>> Some cleanup
 					}
 					proposal.Index = entry.Index
 					proposals = append(proposals, proposal)
@@ -1274,9 +1258,6 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // would only act on the txns which have not been active in the last N minutes, and send them for
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
-	if x.WorkerConfig.LudicrousMode {
-		return
-	}
 	// Aborts if not already committed.
 	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
 	if len(starts) == 0 {
