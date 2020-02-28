@@ -2041,7 +2041,7 @@ See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-st
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
 
-### Whitelist Admin Operations
+### Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
 You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
@@ -2052,7 +2052,7 @@ dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third R
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
 
-### Restrict Mutation Operations
+### Restricting Mutation Operations
 
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
@@ -2075,7 +2075,7 @@ you need to perform an alter operation with that predicate and its schema type.
 dgraph alpha --mutations strict
 ```
 
-### Secure Alter Operations
+### Securing Alter Operations
 
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
@@ -2109,7 +2109,7 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 {{% /notice %}}
 
 
-### Export Database
+### Exporting Database
 
 An export of all nodes is started by locally accessing the export endpoint of any Alpha in the cluster. Execute the following mutation using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
 
@@ -2156,7 +2156,7 @@ mutation {
 
 Currently, "rdf" and "json" are the only formats supported.
 
-### Shutdown Database
+### Shutting Down Database
 
 A clean exit of a single Dgraph node is initiated by running the following command on that node.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
@@ -2174,7 +2174,7 @@ mutation {
 
 This stops the Alpha on which the command is executed and not the entire cluster.
 
-### Delete database
+### Deleting database
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
 
@@ -2186,7 +2186,7 @@ Alternatively, you could:
 * delete (maybe do an export first) the `p` and `w` directories, then
 * restart Dgraph.
 
-### Upgrade Database
+### Upgrading Database
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
 
