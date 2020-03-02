@@ -252,8 +252,8 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
-	require.NoError(t, err)
+	result := backup.RunRestore("./data/restore", backupLocation, lastDir)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -284,9 +284,9 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
+	result := backup.RunRestore("./data/restore", backupLocation, lastDir)
+	require.Error(t, result.Err)
+	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
 
 func dirSetup(t *testing.T) {
