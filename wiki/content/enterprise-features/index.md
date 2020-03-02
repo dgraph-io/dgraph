@@ -191,10 +191,10 @@ and would be loaded to posting directory `p2`.
 
 After running the restore command, the directories inside the `postings`
 directory need to be manually copied over to the machines/containers running the
-alphas before running the `dgraph alpha`. For example, in a database cluster
-with two Alpha groups and one replica each, `p1` needs to be moved to the
-location of the first Alpha and `p2` needs to be moved to the location of the
-second Alpha.
+alphas before running the `dgraph alpha` command. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` needs to be moved to
+the location of the first Alpha and `p2` needs to be moved to the location of
+the second Alpha.
 
 By default, Dgraph will look for a posting directory with the name `p`, so make
 sure to rename the directories after moving them. You can also use the `-p`
