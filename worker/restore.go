@@ -34,10 +34,10 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) (uint64, uint64, error) {
+func RunRestore(pdir, location, backupId string) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
-		return 0, 0, err
+		return LoadResult{0, 0, err}
 	}
 
 	// Scan location for backup files and load them. Each file represents a node group,
