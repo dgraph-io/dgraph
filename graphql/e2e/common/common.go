@@ -196,7 +196,6 @@ func RunAll(t *testing.T) {
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("propagate client remote ip", clientInfoLogin)
-	t.Run("add/update group with duplicate rules", testAddUpdateGroupWithDuplicateRules)
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
