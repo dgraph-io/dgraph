@@ -133,12 +133,14 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 
 // ResetCache will clear all the cached list.
 func ResetCache() {
-	lCache.Clear()
+	lCache.Lock()
+	defer lCache.Unlock()
+	lCache.cache = make(map[string]*List)
 }
 
 // RemoveCacheFor will delete the list corresponding to the given key.
 func RemoveCacheFor(key []byte) {
-	lCache.Del(key)
+	lCache.Del(string(key))
 }
 
 // RemoveCachedKeys will delete the cached list by this txn.
@@ -150,10 +152,6 @@ func (txn *Txn) RemoveCachedKeys() {
 	for key := range txn.cache.deltas {
 		lCache.Del(key)
 	}
-}
-
-func WaitForCache() {
-	lCache.Wait()
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
@@ -259,26 +257,23 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 
 // TODO: We should only create a posting list with a specific readTs.
 func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	cachedVal, ok := lCache.Get(key)
-	if ok {
-		l, ok := cachedVal.(*List)
-		if ok {
-
-			// No need to clone the immutable layer or the key since mutations will not modify it.
-			lCopy := &List{
-				minTs: l.minTs,
-				maxTs: l.maxTs,
-				key:   key,
-				plist: l.plist,
-			}
-			if l.mutationMap != nil {
-				lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-				for ts, pl := range l.mutationMap {
-					lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-				}
-			}
-			return lCopy, nil
+	l := lCache.Get(string(key))
+	if l != nil {
+		// No need to clone the immutable layer or the key since mutations will not modify it.
+		lCopy := &List{
+			minTs: l.minTs,
+			maxTs: l.maxTs,
+			key:   key,
+			plist: l.plist,
 		}
+		if l.mutationMap != nil {
+			lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
+			for ts, pl := range l.mutationMap {
+				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
+			}
+		}
+		return lCopy, nil
+
 	}
 	txn := pstore.NewTransactionAt(math.MaxUint64, false)
 	defer txn.Discard()
@@ -295,6 +290,6 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	if err != nil {
 		return l, err
 	}
-	lCache.Set(key, l, 0)
+	lCache.Set(string(key), l)
 	return l, nil
 }
