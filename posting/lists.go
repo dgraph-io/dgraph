@@ -33,7 +33,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/ristretto"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -131,8 +130,30 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore *badger.DB
 	closer *y.Closer
-	lCache *ristretto.Cache
+	lCache *SampleCache
 )
+
+type SampleCache struct {
+	sync.Mutex
+	cache map[string]*List
+}
+
+func (c *SampleCache) Get(key string) *List {
+	c.Lock()
+	defer c.Unlock()
+	return c.cache[key]
+}
+func (c *SampleCache) Del(key string) {
+	c.Lock()
+	defer c.Unlock()
+	delete(c.cache, key)
+}
+
+func (c *SampleCache) Set(key string, l *List) {
+	c.Lock()
+	defer c.Unlock()
+	c.cache[key] = l
+}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
@@ -141,42 +162,32 @@ func Init(ps *badger.DB) {
 	go updateMemoryMetrics(closer)
 
 	// Initialize cache.
-	var err error
-	lCache, err = ristretto.NewCache(&ristretto.Config{
-		NumCounters: 200e6,
-		MaxCost:     int64(Config.AllottedMemory * 1024 * 1024),
-		BufferItems: 64,
-		Metrics:     true,
-		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
-			if !ok {
-				return int64(0)
-			}
-			return int64(l.DeepSize())
-		},
-	})
-	x.Check(err)
-	go func() {
-		m := lCache.Metrics
+	// /var err error
+	lCache = &SampleCache{
+		cache: make(map[string]*List),
+	}
+	// x.Check(err)
+	// go func() {
+	// 	m := lCache.Metrics
 
-		ticker := time.NewTicker(5 * time.Second)
-		for range ticker.C {
-			ostats.Record(context.Background(),
-				x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
-				x.CacheAddedKeys.M(int64(m.KeysAdded())),
-				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
-				x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
-				x.CacheHits.M(int64(m.Hits())),
-				x.CacheHitRatio.M(m.Ratio()),
-				x.CacheMiss.M(int64(m.Misses())),
-				x.CacheAddedBytes.M(int64(m.CostAdded())),
-				x.CacheEvictedBytes.M(int64(m.CostEvicted())),
-				x.CacheDroppedSet.M(int64(m.SetsDropped())),
-				x.CacheRejectedSet.M(int64(m.SetsRejected())),
-				x.CacheDroppedGets.M(int64(m.GetsDropped())),
-				x.CacheKeptGets.M(int64(m.GetsKept())))
-		}
-	}()
+	// 	ticker := time.NewTicker(5 * time.Second)
+	// 	for range ticker.C {
+	// 		ostats.Record(context.Background(),
+	// 			x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
+	// 			x.CacheAddedKeys.M(int64(m.KeysAdded())),
+	// 			x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
+	// 			x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
+	// 			x.CacheHits.M(int64(m.Hits())),
+	// 			x.CacheHitRatio.M(m.Ratio()),
+	// 			x.CacheMiss.M(int64(m.Misses())),
+	// 			x.CacheAddedBytes.M(int64(m.CostAdded())),
+	// 			x.CacheEvictedBytes.M(int64(m.CostEvicted())),
+	// 			x.CacheDroppedSet.M(int64(m.SetsDropped())),
+	// 			x.CacheRejectedSet.M(int64(m.SetsRejected())),
+	// 			x.CacheDroppedGets.M(int64(m.GetsDropped())),
+	// 			x.CacheKeptGets.M(int64(m.GetsKept())))
+	// 	}
+	// }()
 }
 
 // Cleanup waits until the closer has finished processing.
