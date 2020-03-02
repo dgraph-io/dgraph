@@ -137,6 +137,26 @@ func TestInvalidGetUser(t *testing.T) {
 			` parse jwt token: token contains an invalid number of segments"}]}`)
 }
 
+func TestPasswordReturn(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	query := `query {
+		getCurrentUser {
+			name
+			password
+		}
+	}`
+
+	l := makeRequest(t, accessJwt, testutil.GraphQLParams{Query: query})
+	require.Equal(t, string(l), `{"errors":[{"message":"Cannot query field \"password\"`+
+		` on type \"User\".","locations":[{"line":4,"column":4}]}]}`)
+}
+
 func TestGetCurrentUser(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
