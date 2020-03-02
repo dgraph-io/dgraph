@@ -230,11 +230,18 @@ type Node {
 	name
 }
 
+type Speaker {
+	name
+	language
+}
+
 name                           : string @index(term, exact, trigram) @count @lang .
-name_lang					   : string @lang .
+name_lang                      : string @lang .
 lang_type                      : string @index(exact) .
+name_lang_index                : string @index(exact) @lang .
 alt_name                       : [string] @index(term, exact, trigram) @count .
 alias                          : string @index(exact, term, fulltext) .
+alias_lang                     : string @index(exact) @lang .
 abbr                           : string .
 dob                            : dateTime @index(year) .
 dob_day                        : dateTime @index(day) .
@@ -251,7 +258,6 @@ value                          : string @index(trigram) .
 full_name                      : string @index(hash) .
 nick_name                      : string @index(term) .
 royal_title                    : string @index(hash, term, fulltext) @lang .
-noindex_name                   : string .
 school                         : [uid] @count .
 lossy                          : string @index(term) @lang .
 occupations                    : [string] @index(term) .
@@ -283,6 +289,12 @@ boss                           : uid .
 newfriend                      : [uid] .
 owner                          : [uid] .
 noconflict_pred                : string @noconflict .
+noindex_name                   : string .
+noindex_age                    : int .
+noindex_dob                    : datetime .
+noindex_alive                  : bool .
+noindex_salary                 : float .
+language                       : [string] .
 `
 
 func populateCluster() {
@@ -360,9 +372,13 @@ func populateCluster() {
 		<10007> <name> "Elizabeth" .
 		<10101> <name_lang> "zon"@sv .
 		<10101> <name_lang> "öffnen"@de .
+		<10101> <name_lang_index> "zon"@sv .
+		<10101> <name_lang_index> "öffnen"@de .
 		<10101> <lang_type> "Test" .
 		<10102> <name_lang> "öppna"@sv .
 		<10102> <name_lang> "zumachen"@de .
+		<10102> <name_lang_index> "öppna"@sv .
+		<10102> <name_lang_index> "zumachen"@de .
 		<10102> <lang_type> "Test" .
 		<11000> <name> "Baz Luhrmann"@en .
 		<11001> <name> "Strictly Ballroom"@en .
@@ -384,6 +400,29 @@ func populateCluster() {
 		<1> <full_name> "Michonne's large name for hashing" .
 
 		<1> <noindex_name> "Michonne's name not indexed" .
+		<2> <noindex_name> "King Lear's name not indexed" .
+		<3> <noindex_name> "Margaret's name not indexed" .
+		<4> <noindex_name> "Leonard's name not indexed" .
+
+		<1> <noindex_age> "21" .
+		<2> <noindex_age> "22" .
+		<3> <noindex_age> "23" .
+		<4> <noindex_age> "24" .
+
+		<1> <noindex_dob> "1810-11-01" .
+		<2> <noindex_dob> "1710-11-01" .
+		<3> <noindex_dob> "1610-11-01" .
+		<4> <noindex_dob> "1510-11-01" .
+
+		<1> <noindex_alive> "true" .
+		<2> <noindex_alive> "false" .
+		<3> <noindex_alive> "false" .
+		<4> <noindex_alive> "true" .
+
+		<1> <noindex_salary> "501.23" .
+		<2> <noindex_salary> "589.04" .
+		<3> <noindex_salary> "459.47" .
+		<4> <noindex_salary> "967.68" .
 
 		<1> <friend> <23> .
 		<1> <friend> <24> .
@@ -480,6 +519,12 @@ func populateCluster() {
 		<25> <alias> "Bob Joe" .
 		<31> <alias> "Allan Matt" .
 		<101> <alias> "John Oliver" .
+
+		<23> <alias_lang> "Zambo Alice"@en .
+		<24> <alias_lang> "John Alice"@en .
+		<25> <alias_lang> "Bob Joe"@en .
+		<31> <alias_lang> "Allan Matt"@en .
+		<101> <alias_lang> "John Oliver"@en .
 
 		<1> <bin_data> "YmluLWRhdGE=" .
 

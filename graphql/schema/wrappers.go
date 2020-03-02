@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -45,6 +45,7 @@ const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
 	SchemaQuery          QueryType    = "schema"
+	PasswordQuery        QueryType    = "checkPassword"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -80,6 +81,7 @@ type Field interface {
 	Alias() string
 	ResponseName() string
 	ArgValue(name string) interface{}
+	IsArgListType(name string) bool
 	IDArgValue() (*string, uint64, error)
 	XIDArg() string
 	SetArgTo(arg string, val interface{})
@@ -109,6 +111,7 @@ type Mutation interface {
 type Query interface {
 	Field
 	QueryType() QueryType
+	Rename(newName string)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -116,8 +119,10 @@ type Query interface {
 // name from the definition of the type; IDField gets the ID field of the type.
 type Type interface {
 	Field(name string) FieldDefinition
+	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
+	PasswordField() FieldDefinition
 	Name() string
 	DgraphName() string
 	DgraphPredicate(fld string) string
@@ -135,7 +140,9 @@ type FieldDefinition interface {
 	Name() string
 	Type() Type
 	IsID() bool
-	Inverse() (Type, FieldDefinition)
+	Inverse() FieldDefinition
+	// TODO - It might be possible to get rid of ForwardEdge and just use Inverse() always.
+	ForwardEdge() FieldDefinition
 }
 
 type astType struct {
@@ -280,6 +287,43 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return nil
 }
 
+func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
+	if dir.Name != "secret" {
+		return nil
+	}
+
+	name := dir.Arguments.ForName("field").Value.Raw
+	pred := dir.Arguments.ForName("pred")
+	dirs := ast.DirectiveList{}
+
+	if pred != nil {
+		dirs = ast.DirectiveList{{
+			Name: "dgraph",
+			Arguments: ast.ArgumentList{{
+				Name: "pred",
+				Value: &ast.Value{
+					Raw:  pred.Value.Raw,
+					Kind: ast.StringValue,
+				},
+			}},
+			Position: dir.Position,
+		}}
+	}
+
+	fd := &ast.FieldDefinition{
+		Name: name,
+		Type: &ast.Type{
+			NamedType: "String",
+			NonNull:   true,
+			Position:  dir.Position,
+		},
+		Directives: dirs,
+		Position:   dir.Position,
+	}
+
+	return fd
+}
+
 func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	const (
 		add     = "Add"
@@ -317,7 +361,20 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 			inputTyp = sch.Types[inputTypeName]
 		}
 
-		for _, fld := range inputTyp.Fields {
+		// We add password field to the cached type information to be used while opening
+		// resolving and rewriting queries to be sent to dgraph. Otherwise, rewriter won't
+		// know what the password field in AddInputType/ TypePatch/ TypeRef is.
+		var fields ast.FieldList
+		fields = append(fields, inputTyp.Fields...)
+		for _, directive := range inputTyp.Directives {
+			fd := convertPasswordDirective(directive)
+			if fd == nil {
+				continue
+			}
+			fields = append(fields, fd)
+		}
+
+		for _, fld := range fields {
 			if isID(fld) {
 				// We don't need a mapping for the field, as we the dgraph predicate for them is
 				// fixed i.e. uid.
@@ -432,7 +489,17 @@ func (f *field) ResponseName() string {
 }
 
 func (f *field) SetArgTo(arg string, val interface{}) {
+	if f.arguments == nil {
+		f.arguments = make(map[string]interface{})
+	}
 	f.arguments[arg] = val
+
+	// If the argument doesn't exist, add it to the list. It is used later on to get
+	// parameters. Value isn't required because it's fetched using the arguments map.
+	argument := f.field.Arguments.ForName(arg)
+	if argument == nil {
+		f.field.Arguments = append(f.field.Arguments, &ast.Argument{Name: arg})
+	}
 }
 
 func (f *field) ArgValue(name string) interface{} {
@@ -441,6 +508,15 @@ func (f *field) ArgValue(name string) interface{} {
 		f.arguments = f.field.ArgumentMap(f.op.vars)
 	}
 	return f.arguments[name]
+}
+
+func (f *field) IsArgListType(name string) bool {
+	arg := f.field.Arguments.ForName(name)
+	if arg == nil {
+		return false
+	}
+
+	return arg.Value.ExpectedType.Elem != nil
 }
 
 func (f *field) Skip() bool {
@@ -461,8 +537,10 @@ func (f *field) Include() bool {
 
 func (f *field) XIDArg() string {
 	xidArgName := ""
+	passwordField := f.Type().PasswordField()
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName {
+		if arg.Name != IDArgName && (passwordField == nil ||
+			arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
 	}
@@ -470,15 +548,15 @@ func (f *field) XIDArg() string {
 }
 
 func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
+	idField := f.Type().IDField()
+	passwordField := f.Type().PasswordField()
 	xidArgName := ""
-	// This method is only called for Get queries. These queries can accept one of the
-	// combinations as input.
-	// 1. ID only
-	// 2. XID only
-	// 3. ID and XID fields
-	// Therefore, the non ID field is an XID field.
+	// This method is only called for Get queries and check. These queries can accept ID, XID
+	// or Password. Therefore the non ID and Password field is an XID.
+	// TODO maybe there is a better way to do this.
 	for _, arg := range f.field.Arguments {
-		if arg.Name != IDArgName {
+		if (idField == nil || arg.Name != idField.Name()) &&
+			(passwordField == nil || arg.Name != passwordField.Name()) {
 			xidArgName = arg.Name
 		}
 	}
@@ -493,12 +571,11 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 		xid = &xidArgVal
 	}
 
-	idArg := f.ArgValue(IDArgName)
-	if idArg == nil && xid == nil {
-		// This means that both were optional and were not supplied, lets return here.
+	if idField == nil {
 		return
 	}
 
+	idArg := f.ArgValue(idField.Name())
 	if idArg != nil {
 		id, ok := idArg.(string)
 		var ierr error
@@ -590,6 +667,11 @@ func (f *field) TypeName(dgraphTypes []interface{}) string {
 }
 
 func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
+	// As ID maps to uid in dgraph, so it is not stored as an edge, hence does not appear in
+	// f.op.inSchema.dgraphPredicate map. So, always include the queried field if it is of ID type.
+	if f.Type().Name() == IDType {
+		return true
+	}
 	// Given a list of dgraph types, we query the schema and find the one which is an ast.Object
 	// and not an Interface object.
 	for _, typ := range dgraphTypes {
@@ -610,6 +692,10 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
+func (q *query) Rename(newName string) {
+	q.field.Name = newName
+}
+
 func (q *query) Name() string {
 	return (*field)(q).Name()
 }
@@ -624,6 +710,10 @@ func (q *query) SetArgTo(arg string, val interface{}) {
 
 func (q *query) ArgValue(name string) interface{} {
 	return (*field)(q).ArgValue(name)
+}
+
+func (q *query) IsArgListType(name string) bool {
+	return (*field)(q).IsArgListType(name)
 }
 
 func (q *query) Skip() bool {
@@ -674,6 +764,8 @@ func queryType(name string) QueryType {
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
+	case strings.HasPrefix(name, "check"):
+		return PasswordQuery
 	default:
 		return NotSupportedQuery
 	}
@@ -711,6 +803,10 @@ func (m *mutation) SetArgTo(arg string, val interface{}) {
 	(*field)(m).SetArgTo(arg, val)
 }
 
+func (m *mutation) IsArgListType(name string) bool {
+	return (*field)(m).IsArgListType(name)
+}
+
 func (m *mutation) ArgValue(name string) interface{} {
 	return (*field)(m).ArgValue(name)
 }
@@ -744,8 +840,12 @@ func (m *mutation) SelectionSet() []Field {
 }
 
 func (m *mutation) QueryField() Field {
-	// TODO: All our mutations currently have exactly 1 field, but that will change
-	// - need a better way to get the right field by convention.
+	for _, i := range m.SelectionSet() {
+		if i.Name() == NumUid {
+			continue
+		}
+		return i
+	}
 	return m.SelectionSet()[0]
 }
 
@@ -805,18 +905,27 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 }
 
 func (t *astType) Field(name string) FieldDefinition {
-	typName := t.Name()
-	parentInt := parentInterface(t.inSchema, t.inSchema.Types[typName], name)
-	if parentInt != nil {
-		typName = parentInt.Name
-	}
-
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef:        t.inSchema.Types[typName].Fields.ForName(name),
+		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
 	}
+}
+
+func (t *astType) Fields() []FieldDefinition {
+	var result []FieldDefinition
+
+	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+		result = append(result,
+			&fieldDefinition{
+				fieldDef:        fld,
+				inSchema:        t.inSchema,
+				dgraphPredicate: t.dgraphPredicate,
+			})
+	}
+
+	return result
 }
 
 func (fd *fieldDefinition) Name() string {
@@ -844,16 +953,16 @@ func (fd *fieldDefinition) Type() Type {
 	}
 }
 
-func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
+func (fd *fieldDefinition) Inverse() FieldDefinition {
 
 	invDirective := fd.fieldDef.Directives.ForName(inverseDirective)
 	if invDirective == nil {
-		return nil, nil
+		return nil
 	}
 
 	invFieldArg := invDirective.Arguments.ForName(inverseArg)
 	if invFieldArg == nil {
-		return nil, nil // really not possible
+		return nil // really not possible
 	}
 
 	// typ must exist if the schema passed GQL validation
@@ -862,7 +971,57 @@ func (fd *fieldDefinition) Inverse() (Type, FieldDefinition) {
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
 
-	return fd.Type(), &fieldDefinition{fieldDef: fld, inSchema: fd.inSchema}
+	return &fieldDefinition{
+		fieldDef:        fld,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate}
+}
+
+// ForwardEdge gets the field definition for a forward edge if this field is a reverse edge
+// i.e. if it has a dgraph directive like
+// @dgraph(name: "~movies")
+func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
+	dd := fd.fieldDef.Directives.ForName(dgraphDirective)
+	if dd == nil {
+		return nil
+	}
+
+	arg := dd.Arguments.ForName(dgraphPredArg)
+	if arg == nil {
+		return nil // really not possible
+	}
+	name := arg.Value.Raw
+
+	if !strings.HasPrefix(name, "~") && !strings.HasPrefix(name, "<~") {
+		return nil
+	}
+
+	fedge := strings.Trim(name, "<~>")
+	// typ must exist if the schema passed GQL validation
+	typ := fd.inSchema.Types[fd.Type().Name()]
+
+	var fld *ast.FieldDefinition
+	// Have to range through all the fields and find the correct forward edge. This would be
+	// expensive and should ideally be cached on schema update.
+	for _, field := range typ.Fields {
+		dir := field.Directives.ForName(dgraphDirective)
+		if dir == nil {
+			continue
+		}
+		predArg := dir.Arguments.ForName(dgraphPredArg)
+		if predArg == nil || predArg.Value.Raw == "" {
+			continue
+		}
+		if predArg.Value.Raw == fedge {
+			fld = field
+			break
+		}
+	}
+
+	return &fieldDefinition{
+		fieldDef:        fld,
+		inSchema:        fd.inSchema,
+		dgraphPredicate: fd.dgraphPredicate}
 }
 
 func (t *astType) Name() string {
@@ -942,6 +1101,23 @@ func (t *astType) IDField() FieldDefinition {
 	}
 
 	return nil
+}
+
+func (t *astType) PasswordField() FieldDefinition {
+	def := t.inSchema.Types[t.Name()]
+	if def.Kind != ast.Object && def.Kind != ast.Interface {
+		return nil
+	}
+
+	fd := getPasswordField(def)
+	if fd == nil {
+		return nil
+	}
+
+	return &fieldDefinition{
+		fieldDef: fd,
+		inSchema: t.inSchema,
+	}
 }
 
 func (t *astType) XIDField() FieldDefinition {

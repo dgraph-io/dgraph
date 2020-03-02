@@ -30,13 +30,20 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
+)
+
+const (
+	panicMsg = "\n****\nThis test should trap this panic.\n" +
+		"It's working as expected if this message is logged with a stack trace.\n****\n"
 )
 
 type ErrorCase struct {
@@ -148,8 +155,8 @@ func deepMutationErrors(t *testing.T) {
 	for name, tcase := range tcases {
 		t.Run(name, func(t *testing.T) {
 			updateCountryParams := &GraphQLParams{
-				Query: `mutation updateCountry($id: ID!, $set: PatchCountry!) {
-					updateCountry(input: {filter: {ids: [$id]}, set: $set}) {
+				Query: `mutation updateCountry($id: ID!, $set: CountryPatch!) {
+					updateCountry(input: {filter: {id: [$id]}, set: $set}) {
 						country { id }
 					}
 				}`,
@@ -216,7 +223,7 @@ func panicCatcher(t *testing.T) {
 		"query": &GraphQLParams{Query: `query { queryCountry { name } }`},
 		"mutation": &GraphQLParams{
 			Query: `mutation {
-						addCountry(input: { name: "A Country" }) { country { id } }
+						addCountry(input: [{ name: "A Country" }]) { country { id } }
 					}`,
 		},
 	}
@@ -245,10 +252,9 @@ func panicCatcher(t *testing.T) {
 			gqlResponse := test.ExecuteAsPost(t, ts.URL)
 
 			require.Equal(t, x.GqlErrorList{
-				{Message: fmt.Sprintf("[%s] Internal Server Error - a panic was trapped.  "+
-					"This indicates a bug in the GraphQL server.  A stack trace was logged.  "+
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-					gqlResponse.Extensions["requestID"].(string))}},
+				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
+					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
+					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
 			require.Nil(t, gqlResponse.Data)
@@ -259,12 +265,52 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic("bugz!!!")
+	panic(panicMsg)
+}
+
+// clientInfoLogin check whether the client info(IP address) is propagated in the request.
+// It mocks Dgraph like panicCatcher.
+func clientInfoLogin(t *testing.T) {
+	loginQuery := &GraphQLParams{
+		Query: `mutation {
+  						login(input: {userId: "groot", password: "password"}) {
+    						response {
+      							accessJWT
+    						}
+  						}
+					}`,
+	}
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	fns := &resolve.ResolverFns{}
+	var loginCtx context.Context
+	errFunc := func(name string) error { return nil }
+	mErr := resolve.MutationResolverFunc(
+		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
+			loginCtx = ctx
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+		})
+
+	resolverFactory := resolve.NewResolverFactory(nil, mErr).
+		WithConventionResolvers(gqlSchema, fns)
+
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
+	defer ts.Close()
+
+	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	require.NotNil(t, loginCtx)
+	peerInfo, found := peer.FromContext(loginCtx)
+	require.True(t, found)
+	require.NotNil(t, peerInfo.Addr.String())
 }

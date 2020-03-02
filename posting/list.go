@@ -26,7 +26,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -708,7 +707,7 @@ func (l *List) Length(readTs, afterUid uint64) int {
 func (l *List) Rollup() ([]*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
-	out, err := l.rollup(math.MaxUint64)
+	out, err := l.rollup(math.MaxUint64, true)
 	if err != nil {
 		return nil, err
 	}
@@ -733,6 +732,30 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 	}
 
 	return kvs, nil
+}
+
+// SingleListRollup works like rollup but generates a single list with no splits.
+// It's used during backup so that each backed up posting list is stored in a single key.
+func (l *List) SingleListRollup() (*bpb.KV, error) {
+	l.RLock()
+	defer l.RUnlock()
+
+	out, err := l.rollup(math.MaxUint64, false)
+	if err != nil {
+		return nil, err
+	}
+	// out is only nil when the list's minTs is greater than readTs but readTs
+	// is math.MaxUint64 so that's not possible. Assert that's true.
+	x.AssertTrue(out != nil)
+
+	kv := &bpb.KV{}
+	kv.Version = out.newMinTs
+	kv.Key = l.key
+	val, meta := marshalPostingList(out.plist)
+	kv.UserMeta = []byte{meta}
+	kv.Value = val
+
+	return kv, nil
 }
 
 func (out *rollupOutput) marshalPostingListPart(
@@ -770,7 +793,7 @@ type rollupOutput struct {
 // Merge all entries in mutation layer with commitTs <= l.commitTs into
 // immutable layer. Note that readTs can be math.MaxUint64, so do NOT use it
 // directly. It should only serve as the read timestamp for iteration.
-func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
+func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	l.AssertRLock()
 
 	// Pick all committed entries
@@ -796,8 +819,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	initializeSplit := func() {
 		enc = codec.Encoder{BlockSize: blockSize}
 
-		// Otherwise, load the corresponding part and set endUid to correctly
-		// detect the end of the list.
+		// Load the corresponding part and set endUid to correctly detect the end of the list.
 		startUid = l.plist.Splits[splitIdx]
 		if splitIdx+1 == len(l.plist.Splits) {
 			endUid = math.MaxUint64
@@ -809,7 +831,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	}
 
 	// If not a multi-part list, all UIDs go to the same encoder.
-	if len(l.plist.Splits) == 0 {
+	if len(l.plist.Splits) == 0 || !split {
 		plist = out.plist
 		endUid = math.MaxUint64
 	} else {
@@ -817,7 +839,7 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 	}
 
 	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
-		if p.Uid > endUid {
+		if p.Uid > endUid && split {
 			plist.Pack = enc.Done()
 			out.parts[startUid] = plist
 
@@ -853,11 +875,16 @@ func (l *List) rollup(readTs uint64) (*rollupOutput, error) {
 		}
 	}
 
-	// Check if the list (or any of it's parts if it's been previously split) have
-	// become too big. Split the list if that is the case.
-	out.newMinTs = maxCommitTs
-	out.splitUpList()
-	out.removeEmptySplits()
+	if split {
+		// Check if the list (or any of it's parts if it's been previously split) have
+		// become too big. Split the list if that is the case.
+		out.newMinTs = maxCommitTs
+		out.splitUpList()
+		out.removeEmptySplits()
+	} else {
+		out.plist.Splits = nil
+	}
+
 	return out, nil
 }
 
@@ -936,6 +963,21 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 		return nil
 	})
 	return vals, err
+}
+
+// allUntaggedFacets returns facets for all untagged values. Since works well only for
+// fetching facets for list predicates as lang tag in not allowed for list predicates.
+func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
+	l.AssertRLock()
+	var facets []*pb.Facets
+	err := l.iterate(readTs, 0, func(p *pb.Posting) error {
+		if len(p.LangTag) == 0 {
+			facets = append(facets, &pb.Facets{Facets: p.Facets})
+		}
+		return nil
+	})
+
+	return facets, err
 }
 
 // AllValues returns all the values in the posting list.
@@ -1117,15 +1159,30 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 }
 
 // Facets gives facets for the posting representing value.
-func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string) (fs []*api.Facet,
-	ferr error) {
+func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
+	listType bool) ([]*pb.Facets, error) {
+
 	l.RLock()
 	defer l.RUnlock()
+
+	var fcs []*pb.Facets
+	if listType {
+		fs, err := l.allUntaggedFacets(readTs)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, fcts := range fs {
+			fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(fcts.Facets, param)})
+		}
+		return fcs, nil
+	}
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
 		return nil, err
 	}
-	return facets.CopyFacets(p.Facets, param), nil
+	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})
+	return fcs, nil
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
@@ -1254,7 +1311,9 @@ func (out *rollupOutput) removeEmptySplits() {
 
 	if len(out.plist.Splits) == 1 {
 		// Only the first split remains. If it's also empty, remove it as well.
-		// This should mark the entire list for deletion.
+		// This should mark the entire list for deletion. Please note that the
+		// startUid of the first part is always one because a node can never have
+		// its uid set to zero.
 		if isPlistEmpty(out.parts[1]) {
 			out.plist.Splits = []uint64{}
 		}

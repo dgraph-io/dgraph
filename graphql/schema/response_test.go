@@ -23,7 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 func TestDataAndErrors(t *testing.T) {
@@ -36,40 +36,36 @@ func TestDataAndErrors(t *testing.T) {
 		"empty response": {
 			data:     nil,
 			errors:   nil,
-			expected: `{"extensions": { "requestID": "reqID"}}`,
+			expected: `{}`,
 		},
 		"add initial": {
 			data:     []string{`"Some": "Data"`},
 			errors:   nil,
-			expected: `{"data": {"Some": "Data"}, "extensions": { "requestID": "reqID"}}`,
+			expected: `{"data": {"Some": "Data"}}`,
 		},
 		"add nothing": {
 			data:     []string{`"Some": "Data"`, ""},
 			errors:   nil,
-			expected: `{"data": {"Some": "Data"}, "extensions": { "requestID": "reqID"}}`,
+			expected: `{"data": {"Some": "Data"}}`,
 		},
 		"add more": {
-			data:   []string{`"Some": "Data"`, `"And": "More"`},
-			errors: nil,
-			expected: `{
-				"data": {"Some": "Data", "And": "More"}, 
-				"extensions": { "requestID": "reqID"}}`,
+			data:     []string{`"Some": "Data"`, `"And": "More"`},
+			errors:   nil,
+			expected: `{"data": {"Some": "Data", "And": "More"}}`,
 		},
 		"errors and data": {
 			data:   []string{`"Some": "Data"`, `"And": "More"`},
 			errors: []error{errors.New("An Error")},
 			expected: `{
 				"errors":[{"message":"An Error"}],
-				"data": {"Some": "Data", "And": "More"}, 
-				"extensions": { "requestID": "reqID"}}`,
+				"data": {"Some": "Data", "And": "More"}}`,
 		},
 		"many errors": {
 			data:   []string{`"Some": "Data"`},
 			errors: []error{errors.New("An Error"), errors.New("Another Error")},
 			expected: `{
 				"errors":[{"message":"An Error"}, {"message":"Another Error"}],
-				"data": {"Some": "Data"}, 
-				"extensions": { "requestID": "reqID"}}`,
+				"data": {"Some": "Data"}}`,
 		},
 		"gql error": {
 			data: []string{`"Some": "Data"`},
@@ -77,8 +73,7 @@ func TestDataAndErrors(t *testing.T) {
 				&x.GqlError{Message: "An Error", Locations: []x.Location{{Line: 1, Column: 1}}}},
 			expected: `{
 				"errors":[{"message":"An Error", "locations": [{"line":1,"column":1}]}],
-				"data": {"Some": "Data"}, 
-				"extensions": { "requestID": "reqID"}}`,
+				"data": {"Some": "Data"}}`,
 		},
 		"gql error with path": {
 			data: []string{`"Some": "Data"`},
@@ -92,8 +87,7 @@ func TestDataAndErrors(t *testing.T) {
 					"message":"An Error", 
 					"locations": [{"line":1,"column":1}],
 					"path": ["q", 2, "n"]}],
-				"data": {"Some": "Data"}, 
-				"extensions": { "requestID": "reqID"}}`,
+				"data": {"Some": "Data"}}`,
 		},
 		"gql error list": {
 			data: []string{`"Some": "Data"`},
@@ -104,14 +98,13 @@ func TestDataAndErrors(t *testing.T) {
 				"errors":[
 					{"message":"An Error", "locations": [{"line":1,"column":1}]}, 
 					{"message":"Another Error", "locations": [{"line":1,"column":1}]}],
-				"data": {"Some": "Data"}, 
-				"extensions": { "requestID": "reqID"}}`,
+				"data": {"Some": "Data"}}`,
 		},
 	}
 
 	for name, tcase := range tests {
 		t.Run(name, func(t *testing.T) {
-			resp := &Response{Extensions: &Extensions{RequestID: "reqID"}}
+			resp := &Response{}
 
 			for _, d := range tcase.data {
 				resp.AddData([]byte(d))
@@ -129,7 +122,7 @@ func TestDataAndErrors(t *testing.T) {
 }
 
 func TestWriteTo_BadDataWithReqID(t *testing.T) {
-	resp := &Response{Extensions: &Extensions{RequestID: "reqID"}}
+	resp := &Response{}
 	resp.AddData([]byte(`"not json"`))
 
 	buf := new(bytes.Buffer)
@@ -137,8 +130,7 @@ func TestWriteTo_BadDataWithReqID(t *testing.T) {
 
 	assert.JSONEq(t,
 		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}], 
-		"data": null, 
-		"extensions": { "requestID": "reqID"}}`,
+		"data": null}`,
 		buf.String())
 }
 
@@ -151,8 +143,7 @@ func TestWriteTo_BadData(t *testing.T) {
 
 	assert.JSONEq(t,
 		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}], 
-		"data": null, 
-		"extensions": { "requestID": "unknown request ID"}}`,
+		"data": null}`,
 		buf.String())
 }
 
@@ -164,29 +155,27 @@ func TestErrorResponse(t *testing.T) {
 	}{
 		"an error": {
 			err:      errors.New("An Error"),
-			expected: `{"errors":[{"message":"An Error"}], "extensions": {"requestID":"reqID"}}`,
+			expected: `{"errors":[{"message":"An Error"}]}`,
 		},
 
 		"an x.GqlError": {
 			err: x.GqlErrorf("A GraphQL error").
 				WithLocations(x.Location{Line: 1, Column: 2}),
-			expected: `{"errors":[{"message": "A GraphQL error", "locations": [{"column":2, "line":1}]}],
-		"extensions": {"requestID":"reqID"}}`},
+			expected: `
+			{"errors":[{"message": "A GraphQL error", "locations": [{"column":2, "line":1}]}]}`},
 		"an x.GqlErrorList": {
 			err: x.GqlErrorList{
 				x.GqlErrorf("A GraphQL error"),
 				x.GqlErrorf("Another GraphQL error").WithLocations(x.Location{Line: 1, Column: 2})},
 			expected: `{"errors":[
 				{"message":"A GraphQL error"}, 
-				{"message":"Another GraphQL error", "locations": [{"column":2, "line":1}]}],
-				"extensions": {"requestID":"reqID"}}`},
+				{"message":"Another GraphQL error", "locations": [{"column":2, "line":1}]}]}`},
 		"a gqlerror": {
 			err: &gqlerror.Error{
 				Message:   "A GraphQL error",
 				Locations: []gqlerror.Location{{Line: 1, Column: 2}}},
 			expected: `{
-				"errors":[{"message":"A GraphQL error", "locations": [{"line":1,"column":2}]}], 
-				"extensions": {"requestID":"reqID"}}`,
+				"errors":[{"message":"A GraphQL error", "locations": [{"line":1,"column":2}]}]}`,
 		},
 		"a list of gql errors": {
 			err: gqlerror.List{
@@ -196,8 +185,7 @@ func TestErrorResponse(t *testing.T) {
 					Locations: []gqlerror.Location{{Line: 1, Column: 2}}}},
 			expected: `{"errors":[
 				{"message":"A GraphQL error"}, 
-				{"message":"Another GraphQL error", "locations": [{"line":1,"column":2}]}], 
-				"extensions": {"requestID":"reqID"}}`,
+				{"message":"Another GraphQL error", "locations": [{"line":1,"column":2}]}]}`,
 		},
 	}
 
@@ -206,7 +194,7 @@ func TestErrorResponse(t *testing.T) {
 
 			// ErrorResponse doesn't add data - it should only be called before starting
 			// execution - so in all cases no data should be present.
-			resp := ErrorResponse(tcase.err, "reqID")
+			resp := ErrorResponse(tcase.err)
 
 			buf := new(bytes.Buffer)
 			resp.WriteTo(buf)
@@ -224,7 +212,6 @@ func TestNilResponse(t *testing.T) {
 
 	assert.JSONEq(t,
 		`{"errors":[{"message":"Internal error - no response to write."}], 
-		"data": null, 
-		"extensions": {"requestID":"unknown request ID"}}`,
+		"data": null}`,
 		buf.String())
 }

@@ -76,7 +76,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	close(shutdownCh)
+	close(worker.ShutdownCh)
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
@@ -135,22 +135,19 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if memoryMB < worker.MinAllottedMemory {
+
+	if err := worker.UpdateLruMb(memoryMB); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Fprintf(w, "lru_mb must be at least %.0f\n", worker.MinAllottedMemory)
+		fmt.Fprint(w, err.Error())
 		return
 	}
-
-	posting.Config.Mu.Lock()
-	posting.Config.AllottedMemory = memoryMB
-	posting.Config.Mu.Unlock()
 	w.WriteHeader(http.StatusOK)
 }
 
 func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
-	posting.Config.Mu.Lock()
+	posting.Config.Lock()
 	memoryMB := posting.Config.AllottedMemory
-	posting.Config.Mu.Unlock()
+	posting.Config.Unlock()
 
 	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

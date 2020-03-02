@@ -430,6 +430,60 @@ func LoadTypesFromDb() error {
 	return nil
 }
 
+// InitialTypes returns the schema updates to insert at the begining of
+// Dgraph's execution. It looks at the schema state to determine which
+// types to insert.
+func InitialTypes() []*pb.TypeUpdate {
+	var initialTypes []*pb.TypeUpdate
+	initialTypes = append(initialTypes,
+		&pb.TypeUpdate{
+			TypeName: "dgraph.graphql",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema",
+					ValueType: pb.Posting_STRING,
+				},
+			},
+		})
+
+	if x.WorkerConfig.AclEnabled {
+		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
+		// properly.
+		initialTypes = append(initialTypes, &pb.TypeUpdate{
+			TypeName: "User",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.xid",
+					ValueType: pb.Posting_STRING,
+				},
+				{
+					Predicate: "dgraph.password",
+					ValueType: pb.Posting_PASSWORD,
+				},
+				{
+					Predicate: "dgraph.user.group",
+					ValueType: pb.Posting_UID,
+				},
+			},
+		},
+			&pb.TypeUpdate{
+				TypeName: "Group",
+				Fields: []*pb.SchemaUpdate{
+					{
+						Predicate: "dgraph.xid",
+						ValueType: pb.Posting_STRING,
+					},
+					{
+						Predicate: "dgraph.acl.rule",
+						ValueType: pb.Posting_UID,
+					},
+				},
+			})
+	}
+
+	return initialTypes
+}
+
 // InitialSchema returns the schema updates to insert at the beginning of
 // Dgraph's execution. It looks at the worker options to determine which
 // attributes to insert.
@@ -458,11 +512,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	}, &pb.SchemaUpdate{
 		Predicate: "dgraph.graphql.schema",
 		ValueType: pb.Posting_STRING,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.date",
-		ValueType: pb.Posting_DATETIME,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"day"},
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
@@ -486,8 +535,20 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 				List:      true,
 			},
 			{
-				Predicate: "dgraph.group.acl",
+				Predicate: "dgraph.acl.rule",
+				ValueType: pb.Posting_UID,
+				List:      true,
+			},
+			{
+				Predicate: "dgraph.rule.predicate",
 				ValueType: pb.Posting_STRING,
+				Directive: pb.SchemaUpdate_INDEX,
+				Tokenizer: []string{"exact"},
+				Upsert:    true, // Not really sure if this will work.
+			},
+			{
+				Predicate: "dgraph.rule.permission",
+				ValueType: pb.Posting_INT,
 			},
 		}...)
 	}

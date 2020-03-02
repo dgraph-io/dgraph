@@ -1,0 +1,5 @@
+Steps to compile the paper:
+
+- Install texcore-full.
+- Run bibtex dgraph # without any suffix.
+- Run pdflatex dgraph # without any suffix.

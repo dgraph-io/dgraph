@@ -29,7 +29,8 @@ import (
 
 func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(true)
+		// TOOD(Ibrahim): Remove compression level once badger is updated.
+		WithReadOnly(true).WithZSTDCompressionLevel(1)
 	return badger.OpenManaged(opt)
 }
 

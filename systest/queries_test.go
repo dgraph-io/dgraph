@@ -352,7 +352,7 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
           "exact"
         ]
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -392,15 +392,18 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "dgraph.password"
       },
-      {
-        "predicate": "dgraph.group.acl"
+	  {
+		  "predicate": "dgraph.acl.rule"
+	  },
+	  {
+		  "predicate": "dgraph.rule.predicate"
+	  },
+	  {
+		  "predicate": "dgraph.rule.permission"
 	  },
 	  {
         "predicate": "dgraph.graphql.schema"
 	  },
-	  {
-        "predicate": "dgraph.graphql.date"
-      },
       {
         "predicate": "dgraph.user.group"
       },
@@ -416,7 +419,7 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
       {
         "predicate": "age"
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(resp.Json))
 }
@@ -559,7 +562,7 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
           "exact"
         ]
       }
-    ]
+    ],` + x.InitialTypes + `
   }`
 	testutil.CompareJSON(t, js, string(m["data"]))
 }
@@ -603,7 +606,7 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		in, out, failure string
 	}{
 		{
-			in:  `{q(func:match(term, drive, 8)) {term}}`,
+			in:  `{q(func:match(term, drive, 0)) {term}}`,
 			out: `{"q":[{"term":"drive"}]}`,
 		},
 		{
@@ -664,12 +667,19 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 		{
 			in: `{q(func:match(term, "carigeway", 8)) {term}}`,
 			out: `{"q":[
-        {"term": "dual carriageway"}
+        {"term": "highway"},
+        {"term": "motorway"},
+        {"term": "dual carriageway"},
+        {"term": "pathway"},
+        {"term": "parkway"}
       ]}`,
 		},
 		{
-			in:  `{q(func:match(term, "carigeway", 4)) {term}}`,
-			out: `{"q":[]}`,
+			in: `{q(func:match(term, "carigeway", 4)) {term}}`,
+			out: `{"q":[
+        {"term": "highway"},
+        {"term": "parkway"}
+      ]}`,
 		},
 		{
 			in: `{q(func:match(term, "dualway", 8)) {term}}`,

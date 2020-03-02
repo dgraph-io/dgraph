@@ -35,7 +35,6 @@ import (
 )
 
 const N = 10
-const pred = "counter"
 
 func incrementInLoop(t *testing.T, dg *dgo.Dgraph, M int) int {
 	conf := viper.New()

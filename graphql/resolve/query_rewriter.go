@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"fmt"
 	"sort"
 	"strconv"
@@ -35,7 +36,8 @@ func NewQueryRewriter() QueryRewriter {
 }
 
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
-func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
+func (qr *queryRewriter) Rewrite(ctx context.Context,
+	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -61,9 +63,65 @@ func (qr *queryRewriter) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error)
 
 	case schema.FilterQuery:
 		return rewriteAsQuery(gqlQuery), nil
+	case schema.PasswordQuery:
+		return passwordQuery(gqlQuery)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
+	xid, uid, err := m.IDArgValue()
+	if err != nil {
+		return nil, err
+	}
+
+	dgQuery := rewriteAsGet(m, uid, xid)
+
+	queriedType := m.Type()
+	name := queriedType.PasswordField().Name()
+	predicate := queriedType.DgraphPredicate(name)
+	password := m.ArgValue(name).(string)
+
+	op := &gql.GraphQuery{
+		Attr:   "checkPwd",
+		Func:   dgQuery.Func,
+		Filter: dgQuery.Filter,
+		Children: []*gql.GraphQuery{{
+			Var: "pwd",
+			Attr: fmt.Sprintf(`checkpwd(%s, "%s")`, predicate,
+				password),
+		}},
+	}
+
+	ft := &gql.FilterTree{
+		Op: "and",
+		Child: []*gql.FilterTree{{
+			Func: &gql.Function{
+				Name: "eq",
+				Args: []gql.Arg{
+					{
+						Value: "val(pwd)",
+					},
+					{
+						Value: "1",
+					},
+				},
+			},
+		}},
+	}
+
+	if dgQuery.Filter != nil {
+		ft.Child = append(ft.Child, dgQuery.Filter)
+	}
+
+	dgQuery.Filter = ft
+
+	qry := &gql.GraphQuery{
+		Children: []*gql.GraphQuery{dgQuery, op},
+	}
+
+	return qry, nil
 }
 
 func intersection(a, b []uint64) []uint64 {
@@ -115,7 +173,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 		},
 	}
 
-	if ids := idFilter(field); ids != nil {
+	if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
 
@@ -177,7 +235,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 		Attr: field.ResponseName(),
 	}
 
-	if ids := idFilter(field); ids != nil {
+	if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, field.Type().DgraphName())
@@ -309,12 +367,13 @@ func convertIDs(idsSlice []interface{}) []uint64 {
 	return ids
 }
 
-func idFilter(field schema.Field) []uint64 {
+func idFilter(field schema.Field, idField schema.FieldDefinition) []uint64 {
 	filter, ok := field.ArgValue("filter").(map[string]interface{})
-	if !ok {
+	if !ok || idField == nil {
 		return nil
 	}
-	idsFilter := filter["ids"]
+
+	idsFilter := filter[idField.Name()]
 	if idsFilter == nil {
 		return nil
 	}
@@ -332,11 +391,17 @@ func addFilter(q *gql.GraphQuery, typ schema.Type, filter map[string]interface{}
 	// function at root. Lets delete the ids key so that it isn't added in the filter.
 	// Also, we need to add a dgraph.type filter.
 	// 2. This could be a deep filter. In that case we don't need to do anything special.
-	_, hasIDsFilter := filter["ids"]
+	idField := typ.IDField()
+	idName := ""
+	if idField != nil {
+		idName = idField.Name()
+	}
+
+	_, hasIDsFilter := filter[idName]
 	filterAtRoot := hasIDsFilter && q.Func != nil && q.Func.Name == "uid"
 	if filterAtRoot {
 		// If id was present as a filter,
-		delete(filter, "ids")
+		delete(filter, idName)
 	}
 	q.Filter = buildFilter(typ, filter)
 	if filterAtRoot {

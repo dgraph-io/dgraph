@@ -28,8 +28,10 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	"go.opencensus.io/plugin/ocgrpc"
 
 	"github.com/golang/glog"
@@ -40,6 +42,9 @@ var (
 	pstore       *badger.DB
 	workerServer *grpc.Server
 	raftServer   conn.RaftServer
+	// ShutdownCh is used while trying to shutdown the server.
+	ShutdownCh chan struct{}
+
 	// In case of flaky network connectivity we would try to keep upto maxPendingEntries in wal
 	// so that the nodes which have lagged behind leader can just replay entries instead of
 	// fetching snapshot if network disconnectivity is greater than the interval at which snapshots
@@ -112,4 +117,16 @@ func BlockingStop() {
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
+}
+
+// UpdateLruMb updates the value of lru_mb
+func UpdateLruMb(memoryMB float64) error {
+	if memoryMB < MinAllottedMemory {
+		return errors.Errorf("lru_mb must be at least %.0f\n", MinAllottedMemory)
+	}
+
+	posting.Config.Lock()
+	posting.Config.AllottedMemory = memoryMB
+	posting.Config.Unlock()
+	return nil
 }

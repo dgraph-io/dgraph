@@ -30,7 +30,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -126,11 +125,9 @@ type params struct {
 
 	// Facet tells us about the requested facets and their aliases.
 	Facet *pb.FacetParams
-	// FacetOrder has the name of the facet by which the results should be sorted.
-	FacetOrder string
-	// FacetOrderDesc is true if the facets should be order in descending order. If it's
-	// false, the facets will be ordered in ascending order.
-	FacetOrderDesc bool
+	// FacetsOrder keeps ordering for facets. Each entry stores name of the facet key and
+	// OrderDesc(will be true if results should be ordered by desc order of key) information for it.
+	FacetsOrder []*gql.FacetOrder
 
 	// Var is the name of the variable defined in this SubGraph
 	// (e.g. in "x as name", this would be x).
@@ -514,23 +511,22 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 		attrsSeen[key] = struct{}{}
 
 		args := params{
-			Alias:          gchild.Alias,
-			Cascade:        gchild.Cascade || sg.Params.Cascade,
-			Expand:         gchild.Expand,
-			Facet:          gchild.Facets,
-			FacetOrder:     gchild.FacetOrder,
-			FacetOrderDesc: gchild.FacetDesc,
-			FacetVar:       gchild.FacetVar,
-			GetUid:         sg.Params.GetUid,
-			IgnoreReflex:   sg.Params.IgnoreReflex,
-			Langs:          gchild.Langs,
-			NeedsVar:       append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
-			Normalize:      gchild.Normalize || sg.Params.Normalize,
-			Order:          gchild.Order,
-			Var:            gchild.Var,
-			GroupbyAttrs:   gchild.GroupbyAttrs,
-			IsGroupBy:      gchild.IsGroupby,
-			IsInternal:     gchild.IsInternal,
+			Alias:        gchild.Alias,
+			Cascade:      gchild.Cascade || sg.Params.Cascade,
+			Expand:       gchild.Expand,
+			Facet:        gchild.Facets,
+			FacetsOrder:  gchild.FacetsOrder,
+			FacetVar:     gchild.FacetVar,
+			GetUid:       sg.Params.GetUid,
+			IgnoreReflex: sg.Params.IgnoreReflex,
+			Langs:        gchild.Langs,
+			NeedsVar:     append(gchild.NeedsVar[:0:0], gchild.NeedsVar...),
+			Normalize:    gchild.Normalize || sg.Params.Normalize,
+			Order:        gchild.Order,
+			Var:          gchild.Var,
+			GroupbyAttrs: gchild.GroupbyAttrs,
+			IsGroupBy:    gchild.IsGroupby,
+			IsInternal:   gchild.IsInternal,
 		}
 
 		if gchild.IsCount {
@@ -549,7 +545,7 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			return err
 		}
 
-		if len(args.Order) != 0 && len(args.FacetOrder) != 0 {
+		if len(args.Order) != 0 && len(args.FacetsOrder) != 0 {
 			return errors.Errorf("Cannot specify order at both args and facets")
 		}
 
@@ -1233,6 +1229,12 @@ func (sg *SubGraph) updateFacetMatrix() {
 	}
 
 	for lidx, l := range sg.uidMatrix {
+		// For scalar predicates, uid list would be empty, we don't need to update facetsMatrix.
+		// If its an uid predicate and uid list is empty then also we don't need to update
+		// facetsMatrix, as results won't be returned to client in outputnode.go.
+		if len(l.Uids) == 0 {
+			continue
+		}
 		out := sg.facetsMatrix[lidx].FacetsList[:0]
 		for idx, uid := range l.Uids {
 			// If uid wasn't filtered then we keep the facet for it.
@@ -1253,7 +1255,7 @@ func (sg *SubGraph) updateFacetMatrix() {
 func (sg *SubGraph) updateUidMatrix() {
 	sg.updateFacetMatrix()
 	for _, l := range sg.uidMatrix {
-		if len(sg.Params.Order) > 0 || len(sg.Params.FacetOrder) > 0 {
+		if len(sg.Params.Order) > 0 || len(sg.Params.FacetsOrder) > 0 {
 			// We can't do intersection directly as the list is not sorted by UIDs.
 			// So do filter.
 			algo.ApplyFilter(l, func(uid uint64, idx int) bool {
@@ -2095,7 +2097,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 		}
 	}
 
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		// There is no ordering. Just apply pagination and return.
 		if err = sg.applyPagination(ctx); err != nil {
 			rch <- err
@@ -2229,14 +2231,14 @@ func (sg *SubGraph) applyPagination(ctx context.Context) error {
 // applyOrderAndPagination orders each posting list by a given attribute
 // before applying pagination.
 func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
-	if len(sg.Params.Order) == 0 && len(sg.Params.FacetOrder) == 0 {
+	if len(sg.Params.Order) == 0 && len(sg.Params.FacetsOrder) == 0 {
 		return nil
 	}
 
 	sg.updateUidMatrix()
 
 	// See if we need to apply order based on facet.
-	if len(sg.Params.FacetOrder) != 0 {
+	if len(sg.Params.FacetsOrder) != 0 {
 		return sg.sortAndPaginateUsingFacet(ctx)
 	}
 
@@ -2316,41 +2318,62 @@ func (sg *SubGraph) sortAndPaginateUsingFacet(ctx context.Context) error {
 		return errors.Errorf("Facet matrix and UID matrix mismatch: %d vs %d",
 			len(sg.facetsMatrix), len(sg.uidMatrix))
 	}
-	orderby := sg.Params.FacetOrder
+
+	orderbyKeys := make(map[string]int)
+	var orderDesc []bool
+	for i, order := range sg.Params.FacetsOrder {
+		orderbyKeys[order.Key] = i
+		orderDesc = append(orderDesc, order.Desc)
+	}
+
 	for i := 0; i < len(sg.uidMatrix); i++ {
 		ul := sg.uidMatrix[i]
 		fl := sg.facetsMatrix[i]
 		uids := ul.Uids[:0]
-		values := make([][]types.Val, 0, len(ul.Uids))
 		facetList := fl.FacetsList[:0]
+
+		values := make([][]types.Val, len(ul.Uids))
+		for i := 0; i < len(values); i++ {
+			values[i] = make([]types.Val, len(sg.Params.FacetsOrder))
+		}
+
 		for j := 0; j < len(ul.Uids); j++ {
-			var facet *api.Facet
 			uid := ul.Uids[j]
 			f := fl.FacetsList[j]
 			uids = append(uids, uid)
 			facetList = append(facetList, f)
+
+			// Since any facet can come only once in f.Facets, we can have counter to check if we
+			// have populated all facets or not. Once we are done populating all facets
+			// we can break out of below loop.
+			remainingFacets := len(orderbyKeys)
+			// TODO: We are searching sequentially, explore if binary search is useful here.
 			for _, it := range f.Facets {
-				if it.Key == orderby {
-					facet = it
-					break
+				idx, ok := orderbyKeys[it.Key]
+				if !ok {
+					continue
 				}
-			}
-			if facet != nil {
-				fVal, err := facets.ValFor(facet)
+
+				fVal, err := facets.ValFor(it)
 				if err != nil {
 					return err
 				}
+				// If type is not sortable, we are ignoring it.
+				if types.IsSortable(fVal.Tid) {
+					values[j][idx] = fVal
+				}
 
-				values = append(values, []types.Val{fVal})
-			} else {
-				values = append(values, []types.Val{{Value: nil}})
+				remainingFacets--
+				if remainingFacets == 0 {
+					break
+				}
 			}
 		}
 		if len(values) == 0 {
 			continue
 		}
-		if err := types.SortWithFacet(values, &uids, facetList,
-			[]bool{sg.Params.FacetOrderDesc}, ""); err != nil {
+
+		if err := types.SortWithFacet(values, &uids, facetList, orderDesc, ""); err != nil {
 			return err
 		}
 		sg.uidMatrix[i].Uids = uids

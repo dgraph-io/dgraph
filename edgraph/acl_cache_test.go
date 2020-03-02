@@ -13,7 +13,6 @@
 package edgraph
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -37,11 +36,10 @@ func TestAclCache(t *testing.T) {
 			Perm:      4,
 		},
 	}
-	aclBytes, _ := json.Marshal(acls)
 	groups := []acl.Group{
 		{
 			GroupID: group,
-			Acls:    string(aclBytes),
+			Rules:   acls,
 		},
 	}
 	aclCachePtr.update(groups)

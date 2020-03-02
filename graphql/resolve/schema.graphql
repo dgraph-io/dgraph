@@ -3,7 +3,7 @@
 
 type Country {
         id: ID!
-        name: String! @search(by: [trigram])
+        name: String! @search(by: [trigram, exact])
         states: [State] @hasInverse(field: country)
 }
 
@@ -44,6 +44,7 @@ type Category {
         id: ID
         name: String
         posts: [Post]
+        iAmDeprecated: String @deprecated(reason: "because")
 }
 
 enum PostType {
@@ -68,4 +69,45 @@ type Director implements Character {
 type Human implements Character & Employee {
         dob: DateTime
         female: Boolean
+}
+
+# just for testing singluar (non-list) edges in both directions
+
+type House {
+        id: ID!
+        owner: Owner @hasInverse(field: house)
+}
+
+type Owner {
+        id: ID!
+        house: House
+}
+
+# for testing ~reverse predicate in @dgraph directive
+type Movie {
+        id: ID!
+        name: String!
+        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+}
+
+type MovieDirector {
+        id: ID!
+        name: String!
+        directed: [Movie] @dgraph(pred: "directed.movies")
+}
+
+# just for testing XID remove in list
+type Computer {
+	owners: [ComputerOwner!]
+	name: String! @id
+}
+
+type ComputerOwner {
+	name: String! @id
+	nickName: String
+	computers: Computer! @hasInverse(field: owners)
+}
+
+type User @secret(field: "pwd") {
+	name: String! @id
 }

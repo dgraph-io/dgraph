@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -72,7 +73,7 @@ func indexTokens(info *indexMutationInfo) ([]string, error) {
 
 	var tokens []string
 	for _, it := range info.tokenizers {
-		toks, err := tok.BuildTokens(sv.Value, tok.GetLangTokenizer(it, lang))
+		toks, err := tok.BuildTokens(sv.Value, tok.GetTokenizerForLang(it, lang))
 		if err != nil {
 			return tokens, err
 		}
@@ -173,6 +174,30 @@ func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 
 func (txn *Txn) addReverseMutation(ctx context.Context, t *pb.DirectedEdge) error {
 	key := x.ReverseKey(t.Attr, t.ValueId)
+	plist, err := txn.GetFromDelta(key)
+	if err != nil {
+		return err
+	}
+	x.AssertTrue(plist != nil)
+
+	// We must create a copy here.
+	edge := &pb.DirectedEdge{
+		Entity:  t.ValueId,
+		ValueId: t.Entity,
+		Attr:    t.Attr,
+		Op:      t.Op,
+		Facets:  t.Facets,
+	}
+	if err := plist.addMutation(ctx, txn, edge); err != nil {
+		return err
+	}
+
+	ostats.Record(ctx, x.NumEdges.M(1))
+	return nil
+}
+
+func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEdge) error {
+	key := x.ReverseKey(t.Attr, t.ValueId)
 	hasCountIndex := schema.State().HasCount(t.Attr)
 
 	var getFn func(key []byte) (*List, error)
@@ -231,7 +256,7 @@ func (l *List) handleDeleteAll(ctx context.Context, edge *pb.DirectedEdge,
 		case isReversed:
 			// Delete reverse edge for each posting.
 			delEdge.ValueId = p.Uid
-			return txn.addReverseMutation(ctx, delEdge)
+			return txn.addReverseAndCountMutation(ctx, delEdge)
 		case isIndexed:
 			// Delete index edge of each posting.
 			val := types.Val{
@@ -282,7 +307,6 @@ func (txn *Txn) addCountMutation(ctx context.Context, t *pb.DirectedEdge, count 
 	}
 	ostats.Record(ctx, x.NumEdges.M(1))
 	return nil
-
 }
 
 func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
@@ -291,9 +315,11 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 		Attr:    params.attr,
 		Op:      pb.DirectedEdge_DEL,
 	}
-	if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
-		params.reverse); err != nil {
-		return err
+	if params.countBefore > 0 {
+		if err := txn.addCountMutation(ctx, &edge, uint32(params.countBefore),
+			params.reverse); err != nil {
+			return err
+		}
 	}
 
 	if params.countAfter > 0 {
@@ -431,7 +457,7 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 	// Add reverse mutation irrespective of hasMutated, server crash can happen after
 	// mutation is synced and before reverse edge is synced
 	if (pstore != nil) && (edge.ValueId != 0) && schema.State().IsReversed(edge.Attr) {
-		if err := txn.addReverseMutation(ctx, edge); err != nil {
+		if err := txn.addReverseAndCountMutation(ctx, edge); err != nil {
 			return err
 		}
 	}
@@ -439,12 +465,17 @@ func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge,
 }
 
 // deleteTokensFor deletes the index for the given attribute and token.
-func deleteTokensFor(attr, tokenizerName string) error {
+func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 	pk := x.ParsedKey{Attr: attr}
 	prefix := pk.IndexPrefix()
 	tokenizer, ok := tok.GetTokenizer(tokenizerName)
 	if !ok {
 		return errors.Errorf("Could not find valid tokenizer for %s", tokenizerName)
+	}
+	if hasLang {
+		// We just need the tokenizer identifier for ExactTokenizer having language.
+		// It will be same for all the language.
+		tokenizer = tok.GetTokenizerForLang(tokenizer, "en")
 	}
 	prefix = append(prefix, tokenizer.Identifier())
 	if err := pstore.DropPrefix(prefix); err != nil {
@@ -511,7 +542,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// All the temp indexes go into the following directory. We delete the whole
 	// directory after the indexing step is complete. This deletes any other temp
 	// indexes that may have been left around in case defer wasn't executed.
-	tmpParentDir := "dgraph_index"
+	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
+	tmpParentDir := filepath.Join(os.TempDir(), "dgraph_index")
 
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
@@ -528,10 +560,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
+		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
+
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
@@ -549,9 +583,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// Todo(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
 	// could be replaced with WriteBatch in the code
-	// Todo(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
-	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
-	// could be replaced with WriteBatch in the code.
 	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
@@ -574,6 +605,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			return nil, errors.Wrapf(err, "error reading posting list from disk")
 		}
 
+		// We are using different transactions in each call to KeyToList function. This could
+		// be a problem for computing reverse count indexes if deltas for same key are added
+		// in different transactions. Such a case doesn't occur for now.
 		txn := NewTxn(r.startTs)
 		if err := r.fn(pk.Uid, l, txn); err != nil {
 			return nil, err
@@ -781,7 +815,13 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 	glog.Infof("Deleting index for attr %s and tokenizers %s", rb.Attr,
 		rebuildInfo.tokenizersToDelete)
 	for _, tokenizer := range rebuildInfo.tokenizersToDelete {
-		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
+			return err
+		}
+		if tokenizer != "exact" {
+			continue
+		}
+		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
 			return err
 		}
 	}
@@ -800,7 +840,13 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 		rebuildInfo.tokenizersToRebuild)
 	// Before rebuilding, the existing index needs to be deleted.
 	for _, tokenizer := range rebuildInfo.tokenizersToRebuild {
-		if err := deleteTokensFor(rb.Attr, tokenizer); err != nil {
+		if err := deleteTokensFor(rb.Attr, tokenizer, false); err != nil {
+			return err
+		}
+		if tokenizer != "exact" {
+			continue
+		}
+		if err := deleteTokensFor(rb.Attr, tokenizer, true); err != nil {
 			return err
 		}
 	}
@@ -820,6 +866,7 @@ func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
 				Value: p.Value,
 				Tid:   types.TypeID(p.ValType),
 			}
+			edge.Lang = string(p.LangTag)
 
 			for {
 				err := txn.addIndexMutations(ctx, &indexMutationInfo{
@@ -980,6 +1027,8 @@ func rebuildReverseEdges(ctx context.Context, rb *IndexRebuild) error {
 			edge.Label = pp.Label
 
 			for {
+				// we only need to build reverse index here.
+				// We will update the reverse count index separately.
 				err := txn.addReverseMutation(ctx, &edge)
 				switch err {
 				case ErrRetry:

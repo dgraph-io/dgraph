@@ -118,7 +118,7 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec alpha1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec alpha1 curl -Ss -H "Content-Type: application/json" localhost:$HTTP_PORT/admin -XPOST -d '{ "query": "mutation { export(input: {format: \"rdf\"}) { response { code message } }}" }' &>/dev/null
   sleep 2
   docker cp alpha1:/data/alpha1/export .
   sleep 1
@@ -191,10 +191,11 @@ EOF
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
-      1 dgraph.graphql.date
+      1 dgraph.acl.rule
       1 dgraph.graphql.schema
-      1 dgraph.group.acl
       1 dgraph.password
+      1 dgraph.rule.permission
+      1 dgraph.rule.predicate
       1 dgraph.type
       1 dgraph.user.group
       1 dgraph.xid

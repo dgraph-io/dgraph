@@ -17,6 +17,7 @@
 package zero
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -29,7 +30,6 @@ import (
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
-	"golang.org/x/net/context"
 	"golang.org/x/net/trace"
 	"google.golang.org/grpc"
 
@@ -205,9 +205,17 @@ func run() {
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
 		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
+
+	// TOOD(Ibrahim): Remove this once badger is updated.
+	kvOpt.ZSTDCompressionLevel = 1
+
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
+
+	gcCloser := y.NewCloser(1) // closer for vLogGC
+	go x.RunVlogGC(kv, gcCloser)
+	defer gcCloser.SignalAndWait()
 
 	// zero out from memory
 	kvOpt.EncryptionKey = nil

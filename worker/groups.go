@@ -17,14 +17,13 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/badger/v2"
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
@@ -60,7 +59,10 @@ type groupi struct {
 	membershipChecksum uint64 // Checksum received by MembershipState.
 }
 
-var gr *groupi
+var gr = &groupi{
+	blockDeletes: new(sync.Mutex),
+	tablets:      make(map[string]*pb.Tablet),
+}
 
 func groups() *groupi {
 	return gr
@@ -68,13 +70,9 @@ func groups() *groupi {
 
 // StartRaftNodes will read the WAL dir, create the RAFT groups,
 // and either start or restart RAFT nodes.
-// This function triggers RAFT nodes to be created, and is the entrace to the RAFT
+// This function triggers RAFT nodes to be created, and is the entrance to the RAFT
 // world from main.go.
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
-	gr = &groupi{
-		blockDeletes: new(sync.Mutex),
-		tablets:      make(map[string]*pb.Tablet),
-	}
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
 	if len(x.WorkerConfig.MyAddr) == 0 {
@@ -159,6 +157,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	gr.informZeroAboutTablets()
 	gr.proposeInitialSchema()
+	gr.proposeInitialTypes()
 }
 
 func (g *groupi) informZeroAboutTablets() {
@@ -187,20 +186,30 @@ func (g *groupi) informZeroAboutTablets() {
 	}
 }
 
+func (g *groupi) proposeInitialTypes() {
+	initialTypes := schema.InitialTypes()
+	for _, t := range initialTypes {
+		if _, ok := schema.State().GetType(t.TypeName); ok {
+			continue
+		}
+		g.upsertSchema(nil, t)
+	}
+}
+
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else if gid == 0 {
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s)
+			g.upsertSchema(s, nil)
 		} else {
 			// The schema for this predicate has already been proposed.
 			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
@@ -209,7 +218,7 @@ func (g *groupi) proposeInitialSchema() {
 	}
 }
 
-func (g *groupi) upsertSchema(sch *pb.SchemaUpdate) {
+func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
@@ -222,7 +231,12 @@ func (g *groupi) upsertSchema(sch *pb.SchemaUpdate) {
 	}
 
 	m.StartTs = ts.StartId
-	m.Schema = append(m.Schema, sch)
+	if sch != nil {
+		m.Schema = append(m.Schema, sch)
+	}
+	if typ != nil {
+		m.Types = append(m.Types, typ)
+	}
 
 	// This would propose the schema mutation and make sure some node serves this predicate
 	// and has the schema defined above.
@@ -266,7 +280,7 @@ func UpdateMembershipState(ctx context.Context) error {
 	g := groups()
 	p := g.Leader(0)
 	if p == nil {
-		return errors.Errorf("Don't have the address of any dgraphzero server")
+		return errors.Errorf("don't have the address of any dgraph zero leader")
 	}
 
 	c := pb.NewZeroClient(p.Get())
@@ -329,6 +343,7 @@ func (g *groupi) applyState(state *pb.MembershipState) {
 		// removing a freshly added node.
 
 		for _, member := range g.state.GetRemoved() {
+			// TODO: This leader check can be done once instead of repeatedly.
 			if member.GetGroupId() == g.Node.gid && g.Node.AmLeader() {
 				go func() {
 					// Don't try to remove a member if it's already marked as removed in
@@ -992,7 +1007,7 @@ func EnterpriseEnabled() bool {
 		return false
 	}
 	g := groups()
-	if g == nil {
+	if g.state == nil {
 		return askZeroForEE()
 	}
 	g.RLock()
@@ -1042,34 +1057,43 @@ func askZeroForEE() bool {
 }
 
 // SubscribeForUpdates will listen for updates for the given group.
-func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32) {
-	for {
-		// Connect to any of the group 1 nodes.
-		members := groups().AnyTwoServers(group)
-		// There may be a lag while starting so keep retrying.
-		if len(members) == 0 {
-			continue
-		}
-		pool := conn.GetPools().Connect(members[0])
-		client := pb.NewWorkerClient(pool.Get())
+func SubscribeForUpdates(prefixes [][]byte, cb func(kvs *badgerpb.KVList), group uint32,
+	closer *y.Closer) {
+	defer closer.Done()
 
-		// Get Subscriber stream.
-		stream, err := client.Subscribe(context.Background(), &pb.SubscriptionRequest{
-			Prefixes: prefixes,
-		})
-		if err != nil {
-			glog.Errorf("Error from alpha client subscribe: %v", err)
-			continue
-		}
-	receiver:
-		for {
-			// Listen for updates.
-			kvs, err := stream.Recv()
-			if err != nil {
-				glog.Errorf("Error from worker subscribe stream: %v", err)
-				break receiver
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		default:
+
+			// Connect to any of the group 1 nodes.
+			members := groups().AnyTwoServers(group)
+			// There may be a lag while starting so keep retrying.
+			if len(members) == 0 {
+				continue
 			}
-			cb(kvs)
+			pool := conn.GetPools().Connect(members[0])
+			client := pb.NewWorkerClient(pool.Get())
+
+			// Get Subscriber stream.
+			stream, err := client.Subscribe(context.Background(),
+				&pb.SubscriptionRequest{Prefixes: prefixes})
+			if err != nil {
+				glog.Errorf("Error from alpha client subscribe: %v", err)
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+		receiver:
+			for {
+				// Listen for updates.
+				kvs, err := stream.Recv()
+				if err != nil {
+					glog.Errorf("Error from worker subscribe stream: %v", err)
+					break receiver
+				}
+				cb(kvs)
+			}
 		}
 	}
 }

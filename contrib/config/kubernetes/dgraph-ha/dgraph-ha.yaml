@@ -16,7 +16,7 @@ metadata:
     app: dgraph-zero
     monitor: zero-dgraph-io
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 5080
     targetPort: 5080
@@ -35,7 +35,7 @@ metadata:
     app: dgraph-alpha
     monitor: alpha-dgraph-io
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 8080
     targetPort: 8080
@@ -56,7 +56,7 @@ metadata:
   labels:
     app: dgraph-alpha
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 8080
     targetPort: 8080
@@ -71,7 +71,7 @@ metadata:
   labels:
     app: dgraph-ratel
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 8000
     targetPort: 8000
@@ -93,6 +93,10 @@ spec:
     targetPort: 5080
     name: zero-grpc
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph Zero pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-zero
 ---
@@ -110,6 +114,10 @@ spec:
     targetPort: 7080
     name: alpha-grpc-int
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph alpha pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-alpha
 ---
@@ -175,7 +183,7 @@ spec:
           httpGet:
             path: /health
             port: 6080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
@@ -184,7 +192,7 @@ spec:
           httpGet:
             path: /state
             port: 6080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
@@ -310,7 +318,7 @@ spec:
           httpGet:
             path: /health?live=1
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
@@ -319,7 +327,7 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
