@@ -34,56 +34,60 @@ import (
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) (uint64, error) {
+func RunRestore(pdir, location, backupId string) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
-		return 0, err
+		return LoadResult{0, 0, err}
 	}
 
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, backupId, func(r io.Reader, groupId int, preds predicateSet) error {
-		dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-		db, err := badger.OpenManaged(badger.DefaultOptions(dir).
-			WithSyncWrites(false).
-			WithTableLoadingMode(options.MemoryMap).
-			WithValueThreshold(1 << 10).
-			WithNumVersionsToKeep(math.MaxInt32))
-		if err != nil {
-			return err
-		}
-		defer db.Close()
-		fmt.Printf("Restoring groupId: %d\n", groupId)
-		if !pathExist(dir) {
-			fmt.Println("Creating new db:", dir)
-		}
-		gzReader, err := gzip.NewReader(r)
-		if err != nil {
-			return nil
-		}
-		if err := loadFromBackup(db, gzReader, preds); err != nil {
-			return err
-		}
+	return Load(location, backupId,
+		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
-		return x.WriteGroupIdFile(dir, uint32(groupId))
-	})
+			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
+			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
+				WithSyncWrites(false).
+				WithTableLoadingMode(options.MemoryMap).
+				WithValueThreshold(1 << 10).
+				WithNumVersionsToKeep(math.MaxInt32))
+			if err != nil {
+				return 0, err
+			}
+			defer db.Close()
+			fmt.Printf("Restoring groupId: %d\n", groupId)
+			if !pathExist(dir) {
+				fmt.Println("Creating new db:", dir)
+			}
+			gzReader, err := gzip.NewReader(r)
+			if err != nil {
+				return 0, nil
+			}
+			maxUid, err := loadFromBackup(db, gzReader, preds)
+			if err != nil {
+				return 0, err
+			}
+
+			return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
+		})
 }
 
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
-func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
+func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
 	loader := db.NewKVLoader(16)
+	var maxUid uint64
 	for {
 		var sz uint64
 		err := binary.Read(br, binary.LittleEndian, &sz)
 		if err == io.EOF {
 			break
 		} else if err != nil {
-			return err
+			return 0, err
 		}
 
 		if cap(unmarshalBuf) < int(sz) {
@@ -91,23 +95,23 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 		}
 
 		if _, err = io.ReadFull(br, unmarshalBuf[:sz]); err != nil {
-			return err
+			return 0, err
 		}
 
 		list := &bpb.KVList{}
 		if err := list.Unmarshal(unmarshalBuf[:sz]); err != nil {
-			return err
+			return 0, err
 		}
 
 		for _, kv := range list.Kv {
 			if len(kv.GetUserMeta()) != 1 {
-				return errors.Errorf(
+				return 0, errors.Errorf(
 					"Unexpected meta: %v for key: %s", kv.UserMeta, hex.Dump(kv.Key))
 			}
 
 			restoreKey, err := fromBackupKey(kv.Key)
 			if err != nil {
-				return err
+				return 0, err
 			}
 
 			// Filter keys using the preds set. Do not do this filtering for type keys
@@ -115,10 +119,15 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 			// match a predicate name.
 			parsedKey, err := x.Parse(restoreKey)
 			if err != nil {
-				return errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
+				return 0, errors.Wrapf(err, "could not parse key %s", hex.Dump(restoreKey))
 			}
 			if _, ok := preds[parsedKey.Attr]; !parsedKey.IsType() && !ok {
 				continue
+			}
+
+			// Update the max id that has been seen while restoring this backup.
+			if parsedKey.Uid > maxUid {
+				maxUid = parsedKey.Uid
 			}
 
 			var restoreVal []byte
@@ -127,34 +136,34 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) error {
 				var err error
 				backupPl := &pb.BackupPostingList{}
 				if err := backupPl.Unmarshal(kv.Value); err != nil {
-					return errors.Wrapf(err, "while reading backup posting list")
+					return 0, errors.Wrapf(err, "while reading backup posting list")
 				}
 				restoreVal, err = posting.FromBackupPostingList(backupPl).Marshal()
 				if err != nil {
-					return errors.Wrapf(err, "while converting backup posting list")
+					return 0, errors.Wrapf(err, "while converting backup posting list")
 				}
 
 			case posting.BitSchemaPosting:
 				restoreVal = kv.Value
 
 			default:
-				return errors.Errorf(
+				return 0, errors.Errorf(
 					"Unexpected meta %d for key %s", kv.UserMeta[0], hex.Dump(kv.Key))
 			}
 
 			kv.Key = restoreKey
 			kv.Value = restoreVal
 			if err := loader.Set(kv); err != nil {
-				return err
+				return 0, err
 			}
 		}
 	}
 
 	if err := loader.Finish(); err != nil {
-		return err
+		return 0, err
 	}
 
-	return nil
+	return maxUid, nil
 }
 
 func fromBackupKey(key []byte) ([]byte, error) {
