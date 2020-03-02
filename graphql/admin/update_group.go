@@ -33,7 +33,6 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 	srcUID := resolve.MutationQueryVarUID
 
 	var mutSet, mutDel []*dgoapi.Mutation
-	queries := []*gql.GraphQuery{upsertQuery}
 	varGen := resolve.VariableGenerator(0)
 	ruleType := m.MutatedType().Field("rules").Type()
 
@@ -46,8 +45,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
-			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
-			queries = append(queries, ruleQuery)
+			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			nonExistentJson := []byte(fmt.Sprintf(`
 			{
@@ -85,8 +83,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		for _, predicate := range rules {
 			variable := varGen.Next(ruleType)
 
-			ruleQuery := writeAclRuleQuery(m, predicate.(string), variable)
-			queries = append(queries, ruleQuery)
+			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`
 			{
@@ -115,7 +112,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		return nil, nil, nil
 	}
 
-	return &gql.GraphQuery{Children: queries}, append(mutSet, mutDel...), nil
+	return &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}}, append(mutSet, mutDel...), nil
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
@@ -127,15 +124,13 @@ func (urw *updateGroupRewriter) FromMutationResult(
 	return ((*resolve.UpdateRewriter)(urw)).FromMutationResult(mutation, assigned, result)
 }
 
-// writeAclRuleQuery returns a *gql.GraphQuery to query a rule inside a group based on
-// its predicate value.
-func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.GraphQuery {
-	ruleQuery := resolve.RewriteUpsertQueryFromMutation(m)
-	ruleQuery.Attr = variable
-	ruleQuery.Var = ""
-	ruleQuery.Children = append(ruleQuery.Children, &gql.GraphQuery{
-		Attr: "dgraph.acl.rule",
-		Var:  variable,
+// addAclRuleQuery adds a *gql.GraphQuery to upsertQuery.Children to query a rule inside a group
+// based on its predicate value.
+func addAclRuleQuery(upsertQuery *gql.GraphQuery, predicate, variable string) {
+	upsertQuery.Children = append(upsertQuery.Children, &gql.GraphQuery{
+		Attr:  "dgraph.acl.rule",
+		Alias: variable,
+		Var:   variable,
 		Filter: &gql.FilterTree{
 			Op:    "",
 			Child: nil,
@@ -152,6 +147,4 @@ func writeAclRuleQuery(m schema.Mutation, predicate, variable string) *gql.Graph
 			},
 		},
 	})
-
-	return ruleQuery
 }
