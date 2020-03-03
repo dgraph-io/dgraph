@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package gssmr
+package ksmcc
 
 import (
 	"github.com/ChainSafe/gossamer/dot"
@@ -23,16 +23,16 @@ import (
 
 const (
 	// DefaultNode Default node implementation
-	DefaultNode = "gssmr"
+	DefaultNode = "ksmcc"
 	// DefaultConfigPath Default toml configuration path
-	DefaultConfigPath = "./node/gssmr/config.toml"
+	DefaultConfigPath = "./node/ksmcc/config.toml"
 	// DefaultGenesisPath Default genesis configuration path
-	DefaultGenesisPath = "./node/gssmr/genesis.json"
+	DefaultGenesisPath = "./node/ksmcc/genesis.json"
 
 	// DefaultNetworkPort network port
 	DefaultNetworkPort = 7001
 	// DefaultNetworkProtocolID ID
-	DefaultNetworkProtocolID = "/gossamer/gssmr/0"
+	DefaultNetworkProtocolID = "/gossamer/ksmcc/0"
 
 	// DefaultRPCHTTPHost Default host interface for the HTTP RPC server
 	DefaultRPCHTTPHost = "localhost"
@@ -45,7 +45,7 @@ var (
 	DefaultNetworkBootnodes = []string{}
 
 	// DefaultRPCModules holds defaults RPC modules
-	DefaultRPCModules = []string{"system", "author"}
+	DefaultRPCModules = []string{"system"}
 )
 
 var (

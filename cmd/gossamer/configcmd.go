@@ -19,7 +19,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -38,7 +37,9 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
+	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/ChainSafe/gossamer/node/gssmr"
+	"github.com/ChainSafe/gossamer/node/ksmcc"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
@@ -193,31 +194,51 @@ func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtim
 	return runtime.NewRuntime(code, ss, ks)
 }
 
-// getConfig checks for config.toml if --config flag is specified and sets CLI flags
-func getConfig(ctx *cli.Context) (*dot.Config, error) {
-	currentConfig := gssmr.DefaultConfig()
+// getConfig gets the configuration for the node using --node and/or --config,
+// then applies the remaining cli flag options to the configuration
+func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 
-	// Load config file.
-	if file := ctx.GlobalString(ConfigFileFlag.Name); file != "" {
-		configFile := ctx.GlobalString(ConfigFileFlag.Name)
-		err := loadConfig(configFile, currentConfig)
-		if err != nil {
-			log.Warn("err loading toml file", "err", err.Error())
-			return currentConfig, err
+	// check --node flag and apply node defaults to config
+	if name := ctx.GlobalString(NodeFlag.Name); name != "" {
+		switch name {
+		case "gssmr":
+			log.Trace("[gossamer] Using node implementation", "name", name)
+			cfg = gssmr.DefaultConfig()
+		case "ksmcc":
+			log.Trace("[gossamer] Using node implementation", "name", name)
+			cfg = ksmcc.DefaultConfig()
+		default:
+			return nil, fmt.Errorf("unknown node implementation: %s", name)
 		}
 	} else {
-		log.Debug("Config File is not set")
+		log.Trace("[gossamer] Using node implementation", "name", "gssmr")
+		cfg = gssmr.DefaultConfig()
 	}
 
-	//expand tilde or dot
-	newDataDir := expandTildeOrDot(currentConfig.Global.DataDir)
-	currentConfig.Global.DataDir = newDataDir
+	// check --config flag and apply toml configuration to config
+	if name := ctx.GlobalString(ConfigFlag.Name); name != "" {
+		log.Trace("[gossamer] Loading toml configuration file", "path", name)
+		err = loadConfig(name, cfg)
+		if err != nil {
+			return nil, err
+		}
+	}
 
-	// Parse CLI flags
-	setGlobalConfig(ctx, &currentConfig.Global)
-	setNetworkConfig(ctx, &currentConfig.Network)
-	setRPCConfig(ctx, &currentConfig.RPC)
-	return currentConfig, nil
+	// check --datadir flag and expand path of node data directory
+	if name := ctx.GlobalString(DataDirFlag.Name); name != "" {
+		log.Trace("[gossamer] Expanding data directory", "path", name)
+		cfg.Global.DataDir = utils.ExpandDir(name)
+	} else {
+		log.Trace("[gossamer] Expanding data directory", "path", cfg.Global.DataDir)
+		cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
+	}
+
+	// parse remaining flags
+	setGlobalConfig(ctx, &cfg.Global)
+	setNetworkConfig(ctx, &cfg.Network)
+	setRPCConfig(ctx, &cfg.RPC)
+
+	return cfg, nil
 }
 
 // loadConfig loads the contents from config toml and inits Config object
@@ -226,21 +247,25 @@ func loadConfig(file string, config *dot.Config) error {
 	if err != nil {
 		return err
 	}
-	log.Debug("Loading configuration", "path", filepath.Clean(fp))
+
+	log.Debug("[gossamer] Loading toml configuration", "path", filepath.Clean(fp))
+
 	f, err := os.Open(filepath.Clean(fp))
 	if err != nil {
 		return err
 	}
+
 	if err = tomlSettings.NewDecoder(f).Decode(&config); err != nil {
 		return err
 	}
+
 	return nil
 }
 
 func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
 	newDataDir := currentConfig.DataDir
 	if dir := ctx.GlobalString(DataDirFlag.Name); dir != "" {
-		newDataDir = expandTildeOrDot(dir)
+		newDataDir = utils.ExpandDir(dir)
 	}
 	currentConfig.DataDir, _ = filepath.Abs(newDataDir)
 
@@ -421,16 +446,4 @@ var tomlSettings = toml.Config{
 		}
 		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
 	},
-}
-
-// expandTildeOrDot will expand a tilde prefix path to full home path
-func expandTildeOrDot(targetPath string) string {
-	if strings.HasPrefix(targetPath, "~\\") || strings.HasPrefix(targetPath, "~/") {
-		if homeDir := gssmr.HomeDir(); homeDir != "" {
-			targetPath = homeDir + targetPath[1:]
-		}
-	} else if strings.HasPrefix(targetPath, ".\\") || strings.HasPrefix(targetPath, "./") {
-		targetPath, _ = filepath.Abs(targetPath)
-	}
-	return path.Clean(os.ExpandEnv(targetPath))
 }

@@ -25,46 +25,7 @@ import (
 	"github.com/urfave/cli"
 )
 
-var (
-	app       = cli.NewApp()
-	nodeFlags = []cli.Flag{
-		DataDirFlag,
-		RolesFlag,
-		ConfigFileFlag,
-		UnlockFlag,
-		PasswordFlag,
-		AuthorityFlag,
-		KeyFlag,
-	}
-	networkFlags = []cli.Flag{
-		BootnodesFlag,
-		PortFlag,
-		ProtocolIDFlag,
-		NoBootstrapFlag,
-		NoMdnsFlag,
-	}
-	rpcFlags = []cli.Flag{
-		RPCEnabledFlag,
-		RPCHostFlag,
-		RPCPortFlag,
-		RPCModuleFlag,
-	}
-	genesisFlags = []cli.Flag{
-		GenesisFlag,
-	}
-	cliFlags = []cli.Flag{
-		VerbosityFlag,
-	}
-	accountFlags = []cli.Flag{
-		GenerateFlag,
-		Sr25519Flag,
-		Ed25519Flag,
-		Secp256k1Flag,
-		ImportFlag,
-		ListFlag,
-		PasswordFlag,
-	}
-)
+var app = cli.NewApp()
 
 var (
 	dumpConfigCommand = cli.Command{
@@ -72,21 +33,16 @@ var (
 		Name:        "dumpconfig",
 		Usage:       "Show configuration values",
 		ArgsUsage:   "",
-		Flags:       append(nodeFlags, rpcFlags...),
+		Flags:       AllFlags(),
 		Category:    "CONFIGURATION DEBUGGING",
 		Description: `The dumpconfig command shows configuration values.`,
 	}
 	initCommand = cli.Command{
-		Action:    FixFlagOrder(initNode),
-		Name:      "init",
-		Usage:     "Initialize node genesis state",
-		ArgsUsage: "",
-		Flags: []cli.Flag{
-			DataDirFlag,
-			GenesisFlag,
-			VerbosityFlag,
-			ConfigFileFlag,
-		},
+		Action:      FixFlagOrder(initNode),
+		Name:        "init",
+		Usage:       "Initialize node genesis state",
+		ArgsUsage:   "",
+		Flags:       append(CLIFlags, NodeFlags...),
 		Category:    "INITIALIZATION",
 		Description: `The init command initializes the node with a genesis state. Usage: gossamer init --genesis genesis.json`,
 	}
@@ -94,7 +50,7 @@ var (
 		Action:   FixFlagOrder(handleAccounts),
 		Name:     "account",
 		Usage:    "manage gossamer keystore",
-		Flags:    append(append(accountFlags, DataDirFlag), VerbosityFlag),
+		Flags:    append(CLIFlags, append(NodeFlags, AccountFlags...)...),
 		Category: "KEYSTORE",
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
@@ -105,7 +61,7 @@ var (
 	}
 )
 
-// init initializes CLI
+// init initializes gossamer
 func init() {
 	app.Action = gossamer
 	app.Copyright = "Copyright 2019 ChainSafe Systems Authors"
@@ -118,16 +74,15 @@ func init() {
 		initCommand,
 		accountCommand,
 	}
-	app.Flags = append(app.Flags, nodeFlags...)
-	app.Flags = append(app.Flags, networkFlags...)
-	app.Flags = append(app.Flags, rpcFlags...)
-	app.Flags = append(app.Flags, genesisFlags...)
-	app.Flags = append(app.Flags, cliFlags...)
+	app.Flags = append(app.Flags, CLIFlags...)
+	app.Flags = append(app.Flags, NodeFlags...)
+	app.Flags = append(app.Flags, AccountFlags...)
+	app.Flags = append(app.Flags, NetworkFlags...)
+	app.Flags = append(app.Flags, RPCFlags...)
 }
 
 func main() {
 	if err := app.Run(os.Args); err != nil {
-		//log err
 		_, _ = fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

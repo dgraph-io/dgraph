@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"math/big"
+	"path"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
@@ -26,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/ChainSafe/gossamer/node/gssmr"
 
 	log "github.com/ChainSafe/log15"
@@ -40,9 +42,10 @@ func loadGenesis(ctx *cli.Context) error {
 
 	// read genesis file
 	genesisPath := getGenesisPath(ctx)
-	dataDir := expandTildeOrDot(currentConfig.Global.DataDir)
+
+	dataDir := utils.ExpandDir(currentConfig.Global.DataDir)
 	if ctx.String(DataDirFlag.Name) != "" {
-		dataDir = expandTildeOrDot(ctx.String(DataDirFlag.Name))
+		dataDir = utils.ExpandDir(ctx.String(DataDirFlag.Name))
 	}
 
 	log.Debug("Loading genesis", "genesisPath", genesisPath, "dataDir", dataDir)
@@ -130,6 +133,8 @@ func getGenesisPath(ctx *cli.Context) string {
 		return file
 	} else if file := ctx.GlobalString(GenesisFlag.Name); file != "" {
 		return file
+	} else if name := ctx.GlobalString(NodeFlag.Name); name != "" {
+		return path.Join("node", name, "genesis.json")
 	} else {
 		return gssmr.DefaultGenesisPath
 	}

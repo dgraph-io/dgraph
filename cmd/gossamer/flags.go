@@ -22,10 +22,20 @@ import (
 )
 
 var (
-	// DataDirFlag BadgerDB Data directory
+	// NodeFlag node implementation name
+	NodeFlag = cli.StringFlag{
+		Name:  "node",
+		Usage: "Node implementation name",
+	}
+	// ConfigFlag TOML configuration file
+	ConfigFlag = cli.StringFlag{
+		Name:  "config",
+		Usage: "TOML configuration file",
+	}
+	// DataDirFlag data directory for node
 	DataDirFlag = cli.StringFlag{
 		Name:  "datadir",
-		Usage: "Data directory for the database",
+		Usage: "Data directory for the node",
 	}
 	// RolesFlag role of the node (0 = no network, 1 = full node, ...)
 	RolesFlag = cli.StringFlag{
@@ -43,25 +53,10 @@ var (
 		Name:  "genesis",
 		Usage: "Path to genesis JSON file",
 	}
-	// ConfigFileFlag TOML configuration file
-	ConfigFileFlag = cli.StringFlag{
-		Name:  "config",
-		Usage: "TOML configuration file",
-	}
-	// UnlockFlag keystore
-	UnlockFlag = cli.StringFlag{
-		Name:  "unlock",
-		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
-	}
 	// AuthorityFlag is used as bool flag to set node as authority or not
 	AuthorityFlag = cli.BoolFlag{
 		Name:  "authority",
 		Usage: "Set to true if node is a BABE authority, false otherwise.",
-	}
-	// KeyFlag specifies a test keyring account to use
-	KeyFlag = cli.StringFlag{
-		Name:  "key",
-		Usage: "Specify a test keyring account to use: eg --key=alice",
 	}
 )
 
@@ -120,6 +115,11 @@ var (
 
 // Account management flags
 var (
+	// KeyFlag specifies a test keyring account to use
+	KeyFlag = cli.StringFlag{
+		Name:  "key",
+		Usage: "Specify a test keyring account to use: eg --key=alice",
+	}
 	// GenerateFlag Generate a new keypair
 	GenerateFlag = cli.BoolFlag{
 		Name:  "generate",
@@ -129,6 +129,11 @@ var (
 	PasswordFlag = cli.StringFlag{
 		Name:  "password",
 		Usage: "Password used to encrypt the keystore. Used with --generate or --unlock",
+	}
+	// UnlockFlag keystore
+	UnlockFlag = cli.StringFlag{
+		Name:  "unlock",
+		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
 	}
 	// ImportFlag Import encrypted keystore
 	ImportFlag = cli.StringFlag{
@@ -156,6 +161,59 @@ var (
 		Usage: "Specify account type as secp256k1",
 	}
 )
+
+var (
+	// CLIFlags cli flags
+	CLIFlags = []cli.Flag{
+		VerbosityFlag,
+	}
+	// NodeFlags node flags
+	NodeFlags = []cli.Flag{
+		NodeFlag,
+		ConfigFlag,
+		DataDirFlag,
+		RolesFlag,
+		GenesisFlag,
+		AuthorityFlag,
+	}
+	// AccountFlags account flags
+	AccountFlags = []cli.Flag{
+		KeyFlag,
+		GenerateFlag,
+		PasswordFlag,
+		UnlockFlag,
+		ImportFlag,
+		ListFlag,
+		Ed25519Flag,
+		Sr25519Flag,
+		Secp256k1Flag,
+	}
+	// NetworkFlags network flags
+	NetworkFlags = []cli.Flag{
+		PortFlag,
+		ProtocolIDFlag,
+		BootnodesFlag,
+		NoBootstrapFlag,
+		NoMdnsFlag,
+	}
+	// RPCFlags rpc flags
+	RPCFlags = []cli.Flag{
+		RPCEnabledFlag,
+		RPCHostFlag,
+		RPCPortFlag,
+		RPCModuleFlag,
+	}
+)
+
+// AllFlags returns all cli flags
+func AllFlags() (flags []cli.Flag) {
+	flags = append(flags, CLIFlags...)
+	flags = append(flags, NodeFlags...)
+	flags = append(flags, AccountFlags...)
+	flags = append(flags, NetworkFlags...)
+	flags = append(flags, RPCFlags...)
+	return flags
+}
 
 // FixFlagOrder allow us to use various flag order formats, eg: (gossamer init --config config.toml and  gossamer --config config.toml init)
 func FixFlagOrder(f func(ctx *cli.Context) error) func(*cli.Context) error {
