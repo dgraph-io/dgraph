@@ -43,7 +43,7 @@ var (
 
 // Just check the first and last entries and assumes everything in between is okay.
 func checkLoadedData(t *testing.T) {
-	resp, err := testutil.RetryQuery(context.Background(), dg, `
+	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
 				name
@@ -68,7 +68,7 @@ func checkLoadedData(t *testing.T) {
 		}
 	`, string(resp.GetJson()))
 
-	resp, err = testutil.RetryQuery(context.Background(), dg, `
+	resp, err = dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				name
