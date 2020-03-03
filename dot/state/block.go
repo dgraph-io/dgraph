@@ -23,6 +23,7 @@ import (
 	"math/big"
 	"reflect"
 	"sync"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
@@ -53,9 +54,10 @@ func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
 
 // BlockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type BlockState struct {
-	bt   *blocktree.BlockTree
-	db   *BlockDB
-	lock sync.RWMutex
+	bt          *blocktree.BlockTree
+	db          *BlockDB
+	lock        sync.RWMutex
+	genesisHash common.Hash
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
@@ -76,6 +78,8 @@ func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, 
 		db: NewBlockDB(db),
 	}
 
+	bs.genesisHash = bt.GenesisHash()
+
 	return bs, nil
 }
 
@@ -86,20 +90,36 @@ func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*Bloc
 		db: NewBlockDB(db),
 	}
 
-	err := bs.SetHeader(header)
+	err := bs.setArrivalTime(header.Hash(), uint64(time.Now().Unix()))
 	if err != nil {
 		return nil, err
 	}
+
+	err = bs.SetHeader(header)
+	if err != nil {
+		return nil, err
+	}
+
+	err = bs.SetBlock(&types.Block{
+		Header: header,
+		Body:   types.NewBody([]byte{}),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	bs.genesisHash = header.Hash()
 
 	return bs, nil
 }
 
 var (
 	// Data prefixes
-	headerPrefix     = []byte("hdr") // headerPrefix + hash -> header
-	babeHeaderPrefix = []byte("hba") // babeHeaderPrefix || epoch || slot -> babeHeader
-	blockDataPrefix  = []byte("bld") // blockDataPrefix + hash -> blockData
-	headerHashPrefix = []byte("hsh") // headerHashPrefix + encodedBlockNum -> hash
+	headerPrefix      = []byte("hdr") // headerPrefix + hash -> header
+	babeHeaderPrefix  = []byte("hba") // babeHeaderPrefix || epoch || slot -> babeHeader
+	blockDataPrefix   = []byte("bld") // blockDataPrefix + hash -> blockData
+	headerHashPrefix  = []byte("hsh") // headerHashPrefix + encodedBlockNum -> hash
+	arrivalTimePrefix = []byte("arr") // arrivalTimePrefix || hash -> arrivalTime
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -122,6 +142,16 @@ func headerHashKey(number uint64) []byte {
 // blockDataKey = blockDataPrefix + hash
 func blockDataKey(hash common.Hash) []byte {
 	return append(blockDataPrefix, hash.ToBytes()...)
+}
+
+// arrivalTimeKey = arrivalTimePrefix + hash
+func arrivalTimeKey(hash common.Hash) []byte {
+	return append(arrivalTimePrefix, hash.ToBytes()...)
+}
+
+// GenesisHash returns the hash of the genesis block
+func (bs *BlockState) GenesisHash() common.Hash {
+	return bs.genesisHash
 }
 
 // GetHeader returns a BlockHeader for a given hash
@@ -270,10 +300,20 @@ func (bs *BlockState) SetBlockData(blockData *types.BlockData) error {
 	return err
 }
 
-// AddBlock adds a block to the blocktree and the DB
+// AddBlock adds a block to the blocktree and the DB with arrival time as current unix time
 func (bs *BlockState) AddBlock(block *types.Block) error {
+	return bs.AddBlockWithArrivalTime(block, uint64(time.Now().Unix()))
+}
+
+// AddBlockWithArrivalTime adds a block to the blocktree and the DB with the given arrival time
+func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime uint64) error {
+	err := bs.setArrivalTime(block.Header.Hash(), arrivalTime)
+	if err != nil {
+		return err
+	}
+
 	// add block to blocktree
-	err := bs.bt.AddBlock(block)
+	err = bs.bt.AddBlock(block)
 	if err != nil {
 		return err
 	}
@@ -310,19 +350,34 @@ func (bs *BlockState) BestBlockHeader() (*types.Header, error) {
 	return bs.GetHeader(bs.BestBlockHash())
 }
 
+// BestBlock returns the current head of the chain
+func (bs *BlockState) BestBlock() (*types.Block, error) {
+	return bs.GetBlockByHash(bs.BestBlockHash())
+}
+
 // SubChain returns the sub-blockchain between the starting hash and the ending hash using the block tree
 func (bs *BlockState) SubChain(start, end common.Hash) []common.Hash {
 	return bs.bt.SubBlockchain(start, end)
 }
 
-// ComputeSlotForBlock returns the slot number for a given block
-// TODO: can move this out of the blocktree into BABE
-func (bs *BlockState) ComputeSlotForBlock(block *types.Block, slotDuration uint64) uint64 {
-	return bs.bt.ComputeSlotForBlock(block, slotDuration)
-}
-
 func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {
 	return bs.db.db.Put(common.BestBlockHashKey, hash[:])
+}
+
+// GetArrivalTime returns the arrival time of a block given its hash
+func (bs *BlockState) GetArrivalTime(hash common.Hash) (uint64, error) {
+	time, err := bs.db.db.Get(arrivalTimeKey(hash))
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint64(time), nil
+}
+
+func (bs *BlockState) setArrivalTime(hash common.Hash, arrivalTime uint64) error {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, arrivalTime)
+	return bs.db.db.Put(arrivalTimeKey(hash), buf)
 }
 
 // babeHeaderKey = babeHeaderPrefix || epoch || slice

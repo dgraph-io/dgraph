@@ -19,15 +19,12 @@ package network
 import (
 	crand "crypto/rand"
 	"encoding/hex"
-	"errors"
 	"io"
 	"io/ioutil"
 	mrand "math/rand"
 	"os"
 	"path"
 	"path/filepath"
-
-	"github.com/ChainSafe/gossamer/lib/common"
 
 	"github.com/filecoin-project/go-leb128"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -145,34 +142,4 @@ func uint64ToLEB128(in uint64) []byte { //nolint:unused
 //nolint:deadcode
 func LEB128ToUint64(in []byte) uint64 { //nolint:unused
 	return leb128.ToUInt64(in)
-}
-
-// decodeMessage decodes the message based on message type
-func decodeMessage(r io.Reader) (m Message, err error) {
-	msgType, err := common.ReadByte(r)
-	if err != nil {
-		return nil, err
-	}
-
-	switch msgType {
-	case StatusMsgType:
-		m = new(StatusMessage)
-		err = m.Decode(r)
-	case BlockRequestMsgType:
-		m = new(BlockRequestMessage)
-		err = m.Decode(r)
-	case BlockResponseMsgType:
-		m = new(BlockResponseMessage)
-		err = m.Decode(r)
-	case BlockAnnounceMsgType:
-		m = new(BlockAnnounceMessage)
-		err = m.Decode(r)
-	case TransactionMsgType:
-		m = new(TransactionMessage)
-		err = m.Decode(r)
-	default:
-		return nil, errors.New("unsupported message type")
-	}
-
-	return m, err
 }

@@ -352,7 +352,7 @@ func TestDecodeBlock(t *testing.T) {
 		ExtrinsicsRoot: extrinsicsRoot,
 		Digest:         [][]byte{},
 	}
-	expected := NewBlock(header, NewBody(nil), 0)
+	expected := NewBlock(header, NewBody(nil))
 
 	if !reflect.DeepEqual(bh, expected) {
 		t.Fatalf("Fail: got %v, %v expected %v, %v", bh.Header, bh.Body, expected.Header, expected.Body)
@@ -389,7 +389,7 @@ func TestEncodeBlock(t *testing.T) {
 		Digest:         [][]byte{},
 	}
 
-	block := NewBlock(header, NewBody([]byte{}), 0)
+	block := NewBlock(header, NewBody([]byte{}))
 	enc, err := block.Encode()
 	if err != nil {
 		t.Fatal(err)

@@ -326,7 +326,7 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 	case network.TransactionMsgType:
 		err = s.ProcessTransactionMessage(msg)
 	default:
-		err = fmt.Errorf("Received unsupported message type")
+		err = fmt.Errorf("Received unsupported message type %d", msgType)
 	}
 
 	return err

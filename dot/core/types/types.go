@@ -36,17 +36,15 @@ func NewExtrinsic(e []byte) Extrinsic {
 
 // Block defines a state block
 type Block struct {
-	Header      *Header
-	Body        *Body
-	arrivalTime uint64 // arrival time of this block
+	Header *Header
+	Body   *Body
 }
 
 // NewBlock returns a new Block
-func NewBlock(header *Header, body *Body, arrivalTime uint64) *Block {
+func NewBlock(header *Header, body *Body) *Block {
 	return &Block{
-		Header:      header,
-		Body:        body,
-		arrivalTime: arrivalTime,
+		Header: header,
+		Body:   body,
 	}
 }
 
@@ -56,16 +54,6 @@ func NewEmptyBlock() *Block {
 		Header: new(Header),
 		Body:   new(Body),
 	}
-}
-
-// GetBlockArrivalTime returns the arrival time for a block
-func (b *Block) GetBlockArrivalTime() uint64 {
-	return b.arrivalTime
-}
-
-// SetBlockArrivalTime sets the arrival time for a block
-func (b *Block) SetBlockArrivalTime(t uint64) {
-	b.arrivalTime = t
 }
 
 // Encode returns the SCALE encoding of a block

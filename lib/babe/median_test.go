@@ -7,8 +7,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
-	"github.com/ChainSafe/gossamer/lib/blocktree"
-	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
@@ -69,26 +67,9 @@ func TestSlotOffset(t *testing.T) {
 	}
 }
 
-func createFlatBlockTree(t *testing.T, depth int, blockState BlockState) {
-	zeroHash, err := common.HexToHash("0x00")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	genesisBlock := &types.Block{
-		Header: &types.Header{
-			ParentHash: zeroHash,
-			Number:     big.NewInt(0),
-		},
-		Body: &types.Body{},
-	}
-	genesisBlock.SetBlockArrivalTime(uint64(1000))
-
-	bt := blocktree.NewBlockTreeFromGenesis(genesisBlock.Header, nil)
-	previousHash := genesisBlock.Header.Hash()
-	previousAT := genesisBlock.GetBlockArrivalTime()
-
-	blockState.SetBlock(genesisBlock)
+func addBlocksToState(t *testing.T, depth int, blockState BlockState) {
+	previousHash := blockState.BestBlockHash()
+	previousAT := uint64(0)
 
 	for i := 1; i <= depth; i++ {
 		block := &types.Block{
@@ -99,28 +80,30 @@ func createFlatBlockTree(t *testing.T, depth int, blockState BlockState) {
 			Body: &types.Body{},
 		}
 
-		hash := block.Header.Hash()
-		block.SetBlockArrivalTime(previousAT + uint64(1000))
+		arrivalTime := previousAT + uint64(1000)
+		previousHash = block.Header.Hash()
+		previousAT = arrivalTime
 
-		bt.AddBlock(block)
-		previousHash = hash
-		previousAT = block.GetBlockArrivalTime()
-		blockState.AddBlock(block)
+		err := blockState.AddBlockWithArrivalTime(block, arrivalTime)
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
 func TestSlotTime(t *testing.T) {
-	t.Skip()
 	dataDir, err := ioutil.TempDir("", "./test_data")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dbSrv := state.NewService(dataDir)
-	err = dbSrv.Initialize(&types.Header{
+	genesisHeader := &types.Header{
 		Number:    big.NewInt(0),
 		StateRoot: trie.EmptyHash,
-	}, trie.NewEmptyTrie(nil))
+	}
+
+	dbSrv := state.NewService(dataDir)
+	err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +127,7 @@ func TestSlotTime(t *testing.T) {
 
 	babesession := createTestSession(t, cfg)
 
-	createFlatBlockTree(t, 100, dbSrv.Block)
+	addBlocksToState(t, 100, dbSrv.Block)
 
 	res, err := babesession.slotTime(103, 20)
 	if err != nil {

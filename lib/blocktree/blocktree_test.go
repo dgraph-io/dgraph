@@ -38,7 +38,6 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 	require.NotNil(t, bt)
 
 	previousHash := bt.head.hash
-	previousAT := bt.head.arrivalTime
 
 	hashes := []common.Hash{bt.head.hash}
 	for i := 1; i <= depth; i++ {
@@ -52,11 +51,9 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 
 		hash := block.Header.Hash()
 		hashes = append(hashes, hash)
-		block.SetBlockArrivalTime(previousAT + uint64(1000))
 
 		bt.AddBlock(block)
 		previousHash = hash
-		previousAT = block.GetBlockArrivalTime()
 	}
 
 	return bt, hashes
@@ -168,19 +165,6 @@ func TestBlockTree_Subchain(t *testing.T) {
 			t.Errorf("expected Hash: 0x%X got: 0x%X\n", expectedPath[i], n.hash)
 		}
 	}
-}
-
-func TestBlockTree_ComputeSlotForNode(t *testing.T) {
-	bt, hashes := createFlatTree(t, 9)
-
-	expectedSlotNumber := uint64(9)
-
-	slotNumber := bt.computeSlotForNode(bt.getNode(hashes[9]), 1000)
-
-	if slotNumber != expectedSlotNumber {
-		t.Errorf("expected Slot Number: %d got: %d", expectedSlotNumber, slotNumber)
-	}
-
 }
 
 // TODO: Need to define leftmost (see BlockTree.LongestPath)
