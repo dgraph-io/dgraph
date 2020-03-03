@@ -90,7 +90,20 @@ func (r *reducer) run() error {
 			for _, itr := range mapItrs {
 				go itr.startBatching(partitionKeys)
 			}
-			r.reduce(partitionKeys, mapItrs, ci)
+
+			partCh := make(chan []*bpb.KV)
+			listParts := make([]*bpb.KV, 0)
+			partWg := sync.WaitGroup{}
+			partWg.Add(1)
+			appendParts := func() {
+				for parts := range partCh {
+					listParts = append(listParts, parts...)
+				}
+				partWg.Done()
+			}
+
+			r.reduce(partitionKeys, mapItrs, ci, partCh)
+			go appendParts()
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -100,6 +113,11 @@ func (r *reducer) run() error {
 				if err := itr.Close(); err != nil {
 					fmt.Printf("Error while closing iterator: %v", err)
 				}
+			}
+
+			partWg.Wait()
+			wb := db.NewWriteBatch()
+			for _, part := range listParts {
 			}
 		}(i, r.createBadger(i))
 	}
@@ -115,7 +133,8 @@ func (r *reducer) createBadger(i int) *badger.DB {
 			// Crash since the enterprise license is not enabled..
 			log.Fatal("Enterprise License needed for the Encryption feature.")
 		} else {
-			log.Printf("Encryption feature enabled. Using encryption key file: %v", r.opt.BadgerKeyFile)
+			log.Printf("Encryption feature enabled. Using encryption key file: %v",
+				r.opt.BadgerKeyFile)
 		}
 	}
 
@@ -305,12 +324,14 @@ func (r *reducer) streamIdFor(pred string) uint32 {
 	return streamId
 }
 
-func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
+func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer, partCh chan []*bpb.KV) {
 	defer closer.Done()
 	for req := range entryCh {
 
 		req.list = &bpb.KVList{}
-		countKeys := r.toList(req.entries, req.list)
+		countKeys, listParts := r.toList(req.entries, req.list)
+		partCh <- listParts
+
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
 			x.Check(err)
@@ -342,7 +363,9 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 	}
 }
 
-func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
+func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator,
+	ci *countIndexer, partCh chan []*bpb.KV) {
+
 	cpu := runtime.NumCPU()
 	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
@@ -351,7 +374,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	for i := 0; i < cpu; i++ {
 		// Start listening to encode entries
 		// For time being let's lease 100 stream id for each encoder.
-		go r.encode(encoderCh, encoderCloser)
+		go r.encode(encoderCh, encoderCloser, partCh)
 	}
 	// Start listening to write the badger list.
 	writerCloser := y.NewCloser(1)
@@ -396,7 +419,7 @@ func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *cou
 	writerCloser.SignalAndWait()
 }
 
-func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEntry {
+func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) ([]*countIndexEntry, []*bpb.KV) {
 	sort.Slice(bufEntries, func(i, j int) bool {
 		lh, err := GetKeyForMapEntry(bufEntries[i])
 		x.Check(err)
@@ -413,6 +436,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 	countEntries := []*countIndexEntry{}
 	currentBatch := make([]*pb.MapEntry, 0, 100)
 	freelist := make([]*pb.MapEntry, 0)
+	listParts := make([]*bpb.KV, 0)
 
 	appendToList := func() {
 		if len(currentBatch) == 0 {
@@ -478,13 +502,20 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 		x.Check(err)
 
 		if len(kvs) > 1 {
-			keys := make([][]byte, 0)
-			for _, kv := range kvs {
-				keys = append(keys, kv.Key)
-			}
-			fmt.Printf("keys %+v\n", keys)
+			// This is a multi-part list. The main part of the list (whose key is the
+			// same as a non-split key) can be written to disk using the stream writer.
+			// However, the rest of the parts have a flipped bit (indicating that they
+			// are parts of a bigger list) which cannot be written to the stream writer
+			// because it requires that the keys are written in order and the keys of
+			// the list parts do not follow this property.
+			// Store these keys in a list for now so they can be written to Badger after
+			// the stream writer is done writing the rest of the keys.
+			list.Kv = append(list.Kv, kvs[0])
+			listParts = append(listParts, kvs[1:]...)
+		} else {
+			// This is not a multi-part list which can be stored in disk using the stream writer.
+			list.Kv = append(list.Kv, kvs...)
 		}
-		list.Kv = append(list.Kv, kvs...)
 
 		uids = uids[:0]
 		pl.Reset()
@@ -517,5 +548,5 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) []*countIndexEnt
 	}
 
 	appendToList()
-	return countEntries
+	return countEntries, listParts
 }
