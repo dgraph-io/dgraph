@@ -273,10 +273,7 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 ### Set up ACL Rules
 
-Also add a note in the start of the section that the dgraph acl tool is deprecated and would be removed in the next release. ACL changes can be made by using the /admin GraphQL endpoint on any Alpha node.
-
-Now that your cluster is running with the ACL feature turned on, you can set up the ACL
-rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
+Now that your cluster is running with the ACL feature turned on, you can set up the ACL rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground or GraphiQL.
 
 A typical workflow is the following:
 
