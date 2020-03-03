@@ -25,11 +25,6 @@ import (
 	"strings"
 )
 
-const (
-	// HashLength is the expected length of the common.Hash type
-	HashLength = 32
-)
-
 // StringToInts turns a string consisting of ints separated by commas into an int array
 func StringToInts(in string) ([]int, error) {
 	intstrs := strings.Split(in, ",")
@@ -78,21 +73,6 @@ func HexToBytes(in string) ([]byte, error) {
 	in = in[2:]
 	out, err := hex.DecodeString(in)
 	return out, err
-}
-
-// HexToHash turns a 0x prefixed hex string into type Hash
-func HexToHash(in string) (Hash, error) {
-	if strings.Compare(in[:2], "0x") != 0 {
-		return [32]byte{}, errors.New("could not byteify non 0x prefixed string")
-	}
-	in = in[2:]
-	out, err := hex.DecodeString(in)
-	if err != nil {
-		return [32]byte{}, err
-	}
-	var buf = [32]byte{}
-	copy(buf[:], out)
-	return buf, err
 }
 
 // Concat concatenates two byte arrays
@@ -147,18 +127,6 @@ func ReadByte(r io.Reader) (byte, error) {
 		return 0, err
 	}
 	return buf[0], nil
-}
-
-// ReadHash reads a 32-byte hash from the reader and returns it
-func ReadHash(r io.Reader) (Hash, error) {
-	buf := make([]byte, 32)
-	_, err := r.Read(buf)
-	if err != nil {
-		return Hash{}, err
-	}
-	h := [32]byte{}
-	copy(h[:], buf)
-	return Hash(h), nil
 }
 
 // ReadUint32 reads a 4-byte uint32 from the reader and returns it

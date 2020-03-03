@@ -17,40 +17,44 @@
 package common
 
 import (
-	"encoding/hex"
-	"errors"
-	"io"
-	"strings"
+	"golang.org/x/crypto/blake2b"
+	"golang.org/x/crypto/sha3"
 )
 
-const (
-	// HashLength is the expected length of the common.Hash type
-	HashLength = 32
-)
-
-// HexToHash turns a 0x prefixed hex string into type Hash
-func HexToHash(in string) (Hash, error) {
-	if strings.Compare(in[:2], "0x") != 0 {
-		return [32]byte{}, errors.New("could not byteify non 0x prefixed string")
+// Blake2b128 returns the 128-bit blake2b hash of the input data
+func Blake2b128(in []byte) ([]byte, error) {
+	hasher, err := blake2b.New(16, nil)
+	if err != nil {
+		return nil, err
 	}
-	in = in[2:]
-	out, err := hex.DecodeString(in)
+
+	return hasher.Sum(in)[:16], nil
+}
+
+// Blake2bHash returns the 256-bit blake2b hash of the input data
+func Blake2bHash(in []byte) (Hash, error) {
+	h, err := blake2b.New256(nil)
 	if err != nil {
 		return [32]byte{}, err
 	}
+
+	var res []byte
+	_, err = h.Write(in)
+	if err != nil {
+		return [32]byte{}, err
+	}
+
+	res = h.Sum(nil)
 	var buf = [32]byte{}
-	copy(buf[:], out)
+	copy(buf[:], res)
 	return buf, err
 }
 
-// ReadHash reads a 32-byte hash from the reader and returns it
-func ReadHash(r io.Reader) (Hash, error) {
-	buf := make([]byte, 32)
-	_, err := r.Read(buf)
-	if err != nil {
-		return Hash{}, err
-	}
-	h := [32]byte{}
-	copy(h[:], buf)
-	return Hash(h), nil
+// Keccak256 returns the keccak256 hash of the input data
+func Keccak256(in []byte) Hash {
+	h := sha3.NewLegacyKeccak256()
+	hash := h.Sum(in)
+	var buf = [32]byte{}
+	copy(buf[:], hash)
+	return buf
 }
