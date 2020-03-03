@@ -197,7 +197,8 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel()
 
-			resp, err := testutil.RetryQuery(ctx, dg, query)
+			txn := dg.NewTxn()
+			resp, err := txn.Query(ctx, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
@@ -213,7 +214,8 @@ func (s *suite) testCase(query, wantResult string) func(*testing.T) {
 			ctx2, cancel2 := context.WithTimeout(context.Background(), time.Minute)
 			defer cancel2()
 
-			resp, err := testutil.RetryQuery(ctx2, dg, query)
+			txn := dg.NewTxn()
+			resp, err := txn.Query(ctx2, query)
 			if err != nil {
 				t.Fatalf("Could not query: %v", err)
 			}
