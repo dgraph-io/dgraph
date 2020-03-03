@@ -6,6 +6,7 @@ import (
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type updateGroupRewriter resolve.UpdateRewriter
@@ -32,13 +33,17 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 	upsertQuery := resolve.RewriteUpsertQueryFromMutation(m)
 	srcUID := resolve.MutationQueryVarUID
 
+	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
 	varGen := resolve.VariableGenerator(0)
 	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
 		rules, _ := setArg.(map[string]interface{})["rules"].([]interface{})
-		rules = removeDuplicateRuleRef(rules)
+		rules, errs := removeDuplicateRuleRef(rules)
+		if len(errs) != 0 {
+			errSet = schema.GQLWrapf(errs, "failed to rewrite set payload")
+		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
 			variable := varGen.Next(ruleType)
@@ -80,29 +85,34 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 
 	if delArg != nil {
 		rules, _ := delArg.(map[string]interface{})["rules"].([]interface{})
-		for _, predicate := range rules {
-			variable := varGen.Next(ruleType)
+		var errs x.GqlErrorList
+		for i, predicate := range rules {
+			if predicate == "" {
+				errs = appendEmptyPredicateError(errs, i)
+				continue
+			}
 
+			variable := varGen.Next(ruleType)
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
-			deleteJson := []byte(fmt.Sprintf(`
-			{
-				"uid": "%s",
-				"dgraph.acl.rule": [
-					{
-						"uid":                    "uid(%s)",
-						"dgraph.type":            "",
-						"dgraph.rule.predicate":  "",
-						"dgraph.rule.permission": ""
-					}
-				]
-			}`, srcUID, variable))
+			deleteJson := []byte(fmt.Sprintf(`[
+				{
+					"uid": "%s",
+					"dgraph.acl.rule": ["uid(%s)"]
+				},
+				{
+					"uid": "uid(%s)"
+				}
+			]`, srcUID, variable, variable))
 
 			mutDel = append(mutDel, &dgoapi.Mutation{
 				DeleteJson: deleteJson,
 				Cond: fmt.Sprintf(`@if(gt(len(%s),0) AND gt(len(%s),0))`, resolve.MutationQueryVar,
 					variable),
 			})
+		}
+		if len(errs) != 0 {
+			errDel = schema.GQLWrapf(errs, "failed to rewrite remove payload")
 		}
 	}
 
@@ -112,7 +122,9 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		return nil, nil, nil
 	}
 
-	return &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}}, append(mutSet, mutDel...), nil
+	return &gql.GraphQuery{Children: []*gql.GraphQuery{upsertQuery}},
+		append(mutSet, mutDel...),
+		schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.

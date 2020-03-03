@@ -1,10 +1,12 @@
 package admin
 
 import (
+	"fmt"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 type addGroupRewriter resolve.AddRewriter
@@ -23,7 +25,7 @@ func (mrw *addGroupRewriter) Rewrite(
 	// remove rules with same predicate name for each group input
 	for i, groupInput := range addGroupInput {
 		rules, _ := groupInput.(map[string]interface{})["rules"].([]interface{})
-		rules = removeDuplicateRuleRef(rules)
+		rules, _ = removeDuplicateRuleRef(rules)
 		addGroupInput[i].(map[string]interface{})["rules"] = rules
 	}
 
@@ -43,12 +45,18 @@ func (mrw *addGroupRewriter) FromMutationResult(
 
 // removeDuplicateRuleRef removes duplicate rules based on predicate value.
 // for duplicate rules, only the last rule with duplicate predicate name is preserved.
-func removeDuplicateRuleRef(rules []interface{}) []interface{} {
+func removeDuplicateRuleRef(rules []interface{}) ([]interface{}, x.GqlErrorList) {
+	var errs x.GqlErrorList
 	predicateMap := make(map[string]int, len(rules))
 	i := 0
 
-	for _, rule := range rules {
+	for j, rule := range rules {
 		predicate, _ := rule.(map[string]interface{})["predicate"].(string)
+
+		if predicate == "" {
+			errs = appendEmptyPredicateError(errs, j)
+			continue
+		}
 
 		// this ensures that only the last rule with duplicate predicate name is preserved
 		if idx, ok := predicateMap[predicate]; !ok {
@@ -60,5 +68,12 @@ func removeDuplicateRuleRef(rules []interface{}) []interface{} {
 		}
 	}
 
-	return rules[:i]
+	return rules[:i], errs
+}
+
+func appendEmptyPredicateError(errs x.GqlErrorList, i int) x.GqlErrorList {
+	err := fmt.Errorf("at index %d: predicate value can't be empty string", i)
+	errs = append(errs, schema.AsGQLErrors(err)...)
+
+	return errs
 }
