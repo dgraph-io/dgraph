@@ -2173,7 +2173,7 @@ Currently, "rdf" and "json" are the only formats supported.
 
 ### Shutdown Database
 
-A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
+A clean exit of a single Dgraph node is initiated bby running the following GraphQL mutation on /admin endpoint.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
 {{% /notice %}}
 

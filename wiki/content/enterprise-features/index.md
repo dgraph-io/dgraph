@@ -70,7 +70,7 @@ To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
 [whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
-Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
+Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground and GraphiQL.
 
 #### Backup to Amazon S3
 
@@ -227,7 +227,6 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 
 {{% notice "note" %}}
 This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
-The Dgraph ACL tool is deprecated and would be removed in the next release. ACL changes can be made by using the `/admin` GraphQL endpoint on any Alpha node.
 {{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
@@ -272,6 +271,8 @@ If you are using docker-compose, a sample cluster can be set up by:
 4. `docker-compose up` to start the cluster using the `docker-compose.yml` generated above.
 
 ### Set up ACL Rules
+
+Also add a note in the start of the section that the dgraph acl tool is deprecated and would be removed in the next release. ACL changes can be made by using the /admin GraphQL endpoint on any Alpha node.
 
 Now that your cluster is running with the ACL feature turned on, you can set up the ACL
 rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
