@@ -202,15 +202,20 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	startTs := proposal.Mutations.StartTs
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		// For schema mutation, it is possible that a mutation with higher timestamp
+		// was committed before this schema mutation. In that case, if we do not do the
+		// following, we may miss adding indexes for the previous mutation.
+		startTs = posting.Oracle().MaxAssigned()
+
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
-			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
-				return err
-			}
+		}
+		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+			return err
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {

@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -242,6 +241,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	// If a background task for this predicate is already running,
+	// we should reject all the new alter requests.
+	if schema.State().IndexingInProg() {
+		return nil, errors.New("schema is already being modified")
+	}
+
 	for _, update := range result.Preds {
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
@@ -253,12 +258,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
-		}
-
-		// If a background task for this predicate is already running,
-		// we should reject all the new alter requests.
-		if schema.State().IsBeingModified(update.Predicate) {
-			return nil, fmt.Errorf("schema for %v is already being modified", update.Predicate)
 		}
 	}
 
