@@ -87,12 +87,13 @@ func (exp *Experiment) verify() {
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
+	require.NoError(testutil.WaitForAlter(ctx, dg, exp.schema))
 
 	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
 	require.NoError(exp.t, err, "mutation failed")
 
-	response, err := testutil.RetryQuery(ctx, dg, exp.query)
+	response, err := dg.NewReadOnlyTxn().Query(ctx, exp.query)
 	require.NoError(exp.t, err, "query failed")
 	testutil.CompareJSON(exp.t, exp.expected, string(response.GetJson()))
 }

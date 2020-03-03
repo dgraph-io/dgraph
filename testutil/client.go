@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -32,6 +33,8 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -160,43 +163,63 @@ func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	require.NoError(t, err)
 }
 
-// RetryQuery will call RetryQueryWithTxn.
-func RetryQuery(ctx context.Context, dg *dgo.Dgraph, q string) (*api.Response, error) {
-	return RetryQueryWithTxn(ctx, dg.NewReadOnlyTxn(), q)
+// SameIndexes checks whether SchemaUpdate and SchemaNode have same indexes.
+func SameIndexes(su *pb.SchemaUpdate, n *pb.SchemaNode) bool {
+	if (su.Directive == pb.SchemaUpdate_REVERSE) != n.Reverse {
+		return false
+	}
+	if !reflect.DeepEqual(su.Tokenizer, n.Tokenizer) {
+		return false
+	}
+	if su.Count != n.Count {
+		return false
+	}
+	return true
 }
 
-// RetryQueryWithVars will retry query until it succeeds.
-func RetryQueryWithVars(ctx context.Context, dg *dgo.Dgraph, q string, vars map[string]string) (
-	*api.Response, error) {
+// WaitForAlter waits for schema to have the same indexes as the given schema.
+func WaitForAlter(ctx context.Context, dg *dgo.Dgraph, s string) error {
+	ps, err := schema.Parse(s)
+	if err != nil {
+		return err
+	}
+	exp := make(map[string]*pb.SchemaUpdate)
+	for _, su := range ps.Preds {
+		exp[su.Predicate] = su
+	}
 
-	return retryQuery(ctx, func() (*api.Response, error) {
-		return dg.NewReadOnlyTxn().QueryWithVars(ctx, q, vars)
-	})
-}
-
-// RetryQueryWithTxn will retry a query until it succeeds or a non-retryable error is received.
-func RetryQueryWithTxn(ctx context.Context, txn *dgo.Txn, q string) (*api.Response, error) {
-	return retryQuery(ctx, func() (*api.Response, error) {
-		return txn.Query(ctx, q)
-	})
-}
-
-func retryQuery(ctx context.Context, f func() (*api.Response, error)) (*api.Response, error) {
-	retries := 0
-	maxRetries := 200
 	for {
-		retries++
-		resp, err := f()
-		if retries > maxRetries {
-			return resp, err
+		resp, err := dg.NewReadOnlyTxn().Query(ctx, "schema{}")
+		if err != nil {
+			return err
 		}
 
-		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
-			strings.Contains(err.Error(), "is not indexed") ||
-			strings.Contains(err.Error(), "doesn't have reverse edge") ||
-			strings.Contains(err.Error(), "Need @count directive in schema") ||
-			strings.Contains(err.Error(), "does not have trigram index")) {
+		var result struct {
+			Schema []*pb.SchemaNode
+		}
+		if err := json.Unmarshal(resp.Json, &result); err != nil {
+			return err
+		}
 
+		for _, n := range result.Schema {
+			if su, ok := exp[n.Predicate]; !ok {
+				continue
+			} else if !SameIndexes(su, n) {
+				break
+			} else {
+				return nil
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
+}
+
+// RetryQuery will retry a query until it succeeds or a non-retryable error is received.
+func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		resp, err := dg.NewTxn().Query(context.Background(), q)
+		if err != nil && strings.Contains(err.Error(), "Please retry") {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}

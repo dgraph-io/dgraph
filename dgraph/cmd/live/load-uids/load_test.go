@@ -52,7 +52,7 @@ func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 }
 
 func checkLoadedData(t *testing.T, newUids bool) {
-	resp, err := testutil.RetryQuery(context.Background(), dg, `
+	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Homer")) {
 				uid
@@ -83,7 +83,7 @@ func checkLoadedData(t *testing.T, newUids bool) {
 		testutil.CompareJSONMaps(t, wantMap, gotMap)
 	}
 
-	resp, err = testutil.RetryQuery(context.Background(), dg, `
+	resp, err = dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: anyofterms(name, "Maggie")) {
 				uid

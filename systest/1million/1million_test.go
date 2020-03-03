@@ -20,7 +20,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"io/ioutil"
 	"testing"
 	"time"
 
@@ -9265,12 +9265,21 @@ var tc = []struct {
 func Test1Million(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	if err != nil {
-		log.Fatalf("Error while getting a dgraph client: %v", err)
+		t.Fatalf("Error while getting a dgraph client: %v", err)
+	}
+
+	schemaFile := "benchmarks/data/1million.schema"
+	data, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		t.Fatalf("Error in reading the schema :: %v", err)
+	}
+	if err := testutil.WaitForAlter(context.Background(), dg, string(data)); err != nil {
+		t.Fatalf("Error in waiting for alter to complete :: %v", err)
 	}
 
 	for _, tt := range tc {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		resp, err := testutil.RetryQuery(ctx, dg, tt.query)
+		resp, err := dg.NewTxn().Query(ctx, tt.query)
 		cancel()
 
 		if ctx.Err() == context.DeadlineExceeded {
