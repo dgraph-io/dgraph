@@ -102,8 +102,8 @@ func (r *reducer) run() error {
 				partWg.Done()
 			}
 
-			r.reduce(partitionKeys, mapItrs, ci, partCh)
 			go appendParts()
+			r.reduce(partitionKeys, mapItrs, ci, partCh)
 			ci.wait()
 
 			if err := writer.Flush(); err != nil {
@@ -115,9 +115,16 @@ func (r *reducer) run() error {
 				}
 			}
 
+			close(partCh)
 			partWg.Wait()
-			wb := db.NewWriteBatch()
+			wb := db.NewWriteBatchAt(r.writeTs)
 			for _, part := range listParts {
+				x.AssertTrue(len(part.UserMeta) > 0)
+				wb.SetEntry(&badger.Entry{
+					Key:      part.Key,
+					Value:    part.Value,
+					UserMeta: part.UserMeta[0],
+				})
 			}
 		}(i, r.createBadger(i))
 	}
@@ -330,7 +337,9 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer, partCh c
 
 		req.list = &bpb.KVList{}
 		countKeys, listParts := r.toList(req.entries, req.list)
-		partCh <- listParts
+		if len(listParts) > 0 {
+			partCh <- listParts
+		}
 
 		for _, kv := range req.list.Kv {
 			pk, err := x.Parse(kv.Key)
