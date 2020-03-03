@@ -73,10 +73,12 @@ func TestStringIndex(t *testing.T) {
 			}
 			i++
 		}
-		dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		if err := testutil.RetryMutation(dg, &api.Mutation{
 			CommitNow: true,
 			SetNquads: bb.Bytes(),
-		})
+		}); err != nil {
+			t.Fatalf("error in mutation :: %v", err)
+		}
 	}
 
 	fmt.Println("building indexes in background")
@@ -173,7 +175,7 @@ func TestStringIndex(t *testing.T) {
 		q := fmt.Sprintf(`{ q(func: uid(%v)) {balance}}`, uid)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
-			t.Fatalf("error in query: %v :: %v\n", q, err)
+			fmt.Errorf("error in query: %v :: %w", q, err)
 		}
 		var data struct {
 			Q []struct {
@@ -181,7 +183,7 @@ func TestStringIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			t.Fatalf("error in json.Unmarshal :: %v", err)
+			fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		if len(data.Q) != 0 {
@@ -195,7 +197,7 @@ func TestStringIndex(t *testing.T) {
 		q := fmt.Sprintf(`{ q(func: anyoftext(balance, "%v")) {uid}}`, b)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
-			t.Fatalf("error in query: %v :: %v\n", q, err)
+			return fmt.Errorf("error in query: %v :: %w", q, err)
 		}
 		var data struct {
 			Q []struct {
@@ -203,7 +205,7 @@ func TestStringIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			t.Fatalf("error in json.Unmarshal :: %v", err)
+			return fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		actual := make([]int, len(data.Q))

@@ -107,10 +107,22 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
-	if err != nil {
-		return errors.Wrapf(err, "while running request with retries")
+	for {
+		_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
+		if err != nil && strings.Contains(err.Error(), "is already being modified") {
+			time.Sleep(time.Second)
+			continue
+		} else if err != nil {
+			return errors.Wrapf(err, "while running request with retries")
+		} else {
+			break
+		}
 	}
+
+	if err := waitForAlter(s); err != nil {
+		return errors.Wrapf(err, "while waiting for alter to complete")
+	}
+
 	return nil
 }
 
@@ -122,6 +134,46 @@ func alterSchemaWithRetry(s string) error {
 		}
 	}
 	return err
+}
+
+// waitForAlter waits for the alter operation to complete.
+func waitForAlter(s string) error {
+	ps, err := schema.Parse(s)
+	if err != nil {
+		return err
+	}
+	exp := make(map[string]*pb.SchemaUpdate)
+	for _, su := range ps.Preds {
+		exp[su.Predicate] = su
+	}
+
+	for {
+		resp, _, err := queryWithTs("schema{}", "application/graphql+-", "false", 0)
+		if err != nil {
+			return err
+		}
+
+		var result struct {
+			Data struct {
+				Schema []*pb.SchemaNode
+			}
+		}
+		if err := json.Unmarshal([]byte(resp), &result); err != nil {
+			return err
+		}
+
+		for _, n := range result.Data.Schema {
+			if su, ok := exp[n.Predicate]; !ok {
+				continue
+			} else if !testutil.SameIndexes(su, n) {
+				break
+			} else {
+				return nil
+			}
+		}
+
+		time.Sleep(time.Second)
+	}
 }
 
 func dropAll() error {

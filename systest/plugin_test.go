@@ -80,6 +80,7 @@ func TestPlugins(t *testing.T) {
 		check(t, cluster.client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
+		check(t, testutil.WaitForAlter(ctx, cluster.client, initialSchema))
 
 		txn := cluster.client.NewTxn()
 		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
@@ -87,7 +88,8 @@ func TestPlugins(t *testing.T) {
 		check(t, txn.Commit(ctx))
 
 		for _, test := range cases {
-			reply, err := testutil.RetryQuery(ctx, cluster.client, test.query)
+			txn := cluster.client.NewTxn()
+			reply, err := txn.Query(ctx, test.query)
 			check(t, err)
 			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
