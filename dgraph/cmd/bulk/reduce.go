@@ -120,11 +120,11 @@ func (r *reducer) run() error {
 			wb := db.NewWriteBatchAt(r.writeTs)
 			for _, part := range listParts {
 				x.AssertTrue(len(part.UserMeta) > 0)
-				wb.SetEntry(&badger.Entry{
+				x.Check(wb.SetEntry(&badger.Entry{
 					Key:      part.Key,
 					Value:    part.Value,
 					UserMeta: part.UserMeta[0],
-				})
+				}))
 			}
 		}(i, r.createBadger(i))
 	}
