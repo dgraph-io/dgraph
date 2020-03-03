@@ -20,6 +20,7 @@ import (
 	"os"
 	"path"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -42,6 +43,19 @@ var TestMessage = &BlockRequestMessage{
 
 // maximum wait time for non-status message to be handled
 var TestMessageTimeout = 3 * time.Second
+
+// time between connection retries (BackoffBase default 5 seconds)
+var TestBackoffTimeout = 5 * time.Second
+
+// newTestDataDir returns the path of a test directory
+func newTestDataDir(t *testing.T, name string) string {
+	return path.Join(os.TempDir(), "gossamer-test", t.Name(), name)
+}
+
+// failedToDial returns true if "failed to dial" error, otherwise false
+func failedToDial(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "failed to dial")
+}
 
 // helper method to create and start a new network service
 func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan Message, msgRec chan Message) {
@@ -84,7 +98,7 @@ func TestStartService(t *testing.T) {
 
 // test broacast messages from core service
 func TestBroadcastMessages(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -101,7 +115,7 @@ func TestBroadcastMessages(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -124,6 +138,11 @@ func TestBroadcastMessages(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

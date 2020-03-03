@@ -18,14 +18,13 @@ package network
 
 import (
 	"os"
-	"path"
 	"testing"
 	"time"
 )
 
 // test gossip messages to connected peers
 func TestGossip(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -41,7 +40,7 @@ func TestGossip(t *testing.T) {
 
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -63,11 +62,16 @@ func TestGossip(t *testing.T) {
 	}
 
 	err = nodeB.host.connect(*addrInfosA[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeB.host.connect(*addrInfosA[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dataDirC := path.Join(os.TempDir(), "gossamer-test", "nodeC")
+	dataDirC := newTestDataDir(t, "nodeC")
 	defer os.RemoveAll(dataDirC)
 
 	configC := &Config{
@@ -84,6 +88,11 @@ func TestGossip(t *testing.T) {
 	nodeC.noStatus = true
 
 	err = nodeC.host.connect(*addrInfosA[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeC.host.connect(*addrInfosA[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +103,11 @@ func TestGossip(t *testing.T) {
 	}
 
 	err = nodeC.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeC.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}

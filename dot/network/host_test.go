@@ -18,7 +18,6 @@ package network
 
 import (
 	"os"
-	"path"
 	"reflect"
 	"testing"
 	"time"
@@ -26,7 +25,7 @@ import (
 
 // test host connect method
 func TestConnect(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -43,7 +42,7 @@ func TestConnect(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -66,6 +65,11 @@ func TestConnect(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +96,7 @@ func TestConnect(t *testing.T) {
 
 // test host bootstrap method on start
 func TestBootstrap(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -111,7 +115,7 @@ func TestBootstrap(t *testing.T) {
 
 	addrA := nodeA.host.multiaddrs()[0]
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -131,26 +135,34 @@ func TestBootstrap(t *testing.T) {
 	peerCountA := nodeA.host.peerCount()
 	peerCountB := nodeB.host.peerCount()
 
-	if peerCountA != 1 {
-		t.Error(
-			"node A does not have expected peer count",
-			"\nexpected:", 1,
-			"\nreceived:", peerCountA,
-		)
+	if peerCountA == 0 {
+		// check peerstore for disconnected peers
+		peerCountA := len(nodeA.host.h.Peerstore().Peers())
+		if peerCountA == 0 {
+			t.Error(
+				"node A does not have expected peer count",
+				"\nexpected:", "not zero",
+				"\nreceived:", peerCountA,
+			)
+		}
 	}
 
-	if peerCountB != 1 {
-		t.Error(
-			"node B does not have expected peer count",
-			"\nexpected:", 1,
-			"\nreceived:", peerCountB,
-		)
+	if peerCountB == 0 {
+		// check peerstore for disconnected peers
+		peerCountB := len(nodeB.host.h.Peerstore().Peers())
+		if peerCountB == 0 {
+			t.Error(
+				"node B does not have expected peer count",
+				"\nexpected:", "not zero",
+				"\nreceived:", peerCountB,
+			)
+		}
 	}
 }
 
 // test host ping method
 func TestPing(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -167,7 +179,7 @@ func TestPing(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -190,6 +202,11 @@ func TestPing(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +229,7 @@ func TestPing(t *testing.T) {
 
 // test host send method
 func TestSend(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -229,7 +246,7 @@ func TestSend(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -252,6 +269,11 @@ func TestSend(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +299,7 @@ func TestSend(t *testing.T) {
 
 // test host broadcast method
 func TestBroadcast(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -294,7 +316,7 @@ func TestBroadcast(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -317,11 +339,16 @@ func TestBroadcast(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	dataDirC := path.Join(os.TempDir(), "gossamer-test", "nodeC")
+	dataDirC := newTestDataDir(t, "nodeC")
 	defer os.RemoveAll(dataDirC)
 
 	configC := &Config{
@@ -344,6 +371,11 @@ func TestBroadcast(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosC[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosC[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -380,7 +412,7 @@ func TestBroadcast(t *testing.T) {
 
 // test host send method with existing stream
 func TestExistingStream(t *testing.T) {
-	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
+	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -402,7 +434,7 @@ func TestExistingStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
+	dataDirB := newTestDataDir(t, "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -425,6 +457,11 @@ func TestExistingStream(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
+	// retry connect if "failed to dial" error
+	if failedToDial(err) {
+		time.Sleep(TestBackoffTimeout)
+		err = nodeA.host.connect(*addrInfosB[0])
+	}
 	if err != nil {
 		t.Fatal(err)
 	}
