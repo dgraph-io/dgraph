@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
