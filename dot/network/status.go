@@ -61,28 +61,28 @@ func (status *status) setHostMessage(msg Message) {
 // handleConn starts status processes upon connection
 func (status *status) handleConn(conn network.Conn) {
 	ctx := context.Background()
-	peer := conn.RemotePeer()
+	remotePeer := conn.RemotePeer()
 
 	// check if host message set
 	if status.hostMessage != nil {
 
 		// send initial host status message to peer upon connection
-		err := status.host.send(peer, status.hostMessage)
+		err := status.host.send(remotePeer, status.hostMessage)
 		if err != nil {
 			log.Error(
 				"Failed to send host status message to peer",
-				"peer", peer,
+				"peer", remotePeer,
 				"err", err,
 			)
 		}
 
 		// handle status message expiration
-		go status.expireStatus(ctx, peer)
+		go status.expireStatus(ctx, remotePeer)
 
 	} else {
 		log.Error(
 			"Failed to send host status message to peer",
-			"peer", peer,
+			"peer", remotePeer,
 			"err", "host status message not set",
 		)
 	}
@@ -101,10 +101,6 @@ func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 
 		// update peer status message
 		status.peerMessage[peer] = msg
-
-		// check if message arrived is a block bigger then our latest one
-		// if so, fallback
-		// BlockRequestMessage
 
 		// wait then send next host status message
 		go status.sendNextMessage(ctx, peer)

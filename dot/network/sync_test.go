@@ -17,21 +17,21 @@
 package network
 
 import (
+	"math/big"
 	"os"
+	"path"
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/stretchr/testify/require"
 )
 
-// wait time for status messages to be exchanged and handled
-var TestStatusTimeout = time.Second
-
-// test exchange status messages after peer connected
-func TestStatus(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
+// have a peer send a message status with a block ahead
+// test exchanged messages after peer connected are correct
+func TestSendBlockRequestMessage(t *testing.T) {
+	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
 	defer os.RemoveAll(dataDirA)
 
 	configA := &Config{
@@ -42,7 +42,8 @@ func TestStatus(t *testing.T) {
 		NoMdns:      true,
 	}
 
-	nodeA, _, msgRecA := createTestService(t, configA)
+	blockStateA := newMockBlockState(big.NewInt(3))
+	nodeA, msgSendA, msgRecA := createTestServiceWithBlockState(t, configA, blockStateA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -70,7 +71,7 @@ func TestStatus(t *testing.T) {
 	// simulate host status message sent from core service on startup
 	msgRecA <- testStatusMessage
 
-	dataDirB := newTestDataDir(t, "nodeB")
+	dataDirB := path.Join(os.TempDir(), "gossamer-test", "nodeB")
 	defer os.RemoveAll(dataDirB)
 
 	configB := &Config{
@@ -81,7 +82,8 @@ func TestStatus(t *testing.T) {
 		NoMdns:      true,
 	}
 
-	nodeB, _, msgRecB := createTestService(t, configB)
+	blockStateB := newMockBlockState(big.NewInt(1))
+	nodeB, _, msgRecB := createTestServiceWithBlockState(t, configB, blockStateB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -95,11 +97,6 @@ func TestStatus(t *testing.T) {
 	}
 
 	err = nodeA.host.connect(*addrInfosB[0])
-	// retry connect if "failed to dial" error
-	if failedToDial(err) {
-		time.Sleep(TestBackoffTimeout)
-		err = nodeA.host.connect(*addrInfosB[0])
-	}
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,23 +110,37 @@ func TestStatus(t *testing.T) {
 	if !nodeB.status.confirmed(nodeA.host.h.ID()) {
 		t.Error("node B did not confirm status of node A")
 	}
-}
 
-// createTestServiceWithBlockState is a helper method to create and start a new network service
-func createTestServiceWithBlockState(t *testing.T, cfg *Config, blockState *MockBlockState) (node *Service, msgSend chan Message, msgRec chan Message) {
-	msgRec = make(chan Message)
-	msgSend = make(chan Message)
-
-	cfg.BlockState = blockState
-	cfg.NetworkState = &MockNetworkState{}
-	cfg.ProtocolID = TestProtocolID
-
-	var err error
-	node, err = NewService(cfg, msgSend, msgRec)
+	// get latest block header from block state
+	latestHeader, err := blockStateB.BestBlockHeader()
 	require.Nil(t, err)
+	currentHash := latestHeader.Hash()
 
-	err = node.Start()
-	require.Nil(t, err)
+	// expected block request message
+	var expectedMessage = &BlockRequestMessage{
+		RequestedData: 3,
+		StartingBlock: append([]byte{0}, currentHash[:]...),
+		EndBlockHash:  optional.NewHash(true, latestHeader.Hash()),
+		Direction:     1,
+		Max:           optional.NewUint32(false, 0),
+	}
 
-	return node, msgSend, msgRec
+	select {
+	case msg := <-msgSendA:
+		require.NotNil(t, msg)
+
+		// assert correct cast
+		actualBlockRequest, ok := msg.(*BlockRequestMessage)
+		require.True(t, ok)
+		require.NotNil(t, actualBlockRequest)
+
+		// assign ID since its random
+		actualBlockRequest.ID = expectedMessage.ID
+
+		// assert everything else
+		require.Equal(t, expectedMessage, actualBlockRequest)
+
+	case <-time.After(TestMessageTimeout):
+		t.Error("node B timeout waiting for message from node A")
+	}
 }

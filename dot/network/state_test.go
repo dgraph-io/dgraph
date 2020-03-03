@@ -24,7 +24,13 @@ import (
 )
 
 // MockBlockState ...
-type MockBlockState struct{}
+type MockBlockState struct {
+	number *big.Int
+}
+
+func newMockBlockState(number *big.Int) *MockBlockState {
+	return &MockBlockState{number: number}
+}
 
 // BestBlockHeader for MockBlockState
 func (mbs *MockBlockState) BestBlockHeader() (*types.Header, error) {
@@ -41,9 +47,13 @@ func (mbs *MockBlockState) BestBlockHeader() (*types.Header, error) {
 		return nil, err
 	}
 
+	if mbs.number == nil {
+		mbs.number = big.NewInt(1)
+	}
+
 	return &types.Header{
 		ParentHash:     parentHash,
-		Number:         big.NewInt(1),
+		Number:         mbs.number,
 		StateRoot:      stateRoot,
 		ExtrinsicsRoot: extrinsicsRoot,
 		Digest:         [][]byte{{}},

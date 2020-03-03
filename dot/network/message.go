@@ -188,7 +188,7 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 		encMsg = append(encMsg, bm.StartingBlock...)
 	}
 
-	if !bm.EndBlockHash.Exists() {
+	if bm.EndBlockHash == nil || !bm.EndBlockHash.Exists() {
 		encMsg = append(encMsg, []byte{0, 0}...)
 	} else {
 		val := bm.EndBlockHash.Value()
