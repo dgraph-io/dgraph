@@ -159,7 +159,7 @@ func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
-// SetMutSchema sets the in memory schema for the predicate that has indexing going on in background.
+// SetMutSchema sets the mutation schema for the given predicate.
 func (s *state) SetMutSchema(pred string, schema *pb.SchemaUpdate) {
 	s.Lock()
 	defer s.Unlock()
@@ -377,12 +377,11 @@ func (s *state) HasNoConflict(pred string) bool {
 	return s.predicate[pred].GetNoConflict()
 }
 
-// IsBeingModified checks whether indexing is going on for a given predicate.
-func (s *state) IsBeingModified(pred string) bool {
+// IndexingInProg checks whether indexing is going on for a given predicate.
+func (s *state) IndexingInProg() bool {
 	s.RLock()
 	defer s.RUnlock()
-	_, ok := s.mutSchema[pred]
-	return ok
+	return len(s.mutSchema) > 0
 }
 
 // Init resets the schema state, setting the underlying DB to the given pointer.

@@ -262,41 +262,30 @@ func createRequest(method, contentType, url string, body string) (*http.Request,
 func runWithRetries(method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
 
-	retries := 0
-	maxRetries := 20
-	for {
-		retries++
-		req, err := createRequest(method, contentType, url, body)
+	req, err := createRequest(method, contentType, url, body)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	qr, respBody, err := runRequest(req)
+	if err != nil && strings.Contains(err.Error(), "Token is expired") {
+		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
+			Endpoint:   addr + "/admin",
+			RefreshJwt: grootRefreshJwt,
+		})
 		if err != nil {
 			return nil, nil, err
 		}
 
-		qr, respBody, err := runRequest(req)
-		if err == nil {
-			return qr, respBody, err
-		}
-
-		switch {
-		case retries > maxRetries:
-			return qr, respBody, err
-		case strings.Contains(err.Error(), "already being modified"):
-			time.Sleep(time.Second)
-		case strings.Contains(err.Error(), "is not indexed") ||
-			strings.Contains(err.Error(), "doesn't have reverse edge") ||
-			strings.Contains(err.Error(), "Need @count directive in schema"):
-			time.Sleep(time.Millisecond * 100)
-		case strings.Contains(err.Error(), "Token is expired"):
-			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-				Endpoint:   addr + "/admin",
-				RefreshJwt: grootRefreshJwt,
-			})
-			if err != nil {
-				return nil, nil, err
-			}
-		case retries > 0:
+		// create a new request since the previous request would have been closed upon the err
+		retryReq, err := createRequest(method, contentType, url, body)
+		if err != nil {
 			return nil, nil, err
 		}
+
+		return runRequest(retryReq)
 	}
+	return qr, respBody, err
 }
 
 // attach the grootAccessJWT to the request and sends the http request

@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math/rand"
 	"sort"
 	"strconv"
@@ -67,10 +66,12 @@ func TestReverseIndex(t *testing.T) {
 			}
 			i++
 		}
-		dg.NewTxn().Mutate(context.Background(), &api.Mutation{
+		if err := testutil.RetryMutation(dg, &api.Mutation{
 			CommitNow: true,
 			SetNquads: bb.Bytes(),
-		})
+		}); err != nil {
+			t.Fatalf("error in mutation :: %v", err)
+		}
 	}
 
 	fmt.Println("building indexes in background")
@@ -89,7 +90,7 @@ func TestReverseIndex(t *testing.T) {
 				CommitNow: true,
 				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> <%v> .`, uid-2, uid)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
-				log.Fatalf("error in mutation :: %v\n", err)
+				t.Fatalf("error in mutation :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
@@ -107,7 +108,7 @@ func TestReverseIndex(t *testing.T) {
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <balance> <%v> .`, uid-1, uid)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
-				log.Fatalf("error in mutation :: %v\n", err)
+				t.Fatalf("error in mutation :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
@@ -118,7 +119,7 @@ func TestReverseIndex(t *testing.T) {
 				SetNquads: []byte(fmt.Sprintf("<%v> <balance> <%v> .\n<%v> <balance> <%v> .",
 					uid+1, uid, uid-2, uid)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
-				log.Fatalf("error in mutation :: %v\n", err)
+				t.Fatalf("error in mutation :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
@@ -158,7 +159,7 @@ func TestReverseIndex(t *testing.T) {
 		q := fmt.Sprintf(`{ q(func: uid(%v)) { ~balance { uid }}}`, i)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
-			t.Fatalf("error in query :: %v\n", err)
+			return fmt.Errorf("error in query :: %w", err)
 		}
 		var data struct {
 			Q []struct {
@@ -168,7 +169,7 @@ func TestReverseIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			t.Fatalf("error in json.Unmarshal :: %v", err)
+			return fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		_, ok := updated.Load(i)

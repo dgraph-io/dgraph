@@ -116,70 +116,47 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
-func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	// wait until schema modification for this predicate is complete.
+func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+	// wait until schema modification for any predicate is complete.
 	// We cannot have two background tasks running for the same predicate.
 	// This is a race condition, we typically won't propose an index update
 	// if an index update is already going on. In this case, looks like the
 	// receiver of the update had probably finished the previous index update,
 	// but some follower (or perhaps leader) had not finished it.
+	// We cannot run two background tasks for different predicates either. This
+	// is because one task would call DropPrefix while other is trying to write
+	// to badger. Write to badger would fail leading to failure of indexing.
 	for {
-		if !schema.State().IsBeingModified(update.Predicate) {
+		if !schema.State().IndexingInProg() {
 			break
 		}
-		glog.Infof("waiting for indexing to complete for predicate %v", update.Predicate)
+		glog.Infoln("waiting for indexing to complete")
 		time.Sleep(time.Second * 2)
 	}
 
-	if tablet, err := groups().Tablet(update.Predicate); err != nil {
-		return err
-	} else if tablet.GetGroupId() != groups().groupId() {
-		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+	undoSchemaUpdate := func(predicate string) {
+		maxRetries := 10
+		loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+			return schema.Load(predicate)
+		})
+
+		if loadErr != nil {
+			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+		}
 	}
 
-	if err := checkSchema(update); err != nil {
-		return err
-	}
-
-	old, _ := schema.State().Get(ctx, update.Predicate)
-	// Sets only in memory, we will update it on disk only after schema mutations
-	// are successful and written to disk.
-	rebuild := posting.IndexRebuild{
-		Attr:          update.Predicate,
-		StartTs:       startTs,
-		OldSchema:     &old,
-		CurrentSchema: update,
-	}
-	querySchema := rebuild.GetQuerySchema()
-	schema.State().Set(update.Predicate, querySchema)
-	schema.State().SetMutSchema(update.Predicate, update)
-
-	if err := rebuild.DropIndexes(ctx); err != nil {
-		return err
-	}
-	if err := rebuild.BuildData(ctx); err != nil {
-		return err
-	}
-
-	go func() {
+	bgWork := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
 		complete := false
 		defer func() {
 			if complete {
 				return
 			}
 
-			maxRetries := 10
-			loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-				return schema.Load(update.Predicate)
-			})
-
-			if loadErr != nil {
-				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-			}
+			undoSchemaUpdate(update.Predicate)
 		}()
 
-		ctx := schema.GetWriteContext(context.Background())
-		if err := rebuild.BuildIndexes(ctx); err != nil {
+		wrtCtx := schema.GetWriteContext(context.Background())
+		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			glog.Errorf("error in building indexes in background, aborting :: %v\n", err)
 			return
 		}
@@ -189,8 +166,65 @@ func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uin
 		}
 		glog.Infof("Done schema update %+v\n", update)
 		complete = true
-	}()
+	}
 
+	fgWork := func(update *pb.SchemaUpdate) (func(), error) {
+		if tablet, err := groups().Tablet(update.Predicate); err != nil {
+			return nil, err
+		} else if tablet.GetGroupId() != groups().groupId() {
+			return nil, errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+		}
+
+		if err := checkSchema(update); err != nil {
+			return nil, err
+		}
+
+		old, _ := schema.State().Get(ctx, update.Predicate)
+		rebuild := posting.IndexRebuild{
+			Attr:          update.Predicate,
+			StartTs:       startTs,
+			OldSchema:     &old,
+			CurrentSchema: update,
+		}
+		querySchema := rebuild.GetQuerySchema()
+		// Sets only in memory, we will update it on disk only after
+		// schema mutations are successful and written to disk.
+		schema.State().Set(update.Predicate, querySchema)
+		schema.State().SetMutSchema(update.Predicate, update)
+
+		if err := rebuild.DropIndexes(ctx); err != nil {
+			return nil, err
+		}
+		if err := rebuild.BuildData(ctx); err != nil {
+			return nil, err
+		}
+
+		return func() { bgWork(update, rebuild) }, nil
+	}
+
+	// We want to complete all the foreground work for all the predicates.
+	// If everything goes fine, we do all the background work in separate goroutines.
+	complete := false
+	bgTasks := make([]func(), 0, len(updates))
+	for _, su := range updates {
+		task, err := fgWork(su)
+		if err != nil {
+			return err
+		}
+		defer func() {
+			if complete {
+				return
+			}
+
+			undoSchemaUpdate(su.Predicate)
+		}()
+
+		bgTasks = append(bgTasks, task)
+	}
+	for _, task := range bgTasks {
+		go task()
+	}
+	complete = true
 	return nil
 }
 
