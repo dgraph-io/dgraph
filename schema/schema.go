@@ -40,6 +40,10 @@ var (
 	pstore *badger.DB
 )
 
+// We maintain two schemas for a predicate if a background task is building indexes
+// for that predicate. Now, we need to use the new schema for mutations whereas
+// a different schema for queries. While calling functions in this package, we need
+// to set the context correctly as to which schema should be returned.
 type contextKey int
 
 const (
