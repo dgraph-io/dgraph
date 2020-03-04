@@ -120,7 +120,7 @@ func getColumnValues(columns []string, dataTypes []dataType,
 		case datetimeType:
 			valuePtrs = append(valuePtrs, new(mysql.NullTime))
 		default:
-			x.PanicWithSentryException(errors.Errorf("detected unsupported type %s on column %s",
+			x.Panic(errors.Errorf("detected unsupported type %s on column %s",
 				dataTypes[i], columns[i]))
 		}
 	}

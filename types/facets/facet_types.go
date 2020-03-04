@@ -53,6 +53,6 @@ func ValTypeForTypeID(typId TypeID) api.Facet_ValType {
 	case StringID:
 		return api.Facet_STRING
 	}
-	x.PanicWithSentryException(errors.New("unhandled case in ValTypeForTypeID"))
+	x.Panic(errors.New("unhandled case in ValTypeForTypeID"))
 	return api.Facet_ValType(0)
 }

@@ -35,6 +35,6 @@ func evalCompare(cmp string, lv, rv int64) bool {
 	case "eq":
 		return lv == rv
 	}
-	x.PanicWithSentryException(errors.New("EvalCompare: unreachable"))
+	x.Panic(errors.New("EvalCompare: unreachable"))
 	return false
 }

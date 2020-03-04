@@ -258,7 +258,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		PanicWithSentryException(errors.Errorf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 
@@ -301,7 +301,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		PanicWithSentryException(errors.Errorf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 

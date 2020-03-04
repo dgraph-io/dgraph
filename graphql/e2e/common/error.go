@@ -264,7 +264,7 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	x.PanicWithSentryException(errors.New(panicMsg))
+	x.Panic(errors.New(panicMsg))
 	return nil, nil
 }
 
@@ -272,6 +272,6 @@ func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	x.PanicWithSentryException(errors.New(panicMsg))
+	x.Panic(errors.New(panicMsg))
 	return nil, nil, nil
 }

@@ -368,7 +368,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			x.PanicWithSentryException(errors.Errorf(`query: %s\n
+			x.Panic(errors.Errorf(`query: %s\n
 			Uids in index for %q didn't match
 			calculated: %v. Len: %d
 				got:        %v

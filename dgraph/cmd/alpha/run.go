@@ -593,7 +593,7 @@ func run() {
 
 	// Simulate a Sentry exception or panic event as shown below.
 	// x.CaptureSentryException(errors.New("alpha exception"))
-	// x.PanicWithSentryException(errors.New("alpha manual panic will send 2 events"))
+	// x.Panic(errors.New("alpha manual panic will send 2 events"))
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

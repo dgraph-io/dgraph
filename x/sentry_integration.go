@@ -64,8 +64,8 @@ func ConfigureSentryScope(subcmd string) {
 	})
 }
 
-// PanicWithSentryException sends the error report to Sentry and then panics.
-func PanicWithSentryException(err error) {
+// Panic sends the error report to Sentry and then panics.
+func Panic(err error) {
 	if err != nil {
 		CaptureSentryException(err)
 		panic(err)

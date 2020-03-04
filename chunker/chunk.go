@@ -84,7 +84,7 @@ func NewChunker(inputFormat InputFormat, batchSize int) Chunker {
 			nqs: NewNQuadBuffer(batchSize),
 		}
 	default:
-		x.PanicWithSentryException(errors.New("unknown input format"))
+		x.Panic(errors.New("unknown input format"))
 		return nil
 	}
 }

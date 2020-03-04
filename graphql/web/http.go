@@ -100,7 +100,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if !gh.isValid() {
-		x.PanicWithSentryException(errors.New("graphqlHandler not initialised"))
+		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
 	ctx = x.AttachAccessJwt(ctx, r)

@@ -151,14 +151,14 @@ type director struct {
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLStarted(graphqlAdminURL)
 	if err != nil {
-		x.PanicWithSentryException(errors.Errorf(
+		x.Panic(errors.Errorf(
 			"Waited for GraphQL test server to become available, but it never did.\n"+
 				"Got last error %+v", err.Error()))
 	}
 
 	err = checkGraphQLStarted(graphqlAdminTestAdminURL)
 	if err != nil {
-		x.PanicWithSentryException(errors.Errorf(
+		x.Panic(errors.Errorf(
 			"Waited for GraphQL AdminTest server to become available, "+
 				"but it never did.\n Got last error: %+v", err.Error()))
 	}
@@ -167,21 +167,21 @@ func BootstrapServer(schema, data []byte) {
 	defer cancel()
 	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
 	if err != nil {
-		x.PanicWithSentryException(err)
+		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
-		x.PanicWithSentryException(err)
+		x.Panic(err)
 	}
 
 	err = populateGraphQLData(client, data)
 	if err != nil {
-		x.PanicWithSentryException(err)
+		x.Panic(err)
 	}
 	if err = d.Close(); err != nil {
-		x.PanicWithSentryException(err)
+		x.Panic(err)
 	}
 }
 
