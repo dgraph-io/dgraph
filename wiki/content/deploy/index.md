@@ -1236,6 +1236,9 @@ to learn more.
 ## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
+{{% notice "warning" %}}
+These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
+{{% /notice %}}
 
 * `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
@@ -1247,15 +1250,49 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 ### More about /health endpoint
 
-The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
-Here’s an example of JSON returned from `/health` endpoint:
+```graphql
+query {
+  health {
+    instance
+    address
+    version
+    status
+    lastEcho
+    group
+    uptime
+    
+  }
+}
+```
+
+Here’s an example of JSON returned from the above query:
 
 ```json
 {
-  "version": "v1.1.1",
-  "instance": "alpha",
-  "uptime": 75011100974
+  "data": {
+    "health": [
+      {
+        "instance": "zero",
+        "address": "localhost:5080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "0",
+        "uptime": 1504
+      },
+      {
+        "instance": "alpha",
+        "address": "localhost:7080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "1",
+        "uptime": 1505
+      }
+    ]
+  }
 }
 ```
 
@@ -2087,17 +2124,22 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 
 ### Export Database
 
-An export of all nodes is started by locally accessing the export endpoint of any Alpha in the cluster.
+An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
-```sh
-$ curl localhost:8080/admin/export
+```graphql
+mutation {
+  export(input: {format: "rdf"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 {{% notice "warning" %}}By default, this won't work if called from outside the server where the Dgraph Alpha is running.
 You can specify a list or range of whitelisted IP addresses from which export or other admin operations
 can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
-
-This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
 This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
@@ -2114,22 +2156,38 @@ directory specified via the `--export` flag (defaults to a directory called `"ex
 entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
-`format` URL parameter. For example:
+`format` field. For example:
 
-```sh
-$ curl 'localhost:8080/admin/export?format=json'
+```graphql
+mutation {
+  export(input: {format: "json"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
 
 ### Shutdown Database
 
-A clean exit of a single Dgraph node is initiated by running the following command on that node.
+A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
+You can specify a list or range of whitelisted IP addresses from which shutdown or other admin operations
+can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
 
-```sh
-$ curl localhost:8080/admin/shutdown
+```graphql
+mutation {
+  shutdown {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 This stops the Alpha on which the command is executed and not the entire cluster.
@@ -2142,22 +2200,33 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [stop Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
-* delete (maybe do an export first) the `p` and `w` directories, then
-* restart Dgraph.
+* [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+* Delete (maybe do an export first) the `p` and `w` directories, then
+* Restart Dgraph.
 
 ### Upgrade Database
 
-Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
+Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps to safely export and restart.
 
-- Start an [export]({{< relref "#export">}})
-- Ensure it's successful
-- Bring down the cluster
-- Run Dgraph using new data directories.
-- Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
-- If all looks good, you can delete the old directories (export serves as an insurance)
+1. Start an [export]({{< relref "#export-database">}})
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete
+4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
+5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
+
+Blue-green deployment is a common approach to minimize downtime during the upgrade process. 
+This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can 
+do a rolling restart of all your Alpha using the option `--mutations disallow` when you restart the Alphas. This will ensure the cluster is in read-only mode.
+
+At this point your application can still read from the old cluster and you can perform the steps 4. and 5. described above.
+When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
+
+{{% notice "note" %}}
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+{{% /notice %}}
 
 ### Post Installation
 

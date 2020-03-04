@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -184,22 +185,33 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
-	if err != nil {
-		return err
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId)
+	if result.Err != nil {
+		return result.Err
 	}
-	if version == 0 {
+	if result.Version == 0 {
 		return errors.Errorf("Failed to obtain a restore version")
 	}
-	fmt.Printf("Restore version: %d\n", version)
+	fmt.Printf("Restore version: %d\n", result.Version)
+	fmt.Printf("Restore max uid: %d\n", result.MaxLeaseUid)
 
 	if zc != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelTs()
 
-		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
+		_, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version})
 		if err != nil {
-			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
+			fmt.Printf("Failed to assign timestamp %d in Zero: %v", result.Version, err)
+			return err
+		}
+
+		ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelUid()
+
+		_, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid})
+		if err != nil {
+			fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
+			return err
 		}
 	}
 
@@ -209,7 +221,7 @@ func runRestoreCmd() error {
 
 func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
-	manifests, err := ListManifests(opt.location)
+	manifests, err := worker.ListManifests(opt.location)
 	if err != nil {
 		return errors.Wrapf(err, "while listing manifests")
 	}
