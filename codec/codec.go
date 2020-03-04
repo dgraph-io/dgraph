@@ -74,6 +74,15 @@ func FromListXXX(list *pb.List) *ListMap {
 	return lm
 }
 
+func (lm *ListMap) IsEmpty() bool {
+	for _, bitmap := range lm.bitmaps {
+		if !bitmap.IsEmpty() {
+			return false
+		}
+	}
+	return true
+}
+
 func (lm *ListMap) ToPack() *pb.UidPack {
 	pack := &pb.UidPack{}
 	for base, bitmap := range lm.bitmaps {

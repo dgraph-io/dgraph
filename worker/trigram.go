@@ -22,6 +22,7 @@ import (
 	cindex "github.com/google/codesearch/index"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -31,9 +32,9 @@ import (
 var errRegexTooWide = errors.New(
 	"regular expression is too wide-ranging and can't be executed efficiently")
 
+// TODO: Is passing intersect here really the best way?
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *pb.List) (*pb.UidPack, error) {
-	var results *pb.List
+	query *cindex.Query, intersect *pb.List) (*codec.ListMap, error) {
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,
 	}
@@ -41,7 +42,7 @@ func uidsForRegex(attr string, arg funcArgs,
 		opts.Intersect = intersect
 	}
 
-	uidsForTrigram := func(trigram string) (*pb.List, error) {
+	uidsForTrigram := func(trigram string) (*codec.ListMap, error) {
 		key := x.IndexKey(attr, trigram)
 		pl, err := posting.GetNoStore(key)
 		if err != nil {
@@ -53,6 +54,7 @@ func uidsForRegex(attr string, arg funcArgs,
 	switch query.Op {
 	case cindex.QAnd:
 		tok.EncodeRegexTokens(query.Trigram)
+		var results *codec.ListMap
 		for _, t := range query.Trigram {
 			trigramUids, err := uidsForTrigram(t)
 			if err != nil {
@@ -61,10 +63,10 @@ func uidsForRegex(attr string, arg funcArgs,
 			if results == nil {
 				results = trigramUids
 			} else {
-				algo.IntersectWith(results, trigramUids, results)
+				results.Intersect(trigramUids)
 			}
 
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
@@ -78,21 +80,20 @@ func uidsForRegex(attr string, arg funcArgs,
 			if err != nil {
 				return nil, err
 			}
-			if results.Size() == 0 {
+			if results.IsEmpty() {
 				return results, nil
 			}
 		}
 	case cindex.QOr:
 		tok.EncodeRegexTokens(query.Trigram)
-		uidMatrix := make([]*pb.List, len(query.Trigram))
-		var err error
+		results := codec.NewListMap(nil)
 		for i, t := range query.Trigram {
-			uidMatrix[i], err = uidsForTrigram(t)
+			lm, err := uidsForTrigram(t)
 			if err != nil {
 				return nil, err
 			}
+			results.Merge(lm)
 		}
-		results = algo.MergeSorted(uidMatrix)
 		for _, sub := range query.Sub {
 			if results == nil {
 				results = intersect
