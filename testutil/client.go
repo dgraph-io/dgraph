@@ -183,10 +183,6 @@ func WaitForAlter(ctx context.Context, dg *dgo.Dgraph, s string) error {
 	if err != nil {
 		return err
 	}
-	exp := make(map[string]*pb.SchemaUpdate)
-	for _, su := range ps.Preds {
-		exp[su.Predicate] = su
-	}
 
 	for {
 		resp, err := dg.NewReadOnlyTxn().Query(ctx, "schema{}")
@@ -201,14 +197,20 @@ func WaitForAlter(ctx context.Context, dg *dgo.Dgraph, s string) error {
 			return err
 		}
 
-		for _, n := range result.Schema {
-			if su, ok := exp[n.Predicate]; !ok {
-				continue
-			} else if !SameIndexes(su, n) {
+		actual := make(map[string]*pb.SchemaNode)
+		for _, rs := range result.Schema {
+			actual[rs.Predicate] = rs
+		}
+
+		done := true
+		for _, su := range ps.Preds {
+			if n, ok := actual[su.Predicate]; !ok || !SameIndexes(su, n) {
+				done = false
 				break
-			} else {
-				return nil
 			}
+		}
+		if done {
+			return nil
 		}
 
 		time.Sleep(time.Second)

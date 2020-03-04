@@ -142,10 +142,6 @@ func waitForAlter(s string) error {
 	if err != nil {
 		return err
 	}
-	exp := make(map[string]*pb.SchemaUpdate)
-	for _, su := range ps.Preds {
-		exp[su.Predicate] = su
-	}
 
 	for {
 		resp, _, err := queryWithTs("schema{}", "application/graphql+-", "false", 0)
@@ -162,14 +158,20 @@ func waitForAlter(s string) error {
 			return err
 		}
 
-		for _, n := range result.Data.Schema {
-			if su, ok := exp[n.Predicate]; !ok {
-				continue
-			} else if !testutil.SameIndexes(su, n) {
+		actual := make(map[string]*pb.SchemaNode)
+		for _, rs := range result.Data.Schema {
+			actual[rs.Predicate] = rs
+		}
+
+		done := true
+		for _, su := range ps.Preds {
+			if n, ok := actual[su.Predicate]; !ok || !testutil.SameIndexes(su, n) {
+				done = false
 				break
-			} else {
-				return nil
 			}
+		}
+		if done {
+			return nil
 		}
 
 		time.Sleep(time.Second)
