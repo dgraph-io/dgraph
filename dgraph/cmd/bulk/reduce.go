@@ -89,6 +89,8 @@ func (r *reducer) run() error {
 				go itr.startBatching(partitionKeys)
 			}
 
+			// Initialize the channel that receives multi-part lists KVs and the
+			// goroutine that clears out that channel.
 			partCh := make(chan []*bpb.KV)
 			listParts := make([]*bpb.KV, 0)
 			partWg := sync.WaitGroup{}
@@ -111,6 +113,8 @@ func (r *reducer) run() error {
 				}
 			}
 
+			// Once the stream writer is done, the bulk loader can write the multi-part
+			// list KVs that could not be processed by the stream writer due to ordering issues.
 			close(partCh)
 			partWg.Wait()
 			wb := db.NewWriteBatchAt(r.writeTs)
@@ -514,8 +518,7 @@ func (r *reducer) toList(bufEntries [][]byte, list *bpb.KVList) ([]*countIndexEn
 			// are parts of a bigger list) which cannot be written to the stream writer
 			// because it requires that the keys are written in order and the keys of
 			// the list parts do not follow this property.
-			// Store these keys in a list for now so they can be written to Badger after
-			// the stream writer is done writing the rest of the keys.
+			// These KVs will be written to disk once the stream writer has finished.
 			list.Kv = append(list.Kv, kvs[0])
 			listParts = append(listParts, kvs[1:]...)
 		} else {
