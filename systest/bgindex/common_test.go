@@ -45,17 +45,14 @@ func getClient() (*dgo.Dgraph, error) {
 	}
 	dg := dgo.NewDgraphClient(conns...)
 
-	ctx := context.Background()
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
-		err := dg.Login(ctx, "groot", "password")
+		err := dg.Login(context.Background(), "groot", "password")
 		if err == nil || !strings.Contains(err.Error(), "Please retry") {
-			break
+			return dg, err
 		}
 		time.Sleep(time.Second)
 	}
-
-	return dg, nil
 }
 
 func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
