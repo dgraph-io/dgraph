@@ -117,7 +117,7 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 }
 
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
-	// wait until schema modification for any predicate is complete.
+	// wait until schema modification for all predicate is complete.
 	// We cannot have two background tasks running for the same predicate.
 	// This is a race condition, we typically won't propose an index update
 	// if an index update is already going on. In this case, looks like the
@@ -202,7 +202,8 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		return func() { bgWork(update, rebuild) }, nil
 	}
 
-	// We want to complete all the foreground work for all the predicates.
+	// We want to complete all the foreground work for all the predicates otherwise
+	// DropPrefix of one indexing could cause problem to TxnWriter of another.
 	// If everything goes fine, we do all the background work in separate goroutines.
 	complete := false
 	bgTasks := make([]func(), 0, len(updates))
