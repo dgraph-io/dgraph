@@ -271,9 +271,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -803,27 +805,14 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	var startTs uint64
-	if isMutation && req.StartTs == 0 {
+	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
-		if !x.WorkerConfig.LudicrousMode {
-			startTs = worker.State.GetTimestamp(false)
-			req.StartTs = startTs
-		} else {
-			req.StartTs = posting.Oracle().MaxAssigned()
-			if len(qc.req.GetMutations()) > 0 {
-				startTs = worker.State.GetTimestamp(false)
-			}
-		}
+		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
 	if resp, rerr = processQuery(ctx, qc); rerr != nil {
 		return
-	}
-
-	if x.WorkerConfig.LudicrousMode {
-		req.StartTs = startTs
 	}
 	if rerr = s.doMutate(ctx, qc, resp); rerr != nil {
 		return
@@ -847,7 +836,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if len(qc.req.Query) == 0 {
 		return resp, nil
 	}
-
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = posting.Oracle().MaxAssigned()
+	}
 	qr := query.Request{
 		Latency:  qc.latency,
 		GqlQuery: &qc.gqlRes,
@@ -878,11 +872,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 
 	if qc.req.StartTs == 0 {
 		assignTimestampStart := time.Now()
-		if !x.WorkerConfig.LudicrousMode {
-			qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
-		} else {
-			qc.req.StartTs = posting.Oracle().MaxAssigned()
-		}
+		qc.req.StartTs = worker.State.GetTimestamp(qc.req.ReadOnly)
 		qc.latency.AssignTimestamp = time.Since(assignTimestampStart)
 	}
 
