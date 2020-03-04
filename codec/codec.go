@@ -21,6 +21,7 @@ import (
 	"math"
 	"sort"
 
+	"github.com/RoaringBitmap/roaring"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-groupvarint"
@@ -36,7 +37,9 @@ const (
 )
 
 var (
-	bitMask uint64 = 0xffffffff00000000
+	numMsb     uint8  = 48 // Number of most significant bits that are used as bases for UidBlocks
+	msbBitMask uint64 = ((1 << numMsb) - 1) << (64 - numMsb)
+	lsbBitMask uint64 = ^msbBitMask
 )
 
 // Encoder is used to convert a list of UIDs into a pb.UidPack object.
@@ -46,41 +49,56 @@ type Encoder struct {
 	uids      []uint64
 }
 
-func (e *Encoder) packBlock() {
-	if len(e.uids) == 0 {
-		return
+type ListMap struct {
+	bitmaps map[uint64]*roaring.Bitmap
+}
+
+func NewListMap(pack *pb.UidPack) *ListMap {
+	lm := &ListMap{
+		bitmaps: make(map[uint64]*roaring.Bitmap),
 	}
-	block := &pb.UidBlock{Base: e.uids[0], NumUids: uint32(len(e.uids))}
-	last := e.uids[0]
-	e.uids = e.uids[1:]
-
-	var out bytes.Buffer
-	buf := make([]byte, 17)
-	tmpUids := make([]uint32, 4)
-	for {
-		for i := 0; i < 4; i++ {
-			if i >= len(e.uids) {
-				// Padding with '0' because Encode4 encodes only in batch of 4.
-				tmpUids[i] = 0
-			} else {
-				tmpUids[i] = uint32(e.uids[i] - last)
-				last = e.uids[i]
-			}
+	if pack != nil {
+		for _, block := range pack.Blocks {
+			bitmap := roaring.New()
+			x.Check2(bitmap.FromBuffer(block.Deltas))
+			lm.bitmaps[block.Base] = bitmap
+			x.AssertTrue(block.Base&lsbBitMask == 0)
 		}
-
-		data := groupvarint.Encode4(buf, tmpUids)
-		x.Check2(out.Write(data))
-
-		// e.uids has ended and we have padded tmpUids with 0s
-		if len(e.uids) <= 4 {
-			e.uids = e.uids[:0]
-			break
-		}
-		e.uids = e.uids[4:]
 	}
+	return lm
+}
 
-	block.Deltas = out.Bytes()
-	e.pack.Blocks = append(e.pack.Blocks, block)
+func (lm *ListMap) ToPack() *pb.UidPack {
+	pack := &pb.UidPack{}
+	for base, bitmap := range lm.bitmaps {
+		data, err := bitmap.ToBytes()
+		x.Check(err)
+		block := &pb.UidBlock{
+			Base:   base,
+			Deltas: data,
+		}
+		pack.Blocks = append(pack.Blocks, block)
+	}
+	sort.Slice(pack.Blocks, func(i, j int) bool {
+		return pack.Blocks[i].Base < pack.Blocks[j].Base
+	})
+	return pack
+}
+
+func (lm *ListMap) AddOne(uid uint64) {
+	base := uid & msbBitMask
+	bitmap, ok := lm.bitmaps[base]
+	if !ok {
+		bitmap = roaring.New()
+		lm.bitmaps[base] = bitmap
+	}
+	bitmap.Add(uint32(uid & lsbBitMask))
+}
+
+func (lm *ListMap) AddMany(uids []uint64) {
+	for _, uid := range uids {
+		lm.AddOne(uid)
+	}
 }
 
 // Add takes an uid and adds it to the list of UIDs to be encoded.
@@ -88,23 +106,36 @@ func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
 		e.pack = &pb.UidPack{BlockSize: uint32(e.BlockSize)}
 	}
+}
 
-	size := len(e.uids)
-	if size > 0 && !match32MSB(e.uids[size-1], uid) {
-		e.packBlock()
-		e.uids = e.uids[:0]
+func (lm *ListMap) Add(block *pb.UidBlock) error {
+	bitmap, ok := lm.bitmaps[block.Base]
+	if !ok {
+		return nil
 	}
+	dst := roaring.New()
+	if _, err := dst.FromBuffer(block.Deltas); err != nil {
+		return err
+	}
+	bitmap.Or(dst)
+	return nil
+}
 
-	e.uids = append(e.uids, uid)
-	if len(e.uids) >= e.BlockSize {
-		e.packBlock()
-		e.uids = e.uids[:0]
+func (lm *ListMap) Intersect(block *pb.UidBlock) error {
+	bitmap, ok := lm.bitmaps[block.Base]
+	if !ok {
+		return nil
 	}
+	dst := roaring.New()
+	if _, err := dst.FromBuffer(block.Deltas); err != nil {
+		return err
+	}
+	bitmap.And(dst)
+	return nil
 }
 
 // Done returns the final output of the encoder.
 func (e *Encoder) Done() *pb.UidPack {
-	e.packBlock()
 	return e.pack
 }
 
@@ -287,19 +318,8 @@ func (d *Decoder) BlockIdx() int {
 	return d.blockIdx
 }
 
-// Encode takes in a list of uids and a block size. It would pack these uids into blocks of the
-// given size, with the last block having fewer uids. Within each block, it stores the first uid as
-// base. For each next uid, a delta = uids[i] - uids[i-1] is stored. Protobuf uses Varint encoding,
-// as mentioned here: https://developers.google.com/protocol-buffers/docs/encoding . This ensures
-// that the deltas being considerably smaller than the original uids are nicely packed in fewer
-// bytes. Our benchmarks on artificial data show compressed size to be 13% of the original. This
-// mechanism is a LOT simpler to understand and if needed, debug.
 func Encode(uids []uint64, blockSize int) *pb.UidPack {
-	enc := Encoder{BlockSize: blockSize}
-	for _, uid := range uids {
-		enc.Add(uid)
-	}
-	return enc.Done()
+	return nil
 }
 
 // ApproxLen would indicate the total number of UIDs in the pack. Can be used for int slice
@@ -338,10 +358,6 @@ func Decode(pack *pb.UidPack, seek uint64) []uint64 {
 		uids = append(uids, block...)
 	}
 	return uids
-}
-
-func match32MSB(num1, num2 uint64) bool {
-	return (num1 & bitMask) == (num2 & bitMask)
 }
 
 // CopyUidPack creates a copy of the given UidPack.
