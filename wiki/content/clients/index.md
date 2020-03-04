@@ -483,7 +483,7 @@ These third-party clients are contributed by the community and are not officiall
 
 ### Dart
 
-- https://github.com/katutz/dgraph
+- https://github.com/marceloneppel/dgraph
 
 ### Elixir
 

@@ -435,15 +435,51 @@ func LoadTypesFromDb() error {
 // types to insert.
 func InitialTypes() []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
-	initialTypes = append(initialTypes, &pb.TypeUpdate{
-		TypeName: "dgraph.graphql",
-		Fields: []*pb.SchemaUpdate{
-			{
-				Predicate: "dgraph.graphql.schema",
-				ValueType: pb.Posting_STRING,
+	initialTypes = append(initialTypes,
+		&pb.TypeUpdate{
+			TypeName: "dgraph.graphql",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.graphql.schema",
+					ValueType: pb.Posting_STRING,
+				},
+			},
+		})
+
+	if x.WorkerConfig.AclEnabled {
+		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
+		// properly.
+		initialTypes = append(initialTypes, &pb.TypeUpdate{
+			TypeName: "User",
+			Fields: []*pb.SchemaUpdate{
+				{
+					Predicate: "dgraph.xid",
+					ValueType: pb.Posting_STRING,
+				},
+				{
+					Predicate: "dgraph.password",
+					ValueType: pb.Posting_PASSWORD,
+				},
+				{
+					Predicate: "dgraph.user.group",
+					ValueType: pb.Posting_UID,
+				},
 			},
 		},
-	})
+			&pb.TypeUpdate{
+				TypeName: "Group",
+				Fields: []*pb.SchemaUpdate{
+					{
+						Predicate: "dgraph.xid",
+						ValueType: pb.Posting_STRING,
+					},
+					{
+						Predicate: "dgraph.acl.rule",
+						ValueType: pb.Posting_UID,
+					},
+				},
+			})
+	}
 
 	return initialTypes
 }

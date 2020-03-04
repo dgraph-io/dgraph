@@ -178,6 +178,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 						s.Predicate)
 				}
 			}
+
+		}
+
+		// Propose initial types as well after a drop all as they would have been cleared.
+		initialTypes := schema.InitialTypes()
+		for _, t := range initialTypes {
+			if err := updateType(t.GetTypeName(), *t); err != nil {
+				return err
+			}
 		}
 
 		return nil

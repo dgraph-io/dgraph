@@ -12,17 +12,15 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
-## [2.0.0-rc1] - 2020-02-14
-[2.0.0-rc1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v2.0.0-rc1
+## [2.0.0-beta] - 2020-02-20
+[2.0.0-beta]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...release/v2.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
-
-### Removed
-- Remove HTTP admin endpoints. The same functionality is available via GraphQL Admin API.  Please see below. ([#4754][])
 
 ### Changed
 
 - Report GraphQL stats from alpha. ([#4607][])
 - During backup, collapse split posting lists into a single list. ([#4682][]) 
+- Optimize computing reverse reindexing. ([#4755][])
 - Enterprise features
   - **Breaking changes**
     - [BREAKING] Underlying schema for ACL has changed. ([#4725][])
@@ -36,7 +34,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - GraphQL Admin API: Support export, draining, shutdown and setting lrumb operations. ([#4739][])
 - GraphQL Admin API: duplicate `/health` in GraphQL `/admin` ([#4768][])
 - GraphQL Admin API: Add `/admin/schema` endpoint ([#4777][]) 
-
 - Enterprise features
   - ACL: Allow users to query data for their groups ([#4774][])
   - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
@@ -47,9 +44,16 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Check response status when posting telemetry data. ([#4726][])
 - Add support for $ in quoted string. Fixes [#4695][]. ([#4702][])
 - Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][]) 
+- Fix Nquad value conversion in live loader. Fixes [#4468][]. ([#4793][])
+- Use `/tmp` dir to store temporary index. Fixes [#4600][]. ([#4766][])
 - **Breaking changes**
   - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][]) 
 
+[#4755]: https://github.com/dgraph-io/dgraph/issues/4755
+[#4600]: https://github.com/dgraph-io/dgraph/issues/4600
+[#4766]: https://github.com/dgraph-io/dgraph/issues/4766
+[#4468]: https://github.com/dgraph-io/dgraph/issues/4468
+[#4793]: https://github.com/dgraph-io/dgraph/issues/4793
 [#4777]: https://github.com/dgraph-io/dgraph/issues/4777
 [#4768]: https://github.com/dgraph-io/dgraph/issues/4768
 [#4760]: https://github.com/dgraph-io/dgraph/issues/4760
@@ -70,7 +74,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#4773]: https://github.com/dgraph-io/dgraph/issues/4773
 [#4005]: https://github.com/dgraph-io/dgraph/issues/4005
 [#4316]: https://github.com/dgraph-io/dgraph/issues/4316
-[#4754]: https://github.com/dgraph-io/dgraph/issues/4754
 
 ## [1.2.1] - 2020-02-06
 [1.2.1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v1.2.1

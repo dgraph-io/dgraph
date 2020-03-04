@@ -22,11 +22,14 @@ import (
 	"encoding/json"
 	"io"
 	"mime"
+	"net"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/golang/glog"
 	"go.opencensus.io/trace"
+	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -104,6 +107,19 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ctx = x.AttachAccessJwt(ctx, r)
+
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		// Add remote addr as peer info so that the remote address can be logged
+		// inside Server.Login
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
+			ctx = peer.NewContext(ctx, &peer.Peer{
+				Addr: &net.TCPAddr{
+					IP:   net.ParseIP(ip),
+					Port: intPort,
+				},
+			})
+		}
+	}
 
 	var res *schema.Response
 	gqlReq, err := getRequest(ctx, r)

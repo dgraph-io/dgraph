@@ -15,9 +15,12 @@ package acl
 import (
 	"encoding/json"
 
+	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 )
 
 // GetGroupIDs returns a slice containing the group ids of all the given groups.
@@ -153,6 +156,21 @@ func UnmarshalGroups(input []byte, groupKey string) (group []Group, err error) {
 	}
 	groups := m[groupKey]
 	return groups, nil
+}
+
+// getClientWithAdminCtx creates a client by checking the --alpha, various --tls*, and --retries
+// options, and then login using groot id and password
+func getClientWithAdminCtx(conf *viper.Viper) (*dgo.Dgraph, x.CloseFunc, error) {
+	dg, closeClient := x.GetDgraphClient(conf, false)
+	err := x.GetPassAndLogin(dg, &x.CredOpt{
+		Conf:        conf,
+		UserID:      conf.GetString(gName),
+		PasswordOpt: gPassword,
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	return dg, closeClient, nil
 }
 
 // CreateUserNQuads creates the NQuads needed to store a user with the given ID and
