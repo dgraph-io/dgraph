@@ -684,7 +684,9 @@ func (n *node) Run() {
 				span.Annotatef(nil, "Saved to storage")
 			} else if x.WorkerConfig.LudicrousMode && rd.MustSync {
 				go func() {
-					_ = n.Store.Sync()
+					if err := n.Store.Sync(); err != nil {
+						glog.Errorf("Error while calling Store.Sync: %v", err)
+					}
 				}()
 			}
 

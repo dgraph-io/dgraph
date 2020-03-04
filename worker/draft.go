@@ -564,7 +564,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 	if x.WorkerConfig.LudicrousMode {
 		go func() {
-			writer.Flush()
+			if err := writer.Flush(); err != nil {
+				glog.Errorf("Error while flushing to disk: +%v", err)
+			}
 		}()
 	} else {
 		if err := writer.Flush(); err != nil {
@@ -936,7 +938,9 @@ func (n *node) Run() {
 				}
 			} else if x.WorkerConfig.LudicrousMode && rd.MustSync {
 				go func() {
-					_ = n.Store.Sync()
+					if err := n.Store.Sync(); err != nil {
+						glog.Errorf("Error while calling Store.Sync: %+v", err)
+					}
 				}()
 			}
 

@@ -95,7 +95,7 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
-	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {

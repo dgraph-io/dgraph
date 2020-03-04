@@ -578,7 +578,7 @@ func run() {
 		SnapshotAfter:       Alpha.Conf.GetInt("snapshot_after"),
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
-		LudicrousMode:       Alpha.Conf.GetBool("ludicrous-mode"),
+		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
 	}
 
 	setupCustomTokenizers()
