@@ -18,6 +18,7 @@ package worker
 
 import (
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
@@ -80,9 +81,9 @@ func matchFuzzy(query, val string, max int) bool {
 // uidsForMatch collects a list of uids that "might" match a fuzzy term based on the ngram
 // index. matchFuzzy does the actual fuzzy match.
 // Returns the list of uids even if empty, or an error otherwise.
-func uidsForMatch(attr string, arg funcArgs) (*pb.List, error) {
+func uidsForMatch(attr string, arg funcArgs) (*codec.ListMap, error) {
 	opts := posting.ListOptions{ReadTs: arg.q.ReadTs}
-	uidsForNgram := func(ngram string) (*pb.List, error) {
+	uidsForNgram := func(ngram string) (*codec.ListMap, error) {
 		key := x.IndexKey(attr, ngram)
 		pl, err := posting.GetNoStore(key)
 		if err != nil {

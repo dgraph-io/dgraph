@@ -84,7 +84,7 @@ message LangList {
 }
 
 message Result {
-	repeated List uid_matrix = 1;
+	repeated UidPack uid_matrix = 1;
 	repeated ValueList value_matrix = 2;
 	repeated uint32 counts = 3;
 	bool intersect_dest = 4;
@@ -330,7 +330,7 @@ message UidBlock {
 }
 
 message UidPack {
-	uint32 block_size        = 1;
+	uint32 block_size        = 1 [deprecated = true];
 	repeated UidBlock blocks = 2;
 }
 

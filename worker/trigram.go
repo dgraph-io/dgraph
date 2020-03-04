@@ -32,7 +32,7 @@ var errRegexTooWide = errors.New(
 	"regular expression is too wide-ranging and can't be executed efficiently")
 
 func uidsForRegex(attr string, arg funcArgs,
-	query *cindex.Query, intersect *pb.List) (*pb.List, error) {
+	query *cindex.Query, intersect *pb.List) (*pb.UidPack, error) {
 	var results *pb.List
 	opts := posting.ListOptions{
 		ReadTs: arg.q.ReadTs,

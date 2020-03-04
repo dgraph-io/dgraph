@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -395,14 +396,14 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				}
 				out.Counts = append(out.Counts, uint32(count))
 				// Add an empty UID list to make later processing consistent.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix = append(out.UidMatrix, &pb.UidPack{})
 				continue
 			}
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
 			case err == posting.ErrNoValue || len(vals) == 0:
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix = append(out.UidMatrix, &pb.UidPack{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
 					&pb.ValueList{Values: []*pb.TaskValue{}})
@@ -423,7 +424,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 				out.LangMatrix = append(out.LangMatrix, &pb.LangList{Lang: langTags})
 			}
 
-			uidList := new(pb.List)
+			uidMap := codec.NewListMap(nil)
 			var vl pb.ValueList
 			for _, val := range vals {
 				newValue, err := convertToType(val, srcFn.atype)
@@ -439,7 +440,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 						return err
 					}
 					if types.CompareVals(srcFn.fname, val, srcFn.ineqValue) {
-						uidList.Uids = append(uidList.Uids, q.UidList.Uids[i])
+						uidMap.AddOne(q.UidList.Uids[i])
 						break
 					}
 				} else {
@@ -454,7 +455,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			switch {
 			case srcFn.fnType == aggregatorFn:
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix = append(out.UidMatrix, &pb.UidPack{})
 			case srcFn.fnType == passwordFn:
 				lastPos := len(out.ValueMatrix) - 1
 				if len(out.ValueMatrix[lastPos].Values) == 0 {
@@ -472,9 +473,9 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 					out.ValueMatrix[lastPos].Values[0] = ctask.TrueVal
 				}
 				// Add an empty UID list to make later processing consistent
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix = append(out.UidMatrix, &pb.UidPack{})
 			default:
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix = append(out.UidMatrix, uidMap.ToPack())
 			}
 		}
 		return nil
@@ -629,16 +630,14 @@ func countForUidPostings(args funcArgs, pl *posting.List, facetsTree *facetsTree
 }
 
 func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTree,
-	opts posting.ListOptions) (*pb.List, []*pb.Facets, error) {
+	opts posting.ListOptions) (*pb.UidPack, []*pb.Facets, error) {
 	q := args.q
 
 	var fcsList []*pb.Facets
-	uidList := &pb.List{
-		Uids: make([]uint64, 0, pl.ApproxLen()), // preallocate uid slice.
-	}
+	lm := codec.NewListMap(nil)
 
 	err := facetsFilterUidPostingList(pl, facetsTree, opts, func(p *pb.Posting) {
-		uidList.Uids = append(uidList.Uids, p.Uid)
+		lm.AddOne(p.Uid)
 		if q.FacetParam != nil {
 			fcsList = append(fcsList, &pb.Facets{
 				Facets: facets.CopyFacets(p.Facets, q.FacetParam),
@@ -649,7 +648,7 @@ func retrieveUidsAndFacets(args funcArgs, pl *posting.List, facetsTree *facetsTr
 		return nil, nil, err
 	}
 
-	return uidList, fcsList, nil
+	return lm.ToPack(), fcsList, nil
 }
 
 // This function handles operations on uid posting lists. Index keys, reverse keys and some data
@@ -727,7 +726,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				out.Counts = append(out.Counts, uint32(count))
 				// Add an empty UID list to make later processing consistent.
-				out.UidMatrix = append(out.UidMatrix, &pb.List{})
+				out.UidMatrix = append(out.UidMatrix, &pb.UidPack{})
 			case srcFn.fnType == compareScalarFn:
 				if i == 0 {
 					span.Annotate(nil, "CompareScalarFn")
@@ -738,8 +737,7 @@ func (qs *queryState) handleUidPostings(
 				}
 				count := int64(len)
 				if evalCompare(srcFn.fname, count, srcFn.threshold) {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					out.UidMatrix = append(out.UidMatrix, codec.PackOfOne(q.UidList.Uids[i]))
 				}
 			case srcFn.fnType == hasFn:
 				if i == 0 {
@@ -750,8 +748,7 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if !empty {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					out.UidMatrix = append(out.UidMatrix, codec.PackOfOne(q.UidList.Uids[i]))
 				}
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
@@ -768,8 +765,7 @@ func (qs *queryState) handleUidPostings(
 					return err
 				}
 				if len(plist.Uids) > 0 {
-					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
-					out.UidMatrix = append(out.UidMatrix, tlist)
+					out.UidMatrix = append(out.UidMatrix, codec.PackOfOne(q.UidList.Uids[i]))
 				}
 			case q.FacetParam != nil || facetsTree != nil:
 				if i == 0 {
@@ -791,7 +787,7 @@ func (qs *queryState) handleUidPostings(
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, uidList)
+				out.UidMatrix = append(out.UidMatrix, codec.FromListXXX(uidList).ToPack())
 			}
 		}
 		return nil
@@ -819,11 +815,6 @@ func (qs *queryState) handleUidPostings(
 		out.Counts = append(out.Counts, chunk.Counts...)
 		out.UidMatrix = append(out.UidMatrix, chunk.UidMatrix...)
 	}
-	var total int
-	for _, list := range out.UidMatrix {
-		total += len(list.Uids)
-	}
-	span.Annotatef(nil, "Total number of elements in matrix: %d", total)
 	return nil
 }
 
@@ -1075,7 +1066,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
-	var uids *pb.List
+	uids := codec.NewListMap(nil)
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1090,8 +1081,11 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 		// not support eq/gt/lt/le in @filter, see #4077), and this was new code that
 		// was added just to support the aforementioned case, the race condition is only
 		// in this part of the code.
-		uids = &pb.List{}
-		uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
+		// TODO: Do we still need this piece of code with bitmaps?
+
+		// uids = &pb.List{}
+		// uids.Uids = append(arg.q.UidList.Uids[:0:0], arg.q.UidList.Uids...)
+		// TODO: Decide about above.
 
 	// Prefer to use an index (fast)
 	case useIndex:

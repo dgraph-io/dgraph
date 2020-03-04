@@ -68,6 +68,12 @@ func NewListMap(pack *pb.UidPack) *ListMap {
 	return lm
 }
 
+func FromListXXX(list *pb.List) *ListMap {
+	lm := NewListMap(nil)
+	lm.AddMany(list.Uids)
+	return lm
+}
+
 func (lm *ListMap) ToPack() *pb.UidPack {
 	pack := &pb.UidPack{}
 	for base, bitmap := range lm.bitmaps {
@@ -101,6 +107,12 @@ func (lm *ListMap) AddMany(uids []uint64) {
 	}
 }
 
+func PackOfOne(uid uint64) *pb.UidPack {
+	lm := NewListMap(nil)
+	lm.AddOne(uid)
+	return lm.ToPack()
+}
+
 // Add takes an uid and adds it to the list of UIDs to be encoded.
 func (e *Encoder) Add(uid uint64) {
 	if e.pack == nil {
@@ -121,17 +133,64 @@ func (lm *ListMap) Add(block *pb.UidBlock) error {
 	return nil
 }
 
-func (lm *ListMap) Intersect(block *pb.UidBlock) error {
-	bitmap, ok := lm.bitmaps[block.Base]
-	if !ok {
-		return nil
+// // TODO: This might have an issue. If the intersection is done with a UidPack of fewer blocks, then
+// // the remaining blocks need to be removed from listmap.
+// func (lm *ListMap) Intersect(block *pb.UidBlock) error {
+// 	bitmap, ok := lm.bitmaps[block.Base]
+// 	if !ok {
+// 		return nil
+// 	}
+// 	dst := roaring.New()
+// 	if _, err := dst.FromBuffer(block.Deltas); err != nil {
+// 		return err
+// 	}
+// 	bitmap.And(dst)
+// 	return nil
+// }
+
+func (lm *ListMap) Intersect(a2 *ListMap) {
+	if a2 == nil || len(a2.bitmaps) == 0 {
+		// a2 might be empty. In that case, just ignore.
+		return
 	}
-	dst := roaring.New()
-	if _, err := dst.FromBuffer(block.Deltas); err != nil {
-		return err
+	for base, bitmap := range lm.bitmaps {
+		if a2Map, ok := a2.bitmaps[base]; !ok {
+			// a2 does not have this base. So, remove.
+			delete(lm.bitmaps, base)
+		} else {
+			bitmap.And(a2Map)
+		}
 	}
-	bitmap.And(dst)
-	return nil
+}
+
+func (lm *ListMap) Merge(a2 *ListMap) {
+	if a2 == nil || len(a2.bitmaps) == 0 {
+		// a2 might be empty. In that case, just ignore.
+		return
+	}
+	for a2base, a2map := range a2.bitmaps {
+		if bitmap, ok := lm.bitmaps[a2base]; ok {
+			bitmap.Or(a2map)
+		} else {
+			// lm does not have this bitmap. So, add.
+			lm.bitmaps[a2base] = a2map
+		}
+	}
+}
+
+func (lm *ListMap) RemoveBefore(uid uint64) {
+	if uid == 0 {
+		return
+	}
+	uidBase := uid & msbBitMask
+	// Iteration is not in serial order. So, can't break early.
+	for base, bitmap := range lm.bitmaps {
+		if base < uidBase {
+			delete(lm.bitmaps, base)
+		} else if base == uidBase {
+			bitmap.RemoveRange(0, uid&lsbBitMask)
+		}
+	}
 }
 
 // Done returns the final output of the encoder.

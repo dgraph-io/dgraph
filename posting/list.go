@@ -26,7 +26,6 @@ import (
 	"github.com/dgryski/go-farm"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -898,39 +897,40 @@ func (l *List) ApproxLen() int {
 // Uids returns the UIDs given some query params.
 // We have to apply the filtering before applying (offset, count).
 // WARNING: Calling this function just to get UIDs is expensive
-func (l *List) Uids(opt ListOptions) (*pb.List, error) {
+func (l *List) Uids(opt ListOptions) (*codec.ListMap, error) {
 	// Pre-assign length to make it faster.
 	l.RLock()
-	// Use approximate length for initial capacity.
-	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
-	out := &pb.List{}
 	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
 		if opt.ReadTs < l.minTs {
 			l.RUnlock()
-			return out, ErrTsTooOld
+			return nil, ErrTsTooOld
 		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
+		lm := codec.NewListMap(l.plist.Pack)
+		lm.RemoveBefore(opt.AfterUid)
+		lm.Intersect(codec.FromListXXX(opt.Intersect))
 		l.RUnlock()
-		return out, nil
+		return lm, nil
 	}
 
+	// TODO: Do iteration in a different way to generate the listmap.
+	lm := codec.NewListMap(nil)
+	// Use approximate length for initial capacity.
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
-			res = append(res, p.Uid)
+			lm.AddOne(p.Uid)
 		}
 		return nil
 	})
 	l.RUnlock()
 	if err != nil {
-		return out, err
+		return lm, err
 	}
 
 	// Do The intersection here as it's optimized.
-	out.Uids = res
 	if opt.Intersect != nil {
-		algo.IntersectWith(out, opt.Intersect, out)
+		lm.Intersect(codec.FromListXXX(opt.Intersect))
 	}
-	return out, nil
+	return lm, nil
 }
 
 // Postings calls postFn with the postings that are common with
