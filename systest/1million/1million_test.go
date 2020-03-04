@@ -21,6 +21,7 @@ package main
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"testing"
 	"time"
 
@@ -9268,7 +9269,7 @@ func Test1Million(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	schemaFile := "benchmarks/data/1million.schema"
+	schemaFile := os.Getenv("SCHEMA_FILE")
 	data, err := ioutil.ReadFile(schemaFile)
 	if err != nil {
 		t.Fatalf("Error in reading the schema :: %v", err)

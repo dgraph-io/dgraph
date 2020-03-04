@@ -232,6 +232,7 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {
+		// Todo(Aman): we could return the query schema if it is a delete.
 		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
 			return true
 		}
