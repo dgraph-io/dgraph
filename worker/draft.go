@@ -922,20 +922,22 @@ func (n *node) Run() {
 
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
-			if !x.WorkerConfig.LudicrousMode {
-				timer.Record("disk")
-				if rd.MustSync {
-					if err := n.Store.Sync(); err != nil {
-						glog.Errorf("Error while calling Store.Sync: %+v", err)
-					}
-					timer.Record("sync")
+			timer.Record("disk")
+			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
+				timer.Record("sync")
 				if span != nil {
 					span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 						len(rd.Entries),
 						raft.IsEmptySnap(rd.Snapshot),
 						raft.IsEmptyHardState(rd.HardState))
 				}
+			} else if x.WorkerConfig.LudicrousMode && rd.MustSync {
+				go func() {
+					_ = n.Store.Sync()
+				}()
 			}
 
 			// Now schedule or apply committed entries.

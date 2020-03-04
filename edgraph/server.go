@@ -325,11 +325,13 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
 	if x.WorkerConfig.LudicrousMode {
+		// Mutations are automatically committed in case of ludicrous mode, so we don't
+		// need to manually commit.
+		resp.Txn.Keys = resp.Txn.Keys[:0]
+		resp.Txn.CommitTs = qc.req.StartTs
 		return err
 	}
 
-	// what are the cases in which a transaction could be aborted. Doesn it make sense
-	// to abort txn in ludicrous mode ??
 	if !qc.req.CommitNow {
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())

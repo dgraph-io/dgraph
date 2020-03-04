@@ -189,7 +189,7 @@ they form a Raft group and provide synchronous replication.
 	grpc.EnableTracing = false
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
-	flag.Bool("ludicrous-mode", false, "Run alpha in ludicrous mode")
+	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
 }
 
 func setupCustomTokenizers() {
