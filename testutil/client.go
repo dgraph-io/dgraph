@@ -366,11 +366,7 @@ type curlOutput struct {
 	Errors []curlErrorEntry       `json:"errors"`
 }
 
-func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) {
-	output := curlOutput{}
-	require.NoError(t, json.Unmarshal(bytes, &output),
-		"unable to unmarshal the curl output")
-
+func verifyOutput(t *testing.T, output curlOutput, failureConfig *CurlFailureConfig) {
 	if failureConfig.ShouldFail {
 		require.True(t, len(output.Errors) > 0, "no error entry found")
 		if len(failureConfig.DgraphErrMsg) > 0 {
@@ -387,21 +383,28 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-func VerifyCurlCmd(t *testing.T, args []string,
-	failureConfig *CurlFailureConfig) {
-	queryCmd := exec.Command("curl", args...)
-
-	output, err := queryCmd.Output()
-	if len(failureConfig.CurlErrMsg) > 0 {
-		// the curl command should have returned an non-zero code
-		require.Error(t, err, "the curl command should have failed")
-		if ee, ok := err.(*exec.ExitError); ok {
-			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
-				"the curl output does not contain the expected output")
+func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
+	for {
+		queryCmd := exec.Command("curl", args...)
+		output, err := queryCmd.Output()
+		if len(failureConfig.CurlErrMsg) > 0 {
+			// the curl command should have returned an non-zero code
+			require.Error(t, err, "the curl command should have failed")
+			if ee, ok := err.(*exec.ExitError); ok {
+				require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+					"the curl output does not contain the expected output")
+			}
+		} else {
+			require.NoError(t, err, "the curl command should have succeeded")
+			co := curlOutput{}
+			require.NoError(t, json.Unmarshal(output, &co),
+				"unable to unmarshal the curl output")
+			if len(co.Errors) > 0 && strings.Contains(co.Errors[0].Code, "schema is already being modified") {
+				time.Sleep(time.Second)
+				continue
+			}
+			verifyOutput(t, co, failureConfig)
 		}
-	} else {
-		require.NoError(t, err, "the curl command should have succeeded")
-		verifyOutput(t, output, failureConfig)
 	}
 }
 
