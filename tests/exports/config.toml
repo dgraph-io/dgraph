@@ -1,11 +1,11 @@
 [global]
-data-dir = "~/.gossamer/gssmr"
+data-dir = "/tmp/gossamer-test/TestExportConfig"
 roles = 1
-authority = true
+authority = false
 
 [network]
 bootstrap-nodes = []
-protocol-id = "/gossamer/gssmr/0"
+protocol-id = "/gossamer/test/0"
 port = 7001
 no-bootstrap = false
 no-mdns = false
@@ -13,4 +13,4 @@ no-mdns = false
 [rpc]
 port = 8545
 host = "localhost"
-modules = ["system", "author"]
+modules = ["system"]

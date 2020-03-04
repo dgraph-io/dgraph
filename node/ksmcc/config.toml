@@ -1,9 +1,11 @@
 [global]
 data-dir = "~/.gossamer/ksmcc"
+roles = 1
 authority = false
 
 [network]
 bootstrap-nodes = []
+protocol-id = "/gossamer/ksmcc/0"
 port = 7001
 no-bootstrap = false
 no-mdns = false

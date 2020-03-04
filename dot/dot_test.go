@@ -61,7 +61,7 @@ func createTestNode(t *testing.T, testDir string) *Node {
 	return NewNode("gossamer", services)
 }
 
-func TestNode_Start(t *testing.T) {
+func TestStartNode(t *testing.T) {
 	testDir := path.Join(os.TempDir(), "gossamer-test")
 	defer os.RemoveAll(testDir)
 

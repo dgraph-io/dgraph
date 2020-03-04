@@ -64,3 +64,13 @@ func ExpandDir(targetPath string) string {
 	}
 	return path.Clean(os.ExpandEnv(targetPath))
 }
+
+// Exists returns true if the named file or directory exists, otherwise false
+func Exists(fp string) bool {
+	if _, err := os.Stat(fp); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}

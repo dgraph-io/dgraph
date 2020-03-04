@@ -24,12 +24,13 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 //nolint
 const (
 	POLKADOT_RUNTIME     = "polkadot_runtime"
-	POLKADOT_RUNTIME_FP  = "../substrate_test_runtime.compact.wasm"
+	POLKADOT_RUNTIME_FP  = "substrate_test_runtime.compact.wasm"
 	POLKADOT_RUNTIME_URL = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
 
 	TEST_RUNTIME  = "test_runtime"
@@ -44,11 +45,9 @@ const (
 func GetAbsolutePath(targetDir string) string {
 	dir, err := os.Getwd()
 	if err != nil {
-		panic("Could not get current dir for test!")
+		panic("failed to get current working directory")
 	}
-	completePath := path.Join(dir, targetDir)
-
-	return completePath
+	return path.Join(dir, targetDir)
 }
 
 // GetRuntimeVars returns the testRuntimeFilePath and testRuntimeURL
@@ -64,7 +63,7 @@ func GetRuntimeVars(targetRuntime string) (string, string) {
 
 // GetRuntimeBlob checks if the test wasm @testRuntimeFilePath exists and if not, it fetches it from @testRuntimeURL
 func GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL string) (n int64, err error) {
-	if Exists(testRuntimeFilePath) {
+	if utils.Exists(testRuntimeFilePath) {
 		return 0, nil
 	}
 
@@ -87,16 +86,6 @@ func GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL string) (n int64, err er
 
 	n, err = io.Copy(out, resp.Body)
 	return n, err
-}
-
-// Exists reports whether the named file or directory exists.
-func Exists(name string) bool {
-	if _, err := os.Stat(name); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
 }
 
 // TestRuntimeStorage holds trie pointer

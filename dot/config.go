@@ -18,7 +18,11 @@ package dot
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
+	"reflect"
+	"unicode"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
@@ -54,36 +58,80 @@ type RPCConfig struct {
 	Modules []string `toml:"modules"`
 }
 
+// These settings ensure that TOML keys use the same names as Go struct fields.
+var tomlSettings = toml.Config{
+	NormFieldName: func(rt reflect.Type, key string) string {
+		return key
+	},
+	FieldToKey: func(rt reflect.Type, field string) string {
+		return field
+	},
+	MissingField: func(rt reflect.Type, field string) error {
+		link := ""
+		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
+			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
+		}
+		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
+	},
+}
+
 // String will return the json representation for a Config
 func (c *Config) String() string {
 	out, _ := json.MarshalIndent(c, "", "\t")
 	return string(out)
 }
 
+// LoadConfig loads the contents from config toml and inits Config object
+func LoadConfig(fp string, cfg *Config) error {
+	fp, err := filepath.Abs(fp)
+	if err != nil {
+		log.Error("[dot] Failed to create absolute filepath", "error", err)
+		return err
+	}
+
+	file, err := os.Open(filepath.Clean(fp))
+	if err != nil {
+		log.Error("[dot] Failed to open file", "error", err)
+		return err
+	}
+
+	if err = tomlSettings.NewDecoder(file).Decode(&cfg); err != nil {
+		log.Error("[dot] Failed to decode configuration", "error", err)
+		return err
+	}
+
+	return nil
+}
+
 // ExportConfig encodes a state type into a TOML file.
-func ExportConfig(file string, s *Config) *os.File {
+func ExportConfig(fp string, cfg *Config) *os.File {
 	var (
 		newFile *os.File
 		err     error
+		raw     []byte
 	)
 
-	var raw []byte
-	if raw, err = toml.Marshal(*s); err != nil {
-		log.Warn("error marshaling toml", "err", err)
+	if raw, err = toml.Marshal(*cfg); err != nil {
+		log.Error("[dot] Failed to marshal configuration", "error", err)
 		os.Exit(1)
 	}
 
-	newFile, err = os.Create(file)
+	newFile, err = os.Create(filepath.Clean(fp))
 	if err != nil {
-		log.Warn("error creating config file", "err", err)
+		log.Error("[dot] Failed to create configuration file", "error", err)
+		os.Exit(1)
 	}
+
 	_, err = newFile.Write(raw)
 	if err != nil {
-		log.Warn("error writing to config file", "err", err)
+		log.Error("[dot] Failed to write to configuration file", "error", err)
+		os.Exit(1)
 	}
 
 	if err := newFile.Close(); err != nil {
-		log.Warn("error closing file", "err", err)
+		log.Error("[dot] Failed to close configuration file", "error", err)
+		os.Exit(1)
 	}
+
 	return newFile
 }

@@ -20,10 +20,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strconv"
 	"strings"
-	"unicode"
 
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/core"
@@ -218,7 +216,7 @@ func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	// check --config flag and apply toml configuration to config
 	if name := ctx.GlobalString(ConfigFlag.Name); name != "" {
 		log.Trace("[gossamer] Loading toml configuration file", "path", name)
-		err = loadConfig(name, cfg)
+		err = dot.LoadConfig(name, cfg)
 		if err != nil {
 			return nil, err
 		}
@@ -239,27 +237,6 @@ func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	setRPCConfig(ctx, &cfg.RPC)
 
 	return cfg, nil
-}
-
-// loadConfig loads the contents from config toml and inits Config object
-func loadConfig(file string, config *dot.Config) error {
-	fp, err := filepath.Abs(file)
-	if err != nil {
-		return err
-	}
-
-	log.Debug("[gossamer] Loading toml configuration", "path", filepath.Clean(fp))
-
-	f, err := os.Open(filepath.Clean(fp))
-	if err != nil {
-		return err
-	}
-
-	if err = tomlSettings.NewDecoder(f).Decode(&config); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
@@ -429,21 +406,4 @@ func dumpConfig(ctx *cli.Context) error {
 		log.Warn("err writing comment output for dumpconfig command", "err", err.Error())
 	}
 	return nil
-}
-
-// These settings ensure that TOML keys use the same names as Go struct fields.
-var tomlSettings = toml.Config{
-	NormFieldName: func(rt reflect.Type, key string) string {
-		return key
-	},
-	FieldToKey: func(rt reflect.Type, field string) string {
-		return field
-	},
-	MissingField: func(rt reflect.Type, field string) error {
-		link := ""
-		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
-		}
-		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
-	},
 }
