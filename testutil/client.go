@@ -394,17 +394,19 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 				require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
 					"the curl output does not contain the expected output")
 			}
-		} else {
-			require.NoError(t, err, "the curl command should have succeeded")
-			co := curlOutput{}
-			require.NoError(t, json.Unmarshal(output, &co),
-				"unable to unmarshal the curl output")
-			if len(co.Errors) > 0 && strings.Contains(co.Errors[0].Code, "being modified") {
-				time.Sleep(time.Second)
-				continue
-			}
-			verifyOutput(t, co, failureConfig)
+			return
 		}
+
+		require.NoError(t, err, "the curl command should have succeeded")
+		co := curlOutput{}
+		require.NoError(t, json.Unmarshal(output, &co),
+			"unable to unmarshal the curl output")
+		if len(co.Errors) > 0 && strings.Contains(co.Errors[0].Code, "being modified") {
+			time.Sleep(time.Second)
+			continue
+		}
+		verifyOutput(t, co, failureConfig)
+		return
 	}
 }
 
