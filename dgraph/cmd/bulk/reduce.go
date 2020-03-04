@@ -77,9 +77,7 @@ func (r *reducer) run() error {
 			}
 
 			writer := db.NewStreamWriter()
-			if err := writer.Prepare(); err != nil {
-				x.Check(err)
-			}
+			x.Check(writer.Prepare())
 
 			ci := &countIndexer{reducer: r, writer: writer}
 			sort.Slice(partitionKeys, func(i, j int) bool {
@@ -101,17 +99,15 @@ func (r *reducer) run() error {
 				}
 				partWg.Done()
 			}
-
 			go appendParts()
+
 			r.reduce(partitionKeys, mapItrs, ci, partCh)
 			ci.wait()
 
-			if err := writer.Flush(); err != nil {
-				x.Check(err)
-			}
+			x.Check(writer.Flush())
 			for _, itr := range mapItrs {
 				if err := itr.Close(); err != nil {
-					fmt.Printf("Error while closing iterator: %v", err)
+					fmt.Printf("Error while closing iterator: %v\n", err)
 				}
 			}
 
@@ -126,6 +122,7 @@ func (r *reducer) run() error {
 					UserMeta: part.UserMeta[0],
 				}))
 			}
+			x.Check(wb.Flush())
 		}(i, r.createBadger(i))
 	}
 	return thr.Finish()
