@@ -286,7 +286,7 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 		}
 	}
 	x.AssertTruef(su != nil, "schema state not found for %s", pred)
-	var tokenizers []tok.Tokenizer
+	tokenizers := make([]tok.Tokenizer, 0, len(su.Tokenizer))
 	for _, it := range su.Tokenizer {
 		t, found := tok.GetTokenizer(it)
 		x.AssertTruef(found, "Invalid tokenizer %s", it)
