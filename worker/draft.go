@@ -563,11 +563,9 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		toDisk(status.StartTs, status.CommitTs)
 	}
 	if x.WorkerConfig.LudicrousMode {
-		go func() {
-			if err := writer.Flush(); err != nil {
-				glog.Errorf("Error while flushing to disk: +%v", err)
-			}
-		}()
+		if err := writer.Wait(); err != nil {
+			glog.Errorf("Error while waiting to commit: +%v", err)
+		}
 	} else {
 		if err := writer.Flush(); err != nil {
 			return errors.Wrapf(err, "while flushing to disk")
@@ -575,7 +573,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	if delta.GroupChecksums != nil {
+	if delta.GroupChecksums != nil && delta.GetGroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
 
@@ -791,21 +789,6 @@ func (n *node) drainApplyChan() {
 	}
 }
 
-func (n *node) StoreSync(closer *y.Closer) {
-	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			if err := n.Store.Sync(); err != nil {
-				glog.Errorf("Error while calling Store.Sync: %+v", err)
-			}
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
-}
-
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -824,9 +807,10 @@ func (n *node) Run() {
 	go n.ReportRaftComms()
 
 	if x.WorkerConfig.LudicrousMode {
-		closer := y.NewCloser(1)
+		closer := y.NewCloser(2)
 		defer closer.SignalAndWait()
-		go n.StoreSync(closer)
+		go x.StoreSync(n.Store, closer)
+		go x.StoreSync(pstore, closer)
 	}
 
 	applied, err := n.Store.Checkpoint()
