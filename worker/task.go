@@ -764,7 +764,7 @@ func (qs *queryState) handleUidPostings(
 				if err != nil {
 					return err
 				}
-				if len(plist.Uids) > 0 {
+				if !plist.IsEmpty() {
 					out.UidMatrix = append(out.UidMatrix, codec.PackOfOne(q.UidList.Uids[i]))
 				}
 			case q.FacetParam != nil || facetsTree != nil:
@@ -787,7 +787,7 @@ func (qs *queryState) handleUidPostings(
 				if err != nil {
 					return err
 				}
-				out.UidMatrix = append(out.UidMatrix, codec.FromListXXX(uidList).ToPack())
+				out.UidMatrix = append(out.UidMatrix, uidList.ToPack())
 			}
 		}
 		return nil
@@ -1066,7 +1066,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	query := cindex.RegexpQuery(arg.srcFn.regex.Syntax)
 	empty := pb.List{}
-	uids := codec.NewListMap(nil)
+	uidMap := codec.NewListMap(nil)
 
 	// Here we determine the list of uids to match.
 	switch {
@@ -1089,7 +1089,7 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 
 	// Prefer to use an index (fast)
 	case useIndex:
-		uids, err = uidsForRegex(attr, arg, query, &empty)
+		uidMap, err = uidsForRegex(attr, arg, query, &empty)
 		if err != nil {
 			return err
 		}
@@ -1102,55 +1102,65 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 			attr)
 	}
 
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+	arg.out.UidMatrix = append(arg.out.UidMatrix, uidMap.ToPack())
 	isList := schema.State().IsList(attr)
 	lang := langForFunc(arg.q.Langs)
 
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", uidMap.NumUids(), isList, lang)
 
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
-
-		vals := make([]types.Val, 1)
-		switch {
-		case lang != "":
-			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
-
-		case isList:
-			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
-
-		default:
-			vals[0], err = pl.Value(arg.q.ReadTs)
-		}
-		if err != nil {
-			if err == posting.ErrNoValue {
-				continue
+	// TODO: We might be able to not have filtered map at all, and directly remove the uids from the
+	// uidMap.
+	filtered := codec.NewListMap(nil)
+	uids := make([]uint64, 64)
+	itr := uidMap.NewIterator()
+	for sz := itr.Next(uids); sz > 0; {
+		for _, uid := range uids[:sz] {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
 			}
-			return err
-		}
+			pl, err := qs.cache.Get(x.DataKey(attr, uid))
+			if err != nil {
+				return err
+			}
 
-		for _, val := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchRegex(strVal, arg.srcFn.regex) {
-				filtered.Uids = append(filtered.Uids, uid)
-				// NOTE: We only add the uid once.
-				break
+			vals := make([]types.Val, 1)
+			switch {
+			case lang != "":
+				vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+
+			case isList:
+				vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+
+			default:
+				vals[0], err = pl.Value(arg.q.ReadTs)
+			}
+			if err != nil {
+				if err == posting.ErrNoValue {
+					continue
+				}
+				return err
+			}
+
+			for _, val := range vals {
+				// convert data from binary to appropriate format
+				strVal, err := types.Convert(val, types.StringID)
+				if err == nil && matchRegex(strVal, arg.srcFn.regex) {
+					filtered.AddOne(uid)
+					// NOTE: We only add the uid once.
+					break
+				}
 			}
 		}
 	}
 
 	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+		// TODO: This can be optimized if we only work on the latest ListMap. I don't understand why
+		// we are iterating over the whole matrix.
+		lm := codec.NewListMap(arg.out.UidMatrix[i])
+		lm.Intersect(filtered)
+		arg.out.UidMatrix[i] = lm.ToPack()
 	}
 
 	return nil

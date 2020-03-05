@@ -57,7 +57,7 @@ message Query {
 	bool do_count = 4;      // Are we just getting lengths?
 
 	// Exactly one of uids and terms is populated.
-	List uid_list = 5;
+	UidPack uid_list = 5;
 
 	// Function to generate or filter UIDs.
 	SrcFunction src_func = 6;
@@ -332,6 +332,7 @@ message UidBlock {
 message UidPack {
 	uint32 block_size        = 1 [deprecated = true];
 	repeated UidBlock blocks = 2;
+	uint64 num_uids          = 3;
 }
 
 message PostingList {

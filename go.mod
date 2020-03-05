@@ -3,6 +3,7 @@ module github.com/dgraph-io/dgraph
 go 1.12
 
 require (
+	9fans.net/go v0.0.2 // indirect
 	contrib.go.opencensus.io/exporter/jaeger v0.1.0
 	contrib.go.opencensus.io/exporter/prometheus v0.1.0
 	github.com/99designs/gqlgen v0.11.0
@@ -11,12 +12,15 @@ require (
 	github.com/DataDog/zstd v1.4.4 // indirect
 	github.com/OneOfOne/xxhash v1.2.5 // indirect
 	github.com/RoaringBitmap/roaring v0.4.21
+	github.com/alecthomas/gometalinter v3.0.0+incompatible // indirect
+	github.com/alecthomas/units v0.0.0-20190924025748-f65c72e2690d // indirect
 	github.com/beorn7/perks v1.0.0 // indirect
 	github.com/blevesearch/bleve v0.0.0-20181114232033-e1f5e6cdcd76
 	github.com/blevesearch/go-porterstemmer v1.0.2 // indirect
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
+	github.com/davidrjenni/reftools v0.0.0-20191222082827-65925cf01315 // indirect
 	github.com/dgraph-io/badger/v2 v2.0.1-0.20191220102048-ab4352b00a17
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
 	github.com/dgraph-io/ristretto v0.0.1 // indirect
@@ -24,6 +28,9 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/dustin/go-humanize v1.0.0
+	github.com/fatih/gomodifytags v1.3.0 // indirect
+	github.com/fatih/motion v1.1.0 // indirect
+	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.1
@@ -33,16 +40,24 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.3.1
+	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.0.0
+	github.com/josharian/impl v0.0.0-20191119165012-6b9658ad00c7 // indirect
+	github.com/jstemmer/gotags v1.4.1 // indirect
+	github.com/klauspost/asmfmt v1.2.1 // indirect
+	github.com/koron/iferr v0.0.0-20180615142939-bb332a3b1d91 // indirect
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
+	github.com/nicksnyder/go-i18n v1.10.1 // indirect
+	github.com/nsf/gocode v0.0.0-20190302080247-5bee97b48836 // indirect
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
-	github.com/philhofer/fwd v1.0.0 // indirect
+	github.com/pelletier/go-toml v1.6.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/pkg/profile v1.2.1
 	github.com/prometheus/client_golang v0.9.3-0.20190127221311-3c4408c8b829
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
+	github.com/rogpeppe/godef v1.1.1 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
@@ -51,15 +66,18 @@ require (
 	github.com/stretchr/testify v1.4.0
 	github.com/twpayne/go-geom v1.0.5
 	github.com/vektah/gqlparser/v2 v2.0.1
+	github.com/zmb3/gogetdoc v0.0.0-20190228002656-b37376c5da6a // indirect
 	go.etcd.io/etcd v0.0.0-20190228193606-a943ad0ee4c9
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
-	golang.org/x/net v0.0.0-20191209160850-c0dbc17a3553
+	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sys v0.0.0-20200116001909-b77594299b42
 	golang.org/x/text v0.3.2
+	golang.org/x/tools v0.0.0-20200304193943-95d2e580d8eb // indirect
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
+	gopkg.in/alecthomas/kingpin.v3-unstable v3.0.0-20191105091915-95d230a53780 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
-	gopkg.in/yaml.v2 v2.2.4
+	gopkg.in/yaml.v2 v2.2.8
 )

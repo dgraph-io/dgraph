@@ -83,8 +83,86 @@ func (lm *ListMap) IsEmpty() bool {
 	return true
 }
 
+func (lm *ListMap) NumUids() uint64 {
+	var result uint64
+	for _, bitmap := range lm.bitmaps {
+		result += bitmap.GetCardinality()
+	}
+	return result
+}
+
+type ListMapIterator struct {
+	bases   []uint64
+	bitmaps map[uint64]*roaring.Bitmap
+	curIdx  int
+	itr     roaring.ManyIntIterable
+	many    []uint32
+}
+
+func (lm *ListMap) NewIterator() *ListMapIterator {
+	lmi := &ListMapIterator{}
+	for base := range lm.bitmaps {
+		lmi.bases = append(lmi.bases, base)
+	}
+	sort.Slice(lmi.bases, func(i, j int) bool {
+		return lmi.bases[i] < lmi.bases[j]
+	})
+	if len(lmi.bases) == 0 {
+		return nil
+	}
+	base := lmi.bases[0]
+	if bitmap, ok := lmi.bitmaps[base]; ok {
+		lmi.itr = bitmap.ManyIterator()
+	}
+	return lmi
+}
+
+func (lmi *ListMapIterator) Next(uids []uint64) int {
+	if lmi == nil {
+		return 0
+	}
+	if lmi.curIdx >= len(lmi.bases) {
+		return 0
+	}
+
+	// Adjust size of lmi.many.
+	if len(uids) > cap(lmi.many) {
+		lmi.many = make([]uint32, 0, len(uids))
+	}
+	lmi.many = lmi.many[:len(uids)]
+
+	base := lmi.bases[lmi.curIdx]
+	fill := func() int {
+		if lmi.itr == nil {
+			return 0
+		}
+		out := lmi.itr.NextMany(lmi.many)
+		for i := 0; i < out; i++ {
+			// NOTE that we can not set the uids slice via append, etc. That would not get reflected
+			// back to the caller. All we can do is to set the internal elements of the given slice.
+			uids[i] = base | uint64(lmi.many[i])
+		}
+		return out
+	}
+
+	for lmi.curIdx < len(lmi.bases) {
+		if sz := fill(); sz > 0 {
+			return sz
+		}
+		lmi.itr = nil
+		lmi.curIdx++
+		base = lmi.bases[lmi.curIdx]
+		if bitmap, ok := lmi.bitmaps[base]; ok {
+			lmi.itr = bitmap.ManyIterator()
+		}
+	}
+	return 0
+}
+
 func (lm *ListMap) ToPack() *pb.UidPack {
-	pack := &pb.UidPack{}
+	pack := &pb.UidPack{
+		NumUids: lm.NumUids(),
+	}
 	for base, bitmap := range lm.bitmaps {
 		data, err := bitmap.ToBytes()
 		x.Check(err)
@@ -108,6 +186,13 @@ func (lm *ListMap) AddOne(uid uint64) {
 		lm.bitmaps[base] = bitmap
 	}
 	bitmap.Add(uint32(uid & lsbBitMask))
+}
+
+func (lm *ListMap) RemoveOne(uid uint64) {
+	base := uid & msbBitMask
+	if bitmap, ok := lm.bitmaps[base]; ok {
+		bitmap.Remove(uint32(uid & lsbBitMask))
+	}
 }
 
 func (lm *ListMap) AddMany(uids []uint64) {

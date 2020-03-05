@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -97,12 +96,21 @@ func uidsForMatch(attr string, arg funcArgs) (*codec.ListMap, error) {
 		return nil, err
 	}
 
+	var out *codec.ListMap
 	uidMatrix := make([]*pb.List, len(tokens))
 	for i, t := range tokens {
-		uidMatrix[i], err = uidsForNgram(t)
-		if err != nil {
-			return nil, err
+		if out == nil {
+			out, err = uidsForNgram(t)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			next, err := uidsForNgram(t)
+			if err != nil {
+				return nil, err
+			}
+			out.Merge(next)
 		}
 	}
-	return algo.MergeSorted(uidMatrix), nil
+	return out, nil
 }
