@@ -85,10 +85,11 @@ type loader struct {
 	conflicts map[uint64]struct{}
 	uidsLock  sync.RWMutex
 
-	reqNum   uint64
-	reqs     chan request
-	zeroconn *grpc.ClientConn
-	schema   *schema
+	reqNum    uint64
+	reqs      chan request
+	zeroconn  *grpc.ClientConn
+	schema    *schema
+	nameSpace string
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -135,7 +136,7 @@ func (l *loader) infinitelyRetry(req request) {
 	defer l.deregister(&req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
-		txn := l.dc.NewTxn()
+		txn := l.dc.NewNameSpacedTxn(l.nameSpace)
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 		if err == nil {
@@ -159,7 +160,8 @@ func (l *loader) infinitelyRetry(req request) {
 
 func (l *loader) request(req request) {
 	atomic.AddUint64(&l.reqNum, 1)
-	txn := l.dc.NewTxn()
+	txn := l.dc.NewNameSpacedTxn(l.nameSpace)
+
 	req.CommitNow = true
 	_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 

@@ -66,6 +66,7 @@ type options struct {
 	verbose        bool
 	httpAddr       string
 	bufferSize     int
+	nameSpace      string
 }
 
 type predicate struct {
@@ -144,6 +145,7 @@ func init() {
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
+	flag.StringP("namespace", "n", x.DefaultNamespace, "Namespace to be used.")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -167,7 +169,7 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
+func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph, nameSpace string) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
@@ -194,6 +196,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 
 	op := &api.Operation{}
 	op.Schema = string(b)
+	op.Namespace = nameSpace
+	// Q: Do we need to set this? Ask Balaji
+	//op.CreateNamespace = nameSpace
 	return dgraphClient.Alter(ctx, op)
 }
 
@@ -324,7 +329,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, nameSpace string) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -352,6 +357,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		alloc:     alloc,
 		db:        db,
 		zeroconn:  connzero,
+		nameSpace: nameSpace,
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -379,7 +385,9 @@ func run() error {
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
+		nameSpace:      Live.Conf.GetString("namespace"),
 	}
+	fmt.Printf("CLI options:\n %#v\n", opt)
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
@@ -398,11 +406,11 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg)
+	l := setup(bmOpts, dg, opt.nameSpace)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		err := processSchemaFile(ctx, opt.schemaFile, dg)
+		err := processSchemaFile(ctx, opt.schemaFile, dg, opt.nameSpace)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
