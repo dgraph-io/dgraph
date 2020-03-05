@@ -616,6 +616,22 @@ func (n *node) trySnapshot(skip uint64) {
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
+func (n *node) StoreSync(closer *y.Closer) {
+	closer.AddRunning(1)
+	defer closer.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := n.Store.Sync(); err != nil {
+				glog.Errorf("Error while calling Store.Sync: %v", err)
+			}
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
 func (n *node) Run() {
 	var leader bool
 	ticker := time.NewTicker(100 * time.Millisecond)
@@ -636,6 +652,9 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
+	if x.WorkerConfig.LudicrousMode {
+		go n.StoreSync(closer)
+	}
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
@@ -676,18 +695,12 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
+			span.Annotatef(nil, "Saved to storage")
 			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}
 				timer.Record("sync")
-				span.Annotatef(nil, "Saved to storage")
-			} else if x.WorkerConfig.LudicrousMode && rd.MustSync {
-				go func() {
-					if err := n.Store.Sync(); err != nil {
-						glog.Errorf("Error while calling Store.Sync: %v", err)
-					}
-				}()
 			}
 
 			if !raft.IsEmptySnap(rd.Snapshot) {

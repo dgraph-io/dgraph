@@ -348,10 +348,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return err
 		}
 		if x.WorkerConfig.LudicrousMode {
-			txnTimeStamp := proposal.Mutations.StartTs
+			ts := proposal.Mutations.StartTs
 			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
 				Txns: []*pb.TxnStatus{
-					{StartTs: txnTimeStamp, CommitTs: txnTimeStamp},
+					{StartTs: ts, CommitTs: ts},
 				},
 			})
 		}
@@ -791,6 +791,21 @@ func (n *node) drainApplyChan() {
 	}
 }
 
+func (n *node) StoreSync(closer *y.Closer) {
+	defer closer.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := n.Store.Sync(); err != nil {
+				glog.Errorf("Error while calling Store.Sync: %+v", err)
+			}
+		case <-closer.HasBeenClosed():
+			return
+		}
+	}
+}
+
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
@@ -807,6 +822,12 @@ func (n *node) Run() {
 	done := make(chan struct{})
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
+
+	if x.WorkerConfig.LudicrousMode {
+		closer := y.NewCloser(1)
+		defer closer.SignalAndWait()
+		go n.StoreSync(closer)
+	}
 
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
@@ -925,23 +946,17 @@ func (n *node) Run() {
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
+			if span != nil {
+				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
+					len(rd.Entries),
+					raft.IsEmptySnap(rd.Snapshot),
+					raft.IsEmptyHardState(rd.HardState))
+			}
 			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %+v", err)
 				}
 				timer.Record("sync")
-				if span != nil {
-					span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
-						len(rd.Entries),
-						raft.IsEmptySnap(rd.Snapshot),
-						raft.IsEmptyHardState(rd.HardState))
-				}
-			} else if x.WorkerConfig.LudicrousMode && rd.MustSync {
-				go func() {
-					if err := n.Store.Sync(); err != nil {
-						glog.Errorf("Error while calling Store.Sync: %+v", err)
-					}
-				}()
 			}
 
 			// Now schedule or apply committed entries.
@@ -978,8 +993,7 @@ func (n *node) Run() {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
 						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error
-							// while proposing.
+							// Assuming that there will be no error while proposing.
 							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
