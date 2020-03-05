@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"log"
 	"math"
 	"sort"
@@ -110,8 +111,8 @@ func (it *pIterator) init(l *List, afterUid, deleteBelowTs uint64) error {
 	if len(it.l.plist.Splits) > 0 {
 		plist, err := l.readListPart(it.l.plist.Splits[it.splitIdx])
 		if err != nil {
-			return errors.Wrapf(
-				err, "cannot read initial list part for list with base key %v", l.key)
+			return errors.Wrapf(err, "cannot read initial list part for list with base key %s",
+				hex.EncodeToString(l.key))
 		}
 		it.plist = plist
 	} else {
@@ -166,8 +167,8 @@ func (it *pIterator) moveToNextPart() error {
 	it.splitIdx++
 	plist, err := it.l.readListPart(it.l.plist.Splits[it.splitIdx])
 	if err != nil {
-		return errors.Wrapf(err, "cannot move to next list part in iterator for list with key %v",
-			it.l.key)
+		return errors.Wrapf(err, "cannot move to next list part in iterator for list with key %s",
+			hex.EncodeToString(it.l.key))
 	}
 	it.plist = plist
 
@@ -224,8 +225,8 @@ func (it *pIterator) next() error {
 	it.uidx = 0
 	it.uids = it.dec.Next()
 
-	return errors.Wrapf(it.moveToNextValidPart(), "cannot advance iterator for list with key %v",
-		it.l.key)
+	return errors.Wrapf(it.moveToNextValidPart(), "cannot advance iterator for list with key %s",
+		hex.EncodeToString(it.l.key))
 }
 
 func (it *pIterator) valid() (bool, error) {
@@ -407,8 +408,8 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	var conflictKey uint64
 	pk, err := x.Parse(l.key)
 	if err != nil {
-		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %v",
-			l.key)
+		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
+			hex.EncodeToString(l.key))
 	}
 	switch {
 	case schema.State().HasNoConflict(t.Attr):
@@ -772,8 +773,8 @@ func (out *rollupOutput) marshalPostingListPart(
 	key, err := x.GetSplitKey(baseKey, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,
-			"cannot generate split key for list with base key %v and start UID %d",
-			baseKey, startUid)
+			"cannot generate split key for list with base key %s and start UID %d",
+			hex.EncodeToString(baseKey), startUid)
 	}
 	kv.Key = key
 	val, meta := marshalPostingList(plist)
@@ -933,7 +934,8 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	})
 	l.RUnlock()
 	if err != nil {
-		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %v", l.key)
+		return out, errors.Wrapf(err, "cannot retrieve UIDs from list with key %s",
+			hex.EncodeToString(l.key))
 	}
 
 	// Do The intersection here as it's optimized.
@@ -956,7 +958,8 @@ func (l *List) Postings(opt ListOptions, postFn func(*pb.Posting) error) error {
 		}
 		return postFn(p)
 	})
-	return errors.Wrapf(err, "cannot retrieve postings from list with key %v", l.key)
+	return errors.Wrapf(err, "cannot retrieve postings from list with key %s",
+		hex.EncodeToString(l.key))
 }
 
 // AllUntaggedValues returns all the values in the posting list with no language tag.
@@ -974,7 +977,8 @@ func (l *List) AllUntaggedValues(readTs uint64) ([]types.Val, error) {
 		}
 		return nil
 	})
-	return vals, errors.Wrapf(err, "cannot retrieve untagged values from list with key %v", l.key)
+	return vals, errors.Wrapf(err, "cannot retrieve untagged values from list with key %s",
+		hex.EncodeToString(l.key))
 }
 
 // allUntaggedFacets returns facets for all untagged values. Since works well only for
@@ -989,7 +993,8 @@ func (l *List) allUntaggedFacets(readTs uint64) ([]*pb.Facets, error) {
 		return nil
 	})
 
-	return facets, errors.Wrapf(err, "cannot retrieve untagged facets from list with key %v", l.key)
+	return facets, errors.Wrapf(err, "cannot retrieve untagged facets from list with key %s",
+		hex.EncodeToString(l.key))
 }
 
 // AllValues returns all the values in the posting list.
@@ -1005,7 +1010,8 @@ func (l *List) AllValues(readTs uint64) ([]types.Val, error) {
 		})
 		return nil
 	})
-	return vals, errors.Wrapf(err, "cannot retrieve all values from list with key %v", l.key)
+	return vals, errors.Wrapf(err, "cannot retrieve all values from list with key %s",
+		hex.EncodeToString(l.key))
 }
 
 // GetLangTags finds the language tags of each posting in the list.
@@ -1018,7 +1024,8 @@ func (l *List) GetLangTags(readTs uint64) ([]string, error) {
 		tags = append(tags, string(p.LangTag))
 		return nil
 	})
-	return tags, errors.Wrapf(err, "cannot retrieve language tags from list with key %v", l.key)
+	return tags, errors.Wrapf(err, "cannot retrieve language tags from list with key %s",
+		hex.EncodeToString(l.key))
 }
 
 // Value returns the default value from the posting list. The default value is
@@ -1029,7 +1036,7 @@ func (l *List) Value(readTs uint64) (rval types.Val, rerr error) {
 	val, found, err := l.findValue(readTs, math.MaxUint64)
 	if err != nil {
 		return val, errors.Wrapf(err,
-			"cannot retrieve default value from list with key %v", l.key)
+			"cannot retrieve default value from list with key %s", hex.EncodeToString(l.key))
 	}
 	if !found {
 		return val, ErrNoValue
@@ -1047,8 +1054,8 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 	defer l.RUnlock()
 	p, err := l.postingFor(readTs, langs)
 	if err != nil {
-		return rval, errors.Wrapf(err,
-			"cannot retrieve value with langs %v from list with key %v", langs, l.key)
+		return rval, errors.Wrapf(err, "cannot retrieve value with langs %v from list with key %s",
+			langs, hex.EncodeToString(l.key))
 	}
 	return valueToTypesVal(p), nil
 }
@@ -1106,7 +1113,8 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 		switch {
 		case err != nil:
 			return nil, errors.Wrapf(err,
-				"cannot find value without language tag from list with key %v", l.key)
+				"cannot find value without language tag from list with key %s",
+				hex.EncodeToString(l.key))
 		case found:
 			return pos, nil
 		}
@@ -1126,7 +1134,8 @@ func (l *List) postingForLangs(readTs uint64, langs []string) (*pb.Posting, erro
 		})
 		if err != nil {
 			return nil, errors.Wrapf(err,
-				"cannot retrieve value with the smallest lang UID from list with key %v", l.key)
+				"cannot retrieve value with the smallest lang UID from list with key %s",
+				hex.EncodeToString(l.key))
 		}
 	}
 
@@ -1172,7 +1181,7 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 	})
 
 	return found, pos, errors.Wrapf(err,
-		"cannot retrieve posting for UID %d from list with key %v", uid, l.key)
+		"cannot retrieve posting for UID %d from list with key %s", uid, hex.EncodeToString(l.key))
 }
 
 // Facets gives facets for the posting representing value.
@@ -1207,16 +1216,19 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 	key, err := x.GetSplitKey(l.key, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,
-			"cannot generate key for list with base key %v and start UID %d", l.key, startUid)
+			"cannot generate key for list with base key %s and start UID %d",
+			hex.EncodeToString(l.key), startUid)
 	}
 	txn := pstore.NewTransactionAt(l.minTs, false)
 	item, err := txn.Get(key)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "could not read list part with key %s",
+			hex.EncodeToString(key))
 	}
 	part := &pb.PostingList{}
 	if err := unmarshalOrCopy(part, item); err != nil {
-		return nil, errors.Wrapf(err, "cannot unmarshal list part with key %v", key)
+		return nil, errors.Wrapf(err, "cannot unmarshal list part with key %s",
+			hex.EncodeToString(key))
 	}
 	return part, nil
 }
