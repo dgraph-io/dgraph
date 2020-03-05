@@ -126,7 +126,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Enterprise features
   - Backup types. Fixes [#4507][]. ([#4514][])
 
-[#4574]: https://github.com/dgraph-io/dgraph/pull/4447
+[#4574]: https://github.com/dgraph-io/dgraph/pull/4574
 [#4672]: https://github.com/dgraph-io/dgraph/pull/4672
 [#4530]: https://github.com/dgraph-io/dgraph/issues/4530
 [#4310]: https://github.com/dgraph-io/dgraph/issues/4310
