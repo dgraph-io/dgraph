@@ -31,6 +31,7 @@ import (
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -236,7 +237,7 @@ type SubGraph struct {
 	valueMatrix []*pb.ValueList
 	// uidMatrix is a slice of List. There would be one List corresponding to each uid in SrcUIDs.
 	// In graph terms, a list is a slice of outgoing edges from a node.
-	uidMatrix []*pb.List
+	uidMatrix []*pb.UidPack
 
 	// facetsMatrix contains the facet values. There would a list corresponding to each uid in
 	// uidMatrix.
@@ -719,11 +720,12 @@ func isDebug(ctx context.Context) bool {
 }
 
 func (sg *SubGraph) populate(uids []uint64) error {
-	// Put sorted entries in matrix.
-	sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-	sg.uidMatrix = []*pb.List{{Uids: uids}}
-	// User specified list may not be sorted.
-	sg.SrcUIDs = &pb.List{Uids: uids}
+	lm := codec.NewListMap(nil)
+	lm.AddMany(uids)
+	pack := lm.ToPack()
+	sg.uidMatrix = append(sg.uidMatrix, pack)
+	// TODO: This is inefficient.
+	sg.SrcUIDs = &pb.List{Uids: lm.ToUids()}
 	return nil
 }
 
@@ -995,7 +997,8 @@ func evalLevelAgg(
 		ag := aggregator{
 			name: sg.SrcFunc.Name,
 		}
-		for _, uid := range list.Uids {
+		lm := codec.NewListMap(list)
+		for _, uid := range lm.ToUids() {
 			if val, ok := vals[uid]; ok {
 				ag.Apply(val)
 			}
@@ -1059,8 +1062,8 @@ func (fromNode *varValue) transformTo(toPath []*SubGraph) (map[uint64]types.Val,
 			if curVal.Tid != types.IntID && curVal.Tid != types.FloatID {
 				return nil, errors.Errorf("Encountered non int/float type for summing")
 			}
-			for j := 0; j < len(ul.Uids); j++ {
-				dstUid := ul.Uids[j]
+			lm := codec.NewListMap(ul)
+			for _, dstUid := range lm.ToUids() {
 				ag := aggregator{name: "sum"}
 				ag.Apply(curVal)
 				ag.Apply(tempMap[dstUid])
@@ -1224,26 +1227,26 @@ func (sg *SubGraph) populatePostAggregation(doneVars map[string]varValue, path [
 // Filters might have updated the destuids. facetMatrix should also be updated to exclude uids that
 // were removed..
 func (sg *SubGraph) updateFacetMatrix() {
-	if len(sg.facetsMatrix) != len(sg.uidMatrix) {
-		return
-	}
+	// if len(sg.facetsMatrix) != len(sg.uidMatrix) {
+	// 	return
+	// }
 
-	for lidx, l := range sg.uidMatrix {
-		// For scalar predicates, uid list would be empty, we don't need to update facetsMatrix.
-		// If its an uid predicate and uid list is empty then also we don't need to update
-		// facetsMatrix, as results won't be returned to client in outputnode.go.
-		if len(l.Uids) == 0 {
-			continue
-		}
-		out := sg.facetsMatrix[lidx].FacetsList[:0]
-		for idx, uid := range l.Uids {
-			// If uid wasn't filtered then we keep the facet for it.
-			if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
-				out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
-			}
-		}
-		sg.facetsMatrix[lidx].FacetsList = out
-	}
+	// for lidx, l := range sg.uidMatrix {
+	// 	// For scalar predicates, uid list would be empty, we don't need to update facetsMatrix.
+	// 	// If its an uid predicate and uid list is empty then also we don't need to update
+	// 	// facetsMatrix, as results won't be returned to client in outputnode.go.
+	// 	if len(l.Uids) == 0 {
+	// 		continue
+	// 	}
+	// 	out := sg.facetsMatrix[lidx].FacetsList[:0]
+	// 	for idx, uid := range l.Uids {
+	// 		// If uid wasn't filtered then we keep the facet for it.
+	// 		if algo.IndexOf(sg.DestUIDs, uid) >= 0 {
+	// 			out = append(out, sg.facetsMatrix[lidx].FacetsList[idx])
+	// 		}
+	// 	}
+	// 	sg.facetsMatrix[lidx].FacetsList = out
+	// }
 }
 
 // updateUidMatrix is used to filter out the uids in uidMatrix which are not part of DestUIDs
@@ -1359,121 +1362,121 @@ func (sg *SubGraph) updateVars(doneVars map[string]varValue, sgPath []*SubGraph)
 
 // populateUidValVar populates the value of the variable into doneVars.
 func (sg *SubGraph) populateUidValVar(doneVars map[string]varValue, sgPath []*SubGraph) error {
-	if sg.Params.Var == "" {
-		return nil
-	}
+	//if sg.Params.Var == "" {
+	//	return nil
+	//}
 
-	var v varValue
-	var ok bool
+	//var v varValue
+	//var ok bool
 
-	switch {
-	case len(sg.counts) > 0:
-		// 1. When count of a predicate is assigned a variable, we store the mapping of uid =>
-		// count(predicate).
+	//switch {
+	//case len(sg.counts) > 0:
+	//	// 1. When count of a predicate is assigned a variable, we store the mapping of uid =>
+	//	// count(predicate).
 
-		// This implies it is a value variable.
-		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
-		}
-		for idx, uid := range sg.SrcUIDs.Uids {
-			val := types.Val{
-				Tid:   types.IntID,
-				Value: int64(sg.counts[idx]),
-			}
-			doneVars[sg.Params.Var].Vals[uid] = val
-		}
-	case sg.Params.DoCount && sg.Attr == "uid" && sg.IsInternal():
-		// 2. This is the case where count(uid) is requested in the query and stored as variable.
-		// In this case there is just one value which is stored corresponding to the uid
-		// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
-		// value.
-		doneVars[sg.Params.Var] = varValue{
-			Vals:    make(map[uint64]types.Val),
-			path:    sgPath,
-			strList: sg.valueMatrix,
-		}
+	//	// This implies it is a value variable.
+	//	doneVars[sg.Params.Var] = varValue{
+	//		Vals:    make(map[uint64]types.Val),
+	//		path:    sgPath,
+	//		strList: sg.valueMatrix,
+	//	}
+	//	for idx, uid := range sg.SrcUIDs.Uids {
+	//		val := types.Val{
+	//			Tid:   types.IntID,
+	//			Value: int64(sg.counts[idx]),
+	//		}
+	//		doneVars[sg.Params.Var].Vals[uid] = val
+	//	}
+	//case sg.Params.DoCount && sg.Attr == "uid" && sg.IsInternal():
+	//	// 2. This is the case where count(uid) is requested in the query and stored as variable.
+	//	// In this case there is just one value which is stored corresponding to the uid
+	//	// math.MaxUint64 which isn't entirely correct as there could be an actual uid with that
+	//	// value.
+	//	doneVars[sg.Params.Var] = varValue{
+	//		Vals:    make(map[uint64]types.Val),
+	//		path:    sgPath,
+	//		strList: sg.valueMatrix,
+	//	}
 
-		// Because we are counting the number of UIDs in parent
-		// we use the length of SrcUIDs instead of DestUIDs.
-		val := types.Val{
-			Tid:   types.IntID,
-			Value: int64(len(sg.SrcUIDs.Uids)),
-		}
-		doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
-	case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
-		// 3. A uid variable. The variable could be defined in one of two places.
-		// a) Either on the actual predicate.
-		//    me(func: (...)) {
-		//      a as friend
-		//    }
-		//
-		// b) Or on the uid edge
-		//    me(func:(...)) {
-		//      friend {
-		//        a as uid
-		//      }
-		//    }
+	//	// Because we are counting the number of UIDs in parent
+	//	// we use the length of SrcUIDs instead of DestUIDs.
+	//	val := types.Val{
+	//		Tid:   types.IntID,
+	//		Value: int64(len(sg.SrcUIDs.Uids)),
+	//	}
+	//	doneVars[sg.Params.Var].Vals[math.MaxUint64] = val
+	//case len(sg.DestUIDs.Uids) != 0 || (sg.Attr == "uid" && sg.SrcUIDs != nil):
+	//	// 3. A uid variable. The variable could be defined in one of two places.
+	//	// a) Either on the actual predicate.
+	//	//    me(func: (...)) {
+	//	//      a as friend
+	//	//    }
+	//	//
+	//	// b) Or on the uid edge
+	//	//    me(func:(...)) {
+	//	//      friend {
+	//	//        a as uid
+	//	//      }
+	//	//    }
 
-		// Uid variable could be defined using uid or a predicate.
-		uids := sg.DestUIDs
-		if sg.Attr == "uid" {
-			uids = sg.SrcUIDs
-		}
+	//	// Uid variable could be defined using uid or a predicate.
+	//	uids := sg.DestUIDs
+	//	if sg.Attr == "uid" {
+	//		uids = sg.SrcUIDs
+	//	}
 
-		if v, ok = doneVars[sg.Params.Var]; !ok {
-			doneVars[sg.Params.Var] = varValue{
-				Uids:    uids,
-				path:    sgPath,
-				Vals:    make(map[uint64]types.Val),
-				strList: sg.valueMatrix,
-			}
-			return nil
-		}
+	//	if v, ok = doneVars[sg.Params.Var]; !ok {
+	//		doneVars[sg.Params.Var] = varValue{
+	//			Uids:    uids,
+	//			path:    sgPath,
+	//			Vals:    make(map[uint64]types.Val),
+	//			strList: sg.valueMatrix,
+	//		}
+	//		return nil
+	//	}
 
-		// For a recurse query this can happen. We don't allow using the same variable more than
-		// once otherwise.
-		lists := append([]*pb.List(nil), v.Uids, uids)
-		v.Uids = algo.MergeSorted(lists)
-		doneVars[sg.Params.Var] = v
-	case len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0:
-		// 4. A value variable. We get the first value from every list thats part of ValueMatrix
-		// and store it corresponding to a uid in SrcUIDs.
-		if v, ok = doneVars[sg.Params.Var]; !ok {
-			v.Vals = make(map[uint64]types.Val)
-			v.path = sgPath
-			v.strList = sg.valueMatrix
-		}
+	//	// For a recurse query this can happen. We don't allow using the same variable more than
+	//	// once otherwise.
+	//	lists := append([]*pb.List(nil), v.Uids, uids)
+	//	v.Uids = algo.MergeSorted(lists)
+	//	doneVars[sg.Params.Var] = v
+	//case len(sg.valueMatrix) != 0 && sg.SrcUIDs != nil && len(sgPath) != 0:
+	//	// 4. A value variable. We get the first value from every list thats part of ValueMatrix
+	//	// and store it corresponding to a uid in SrcUIDs.
+	//	if v, ok = doneVars[sg.Params.Var]; !ok {
+	//		v.Vals = make(map[uint64]types.Val)
+	//		v.path = sgPath
+	//		v.strList = sg.valueMatrix
+	//	}
 
-		for idx, uid := range sg.SrcUIDs.Uids {
-			if len(sg.valueMatrix[idx].Values) > 1 {
-				return errors.Errorf("Value variables not supported for predicate with list type.")
-			}
+	//	for idx, uid := range sg.SrcUIDs.Uids {
+	//		if len(sg.valueMatrix[idx].Values) > 1 {
+	//			return errors.Errorf("Value variables not supported for predicate with list type.")
+	//		}
 
-			if len(sg.valueMatrix[idx].Values) == 0 {
-				continue
-			}
-			val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
-			if err != nil {
-				continue
-			}
-			v.Vals[uid] = val
-		}
-		doneVars[sg.Params.Var] = v
-	default:
-		// If the variable already existed and now we see it again without any DestUIDs or
-		// ValueMatrix then lets just return.
-		if _, ok := doneVars[sg.Params.Var]; ok {
-			return nil
-		}
-		// Insert a empty entry to keep the dependency happy.
-		doneVars[sg.Params.Var] = varValue{
-			path:    sgPath,
-			Vals:    make(map[uint64]types.Val),
-			strList: sg.valueMatrix,
-		}
-	}
+	//		if len(sg.valueMatrix[idx].Values) == 0 {
+	//			continue
+	//		}
+	//		val, err := convertWithBestEffort(sg.valueMatrix[idx].Values[0], sg.Attr)
+	//		if err != nil {
+	//			continue
+	//		}
+	//		v.Vals[uid] = val
+	//	}
+	//	doneVars[sg.Params.Var] = v
+	//default:
+	//	// If the variable already existed and now we see it again without any DestUIDs or
+	//	// ValueMatrix then lets just return.
+	//	if _, ok := doneVars[sg.Params.Var]; ok {
+	//		return nil
+	//	}
+	//	// Insert a empty entry to keep the dependency happy.
+	//	doneVars[sg.Params.Var] = varValue{
+	//		path:    sgPath,
+	//		Vals:    make(map[uint64]types.Val),
+	//		strList: sg.valueMatrix,
+	//	}
+	//}
 	return nil
 }
 
@@ -1609,57 +1612,57 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 // fillVars reads the value corresponding to a variable from the map mp and stores it inside
 // SubGraph. This value is then later used for execution of the SubGraph.
 func (sg *SubGraph) fillVars(mp map[string]varValue) error {
-	if sg.Params.Alias == "shortest" {
-		if err := sg.fillShortestPathVars(mp); err != nil {
-			return err
-		}
-	}
+	// if sg.Params.Alias == "shortest" {
+	// 	if err := sg.fillShortestPathVars(mp); err != nil {
+	// 		return err
+	// 	}
+	// }
 
-	var lists []*pb.List
-	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
-	// we do, then we store that value in the appropriate variable inside SubGraph.
-	for _, v := range sg.Params.NeedsVar {
-		l, ok := mp[v.Name]
-		if !ok {
-			continue
-		}
-		switch {
-		case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
-			// This is for the case when we use expand(val(x)) with a value variable.
-			// We populate the list of values into ExpandPreds and use that for the expand query
-			// later.
-			// TODO: If we support value vars for list type then this needn't be true
-			sg.ExpandPreds = l.strList
+	// var lists []*pb.List
+	// // Go through all the variables in NeedsVar and see if we have a value for them in the map. If
+	// // we do, then we store that value in the appropriate variable inside SubGraph.
+	// for _, v := range sg.Params.NeedsVar {
+	// 	l, ok := mp[v.Name]
+	// 	if !ok {
+	// 		continue
+	// 	}
+	// 	switch {
+	// 	case (v.Typ == gql.AnyVar || v.Typ == gql.ListVar) && l.strList != nil:
+	// 		// This is for the case when we use expand(val(x)) with a value variable.
+	// 		// We populate the list of values into ExpandPreds and use that for the expand query
+	// 		// later.
+	// 		// TODO: If we support value vars for list type then this needn't be true
+	// 		sg.ExpandPreds = l.strList
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
-			lists = append(lists, l.Uids)
+	// 	case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
+	// 		lists = append(lists, l.Uids)
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
-			// This should happen only once.
-			// TODO: This allows only one value var per subgraph, change it later
-			sg.Params.UidToVal = l.Vals
+	// 	case (v.Typ == gql.AnyVar || v.Typ == gql.ValueVar):
+	// 		// This should happen only once.
+	// 		// TODO: This allows only one value var per subgraph, change it later
+	// 		sg.Params.UidToVal = l.Vals
 
-		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
-			// Derive the UID list from value var.
-			uids := make([]uint64, 0, len(l.Vals))
-			for k := range l.Vals {
-				uids = append(uids, k)
-			}
-			sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
-			lists = append(lists, &pb.List{Uids: uids})
+	// 	case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && len(l.Vals) != 0:
+	// 		// Derive the UID list from value var.
+	// 		uids := make([]uint64, 0, len(l.Vals))
+	// 		for k := range l.Vals {
+	// 			uids = append(uids, k)
+	// 		}
+	// 		sort.Slice(uids, func(i, j int) bool { return uids[i] < uids[j] })
+	// 		lists = append(lists, &pb.List{Uids: uids})
 
-		case len(l.Vals) != 0 || l.Uids != nil:
-			return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
+	// 	case len(l.Vals) != 0 || l.Uids != nil:
+	// 		return errors.Errorf("Wrong variable type encountered for var(%v) %v.", v.Name, v.Typ)
 
-		default:
-			glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
-		}
-	}
-	if err := sg.replaceVarInFunc(); err != nil {
-		return err
-	}
-	lists = append(lists, sg.DestUIDs)
-	sg.DestUIDs = algo.MergeSorted(lists)
+	// 	default:
+	// 		glog.V(3).Infof("Warning: reached default case in fillVars for var: %v", v.Name)
+	// 	}
+	// }
+	// if err := sg.replaceVarInFunc(); err != nil {
+	// 	return err
+	// }
+	// lists = append(lists, sg.DestUIDs)
+	// sg.DestUIDs = algo.MergeSorted(lists)
 	return nil
 }
 
@@ -2213,18 +2216,18 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 // applyPagination applies count and offset to lists inside uidMatrix.
 func (sg *SubGraph) applyPagination(ctx context.Context) error {
-	if sg.Params.Count == 0 && sg.Params.Offset == 0 { // No pagination.
-		return nil
-	}
+	// if sg.Params.Count == 0 && sg.Params.Offset == 0 { // No pagination.
+	// 	return nil
+	// }
 
-	sg.updateUidMatrix()
-	for i := 0; i < len(sg.uidMatrix); i++ {
-		// Apply the offsets.
-		start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
-		sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
-	}
-	// Re-merge the UID matrix.
-	sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
+	// sg.updateUidMatrix()
+	// for i := 0; i < len(sg.uidMatrix); i++ {
+	// 	// Apply the offsets.
+	// 	start, end := x.PageRange(sg.Params.Count, sg.Params.Offset, len(sg.uidMatrix[i].Uids))
+	// 	sg.uidMatrix[i].Uids = sg.uidMatrix[i].Uids[start:end]
+	// }
+	// // Re-merge the UID matrix.
+	// sg.DestUIDs = algo.MergeSorted(sg.uidMatrix)
 	return nil
 }
 

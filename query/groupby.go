@@ -201,68 +201,68 @@ func (res *groupResults) formGroups(dedupMap dedup, cur *pb.List, groupVal []gro
 }
 
 func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
-	var dedupMap dedup
+	// var dedupMap dedup
 	res := new(groupResults)
 
-	for _, child := range sg.Children {
-		if !child.Params.IgnoreResult {
-			continue
-		}
+	// for _, child := range sg.Children {
+	// 	if !child.Params.IgnoreResult {
+	// 		continue
+	// 	}
 
-		attr := child.Params.Alias
-		if attr == "" {
-			attr = child.Attr
-		}
-		if len(child.DestUIDs.GetUids()) > 0 {
-			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
-				// Ignore uids which are not part of srcUid.
-				if algo.IndexOf(ul, srcUid) < 0 {
-					continue
-				}
+	// 	attr := child.Params.Alias
+	// 	if attr == "" {
+	// 		attr = child.Attr
+	// 	}
+	// 	if len(child.DestUIDs.GetUids()) > 0 {
+	// 		// It's a UID node.
+	// 		for i := 0; i < len(child.uidMatrix); i++ {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			// Ignore uids which are not part of srcUid.
+	// 			if algo.IndexOf(ul, srcUid) < 0 {
+	// 				continue
+	// 			}
 
-				ul := child.uidMatrix[i]
-				for _, uid := range ul.GetUids() {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-				}
-			}
-		} else {
-			// It's a value node.
-			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
-					continue
-				}
-				val, err := convertTo(v.Values[0])
-				if err != nil {
-					continue
-				}
-				dedupMap.addValue(attr, val, srcUid)
-			}
-		}
-	}
+	// 			ul := child.uidMatrix[i]
+	// 			for _, uid := range ul.GetUids() {
+	// 				dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+	// 			}
+	// 		}
+	// 	} else {
+	// 		// It's a value node.
+	// 		for i, v := range child.valueMatrix {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			if len(v.Values) == 0 || algo.IndexOf(ul, srcUid) < 0 {
+	// 				continue
+	// 			}
+	// 			val, err := convertTo(v.Values[0])
+	// 			if err != nil {
+	// 				continue
+	// 			}
+	// 			dedupMap.addValue(attr, val, srcUid)
+	// 		}
+	// 	}
+	// }
 
-	// Create all the groups here.
-	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
+	// // Create all the groups here.
+	// res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
-	// Go over the groups and aggregate the values.
-	for _, child := range sg.Children {
-		if child.Params.IgnoreResult {
-			continue
-		}
-		// This is a aggregation node.
-		for _, grp := range res.group {
-			err := grp.aggregateChild(child)
-			if err != nil && err != ErrEmptyVal {
-				return res, err
-			}
-		}
-	}
-	// Sort to order the groups for determinism.
-	sort.Slice(res.group, func(i, j int) bool {
-		return groupLess(res.group[i], res.group[j])
-	})
+	// // Go over the groups and aggregate the values.
+	// for _, child := range sg.Children {
+	// 	if child.Params.IgnoreResult {
+	// 		continue
+	// 	}
+	// 	// This is a aggregation node.
+	// 	for _, grp := range res.group {
+	// 		err := grp.aggregateChild(child)
+	// 		if err != nil && err != ErrEmptyVal {
+	// 			return res, err
+	// 		}
+	// 	}
+	// }
+	// // Sort to order the groups for determinism.
+	// sort.Slice(res.group, func(i, j int) bool {
+	// 	return groupLess(res.group[i], res.group[j])
+	// })
 
 	return res, nil
 }
@@ -271,121 +271,121 @@ func (sg *SubGraph) formResult(ul *pb.List) (*groupResults, error) {
 // that it considers the whole uidMatrix to do the grouping before assigning the variable.
 // TODO - Check if we can reduce this duplication.
 func (sg *SubGraph) fillGroupedVars(doneVars map[string]varValue, path []*SubGraph) error {
-	var childHasVar bool
-	for _, child := range sg.Children {
-		if child.Params.Var != "" {
-			childHasVar = true
-			break
-		}
-	}
+	// var childHasVar bool
+	// for _, child := range sg.Children {
+	// 	if child.Params.Var != "" {
+	// 		childHasVar = true
+	// 		break
+	// 	}
+	// }
 
-	if !childHasVar {
-		return nil
-	}
+	// if !childHasVar {
+	// 	return nil
+	// }
 
-	var pathNode *SubGraph
-	var dedupMap dedup
+	// var pathNode *SubGraph
+	// var dedupMap dedup
 
-	for _, child := range sg.Children {
-		if !child.Params.IgnoreResult {
-			continue
-		}
+	// for _, child := range sg.Children {
+	// 	if !child.Params.IgnoreResult {
+	// 		continue
+	// 	}
 
-		attr := child.Params.Alias
-		if attr == "" {
-			attr = child.Attr
-		}
-		if len(child.DestUIDs.GetUids()) > 0 {
-			// It's a UID node.
-			for i := 0; i < len(child.uidMatrix); i++ {
-				srcUid := child.SrcUIDs.Uids[i]
-				ul := child.uidMatrix[i]
-				for _, uid := range ul.Uids {
-					dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
-				}
-			}
-			pathNode = child
-		} else {
-			// It's a value node.
-			for i, v := range child.valueMatrix {
-				srcUid := child.SrcUIDs.Uids[i]
-				if len(v.Values) == 0 {
-					continue
-				}
-				val, err := convertTo(v.Values[0])
-				if err != nil {
-					continue
-				}
-				dedupMap.addValue(attr, val, srcUid)
-			}
-		}
-	}
+	// 	attr := child.Params.Alias
+	// 	if attr == "" {
+	// 		attr = child.Attr
+	// 	}
+	// 	if len(child.DestUIDs.GetUids()) > 0 {
+	// 		// It's a UID node.
+	// 		for i := 0; i < len(child.uidMatrix); i++ {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			ul := child.uidMatrix[i]
+	// 			for _, uid := range ul.Uids {
+	// 				dedupMap.addValue(attr, types.Val{Tid: types.UidID, Value: uid}, srcUid)
+	// 			}
+	// 		}
+	// 		pathNode = child
+	// 	} else {
+	// 		// It's a value node.
+	// 		for i, v := range child.valueMatrix {
+	// 			srcUid := child.SrcUIDs.Uids[i]
+	// 			if len(v.Values) == 0 {
+	// 				continue
+	// 			}
+	// 			val, err := convertTo(v.Values[0])
+	// 			if err != nil {
+	// 				continue
+	// 			}
+	// 			dedupMap.addValue(attr, val, srcUid)
+	// 		}
+	// 	}
+	// }
 
-	// Create all the groups here.
-	res := new(groupResults)
-	res.formGroups(dedupMap, &pb.List{}, []groupPair{})
+	// // Create all the groups here.
+	// res := new(groupResults)
+	// res.formGroups(dedupMap, &pb.List{}, []groupPair{})
 
-	// Go over the groups and aggregate the values.
-	for _, child := range sg.Children {
-		if child.Params.IgnoreResult {
-			continue
-		}
-		// This is a aggregation node.
-		for _, grp := range res.group {
-			err := grp.aggregateChild(child)
-			if err != nil && err != ErrEmptyVal {
-				return err
-			}
-		}
-		if child.Params.Var == "" {
-			continue
-		}
-		chVar := child.Params.Var
+	// // Go over the groups and aggregate the values.
+	// for _, child := range sg.Children {
+	// 	if child.Params.IgnoreResult {
+	// 		continue
+	// 	}
+	// 	// This is a aggregation node.
+	// 	for _, grp := range res.group {
+	// 		err := grp.aggregateChild(child)
+	// 		if err != nil && err != ErrEmptyVal {
+	// 			return err
+	// 		}
+	// 	}
+	// 	if child.Params.Var == "" {
+	// 		continue
+	// 	}
+	// 	chVar := child.Params.Var
 
-		tempMap := make(map[uint64]types.Val)
-		for _, grp := range res.group {
-			if len(grp.keys) == 0 {
-				continue
-			}
-			if len(grp.keys) > 1 {
-				return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
-			}
-			uidVal := grp.keys[0].key.Value
-			uid, ok := uidVal.(uint64)
-			if !ok {
-				return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
-			}
-			// grp.aggregates could be empty if schema conversion failed during aggregation
-			if len(grp.aggregates) > 0 {
-				tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
-			}
-		}
-		doneVars[chVar] = varValue{
-			Vals: tempMap,
-			path: append(path, pathNode),
-		}
-	}
+	// 	tempMap := make(map[uint64]types.Val)
+	// 	for _, grp := range res.group {
+	// 		if len(grp.keys) == 0 {
+	// 			continue
+	// 		}
+	// 		if len(grp.keys) > 1 {
+	// 			return errors.Errorf("Expected one UID for var in groupby but got: %d", len(grp.keys))
+	// 		}
+	// 		uidVal := grp.keys[0].key.Value
+	// 		uid, ok := uidVal.(uint64)
+	// 		if !ok {
+	// 			return errors.Errorf("Vars can be assigned only when grouped by UID attribute")
+	// 		}
+	// 		// grp.aggregates could be empty if schema conversion failed during aggregation
+	// 		if len(grp.aggregates) > 0 {
+	// 			tempMap[uid] = grp.aggregates[len(grp.aggregates)-1].key
+	// 		}
+	// 	}
+	// 	doneVars[chVar] = varValue{
+	// 		Vals: tempMap,
+	// 		path: append(path, pathNode),
+	// 	}
+	// }
 	return nil
 }
 
 func (sg *SubGraph) processGroupBy(doneVars map[string]varValue, path []*SubGraph) error {
-	for _, ul := range sg.uidMatrix {
-		// We need to process groupby for each list as grouping needs to happen for each path of the
-		// tree.
+	// for _, ul := range sg.uidMatrix {
+	// 	// We need to process groupby for each list as grouping needs to happen for each path of the
+	// 	// tree.
 
-		r, err := sg.formResult(ul)
-		if err != nil {
-			return err
-		}
-		sg.GroupbyRes = append(sg.GroupbyRes, r)
-	}
+	// 	r, err := sg.formResult(ul)
+	// 	if err != nil {
+	// 		return err
+	// 	}
+	// 	sg.GroupbyRes = append(sg.GroupbyRes, r)
+	// }
 
-	if err := sg.fillGroupedVars(doneVars, path); err != nil {
-		return err
-	}
+	// if err := sg.fillGroupedVars(doneVars, path); err != nil {
+	// 	return err
+	// }
 
-	// All the result that we want to return is in sg.GroupbyRes
-	sg.Children = sg.Children[:0]
+	// // All the result that we want to return is in sg.GroupbyRes
+	// sg.Children = sg.Children[:0]
 
 	return nil
 }

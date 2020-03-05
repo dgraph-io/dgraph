@@ -68,6 +68,16 @@ func NewListMap(pack *pb.UidPack) *ListMap {
 	return lm
 }
 
+func (lm *ListMap) ToUids() []uint64 {
+	lmi := lm.NewIterator()
+	uids := make([]uint64, 64)
+	var result []uint64
+	for sz := lmi.Next(uids); sz > 0; {
+		result = append(result, uids[:sz]...)
+	}
+	return result
+}
+
 func FromListXXX(list *pb.List) *ListMap {
 	lm := NewListMap(nil)
 	lm.AddMany(list.Uids)

@@ -32,6 +32,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
+	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
 	"github.com/dgraph-io/dgraph/types"
@@ -513,39 +514,44 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 		return nil
 	}
 
-	lenList := len(sg.uidMatrix[0].Uids)
-	for i := 0; i < lenList; i++ {
-		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
-			// This UID was filtered. So Ignore it.
-			continue
-		}
-
-		n1 := seedNode.New(sg.Params.Alias)
-		if err := sg.preTraverse(uid, n1); err != nil {
-			if err.Error() == "_INV_" {
+	lm := codec.NewListMap(sg.uidMatrix[0])
+	// lenList := len(sg.uidMatrix[0].Uids)
+	lmi := lm.NewIterator()
+	uids := make([]uint64, 64)
+	for sz := lmi.Next(uids); sz > 0; {
+		for _, uid := range uids[:sz] {
+			// uid := sg.uidMatrix[0].Uids[i]
+			if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+				// This UID was filtered. So Ignore it.
 				continue
 			}
-			return err
-		}
 
-		if n1.IsEmpty() {
-			continue
-		}
+			n1 := seedNode.New(sg.Params.Alias)
+			if err := sg.preTraverse(uid, n1); err != nil {
+				if err.Error() == "_INV_" {
+					continue
+				}
+				return err
+			}
 
-		hasChild = true
-		if !sg.Params.Normalize {
-			fj.AddListChild(sg.Params.Alias, n1)
-			continue
-		}
+			if n1.IsEmpty() {
+				continue
+			}
 
-		// Lets normalize the response now.
-		normalized, err := n1.normalize()
-		if err != nil {
-			return err
-		}
-		for _, c := range normalized {
-			fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
+			hasChild = true
+			if !sg.Params.Normalize {
+				fj.AddListChild(sg.Params.Alias, n1)
+				continue
+			}
+
+			// Lets normalize the response now.
+			normalized, err := n1.normalize()
+			if err != nil {
+				return err
+			}
+			for _, c := range normalized {
+				fj.AddListChild(sg.Params.Alias, &fastJsonNode{attrs: c})
+			}
 		}
 	}
 
@@ -732,7 +738,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 		case pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd":
 			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
 
-		case idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0:
+		case idx < len(pc.uidMatrix) && pc.uidMatrix[idx].NumUids > 0:
 			var fcsList []*pb.Facets
 			if pc.Params.Facet != nil {
 				fcsList = pc.facetsMatrix[idx].FacetsList
@@ -745,82 +751,90 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
 			ul := pc.uidMatrix[idx]
+			lm := codec.NewListMap(ul)
+			lmi := lm.NewIterator()
+			uids := make([]uint64, 64)
 			// noneEmptyUID will store indexes of non empty UIDs.
 			// This will be used for indexing facet response
 			var nonEmptyUID []int
-			for childIdx, childUID := range ul.Uids {
-				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
-					continue
-				}
-				uc := dst.New(fieldName)
-				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
-					if rerr.Error() == "_INV_" {
-						if invalidUids == nil {
-							invalidUids = make(map[uint64]bool)
-						}
-
-						invalidUids[childUID] = true
-						continue // next UID.
-					}
-					// Some other error.
-					glog.Errorf("Error while traversal: %v", rerr)
-					return rerr
-				}
-
-				if !uc.IsEmpty() {
-					if sg.Params.GetUid {
-						uc.SetUID(childUID, "uid")
-					}
-					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
-
-					if pc.Params.Normalize {
-						// We will normalize at each level instead of
-						// calling normalize after pretraverse.
-						// Now normalize() only flattens one level,
-						// the expectation is that its children have
-						// already been normalized.
-						normAttrs, err := uc.normalize()
-						if err != nil {
-							return err
-						}
-
-						for _, c := range normAttrs {
-							// Adding as list child irrespective of the type of pc
-							// (list or non-list), otherwise result might be inconsistent or might
-							// depend on children and grandchildren of pc. Consider the case:
-							// 	boss: uid .
-							// 	friend: [uid] .
-							// 	name: string .
-							// For query like:
-							// {
-							// 	me(func: uid(0x1)) {
-							// 		boss @normalize {
-							// 			name
-							// 		}
-							// 	}
-							// }
-							// boss will be non list type in response, but for query like:
-							// {
-							// 	me(func: uid(0x1)) {
-							// 		boss @normalize {
-							// 			friend {
-							// 				name
-							// 			}
-							// 		}
-							// 	}
-							// }
-							// boss should be of list type because there can be mutliple friends of
-							// boss.
-							dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
-						}
+			var count int
+			for sz := lmi.Next(uids); sz > 0; {
+				for idx, childUID := range uids[:sz] {
+					childIdx := count + idx
+					if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 						continue
 					}
-					if pc.List {
-						dst.AddListChild(fieldName, uc)
-					} else {
-						dst.AddMapChild(fieldName, uc, false)
+					uc := dst.New(fieldName)
+					if rerr := pc.preTraverse(childUID, uc); rerr != nil {
+						if rerr.Error() == "_INV_" {
+							if invalidUids == nil {
+								invalidUids = make(map[uint64]bool)
+							}
+
+							invalidUids[childUID] = true
+							continue // next UID.
+						}
+						// Some other error.
+						glog.Errorf("Error while traversal: %v", rerr)
+						return rerr
+					}
+
+					if !uc.IsEmpty() {
+						if sg.Params.GetUid {
+							uc.SetUID(childUID, "uid")
+						}
+						nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
+
+						if pc.Params.Normalize {
+							// We will normalize at each level instead of
+							// calling normalize after pretraverse.
+							// Now normalize() only flattens one level,
+							// the expectation is that its children have
+							// already been normalized.
+							normAttrs, err := uc.normalize()
+							if err != nil {
+								return err
+							}
+
+							for _, c := range normAttrs {
+								// Adding as list child irrespective of the type of pc
+								// (list or non-list), otherwise result might be inconsistent or might
+								// depend on children and grandchildren of pc. Consider the case:
+								// 	boss: uid .
+								// 	friend: [uid] .
+								// 	name: string .
+								// For query like:
+								// {
+								// 	me(func: uid(0x1)) {
+								// 		boss @normalize {
+								// 			name
+								// 		}
+								// 	}
+								// }
+								// boss will be non list type in response, but for query like:
+								// {
+								// 	me(func: uid(0x1)) {
+								// 		boss @normalize {
+								// 			friend {
+								// 				name
+								// 			}
+								// 		}
+								// 	}
+								// }
+								// boss should be of list type because there can be mutliple friends of
+								// boss.
+								dst.AddListChild(fieldName, &fastJsonNode{attrs: c})
+							}
+							continue
+						}
+						if pc.List {
+							dst.AddListChild(fieldName, uc)
+						} else {
+							dst.AddMapChild(fieldName, uc, false)
+						}
 					}
 				}
+				count += sz
 			}
 
 			// Now fill facets for non empty UIDs.
@@ -837,7 +851,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			}
 
 			// add value for count(uid) nodes if any.
-			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
+			_ = handleCountUIDNodes(pc, dst, int(lm.NumUids()))
 		default:
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
 				fieldName += "@"
