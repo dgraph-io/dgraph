@@ -51,6 +51,12 @@ import (
 	"golang.org/x/net/trace"
 )
 
+type runMutPayload struct {
+	edge *pb.DirectedEdge
+	ctx  context.Context
+	txn  *posting.Txn
+}
+
 type node struct {
 	*conn.Node
 
@@ -66,7 +72,9 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
-	pendingSize int64
+	pendingSize   int64
+	predChan      map[string]chan *runMutPayload
+	predChanMutex sync.RWMutex
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -93,6 +101,9 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
+	}
+	if x.WorkerConfig.LudicrousMode {
+		n.predChan = make(map[string]chan *runMutPayload)
 	}
 	return n
 }
@@ -274,7 +285,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
+	if !x.WorkerConfig.LudicrousMode {
+		defer txn.Update()
+	}
 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
@@ -289,6 +302,50 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
+
+	if x.WorkerConfig.LudicrousMode {
+		for _, edge := range m.Edges {
+			n.predChanMutex.RLock()
+			ch, ok := n.predChan[edge.Attr]
+			n.predChanMutex.RUnlock()
+			if !ok {
+				n.predChanMutex.Lock()
+				ch, ok = n.predChan[edge.Attr]
+				if !ok {
+					ch = make(chan *runMutPayload, 1000)
+					n.predChan[edge.Attr] = ch
+				}
+				n.predChanMutex.Unlock()
+				go func(ch chan *runMutPayload) {
+					writer := posting.NewTxnWriter(pstore)
+					for payload := range ch {
+						for {
+							err := runMutation(payload.ctx, payload.edge, payload.txn)
+							if err == nil {
+								break
+							}
+							if err != posting.ErrRetry {
+								glog.Errorf("Error while mutating: %+v", err)
+								break
+							}
+						}
+
+						key := string(x.DataKey(edge.Attr, edge.Entity))
+						payload.txn.CommitKeyToDisk(writer, key, payload.txn.StartTs)
+						payload.txn.UpdateKey(key)
+					}
+				}(ch)
+			}
+
+			ch <- &runMutPayload{
+				edge: edge,
+				ctx:  ctx,
+				txn:  txn,
+			}
+		}
+
+		return nil
+	}
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
@@ -349,7 +406,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		if x.WorkerConfig.LudicrousMode {
 			ts := proposal.Mutations.StartTs
-			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			posting.Oracle().ProcessDelta(&pb.OracleDelta{
 				Txns: []*pb.TxnStatus{
 					{StartTs: ts, CommitTs: ts},
 				},
@@ -573,7 +630,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	}
 
 	g := groups()
-	if delta.GroupChecksums != nil && delta.GetGroupChecksums[g.groupId()] > 0 {
+	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
 
