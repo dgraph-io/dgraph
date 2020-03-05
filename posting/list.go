@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -309,7 +310,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(mpost *pb.Posting) {
+func (l *List) updateMutationLayer(mpost *pb.Posting, isListAttr bool) {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
@@ -323,16 +324,36 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 		l.mutationMap[mpost.StartTs] = plist
 		return
 	}
+
 	plist, ok := l.mutationMap[mpost.StartTs]
 	if !ok {
-		plist := &pb.PostingList{}
+		plist = &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 		if l.mutationMap == nil {
 			l.mutationMap = make(map[uint64]*pb.PostingList)
 		}
 		l.mutationMap[mpost.StartTs] = plist
+	}
+
+	if !isListAttr && mpost.PostingType == pb.Posting_REF {
+		// This handles predicates of type uid. The fingerprint approach that is used
+		// in other scalar types does not work because it would replace the uid of
+		// the posting. Intead, the list is traversed and new postings are added for
+		// each existing value with the Op value set to delete.
+		l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
+			objCopy := proto.Clone(obj).(*pb.Posting)
+			objCopy.Op = Del
+			plist.Postings = append(plist.Postings, objCopy)
+			return nil
+		})
+	}
+
+	if !ok {
+		// The mutation map for this entry was just created so there's no need
+		// of replacing anything and the function can exit early at this point.
 		return
 	}
+
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
 	for i, prev := range plist.Postings {
 		if prev.Uid == mpost.Uid {
@@ -399,7 +420,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		t.ValueId = fingerprintEdge(t)
 		mpost.Uid = t.ValueId
 	}
-	l.updateMutationLayer(mpost)
+	l.updateMutationLayer(mpost, schema.State().IsList(t.Attr))
 
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
