@@ -201,9 +201,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
-		// For schema mutation, it is possible that a mutation with higher timestamp
-		// was committed before this schema mutation. In that case, if we do not do the
-		// following, we may miss adding indexes for the previous mutation.
+		// MaxAssigned would ensure that everything that's committed up until this point
+		// would be picked up in building indexes. Any uncommitted txns would be cancelled
+		// by detectPendingTxns below.
 		startTs := posting.Oracle().MaxAssigned()
 
 		span.Annotatef(nil, "Applying schema and types")

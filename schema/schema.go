@@ -274,14 +274,12 @@ func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
 	defer s.RUnlock()
 	var su *pb.SchemaUpdate
 	if isWrite {
-		schema, ok := s.mutSchema[pred]
-		if ok {
+		if schema, ok := s.mutSchema[pred]; ok {
 			su = schema
 		}
 	}
 	if su == nil {
-		schema, ok := s.predicate[pred]
-		if ok {
+		if schema, ok := s.predicate[pred]; ok {
 			su = schema
 		}
 	}
@@ -382,8 +380,8 @@ func (s *state) HasNoConflict(pred string) bool {
 	return s.predicate[pred].GetNoConflict()
 }
 
-// IndexingInProg checks whether indexing is going on for a given predicate.
-func (s *state) IndexingInProg() bool {
+// IndexingInProgress checks whether indexing is going on for a given predicate.
+func (s *state) IndexingInProgress() bool {
 	s.RLock()
 	defer s.RUnlock()
 	return len(s.mutSchema) > 0

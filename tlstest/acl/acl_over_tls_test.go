@@ -109,7 +109,7 @@ func TestLoginOverTLS(t *testing.T) {
 		err := dg.Login(context.Background(), "groot", "password")
 		if err == nil {
 			break
-		} else if err != nil && !strings.Contains(err.Error(), "user not found for id groot") {
+		} else if err != nil && !strings.Contains(err.Error(), "user not found") {
 			t.Fatalf("Unable to login using the groot account: %v", err.Error())
 		}
 
