@@ -17,7 +17,6 @@
 package algo
 
 import (
-	"container/heap"
 	"sort"
 
 	"github.com/dgraph-io/dgraph/codec"
@@ -287,38 +286,16 @@ type listInfo struct {
 
 // IntersectSorted calculates the intersection of multiple lists and performs
 // the intersections from the smallest to the largest list.
-func IntersectSorted(lists []*pb.List) *pb.List {
+func IntersectSorted(lists []*pb.UidPack) *codec.ListMap {
 	if len(lists) == 0 {
-		return &pb.List{}
+		return nil
 	}
-	ls := make([]listInfo, 0, len(lists))
-	for _, list := range lists {
-		ls = append(ls, listInfo{
-			l:      list,
-			length: len(list.Uids),
-		})
+	lm := codec.NewListMap(lists[0])
+	for i := 1; i < len(lists); i++ {
+		dst := codec.NewListMap(lists[i])
+		lm.Intersect(dst)
 	}
-	// Sort the lists based on length.
-	sort.Slice(ls, func(i, j int) bool {
-		return ls[i].length < ls[j].length
-	})
-	out := &pb.List{Uids: make([]uint64, ls[0].length)}
-	if len(ls) == 1 {
-		copy(out.Uids, ls[0].l.Uids)
-		return out
-	}
-
-	IntersectWith(ls[0].l, ls[1].l, out)
-	// Intersect from smallest to largest.
-	for i := 2; i < len(ls); i++ {
-		IntersectWith(out, ls[i].l, out)
-		// Break if we reach size 0 as we can no longer
-		// add any element.
-		if len(out.Uids) == 0 {
-			break
-		}
-	}
-	return out
+	return lm
 }
 
 // Difference returns the difference of two lists.
@@ -355,53 +332,16 @@ func Difference(u, v *pb.List) *pb.List {
 }
 
 // MergeSorted merges sorted lists.
-func MergeSorted(lists []*pb.List) *pb.List {
+func MergeSorted(lists []*pb.UidPack) *codec.ListMap {
 	if len(lists) == 0 {
-		return new(pb.List)
+		return nil
 	}
-
-	h := &uint64Heap{}
-	heap.Init(h)
-	maxSz := 0
-
-	for i, l := range lists {
-		if l == nil {
-			continue
-		}
-		lenList := len(l.Uids)
-		if lenList > 0 {
-			heap.Push(h, elem{
-				val:     l.Uids[0],
-				listIdx: i,
-			})
-			if lenList > maxSz {
-				maxSz = lenList
-			}
-		}
+	lm := codec.NewListMap(lists[0])
+	for i := 1; i < len(lists); i++ {
+		dst := codec.NewListMap(lists[i])
+		lm.Merge(dst)
 	}
-
-	// Our final output. Give it an approximate capacity as copies are expensive.
-	output := make([]uint64, 0, maxSz)
-	// idx[i] is the element we are looking at for lists[i].
-	idx := make([]int, len(lists))
-	var last uint64   // Last element added to sorted / final output.
-	for h.Len() > 0 { // While heap is not empty.
-		me := (*h)[0] // Peek at the top element in heap.
-		if len(output) == 0 || me.val != last {
-			output = append(output, me.val) // Add if unique.
-			last = me.val
-		}
-		l := lists[me.listIdx]
-		if idx[me.listIdx] >= len(l.Uids)-1 {
-			heap.Pop(h)
-		} else {
-			idx[me.listIdx]++
-			val := l.Uids[idx[me.listIdx]]
-			(*h)[0].val = val
-			heap.Fix(h, 0) // Faster than Pop() followed by Push().
-		}
-	}
-	return &pb.List{Uids: output}
+	return lm
 }
 
 // IndexOf performs a binary search on the uids slice and returns the index at

@@ -21,12 +21,8 @@ import (
 
 	cindex "github.com/google/codesearch/index"
 
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/tok"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 var errRegexTooWide = errors.New(
@@ -35,77 +31,78 @@ var errRegexTooWide = errors.New(
 // TODO: Is passing intersect here really the best way?
 func uidsForRegex(attr string, arg funcArgs,
 	query *cindex.Query, intersect *pb.List) (*codec.ListMap, error) {
-	opts := posting.ListOptions{
-		ReadTs: arg.q.ReadTs,
-	}
-	if intersect.Size() > 0 {
-		opts.Intersect = intersect
-	}
+	return nil, nil
+	// opts := posting.ListOptions{
+	// 	ReadTs: arg.q.ReadTs,
+	// }
+	// if intersect.Size() > 0 {
+	// 	opts.Intersect = intersect
+	// }
 
-	uidsForTrigram := func(trigram string) (*codec.ListMap, error) {
-		key := x.IndexKey(attr, trigram)
-		pl, err := posting.GetNoStore(key)
-		if err != nil {
-			return nil, err
-		}
-		return pl.Uids(opts)
-	}
+	// uidsForTrigram := func(trigram string) (*codec.ListMap, error) {
+	// 	key := x.IndexKey(attr, trigram)
+	// 	pl, err := posting.GetNoStore(key)
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	return pl.Uids(opts)
+	// }
 
-	switch query.Op {
-	case cindex.QAnd:
-		tok.EncodeRegexTokens(query.Trigram)
-		var results *codec.ListMap
-		for _, t := range query.Trigram {
-			trigramUids, err := uidsForTrigram(t)
-			if err != nil {
-				return nil, err
-			}
-			if results == nil {
-				results = trigramUids
-			} else {
-				results.Intersect(trigramUids)
-			}
+	// switch query.Op {
+	// case cindex.QAnd:
+	// 	tok.EncodeRegexTokens(query.Trigram)
+	// 	var results *codec.ListMap
+	// 	for _, t := range query.Trigram {
+	// 		trigramUids, err := uidsForTrigram(t)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		if results == nil {
+	// 			results = trigramUids
+	// 		} else {
+	// 			results.Intersect(trigramUids)
+	// 		}
 
-			if results.IsEmpty() {
-				return results, nil
-			}
-		}
-		for _, sub := range query.Sub {
-			if results == nil {
-				results = intersect
-			}
-			// current list of result is passed for intersection
-			var err error
-			results, err = uidsForRegex(attr, arg, sub, results)
-			if err != nil {
-				return nil, err
-			}
-			if results.IsEmpty() {
-				return results, nil
-			}
-		}
-	case cindex.QOr:
-		tok.EncodeRegexTokens(query.Trigram)
-		results := codec.NewListMap(nil)
-		for i, t := range query.Trigram {
-			lm, err := uidsForTrigram(t)
-			if err != nil {
-				return nil, err
-			}
-			results.Merge(lm)
-		}
-		for _, sub := range query.Sub {
-			if results == nil {
-				results = intersect
-			}
-			subUids, err := uidsForRegex(attr, arg, sub, intersect)
-			if err != nil {
-				return nil, err
-			}
-			results = algo.MergeSorted([]*pb.List{results, subUids})
-		}
-	default:
-		return nil, errRegexTooWide
-	}
-	return results, nil
+	// 		if results.IsEmpty() {
+	// 			return results, nil
+	// 		}
+	// 	}
+	// 	for _, sub := range query.Sub {
+	// 		if results == nil {
+	// 			results = codec.FromListXXX(intersect)
+	// 		}
+	// 		// current list of result is passed for intersection
+	// 		var err error
+	// 		results, err = uidsForRegex(attr, arg, sub, results)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		if results.IsEmpty() {
+	// 			return results, nil
+	// 		}
+	// 	}
+	// case cindex.QOr:
+	// 	tok.EncodeRegexTokens(query.Trigram)
+	// 	results := codec.NewListMap(nil)
+	// 	for i, t := range query.Trigram {
+	// 		lm, err := uidsForTrigram(t)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		results.Merge(lm)
+	// 	}
+	// 	for _, sub := range query.Sub {
+	// 		if results == nil {
+	// 			results = intersect
+	// 		}
+	// 		subUids, err := uidsForRegex(attr, arg, sub, intersect)
+	// 		if err != nil {
+	// 			return nil, err
+	// 		}
+	// 		results = algo.MergeSorted([]*pb.List{results, subUids})
+	// 	}
+	// default:
+	// 	return nil, errRegexTooWide
+	// }
+	// return results, nil
 }

@@ -26,7 +26,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -1167,288 +1166,288 @@ func (qs *queryState) handleRegexFunction(ctx context.Context, arg funcArgs) err
 }
 
 func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) error {
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "handleCompareFunction")
-	defer stop()
-	if span != nil {
-		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
-	}
+	// span := otrace.FromContext(ctx)
+	// stop := x.SpanTimer(span, "handleCompareFunction")
+	// defer stop()
+	// if span != nil {
+	// 	span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	// }
 
-	attr := arg.q.Attr
-	span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
-	tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
-	if err != nil {
-		return err
-	}
+	// attr := arg.q.Attr
+	// span.Annotatef(nil, "Attr: %s. Fname: %s", attr, arg.srcFn.fname)
+	// tokenizer, err := pickTokenizer(attr, arg.srcFn.fname)
+	// if err != nil {
+	// 	return err
+	// }
 
-	// Only if the tokenizer that we used IsLossy
-	// then we need to fetch and compare the actual values.
-	span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
-	if tokenizer.IsLossy() {
-		// Need to evaluate inequality for entries in the first bucket.
-		typ, err := schema.State().TypeOf(attr)
-		if err != nil || !typ.IsScalar() {
-			return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
-		}
+	// // Only if the tokenizer that we used IsLossy
+	// // then we need to fetch and compare the actual values.
+	// span.Annotatef(nil, "Tokenizer: %s, Lossy: %t", tokenizer.Name(), tokenizer.IsLossy())
+	// if tokenizer.IsLossy() {
+	// 	// Need to evaluate inequality for entries in the first bucket.
+	// 	typ, err := schema.State().TypeOf(attr)
+	// 	if err != nil || !typ.IsScalar() {
+	// 		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+	// 	}
 
-		x.AssertTrue(len(arg.out.UidMatrix) > 0)
-		rowsToFilter := 0
-		switch {
-		case arg.srcFn.fname == eq:
-			// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
-			rowsToFilter = len(arg.srcFn.tokens)
-		case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
-			// If operation is not eq and ineqValueToken equals first token,
-			// then we need to filter first row.
-			rowsToFilter = 1
-		}
-		isList := schema.State().IsList(attr)
-		lang := langForFunc(arg.q.Langs)
-		for row := 0; row < rowsToFilter; row++ {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			var filterErr error
-			algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
-				switch lang {
-				case "":
-					if isList {
-						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
-						if err != nil {
-							filterErr = err
-							return false
-						}
-						svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
-						if err != nil {
-							if err != posting.ErrNoValue {
-								filterErr = err
-							}
-							return false
-						}
-						for _, sv := range svs {
-							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
-								return true
-							}
-						}
+	// 	x.AssertTrue(len(arg.out.UidMatrix) > 0)
+	// 	rowsToFilter := 0
+	// 	switch {
+	// 	case arg.srcFn.fname == eq:
+	// 		// If fn is eq, we could have multiple arguments and hence multiple rows to filter.
+	// 		rowsToFilter = len(arg.srcFn.tokens)
+	// 	case arg.srcFn.tokens[0] == arg.srcFn.ineqValueToken:
+	// 		// If operation is not eq and ineqValueToken equals first token,
+	// 		// then we need to filter first row.
+	// 		rowsToFilter = 1
+	// 	}
+	// 	isList := schema.State().IsList(attr)
+	// 	lang := langForFunc(arg.q.Langs)
+	// 	for row := 0; row < rowsToFilter; row++ {
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			return ctx.Err()
+	// 		default:
+	// 		}
+	// 		var filterErr error
+	// 		algo.ApplyFilter(arg.out.UidMatrix[row], func(uid uint64, i int) bool {
+	// 			switch lang {
+	// 			case "":
+	// 				if isList {
+	// 					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	// 					if err != nil {
+	// 						filterErr = err
+	// 						return false
+	// 					}
+	// 					svs, err := pl.AllUntaggedValues(arg.q.ReadTs)
+	// 					if err != nil {
+	// 						if err != posting.ErrNoValue {
+	// 							filterErr = err
+	// 						}
+	// 						return false
+	// 					}
+	// 					for _, sv := range svs {
+	// 						dst, err := types.Convert(sv, typ)
+	// 						if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+	// 							return true
+	// 						}
+	// 					}
 
-						return false
-					}
+	// 					return false
+	// 				}
 
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					sv, err := pl.Value(arg.q.ReadTs)
-					if err != nil {
-						if err != posting.ErrNoValue {
-							filterErr = err
-						}
-						return false
-					}
-					dst, err := types.Convert(sv, typ)
-					return err == nil &&
-						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
-				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
-					if err != nil {
-						filterErr = err
-						return false
-					}
-					for _, sv := range values {
-						dst, err := types.Convert(sv, typ)
-						if err == nil &&
-							types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
-							return true
-						}
-					}
-					return false
-				default:
-					sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
-					if err != nil {
-						if err != posting.ErrNoValue {
-							filterErr = err
-						}
-						return false
-					}
-					if sv.Value == nil {
-						return false
-					}
-					return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
-				}
-			})
-			if filterErr != nil {
-				return err
-			}
-		}
-	}
+	// 				pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	// 				if err != nil {
+	// 					filterErr = err
+	// 					return false
+	// 				}
+	// 				sv, err := pl.Value(arg.q.ReadTs)
+	// 				if err != nil {
+	// 					if err != posting.ErrNoValue {
+	// 						filterErr = err
+	// 					}
+	// 					return false
+	// 				}
+	// 				dst, err := types.Convert(sv, typ)
+	// 				return err == nil &&
+	// 					types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
+	// 			case ".":
+	// 				pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	// 				if err != nil {
+	// 					filterErr = err
+	// 					return false
+	// 				}
+	// 				values, err := pl.AllValues(arg.q.ReadTs) // does not return ErrNoValue
+	// 				if err != nil {
+	// 					filterErr = err
+	// 					return false
+	// 				}
+	// 				for _, sv := range values {
+	// 					dst, err := types.Convert(sv, typ)
+	// 					if err == nil &&
+	// 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+	// 						return true
+	// 					}
+	// 				}
+	// 				return false
+	// 			default:
+	// 				sv, err := fetchValue(uid, attr, arg.q.Langs, typ, arg.q.ReadTs)
+	// 				if err != nil {
+	// 					if err != posting.ErrNoValue {
+	// 						filterErr = err
+	// 					}
+	// 					return false
+	// 				}
+	// 				if sv.Value == nil {
+	// 					return false
+	// 				}
+	// 				return types.CompareVals(arg.q.SrcFunc.Name, sv, arg.srcFn.eqTokens[row])
+	// 			}
+	// 		})
+	// 		if filterErr != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
 	return nil
 }
 
 func (qs *queryState) handleMatchFunction(ctx context.Context, arg funcArgs) error {
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "handleMatchFunction")
-	defer stop()
-	if span != nil {
-		span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
-	}
+	// span := otrace.FromContext(ctx)
+	// stop := x.SpanTimer(span, "handleMatchFunction")
+	// defer stop()
+	// if span != nil {
+	// 	span.Annotatef(nil, "Number of uids: %d. args.srcFn: %+v", arg.srcFn.n, arg.srcFn)
+	// }
 
-	attr := arg.q.Attr
-	typ := arg.srcFn.atype
-	span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
-	var uids *pb.List
-	switch {
-	case !typ.IsScalar():
-		return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
+	// attr := arg.q.Attr
+	// typ := arg.srcFn.atype
+	// span.Annotatef(nil, "Attr: %s. Type: %s", attr, typ.Name())
+	// var uids *pb.List
+	// switch {
+	// case !typ.IsScalar():
+	// 	return errors.Errorf("Attribute not scalar: %s %v", attr, typ)
 
-	case typ != types.StringID:
-		return errors.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
+	// case typ != types.StringID:
+	// 	return errors.Errorf("Got non-string type. Fuzzy match is allowed only on string type.")
 
-	case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
-		uids = arg.q.UidList
+	// case arg.q.UidList != nil && len(arg.q.UidList.Uids) != 0:
+	// 	uids = arg.q.UidList
 
-	case schema.State().HasTokenizer(tok.IdentTrigram, attr):
-		var err error
-		uids, err = uidsForMatch(attr, arg)
-		if err != nil {
-			return err
-		}
+	// case schema.State().HasTokenizer(tok.IdentTrigram, attr):
+	// 	var err error
+	// 	uids, err = uidsForMatch(attr, arg)
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
-	default:
-		return errors.Errorf(
-			"Attribute %v does not have trigram index for fuzzy matching. "+
-				"Please add a trigram index or use has/uid function with match() as filter.",
-			attr)
-	}
+	// default:
+	// 	return errors.Errorf(
+	// 		"Attribute %v does not have trigram index for fuzzy matching. "+
+	// 			"Please add a trigram index or use has/uid function with match() as filter.",
+	// 		attr)
+	// }
 
-	isList := schema.State().IsList(attr)
-	lang := langForFunc(arg.q.Langs)
-	span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
-	arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
+	// isList := schema.State().IsList(attr)
+	// lang := langForFunc(arg.q.Langs)
+	// span.Annotatef(nil, "Total uids: %d, list: %t lang: %v", len(uids.Uids), isList, lang)
+	// arg.out.UidMatrix = append(arg.out.UidMatrix, uids)
 
-	matchQuery := strings.Join(arg.srcFn.tokens, "")
-	filtered := &pb.List{}
-	for _, uid := range uids.Uids {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		pl, err := qs.cache.Get(x.DataKey(attr, uid))
-		if err != nil {
-			return err
-		}
+	// matchQuery := strings.Join(arg.srcFn.tokens, "")
+	// filtered := &pb.List{}
+	// for _, uid := range uids.Uids {
+	// 	select {
+	// 	case <-ctx.Done():
+	// 		return ctx.Err()
+	// 	default:
+	// 	}
+	// 	pl, err := qs.cache.Get(x.DataKey(attr, uid))
+	// 	if err != nil {
+	// 		return err
+	// 	}
 
-		vals := make([]types.Val, 1)
-		switch {
-		case lang != "":
-			vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
+	// 	vals := make([]types.Val, 1)
+	// 	switch {
+	// 	case lang != "":
+	// 		vals[0], err = pl.ValueForTag(arg.q.ReadTs, lang)
 
-		case isList:
-			vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
+	// 	case isList:
+	// 		vals, err = pl.AllUntaggedValues(arg.q.ReadTs)
 
-		default:
-			vals[0], err = pl.Value(arg.q.ReadTs)
-		}
-		if err != nil {
-			if err == posting.ErrNoValue {
-				continue
-			}
-			return err
-		}
+	// 	default:
+	// 		vals[0], err = pl.Value(arg.q.ReadTs)
+	// 	}
+	// 	if err != nil {
+	// 		if err == posting.ErrNoValue {
+	// 			continue
+	// 		}
+	// 		return err
+	// 	}
 
-		max := int(arg.srcFn.threshold)
-		for _, val := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(val, types.StringID)
-			if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
-				filtered.Uids = append(filtered.Uids, uid)
-				// NOTE: We only add the uid once.
-				break
-			}
-		}
-	}
+	// 	max := int(arg.srcFn.threshold)
+	// 	for _, val := range vals {
+	// 		// convert data from binary to appropriate format
+	// 		strVal, err := types.Convert(val, types.StringID)
+	// 		if err == nil && matchFuzzy(matchQuery, strVal.Value.(string), max) {
+	// 			filtered.Uids = append(filtered.Uids, uid)
+	// 			// NOTE: We only add the uid once.
+	// 			break
+	// 		}
+	// 	}
+	// }
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
-	}
+	// for i := 0; i < len(arg.out.UidMatrix); i++ {
+	// 	algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	// }
 
 	return nil
 }
 
 func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error {
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "filterGeoFunction")
-	defer stop()
+	// span := otrace.FromContext(ctx)
+	// stop := x.SpanTimer(span, "filterGeoFunction")
+	// defer stop()
 
-	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	numGo, width := x.DivideAndRule(len(uids.Uids))
-	if span != nil && numGo > 1 {
-		span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
-			len(uids.Uids), numGo, width)
-	}
+	// attr := arg.q.Attr
+	// uids := algo.MergeSorted(arg.out.UidMatrix)
+	// numGo, width := x.DivideAndRule(int(uids.NumUids()))
+	// if span != nil && numGo > 1 {
+	// 	span.Annotatef(nil, "Number of uids: %d. NumGo: %d. Width: %d\n",
+	// 		len(uids.Uids), numGo, width)
+	// }
 
-	filtered := make([]*pb.List, numGo)
-	filter := func(idx, start, end int) error {
-		filtered[idx] = &pb.List{}
-		out := filtered[idx]
-		for _, uid := range uids.Uids[start:end] {
-			pl, err := qs.cache.Get(x.DataKey(attr, uid))
-			if err != nil {
-				return err
-			}
-			var tv pb.TaskValue
-			err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
-				tv.ValType = p.ValType
-				tv.Val = p.Value
-				if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
-					out.Uids = append(out.Uids, uid)
-					return posting.ErrStopIteration
-				}
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+	// filtered := make([]*pb.List, numGo)
+	// filter := func(idx, start, end int) error {
+	// 	filtered[idx] = &pb.List{}
+	// 	out := filtered[idx]
+	// 	for _, uid := range uids.Uids[start:end] {
+	// 		pl, err := qs.cache.Get(x.DataKey(attr, uid))
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 		var tv pb.TaskValue
+	// 		err = pl.Iterate(arg.q.ReadTs, 0, func(p *pb.Posting) error {
+	// 			tv.ValType = p.ValType
+	// 			tv.Val = p.Value
+	// 			if types.MatchGeo(&tv, arg.srcFn.geoQuery) {
+	// 				out.Uids = append(out.Uids, uid)
+	// 				return posting.ErrStopIteration
+	// 			}
+	// 			return nil
+	// 		})
+	// 		if err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// 	return nil
+	// }
 
-	errCh := make(chan error, numGo)
-	for i := 0; i < numGo; i++ {
-		start := i * width
-		end := start + width
-		if end > len(uids.Uids) {
-			end = len(uids.Uids)
-		}
-		go func(idx, start, end int) {
-			errCh <- filter(idx, start, end)
-		}(i, start, end)
-	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
-		}
-	}
-	final := &pb.List{}
-	for _, out := range filtered {
-		final.Uids = append(final.Uids, out.Uids...)
-	}
-	if span != nil && numGo > 1 {
-		span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
-	}
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
-	}
+	// errCh := make(chan error, numGo)
+	// for i := 0; i < numGo; i++ {
+	// 	start := i * width
+	// 	end := start + width
+	// 	if end > len(uids.Uids) {
+	// 		end = len(uids.Uids)
+	// 	}
+	// 	go func(idx, start, end int) {
+	// 		errCh <- filter(idx, start, end)
+	// 	}(i, start, end)
+	// }
+	// for i := 0; i < numGo; i++ {
+	// 	if err := <-errCh; err != nil {
+	// 		return err
+	// 	}
+	// }
+	// final := &pb.List{}
+	// for _, out := range filtered {
+	// 	final.Uids = append(final.Uids, out.Uids...)
+	// }
+	// if span != nil && numGo > 1 {
+	// 	span.Annotatef(nil, "Total uids after filtering geo: %d", len(final.Uids))
+	// }
+	// for i := 0; i < len(arg.out.UidMatrix); i++ {
+	// 	algo.IntersectWith(arg.out.UidMatrix[i], final, arg.out.UidMatrix[i])
+	// }
 	return nil
 }
 
@@ -1456,80 +1455,81 @@ func (qs *queryState) filterGeoFunction(ctx context.Context, arg funcArgs) error
 // `has(name)`. We could potentially have a query level cache, which can be used to speed things up
 // a bit. Or, try to reduce the number of UIDs which make it here.
 func (qs *queryState) filterStringFunction(arg funcArgs) error {
-	if glog.V(3) {
-		glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
-		defer glog.Infof("Done filterStringFunction")
-	}
-	attr := arg.q.Attr
-	uids := algo.MergeSorted(arg.out.UidMatrix)
-	var values [][]types.Val
-	filteredUids := make([]uint64, 0, len(uids.Uids))
-	lang := langForFunc(arg.q.Langs)
+	// if glog.V(3) {
+	// 	glog.Infof("filterStringFunction. arg: %+v\n", arg.q)
+	// 	defer glog.Infof("Done filterStringFunction")
+	// }
+	// attr := arg.q.Attr
+	// uids := algo.MergeSorted(arg.out.UidMatrix) // Can be ListMap.
+	// var values [][]types.Val
+	// filteredUids := make([]uint64, 0, len(uids.Uids)) // Can be ListMap.
+	// lang := langForFunc(arg.q.Langs)
 
-	// This iteration must be done in a serial order, because we're also storing the values in a
-	// matrix, to check it later.
-	// TODO: This function can be optimized by having a query specific cache, which can be populated
-	// by the handleHasFunction for e.g. for a `has(name)` query.
-	for _, uid := range uids.Uids {
-		vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
-		switch {
-		case err == posting.ErrNoValue:
-			continue
-		case err != nil:
-			return err
-		}
+	// // This iteration must be done in a serial order, because we're also storing the values in a
+	// // matrix, to check it later.
+	// // TODO: This function can be optimized by having a query specific cache, which can be populated
+	// // by the handleHasFunction for e.g. for a `has(name)` query.
 
-		var strVals []types.Val
-		for _, v := range vals {
-			// convert data from binary to appropriate format
-			strVal, err := types.Convert(v, types.StringID)
-			if err != nil {
-				continue
-			}
-			strVals = append(strVals, strVal)
-		}
-		if len(strVals) > 0 {
-			values = append(values, strVals)
-			filteredUids = append(filteredUids, uid)
-		}
-	}
+	// for _, uid := range uids.Uids { // Convert UidPack to list to iterate. Or, use iterator system.
+	// 	vals, err := qs.getValsForUID(attr, lang, uid, arg.q.ReadTs)
+	// 	switch {
+	// 	case err == posting.ErrNoValue:
+	// 		continue
+	// 	case err != nil:
+	// 		return err
+	// 	}
 
-	filtered := &pb.List{Uids: filteredUids}
-	filter := stringFilter{
-		funcName: arg.srcFn.fname,
-		funcType: arg.srcFn.fnType,
-		lang:     lang,
-	}
+	// 	var strVals []types.Val
+	// 	for _, v := range vals {
+	// 		// convert data from binary to appropriate format
+	// 		strVal, err := types.Convert(v, types.StringID)
+	// 		if err != nil {
+	// 			continue
+	// 		}
+	// 		strVals = append(strVals, strVal)
+	// 	}
+	// 	if len(strVals) > 0 {
+	// 		values = append(values, strVals)
+	// 		filteredUids = append(filteredUids, uid) // Can be ListMap.
+	// 	}
+	// }
 
-	switch arg.srcFn.fnType {
-	case hasFn:
-		// Dont do anything, as filtering based on lang is already
-		// done above.
-	case fullTextSearchFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "fulltext"
-		filtered = matchStrings(filtered, values, &filter)
-	case standardFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = "term"
-		filtered = matchStrings(filtered, values, &filter)
-	case customIndexFn:
-		filter.tokens = arg.srcFn.tokens
-		filter.match = defaultMatch
-		filter.tokName = arg.q.SrcFunc.Args[0]
-		filtered = matchStrings(filtered, values, &filter)
-	case compareAttrFn:
-		filter.ineqValue = arg.srcFn.ineqValue
-		filter.eqVals = arg.srcFn.eqTokens
-		filter.match = ineqMatch
-		filtered = matchStrings(filtered, values, &filter)
-	}
+	// filtered := &pb.List{Uids: filteredUids}
+	// filter := stringFilter{
+	// 	funcName: arg.srcFn.fname,
+	// 	funcType: arg.srcFn.fnType,
+	// 	lang:     lang,
+	// }
 
-	for i := 0; i < len(arg.out.UidMatrix); i++ {
-		algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
-	}
+	// switch arg.srcFn.fnType {
+	// case hasFn:
+	// 	// Dont do anything, as filtering based on lang is already
+	// 	// done above.
+	// case fullTextSearchFn:
+	// 	filter.tokens = arg.srcFn.tokens
+	// 	filter.match = defaultMatch
+	// 	filter.tokName = "fulltext"
+	// 	filtered = matchStrings(filtered, values, &filter)
+	// case standardFn:
+	// 	filter.tokens = arg.srcFn.tokens
+	// 	filter.match = defaultMatch
+	// 	filter.tokName = "term"
+	// 	filtered = matchStrings(filtered, values, &filter)
+	// case customIndexFn:
+	// 	filter.tokens = arg.srcFn.tokens
+	// 	filter.match = defaultMatch
+	// 	filter.tokName = arg.q.SrcFunc.Args[0]
+	// 	filtered = matchStrings(filtered, values, &filter)
+	// case compareAttrFn:
+	// 	filter.ineqValue = arg.srcFn.ineqValue
+	// 	filter.eqVals = arg.srcFn.eqTokens
+	// 	filter.match = ineqMatch
+	// 	filtered = matchStrings(filtered, values, &filter)
+	// }
+
+	// for i := 0; i < len(arg.out.UidMatrix); i++ {
+	// 	algo.IntersectWith(arg.out.UidMatrix[i], filtered, arg.out.UidMatrix[i])
+	// }
 	return nil
 }
 
@@ -2110,7 +2110,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		out.UidMatrix = append(out.UidMatrix, uids)
+		out.UidMatrix = append(out.UidMatrix, uids.ToPack())
 		return nil
 	}
 
@@ -2146,7 +2146,7 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 		if err != nil {
 			return err
 		}
-		out.UidMatrix = append(out.UidMatrix, uids)
+		out.UidMatrix = append(out.UidMatrix, uids.ToPack())
 	}
 	return nil
 }
@@ -2175,7 +2175,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		prefix = initKey.ReversePrefix()
 	}
 
-	result := &pb.List{}
+	result := codec.NewListMap(nil)
 	var prevKey []byte
 	itOpt := badger.DefaultIteratorOptions
 	itOpt.PrefetchValues = false
@@ -2199,6 +2199,7 @@ func (qs *queryState) handleHasFunction(ctx context.Context, q *pb.Query, out *p
 		return err
 	}
 
+	var count int
 loop:
 	// This function could be switched to the stream.Lists framework, but after the change to use
 	// BitCompletePosting, the speed here is already pretty fast. The slowdown for @lang predicates
@@ -2233,10 +2234,10 @@ loop:
 			case err != nil:
 				return err
 			}
-			result.Uids = append(result.Uids, pk.Uid)
+			result.AddOne(pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
-			if len(result.Uids) >= int(q.First) {
+			if result.NumUids() >= uint64(q.First) {
 				break
 			}
 			continue
@@ -2259,15 +2260,16 @@ loop:
 			case err != nil:
 				return err
 			}
-			result.Uids = append(result.Uids, pk.Uid)
+			result.AddOne(pk.Uid)
 
 			// We'll stop fetching if we fetch the required count.
-			if len(result.Uids) >= int(q.First) {
+			if result.NumUids() >= uint64(q.First) {
 				break loop
 			}
 		}
 
-		if len(result.Uids)%100000 == 0 {
+		count++
+		if count%100000 == 0 {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -2276,8 +2278,8 @@ loop:
 		}
 	}
 	if span != nil {
-		span.Annotatef(nil, "handleHasFunction found %d uids", len(result.Uids))
+		span.Annotatef(nil, "handleHasFunction found %d uids", result.NumUids())
 	}
-	out.UidMatrix = append(out.UidMatrix, result)
+	out.UidMatrix = append(out.UidMatrix, result.ToPack())
 	return nil
 }

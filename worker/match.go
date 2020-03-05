@@ -19,7 +19,6 @@ package worker
 import (
 	"github.com/dgraph-io/dgraph/codec"
 	"github.com/dgraph-io/dgraph/posting"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -97,8 +96,7 @@ func uidsForMatch(attr string, arg funcArgs) (*codec.ListMap, error) {
 	}
 
 	var out *codec.ListMap
-	uidMatrix := make([]*pb.List, len(tokens))
-	for i, t := range tokens {
+	for _, t := range tokens {
 		if out == nil {
 			out, err = uidsForNgram(t)
 			if err != nil {
