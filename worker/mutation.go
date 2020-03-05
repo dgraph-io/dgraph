@@ -117,17 +117,19 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 }
 
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
-	// wait until schema modification for all predicate is complete.
-	// We cannot have two background tasks running for the same predicate.
-	// This is a race condition, we typically won't propose an index update
-	// if an index update is already going on. In this case, looks like the
-	// receiver of the update had probably finished the previous index update,
-	// but some follower (or perhaps leader) had not finished it.
-	// We cannot run two background tasks for different predicates either. This
-	// is because one task would call DropPrefix while other is trying to write
-	// to badger. Write to badger would fail leading to failure of indexing.
+	// wait until schema modification for all predicate is complete. We cannot have two
+	// background tasks running for the same predicate. This is a race condition, we typically
+	// won't propose an index update if an index update is already going on. In this case, looks
+	// like the receiver of the update had probably finished the previous index update, but some
+	// follower (or perhaps leader) had not finished it.
+	// In other words, before reaching here, the proposer P would have checked that no indexing
+	// is in progress (could also be because proposer was done earlier than others). If P was still
+	// indexing when the req was received, it would have rejected the Alter request. Only if P is
+	// not indexing, it would accept and propose the request.
+	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
+	// block here and wait for indexing to be finished.
 	for {
-		if !schema.State().IndexingInProg() {
+		if !schema.State().IndexingInProgress() {
 			break
 		}
 		glog.Infoln("waiting for indexing to complete")

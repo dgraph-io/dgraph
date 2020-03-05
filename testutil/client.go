@@ -110,7 +110,7 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 		// keep retrying until we succeed or receive a non-retriable error
 		err = dg.Login(ctx, x.GrootId, "password")
 		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
-			strings.Contains(err.Error(), "user not found for id groot")) {
+			strings.Contains(err.Error(), "user not found")) {
 
 			break
 		}

@@ -344,6 +344,7 @@ func (r *reducer) startWriting(ci *countIndexer, writerCh chan *encodeRequest, c
 
 func (r *reducer) reduce(partitionKeys [][]byte, mapItrs []*mapIterator, ci *countIndexer) {
 	cpu := runtime.NumCPU()
+	fmt.Printf("Num CPUs: %d\n", cpu)
 	encoderCh := make(chan *encodeRequest, 2*cpu)
 	writerCh := make(chan *encodeRequest, 2*cpu)
 	encoderCloser := y.NewCloser(cpu)
