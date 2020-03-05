@@ -304,6 +304,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	})
 
 	if x.WorkerConfig.LudicrousMode {
+		// In ludicrous mode we won't block for all the changes to be applied. We have channels
+		// for every predicate. We will push the changes to corresponding channel. There will be
+		// a goroutine for every channel which will do following things for every change -:
+		// 		1. call runMutation -> This will make changes to the posting list
+		// 		2. call CommitKeyToDisk -> At any instance of time, we can't guarantee than all the
+		// 		   changes of a transaction have been applied. So every channel, after calling
+		// 		   runMutation, will commit it's own data.
+		// 		3. clear cache ->  Clear txn cache of it's predicate (cache.deltas[x.datakey(attr, entity)])
+		// Since we did all these things we don't need to call commitToDisk separately.
 		for _, edge := range m.Edges {
 			n.predChanMutex.RLock()
 			ch, ok := n.predChan[edge.Attr]
@@ -405,8 +414,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return err
 		}
 		if x.WorkerConfig.LudicrousMode {
+			// We have already commited changes to disk. We only need to advance the oracle.
 			ts := proposal.Mutations.StartTs
 			posting.Oracle().ProcessDelta(&pb.OracleDelta{
+				MaxAssigned: ts,
 				Txns: []*pb.TxnStatus{
 					{StartTs: ts, CommitTs: ts},
 				},
