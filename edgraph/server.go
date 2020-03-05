@@ -242,8 +242,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// If a background task is already running, we should reject all the new alter requests.
-	if schema.State().IndexingInProg() {
-		return nil, errors.New("schema is already being modified")
+	if schema.State().IndexingInProgress() {
+		return nil, errors.New("schema is already being modified, Please retry")
 	}
 
 	for _, update := range result.Preds {
