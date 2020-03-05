@@ -27,100 +27,114 @@ import (
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/ChainSafe/gossamer/node/gssmr"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
-func loadGenesis(ctx *cli.Context) error {
-	currentConfig, err := getConfig(ctx)
+// initializeNode creates a Genesis instance from the configured genesis file
+// and then initializes the state database using the Genesis instance
+func initializeNode(ctx *cli.Context) error {
+	cfg, err := getConfig(ctx)
 	if err != nil {
 		return err
 	}
 
-	// read genesis file
-	genesisPath := getGenesisPath(ctx)
+	datadir := cfg.Global.DataDir
+	genPath := getGenesisPath(ctx)
 
-	dataDir := utils.ExpandDir(currentConfig.Global.DataDir)
-	if ctx.String(DataDirFlag.Name) != "" {
-		dataDir = utils.ExpandDir(ctx.String(DataDirFlag.Name))
-	}
+	log.Info(
+		"[gossamer] Initializing node...",
+		"datadir", datadir,
+		"genesis", genPath,
+	)
 
-	log.Debug("Loading genesis", "genesisPath", genesisPath, "dataDir", dataDir)
-
-	// read genesis configuration file
-	gen, err := genesis.LoadGenesisFromJSON(genesisPath)
+	// load Genesis from genesis configuration file
+	gen, err := genesis.LoadGenesisFromJSON(genPath)
 	if err != nil {
+		log.Error("[gossamer] Failed to load genesis from file", "error", err)
 		return err
 	}
 
-	log.Info("🕸\t Initializing node", "Name", gen.Name, "ID", gen.ID, "ProtocolID", gen.ProtocolID, "Bootnodes", gen.Bootnodes)
+	log.Info(
+		"[gossamer] Loading genesis...",
+		"Name", gen.Name,
+		"ID", gen.ID,
+		"ProtocolID", gen.ProtocolID,
+		"Bootnodes", gen.Bootnodes,
+	)
 
 	// initialize stateDB and blockDB
-	stateSrv := state.NewService(dataDir)
+	stateSrv := state.NewService(datadir)
 
-	t, header, err := initializeGenesisState(gen.GenesisFields())
+	// initialize genesis state from genesis data
+	t, header, err := initializeGenesisState(gen)
 	if err != nil {
 		return err
 	}
 
-	// initialize DB with genesis header
+	// initialize state service with genesis block header
 	err = stateSrv.Initialize(header, t)
 	if err != nil {
-		return fmt.Errorf("cannot initialize state service: %s", err)
+		return fmt.Errorf("failed to initialize state service: %s", err)
 	}
 
-	// initialize database with genesis storage state
-	db, err := database.NewBadgerDB(dataDir)
+	// create and/or open database instance
+	db, err := database.NewBadgerDB(datadir)
 	if err != nil {
 		return err
 	}
-
 	defer func() {
 		err = db.Close()
 		if err != nil {
-			log.Error("Loading genesis: cannot close db", "error", err)
+			log.Error("[gossamer] Failed to close database", "error", err)
 		}
 	}()
 
-	// set up trie database
+	// set trie database to open database instance
 	t.SetDb(&trie.Database{
 		DB: db,
 	})
 
-	// write initial genesis data to DB
-	err = t.StoreInDB()
+	// store genesis data in trie database
+	err = storeGenesisData(t, gen)
 	if err != nil {
-		return fmt.Errorf("cannot store genesis data in db: %s", err)
+		return fmt.Errorf("failed to store genesis data in trie database: %s", err)
 	}
 
-	err = t.StoreHash()
-	if err != nil {
-		return fmt.Errorf("cannot store genesis hash in db: %s", err)
-	}
-
-	// store node name, ID, network protocol, bootnodes in state database
-	return t.Db().StoreGenesisData(gen.GenesisData())
+	return nil
 }
 
 // initializeGenesisState given raw genesis state data, return the initialized state trie and genesis block header.
-func initializeGenesisState(gen genesis.Fields) (*trie.Trie, *types.Header, error) {
+func initializeGenesisState(gen *genesis.Genesis) (*trie.Trie, *types.Header, error) {
 	t := trie.NewEmptyTrie(nil)
-	err := t.Load(gen.Raw[0])
+
+	// set raw genesis data for parent
+	genRaw := gen.GenesisFields().Raw[0]
+
+	// load raw genesis data into trie
+	err := t.Load(genRaw)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot load trie with initial state: %s", err)
+		return nil, nil, fmt.Errorf("failed to load raw genesis data into trie: %s", err)
 	}
 
+	// create state root from trie hash
 	stateRoot, err := t.Hash()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create state root: %s", err)
+		return nil, nil, fmt.Errorf("failed to create state root from trie hash: %s", err)
 	}
 
-	header, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), stateRoot, trie.EmptyHash, [][]byte{})
+	// create genesis block header
+	header, err := types.NewHeader(
+		common.NewHash([]byte{0}), // parentHash
+		big.NewInt(0),             // number
+		stateRoot,                 // stateRoot
+		trie.EmptyHash,            // extrinsicsRoot
+		[][]byte{},                // digest
+	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot create genesis header: %s", err)
+		return nil, nil, fmt.Errorf("failed to create genesis block header: %s", err)
 	}
 
 	return t, header, nil
@@ -138,4 +152,28 @@ func getGenesisPath(ctx *cli.Context) string {
 	} else {
 		return gssmr.DefaultGenesisPath
 	}
+}
+
+// storeGenesisData stores genesis data in trie database
+func storeGenesisData(t *trie.Trie, gen *genesis.Genesis) error {
+
+	// encode trie and write to trie database
+	err := t.StoreInDB()
+	if err != nil {
+		return fmt.Errorf("failed to encode trie and write to database: %s", err)
+	}
+
+	// store genesis hash in trie database
+	err = t.StoreHash()
+	if err != nil {
+		return fmt.Errorf("failed to store genesis hash in database: %s", err)
+	}
+
+	// store genesis data in trie database
+	err = t.Db().StoreGenesisData(gen.GenesisData())
+	if err != nil {
+		return fmt.Errorf("failed to store genesis data in database: %s", err)
+	}
+
+	return nil
 }

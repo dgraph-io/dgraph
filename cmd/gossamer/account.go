@@ -45,7 +45,7 @@ import (
 func handleAccounts(ctx *cli.Context) error {
 	err := startLogger(ctx)
 	if err != nil {
-		log.Error("account", "error", err)
+		log.Error("[gossamer] Failed to start logger", "error", err)
 		return err
 	}
 
@@ -54,7 +54,7 @@ func handleAccounts(ctx *cli.Context) error {
 	if dir := ctx.String(DataDirFlag.Name); dir != "" {
 		datadir, err = filepath.Abs(dir)
 		if err != nil {
-			log.Error("invalid datadir", "error", err)
+			log.Error("[gossamer] Failed to create absolute filepath", "error", err)
 			return err
 		}
 	}
@@ -63,7 +63,7 @@ func handleAccounts(ctx *cli.Context) error {
 	// can specify key type using --ed25519, --sr25519, --secp256k1
 	// otherwise defaults to sr25519
 	if keygen := ctx.Bool(GenerateFlag.Name); keygen {
-		log.Info("generating keypair...")
+		log.Info("[gossamer] Generating keypair...")
 
 		// check if --ed25519, --sr25519, --secp256k1 is set
 		keytype := crypto.Sr25519Type
@@ -81,28 +81,31 @@ func handleAccounts(ctx *cli.Context) error {
 			password = []byte(pwdflag)
 		}
 
+		// generate keypair
 		_, err = generateKeypair(keytype, datadir, password)
 		if err != nil {
-			log.Error("generate error", "error", err)
+			log.Error("[gossamer] Failed to generate keypair", "error", err)
 			return err
 		}
 	}
 
-	// import key
+	// check if --import is set
 	if keyimport := ctx.String(ImportFlag.Name); keyimport != "" {
-		log.Info("importing key...")
+		log.Info("[gossamer] Importing keypair...")
+
+		// import keypair
 		_, err = importKey(keyimport, datadir)
 		if err != nil {
-			log.Error("import error", "error", err)
+			log.Error("[gossamer] Failed to import key", "error", err)
 			return err
 		}
 	}
 
-	// list keys
+	// check if --list is set
 	if keylist := ctx.Bool(ListFlag.Name); keylist {
 		_, err = listKeys(datadir)
 		if err != nil {
-			log.Error("list error", "error", err)
+			log.Error("[gossamer] Failed to list keys", "error", err)
 			return err
 		}
 	}
@@ -116,31 +119,32 @@ func handleAccounts(ctx *cli.Context) error {
 func importKey(filename, datadir string) (string, error) {
 	keystorepath, err := keystoreDir(datadir)
 	if err != nil {
-		return "", fmt.Errorf("could not get keystore directory: %s", err)
+		return "", fmt.Errorf("failed to get keystore directory: %s", err)
 	}
 
 	importdata, err := ioutil.ReadFile(filepath.Clean(filename))
 	if err != nil {
-		return "", fmt.Errorf("could not read import file: %s", err)
+		return "", fmt.Errorf("failed to read import file: %s", err)
 	}
 
 	ksjson := new(keystore.EncryptedKeystore)
 	err = json.Unmarshal(importdata, ksjson)
 	if err != nil {
-		return "", fmt.Errorf("could not read file contents: %s", err)
+		return "", fmt.Errorf("failed to read import data: %s", err)
 	}
 
 	keystorefile, err := filepath.Abs(keystorepath + "/" + ksjson.PublicKey[2:] + ".key")
 	if err != nil {
-		return "", fmt.Errorf("could not create keystore file path: %s", err)
+		return "", fmt.Errorf("failed to create keystore filepath: %s", err)
 	}
 
 	err = ioutil.WriteFile(keystorefile, importdata, 0644)
 	if err != nil {
-		return "", fmt.Errorf("could not write to keystore directory: %s", err)
+		return "", fmt.Errorf("failed to write to keystore file: %s", err)
 	}
 
-	log.Info("successfully imported key", "public key", ksjson.PublicKey, "file", keystorefile)
+	log.Info("[gossamer] Key imported", "pubkey", ksjson.PublicKey, "file", keystorefile)
+
 	return keystorefile, nil
 }
 
@@ -162,12 +166,12 @@ func listKeys(datadir string) ([]string, error) {
 func getKeyFiles(datadir string) ([]string, error) {
 	keystorepath, err := keystoreDir(datadir)
 	if err != nil {
-		return nil, fmt.Errorf("could not get keystore directory: %s", err)
+		return nil, fmt.Errorf("failed to get keystore directory: %s", err)
 	}
 
 	files, err := ioutil.ReadDir(keystorepath)
 	if err != nil {
-		return nil, fmt.Errorf("could not read keystore dir: %s", err)
+		return nil, fmt.Errorf("failed to read keystore directory: %s", err)
 	}
 
 	keys := []string{}
@@ -200,31 +204,31 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 		// generate sr25519 keys
 		kp, err = sr25519.GenerateKeypair()
 		if err != nil {
-			return "", fmt.Errorf("could not generate sr25519 keypair: %s", err)
+			return "", fmt.Errorf("failed to generate sr25519 keypair: %s", err)
 		}
 	} else if keytype == crypto.Ed25519Type {
 		// generate ed25519 keys
 		kp, err = ed25519.GenerateKeypair()
 		if err != nil {
-			return "", fmt.Errorf("could not generate ed25519 keypair: %s", err)
+			return "", fmt.Errorf("failed to generate ed25519 keypair: %s", err)
 		}
 	} else if keytype == crypto.Secp256k1Type {
 		// generate secp256k1 keys
 		kp, err = secp256k1.GenerateKeypair()
 		if err != nil {
-			return "", fmt.Errorf("could not generate secp256k1 keypair: %s", err)
+			return "", fmt.Errorf("failed to generate secp256k1 keypair: %s", err)
 		}
 	}
 
 	keystorepath, err := keystoreDir(datadir)
 	if err != nil {
-		return "", fmt.Errorf("could not get keystore directory: %s", err)
+		return "", fmt.Errorf("failed to get keystore directory: %s", err)
 	}
 
 	pub := hex.EncodeToString(kp.Public().Encode())
 	fp, err := filepath.Abs(keystorepath + "/" + pub + ".key")
 	if err != nil {
-		return "", fmt.Errorf("invalid filepath: %s", err)
+		return "", fmt.Errorf("failed to create absolute filepath: %s", err)
 	}
 
 	file, err := os.OpenFile(fp, os.O_EXCL|os.O_CREATE|os.O_WRONLY, 0600)
@@ -235,16 +239,17 @@ func generateKeypair(keytype, datadir string, password []byte) (string, error) {
 	defer func() {
 		err = file.Close()
 		if err != nil {
-			log.Error("generate keypair: could not close keystore file")
+			log.Error("[gossamer] Failed to close keystore file")
 		}
 	}()
 
 	err = keystore.EncryptAndWriteToFile(file, kp.Private(), password)
 	if err != nil {
-		return "", fmt.Errorf("could not write key to file: %s", err)
+		return "", fmt.Errorf("failed to write key to file: %s", err)
 	}
 
-	log.Info("key generated", "public key", pub, "type", keytype, "file", fp)
+	log.Info("[gossamer] Generated key", "type", keytype, "pubkey", pub, "file", fp)
+
 	return fp, nil
 }
 
@@ -254,14 +259,14 @@ func keystoreDir(datadir string) (keystorepath string, err error) {
 	if datadir != "" {
 		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to create absolute filepath: %s", err)
 		}
 	} else {
 		// datadir not specified, use default datadir and set keystore filepath to absolute path of [datadir]/keystore
 		datadir = utils.DataDir(gssmr.DefaultNode)
 		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
-			return "", fmt.Errorf("could not create keystore file path: %s", err)
+			return "", fmt.Errorf("failed to create keystore filepath: %s", err)
 		}
 	}
 
@@ -269,7 +274,7 @@ func keystoreDir(datadir string) (keystorepath string, err error) {
 	if _, err = os.Stat(datadir); os.IsNotExist(err) {
 		err = os.Mkdir(datadir, os.ModePerm)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to create data directory: %s", err)
 		}
 	}
 
@@ -277,7 +282,7 @@ func keystoreDir(datadir string) (keystorepath string, err error) {
 	if _, err = os.Stat(keystorepath); os.IsNotExist(err) {
 		err = os.Mkdir(keystorepath, os.ModePerm)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to create keystore directory: %s", err)
 		}
 	}
 

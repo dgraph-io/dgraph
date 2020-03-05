@@ -107,16 +107,16 @@ func startLogger(ctx *cli.Context) error {
 func initNode(ctx *cli.Context) error {
 	err := startLogger(ctx)
 	if err != nil {
+		log.Error("[gossamer] Failed to start logger", "error", err)
 		return err
 	}
 
-	err = loadGenesis(ctx)
+	err = initializeNode(ctx)
 	if err != nil {
-		log.Error("error loading genesis state", "error", err)
+		log.Error("[gossamer] Failed to initialize node", "error", err)
 		return err
 	}
 
-	log.Info("🕸\t Finished initializing node!")
 	return nil
 }
 
@@ -124,20 +124,21 @@ func initNode(ctx *cli.Context) error {
 func gossamer(ctx *cli.Context) error {
 	err := startLogger(ctx)
 	if err != nil {
+		log.Error("[gossamer] Failed to start logger", "error", err)
 		return err
 	}
 
 	if arguments := ctx.Args(); len(arguments) > 0 {
-		return fmt.Errorf("this command is invalid: %q", arguments[0])
+		return fmt.Errorf("failed to read command argument: %q", arguments[0])
 	}
 
 	node, _, err := makeNode(ctx)
 	if err != nil {
-		log.Error("error starting gossamer", "err", err)
+		log.Error("[gossamer] Failed to initialize node", "error", err)
 		return err
 	}
 
-	log.Info("🕸️\t Starting node...", "name", node.Name)
+	log.Info("[gossamer] Starting node services...", "name", node.Name)
 	node.Start()
 
 	return nil

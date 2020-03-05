@@ -48,7 +48,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 	set.String("genesis", genesisPath, "path to genesis file")
 	ctx := cli.NewContext(nil, set, nil)
 
-	err := loadGenesis(ctx)
+	err := initializeNode(ctx)
 	require.Nil(t, err)
 
 	currentConfig, err := getConfig(ctx)
@@ -117,12 +117,12 @@ func TestGenesisStateLoading(t *testing.T) {
 	set.String("config", tempFile.Name(), "TOML configuration file")
 	set.String("genesis", genesisPath, "path to genesis file")
 	set.Bool("authority", false, "")
-	context := cli.NewContext(nil, set, nil)
+	ctx := cli.NewContext(nil, set, nil)
 
-	err = loadGenesis(context)
+	err = initializeNode(ctx)
 	require.Nil(t, err)
 
-	d, _, err := makeNode(context)
+	d, _, err := makeNode(ctx)
 	require.Nil(t, err)
 
 	if reflect.TypeOf(d) != reflect.TypeOf(&dot.Node{}) {

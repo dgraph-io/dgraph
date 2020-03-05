@@ -82,16 +82,16 @@ func unlockKeys(ctx *cli.Context, datadir string, ks *keystore.Keystore) error {
 		keyfile := keyfiles[idx]
 		priv, err := keystore.ReadFromFileAndDecrypt(keydir+"/"+keyfile, []byte(passwords[i]))
 		if err != nil {
-			return fmt.Errorf("cannot decrypt key file %s: %s", keyfile, err)
+			return fmt.Errorf("failed to decrypt key file %s: %s", keyfile, err)
 		}
 
 		kp, err := keystore.PrivateKeyToKeypair(priv)
 		if err != nil {
-			return fmt.Errorf("cannot create keypair from private key %d: %s", idx, err)
+			return fmt.Errorf("failed to create keypair from private key %d: %s", idx, err)
 		}
 
 		ks.Insert(kp)
-		log.Info("[cmd] unlocked key", "key", kp.Public().Hex())
+		log.Info("[gossamer] Key unlocked", "key", kp.Public().Hex())
 	}
 
 	return nil

@@ -221,7 +221,7 @@ func FixFlagOrder(f func(ctx *cli.Context) error) func(*cli.Context) error {
 		for _, flagName := range ctx.FlagNames() {
 			if ctx.IsSet(flagName) {
 				if err := ctx.GlobalSet(flagName, ctx.String(flagName)); err != nil {
-					log.Error("Error when fixing flag", "flagName", flagName)
+					log.Error("[gossamer] Failed to fix flag order", "flag", flagName)
 				}
 			}
 		}

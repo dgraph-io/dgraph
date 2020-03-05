@@ -52,7 +52,7 @@ func NewNode(name string, srvcs []services.Service) *Node {
 
 // Start starts all services. API service is started last.
 func (n *Node) Start() {
-	log.Debug("Starting core services.")
+	log.Info("[dot] Starting node services...")
 	n.Services.StartAll()
 
 	n.stop = make(chan struct{})
@@ -61,7 +61,7 @@ func (n *Node) Start() {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("Got interrupt, shutting down...")
+		log.Info("[dot] Signal interrupt, shutting down...")
 		n.Stop()
 		os.Exit(130)
 	}()

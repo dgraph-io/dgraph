@@ -51,7 +51,7 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 		return nil, nil, err
 	}
 
-	log.Info("🕸\t Configuring node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.Network.ProtocolID, "bootnodes", currentConfig.Network.Bootnodes)
+	log.Info("[gossamer] Setting up node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.Network.ProtocolID, "bootnodes", currentConfig.Network.Bootnodes)
 
 	var srvcs []services.Service
 
@@ -63,24 +63,24 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 
 	err = stateSrv.Start()
 	if err != nil {
-		return nil, nil, fmt.Errorf("cannot start db service: %s", err)
+		return nil, nil, fmt.Errorf("failed to start db service: %s", err)
 	}
 
 	ks, err := loadKeystore(ctx, dataDir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to load keystore: %s", err)
 	}
 
 	// Trie, runtime: load most recent state from DB, load runtime code from trie and create runtime executor
 	rt, err := loadStateAndRuntime(stateSrv.Storage, ks)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error loading state and runtime: %s", err)
+		return nil, nil, fmt.Errorf("failed to load state and runtime: %s", err)
 	}
 
 	// load genesis from JSON file
 	gendata, err := stateSrv.Storage.LoadGenesisData()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to load genesis data: %s", err)
 	}
 
 	// TODO: Configure node based on Roles #601
@@ -100,7 +100,7 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 		currentConfig.Global.Authority = false
 	}
 
-	log.Info("node", "authority", currentConfig.Global.Authority)
+	log.Trace("[gossamer] BABE authority determined", "authority", currentConfig.Global.Authority)
 
 	// Core
 	coreConfig := &core.Config{
@@ -116,7 +116,7 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 
 	coreSrvc, err := createCoreService(coreConfig)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating core service: %s", err)
+		return nil, nil, fmt.Errorf("failed to create core service: %s", err)
 	}
 
 	srvcs = append(srvcs, coreSrvc)
@@ -137,7 +137,7 @@ func loadKeystore(ctx *cli.Context, dataDir string) (*keystore.Keystore, error) 
 	if key := ctx.String(KeyFlag.Name); key != "" {
 		ring, err := keyring.NewKeyring()
 		if err != nil {
-			return nil, fmt.Errorf("cannot create test keyring")
+			return nil, fmt.Errorf("failed to create test keyring")
 		}
 
 		switch strings.ToLower(key) {
@@ -166,7 +166,7 @@ func loadKeystore(ctx *cli.Context, dataDir string) (*keystore.Keystore, error) 
 	if keyindices := ctx.String(UnlockFlag.Name); keyindices != "" {
 		err := unlockKeys(ctx, dataDir, ks)
 		if err != nil {
-			return nil, fmt.Errorf("could not unlock keys: %s", err)
+			return nil, fmt.Errorf("failed to unlock keys: %s", err)
 		}
 	}
 
@@ -176,17 +176,17 @@ func loadKeystore(ctx *cli.Context, dataDir string) (*keystore.Keystore, error) 
 func loadStateAndRuntime(ss *state.StorageState, ks *keystore.Keystore) (*runtime.Runtime, error) {
 	latestState, err := ss.LoadHash()
 	if err != nil {
-		return nil, fmt.Errorf("cannot load latest state root hash: %s", err)
+		return nil, fmt.Errorf("failed to load latest state root hash: %s", err)
 	}
 
 	err = ss.LoadFromDB(latestState)
 	if err != nil {
-		return nil, fmt.Errorf("cannot load latest state: %s", err)
+		return nil, fmt.Errorf("failed to load latest state from database: %s", err)
 	}
 
 	code, err := ss.GetStorage([]byte(":code"))
 	if err != nil {
-		return nil, fmt.Errorf("error retrieving :code from trie: %s", err)
+		return nil, fmt.Errorf("failed to retrieve :code from trie: %s", err)
 	}
 
 	return runtime.NewRuntime(code, ss, ks)
@@ -250,7 +250,7 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
 	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
 		b, err := strconv.Atoi(roles)
 		if err != nil {
-			log.Debug("Failed to convert to byte", "roles", roles)
+			log.Error("[gossamer] Failed to convert Roles to byte", "error", err)
 		} else {
 			newRoles = byte(b)
 		}
@@ -317,7 +317,7 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 
 	networkService, err := network.NewService(&networkConfig, networkMsgSend, networkMsgRec)
 	if err != nil {
-		log.Error("Failed to create new network service", "err", err)
+		log.Error("[gossamer] Failed to create network service", "error", err)
 	}
 
 	return networkService, networkMsgSend, networkMsgRec
@@ -327,7 +327,7 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 func createCoreService(coreConfig *core.Config) (*core.Service, error) {
 	coreService, err := core.NewService(coreConfig)
 	if err != nil {
-		log.Crit("Failed to create new core service", "err", err)
+		log.Error("[gossamer] Failed to create core service", "error", err)
 		return nil, err
 	}
 
@@ -393,17 +393,17 @@ func dumpConfig(ctx *cli.Context) error {
 		defer func() {
 			err = dump.Close()
 			if err != nil {
-				log.Warn("err closing conn", "err", err.Error())
+				log.Error("[gossamer] Failed to close connection", "error", err)
 			}
 		}()
 	}
 	_, err = dump.WriteString(comment)
 	if err != nil {
-		log.Warn("err writing comment output for dumpconfig command", "err", err.Error())
+		log.Error("[gossamer] Failed to write output for dumpconfig command", "error", err)
 	}
 	_, err = dump.Write(out)
 	if err != nil {
-		log.Warn("err writing comment output for dumpconfig command", "err", err.Error())
+		log.Error("[gossamer] Failed to write output for dumpconfig command", "error", err)
 	}
 	return nil
 }

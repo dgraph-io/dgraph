@@ -29,9 +29,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/docker/docker/pkg/reexec"
+	"github.com/stretchr/testify/require"
 )
 
 type testgossamer struct {
@@ -191,7 +190,7 @@ func TestGossamerInvalidCommand(t *testing.T) {
 	gossamer.ExpectExit()
 
 	expectedMessages := []string{
-		"this command is invalid: \"potato\"",
+		"failed to read command argument: \"potato\"",
 	}
 	for _, m := range expectedMessages {
 		require.Contains(t, gossamer.StderrText(), m)
