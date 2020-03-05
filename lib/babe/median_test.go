@@ -1,13 +1,11 @@
 package babe
 
 import (
-	"io/ioutil"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
-	"github.com/ChainSafe/gossamer/dot/state"
-	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
 func TestMedian_OddLength(t *testing.T) {
@@ -67,24 +65,54 @@ func TestSlotOffset(t *testing.T) {
 	}
 }
 
-func addBlocksToState(t *testing.T, depth int, blockState BlockState) {
+func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState BlockState, startTime uint64) {
 	previousHash := blockState.BestBlockHash()
-	previousAT := uint64(0)
+	previousAT := startTime
 
 	for i := 1; i <= depth; i++ {
+
+		// create proof that we can authorize this block
+		babesession.epochThreshold = big.NewInt(0)
+		babesession.authorityIndex = 0
+		slotNumber := uint64(i)
+
+		outAndProof, err := babesession.runLottery(slotNumber)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if outAndProof == nil {
+			t.Fatal("proof was nil when over threshold")
+		}
+
+		babesession.slotToProof[slotNumber] = outAndProof
+
+		// create pre-digest
+		slot := Slot{
+			start:    uint64(time.Now().Unix()),
+			duration: uint64(1000),
+			number:   slotNumber,
+		}
+
+		predigest, err := babesession.buildBlockPreDigest(slot)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		block := &types.Block{
 			Header: &types.Header{
 				ParentHash: previousHash,
 				Number:     big.NewInt(int64(i)),
+				Digest:     [][]byte{predigest.Encode()},
 			},
 			Body: &types.Body{},
 		}
 
-		arrivalTime := previousAT + uint64(1000)
+		arrivalTime := previousAT + uint64(1)
 		previousHash = block.Header.Hash()
 		previousAT = arrivalTime
 
-		err := blockState.AddBlockWithArrivalTime(block, arrivalTime)
+		err = blockState.AddBlockWithArrivalTime(block, arrivalTime)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,51 +120,114 @@ func addBlocksToState(t *testing.T, depth int, blockState BlockState) {
 }
 
 func TestSlotTime(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "./test_data")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	genesisHeader := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	dbSrv := state.NewService(dataDir)
-	err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = dbSrv.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	babesession, dbSrv := createTestSessionWithState(t, nil)
 	defer func() {
-		err = dbSrv.Stop()
+		err := dbSrv.Stop()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}()
 
-	cfg := &SessionConfig{
-		BlockState:   dbSrv.Block,
-		StorageState: dbSrv.Storage,
-	}
-
-	babesession := createTestSession(t, cfg)
-
-	addBlocksToState(t, 100, dbSrv.Block)
+	addBlocksToState(t, babesession, 100, dbSrv.Block, uint64(0))
 
 	res, err := babesession.slotTime(103, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := uint64(104000)
+	expected := uint64(103)
 
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
+	}
+}
+
+func TestEstimateCurrentSlot(t *testing.T) {
+	babesession, dbSrv := createTestSessionWithState(t, nil)
+
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// create proof that we can authorize this block
+	babesession.epochThreshold = big.NewInt(0)
+	babesession.authorityIndex = 0
+	slotNumber := uint64(17)
+
+	outAndProof, err := babesession.runLottery(slotNumber)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if outAndProof == nil {
+		t.Fatal("proof was nil when over threshold")
+	}
+
+	babesession.slotToProof[slotNumber] = outAndProof
+
+	// create pre-digest
+	slot := Slot{
+		start:    uint64(time.Now().Unix()),
+		duration: babesession.config.SlotDuration,
+		number:   slotNumber,
+	}
+
+	predigest, err := babesession.buildBlockPreDigest(slot)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	block := &types.Block{
+		Header: &types.Header{
+			ParentHash: genesisHeader.Hash(),
+			Number:     big.NewInt(int64(1)),
+			Digest:     [][]byte{predigest.Encode()},
+		},
+		Body: &types.Body{},
+	}
+
+	arrivalTime := uint64(time.Now().Unix()) - slot.duration
+
+	err = dbSrv.Block.AddBlockWithArrivalTime(block, arrivalTime)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	estimatedSlot, err := babesession.estimateCurrentSlot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if estimatedSlot != slotNumber+1 {
+		t.Fatalf("Fail: got %d expected %d", estimatedSlot, slotNumber+1)
+	}
+}
+
+func TestGetCurrentSlot(t *testing.T) {
+	babesession, dbSrv := createTestSessionWithState(t, nil)
+
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// 100 blocks / 1000 ms/s
+	// TODO: use time.Duration
+	addBlocksToState(t, babesession, 100, dbSrv.Block, uint64(time.Now().Unix())-(babesession.config.SlotDuration/10))
+
+	res, err := babesession.getCurrentSlot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expected := uint64(101)
+
+	if res != expected && res != expected+1 {
+		t.Fatalf("Fail: got %d expected %d", res, expected)
 	}
 }

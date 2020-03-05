@@ -54,10 +54,11 @@ func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
 
 // BlockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type BlockState struct {
-	bt          *blocktree.BlockTree
-	db          *BlockDB
-	lock        sync.RWMutex
-	genesisHash common.Hash
+	bt                 *blocktree.BlockTree
+	db                 *BlockDB
+	lock               sync.RWMutex
+	genesisHash        common.Hash
+	highestBlockHeader *types.Header
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
@@ -79,6 +80,11 @@ func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, 
 	}
 
 	bs.genesisHash = bt.GenesisHash()
+	var err error
+	bs.highestBlockHeader, err = bs.BestBlockHeader()
+	if err != nil {
+		return nil, err
+	}
 
 	return bs, nil
 }
@@ -253,6 +259,13 @@ func (bs *BlockState) SetHeader(header *types.Header) error {
 
 	hash := header.Hash()
 
+	// if this is the highest block we've seen, save it
+	if bs.highestBlockHeader == nil {
+		bs.highestBlockHeader = header
+	} else if bs.highestBlockHeader.Number.Cmp(header.Number) == -1 {
+		bs.highestBlockHeader = header
+	}
+
 	// Write the encoded header
 	bh, err := json.Marshal(header)
 	if err != nil {
@@ -340,6 +353,20 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 	return err
 }
 
+// HighestBlockHash returns the hash of the block with the highest number we have received
+// This block may not necessarily be in the blocktree.
+// TODO: can probably remove this once BlockResponses are implemented
+func (bs *BlockState) HighestBlockHash() common.Hash {
+	return bs.highestBlockHeader.Hash()
+}
+
+// HighestBlockNumber returns the largest block number we have seen
+// This block may not necessarily be in the blocktree.
+// TODO: can probably remove this once BlockResponses are implemented
+func (bs *BlockState) HighestBlockNumber() *big.Int {
+	return bs.highestBlockHeader.Number
+}
+
 // BestBlockHash returns the hash of the head of the current chain
 func (bs *BlockState) BestBlockHash() common.Hash {
 	return bs.bt.DeepestBlockHash()
@@ -350,9 +377,51 @@ func (bs *BlockState) BestBlockHeader() (*types.Header, error) {
 	return bs.GetHeader(bs.BestBlockHash())
 }
 
+// BestBlockNumber returns the block number of the current head of the chain
+func (bs *BlockState) BestBlockNumber() (*big.Int, error) {
+	header, err := bs.GetHeader(bs.BestBlockHash())
+	if err != nil {
+		return nil, err
+	}
+
+	return header.Number, nil
+}
+
 // BestBlock returns the current head of the chain
 func (bs *BlockState) BestBlock() (*types.Block, error) {
 	return bs.GetBlockByHash(bs.BestBlockHash())
+}
+
+// GetSlotForBlock returns the slot for a block
+func (bs *BlockState) GetSlotForBlock(hash common.Hash) (uint64, error) {
+	header, err := bs.GetHeader(hash)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(header.Digest) == 0 {
+		return 0, fmt.Errorf("chain head missing digest")
+	}
+
+	preDigestBytes := header.Digest[0]
+
+	digestItem, err := types.DecodeDigestItem(preDigestBytes)
+	if err != nil {
+		return 0, err
+	}
+
+	preDigest, ok := digestItem.(*types.PreRuntimeDigest)
+	if !ok {
+		return 0, fmt.Errorf("first digest item is not pre-digest")
+	}
+
+	babeHeader := new(babetypes.BabeHeader)
+	err = babeHeader.Decode(preDigest.Data)
+	if err != nil {
+		return 0, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
+	}
+
+	return babeHeader.SlotNumber, nil
 }
 
 // SubChain returns the sub-blockchain between the starting hash and the ending hash using the block tree

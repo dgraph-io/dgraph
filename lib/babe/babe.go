@@ -44,6 +44,7 @@ type Session struct {
 	authorityData    []*AuthorityData
 	epochThreshold   *big.Int // validator threshold for this epoch
 	transactionQueue TransactionQueue
+	startSlot        uint64
 	slotToProof      map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 	newBlocks        chan<- types.Block            // send blocks to core service
 	done             chan<- struct{}               // lets core know when the epoch is done
@@ -59,6 +60,7 @@ type SessionConfig struct {
 	NewBlocks        chan<- types.Block
 	AuthData         []*AuthorityData
 	EpochThreshold   *big.Int // should only be used for testing
+	StartSlot        uint64   // slot to begin session at
 	Done             chan<- struct{}
 }
 
@@ -78,6 +80,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		newBlocks:        cfg.NewBlocks,
 		authorityData:    cfg.AuthData,
 		epochThreshold:   cfg.EpochThreshold,
+		startSlot:        cfg.StartSlot,
 		done:             cfg.Done,
 	}
 
@@ -111,9 +114,9 @@ func (b *Session) Start() error {
 
 	log.Trace("[babe]", "epochThreshold", b.epochThreshold)
 
-	var i uint64 = 0
+	var i uint64 = b.startSlot
 	var err error
-	for ; i < b.config.EpochLength; i++ {
+	for ; i < b.startSlot+b.config.EpochLength; i++ {
 		b.slotToProof[i], err = b.runLottery(i)
 		if err != nil {
 			return fmt.Errorf("error running slot lottery at slot %d: error %s", i, err)
@@ -153,9 +156,6 @@ func (b *Session) setAuthorityIndex() error {
 }
 
 func (b *Session) invokeBlockAuthoring() {
-	// TODO: we might not actually be starting at slot 0, need to run median algorithm here
-	var slotNum uint64 = 0
-
 	if b.config == nil {
 		log.Error("[babe] block authoring", "error", "config is nil")
 		return
@@ -171,7 +171,25 @@ func (b *Session) invokeBlockAuthoring() {
 		return
 	}
 
-	for ; slotNum < b.config.EpochLength; slotNum++ {
+	slotNum := b.startSlot
+
+	bestNum := b.blockState.HighestBlockNumber()
+	log.Debug("[babe]", "highest block num", bestNum)
+
+	var err error
+	// check if we are starting at genesis, if not, need to calculate slot
+	if bestNum.Cmp(big.NewInt(0)) == 1 && slotNum == 0 {
+		// TODO: change this to getCurrentSlot, once BlockResponse messages are implemented
+		slotNum, err = b.estimateCurrentSlot()
+		if err != nil {
+			log.Error("[babe] cannot estimate current slot", "error", err)
+			return
+		}
+
+		log.Debug("[babe]", "estimated slot", slotNum)
+	}
+
+	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
 		b.handleSlot(slotNum)
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
@@ -203,12 +221,16 @@ func (b *Session) handleSlot(slotNum uint64) {
 		number:   slotNum,
 	}
 
+	// TODO: move block authorization check here
+
 	block, err := b.buildBlock(parentHeader, currentSlot)
 	if err != nil {
 		log.Error("BABE block authoring", "error", err)
 	} else {
+		// TODO: loop until slot is done, attempt to produce multiple blocks
+
 		hash := block.Header.Hash()
-		log.Info("BABE", "built block", hash.String(), "number", block.Header.Number)
+		log.Info("BABE", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
 		log.Debug("BABE built block", "header", block.Header, "body", block.Body)
 
 		b.newBlocks <- *block

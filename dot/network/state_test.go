@@ -60,5 +60,9 @@ func (mbs *MockBlockState) BestBlockHeader() (*types.Header, error) {
 	}, nil
 }
 
+func (mbs *MockBlockState) GenesisHash() common.Hash {
+	return common.NewHash([]byte{})
+}
+
 // MockNetworkState ...
 type MockNetworkState struct{}

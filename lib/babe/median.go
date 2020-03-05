@@ -21,12 +21,66 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-
-	"github.com/ChainSafe/gossamer/lib/common"
+	"time"
 )
 
-// slotTime calculates the slot time in the form of miliseconds since the unix epoch
-// for a given slot in miliseconds, returns 0 and an error if it can't be calculated
+// slotTail is the number of blocks needed for us to run the median algorithm. in the spec, it's arbitrarily set to 1200.
+// TODO: will need to update this once finished simple slot time algo testing
+var slotTail = uint64(12)
+
+// returns the estimated current slot number, without median algorithm
+func (b *Session) estimateCurrentSlot() (uint64, error) {
+	// estimate slot of highest block we've received
+	// TODO: change this to BestBlockHash. however this requires us to have at least `slotTail` number of blocks in our state
+	head := b.blockState.HighestBlockHash()
+
+	slot, err := b.blockState.GetSlotForBlock(head)
+	if err != nil {
+		return 0, err
+	}
+
+	// find arrival time of chain head
+	// note: this assumes that the block arrived within the slot it was produced, may be off
+	arrivalTime, err := b.blockState.GetArrivalTime(head)
+	if err != nil {
+		return 0, err
+	}
+
+	// use slot duration to count up
+	for {
+		if arrivalTime >= uint64(time.Now().Unix())-(b.config.SlotDuration/1000) {
+			return slot, nil
+		}
+
+		// increment slot, slot time
+		arrivalTime += b.config.SlotDuration
+		slot++
+	}
+}
+
+// getCurrentSlot estimates the current slot, then uses the slotTime algorithm to determine the exact slot
+func (b *Session) getCurrentSlot() (uint64, error) {
+	estimate, err := b.estimateCurrentSlot()
+	if err != nil {
+		return 0, err
+	}
+
+	for {
+		slotTime, err := b.slotTime(estimate, slotTail)
+		if err != nil {
+			return 0, err
+		}
+
+		if slotTime > uint64(time.Now().Unix())-(b.config.SlotDuration/1000) {
+			return estimate, nil
+		}
+
+		estimate++
+	}
+}
+
+// slotTime calculates the slot time in the form of seconds since the unix epoch
+// for a given slot in seconds, returns 0 and an error if it can't be calculated
 func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) {
 	var at []uint64
 
@@ -55,14 +109,14 @@ func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) {
 		return 0, err
 	}
 
-	sd := b.config.SlotDuration
+	sd := (b.config.SlotDuration / 1000)
 
 	var currSlot uint64
 	var so uint64
 	var arrivalTime uint64
 
 	for _, hash := range b.blockState.SubChain(start.Header.Hash(), deepestBlock.Hash()) {
-		currSlot, err = b.computeSlotForBlock(hash, sd)
+		currSlot, err = b.blockState.GetSlotForBlock(hash)
 		if err != nil {
 			return 0, err
 		}
@@ -110,32 +164,7 @@ func median(l []uint64) (uint64, error) {
 func slotOffset(start uint64, end uint64) (uint64, error) {
 	os := end - start
 	if end < start {
-		return 0, errors.New("cannot have negative Slot Offset! ")
+		return 0, errors.New("cannot have negative Slot Offset")
 	}
 	return os, nil
-}
-
-// computeSlotForBlock computes the slot for a block
-// TODO: this is wrong, need to use the slot # as in the block's pre-digest
-func (b *Session) computeSlotForBlock(hash common.Hash, sd uint64) (uint64, error) {
-	start, err := b.blockState.GetBlockByNumber(big.NewInt(1))
-	if err != nil {
-		return 0, err
-	}
-	gt, err := b.blockState.GetArrivalTime(start.Header.Hash())
-	if err != nil {
-		return 0, err
-	}
-	nt, err := b.blockState.GetArrivalTime(hash)
-	if err != nil {
-		return 0, err
-	}
-
-	sp := uint64(0)
-	for gt < nt {
-		gt += sd
-		sp++
-	}
-
-	return sp, nil
 }

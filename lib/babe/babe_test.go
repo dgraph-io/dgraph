@@ -31,6 +31,11 @@ import (
 	"github.com/ChainSafe/gossamer/tests"
 )
 
+var genesisHeader = &types.Header{
+	Number:    big.NewInt(0),
+	StateRoot: trie.EmptyHash,
+}
+
 func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
 
@@ -70,6 +75,66 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	}
 
 	return babesession
+}
+
+func createTestSessionWithState(t *testing.T, cfg *SessionConfig) (*Session, *state.Service) {
+	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+
+	if cfg == nil {
+		cfg = &SessionConfig{
+			Runtime: rt,
+		}
+	}
+
+	if cfg.Runtime == nil {
+		cfg.Runtime = rt
+	}
+
+	var err error
+	if cfg.Keypair == nil {
+		cfg.Keypair, err = sr25519.GenerateKeypair()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if cfg.AuthData == nil {
+		auth := &AuthorityData{
+			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
+			Weight: 1,
+		}
+		cfg.AuthData = []*AuthorityData{auth}
+	}
+
+	if cfg.TransactionQueue == nil {
+		cfg.TransactionQueue = state.NewTransactionQueue()
+	}
+
+	dataDir, err := ioutil.TempDir("", "./test_data")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dbSrv := state.NewService(dataDir)
+	err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = dbSrv.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.BlockState = dbSrv.Block
+	cfg.StorageState = dbSrv.Storage
+
+	babesession, err := NewSession(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return babesession, dbSrv
 }
 
 func TestCalculateThreshold(t *testing.T) {
@@ -179,44 +244,22 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 
 func TestBabeAnnounceMessage(t *testing.T) {
 	newBlocks := make(chan types.Block)
+	TransactionQueue := state.NewTransactionQueue()
 
-	dataDir, err := ioutil.TempDir("", "./test_data")
-	if err != nil {
-		t.Fatal(err)
+	cfg := &SessionConfig{
+		NewBlocks:        newBlocks,
+		TransactionQueue: TransactionQueue,
 	}
 
-	dbSrv := state.NewService(dataDir)
-	err = dbSrv.Initialize(&types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}, trie.NewEmptyTrie(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = dbSrv.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	babesession, dbSrv := createTestSessionWithState(t, cfg)
 	defer func() {
-		err = dbSrv.Stop()
+		err := dbSrv.Stop()
 		if err != nil {
 			t.Fatal(err)
 		}
 	}()
 
-	TransactionQueue := state.NewTransactionQueue()
-
-	cfg := &SessionConfig{
-		NewBlocks:        newBlocks,
-		BlockState:       dbSrv.Block,
-		StorageState:     dbSrv.Storage,
-		TransactionQueue: TransactionQueue,
-	}
-
-	babesession := createTestSession(t, cfg)
-	err = babesession.configurationFromRuntime()
+	err := babesession.configurationFromRuntime()
 	if err != nil {
 		t.Fatal(err)
 	}

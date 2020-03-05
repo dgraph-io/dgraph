@@ -168,7 +168,7 @@ func (s *Service) handleConn(conn network.Conn) {
 			Roles:               s.cfg.Roles,
 			BestBlockNumber:     latestBlock.Number.Uint64(),
 			BestBlockHash:       latestBlock.Hash(),
-			GenesisHash:         latestBlock.StateRoot,
+			GenesisHash:         s.cfg.BlockState.GenesisHash(),
 			ChainStatus:         []byte{0}, // TODO
 		}
 

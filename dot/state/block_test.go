@@ -189,3 +189,43 @@ func TestAddBlock(t *testing.T) {
 	// Check if latestBlock is set correctly
 	require.Equal(t, block1.Header.Hash(), bs.BestBlockHash(), "Latest Header Block Check Fail")
 }
+
+func TestGetSlotForBlock(t *testing.T) {
+	genesisHeader := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
+	bs := newTestBlockState(t, genesisHeader)
+	defer bs.db.db.Close()
+
+	preDigest, err := common.HexToBytes("0x014241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	expectedSlot := uint64(17)
+
+	block := &types.Block{
+		Header: &types.Header{
+			ParentHash: genesisHeader.Hash(),
+			Number:     big.NewInt(int64(1)),
+			Digest:     [][]byte{preDigest},
+		},
+		Body: &types.Body{},
+	}
+
+	err = bs.AddBlock(block)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := bs.GetSlotForBlock(block.Header.Hash())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, expectedSlot) {
+		t.Fatalf("Fail: got %x expected %x", res, expectedSlot)
+	}
+}

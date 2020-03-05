@@ -18,11 +18,13 @@ package network
 
 import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/lib/common"
 )
 
 // BlockState interface for block state methods
 type BlockState interface {
 	BestBlockHeader() (*types.Header, error)
+	GenesisHash() common.Hash
 }
 
 // NetworkState interface for network state methods
