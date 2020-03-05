@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path"
 	"strconv"
 
 	log "github.com/ChainSafe/log15"
@@ -111,6 +112,7 @@ func initNode(ctx *cli.Context) error {
 		return err
 	}
 
+	// initialize node (initialize databases and load genesis data)
 	err = initializeNode(ctx)
 	if err != nil {
 		log.Error("[gossamer] Failed to initialize node", "error", err)
@@ -128,18 +130,63 @@ func gossamer(ctx *cli.Context) error {
 		return err
 	}
 
+	// check command arguments
 	if arguments := ctx.Args(); len(arguments) > 0 {
 		return fmt.Errorf("failed to read command argument: %q", arguments[0])
 	}
 
+	// check if node has been initialized
+	if !nodeInitialized(ctx) {
+
+		// initialize node (initialize databases and load genesis data)
+		err = initializeNode(ctx)
+		if err != nil {
+			log.Error("[gossamer] Failed to initialize node", "error", err)
+			return err
+		}
+	}
+
+	// create node services
 	node, _, err := makeNode(ctx)
 	if err != nil {
-		log.Error("[gossamer] Failed to initialize node", "error", err)
+		log.Error("[gossamer] Failed to create node services", "error", err)
 		return err
 	}
 
-	log.Info("[gossamer] Starting node services...", "name", node.Name)
+	log.Info("[gossamer] Starting node...", "name", node.Name)
+
+	// start node
 	node.Start()
 
 	return nil
+}
+
+// nodeInitialized returns true if, within the configured data directory for the
+// node, the state database has been created and the gensis data has been loaded
+func nodeInitialized(ctx *cli.Context) bool {
+	cfg, err := getConfig(ctx)
+	if err != nil {
+		log.Error("[gossamer] Failed to get node configuration", "error", err)
+		return false
+	}
+
+	// check if key registry exists
+	registry := path.Join(cfg.Global.DataDir, "KEYREGISTRY")
+	_, err = os.Stat(registry)
+	if os.IsNotExist(err) {
+		log.Error("[gossamer] Failed to locate KEYREGISTRY", "error", err)
+		return false
+	}
+
+	// check if manifest exists
+	manifest := path.Join(cfg.Global.DataDir, "MANIFEST")
+	_, err = os.Stat(manifest)
+	if os.IsNotExist(err) {
+		log.Error("[gossamer] Failed to locate MANIFEST", "error", err)
+		return false
+	}
+
+	// TODO: investigate cheap way to confirm valid genesis data has been loaded
+
+	return true
 }

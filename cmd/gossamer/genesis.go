@@ -36,12 +36,16 @@ import (
 // initializeNode creates a Genesis instance from the configured genesis file
 // and then initializes the state database using the Genesis instance
 func initializeNode(ctx *cli.Context) error {
+
+	// get node configuration
 	cfg, err := getConfig(ctx)
 	if err != nil {
 		return err
 	}
 
 	datadir := cfg.Global.DataDir
+
+	// get genesis configuration path
 	genPath := getGenesisPath(ctx)
 
 	log.Info(
@@ -65,79 +69,34 @@ func initializeNode(ctx *cli.Context) error {
 		"Bootnodes", gen.Bootnodes,
 	)
 
-	// initialize stateDB and blockDB
-	stateSrv := state.NewService(datadir)
-
-	// initialize genesis state from genesis data
-	t, header, err := initializeGenesisState(gen)
+	// create and load trie from genesis
+	t, err := newTrieFromGenesis(gen)
 	if err != nil {
+		log.Error("[gossamer] Failed to create trie from genesis", "error", err)
 		return err
 	}
 
-	// initialize state service with genesis block header
-	err = stateSrv.Initialize(header, t)
+	// generates genesis block header from trie and stores it in state database
+	err = loadGenesisBlock(t, datadir)
 	if err != nil {
-		return fmt.Errorf("failed to initialize state service: %s", err)
-	}
-
-	// create and/or open database instance
-	db, err := database.NewBadgerDB(datadir)
-	if err != nil {
+		log.Error("[gossamer] Failed to load genesis block with state service", "error", err)
 		return err
 	}
-	defer func() {
-		err = db.Close()
-		if err != nil {
-			log.Error("[gossamer] Failed to close database", "error", err)
-		}
-	}()
 
-	// set trie database to open database instance
-	t.SetDb(&trie.Database{
-		DB: db,
-	})
-
-	// store genesis data in trie database
-	err = storeGenesisData(t, gen)
+	// initialize trie database
+	err = initializeTrieDatabase(t, datadir, gen)
 	if err != nil {
-		return fmt.Errorf("failed to store genesis data in trie database: %s", err)
+		log.Error("[gossamer] Failed to initialize trie database", "error", err)
+		return err
 	}
+
+	log.Info(
+		"[gossamer] Node initialized",
+		"datadir", datadir,
+		"genesis", genPath,
+	)
 
 	return nil
-}
-
-// initializeGenesisState given raw genesis state data, return the initialized state trie and genesis block header.
-func initializeGenesisState(gen *genesis.Genesis) (*trie.Trie, *types.Header, error) {
-	t := trie.NewEmptyTrie(nil)
-
-	// set raw genesis data for parent
-	genRaw := gen.GenesisFields().Raw[0]
-
-	// load raw genesis data into trie
-	err := t.Load(genRaw)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to load raw genesis data into trie: %s", err)
-	}
-
-	// create state root from trie hash
-	stateRoot, err := t.Hash()
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create state root from trie hash: %s", err)
-	}
-
-	// create genesis block header
-	header, err := types.NewHeader(
-		common.NewHash([]byte{0}), // parentHash
-		big.NewInt(0),             // number
-		stateRoot,                 // stateRoot
-		trie.EmptyHash,            // extrinsicsRoot
-		[][]byte{},                // digest
-	)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to create genesis block header: %s", err)
-	}
-
-	return t, header, nil
 }
 
 // getGenesisPath gets the path to the genesis file
@@ -154,9 +113,90 @@ func getGenesisPath(ctx *cli.Context) string {
 	}
 }
 
-// storeGenesisData stores genesis data in trie database
-func storeGenesisData(t *trie.Trie, gen *genesis.Genesis) error {
+// newTrieFromGenesis creates a new trie and loads it with the raw genesis data
+func newTrieFromGenesis(gen *genesis.Genesis) (*trie.Trie, error) {
+	// create new empty trie
+	t := trie.NewEmptyTrie(nil)
 
+	// set raw genesis data for parent
+	genRaw := gen.GenesisFields().Raw[0]
+
+	// load raw genesis data into trie
+	err := t.Load(genRaw)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load raw genesis data into trie: %s", err)
+	}
+
+	return t, nil
+}
+
+// loadGenesisBlock generates the genesis block from the trie (assumes trie is
+// already loaded with the raw genesis data), and then loads the genesis block
+// header with state service (storing the genesis block in the state database)
+func loadGenesisBlock(t *trie.Trie, datadir string) error {
+	// create state root from trie hash
+	stateRoot, err := t.Hash()
+	if err != nil {
+		return fmt.Errorf("failed to create state root from trie hash: %s", err)
+	}
+
+	// create genesis block header
+	header, err := types.NewHeader(
+		common.NewHash([]byte{0}), // parentHash
+		big.NewInt(0),             // number
+		stateRoot,                 // stateRoot
+		trie.EmptyHash,            // extrinsicsRoot
+		[][]byte{},                // digest
+	)
+	if err != nil {
+		return fmt.Errorf("failed to create genesis block header: %s", err)
+	}
+
+	// create new state service
+	stateSrv := state.NewService(datadir)
+
+	// initialize state service with genesis block header
+	err = stateSrv.Initialize(header, t)
+	if err != nil {
+		return fmt.Errorf("failed to initialize state service: %s", err)
+	}
+
+	return nil
+}
+
+// initializeTrieDatabase initializes and sets the trie database and then stores
+// the encoded trie, the genesis hash, and the gensis data in the trie database
+func initializeTrieDatabase(t *trie.Trie, datadir string, gen *genesis.Genesis) error {
+	// initialize database within data directory
+	db, err := database.NewBadgerDB(datadir)
+	if err != nil {
+		return fmt.Errorf("failed to open database: %s", err)
+	}
+
+	// set trie database to initialized database
+	t.SetDb(&trie.Database{
+		DB: db,
+	})
+
+	// store genesis data in trie database
+	err = storeGenesisData(t, gen)
+	if err != nil {
+		log.Error("[gossamer] Failed to store genesis data in trie database", "error", err)
+		return err
+	}
+
+	// close trie database
+	err = db.Close()
+	if err != nil {
+		log.Error("[gossamer] Failed to close trie database", "error", err)
+	}
+
+	return nil
+}
+
+// storeGenesisData stores the encoded trie, the genesis hash, and the gensis
+// data in the trie database
+func storeGenesisData(t *trie.Trie, gen *genesis.Genesis) error {
 	// encode trie and write to trie database
 	err := t.StoreInDB()
 	if err != nil {
