@@ -616,22 +616,6 @@ func (n *node) trySnapshot(skip uint64) {
 	glog.Infof("Writing snapshot at index: %d, applied mark: %d\n", idx, n.Applied.DoneUntil())
 }
 
-func (n *node) StoreSync(closer *y.Closer) {
-	closer.AddRunning(1)
-	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			if err := n.Store.Sync(); err != nil {
-				glog.Errorf("Error while calling Store.Sync: %v", err)
-			}
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
-}
-
 func (n *node) Run() {
 	var leader bool
 	ticker := time.NewTicker(100 * time.Millisecond)

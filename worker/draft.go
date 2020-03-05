@@ -891,21 +891,6 @@ func (n *node) drainApplyChan() {
 	}
 }
 
-func (n *node) StoreSync(closer *y.Closer) {
-	defer closer.Done()
-	ticker := time.NewTicker(1 * time.Second)
-	for {
-		select {
-		case <-ticker.C:
-			if err := n.Store.Sync(); err != nil {
-				glog.Errorf("Error while calling Store.Sync: %+v", err)
-			}
-		case <-closer.HasBeenClosed():
-			return
-		}
-	}
-}
-
 func (n *node) Run() {
 	defer n.closer.Done() // CLOSER:1
 
