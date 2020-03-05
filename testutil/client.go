@@ -401,9 +401,11 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 		co := curlOutput{}
 		require.NoError(t, json.Unmarshal(output, &co),
 			"unable to unmarshal the curl output")
-		if len(co.Errors) > 0 && strings.Contains(co.Errors[0].Code, "being modified") {
-			time.Sleep(time.Second)
-			continue
+		if len(co.Errors) > 0 {
+			if strings.Contains(co.Errors[0].Message, "schema is already being modified") {
+				time.Sleep(time.Second)
+				continue
+			}
 		}
 		verifyOutput(t, co, failureConfig)
 		return
