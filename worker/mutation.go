@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
@@ -136,98 +137,82 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		time.Sleep(time.Second * 2)
 	}
 
-	undoSchemaUpdate := func(predicate string) {
-		maxRetries := 10
-		loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-			return schema.Load(predicate)
-		})
-
-		if loadErr != nil {
-			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-		}
-	}
-
-	bgWork := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
-		complete := false
-		defer func() {
-			if complete {
-				return
-			}
-
-			undoSchemaUpdate(update.Predicate)
-		}()
-
+	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
-			glog.Errorf("error in building indexes in background, aborting :: %v\n", err)
-			return
+			return err
 		}
 		if err := updateSchema(update); err != nil {
-			glog.Errorf("error in updating schema, aborting :: %v\n", err)
-			return
+			return err
 		}
+
 		glog.Infof("Done schema update %+v\n", update)
-		complete = true
+		return nil
 	}
 
-	fgWork := func(update *pb.SchemaUpdate) (func(), error) {
-		if tablet, err := groups().Tablet(update.Predicate); err != nil {
-			return nil, err
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Done()
+	buildIndxes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+		// we should only start building indexes once this function has returned.
+		// This is in order to ensure that we do not call DropPrefix for one predicate
+		// and write indexes for another predicate simultaneously. because that could
+		// cause writes to badger to fail leading to undesired indexing failures.
+		wg.Wait()
+
+		// undo schema changes in case re-indexing fails.
+		if err := buildIndexesHelper(update, rebuild); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+
+			maxRetries := 10
+			loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+				return schema.Load(update.Predicate)
+			})
+
+			if loadErr != nil {
+				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+			}
+		}
+	}
+
+	for _, su := range updates {
+		if tablet, err := groups().Tablet(su.Predicate); err != nil {
+			return err
 		} else if tablet.GetGroupId() != groups().groupId() {
-			return nil, errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+			return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
 		}
 
-		if err := checkSchema(update); err != nil {
-			return nil, err
+		if err := checkSchema(su); err != nil {
+			return err
 		}
 
-		old, _ := schema.State().Get(ctx, update.Predicate)
+		old, _ := schema.State().Get(ctx, su.Predicate)
 		rebuild := posting.IndexRebuild{
-			Attr:          update.Predicate,
+			Attr:          su.Predicate,
 			StartTs:       startTs,
 			OldSchema:     &old,
-			CurrentSchema: update,
+			CurrentSchema: su,
 		}
 		querySchema := rebuild.GetQuerySchema()
 		// Sets only in memory, we will update it on disk only after
 		// schema mutations are successful and written to disk.
-		schema.State().Set(update.Predicate, querySchema)
-		schema.State().SetMutSchema(update.Predicate, update)
+		schema.State().Set(su.Predicate, querySchema)
+		schema.State().SetMutSchema(su.Predicate, su)
 
 		if err := rebuild.DropIndexes(ctx); err != nil {
-			return nil, err
-		}
-		if err := rebuild.BuildData(ctx); err != nil {
-			return nil, err
-		}
-
-		return func() { bgWork(update, rebuild) }, nil
-	}
-
-	// We want to complete all the foreground work for all the predicates otherwise
-	// DropPrefix of one indexing could cause problem to TxnWriter of another.
-	// If everything goes fine, we do all the background work in separate goroutines.
-	complete := false
-	bgTasks := make([]func(), 0, len(updates))
-	for _, su := range updates {
-		task, err := fgWork(su)
-		if err != nil {
 			return err
 		}
-		defer func() {
-			if complete {
-				return
-			}
+		if err := rebuild.BuildData(ctx); err != nil {
+			return err
+		}
 
-			undoSchemaUpdate(su.Predicate)
-		}()
+		if rebuild.NeedIndexRebuild() {
+			go buildIndxes(su, rebuild)
+		} else if err := updateSchema(su); err != nil {
+			return err
+		}
+	}
 
-		bgTasks = append(bgTasks, task)
-	}
-	for _, task := range bgTasks {
-		go task()
-	}
-	complete = true
 	return nil
 }
 

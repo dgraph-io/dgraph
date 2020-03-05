@@ -705,7 +705,7 @@ const (
 func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 	// copy the current schema
 	querySchema := *rb.CurrentSchema
-	info := rb.needsIndexRebuild()
+	info := rb.needsTokIndexRebuild()
 
 	// compute old.Tokenizer minus info.tokenizersToDelete
 	interimTokenizers := make([]string, 0)
@@ -748,9 +748,16 @@ func (rb *IndexRebuild) BuildData(ctx context.Context) error {
 	return rebuildListType(ctx, rb)
 }
 
+// NeedIndexRebuild returns true if any of the tokenizer, reverse or count indexes need to be rebuilt.
+func (rb *IndexRebuild) NeedIndexRebuild() bool {
+	return rb.needsTokIndexRebuild().op == indexRebuild ||
+		rb.needsReverseEdgesRebuild() == indexRebuild ||
+		rb.needsCountIndexRebuild() == indexRebuild
+}
+
 // BuildIndexes builds indexes.
 func (rb *IndexRebuild) BuildIndexes(ctx context.Context) error {
-	if err := rebuildIndex(ctx, rb); err != nil {
+	if err := rebuildTokIndex(ctx, rb); err != nil {
 		return err
 	}
 	if err := rebuildReverseEdges(ctx, rb); err != nil {
@@ -765,7 +772,7 @@ type indexRebuildInfo struct {
 	tokenizersToRebuild []string
 }
 
-func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
+func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	x.AssertTruef(rb.CurrentSchema != nil, "Current schema cannot be nil.")
 
 	// If the old schema is nil, we can treat it as an empty schema. Copy it
@@ -834,7 +841,7 @@ func (rb *IndexRebuild) needsIndexRebuild() indexRebuildInfo {
 }
 
 func dropIndex(ctx context.Context, rb *IndexRebuild) error {
-	rebuildInfo := rb.needsIndexRebuild()
+	rebuildInfo := rb.needsTokIndexRebuild()
 	if rebuildInfo.op == indexNoop {
 		return nil
 	}
@@ -871,10 +878,10 @@ func dropIndex(ctx context.Context, rb *IndexRebuild) error {
 	return nil
 }
 
-// rebuildIndex rebuilds index for a given attribute.
+// rebuildTokIndex rebuilds index for a given attribute.
 // We commit mutations with startTs and ignore the errors.
-func rebuildIndex(ctx context.Context, rb *IndexRebuild) error {
-	rebuildInfo := rb.needsIndexRebuild()
+func rebuildTokIndex(ctx context.Context, rb *IndexRebuild) error {
+	rebuildInfo := rb.needsTokIndexRebuild()
 	if rebuildInfo.op != indexRebuild {
 		return nil
 	}
