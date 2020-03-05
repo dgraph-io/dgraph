@@ -1,6 +1,7 @@
 #!/bin/bash
 
 set -e
+readonly SRCDIR=$(dirname $0)
 
 function Info {
     echo -e "INFO: $*"
@@ -9,6 +10,9 @@ function Info {
 function DockerCompose {
     docker-compose -p dgraph "$@"
 }
+
+Info "entering directory $SRCDIR"
+cd $SRCDIR
 
 Info "bringing down dgraph cluster and data volumes"
 DockerCompose down -v
