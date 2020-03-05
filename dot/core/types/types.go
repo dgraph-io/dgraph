@@ -295,7 +295,7 @@ func (bd *BlockData) Encode() ([]byte, error) {
 		enc = append(enc, byte(0)) // None
 	}
 
-	if bd.Receipt.Exists() {
+	if bd.Receipt != nil && bd.Receipt.Exists() {
 		venc, err := scale.Encode(bd.Receipt.Value())
 		if err != nil {
 			return nil, err
@@ -306,7 +306,7 @@ func (bd *BlockData) Encode() ([]byte, error) {
 		enc = append(enc, byte(0)) // None
 	}
 
-	if bd.MessageQueue.Exists() {
+	if bd.MessageQueue != nil && bd.MessageQueue.Exists() {
 		venc, err := scale.Encode(bd.MessageQueue.Value())
 		if err != nil {
 			return nil, err
@@ -317,7 +317,7 @@ func (bd *BlockData) Encode() ([]byte, error) {
 		enc = append(enc, byte(0)) // None
 	}
 
-	if bd.Justification.Exists() {
+	if bd.Justification != nil && bd.Justification.Exists() {
 		venc, err := scale.Encode(bd.Justification.Value())
 		if err != nil {
 			return nil, err

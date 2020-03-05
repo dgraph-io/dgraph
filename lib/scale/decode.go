@@ -342,6 +342,12 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 				copy(arr[:], buf)
 				*ptr = arr
 			}
+		case *common.PeerInfo:
+			_, err = sd.DecodeInterface(ptr)
+			if err != nil {
+				return nil, err
+			}
+
 		default:
 			var res interface{}
 			res, err = sd.DecodeCustom(sl.Index(i).Interface())
