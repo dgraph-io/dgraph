@@ -276,11 +276,11 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
-// Delete all entries from [0, until), i.e. excluding until.
+// Delete all entries from [from, until), i.e. excluding until.
 // Keep the entry at the snapshot index, for simplification of logic.
 // It is the application's responsibility to not attempt to deleteUntil an index
 // greater than raftLog.applied.
-func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error {
+func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, from, until uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -289,7 +289,7 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.EntryKey(0)
+		start := w.EntryKey(from)
 		first := true
 		var index uint64
 		for itr.Seek(start); itr.Valid(); itr.Next() {
@@ -622,7 +622,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
 	}
-	if err := w.deleteUntil(batch, snap.Metadata.Index); err != nil {
+	if err := w.deleteUntil(batch, first-1, snap.Metadata.Index); err != nil {
 		return err
 	}
 	return batch.Flush()
