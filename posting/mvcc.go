@@ -228,6 +228,34 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 	return nil
 }
 
+func (txn *Txn) CommitKeyToDisk(writer *TxnWriter, key string, commitTs uint64) error {
+	if commitTs == 0 {
+		return nil
+	}
+
+	cache := txn.cache
+	cache.Lock()
+	defer cache.Unlock()
+
+	return writer.update(commitTs, func(btxn *badger.Txn) error {
+		data := cache.deltas[key]
+		if len(data) == 0 {
+			return nil
+		}
+		if ts := cache.maxVersions[key]; ts >= commitTs {
+			// Skip write because we already have a write at a higher ts.
+			// Logging here can cause a lot of output when doing Raft log replay. So, let's
+			// not output anything here.
+			return nil
+		}
+		return btxn.SetEntry(&badger.Entry{
+			Key:      []byte(key),
+			Value:    data,
+			UserMeta: BitDeltaPosting,
+		})
+	})
+}
+
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {

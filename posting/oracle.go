@@ -87,6 +87,26 @@ func (txn *Txn) Update() {
 	txn.cache.UpdateDeltasAndDiscardLists()
 }
 
+func (txn *Txn) UpdateKey(key string) {
+	txn.cache.Lock()
+	defer txn.cache.Unlock()
+	if len(txn.cache.plists) == 0 {
+		return
+	}
+
+	pl, ok := txn.cache.plists[key]
+	if !ok {
+		return
+	}
+
+	data := pl.getMutation(txn.cache.startTs)
+	if len(data) > 0 {
+		txn.cache.deltas[key] = data
+	}
+	txn.cache.maxVersions[key] = pl.maxVersion()
+	delete(txn.cache.plists, key)
+}
+
 // Store is used by tests.
 func (txn *Txn) Store(pl *List) *List {
 	return txn.cache.SetIfAbsent(string(pl.key), pl)
