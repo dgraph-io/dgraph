@@ -31,21 +31,21 @@ import (
 
 //nolint
 const (
-	StatusMsgType = iota
-	BlockRequestMsgType
-	BlockResponseMsgType
-	BlockAnnounceMsgType
-	TransactionMsgType
-	ConsensusMsgType
-	RemoteCallRequestType
-	RemoteCallResponseType
-	RemoteReadRequestType
-	RemoteReadResponseType
-	RemoteHeaderRequestType
-	RemoteHeaderResponseType
-	RemoteChangesRequestType
-	RemoteChangesResponseType
-	ChainSpecificMsgType = 255
+	StatusMsgType             = 0
+	BlockRequestMsgType       = 1
+	BlockResponseMsgType      = 2
+	BlockAnnounceMsgType      = 3
+	TransactionMsgType        = 4
+	ConsensusMsgType          = 5
+	RemoteCallRequestType     = 6
+	RemoteCallResponseType    = 7
+	RemoteReadRequestType     = 8
+	RemoteReadResponseType    = 9
+	RemoteHeaderRequestType   = 10
+	RemoteHeaderResponseType  = 11
+	RemoteChangesRequestType  = 12
+	RemoteChangesResponseType = 13
+	ChainSpecificMsgType      = 255
 )
 
 // Message interface

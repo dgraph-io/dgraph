@@ -380,3 +380,83 @@ func TestService_NotAuthority(t *testing.T) {
 		t.Fatal("Fail: should not have babe session")
 	}
 }
+
+func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
+	previousHash := blockState.BestBlockHash()
+	previousNum, err := blockState.BestBlockNumber()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 1; i <= depth; i++ {
+		block := &types.Block{
+			Header: &types.Header{
+				ParentHash: previousHash,
+				Number:     big.NewInt(int64(i)).Add(previousNum, big.NewInt(int64(i))),
+			},
+			Body: &types.Body{},
+		}
+
+		previousHash = block.Header.Hash()
+
+		err := blockState.AddBlock(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestService_ProcessBlockRequest(t *testing.T) {
+	msgSend := make(chan network.Message, 10)
+
+	cfg := &Config{
+		MsgSend: msgSend,
+	}
+
+	s, dbSrv := newTestService(t, cfg)
+
+	defer func() {
+		s.Stop()
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	err := s.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	addTestBlocksToState(t, 1, dbSrv.Block)
+
+	endHash := s.blockState.BestBlockHash()
+
+	request := &network.BlockRequestMessage{
+		ID:            1,
+		RequestedData: 3,
+		StartingBlock: []byte{1, 1, 0, 0, 0, 0, 0, 0, 0},
+		EndBlockHash:  optional.NewHash(true, endHash),
+		Direction:     1,
+		Max:           optional.NewUint32(false, 0),
+	}
+
+	err = s.ProcessBlockRequestMessage(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case resp := <-msgSend:
+		msgType := resp.GetType()
+		if !reflect.DeepEqual(msgType, network.BlockResponseMsgType) {
+			t.Error(
+				"received unexpected message type",
+				"\nexpected:", network.BlockResponseMsgType,
+				"\nreceived:", msgType,
+			)
+		}
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
+	}
+}
