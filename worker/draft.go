@@ -409,8 +409,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			return nil
 		}
 		n.elog.Printf("Creating snapshot: %+v", snap)
-		glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
+		// glog.Infof("Creating snapshot at index: %d. ReadTs: %d.\n", snap.Index, snap.ReadTs)
 
+		now := time.Now()
 		data, err := snap.Marshal()
 		x.Check(err)
 		for {
@@ -423,6 +424,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		}
 		// Roll up all posting lists as a best-effort operation.
 		n.rollupCh <- snap.ReadTs
+		glog.Infof("Created snapshot at index: %d. ReadTs: %d. in time: %s\n", snap.Index, snap.ReadTs, time.Since(now))
 		return nil
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)

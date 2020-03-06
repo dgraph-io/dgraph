@@ -19,6 +19,7 @@ package raftwal
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"math"
 	"sync"
 
@@ -40,12 +41,18 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
-	cache *sync.Map
+	cache      *sync.Map
+	deleteChan chan deleteRange
+}
+
+type deleteRange struct {
+	from, until uint64
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
-	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
+	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map),
+		deleteChan: make(chan deleteRange, 16)}
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
@@ -64,6 +71,21 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	} else {
 		x.Check(err)
 	}
+
+	go func() {
+		for r := range w.deleteChan {
+			batch := w.db.NewWriteBatch()
+			if err := w.deleteUntil(batch, r.from, r.until); err != nil {
+				fmt.Printf("deleteuntil failed with error: %s, from: %d, until: %d\n",
+					err, r.from, r.until)
+			}
+
+			if err := batch.Flush(); err != nil {
+				fmt.Printf("batch flush failed with error: %s, from: %d, until: %d\n",
+					err, r.from, r.until)
+			}
+		}
+	}()
 	return w
 }
 
@@ -243,12 +265,10 @@ var (
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
-	if val, ok := w.cache.Load(snapshotKey); ok {
-		snap, ok := val.(*raftpb.Snapshot)
-		if ok && !raft.IsEmptySnap(*snap) {
-			return snap.Metadata.Index + 1, nil
-		}
+	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
+		return snap.Metadata.Index, nil
 	}
+
 	if val, ok := w.cache.Load(firstKey); ok {
 		if first, ok := val.(uint64); ok {
 			return first, nil
@@ -622,10 +642,13 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
 	}
-	if err := w.deleteUntil(batch, first-1, snap.Metadata.Index); err != nil {
+
+	if err := batch.Flush(); err != nil {
 		return err
 	}
-	return batch.Flush()
+
+	w.deleteChan <- deleteRange{first - 1, snap.Metadata.Index}
+	return nil
 }
 
 // Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
