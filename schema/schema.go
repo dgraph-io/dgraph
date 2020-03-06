@@ -42,8 +42,9 @@ var (
 
 // We maintain two schemas for a predicate if a background task is building indexes
 // for that predicate. Now, we need to use the new schema for mutations whereas
-// a different schema for queries. While calling functions in this package, we need
+// a query schema for queries. While calling functions in this package, we need
 // to set the context correctly as to which schema should be returned.
+// Query schema is defined as (old schema - tokenizers to drop based on new schema).
 type contextKey int
 
 const (
@@ -191,15 +192,16 @@ func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
 	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
+	// If this is write context, mutSchema will have the updated schema.
+	// If mutSchema doesn't have the predicate key, we use the schema from s.predicate.
 	if isWrite {
-		schema, has := s.mutSchema[pred]
-		if has {
+		if schema, ok := s.mutSchema[pred]; ok {
 			return *schema, true
 		}
 	}
 
-	schema, has := s.predicate[pred]
-	if !has {
+	schema, ok := s.predicate[pred]
+	if !ok {
 		return pb.SchemaUpdate{}, false
 	}
 	return *schema, true
@@ -232,7 +234,7 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 	s.RLock()
 	defer s.RUnlock()
 	if isWrite {
-		// Todo(Aman): we could return the query schema if it is a delete.
+		// TODO(Aman): we could return the query schema if it is a delete.
 		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
 			return true
 		}

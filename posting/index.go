@@ -562,11 +562,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		"Rebuilding index for predicate %s: Starting process. StartTs=%d. Prefix=\n%s\n",
 		r.attr, r.startTs, hex.Dump(r.prefix))
 
-	// Counter is used here to ensure that all keys are commited at different timestamp.
+	// Counter is used here to ensure that all keys are committed at different timestamp.
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	// Todo(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
+	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
 	// could be replaced with WriteBatch in the code
 	tmpWriter := NewTxnWriter(tmpDB)
@@ -703,11 +703,11 @@ const (
 // GetQuerySchema returns the schema that can be served while indexes are getting built.
 // Query schema is defined as current schema minus tokens to delete from current schema.
 func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
-	// copy the current schema
+	// Copy the current schema.
 	querySchema := *rb.CurrentSchema
 	info := rb.needsTokIndexRebuild()
 
-	// compute old.Tokenizer minus info.tokenizersToDelete
+	// Compute old.Tokenizer minus info.tokenizersToDelete.
 	interimTokenizers := make([]string, 0)
 	for _, t1 := range rb.OldSchema.Tokenizer {
 		found := false
@@ -732,9 +732,9 @@ func (rb *IndexRebuild) GetQuerySchema() *pb.SchemaUpdate {
 	return &querySchema
 }
 
-// DropIndexes drops indexes.
+// DropIndexes drops the indexes that need to be rebuilt.
 func (rb *IndexRebuild) DropIndexes(ctx context.Context) error {
-	if err := dropIndex(ctx, rb); err != nil {
+	if err := dropTokIndexes(ctx, rb); err != nil {
 		return err
 	}
 	if err := dropReverseEdges(ctx, rb); err != nil {
@@ -748,7 +748,8 @@ func (rb *IndexRebuild) BuildData(ctx context.Context) error {
 	return rebuildListType(ctx, rb)
 }
 
-// NeedIndexRebuild returns true if any of the tokenizer, reverse or count indexes need to be rebuilt.
+// NeedIndexRebuild returns true if any of the tokenizer, reverse
+// or count indexes need to be rebuilt.
 func (rb *IndexRebuild) NeedIndexRebuild() bool {
 	return rb.needsTokIndexRebuild().op == indexRebuild ||
 		rb.needsReverseEdgesRebuild() == indexRebuild ||
@@ -840,7 +841,7 @@ func (rb *IndexRebuild) needsTokIndexRebuild() indexRebuildInfo {
 	}
 }
 
-func dropIndex(ctx context.Context, rb *IndexRebuild) error {
+func dropTokIndexes(ctx context.Context, rb *IndexRebuild) error {
 	rebuildInfo := rb.needsTokIndexRebuild()
 	if rebuildInfo.op == indexNoop {
 		return nil
