@@ -270,7 +270,7 @@ func TestRebuildTokIndex(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	require.NoError(t, dropIndex(context.Background(), &rb))
+	require.NoError(t, dropTokIndexes(context.Background(), &rb))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Check index entries in data store.
@@ -321,7 +321,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
-	require.NoError(t, dropIndex(context.Background(), &rb))
+	require.NoError(t, dropTokIndexes(context.Background(), &rb))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
@@ -333,7 +333,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 		OldSchema:     &currentSchema,
 		CurrentSchema: &newSchema,
 	}
-	require.NoError(t, dropIndex(context.Background(), &rb))
+	require.NoError(t, dropTokIndexes(context.Background(), &rb))
 	require.NoError(t, rebuildTokIndex(context.Background(), &rb))
 
 	// Check index entries in data store.

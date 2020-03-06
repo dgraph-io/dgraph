@@ -198,7 +198,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	if err := dgraphClient.Alter(ctx, op); err != nil {
 		return err
 	}
-	// Todo(Aman): avoid using functions from testutil.
+	// TODO(Aman): avoid using functions from testutil.
 	return testutil.WaitForAlter(ctx, dgraphClient, op.Schema)
 }
 
