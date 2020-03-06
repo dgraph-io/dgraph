@@ -438,7 +438,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 	pred, ok := schema.State().Get(t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
-		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF 
+		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
 
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
