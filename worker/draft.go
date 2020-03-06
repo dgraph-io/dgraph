@@ -49,9 +49,9 @@ import (
 )
 
 type runMutPayload struct {
-	edge *pb.DirectedEdge
-	ctx  context.Context
-	txn  *posting.Txn
+	edges   []*pb.DirectedEdge
+	ctx     context.Context
+	startTs uint64
 }
 
 type node struct {
@@ -421,15 +421,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	})
 
 	if x.WorkerConfig.LudicrousMode {
-		// In ludicrous mode we won't block for all the changes to be applied. We have channels
-		// for every predicate. We will push the changes to corresponding channel. There will be
-		// a goroutine for every channel which will do following things for every change -:
-		// 		1. call runMutation -> This will make changes to the posting list
-		// 		2. call CommitKeyToDisk -> At any instance of time, we can't guarantee than all the
-		// 		   changes of a transaction have been applied. So every channel, after calling
-		// 		   runMutation, will commit it's own data.
-		// 		3. clear cache ->  Clear txn cache of it's predicate (cache.deltas[x.datakey(attr, entity)])
-		// Since we did all these things we don't need to call commitToDisk separately.
+		payloadMap := make(map[string]runMutPayload)
 		for _, edge := range m.Edges {
 			n.predChanMutex.RLock()
 			ch, ok := n.predChan[edge.Attr]
@@ -445,29 +437,41 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				go func(ch chan *runMutPayload) {
 					writer := posting.NewTxnWriter(pstore)
 					for payload := range ch {
-						for {
-							err := runMutation(payload.ctx, payload.edge, payload.txn)
-							if err == nil {
-								break
+						ptxn := posting.NewTxn(payload.startTs)
+						for _, edge := range payload.edges {
+							for {
+								err := runMutation(payload.ctx, edge, ptxn)
+								if err == nil {
+									break
+								}
+								if err != posting.ErrRetry {
+									glog.Errorf("Error while mutating: %+v", err)
+									break
+								}
 							}
-							if err != posting.ErrRetry {
-								glog.Errorf("Error while mutating: %+v", err)
-								break
-							}
-						}
 
-						key := string(x.DataKey(edge.Attr, edge.Entity))
-						payload.txn.CommitKeyToDisk(writer, key, payload.txn.StartTs)
-						payload.txn.UpdateKey(key)
+						}
+						ptxn.Update()
+						ptxn.CommitToDisk(writer, payload.startTs)
 					}
 				}(ch)
 			}
 
-			ch <- &runMutPayload{
-				edge: edge,
-				ctx:  ctx,
-				txn:  txn,
+			payload, ok := payloadMap[edge.Attr]
+			if !ok {
+				payloadMap[edge.Attr] = runMutPayload{
+					ctx:     ctx,
+					startTs: m.StartTs,
+				}
+				payload = payloadMap[edge.Attr]
 			}
+			payload.edges = append(payload.edges, edge)
+		}
+
+		for attr, payload := range payloadMap {
+			ch, ok := n.predChan[attr]
+			x.AssertTrue(ok)
+			ch <- &payload
 		}
 
 		return nil
