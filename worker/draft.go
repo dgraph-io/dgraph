@@ -421,7 +421,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	})
 
 	if x.WorkerConfig.LudicrousMode {
-		payloadMap := make(map[string]runMutPayload)
+		payloadMap := make(map[string]*runMutPayload)
 		for _, edge := range m.Edges {
 			n.predChanMutex.RLock()
 			ch, ok := n.predChan[edge.Attr]
@@ -459,7 +459,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 			payload, ok := payloadMap[edge.Attr]
 			if !ok {
-				payloadMap[edge.Attr] = runMutPayload{
+				payloadMap[edge.Attr] = &runMutPayload{
 					ctx:     ctx,
 					startTs: m.StartTs,
 				}
@@ -471,7 +471,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		for attr, payload := range payloadMap {
 			ch, ok := n.predChan[attr]
 			x.AssertTrue(ok)
-			ch <- &payload
+			ch <- payload
 		}
 
 		return nil
