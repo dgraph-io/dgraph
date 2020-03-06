@@ -97,6 +97,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	CollectFragmentFields()
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -692,6 +693,18 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
+func (f *field) CollectFragmentFields() {
+	collectedFields := collectFields(&requestContext{
+		RawQuery:  f.op.query,
+		Variables: f.op.vars,
+		Doc:       f.op.doc,
+	}, f.field.SelectionSet, []string{f.Type().Name()})
+	f.field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
+	for _, collectedField := range collectedFields {
+		f.field.SelectionSet = append(f.field.SelectionSet, collectedField.Field)
+	}
+}
+
 func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
@@ -750,6 +763,10 @@ func (q *query) ResponseName() string {
 
 func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
+}
+
+func (q *query) CollectFragmentFields() {
+	(*field)(q).CollectFragmentFields()
 }
 
 func (q *query) QueryType() QueryType {
@@ -902,6 +919,10 @@ func (m *mutation) TypeName(dgraphTypes []interface{}) string {
 
 func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(m).IncludeInterfaceField(dgraphTypes)
+}
+
+func (m *mutation) CollectFragmentFields() {
+	(*field)(m).CollectFragmentFields()
 }
 
 func (t *astType) Field(name string) FieldDefinition {
