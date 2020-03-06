@@ -427,16 +427,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
-		if x.WorkerConfig.LudicrousMode {
-			// We have already commited changes to disk. We only need to advance the oracle.
-			ts := proposal.Mutations.StartTs
-			posting.Oracle().ProcessDelta(&pb.OracleDelta{
-				MaxAssigned: ts,
-				Txns: []*pb.TxnStatus{
-					{StartTs: ts, CommitTs: ts},
-				},
-			})
-		}
 		span.Annotate(nil, "Done")
 		return nil
 	}
