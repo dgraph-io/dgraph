@@ -2802,6 +2802,66 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	require.Equal(t, 2, len(result.Queries["user2"]))
 }
 
+func TestValVarWithBlankNode(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`version: int .`))
+
+	m := `
+upsert {
+  query {
+    q(func: has(version), orderdesc: version, first: 1) {
+      Ver as version
+      VerIncr as math(Ver + 1)
+    }
+
+    me() {
+      sVerIncr as sum(val(VerIncr))
+    }
+  }
+
+  mutation @if(gt(len(VerIncr), 0)) {
+    set {
+      _:newNode <version> val(sVerIncr) .
+    }
+  }
+
+  mutation @if(eq(len(VerIncr), 0)) {
+    set {
+      _:newNode <version> "1" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+
+	for i := 0; i < 10; i++ {
+		mr, err = mutationWithTs(m, "application/rdf", false, true, 0)
+		require.NoError(t, err)
+		require.True(t, len(mr.keys) == 0)
+		require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+	}
+
+	q1 := `
+{
+  q(func: has(version), orderdesc: version, first: 1) {
+    version
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "version": 11
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
+}
+
 // This test may fail sometimes because ACL token
 // can get expired while the mutations is running.
 func upsertTooBigTest(t *testing.T) {
