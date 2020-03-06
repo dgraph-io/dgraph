@@ -420,43 +420,53 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return ei.GetEntity() < ej.GetEntity()
 	})
 
+	mutateInBG := func(ch chan *runMutPayload) {
+		writer := posting.NewTxnWriter(pstore)
+		for payload := range ch {
+			ptxn := posting.NewTxn(payload.startTs)
+			for _, edge := range payload.edges {
+				for {
+					err := runMutation(payload.ctx, edge, ptxn)
+					if err == nil {
+						break
+					}
+					if err != posting.ErrRetry {
+						glog.Errorf("Error while mutating: %+v", err)
+						break
+					}
+				}
+
+			}
+			if err := ptxn.Update(); err != nil {
+				glog.Errorf("Error while txn update: %+v", err)
+			}
+			if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
+				glog.Errorf("Error while commiting to disk: %+v", err)
+			}
+		}
+	}
+
+	checkAndAddPredChannel := func(pred string) {
+		n.predChanMutex.RLock()
+		_, ok := n.predChan[pred]
+		n.predChanMutex.RUnlock()
+		if !ok {
+			n.predChanMutex.Lock()
+			ch, ok = n.predChan[pred]
+			if !ok {
+				ch = make(chan *runMutPayload, 1000)
+				n.predChan[pred] = ch
+			}
+			n.predChanMutex.Unlock()
+			go mutateInBG(ch)
+		}
+
+	}
+
 	if x.WorkerConfig.LudicrousMode {
 		payloadMap := make(map[string]*runMutPayload)
 		for _, edge := range m.Edges {
-			n.predChanMutex.RLock()
-			ch, ok := n.predChan[edge.Attr]
-			n.predChanMutex.RUnlock()
-			if !ok {
-				n.predChanMutex.Lock()
-				ch, ok = n.predChan[edge.Attr]
-				if !ok {
-					ch = make(chan *runMutPayload, 1000)
-					n.predChan[edge.Attr] = ch
-				}
-				n.predChanMutex.Unlock()
-				go func(ch chan *runMutPayload) {
-					writer := posting.NewTxnWriter(pstore)
-					for payload := range ch {
-						ptxn := posting.NewTxn(payload.startTs)
-						for _, edge := range payload.edges {
-							for {
-								err := runMutation(payload.ctx, edge, ptxn)
-								if err == nil {
-									break
-								}
-								if err != posting.ErrRetry {
-									glog.Errorf("Error while mutating: %+v", err)
-									break
-								}
-							}
-
-						}
-						ptxn.Update()
-						ptxn.CommitToDisk(writer, payload.startTs)
-					}
-				}(ch)
-			}
-
+			checkAndAddPredChannel(edge.Attr)
 			payload, ok := payloadMap[edge.Attr]
 			if !ok {
 				payloadMap[edge.Attr] = &runMutPayload{
