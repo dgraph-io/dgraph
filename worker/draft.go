@@ -320,9 +320,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				}
 
 			}
-			if err := ptxn.Update(); err != nil {
-				glog.Errorf("Error while txn update: %+v", err)
-			}
+			ptxn.Update()
 			if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
 				glog.Errorf("Error while commiting to disk: %+v", err)
 			}
@@ -335,7 +333,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		n.predChanMutex.RUnlock()
 		if !ok {
 			n.predChanMutex.Lock()
-			ch, ok = n.predChan[pred]
+			ch, ok := n.predChan[pred]
 			if !ok {
 				ch = make(chan *runMutPayload, 1000)
 				n.predChan[pred] = ch
