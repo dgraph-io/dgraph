@@ -46,16 +46,19 @@ import (
 
 // makeNode sets up node; opening badgerDB instance and returning the Node container
 func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
-	currentConfig, err := getConfig(ctx)
+	cfg, err := getConfig(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	log.Info("[gossamer] Setting up node...", "datadir", currentConfig.Global.DataDir, "protocol", currentConfig.Network.ProtocolID, "bootnodes", currentConfig.Network.Bootnodes)
+	dataDir := cfg.Global.DataDir
+
+	log.Info(
+		"[gossamer] Setting up node services...",
+		"datadir", dataDir,
+	)
 
 	var srvcs []services.Service
-
-	dataDir := currentConfig.Global.DataDir
 
 	// Create service, initialize stateDB and blockDB
 	stateSrv := state.NewService(dataDir)
@@ -86,21 +89,19 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 	// TODO: Configure node based on Roles #601
 
 	// Network
-	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(currentConfig, gendata, stateSrv)
+	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(cfg, gendata, stateSrv)
 	srvcs = append(srvcs, networkSrvc)
 
 	// BABE authority configuration; flag overwrites config option
-	if auth := ctx.GlobalBool(AuthorityFlag.Name); auth && !currentConfig.Global.Authority {
-		currentConfig.Global.Authority = true
+	if auth := ctx.GlobalBool(AuthorityFlag.Name); auth && !cfg.Global.Authority {
+		cfg.Global.Authority = true
 		// if authority, should have at least 1 key in keystore
 		if ks.NumSr25519Keys() == 0 {
 			return nil, nil, fmt.Errorf("no keys provided for authority node")
 		}
-	} else if ctx.IsSet(AuthorityFlag.Name) && !auth && currentConfig.Global.Authority {
-		currentConfig.Global.Authority = false
+	} else if ctx.IsSet(AuthorityFlag.Name) && !auth && cfg.Global.Authority {
+		cfg.Global.Authority = false
 	}
-
-	log.Trace("[gossamer] BABE authority determined", "authority", currentConfig.Global.Authority)
 
 	// Core
 	coreConfig := &core.Config{
@@ -111,7 +112,7 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 		Runtime:          rt,
 		MsgRec:           networkMsgSend, // message channel from network service to core service
 		MsgSend:          networkMsgRec,  // message channel from core service to network service
-		IsBabeAuthority:  currentConfig.Global.Authority,
+		IsBabeAuthority:  cfg.Global.Authority,
 	}
 
 	coreSrvc, err := createCoreService(coreConfig)
@@ -123,11 +124,11 @@ func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 
 	// RPC
 	if ctx.GlobalBool(RPCEnabledFlag.Name) {
-		rpcSrvr := setupRPC(currentConfig.RPC, stateSrv, networkSrvc, coreSrvc, stateSrv.TransactionQueue)
+		rpcSrvr := setupRPC(cfg.RPC, stateSrv, networkSrvc, coreSrvc, stateSrv.TransactionQueue)
 		srvcs = append(srvcs, rpcSrvr)
 	}
 
-	return dot.NewNode(gendata.Name, srvcs), currentConfig, nil
+	return dot.NewNode(gendata.Name, srvcs), cfg, nil
 }
 
 func loadKeystore(ctx *cli.Context, dataDir string) (*keystore.Keystore, error) {
@@ -200,22 +201,22 @@ func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	if name := ctx.GlobalString(NodeFlag.Name); name != "" {
 		switch name {
 		case "gssmr":
-			log.Trace("[gossamer] Using node implementation", "name", name)
+			log.Trace("[gossamer] Node implementation", "name", name)
 			cfg = gssmr.DefaultConfig()
 		case "ksmcc":
-			log.Trace("[gossamer] Using node implementation", "name", name)
+			log.Trace("[gossamer] Node implementation", "name", name)
 			cfg = ksmcc.DefaultConfig()
 		default:
 			return nil, fmt.Errorf("unknown node implementation: %s", name)
 		}
 	} else {
-		log.Trace("[gossamer] Using node implementation", "name", "gssmr")
+		log.Trace("[gossamer] Node implementation", "name", "gssmr")
 		cfg = gssmr.DefaultConfig()
 	}
 
 	// check --config flag and apply toml configuration to config
 	if name := ctx.GlobalString(ConfigFlag.Name); name != "" {
-		log.Trace("[gossamer] Loading toml configuration file", "path", name)
+		log.Trace("[gossamer] Loading toml configuration...", "path", name)
 		err = dot.LoadConfig(name, cfg)
 		if err != nil {
 			return nil, err
@@ -224,12 +225,12 @@ func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 
 	// check --datadir flag and expand path of node data directory
 	if name := ctx.GlobalString(DataDirFlag.Name); name != "" {
-		log.Trace("[gossamer] Expanding data directory", "path", name)
 		cfg.Global.DataDir = utils.ExpandDir(name)
 	} else {
-		log.Trace("[gossamer] Expanding data directory", "path", cfg.Global.DataDir)
 		cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
 	}
+
+	log.Trace("[gossamer] Expanded data directory", "path", cfg.Global.DataDir)
 
 	// parse remaining flags
 	setGlobalConfig(ctx, &cfg.Global)
@@ -239,14 +240,14 @@ func getConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	return cfg, nil
 }
 
-func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
-	newDataDir := currentConfig.DataDir
+func setGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
+	newDataDir := cfg.DataDir
 	if dir := ctx.GlobalString(DataDirFlag.Name); dir != "" {
 		newDataDir = utils.ExpandDir(dir)
 	}
-	currentConfig.DataDir, _ = filepath.Abs(newDataDir)
+	cfg.DataDir, _ = filepath.Abs(newDataDir)
 
-	newRoles := currentConfig.Roles
+	newRoles := cfg.Roles
 	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
 		b, err := strconv.Atoi(roles)
 		if err != nil {
@@ -255,7 +256,7 @@ func setGlobalConfig(ctx *cli.Context, currentConfig *dot.GlobalConfig) {
 			newRoles = byte(b)
 		}
 	}
-	currentConfig.Roles = newRoles
+	cfg.Roles = newRoles
 }
 
 func setNetworkConfig(ctx *cli.Context, fig *dot.NetworkConfig) {
@@ -299,6 +300,13 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 		protocolID = fig.Network.ProtocolID
 	}
 
+	log.Info(
+		"[gossamer] Creating network service...",
+		"port", fig.Network.Port,
+		"protocol", protocolID,
+		"bootnodes", bootnodes,
+	)
+
 	// network service configuation
 	networkConfig := network.Config{
 		BlockState:   stateService.Block,
@@ -325,6 +333,11 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 
 // createCoreService creates the core service from the provided core configuration
 func createCoreService(coreConfig *core.Config) (*core.Service, error) {
+	log.Info(
+		"[gossamer] Creating core service...",
+		"authority", coreConfig.IsBabeAuthority,
+	)
+
 	coreService, err := core.NewService(coreConfig)
 	if err != nil {
 		log.Error("[gossamer] Failed to create core service", "error", err)
@@ -370,14 +383,14 @@ func setupRPC(fig dot.RPCConfig, stateSrv *state.Service, networkSrvc *network.S
 
 // dumpConfig is the dumpconfig command.
 func dumpConfig(ctx *cli.Context) error {
-	currentConfig, err := getConfig(ctx)
+	cfg, err := getConfig(ctx)
 	if err != nil {
 		return err
 	}
 
 	comment := ""
 
-	out, err := toml.Marshal(currentConfig)
+	out, err := toml.Marshal(cfg)
 	if err != nil {
 		return err
 	}

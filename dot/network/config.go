@@ -18,6 +18,7 @@ package network
 
 import (
 	"errors"
+	"path"
 	"strconv"
 	"strings"
 
@@ -25,56 +26,59 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 )
 
-// DefaultKeyFile KeyFile key
+// DefaultKeyFile the default value for KeyFile
 const DefaultKeyFile = "node.key"
 
-// DefaultDataDir for the gossamer database and related blockchain files
+// DefaultDataDir the default value for Config.DataDir
 const DefaultDataDir = "~/.gossamer/gssmr"
 
-// DefaultPort is the default por const
+// DefaultPort the default value for Config.Port
 const DefaultPort = uint32(7000)
 
-// DefaultRandSeed is a random key
+// DefaultRandSeed the default value for Config.RandSeed (0 = non-deterministic)
 const DefaultRandSeed = int64(0)
 
-// DefaultProtocolID ID
+// DefaultProtocolID the default value for Config.ProtocolID
 const DefaultProtocolID = "/gossamer/gssmr/0"
 
-// DefaultRoles full node
+// DefaultProtocolVersion the default value for Config.ProtocolVersion
+const DefaultProtocolVersion = 0
+
+// DefaultRoles the default value for Config.Roles (0 = no network, 1 = full node)
 const DefaultRoles = byte(1)
 
-// DefaultBootnodes holds the default bootnodes the client will always have
+// DefaultBootnodes the default value for Config.Bootnodes
 var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service
 type Config struct {
-	// BlockState interface
+	// BlockState the block state's interface
 	BlockState BlockState
-	// NetworkState interface
+	// NetworkState the network state's interface
 	NetworkState NetworkState
-	// Global data directory
+	// DataDir the data directory for the node
 	DataDir string
-	// Role is a bitmap value whose bits represent difierent roles for the sender node (see Table E.2)
+	// Roles a bitmap value that represents the different roles for the sender node (see Table E.2)
 	Roles byte
-	// Listening port
+	// Port the network port used for listening
 	Port uint32
-	// If 0, random host ID will be generated; If non-0, deterministic ID will be produced, keys will not be loaded from data dir
+	// RandSeed the seed used to generate the network p2p identity (0 = non-deterministic random seed)
 	RandSeed int64
-	// Peers used for bootstrapping
+	// Bootnodes the peer addresses used for bootstrapping
 	Bootnodes []string
-	// Protocol ID for network messages
+	// ProtocolID the protocol ID for network messages
 	ProtocolID string
-	// ProtocolVersion is the current protocol version, the last digit in the ProtocolID
+	// ProtocolVersion the protocol version for network messages (the third item in the ProtocolID)
 	ProtocolVersion uint32
-	// MinSupportedVersion is the minimum supported protocol version (defaults to current ProtocolVersion)
+	// MinSupportedVersion the minimum supported protocol version (defaults to current ProtocolVersion)
 	MinSupportedVersion uint32
-	// Disables bootstrapping
+	// NoBootstrap disables bootstrapping
 	NoBootstrap bool
-	// Disables MDNS discovery
+	// NoMDNS disables MDNS discovery
 	NoMDNS bool
-	// Disables status messages
+	// NoStatus disables the status message exchange protocol
 	NoStatus bool
-	// Identity key for node
+	// privateKey the private key for the network p2p identity
 	privateKey crypto.PrivKey
 }
 
@@ -114,7 +118,7 @@ func (c *Config) build() error {
 
 	// check bootnoode configuration
 	if !c.NoBootstrap && len(c.Bootnodes) == 0 {
-		log.Warn("Bootstrap is enabled and no bootstrap nodes are defined")
+		log.Warn("[network] Bootstrap is enabled but no bootstrap nodes are defined")
 	}
 
 	return nil
@@ -123,11 +127,11 @@ func (c *Config) build() error {
 func (c *Config) checkState() (err error) {
 	// set NoStatus to true if we don't need BlockState
 	if c.BlockState == nil && !c.NoStatus {
-		err = errors.New("Failed to build configuration: BlockState required")
+		err = errors.New("failed to build configuration: BlockState required")
 	}
 
 	if c.NetworkState == nil {
-		err = errors.New("Failed to build configuration: NetworkState required")
+		err = errors.New("failed to build configuration: NetworkState required")
 	}
 
 	return err
@@ -147,9 +151,10 @@ func (c *Config) buildIdentity() error {
 
 		// generate key if no key exists
 		if key == nil {
-			log.Trace(
-				"Generating new p2p identity",
-				"DataDir", c.DataDir,
+			log.Info(
+				"[network] Generating p2p identity",
+				"RandSeed", c.RandSeed,
+				"KeyFile", path.Join(c.DataDir, DefaultKeyFile),
 			)
 
 			// generate key
@@ -162,10 +167,10 @@ func (c *Config) buildIdentity() error {
 		// set private key
 		c.privateKey = key
 	} else {
-		log.Warn(
-			"Generating p2p identity from seed",
-			"DataDir", c.DataDir,
+		log.Info(
+			"[network] Generating p2p identity from seed",
 			"RandSeed", c.RandSeed,
+			"KeyFile", path.Join(c.DataDir, DefaultKeyFile),
 		)
 
 		// generate temporary deterministic key
@@ -185,7 +190,7 @@ func (c *Config) buildIdentity() error {
 func (c *Config) buildProtocol() error {
 	if c.ProtocolID == "" {
 		log.Warn(
-			"ProtocolID not defined, using DefaultProtocolID",
+			"[network] ProtocolID not defined, using DefaultProtocolID",
 			"DefaultProtocolID", DefaultProtocolID,
 		)
 		c.ProtocolID = DefaultProtocolID
@@ -193,19 +198,19 @@ func (c *Config) buildProtocol() error {
 
 	if c.ProtocolVersion == 0 {
 		s := strings.Split(c.ProtocolID, "/")
-		// expecting default protocol format ("/gossamer/dot/0")
+		// expecting the default protocol format ("/gossamer/gssmr/0")
 		if len(s) != 4 {
 			log.Warn(
-				"Unable to parse ProtocolID, using DefaultProtocolVersion",
-				"DefaultProtocolVersion", 0,
+				"[network] Unable to parse ProtocolID, using DefaultProtocolVersion",
+				"DefaultProtocolVersion", DefaultProtocolVersion,
 			)
 		} else {
-			// get the last item in the slice ("0" in default protocol format)
+			// get the last item in the slice ("0" in the default protocol format)
 			i, err := strconv.Atoi(s[len(s)-1])
 			if err != nil {
 				log.Warn(
-					"Unable to parse ProtocolID, using DefaultProtocolVersion",
-					"DefaultProtocolVersion", 0,
+					"[network] Unable to parse ProtocolID, using DefaultProtocolVersion",
+					"DefaultProtocolVersion", DefaultProtocolVersion,
 				)
 			} else {
 				c.ProtocolVersion = uint32(i)
@@ -214,7 +219,8 @@ func (c *Config) buildProtocol() error {
 	}
 
 	if c.MinSupportedVersion < c.ProtocolVersion {
-		log.Warn("MinSupportedVersion less than ProtocolVersion, using ProtocolVersion",
+		log.Warn(
+			"[network] MinSupportedVersion less than ProtocolVersion, using ProtocolVersion",
 			"ProtocolVersion", c.ProtocolVersion,
 		)
 		c.MinSupportedVersion = c.ProtocolVersion

@@ -69,27 +69,27 @@ func (*ConnManager) Unprotect(peer.ID, string) bool { return false }
 func (*ConnManager) Close() error { return nil }
 
 // Listen is called when network starts listening on an address
-func (cm *ConnManager) Listen(n network.Network, address ma.Multiaddr) {
+func (cm *ConnManager) Listen(n network.Network, addr ma.Multiaddr) {
 	log.Trace(
-		"Started listening",
+		"[network] Started listening",
 		"host", n.LocalPeer(),
-		"address", address,
+		"address", addr,
 	)
 }
 
 // ListenClose is called when network stops listening on an address
-func (cm *ConnManager) ListenClose(n network.Network, address ma.Multiaddr) {
+func (cm *ConnManager) ListenClose(n network.Network, addr ma.Multiaddr) {
 	log.Trace(
-		"Stopped listening",
+		"[network] Stopped listening",
 		"host", n.LocalPeer(),
-		"address", address,
+		"address", addr,
 	)
 }
 
 // Connected is called when a connection opened
 func (cm *ConnManager) Connected(n network.Network, c network.Conn) {
 	log.Trace(
-		"Connected to peer",
+		"[network] Connected to peer",
 		"host", c.LocalPeer(),
 		"peer", c.RemotePeer(),
 	)
@@ -98,7 +98,7 @@ func (cm *ConnManager) Connected(n network.Network, c network.Conn) {
 // Disconnected is called when a connection closed
 func (cm *ConnManager) Disconnected(n network.Network, c network.Conn) {
 	log.Trace(
-		"Disconnected from peer",
+		"[network] Disconnected from peer",
 		"host", c.LocalPeer(),
 		"peer", c.RemotePeer(),
 	)
@@ -107,7 +107,7 @@ func (cm *ConnManager) Disconnected(n network.Network, c network.Conn) {
 // OpenedStream is called when a stream opened
 func (cm *ConnManager) OpenedStream(n network.Network, s network.Stream) {
 	log.Trace(
-		"Opened stream",
+		"[network] Opened stream",
 		"host", s.Conn().LocalPeer(),
 		"peer", s.Conn().RemotePeer(),
 		"protocol", s.Protocol(),
@@ -117,7 +117,7 @@ func (cm *ConnManager) OpenedStream(n network.Network, s network.Stream) {
 // ClosedStream is called when a stream closed
 func (cm *ConnManager) ClosedStream(n network.Network, s network.Stream) {
 	log.Trace(
-		"Closed stream",
+		"[network] Closed stream",
 		"host", s.Conn().LocalPeer(),
 		"peer", s.Conn().RemotePeer(),
 		"protocol", s.Protocol(),

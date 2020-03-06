@@ -17,32 +17,26 @@
 package network
 
 import (
-	"github.com/ChainSafe/gossamer/lib/common/optional"
-	log "github.com/ChainSafe/log15"
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"math/big"
 	mrand "math/rand"
 	"time"
 
+	"github.com/ChainSafe/gossamer/lib/common/optional"
+
+	log "github.com/ChainSafe/log15"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"golang.org/x/exp/rand"
 )
 
-// sendBlockRequestMessage will send a BlockRequestMessage if peer block is greater than host block number
-func (s *Service) sendBlockRequestMessage(peer peer.ID, msg Message) {
+// sendBlockRequestMessage sends a block request message if peer best block number is greater than host best block number
+func (s *Service) sendBlockRequestMessage(peer peer.ID, statusMessage *StatusMessage) {
 	// check if peer status confirmed
 	if s.status.confirmed(peer) {
 
 		// get latest block header from block state
 		latestHeader, err := s.cfg.BlockState.BestBlockHeader()
 		if err != nil {
-			log.Error("(*Service).sendBlockRequestMessage, failed to BestBlockHeader")
-			return
-		}
-
-		statusMessage, ok := msg.(*StatusMessage)
-		if !ok {
-			log.Error("(*Service).sendBlockRequestMessage, failed to cast blockAnnounceMessage from msg.(*BlockAnnounceMessage)")
+			log.Error("[network] Failed to get best block header from block state", "error", err)
 			return
 		}
 
@@ -73,9 +67,9 @@ func (s *Service) sendBlockRequestMessage(peer peer.ID, msg Message) {
 			// send block request message
 			err := s.host.send(peer, blockRequest)
 			if err != nil {
-				log.Error("(*Service).sendBlockRequestMessage, failed to send blockRequest message to peer", "err", err)
+				log.Error("[network] Failed to send block request message to peer", "error", err)
 			} else {
-				log.Trace("(*Service).sendBlockRequestMessage, sent blockRequest message to peer")
+				log.Trace("[network] Sent block message to peer", "peer", peer, "type", blockRequest.GetType())
 			}
 		}
 	}

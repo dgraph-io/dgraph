@@ -138,6 +138,8 @@ func gossamer(ctx *cli.Context) error {
 	// check if node has been initialized
 	if !nodeInitialized(ctx) {
 
+		log.Warn("[gossamer] Node has not been initialized, initializing new node...")
+
 		// initialize node (initialize databases and load genesis data)
 		err = initializeNode(ctx)
 		if err != nil {
@@ -174,7 +176,11 @@ func nodeInitialized(ctx *cli.Context) bool {
 	registry := path.Join(cfg.Global.DataDir, "KEYREGISTRY")
 	_, err = os.Stat(registry)
 	if os.IsNotExist(err) {
-		log.Error("[gossamer] Failed to locate KEYREGISTRY", "error", err)
+		log.Warn(
+			"[gossamer] Node has not been initialized",
+			"datadir", cfg.Global.DataDir,
+			"error", "failed to locate KEYREGISTRY file in data directory",
+		)
 		return false
 	}
 
@@ -182,7 +188,11 @@ func nodeInitialized(ctx *cli.Context) bool {
 	manifest := path.Join(cfg.Global.DataDir, "MANIFEST")
 	_, err = os.Stat(manifest)
 	if os.IsNotExist(err) {
-		log.Error("[gossamer] Failed to locate MANIFEST", "error", err)
+		log.Warn(
+			"[gossamer] Node has not been initialized",
+			"datadir", cfg.Global.DataDir,
+			"error", "failed to locate MANIFEST file in data directory",
+		)
 		return false
 	}
 

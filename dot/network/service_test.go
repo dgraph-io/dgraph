@@ -65,7 +65,7 @@ func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan M
 	// same for all network tests use the createTestService helper method
 	cfg.BlockState = &MockBlockState{} // required
 	cfg.NetworkState = &MockNetworkState{}
-	cfg.ProtocolID = TestProtocolID // default "/gossamer/dot/0"
+	cfg.ProtocolID = TestProtocolID // default "/gossamer/gssmr/0"
 
 	node, err := NewService(cfg, msgSend, msgRec)
 	if err != nil {

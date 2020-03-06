@@ -44,7 +44,7 @@ func (g *gossip) handleMessage(msg Message) {
 		g.hasSeen[msg.IDString()] = true
 
 		log.Trace(
-			"Gossiping message from peer",
+			"[network ] Gossiping message from peer",
 			"host", g.host.id(),
 			"type", msg.GetType(),
 		)
