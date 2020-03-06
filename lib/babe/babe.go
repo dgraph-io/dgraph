@@ -48,6 +48,8 @@ type Session struct {
 	slotToProof      map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 	newBlocks        chan<- types.Block            // send blocks to core service
 	done             chan<- struct{}               // lets core know when the epoch is done
+	kill             <-chan struct{}               // kill session if this is closed
+	killed           bool
 }
 
 // SessionConfig struct
@@ -62,12 +64,17 @@ type SessionConfig struct {
 	EpochThreshold   *big.Int // should only be used for testing
 	StartSlot        uint64   // slot to begin session at
 	Done             chan<- struct{}
+	Kill             <-chan struct{}
 }
 
 // NewSession returns a new Babe session using the provided VRF keys and runtime
 func NewSession(cfg *SessionConfig) (*Session, error) {
 	if cfg.Keypair == nil {
 		return nil, errors.New("cannot create BABE session; no keypair provided")
+	}
+
+	if cfg.Kill == nil {
+		return nil, errors.New("kill channel is nil")
 	}
 
 	babeSession := &Session{
@@ -82,6 +89,8 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		epochThreshold:   cfg.EpochThreshold,
 		startSlot:        cfg.StartSlot,
 		done:             cfg.Done,
+		kill:             cfg.Kill,
+		killed:           false,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -125,7 +134,21 @@ func (b *Session) Start() error {
 
 	go b.invokeBlockAuthoring()
 
+	go b.checkForKill()
+
 	return nil
+}
+
+func (b *Session) stop() {
+	if b.newBlocks != nil {
+		close(b.newBlocks)
+		b.newBlocks = nil
+	}
+
+	if b.done != nil {
+		close(b.done)
+		b.done = nil
+	}
 }
 
 // AuthorityData returns the data related to the authority
@@ -155,6 +178,11 @@ func (b *Session) setAuthorityIndex() error {
 	return fmt.Errorf("key not in BABE authority data")
 }
 
+func (b *Session) checkForKill() {
+	<-b.kill
+	b.killed = true
+}
+
 func (b *Session) invokeBlockAuthoring() {
 	if b.config == nil {
 		log.Error("[babe] block authoring", "error", "config is nil")
@@ -172,7 +200,6 @@ func (b *Session) invokeBlockAuthoring() {
 	}
 
 	slotNum := b.startSlot
-
 	bestNum := b.blockState.HighestBlockNumber()
 	log.Debug("[babe]", "highest block num", bestNum)
 
@@ -190,28 +217,26 @@ func (b *Session) invokeBlockAuthoring() {
 	}
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
+		if b.killed {
+			// session has been killed, exit
+			return
+		}
 		b.handleSlot(slotNum)
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
 
-	if b.newBlocks != nil {
-		close(b.newBlocks)
-	}
-
-	if b.done != nil {
-		close(b.done)
-	}
+	b.stop()
 }
 
 func (b *Session) handleSlot(slotNum uint64) {
 	parentHeader, err := b.blockState.BestBlockHeader()
 	if err != nil {
-		log.Error("BABE block authoring", "error", "parent header is nil")
+		log.Error("[babe] block authoring", "error", "parent header is nil")
 		return
 	}
 
 	if parentHeader == nil {
-		log.Error("BABE block authoring", "error", "parent header is nil")
+		log.Error("[babe] block authoring", "error", "parent header is nil")
 		return
 	}
 
@@ -225,13 +250,19 @@ func (b *Session) handleSlot(slotNum uint64) {
 
 	block, err := b.buildBlock(parentHeader, currentSlot)
 	if err != nil {
-		log.Error("BABE block authoring", "error", err)
+		log.Error("[babe] block authoring", "error", err)
 	} else {
 		// TODO: loop until slot is done, attempt to produce multiple blocks
 
 		hash := block.Header.Hash()
-		log.Info("BABE", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
-		log.Debug("BABE built block", "header", block.Header, "body", block.Body)
+		log.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
+		log.Debug("[babe] built block", "header", block.Header, "body", block.Body)
+
+		if b.killed {
+			// session killed, return
+			log.Warn("[babe] session killed before block could be sent to core")
+			return
+		}
 
 		b.newBlocks <- *block
 	}

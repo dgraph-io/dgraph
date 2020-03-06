@@ -27,6 +27,7 @@ import (
 )
 
 var storagePrefix = []byte("storage")
+var codeKey = []byte(":code")
 
 // StorageDB stores trie structure in an underlying database
 type StorageDB struct {
@@ -52,8 +53,8 @@ type StorageState struct {
 	lock sync.RWMutex
 }
 
-// NewStateDB instantiates badgerDB instance for storing trie structure
-func NewStateDB(db database.Database) *StorageDB {
+// NewStorageDB instantiates badgerDB instance for storing trie structure
+func NewStorageDB(db database.Database) *StorageDB {
 	return &StorageDB{
 		db,
 	}
@@ -65,12 +66,16 @@ func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) 
 		return nil, fmt.Errorf("cannot have nil database")
 	}
 
+	if t == nil {
+		return nil, fmt.Errorf("cannot have nil trie")
+	}
+
 	triedb := trie.NewDatabase(db)
 	t.SetDb(triedb)
 
 	return &StorageState{
 		trie: t,
-		db:   NewStateDB(db),
+		db:   NewStorageDB(db),
 	}, nil
 }
 
@@ -183,4 +188,19 @@ func (s *StorageState) GetStorageFromChild(keyToChild, key []byte) ([]byte, erro
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.trie.GetFromChild(keyToChild, key)
+}
+
+// LoadCode returns the runtime code (located at :code)
+func (s *StorageState) LoadCode() ([]byte, error) {
+	return s.GetStorage(codeKey)
+}
+
+// LoadCodeHash returns the hash of the runtime code (located at :code)
+func (s *StorageState) LoadCodeHash() (common.Hash, error) {
+	code, err := s.LoadCode()
+	if err != nil {
+		return common.NewHash([]byte{}), err
+	}
+
+	return common.Blake2bHash(code)
 }

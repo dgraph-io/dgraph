@@ -29,7 +29,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/transaction"
@@ -38,6 +37,11 @@ import (
 )
 
 var TestMessageTimeout = 5 * time.Second
+
+var genesisHeader = &types.Header{
+	Number:    big.NewInt(0),
+	StateRoot: trie.EmptyHash,
+}
 
 func newTestService(t *testing.T, cfg *Config) (*Service, *state.Service) {
 	if cfg == nil {
@@ -71,10 +75,7 @@ func newTestService(t *testing.T, cfg *Config) (*Service, *state.Service) {
 	}
 
 	dbSrv := state.NewService(dataDir)
-	err = dbSrv.Initialize(&types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}, trie.NewEmptyTrie(nil))
+	err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +101,14 @@ func newTestService(t *testing.T, cfg *Config) (*Service, *state.Service) {
 	return s, dbSrv
 }
 func TestStartService(t *testing.T) {
-	s, _ := newTestService(t, nil)
+	s, dbSrv := newTestService(t, nil)
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
 	err := s.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +118,13 @@ func TestStartService(t *testing.T) {
 }
 
 func TestValidateBlock(t *testing.T) {
-	s, _ := newTestService(t, nil)
+	s, dbSrv := newTestService(t, nil)
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// https://github.com/paritytech/substrate/blob/426c26b8bddfcdbaf8d29f45b128e0864b57de1c/core/test-runtime/src/system.rs#L371
 	data := []byte{69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 179, 38, 109, 225, 55, 210, 10, 93, 15, 243, 166, 64, 30, 181, 113, 39, 82, 95, 217, 178, 105, 55, 1, 240, 191, 90, 138, 133, 63, 163, 235, 224, 3, 23, 10, 46, 117, 151, 183, 183, 227, 216, 76, 5, 57, 29, 19, 154, 98, 177, 87, 231, 135, 134, 216, 192, 130, 242, 157, 207, 76, 17, 19, 20, 0, 0}
@@ -123,7 +137,13 @@ func TestValidateBlock(t *testing.T) {
 }
 
 func TestValidateTransaction(t *testing.T) {
-	s, _ := newTestService(t, nil)
+	s, dbSrv := newTestService(t, nil)
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
 	tx := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
@@ -162,7 +182,6 @@ func TestAnnounceBlock(t *testing.T) {
 	}
 
 	s, dbSrv := newTestService(t, cfg)
-
 	defer func() {
 		err := dbSrv.Stop()
 		if err != nil {
@@ -223,27 +242,19 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
 
-	header := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	blockState, err := state.NewBlockStateFromGenesis(database.NewMemDatabase(), header)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	cfg := &Config{
 		Runtime:         rt,
 		Keystore:        ks,
-		BlockState:      blockState,
 		IsBabeAuthority: false,
 	}
 
-	s, err := NewService(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s, dbSrv := newTestService(t, cfg)
+	defer func() {
+		err = dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
 
 	err = s.Start()
 	if err != nil {
@@ -269,7 +280,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	header = &types.Header{
+	header := &types.Header{
 		ParentHash:     parentHash,
 		Number:         big.NewInt(1),
 		StateRoot:      stateRoot,
@@ -302,7 +313,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := blockState.GetHeader(header.Hash())
+	res, err := s.blockState.GetHeader(header.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +348,15 @@ func TestProcessTransactionMessage(t *testing.T) {
 		IsBabeAuthority:  true,
 	}
 
-	s, err := NewService(cfg)
+	s, dbSrv := newTestService(t, cfg)
+	defer func() {
+		err = dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	err = s.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -371,13 +390,76 @@ func TestService_NotAuthority(t *testing.T) {
 		IsBabeAuthority: false,
 	}
 
-	s, err := NewService(cfg)
+	s, dbSrv := newTestService(t, cfg)
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	if s.bs != nil {
+		t.Fatal("Fail: should not have babe session")
+	}
+}
+
+func TestService_CheckForRuntimeChanges(t *testing.T) {
+	tt := trie.NewEmptyTrie(nil)
+	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+
+	kp, err := sr25519.GenerateKeypair()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if s.bs != nil {
-		t.Fatal("Fail: should not have babe session")
+	pubkey := kp.Public().Encode()
+	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ks := keystore.NewKeystore()
+	ks.Insert(kp)
+
+	cfg := &Config{
+		Runtime:          rt,
+		Keystore:         ks,
+		TransactionQueue: transaction.NewPriorityQueue(),
+		IsBabeAuthority:  false,
+	}
+
+	s, dbSrv := newTestService(t, cfg)
+	defer func() {
+		err = dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	err = s.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Stop()
+
+	_, err = tests.GetRuntimeBlob(tests.TESTS_FP, tests.TEST_WASM_URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testRuntime, err := ioutil.ReadFile(tests.TESTS_FP)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = dbSrv.Storage.SetStorage([]byte(":code"), testRuntime)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.checkForRuntimeChanges()
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -1,19 +1,14 @@
 package core
 
 import (
-	"io/ioutil"
 	"math/big"
 	"testing"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
-	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/keystore"
-	"github.com/ChainSafe/gossamer/lib/runtime"
-	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/ChainSafe/gossamer/tests"
 	"github.com/stretchr/testify/require"
 )
 
@@ -54,28 +49,9 @@ func TestProcessBlockRequestAndBlockAnnounce(t *testing.T) {
 
 		localTest := test
 		t.Run(test.name, func(t *testing.T) {
-
-			rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
-
 			msgRec := make(chan network.Message)
 			msgSend := make(chan network.Message)
 			newBlocks := make(chan types.Block)
-
-			dataDir, err := ioutil.TempDir("", "./test_data")
-			require.Nil(t, err)
-
-			blockState := state.NewService(dataDir)
-
-			genesisHeader := &types.Header{
-				Number:    big.NewInt(0),
-				StateRoot: trie.EmptyHash,
-			}
-
-			err = blockState.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
-			require.Nil(t, err)
-
-			err = blockState.Start()
-			require.Nil(t, err)
 
 			// Create header
 			header0 := &types.Header{
@@ -91,18 +67,10 @@ func TestProcessBlockRequestAndBlockAnnounce(t *testing.T) {
 				Body:   &blockBody0,
 			}
 
-			if localTest.msgType == network.BlockAnnounceMsgType {
-				// Add the block0 to the DB
-				err = blockState.Block.AddBlock(block0)
-				require.Nil(t, err)
-			}
-
 			cfg := &Config{
-				Runtime:    rt,
-				MsgSend:    msgSend,
-				Keystore:   keystore.NewKeystore(),
-				BlockState: blockState.Block,
-				NewBlocks:  newBlocks,
+				MsgSend:   msgSend,
+				Keystore:  keystore.NewKeystore(),
+				NewBlocks: newBlocks,
 			}
 
 			if localTest.msgType == network.BlockRequestMsgType {
@@ -111,15 +79,24 @@ func TestProcessBlockRequestAndBlockAnnounce(t *testing.T) {
 				cfg.MsgRec = msgRec
 			}
 
-			s, err := NewService(cfg)
+			s, dbSrv := newTestService(t, cfg)
+			defer func() {
+				err := dbSrv.Stop()
+				if err != nil {
+					t.Fatal(err)
+				}
+			}()
+
+			err := s.Start()
 			require.Nil(t, err)
 
-			err = s.Start()
-			require.Nil(t, err)
+			if localTest.msgType == network.BlockAnnounceMsgType {
+				// Add the block0 to the DB
+				err = s.blockState.AddBlock(block0)
+				require.Nil(t, err)
+			}
 
 			defer func() {
-				err := blockState.Stop()
-				require.Nil(t, err)
 				err = s.Stop()
 				require.Nil(t, err)
 			}()

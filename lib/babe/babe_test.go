@@ -45,6 +45,10 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 		}
 	}
 
+	if cfg.Kill == nil {
+		cfg.Kill = make(chan struct{})
+	}
+
 	if cfg.Runtime == nil {
 		cfg.Runtime = rt
 	}
@@ -84,6 +88,10 @@ func createTestSessionWithState(t *testing.T, cfg *SessionConfig) (*Session, *st
 		cfg = &SessionConfig{
 			Runtime: rt,
 		}
+	}
+
+	if cfg.Kill == nil {
+		cfg.Kill = make(chan struct{})
 	}
 
 	if cfg.Runtime == nil {
@@ -135,6 +143,32 @@ func createTestSessionWithState(t *testing.T, cfg *SessionConfig) (*Session, *st
 	}
 
 	return babesession, dbSrv
+}
+
+func TestKill(t *testing.T) {
+	killChan := make(chan struct{})
+	cfg := &SessionConfig{
+		Kill: killChan,
+	}
+
+	babesession, dbSrv := createTestSessionWithState(t, cfg)
+	defer func() {
+		err := dbSrv.Stop()
+		if err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	err := babesession.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	close(killChan)
+
+	if babesession.newBlocks != nil || babesession.done != nil {
+		t.Fatalf("did not kill session")
+	}
 }
 
 func TestCalculateThreshold(t *testing.T) {
