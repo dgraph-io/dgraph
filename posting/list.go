@@ -441,7 +441,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF 
 
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
-		return errors.Wrapf(err, "could not update mutation layer of key %s with value %+v",
+		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
 			hex.EncodeToString(l.key), mpost)
 	}
 
