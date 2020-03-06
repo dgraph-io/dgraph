@@ -48,7 +48,7 @@ type NetworkConfig struct {
 	ProtocolID  string   `toml:"protocol-id"`
 	Port        uint32   `toml:"port"`
 	NoBootstrap bool     `toml:"no-bootstrap"`
-	NoMdns      bool     `toml:"no-mdns"`
+	NoMDNS      bool     `toml:"no-mdns"`
 }
 
 // RPCConfig is to marshal/unmarshal toml RPC vars

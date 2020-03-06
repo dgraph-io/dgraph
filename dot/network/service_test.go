@@ -90,7 +90,7 @@ func TestStartService(t *testing.T) {
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoMdns:      true,
+		NoMDNS:      true,
 	}
 	node, _, _ := createTestService(t, config)
 	node.Stop()
@@ -106,7 +106,7 @@ func TestBroadcastMessages(t *testing.T) {
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoMdns:      true,
+		NoMDNS:      true,
 	}
 
 	nodeA, _, msgRecA := createTestService(t, configA)
@@ -123,7 +123,7 @@ func TestBroadcastMessages(t *testing.T) {
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
-		NoMdns:      true,
+		NoMDNS:      true,
 	}
 
 	nodeB, msgSendB, _ := createTestService(t, configB)

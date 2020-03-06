@@ -39,7 +39,7 @@ func TestSendBlockRequestMessage(t *testing.T) {
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
-		NoMdns:      true,
+		NoMDNS:      true,
 	}
 
 	blockStateA := newMockBlockState(big.NewInt(3))
@@ -79,7 +79,7 @@ func TestSendBlockRequestMessage(t *testing.T) {
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
-		NoMdns:      true,
+		NoMDNS:      true,
 	}
 
 	blockStateB := newMockBlockState(big.NewInt(1))

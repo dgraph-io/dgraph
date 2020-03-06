@@ -234,7 +234,7 @@ func TestSetNetworkConfig(t *testing.T) {
 				ProtocolID:  gssmr.DefaultNetworkProtocolID,
 				Port:        gssmr.DefaultNetworkPort,
 				NoBootstrap: true,
-				NoMdns:      true,
+				NoMDNS:      true,
 			},
 		},
 		{
@@ -246,7 +246,7 @@ func TestSetNetworkConfig(t *testing.T) {
 				ProtocolID:  gssmr.DefaultNetworkProtocolID,
 				Port:        gssmr.DefaultNetworkPort,
 				NoBootstrap: false,
-				NoMdns:      false,
+				NoMDNS:      false,
 			},
 		},
 		{
@@ -258,7 +258,7 @@ func TestSetNetworkConfig(t *testing.T) {
 				ProtocolID:  gssmr.DefaultNetworkProtocolID,
 				Port:        1337,
 				NoBootstrap: false,
-				NoMdns:      false,
+				NoMDNS:      false,
 			},
 		},
 		{
@@ -270,7 +270,7 @@ func TestSetNetworkConfig(t *testing.T) {
 				Port:        gssmr.DefaultNetworkPort,
 				ProtocolID:  TestProtocolID,
 				NoBootstrap: false,
-				NoMdns:      false,
+				NoMDNS:      false,
 			},
 		},
 	}

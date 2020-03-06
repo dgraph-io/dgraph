@@ -23,10 +23,10 @@ import (
 )
 
 // wait time to discover and connect using mdns discovery
-var TestMdnsTimeout = time.Second
+var TestMDNSTimeout = time.Second
 
 // test mdns discovery service (discovers and connects)
-func TestMdns(t *testing.T) {
+func TestMDNS(t *testing.T) {
 	dataDirA := newTestDataDir(t, "nodeA")
 	defer os.RemoveAll(dataDirA)
 
@@ -59,7 +59,7 @@ func TestMdns(t *testing.T) {
 	nodeB.noGossip = true
 	nodeB.noStatus = true
 
-	time.Sleep(TestMdnsTimeout)
+	time.Sleep(TestMDNSTimeout)
 
 	peerCountA := nodeA.host.peerCount()
 	peerCountB := nodeB.host.peerCount()

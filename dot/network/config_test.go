@@ -108,5 +108,5 @@ func TestBuild(t *testing.T) {
 	require.Equal(t, DefaultBootnodes, cfg.Bootnodes)
 	require.Equal(t, DefaultProtocolID, cfg.ProtocolID)
 	require.Equal(t, false, cfg.NoBootstrap)
-	require.Equal(t, false, cfg.NoMdns)
+	require.Equal(t, false, cfg.NoMDNS)
 }

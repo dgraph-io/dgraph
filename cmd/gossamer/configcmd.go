@@ -277,9 +277,9 @@ func setNetworkConfig(ctx *cli.Context, fig *dot.NetworkConfig) {
 		fig.NoBootstrap = true
 	}
 
-	// NoMdns
-	if off := ctx.GlobalBool(NoMdnsFlag.Name); off {
-		fig.NoMdns = true
+	// NoMDNS
+	if off := ctx.GlobalBool(NoMDNSFlag.Name); off {
+		fig.NoMDNS = true
 	}
 }
 
@@ -309,7 +309,7 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 		Bootnodes:    bootnodes,
 		ProtocolID:   protocolID,
 		NoBootstrap:  fig.Network.NoBootstrap,
-		NoMdns:       fig.Network.NoMdns,
+		NoMDNS:       fig.Network.NoMDNS,
 	}
 
 	networkMsgRec := make(chan network.Message)

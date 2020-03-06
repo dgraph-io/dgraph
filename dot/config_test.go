@@ -37,7 +37,7 @@ func NewTestConfig(datadir string) *Config {
 			ProtocolID:  "/gossamer/test/0",
 			Port:        7001,
 			NoBootstrap: false,
-			NoMdns:      false,
+			NoMDNS:      false,
 		},
 		RPC: RPCConfig{
 			Host:    "localhost",

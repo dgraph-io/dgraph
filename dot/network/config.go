@@ -71,7 +71,7 @@ type Config struct {
 	// Disables bootstrapping
 	NoBootstrap bool
 	// Disables MDNS discovery
-	NoMdns bool
+	NoMDNS bool
 	// Disables status messages
 	NoStatus bool
 	// Identity key for node

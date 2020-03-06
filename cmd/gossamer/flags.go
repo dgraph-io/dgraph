@@ -82,8 +82,8 @@ var (
 		Name:  "nobootstrap",
 		Usage: "Disables network bootstrapping (mdns still enabled)",
 	}
-	// NoMdnsFlag Disables network mdns
-	NoMdnsFlag = cli.BoolFlag{
+	// NoMDNSFlag Disables network mdns
+	NoMDNSFlag = cli.BoolFlag{
 		Name:  "nomdns",
 		Usage: "Disables network mdns discovery",
 	}
@@ -194,7 +194,7 @@ var (
 		ProtocolIDFlag,
 		BootnodesFlag,
 		NoBootstrapFlag,
-		NoMdnsFlag,
+		NoMDNSFlag,
 	}
 	// RPCFlags rpc flags
 	RPCFlags = []cli.Flag{

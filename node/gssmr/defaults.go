@@ -62,7 +62,7 @@ var (
 		ProtocolID:  DefaultNetworkProtocolID,
 		Port:        DefaultNetworkPort,
 		NoBootstrap: false,
-		NoMdns:      false,
+		NoMDNS:      false,
 	}
 
 	// DefaultRPCConfig RPC
