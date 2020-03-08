@@ -1361,8 +1361,8 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 
 	if int(numDiscarding) < discardN {
 		span.Annotate(nil, "Skipping snapshot because insufficient discard entries")
-		glog.Infof("Skipping snapshot at index: %d. Insufficient discard entries: %d."+
-			" MinPendingStartTs: %d\n", snapshotIdx, numDiscarding, minPendingStart)
+		glog.Infof("Skipping snapshot at index: %d. firstIndex: %d. Insufficient discard entries: %d."+
+			" MinPendingStartTs: %d\n", snapshotIdx, first, numDiscarding, minPendingStart)
 		return nil, nil
 	}
 

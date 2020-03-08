@@ -142,6 +142,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 
 	// Initialize DiskStorage and pass it along.
 	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
+	store.StartRoutines()
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")
