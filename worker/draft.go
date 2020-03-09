@@ -356,6 +356,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
+		if x.WorkerConfig.LudicrousMode {
+			ts := proposal.Mutations.StartTs
+			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+				Txns: []*pb.TxnStatus{
+					{StartTs: ts, CommitTs: ts},
+				},
+			})
+		}
 		span.Annotate(nil, "Done")
 		return nil
 	}
@@ -563,12 +571,20 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
+	if x.WorkerConfig.LudicrousMode {
+		if err := writer.Wait(); err != nil {
+			glog.Errorf("Error while waiting to commit: +%v", err)
+		}
+	} else {
+		if err := writer.Flush(); err != nil {
+			return errors.Wrapf(err, "while flushing to disk")
+		}
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
+		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	}
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -799,6 +815,13 @@ func (n *node) Run() {
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
 
+	if x.WorkerConfig.LudicrousMode {
+		closer := y.NewCloser(2)
+		defer closer.SignalAndWait()
+		go x.StoreSync(n.Store, closer)
+		go x.StoreSync(pstore, closer)
+	}
+
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
 		glog.Errorf("While trying to find raft progress: %v", err)
@@ -916,17 +939,17 @@ func (n *node) Run() {
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
-			if rd.MustSync {
-				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %+v", err)
-				}
-				timer.Record("sync")
-			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
+			}
+			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
+				}
+				timer.Record("sync")
 			}
 
 			// Now schedule or apply committed entries.
@@ -961,6 +984,10 @@ func (n *node) Run() {
 						atomic.AddUint32(&pctx.Found, 1)
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
+						}
+						if x.WorkerConfig.LudicrousMode {
+							// Assuming that there will be no error while proposing.
+							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
 					proposal.Index = entry.Index

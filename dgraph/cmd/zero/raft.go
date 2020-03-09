@@ -636,6 +636,10 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
+	if x.WorkerConfig.LudicrousMode {
+		closer.AddRunning(1)
+		go x.StoreSync(n.Store, closer)
+	}
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
@@ -676,13 +680,13 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
-			if rd.MustSync {
+			span.Annotatef(nil, "Saved to storage")
+			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}
 				timer.Record("sync")
 			}
-			span.Annotatef(nil, "Saved to storage")
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
