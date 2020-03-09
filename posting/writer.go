@@ -118,6 +118,10 @@ func (w *TxnWriter) Flush() error {
 			glog.Errorf("Error while calling Sync from TxnWriter.Flush: %v", err)
 		}
 	}()
+	return w.Wait()
+}
+
+func (w *TxnWriter) Wait() error {
 	w.wg.Wait()
 	select {
 	case err := <-w.che:

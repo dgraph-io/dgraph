@@ -1010,7 +1010,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(name)) {
+				me(func: has(name), orderasc: name) {
 					name
 					age
 				}
@@ -1022,7 +1022,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(age)) {
+				me(func: has(age), orderasc: name) {
 					name
 					age
 				}
@@ -1035,22 +1035,20 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`
 			{
 				me1(func: has(name), orderdesc: age) {
-					name
 					age
 				}
 				me2(func: has(name), orderasc: age) {
-					name
 					age
 				}
 			}
 			`,
-			`{"me1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"me2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`{"me1":[],"me2":[]}`,
 			`me1, me2 will have same results, can't order by <age> since it is unauthorized`,
 		},
 		{
 			`
 			{
-				me(func: has(name)) @groupby(age) {
+				me(func: has(name), orderasc: name) @groupby(age) {
 					count(name)
 				}
 			}
@@ -1061,7 +1059,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(name)) @filter(eq(nickname, "RG")) {
+				me(func: has(name), orderasc: name) @filter(eq(nickname, "RG")) {
 					name
 					age
 				}
