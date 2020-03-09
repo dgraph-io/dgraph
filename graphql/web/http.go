@@ -26,8 +26,11 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
+	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/peer"
 
@@ -59,7 +62,7 @@ type graphqlHandler struct {
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
 func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
 	gh := &graphqlHandler{resolver: resolver}
-	gh.handler = recoveryHandler(commonHeaders(gh))
+	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
 	return gh
 }
 
@@ -92,6 +95,65 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	if _, err := rr.WriteTo(out); err != nil {
 		glog.Error(err)
 	}
+}
+
+type graphqlSubscription struct {
+	graphqlHandler *graphqlHandler
+}
+
+func (gs *graphqlSubscription) Subscribe(
+	ctx context.Context,
+	document string,
+	operationName string,
+	variableValues map[string]interface{}) (payloads <-chan interface{},
+	err error) {
+	req := &schema.Request{
+		OperationName: operationName,
+		Query:         document,
+		Variables:     variableValues,
+	}
+	ch := make(chan interface{}, 10)
+	// TODO: @balajijinnah.
+	// - Cancel the subscription if there a schema change.
+	// - Batch same request in a one polling go routine.
+	res := gs.graphqlHandler.Resolve(ctx, req)
+	if len(res.Errors) != 0 {
+		return nil, res.Errors
+	}
+	ch <- res.Output()
+	prevHash := farm.Fingerprint64(res.Data.Bytes())
+
+	// Poll the server for every one second.
+	go func() {
+		for {
+			time.Sleep(time.Second)
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				res = gs.graphqlHandler.Resolve(ctx, req)
+				if len(res.Errors) != 0 {
+					ch <- res.Output()
+					close(ch)
+					return
+				}
+				hash := farm.Fingerprint64(res.Data.Bytes())
+				if hash == prevHash {
+					continue
+				}
+				prevHash = hash
+				// Update the client if there is change.
+				ch <- res.Output()
+			}
+		}
+	}()
+	return ch, nil
+}
+
+func (gh *graphqlHandler) Handler() http.Handler {
+	return graphqlws.NewHandlerFunc(&graphqlSubscription{
+		graphqlHandler: gh,
+	}, gh)
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved

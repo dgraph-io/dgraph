@@ -230,7 +230,7 @@ func (o *operation) Schema() Schema {
 }
 
 func (o *operation) Queries() (qs []Query) {
-	if !o.IsQuery() {
+	if o.IsMutation() {
 		return
 	}
 

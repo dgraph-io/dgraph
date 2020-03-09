@@ -33,6 +33,8 @@ require (
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.3.1
 	github.com/google/uuid v1.0.0
+	github.com/gorilla/websocket v1.4.1 // indirect
+	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect
