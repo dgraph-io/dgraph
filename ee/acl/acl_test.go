@@ -683,4 +683,16 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			require.Equal(t, tc.output, string(resp.Json))
 		})
 	}
+
+	uidQuery := `
+	{
+		me(func: has(name)) {
+			uid
+			name
+		}
+	}
+	`
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
+	require.Nil(t, err)
+	require.Contains(t, string(resp.Json), "uid")
 }
