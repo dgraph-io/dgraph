@@ -48,12 +48,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-type runMutPayload struct {
-	edges   []*pb.DirectedEdge
-	ctx     context.Context
-	startTs uint64
-}
-
 type node struct {
 	*conn.Node
 
@@ -73,8 +67,8 @@ type node struct {
 	elog        trace.EventLog
 
 	pendingSize   int64
-	predChan      map[string]chan *runMutPayload
-	predChanMutex sync.RWMutex
+
+	ex *Executor
 }
 
 type op int
@@ -207,7 +201,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		n.ex = newExecutor()
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.predChan = make(map[string]chan *runMutPayload)
+		n.ex = newExecutor()
 	}
 	return n
 }
@@ -420,68 +414,8 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return ei.GetEntity() < ej.GetEntity()
 	})
 
-	mutateInBG := func(ch chan *runMutPayload) {
-		writer := posting.NewTxnWriter(pstore)
-		for payload := range ch {
-			ptxn := posting.NewTxn(payload.startTs)
-			for _, edge := range payload.edges {
-				for {
-					err := runMutation(payload.ctx, edge, ptxn)
-					if err == nil {
-						break
-					}
-					if err != posting.ErrRetry {
-						glog.Errorf("Error while mutating: %+v", err)
-						break
-					}
-				}
-
-			}
-			ptxn.Update()
-			if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
-				glog.Errorf("Error while commiting to disk: %+v", err)
-			}
-		}
-	}
-
-	checkAndAddPredChannel := func(pred string) {
-		n.predChanMutex.RLock()
-		_, ok := n.predChan[pred]
-		n.predChanMutex.RUnlock()
-		if !ok {
-			n.predChanMutex.Lock()
-			ch, ok := n.predChan[pred]
-			if !ok {
-				ch = make(chan *runMutPayload, 1000)
-				n.predChan[pred] = ch
-			}
-			n.predChanMutex.Unlock()
-			go mutateInBG(ch)
-		}
-
-	}
-
 	if x.WorkerConfig.LudicrousMode {
-		payloadMap := make(map[string]*runMutPayload)
-		for _, edge := range m.Edges {
-			checkAndAddPredChannel(edge.Attr)
-			payload, ok := payloadMap[edge.Attr]
-			if !ok {
-				payloadMap[edge.Attr] = &runMutPayload{
-					ctx:     ctx,
-					startTs: m.StartTs,
-				}
-				payload = payloadMap[edge.Attr]
-			}
-			payload.edges = append(payload.edges, edge)
-		}
-
-		for attr, payload := range payloadMap {
-			ch, ok := n.predChan[attr]
-			x.AssertTrue(ok)
-			ch <- payload
-		}
-
+		n.ex.addEdges(ctx, m.StartTs, m.Edges)
 		return nil
 	}
 
