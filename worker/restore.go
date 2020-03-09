@@ -42,7 +42,7 @@ func RunRestore(pdir, location, backupId string) LoadResult {
 
 	// Scan location for backup files and load them. Each file represents a node group,
 	// and we create a new p dir for each.
-	return Load(location, backupId,
+	return LoadBackup(location, backupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
