@@ -265,7 +265,6 @@ func handleWal(db *badger.DB) error {
 		for gid := range gids {
 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
 			store := raftwal.Init(db, rid, gid)
-			// store.StartRoutines()
 			switch {
 			case len(opt.wsetSnapshot) > 0:
 				return overwriteSnapshot(db, store)

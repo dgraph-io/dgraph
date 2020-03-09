@@ -221,7 +221,6 @@ func run() {
 	kvOpt.EncryptionKey = nil
 
 	store := raftwal.Init(kv, opts.nodeId, 0)
-	store.StartRoutines()
 
 	// Initialize the servers.
 	var st state

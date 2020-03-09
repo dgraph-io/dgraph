@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"math"
 	"sync"
-	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -56,6 +55,8 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
+	defer w.processDeleteRange()
+
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.Snapshot()
@@ -72,44 +73,11 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		x.Check(err)
 	}
 
-	// glog.Infof("***************** starting deletechan go routine\n")
-	// go func() {
-	// 	glog.Infof("***************** starting deletechan go routine\n")
-	// 	for r := range w.deleteChan {
-	// 		batch := w.db.NewWriteBatch()
-	// 		if err := w.deleteUntil(batch, r.from, r.until); err != nil {
-	// 			glog.Infof("deleteuntil failed with error: %s, from: %d, until: %d\n",
-	// 				err, r.from, r.until)
-	// 		}
-
-	// 		if err := batch.Flush(); err != nil {
-	// 			glog.Infof("batch flush failed with error: %s, from: %d, until: %d\n",
-	// 				err, r.from, r.until)
-	// 		}
-	// 	}
-	// }()
-
-	// glog.Infof("***************** starting first index go routine")
-	// go func() {
-	// 	glog.Infof("***************** starting first index go routine")
-	// 	for {
-	// 		select {
-	// 		case <-time.After(30 * time.Second):
-	// 			if first, err := w.FirstIndex(); err != nil {
-	// 				panic("Unable to get first index " + err.Error())
-	// 			} else {
-	// 				glog.Infof("****** Getting first index in loop: %d\n", first)
-	// 			}
-	// 		}
-	// 	}
-	// }()
 	return w
 }
 
-func (w *DiskStorage) StartRoutines() {
-	glog.Infof("***************** starting deletechan go routine\n")
+func (w *DiskStorage) processDeleteRange() {
 	go func() {
-		glog.Infof("***************** starting deletechan go routine\n")
 		for r := range w.deleteChan {
 			batch := w.db.NewWriteBatch()
 			if err := w.deleteUntil(batch, r.from, r.until); err != nil {
@@ -120,21 +88,6 @@ func (w *DiskStorage) StartRoutines() {
 			if err := batch.Flush(); err != nil {
 				glog.Infof("batch flush failed with error: %s, from: %d, until: %d\n",
 					err, r.from, r.until)
-			}
-		}
-	}()
-
-	glog.Infof("***************** starting first index go routine")
-	go func() {
-		glog.Infof("***************** starting first index go routine")
-		for {
-			select {
-			case <-time.After(30 * time.Second):
-				if first, err := w.FirstIndex(); err != nil {
-					panic("Unable to get first index " + err.Error())
-				} else {
-					glog.Infof("****** Getting first index in loop: %d\n", first)
-				}
 			}
 		}
 	}()
@@ -699,7 +652,6 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	}
 
 	w.deleteChan <- deleteRange{first - 1, snap.Metadata.Index}
-	glog.Infoln("Successfully pushed range to deletechan ", first-1, snap.Metadata.Index)
 	return nil
 }
 
