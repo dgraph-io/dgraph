@@ -778,6 +778,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	if len(blockedPreds) != 0 {
+		if _, ok := blockedPreds["uid"]; ok {
+			delete(blockedPreds, "uid")
+		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 	}
 
