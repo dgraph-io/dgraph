@@ -17,10 +17,10 @@ type runMutPayload struct {
 
 type Executor struct {
 	sync.RWMutex
-	predChan      map[string]chan *runMutPayload
+	predChan map[string]chan *runMutPayload
 }
 
-func newExecutor() (*Executor) {
+func newExecutor() *Executor {
 	return &Executor{
 		predChan: make(map[string]chan *runMutPayload),
 	}

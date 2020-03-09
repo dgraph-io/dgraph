@@ -66,7 +66,7 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
-	pendingSize   int64
+	pendingSize int64
 
 	ex *Executor
 }
