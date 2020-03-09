@@ -97,7 +97,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	CollectFragmentFields()
+	RecursivelyExpandFragmentSelections()
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -693,15 +693,40 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
-func (f *field) CollectFragmentFields() {
+func (f *field) RecursivelyExpandFragmentSelections() {
+	// find all valid type names that this field satisfies
+	typeName := f.field.Definition.Type.Name()
+	satisfies := []string{typeName}
+	var additionalTypes []*ast.Definition
+	switch f.op.inSchema.schema.Types[typeName].Kind {
+	case ast.Interface:
+		additionalTypes = f.op.inSchema.schema.PossibleTypes[typeName]
+	case ast.Union:
+		additionalTypes = f.op.inSchema.schema.PossibleTypes[typeName]
+	case ast.Object:
+		additionalTypes = f.op.inSchema.schema.Implements[typeName]
+	default:
+		// return, as fragment can't be present on a field which is not Interface, Union or Object
+		return
+	}
+	for _, typ := range additionalTypes {
+		satisfies = append(satisfies, typ.Name)
+	}
+
+	// collect all fields from any satisfying fragments into selectionSet
 	collectedFields := collectFields(&requestContext{
 		RawQuery:  f.op.query,
 		Variables: f.op.vars,
 		Doc:       f.op.doc,
-	}, f.field.SelectionSet, []string{f.Type().Name()})
+	}, f.field.SelectionSet, satisfies)
 	f.field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
 	for _, collectedField := range collectedFields {
 		f.field.SelectionSet = append(f.field.SelectionSet, collectedField.Field)
+	}
+
+	// recursively run for this field's selectionSet
+	for _, field := range f.SelectionSet() {
+		field.RecursivelyExpandFragmentSelections()
 	}
 }
 
@@ -765,8 +790,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CollectFragmentFields() {
-	(*field)(q).CollectFragmentFields()
+func (q *query) RecursivelyExpandFragmentSelections() {
+	(*field)(q).RecursivelyExpandFragmentSelections()
 }
 
 func (q *query) QueryType() QueryType {
@@ -921,8 +946,8 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(m).IncludeInterfaceField(dgraphTypes)
 }
 
-func (m *mutation) CollectFragmentFields() {
-	(*field)(m).CollectFragmentFields()
+func (m *mutation) RecursivelyExpandFragmentSelections() {
+	(*field)(m).RecursivelyExpandFragmentSelections()
 }
 
 func (t *astType) Field(name string) FieldDefinition {
