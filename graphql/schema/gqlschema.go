@@ -393,6 +393,12 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
+	sch.Subscription = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Subscription",
+		Fields: make([]*ast.FieldDefinition, 0),
+	}
+
 	for _, key := range definitions {
 		defn := sch.Types[key]
 
@@ -425,7 +431,8 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		addQueries(sch, defn)
+		sch.Query.Fields = append(sch.Query.Fields, generateQueryFields(sch, defn)...)
+		sch.Subscription.Fields = append(sch.Subscription.Fields, generateQueryFields(sch, defn)...)
 	}
 }
 
@@ -911,11 +918,11 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
+func generateGetQuery(defn *ast.Definition) *ast.FieldDefinition {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
-		return
+		return nil
 	}
 
 	qry := &ast.FieldDefinition{
@@ -947,10 +954,10 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 			},
 		})
 	}
-	schema.Query.Fields = append(schema.Query.Fields, qry)
+	return qry
 }
 
-func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
+func getFilterForSchema(schema *ast.Schema, defn *ast.Definition) *ast.FieldDefinition {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -962,15 +969,14 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
-
-	schema.Query.Fields = append(schema.Query.Fields, qry)
+	return qry
 }
 
-func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+func generatePasswordQuery(defn *ast.Definition) *ast.FieldDefinition {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
-		return
+		return nil
 	}
 
 	idField := getIDField(defn)
@@ -979,7 +985,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	}
 	passwordField := getPasswordField(defn)
 	if passwordField == nil {
-		return
+		return nil
 	}
 
 	qry := &ast.FieldDefinition{
@@ -1001,13 +1007,20 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 			},
 		},
 	}
-	schema.Query.Fields = append(schema.Query.Fields, qry)
+	return qry
 }
 
-func addQueries(schema *ast.Schema, defn *ast.Definition) {
-	addGetQuery(schema, defn)
-	addPasswordQuery(schema, defn)
-	addFilterQuery(schema, defn)
+func generateQueryFields(schema *ast.Schema, defn *ast.Definition) []*ast.FieldDefinition {
+	fields := make([]*ast.FieldDefinition, 0)
+	query := generateGetQuery(defn)
+	if query != nil {
+		fields = append(fields, query)
+	}
+	query = generatePasswordQuery(defn)
+	if query != nil {
+		fields = append(fields, query)
+	}
+	return append(fields, getFilterForSchema(schema, defn))
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
@@ -1433,6 +1446,9 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Mutations\n#######################\n\n"))
 	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Subscriptions\n#######################\n\n"))
+	x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
 
 	return sch.String()
 }
