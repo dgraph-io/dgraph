@@ -88,7 +88,7 @@ func (w *DiskStorage) processDeleteRange() {
 
 			if err := batch.Flush(); err != nil {
 				glog.Errorf("batch flush failed while deleting range from: %d, until: %d "+
-					"with error: %s,\n", err, r.from, r.until)
+					"with error: %s,\n", r.from, r.until, err)
 			}
 		}
 	}()
