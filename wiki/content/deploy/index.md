@@ -63,7 +63,7 @@ curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
 {{% notice "note" %}}
-Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#export-database) before running this script and reimported to the new cluster running the updated version.
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#exporting-database) before running this script and reimported to the new cluster running the updated version.
 {{% /notice %}}
 
 ### Manual download [optional]
@@ -2200,7 +2200,7 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+* [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete,
 * Delete (maybe do an export first) the `p` and `w` directories, then
 * Restart Dgraph.
 
@@ -2208,9 +2208,9 @@ Alternatively, you could:
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps to safely export and restart.
 
-1. Start an [export]({{< relref "#export-database">}})
+1. Start an [export]({{< relref "#exporting-database">}})
 2. Ensure it is successful
-3. [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
 5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
