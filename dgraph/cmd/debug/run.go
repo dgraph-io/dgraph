@@ -121,7 +121,7 @@ func uidToVal(itr *badger.Iterator, prefix string) map[uint64]int {
 		lastKey = append(lastKey[:0], item.Key()...)
 		pk, err := x.Parse(item.Key())
 		x.Check(err)
-		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) {
+		if !pk.IsData() || !strings.HasPrefix(pk.Attr, prefix) || pk.HasStartUid {
 			continue
 		}
 		if pk.IsSchema() {

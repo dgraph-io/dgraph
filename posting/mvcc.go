@@ -35,7 +35,7 @@ var (
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
 	// ErrInvalidKey is returned when trying to read a posting list using
 	// an invalid key (e.g the key to a single part of a larger multi-part list).
-	ErrInvalidKey = errors.Errorf("cannot read posting list from this key")
+	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
 )
 
 // ShouldAbort returns whether the transaction should be aborted.
@@ -155,7 +155,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	if pk.HasStartUid {
 		// Trying to read a single part of a multi part list. This type of list
 		// should be read once using the canonical list (with startUid equal to zero).
-		return nil, ErrInvalidKey
+		// Return a nil list.
+		return nil, nil
 	}
 
 	l := new(List)
@@ -183,16 +184,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-
-			// If this list is a multi-part list, advance past the keys holding the parts.
-			if len(l.plist.GetSplits()) > 0 {
-				lastKey, err := x.GetSplitKey(key, math.MaxUint64)
-				if err != nil {
-					return nil, errors.Wrapf(err,
-						"while advancing past the end of multi-part list with key [%v]", key)
-				}
-				it.Seek(lastKey)
-			}
 
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
