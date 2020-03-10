@@ -1602,6 +1602,27 @@ enabled the browser will prompt you for a client certificate to use. Select the
 certificate you've just installed in the step above and queries/mutations will
 succeed.
 
+### Using Curl with Client authentication
+
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.
+
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default),
+use the option `--cacert`. For instance (for an export request):
+
+``
+curl --cacert ./tls/ca.crt https://localhost:8080/admin/export
+```
+
+If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`,
+in addition to the `--cacert` option, also use the `--cert` and `--key` options.
+For instance (for an export request):
+
+``` 
+curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
+```
+
+Refer to the `curl` documentation for further information on its TLS options.
+
 ### Troubleshooting Ratel's Client authentication
 
 If you are getting errors in Ratel when server's TLS is enabled try opening
