@@ -271,9 +271,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -323,6 +325,15 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+
+	if x.WorkerConfig.LudicrousMode {
+		// Mutations are automatically committed in case of ludicrous mode, so we don't
+		// need to manually commit.
+		resp.Txn.Keys = resp.Txn.Keys[:0]
+		resp.Txn.CommitTs = qc.req.StartTs
+		return err
+	}
+
 	if !qc.req.CommitNow {
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
@@ -473,7 +484,7 @@ func findMutationVars(qc *queryContext) []string {
 // Assumption is that Subject can contain UID, whereas Object can contain Val
 // If val(variable) exists in a query, but the values are not there for the variable,
 // it will ignore the mutation silently.
-func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
+func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api.NQuad {
 	getNewVals := func(s string) (map[uint64]types.Val, bool) {
 		if strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
@@ -512,18 +523,24 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 		// to *api.Value before applying the mutation. For that, first
 		// we convert key to uint64 and get the UID to Value map from
 		// the result of the query.
-		if nq.Subject[0] == '_' {
-			// UID is of format "_:uid(u)". Ignore silently
+		var key uint64
+		var err error
+		switch {
+		case nq.Subject[0] == '_' && isSet:
+			// in case aggregate val(var) is there, that should work with blank node.
+			key = 0
+		case nq.Subject[0] == '_' && !isSet:
+			// UID is of format "_:uid(u)". Ignore the delete silently
 			continue
-		}
-
-		key, err := strconv.ParseUint(nq.Subject, 0, 64)
-		if err != nil {
-			// Key conversion failed, ignoring the nquad. Ideally,
-			// it shouldn't happen as this is the result of a query.
-			glog.Errorf("Conversion of subject %s failed. Error: %s",
-				nq.Subject, err.Error())
-			continue
+		default:
+			key, err = strconv.ParseUint(nq.Subject, 0, 64)
+			if err != nil {
+				// Key conversion failed, ignoring the nquad. Ideally,
+				// it shouldn't happen as this is the result of a query.
+				glog.Errorf("Conversion of subject %s failed. Error: %s",
+					nq.Subject, err.Error())
+				continue
+			}
 		}
 
 		// Get the value to the corresponding UID(key) from the query result
@@ -551,8 +568,8 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 // updateValInMuations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
-	gmu.Del = updateValInNQuads(gmu.Del, qc)
-	gmu.Set = updateValInNQuads(gmu.Set, qc)
+	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
+	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 }
 
 // updateUIDInMutations does following transformations:
@@ -658,7 +675,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 	var healthAll []pb.HealthInfo
 	if all {
-		if err := authorizeGroot(ctx); err != nil {
+		if err := authorizeGuardians(ctx); err != nil {
 			return nil, err
 		}
 		pool := conn.GetPools().GetAll()
@@ -694,7 +711,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeGroot(ctx); err != nil {
+	if err := authorizeGuardians(ctx); err != nil {
 		return nil, err
 	}
 
@@ -794,7 +811,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 {
+	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
 		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
@@ -825,7 +842,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if len(qc.req.Query) == 0 {
 		return resp, nil
 	}
-
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = posting.Oracle().MaxAssigned()
+	}
 	qr := query.Request{
 		Latency:  qc.latency,
 		GqlQuery: &qc.gqlRes,
@@ -993,7 +1015,7 @@ func parseRequest(qc *queryContext) error {
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
-	if err := authorizeQuery(ctx, &qc.gqlRes); err != nil {
+	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
 		return err
 	}
 

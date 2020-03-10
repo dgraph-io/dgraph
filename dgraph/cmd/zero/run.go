@@ -95,6 +95,7 @@ instances to achieve high-availability.
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
+	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -168,6 +169,10 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+	}
+
+	x.WorkerConfig = x.WorkerOptions{
+		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {

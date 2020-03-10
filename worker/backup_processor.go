@@ -10,7 +10,7 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-package backup
+package worker
 
 import (
 	"compress/gzip"
@@ -33,12 +33,23 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-// Processor handles the different stages of the backup process.
-type Processor struct {
+// BackupProcessor handles the different stages of the backup process.
+type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
 	DB *badger.DB
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
+}
+
+// LoadResult holds the output of a Load operation.
+type LoadResult struct {
+	// Version is the timestamp at which the database is after loading a backup.
+	Version uint64
+	// MaxLeaseUid is the max UID seen by the load operation. Needed to request zero
+	// for the proper number of UIDs.
+	MaxLeaseUid uint64
+	// The error, if any, of the load operation.
+	Err error
 }
 
 // Manifest records backup details, these are values used during restore.
@@ -85,7 +96,7 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 // retrieval to stream.Orchestrate. The writer will create all the fd's needed to
 // collect the data and later move to the target.
 // Returns errors on failure, nil on success.
-func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
+func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 	var emptyRes pb.Status
 
 	if err := ctx.Err(); err != nil {
@@ -166,7 +177,7 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 }
 
 // CompleteBackup will finalize a backup by writing the manifest at the backup destination.
-func (pr *Processor) CompleteBackup(ctx context.Context, manifest *Manifest) error {
+func (pr *BackupProcessor) CompleteBackup(ctx context.Context, manifest *Manifest) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -201,7 +212,7 @@ func (m *Manifest) GoString() string {
 	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v}`, m.Since, m.Groups)
 }
 
-func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
 	item := itr.Item()

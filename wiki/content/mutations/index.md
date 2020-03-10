@@ -695,6 +695,40 @@ or an int. If it can be parsed as a boolean, it will be stored as a boolean. If 
 is a string, it will be stored as a datetime if the string matches the RFC3339 format or
 as a double-quoted string otherwise.
 
+### Deleting Facets
+
+The easiest way to delete a Facet is overwriting it. When you create a new mutation for the same entity without a facet, the existing facet will be deleted automatically.
+
+e.g:
+
+```RDF
+<0x1> <name> "Carol" .
+<0x1> <friend> <0x2> .
+```
+
+Another way to do this is by using the Upsert Block.
+
+> In this query below, we are deleting Facet in the Name and Friend predicates. To overwrite we need to collect the values ​​of the edges on which we are performing this operation and use the function "val(var)" to complete the overwriting.
+
+```sh
+curl -H "Content-Type: application/rdf" -X POST localhost:8080/mutate?commitNow=true -d $'
+upsert {
+  query {
+    user as var(func: eq(name, "Carol")){
+      Name as name
+      Friends as friend
+    }
+ }
+
+  mutation {
+    set {
+      uid(user) <name> val(Name) .
+      uid(user) <friend> uid(Friends) .
+    }
+  }
+}' | jq
+```
+
 ### Creating a list with JSON and interacting with
 
 Schema:

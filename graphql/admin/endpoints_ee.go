@@ -32,12 +32,6 @@ const adminTypes = `
 		response: Response
 	}
 
-	input LoginInput {
-		userId: String
-		password: String
-		refreshToken: String
-	}
-
 	type LoginResponse {
 		accessJWT: String
 		refreshJWT: String
@@ -47,10 +41,8 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User {
+	type User @secret(field: "password", pred: "dgraph.password") {
 		name: String! @id @dgraph(pred: "dgraph.xid")
-		# TODO - Update this to actual secret after password PR is merged here.
-		password: String! @dgraph(pred: "dgraph.password")
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
@@ -61,7 +53,6 @@ const adminTypes = `
 	}
 
 	type Rule {
-		id: ID!
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
 		# TODO - Change permission to enum type once we figure out how to map enum strings to Int
 		# while storing it in Dgraph.
@@ -103,9 +94,8 @@ const adminTypes = `
 	}
 
 	input RuleRef {
-		id: ID
-		predicate: String
-		permission: Int
+		predicate: String!
+		permission: Int!
 	}
 
 	input UserFilter {
@@ -145,22 +135,26 @@ const adminTypes = `
 		not: UserFilter
 	}
 
-	input GroupPatch {
-		rules: [RuleRef]
+	input SetGroupPatch {
+		rules: [RuleRef!]!
+	}
+
+	input RemoveGroupPatch {
+		rules: [String!]!
 	}
 
 	input UpdateGroupInput {
 		filter: GroupFilter!
-		set: GroupPatch
-		remove: GroupPatch
+		set: SetGroupPatch
+		remove: RemoveGroupPatch
 	}
 
 	type AddUserPayload {
-		user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+		user: [User]
 	}
 
 	type AddGroupPayload {
-		group(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+		group: [Group]
 	}
 
 	type DeleteUserPayload {
@@ -174,21 +168,21 @@ const adminTypes = `
 const adminMutations = `
 	backup(input: BackupInput!) : BackupPayload
 
-	login(input: LoginInput!): LoginPayload
+	login(userId: String, password: String, refreshToken: String): LoginPayload
 	# ACL related endpoints.
 	# 1. If user and group don't exist both are created and linked.
 	# 2. If user doesn't exist but group does, then user is created and both are linked.
 	# 3. If user exists and group doesn't exist, then two errors are returned i.e. User exists
 	# and group doesn't exist.
 	# 4. If user and group exists, then error that user exists.
-	addUser(input: [AddUserInput]): AddUserPayload
-	addGroup(input: [AddGroupInput]): AddGroupPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
 	# update user allows updating a user's password or updating their groups. If the group
 	# doesn't exist, then it is created, otherwise linked to the user. If the user filter
 	# doesn't return anything then nothing happens.
 	updateUser(input: UpdateUserInput!): AddUserPayload
-	# update group only allows adding rules to a group.
+	# update group only allows adding/removing rules to a group.
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
@@ -202,8 +196,7 @@ const adminQueries = `
 	getUser(name: String!): User
 	getGroup(name: String!): Group
 
-	# TODO - This needs a custom handler. Implement this later.
-	# getCurrentUser: User
+	getCurrentUser: User
 
-	queryUser(filter: UserFilter): [User]
-	queryGroup(filter: GroupFilter): [Group]`
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`

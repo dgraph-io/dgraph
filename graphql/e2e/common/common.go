@@ -42,9 +42,12 @@ const (
 	graphqlAdminURL = "http://localhost:8180/admin"
 	alphagRPC       = "localhost:9180"
 
-	graphqlAdminTestURL      = "http://localhost:8280/graphql"
-	graphqlAdminTestAdminURL = "http://localhost:8280/admin"
-	alphaAdminTestgRPC       = "localhost:9280"
+	adminDgraphHealthURL           = "http://localhost:8280/health?all"
+	adminDgraphStateURL            = "http://localhost:8280/state"
+	graphqlAdminTestURL            = "http://localhost:8280/graphql"
+	graphqlAdminTestAdminURL       = "http://localhost:8280/admin"
+	graphqlAdminTestAdminSchemaURL = "http://localhost:8280/admin/schema"
+	alphaAdminTestgRPC             = "localhost:9280"
 )
 
 // GraphQLParams is parameters for the constructing a GraphQL query - that's
@@ -111,6 +114,11 @@ type author struct {
 	Posts      []*post    `json:"posts,omitempty"`
 }
 
+type user struct {
+	Name     string `json:"name,omitempty"`
+	Password string `json:"password,omitempty"`
+}
+
 type post struct {
 	PostID      string    `json:"postID,omitempty"`
 	Title       string    `json:"title,omitempty"`
@@ -148,13 +156,13 @@ type director struct {
 }
 
 func BootstrapServer(schema, data []byte) {
-	err := checkGraphQLLayerStarted(graphqlAdminURL)
+	err := checkGraphQLStarted(graphqlAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
 			"Got last error %+v", err.Error()))
 	}
 
-	err = checkGraphQLLayerStarted(graphqlAdminTestAdminURL)
+	err = checkGraphQLStarted(graphqlAdminTestAdminURL)
 	if err != nil {
 		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
 			"but it never did.\n Got last error: %+v", err.Error()))
@@ -178,11 +186,6 @@ func BootstrapServer(schema, data []byte) {
 		panic(err)
 	}
 
-	err = checkGraphQLHealth(graphqlAdminURL, []string{"Healthy"})
-	if err != nil {
-		panic(err)
-	}
-
 	if err = d.Close(); err != nil {
 		panic(err)
 	}
@@ -192,6 +195,9 @@ func BootstrapServer(schema, data []byte) {
 func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
+	t.Run("health", health)
+	t.Run("state", adminState)
+	t.Run("propagate client remote ip", clientInfoLogin)
 
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
@@ -269,6 +275,9 @@ func RunAll(t *testing.T) {
 	t.Run("error in multiple mutations", addMultipleMutationWithOneError)
 	t.Run("dgraph directive with reverse edge adds data correctly",
 		addMutationWithReverseDgraphEdge)
+	t.Run("numUids test", testNumUids)
+	t.Run("empty delete", mutationEmptyDelete)
+	t.Run("password in mutation", passwordTest)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -578,20 +587,18 @@ func allCountriesAdded() ([]*country, error) {
 	return result.Data.QueryCountry, nil
 }
 
-func checkGraphQLLayerStarted(url string) error {
+func checkGraphQLStarted(url string) error {
 	var err error
 	retries := 6
 	sleep := 10 * time.Second
 
-	// Because of how the test containers are brought up, there's no guarantee
-	// that the GraphQL layer is running by now.  So we
+	// Because of how GraphQL starts (it needs to read the schema from Dgraph),
+	// there's no guarantee that GraphQL is available by now.  So we
 	// need to try and connect and potentially retry a few times.
 	for retries > 0 {
 		retries--
 
-		// In local dev, we might already have an instance Healthy.  In CI,
-		// we expect the GraphQL layer to be waiting for a first schema.
-		err = checkGraphQLHealth(url, []string{"NoGraphQLSchema", "Healthy"})
+		_, err = hasCurrentGraphQLSchema(url)
 		if err == nil {
 			return nil
 		}
@@ -600,52 +607,47 @@ func checkGraphQLLayerStarted(url string) error {
 	return err
 }
 
-func checkGraphQLHealth(url string, status []string) error {
-	health := &GraphQLParams{
-		Query: `query {
-			health {
-				message
-				status
-			}
-		}`,
+func hasCurrentGraphQLSchema(url string) (bool, error) {
+
+	schemaQry := &GraphQLParams{
+		Query: `query { getGQLSchema { id } }`,
 	}
-	req, err := health.createGQLPost(url)
+	req, err := schemaQry.createGQLPost(url)
 	if err != nil {
-		return errors.Wrap(err, "while creating gql post")
+		return false, errors.Wrap(err, "while creating gql post")
 	}
 
-	resp, err := runGQLRequest(req)
+	res, err := runGQLRequest(req)
 	if err != nil {
-		return errors.Wrap(err, "error running GraphQL query")
+		return false, errors.Wrap(err, "error running GraphQL query")
 	}
 
-	var healthResult struct {
-		Data struct {
-			Health struct {
-				Message string
-				Status  string
-			}
-		}
-		Errors x.GqlErrorList
-	}
-
-	err = json.Unmarshal(resp, &healthResult)
+	var result *GraphQLResponse
+	err = json.Unmarshal(res, &result)
 	if err != nil {
-		return errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+		return false, errors.Wrap(err, "error unmarshalling result")
 	}
 
-	if len(healthResult.Errors) > 0 {
-		return healthResult.Errors
+	if len(result.Errors) > 0 {
+		return false, result.Errors
 	}
 
-	for _, s := range status {
-		if healthResult.Data.Health.Status == s {
-			return nil
+	var sch struct {
+		GetGQLSchema struct {
+			ID string
 		}
 	}
 
-	return errors.Errorf("GraphQL server was not at right health: found %s",
-		healthResult.Data.Health.Status)
+	err = json.Unmarshal(result.Data, &sch)
+	if err != nil {
+		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+	}
+
+	if sch.GetGQLSchema.ID == "" {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func addSchema(url string, schema string) error {
@@ -685,6 +687,36 @@ func addSchema(url string, schema string) error {
 	}
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
+		return errors.New("GraphQL schema mutation failed")
+	}
+
+	return nil
+}
+
+func addSchemaThroughAdminSchemaEndpt(url string, schema string) error {
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(schema))
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
+
+	resp, err := runGQLRequest(req)
+	if err != nil {
+		return errors.Wrap(err, "error running GraphQL query")
+	}
+
+	var addResult struct {
+		Data struct {
+			Code    string
+			Message string
+		}
+	}
+
+	err = json.Unmarshal(resp, &addResult)
+	if err != nil {
+		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if addResult.Data.Code != "Success" && addResult.Data.Message != "Done" {
 		return errors.New("GraphQL schema mutation failed")
 	}
 
