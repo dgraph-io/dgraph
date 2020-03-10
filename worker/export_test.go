@@ -58,6 +58,9 @@ var personType = &pb.TypeUpdate{
 			Predicate: "friend",
 		},
 		{
+			Predicate: "~friend",
+		},
+		{
 			Predicate: "friend_not_served",
 		},
 	},

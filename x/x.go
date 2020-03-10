@@ -123,7 +123,8 @@ const (
 	InitialTypes = `
 	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
-{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"}]`
+{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
+{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -907,6 +908,25 @@ func RunVlogGC(store *badger.DB, closer *y.Closer) {
 			runGC()
 		case <-mandatoryVlogTicker.C:
 			runGC()
+		}
+	}
+}
+
+type DB interface {
+	Sync() error
+}
+
+func StoreSync(db DB, closer *y.Closer) {
+	defer closer.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := db.Sync(); err != nil {
+				glog.Errorf("Error while calling db sync: %+v", err)
+			}
+		case <-closer.HasBeenClosed():
+			return
 		}
 	}
 }

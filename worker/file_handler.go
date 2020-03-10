@@ -111,9 +111,10 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 	if !pathExist(uri.Path) {
-		return 0, errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)
+		return LoadResult{0, 0,
+			errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)}
 	}
 
 	suffix := filepath.Join(string(filepath.Separator), backupManifest)
@@ -121,7 +122,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(paths) == 0 {
-		return 0, errors.Errorf("No manifests found at path: %s", uri.Path)
+		return LoadResult{0, 0, errors.Errorf("No manifests found at path: %s", uri.Path)}
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
@@ -134,20 +135,21 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(path, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", path)
+			return LoadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
 	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
-		return 0, err
+		return LoadResult{0, 0, err}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup files for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
 	var since uint64
+	var maxUid uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
@@ -161,20 +163,26 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, er
 			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
-				return 0, errors.Wrapf(err, "Failed to open %q", file)
+				return LoadResult{0, 0, errors.Wrapf(err, "Failed to open %q", file)}
 			}
 			defer fp.Close()
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
-			if err = fn(fp, int(gid), predSet); err != nil {
-				return 0, err
+
+			groupMaxUid, err := fn(fp, int(gid), predSet)
+			if err != nil {
+				return LoadResult{0, 0, err}
+			}
+			if groupMaxUid > maxUid {
+				maxUid = groupMaxUid
 			}
 		}
 		since = manifest.Since
 	}
-	return since, nil
+
+	return LoadResult{since, maxUid, nil}
 }
 
 // ListManifests loads the manifests in the locations and returns them.
