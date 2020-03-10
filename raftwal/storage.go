@@ -55,7 +55,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
-	defer w.processDeleteRange()
+	w.processDeleteRange()
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
