@@ -140,7 +140,9 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 
 				if parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
 					// This key is storing part of a multi-part list. Write each individual
-					// part without rolling the key first.
+					// part without rolling the key first. This part is here for backwards
+					// compatibility. New backups are not affected because there was a change
+					// to roll up lists into a single one.
 					restoreVal, err := pl.Marshal()
 					if err != nil {
 						return 0, errors.Wrapf(err, "while converting backup posting list")
