@@ -77,17 +77,18 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 }
 
 func (w *DiskStorage) processDeleteRange() {
+	// TODO: Figure out a way to close this.
 	go func() {
 		for r := range w.deleteChan {
 			batch := w.db.NewWriteBatch()
 			if err := w.deleteUntil(batch, r.from, r.until); err != nil {
-				glog.Infof("deleteuntil failed with error: %s, from: %d, until: %d\n",
+				glog.Errorf("deleteuntil failed with error: %s, from: %d, until: %d\n",
 					err, r.from, r.until)
 			}
 
 			if err := batch.Flush(); err != nil {
-				glog.Infof("batch flush failed with error: %s, from: %d, until: %d\n",
-					err, r.from, r.until)
+				glog.Errorf("batch flush failed while deleting range from: %d, until: %d "+
+					"with error: %s,\n", err, r.from, r.until)
 			}
 		}
 	}()
@@ -655,6 +656,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 		return err
 	}
 
+	// TODO: should we block here?
 	w.deleteChan <- deleteRange{first - 1, snap.Metadata.Index}
 	return nil
 }
