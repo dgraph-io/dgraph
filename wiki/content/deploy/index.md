@@ -1623,6 +1623,15 @@ curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://lo
 
 Refer to the `curl` documentation for further information on its TLS options.
 
+### Access Data Using a Client
+
+Some examples of connecting via a [Client](/clients) when TLS is in use can be found below:
+
+- [dgraph4](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
+- [dgraph-js](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls)
+- [dgo](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/tree/master/examples/tls)
+
 ### Troubleshooting Ratel's Client authentication
 
 If you are getting errors in Ratel when server's TLS is enabled try opening
