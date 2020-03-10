@@ -47,6 +47,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -104,34 +105,42 @@ input StringHashFilter {
 
 type AddDirectorPayload {
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	numUids: Int
 }
 
 type AddOscarMoviePayload {
 	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	numUids: Int
 }
 
 type DeleteDirectorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteMoviePayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteOscarMoviePayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateDirectorPayload {
 	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+	numUids: Int
 }
 
 type UpdateMoviePayload {
 	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	numUids: Int
 }
 
 type UpdateOscarMoviePayload {
 	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	numUids: Int
 }
 
 #######################
@@ -157,6 +166,7 @@ enum OscarMovieOrderable {
 
 input AddDirectorInput {
 	name: String!
+	directed: [OscarMovieRef]
 }
 
 input AddOscarMovieInput {
@@ -183,6 +193,7 @@ input DirectorPatch {
 input DirectorRef {
 	id: ID
 	name: String
+	directed: [OscarMovieRef]
 }
 
 input MovieFilter {

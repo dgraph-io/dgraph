@@ -2964,6 +2964,21 @@ func TestLangsInvalid9(t *testing.T) {
 		"The * symbol cannot be used as a valid language inside functions")
 }
 
+func TestLangsInvalid10(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@.:*
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
@@ -5135,4 +5150,63 @@ func TestParseExpandFilterErr(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}
+
+func TestFilterWithDollar(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "$yo")
+}
+
+func TestFilterWithDollarError(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, $yo)) {
+		  name
+		  description
+		}
+	  }
+	`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+}
+
+func TestFilterWithVar(t *testing.T) {
+	query := `query data($a: string = "dgraph")
+	{
+		data(func: eq(name, "Bob"), first:5) @filter(eq(description, $a)) {
+			name
+			description
+		  }
+	}`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "dgraph")
+}
+
+func TestFilterWithEmpty(t *testing.T) {
+	query := `{
+		names(func: has(name)) @filter(eq(name, "")) {
+		  count(uid)
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
 }

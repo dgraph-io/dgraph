@@ -44,6 +44,7 @@ func initDataTypes() {
 
 	sqlTypeToInternal = make(map[string]dataType)
 	sqlTypeToInternal["int"] = intType
+	sqlTypeToInternal["tinyint"] = intType
 	sqlTypeToInternal["varchar"] = stringType
 	sqlTypeToInternal["text"] = stringType
 	sqlTypeToInternal["date"] = datetimeType

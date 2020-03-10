@@ -16,12 +16,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,8 +35,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -216,17 +217,29 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
-	forceFullStr := "false"
-	if forceFull {
-		forceFullStr = "true"
-	}
 
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{backupDst},
-		"force_full":  []string{forceFullStr},
-	})
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+		backup(input: {destination: $dst, forceFull: $ff}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": backupDst,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "Backup completed.")
@@ -280,7 +293,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node"}, restoredTypes)
+	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
 
 	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
@@ -294,9 +307,9 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	require.Error(t, result.Err)
+	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
 
 func dirSetup(t *testing.T) {
