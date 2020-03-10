@@ -154,8 +154,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	}
 	if pk.HasStartUid {
 		// Trying to read a single part of a multi part list. This type of list
-		// should be read once using the canonical list (with startUid equal to zero).
-		// Return a nil list.
+		// should be read using using the main key because the information needed
+		// to access the whole list is stored there.
+		// The function returns a nil list instead. This is safe to do because all
+		// public methods of the List object are no-ops and the list is being already
+		// accessed via the main key in the places where this code is reached (e.g rollups).
 		return nil, nil
 	}
 
