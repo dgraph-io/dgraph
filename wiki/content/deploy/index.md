@@ -1685,7 +1685,7 @@ Refer to the `curl` documentation for further information on its TLS options.
 
 Some examples of connecting via a [Client](/clients) when TLS is in use can be found below:
 
-- [dgraph4](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
 - [dgraph-js](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls)
 - [dgo](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
 - [pydgraph](https://github.com/dgraph-io/pydgraph/tree/master/examples/tls)
