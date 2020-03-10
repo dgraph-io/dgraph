@@ -1667,7 +1667,7 @@ When TLS is enabled, `curl` requests to Dgraph will need some specific options t
 If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default),
 use the option `--cacert`. For instance (for an export request):
 
-``
+```
 curl --cacert ./tls/ca.crt https://localhost:8080/admin/export
 ```
 
