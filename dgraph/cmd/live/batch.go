@@ -89,7 +89,7 @@ type loader struct {
 	reqs      chan request
 	zeroconn  *grpc.ClientConn
 	schema    *schema
-	nameSpace string
+	namespace string
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -136,7 +136,7 @@ func (l *loader) infinitelyRetry(req request) {
 	defer l.deregister(&req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
-		txn := l.dc.NewNameSpacedTxn(l.nameSpace)
+		txn := l.dc.NewNamespacedTxn(l.namespace)
 		req.CommitNow = true
 		_, err := txn.Mutate(l.opts.Ctx, req.Mutation)
 		if err == nil {
@@ -160,7 +160,7 @@ func (l *loader) infinitelyRetry(req request) {
 
 func (l *loader) request(req request) {
 	atomic.AddUint64(&l.reqNum, 1)
-	txn := l.dc.NewNameSpacedTxn(l.nameSpace)
+	txn := l.dc.NewNamespacedTxn(l.namespace)
 
 	req.CommitNow = true
 	_, err := txn.Mutate(l.opts.Ctx, req.Mutation)

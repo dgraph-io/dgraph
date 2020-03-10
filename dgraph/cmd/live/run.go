@@ -66,7 +66,7 @@ type options struct {
 	verbose        bool
 	httpAddr       string
 	bufferSize     int
-	nameSpace      string
+	namespace      string
 }
 
 type predicate struct {
@@ -169,20 +169,20 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph, nameSpace string) error {
-	fmt.Printf("\nProcessing schema file %q\n", file)
+func processSchemaFile(ctx context.Context, opt options, dgraphClient *dgo.Dgraph) error {
+	fmt.Printf("\nProcessing schema file %q\n", opt.schemaFile)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
 		md.Append("auth-token", opt.authToken)
 		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
-	f, err := os.Open(file)
+	f, err := os.Open(opt.schemaFile)
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
 	var reader io.Reader
-	if strings.HasSuffix(strings.ToLower(file), ".gz") {
+	if strings.HasSuffix(strings.ToLower(opt.schemaFile), ".gz") {
 		reader, err = gzip.NewReader(f)
 		x.Check(err)
 	} else {
@@ -196,9 +196,9 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	op.Namespace = nameSpace
+	op.Namespace = opt.namespace
 	// Q: Do we need to set this? Ask Balaji
-	//op.CreateNamespace = nameSpace
+	//op.CreateNamespace = opt.namespace
 	return dgraphClient.Alter(ctx, op)
 }
 
@@ -329,7 +329,7 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 	return nil
 }
 
-func setup(opts batchMutationOptions, dc *dgo.Dgraph, nameSpace string) *loader {
+func setup(opts batchMutationOptions, dc *dgo.Dgraph, namespace string) *loader {
 	var db *badger.DB
 	if len(opt.clientDir) > 0 {
 		x.Check(os.MkdirAll(opt.clientDir, 0700))
@@ -357,7 +357,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph, nameSpace string) *loader 
 		alloc:     alloc,
 		db:        db,
 		zeroconn:  connzero,
-		nameSpace: nameSpace,
+		namespace: namespace,
 	}
 
 	l.requestsWg.Add(opts.Pending)
@@ -385,9 +385,9 @@ func run() error {
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
-		nameSpace:      Live.Conf.GetString("namespace"),
+		namespace:      Live.Conf.GetString("namespace"),
 	}
-	fmt.Printf("CLI options:\n %#v\n", opt)
+
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
@@ -406,11 +406,11 @@ func run() error {
 	dg, closeFunc := x.GetDgraphClient(Live.Conf, true)
 	defer closeFunc()
 
-	l := setup(bmOpts, dg, opt.nameSpace)
+	l := setup(bmOpts, dg, opt.namespace)
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		err := processSchemaFile(ctx, opt.schemaFile, dg, opt.nameSpace)
+		err := processSchemaFile(ctx, opt, dg)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
