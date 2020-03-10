@@ -512,15 +512,19 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 
 // NumEntries returns the number of entries in the write-ahead log.
 func (w *DiskStorage) NumEntries() (int, error) {
+	first, err := w.FirstIndex()
+	if err != nil {
+		return 0, err
+	}
 	var count int
-	err := w.db.View(func(txn *badger.Txn) error {
+	err = w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.EntryKey(0)
+		start := w.EntryKey(first)
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			count++
 		}
