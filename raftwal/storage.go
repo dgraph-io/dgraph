@@ -270,7 +270,7 @@ var (
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
 	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
-		return snap.Metadata.Index, nil
+		return snap.Metadata.Index + 1, nil
 	}
 
 	if val, ok := w.cache.Load(firstKey); ok {
