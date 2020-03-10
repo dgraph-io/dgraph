@@ -478,6 +478,19 @@ func InitialTypes() []*pb.TypeUpdate {
 						ValueType: pb.Posting_UID,
 					},
 				},
+			},
+			&pb.TypeUpdate{
+				TypeName: "Rule",
+				Fields: []*pb.SchemaUpdate{
+					{
+						Predicate: "dgraph.rule.predicate",
+						ValueType: pb.Posting_STRING,
+					},
+					{
+						Predicate: "dgraph.rule.permission",
+						ValueType: pb.Posting_INT,
+					},
+				},
 			})
 	}
 

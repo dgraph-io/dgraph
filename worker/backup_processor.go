@@ -41,6 +41,17 @@ type BackupProcessor struct {
 	Request *pb.BackupRequest
 }
 
+// LoadResult holds the output of a Load operation.
+type LoadResult struct {
+	// Version is the timestamp at which the database is after loading a backup.
+	Version uint64
+	// MaxLeaseUid is the max UID seen by the load operation. Needed to request zero
+	// for the proper number of UIDs.
+	MaxLeaseUid uint64
+	// The error, if any, of the load operation.
+	Err error
+}
+
 // Manifest records backup details, these are values used during restore.
 // Since is the timestamp from which the next incremental backup should start (it's set
 // to the readTs of the current backup).

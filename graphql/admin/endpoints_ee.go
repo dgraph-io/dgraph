@@ -53,7 +53,6 @@ const adminTypes = `
 	}
 
 	type Rule {
-		id: ID!
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
 		# TODO - Change permission to enum type once we figure out how to map enum strings to Int
 		# while storing it in Dgraph.
@@ -95,9 +94,8 @@ const adminTypes = `
 	}
 
 	input RuleRef {
-		id: ID
-		predicate: String
-		permission: Int
+		predicate: String!
+		permission: Int!
 	}
 
 	input UserFilter {
@@ -137,14 +135,18 @@ const adminTypes = `
 		not: UserFilter
 	}
 
-	input GroupPatch {
-		rules: [RuleRef]
+	input SetGroupPatch {
+		rules: [RuleRef!]!
+	}
+
+	input RemoveGroupPatch {
+		rules: [String!]!
 	}
 
 	input UpdateGroupInput {
 		filter: GroupFilter!
-		set: GroupPatch
-		remove: GroupPatch
+		set: SetGroupPatch
+		remove: RemoveGroupPatch
 	}
 
 	type AddUserPayload {
@@ -173,14 +175,14 @@ const adminMutations = `
 	# 3. If user exists and group doesn't exist, then two errors are returned i.e. User exists
 	# and group doesn't exist.
 	# 4. If user and group exists, then error that user exists.
-	addUser(input: [AddUserInput]): AddUserPayload
-	addGroup(input: [AddGroupInput]): AddGroupPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
 	# update user allows updating a user's password or updating their groups. If the group
 	# doesn't exist, then it is created, otherwise linked to the user. If the user filter
 	# doesn't return anything then nothing happens.
 	updateUser(input: UpdateUserInput!): AddUserPayload
-	# update group only allows adding rules to a group.
+	# update group only allows adding/removing rules to a group.
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
