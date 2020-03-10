@@ -127,11 +127,7 @@ func (s *Service) Stop() error {
 		log.Error("[network] Failed to close host", "error", err)
 	}
 
-	// close channel to core service
-	if s.msgSend != nil {
-		close(s.msgSend)
-	}
-
+	// TODO: close s.msgSend, need channel close handling
 	return nil
 }
 
@@ -198,11 +194,32 @@ func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 	// create buffer stream for non-blocking read
 	r := bufio.NewReader(stream)
 
+	go s.readStream(r, peer)
+	// the stream stays open until closed or reset
+}
+
+func (s *Service) readStream(r *bufio.Reader, peer peer.ID) {
 	for {
-		// TODO: re-add leb128 variable-length encoding #484
+		length, err := readLEB128ToUint64(r)
+		if err != nil {
+			log.Error("[network] Failed to read LEB128 encoding", "error", err)
+			return
+		}
+
+		msgBytes := make([]byte, length)
+		n, err := r.Read(msgBytes)
+		if err != nil {
+			log.Error("[network] Failed to read message from stream", "error", err)
+			return
+		}
+
+		if uint64(n) != length {
+			log.Error("[network] Failed to read entire message", "length", length, "read", n)
+			return
+		}
 
 		// decode message based on message type
-		msg, err := decodeMessage(r)
+		msg, err := decodeMessageBytes(msgBytes)
 		if err != nil {
 			log.Error("[network] Failed to decode message from peer", "peer", peer, "err", err)
 			return // exit
@@ -212,7 +229,6 @@ func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 		s.handleMessage(peer, msg)
 	}
 
-	// the stream stays open until closed or reset
 }
 
 // handleMessage handles the message based on peer status and message type
@@ -237,7 +253,7 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 		if !s.noGossip {
 
 			// handle non-status message from peer with gossip submodule
-			s.gossip.handleMessage(msg)
+			s.gossip.handleMessage(msg, peer)
 		}
 
 	} else {

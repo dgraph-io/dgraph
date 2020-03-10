@@ -17,6 +17,7 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"time"
 
@@ -121,8 +122,10 @@ func (status *status) validMessage(msg *StatusMessage) bool {
 		return false
 	}
 
+	log.Debug("[network] Validating peer status message", "GenesisHash", msg.GenesisHash)
+
 	switch {
-	case msg.GenesisHash != status.hostMessage.GenesisHash:
+	case !bytes.Equal(msg.GenesisHash[:], status.hostMessage.GenesisHash[:]):
 		log.Error(
 			"[network] Failed to validate status message",
 			"error", "host and peer genesis hashes do not match",

@@ -26,7 +26,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/filecoin-project/go-leb128"
+	"github.com/go-interpreter/wagon/wasm/leb128"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
@@ -132,14 +132,10 @@ func saveKey(priv crypto.PrivKey, fp string) (err error) {
 	return f.Close()
 }
 
-// uint64ToLEB128 applies leb128 variable-length encoding to a uint64
-//nolint:deadcode
-func uint64ToLEB128(in uint64) []byte { //nolint:unused
-	return leb128.FromUInt64(in)
+func uint64ToLEB128(in uint64) []byte {
+	return leb128.AppendUleb128([]byte{}, in)
 }
 
-// LEB128ToUint64 decodes a leb128 variable-length encoded byte array into a uint64
-//nolint:deadcode
-func LEB128ToUint64(in []byte) uint64 { //nolint:unused
-	return leb128.ToUInt64(in)
+func readLEB128ToUint64(r io.Reader) (uint64, error) {
+	return leb128.ReadVarUint64(r)
 }

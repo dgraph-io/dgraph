@@ -43,6 +43,8 @@ import (
 
 var _ services.Service = &Service{}
 
+var maxResponseSize = 8 // maximum number of block datas to reply with in a BlockResponse message.
+
 // Service is an overhead layer that allows communication between the runtime,
 // BABE session, and network service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
@@ -405,7 +407,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 			return err
 		}
 
-		log.Info("[core] imported block", "number", header.Number, "hash", header.Hash())
+		log.Info("[core] saved block", "number", header.Number, "hash", header.Hash())
 
 	} else {
 		return err
@@ -431,7 +433,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 
 		blockRequest := &network.BlockRequestMessage{
 			ID:            randomID, // random
-			RequestedData: 2,        // block body
+			RequestedData: 3,        // block header + body
 			StartingBlock: append([]byte{1}, buf...),
 			EndBlockHash:  optional.NewHash(true, header.Hash()),
 			Direction:     1,
@@ -444,12 +446,12 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		// send block request message to network service
 		log.Debug("send blockRequest message to network service")
 
+		// TODO: safe channel checking
 		if s.msgSend == nil {
 			return nil
 		}
 
 		s.msgSend <- blockRequest
-
 	}
 
 	return nil
@@ -490,6 +492,10 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 
 	// get sub-chain of block hashes
 	subchain := s.blockState.SubChain(startHash, endHash)
+
+	if len(subchain) > maxResponseSize {
+		subchain = subchain[:maxResponseSize]
+	}
 
 	responseData := []*types.BlockData{}
 
@@ -558,6 +564,11 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
 	blockData := msg.(*network.BlockResponseMessage).BlockData
 
+	bestNum, err := s.blockState.BestBlockNumber()
+	if err != nil {
+		return err
+	}
+
 	for _, bd := range blockData {
 		if bd.Header.Exists() {
 			header, err := types.NewHeaderFromOptional(bd.Header)
@@ -565,9 +576,21 @@ func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
 				return err
 			}
 
-			err = s.handleConsensusDigest(header)
-			if err != nil {
-				return err
+			// get block header; if exists, return
+			existingHeader, err := s.blockState.GetHeader(bd.Hash)
+			if err != nil && existingHeader == nil {
+				err = s.blockState.SetHeader(header)
+				if err != nil {
+					return err
+				}
+
+				log.Info("[core] saved block header", "hash", header.Hash(), "number", header.Number)
+
+				// TODO: handle consensus digest, if first in epoch
+				// err = s.handleConsensusDigest(header)
+				// if err != nil {
+				// 	return err
+				// }
 			}
 		}
 
@@ -587,33 +610,34 @@ func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
 				Body:   body,
 			}
 
-			enc, err := block.Encode()
-			if err != nil {
-				return err
-			}
+			// TODO: why doesn't execute block work with block we built?
 
-			err = s.executeBlock(enc)
-			if err != nil {
-				log.Error("[core] failed to validate block", "err", err)
-				return err
-			}
+			// blockWithoutDigests := block
+			// blockWithoutDigests.Header.Digest = [][]byte{{}}
 
-			err = s.checkForRuntimeChanges()
-			if err != nil {
-				return err
-			}
+			// enc, err := block.Encode()
+			// if err != nil {
+			// 	return err
+			// }
 
-			// get block header; if exists, return
-			existingHeader, err := s.blockState.GetHeader(bd.Hash)
-			if err == nil && existingHeader != nil {
-				// header exists, return
-				// TODO: store this block in the blocktree
-				return nil
-			}
+			// err = s.executeBlock(enc)
+			// if err != nil {
+			// 	log.Error("[core] failed to validate block", "err", err)
+			// 	return err
+			// }
 
-			err = s.blockState.SetHeader(header)
-			if err != nil {
-				return err
+			if header.Number.Cmp(bestNum) == 1 {
+				err = s.blockState.AddBlock(block)
+				if err != nil {
+					return err
+				}
+
+				log.Info("[core] imported block", "number", header.Number, "hash", header.Hash())
+
+				err = s.checkForRuntimeChanges()
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -724,6 +748,7 @@ func (s *Service) ProcessTransactionMessage(msg network.Message) error {
 }
 
 // handle authority and randomness changes over transitions from one epoch to the next
+//nolint
 func (s *Service) handleConsensusDigest(header *types.Header) (err error) {
 	var item types.DigestItem
 	for _, digest := range header.Digest {

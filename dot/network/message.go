@@ -17,8 +17,8 @@
 package network
 
 import (
+	"bytes"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -81,10 +81,21 @@ func decodeMessage(r io.Reader) (m Message, err error) {
 		m = new(TransactionMessage)
 		err = m.Decode(r)
 	default:
-		return nil, errors.New("unsupported message type")
+		return nil, fmt.Errorf("unsupported message type %d", msgType)
 	}
 
 	return m, err
+}
+
+// decodeMessageBytes decodes the message based on message type
+func decodeMessageBytes(in []byte) (m Message, err error) {
+	r := &bytes.Buffer{}
+	_, err = r.Write(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeMessage(r)
 }
 
 // StatusMessage struct

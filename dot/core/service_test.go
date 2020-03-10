@@ -265,11 +265,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	hash := common.NewHash([]byte{0})
 	body := optional.CoreBody{0xa, 0xb, 0xc, 0xd}
 
-	parentHash, err := common.HexToHash("0x4545454545454545454545454545454545454545454545454545454545454545")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	parentHash := genesisHeader.Hash()
 	stateRoot, err := common.HexToHash("0x2747ab7c0dc38b7f2afba82bd5e2d6acef8c31e09800f660b75ec84a7005099f")
 	if err != nil {
 		t.Fatal(err)

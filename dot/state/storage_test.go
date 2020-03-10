@@ -10,7 +10,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
-func newTesStorageState(t *testing.T) *StorageState {
+func newTestStorageState(t *testing.T) *StorageState {
 	datadir, err := ioutil.TempDir("", "./test_data")
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func newTesStorageState(t *testing.T) *StorageState {
 }
 
 func TestLoadCodeHash(t *testing.T) {
-	storage := newTesStorageState(t)
+	storage := newTestStorageState(t)
 	testCode := []byte("asdf")
 
 	err := storage.SetStorage(codeKey, testCode)

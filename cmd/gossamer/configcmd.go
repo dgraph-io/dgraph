@@ -44,6 +44,8 @@ import (
 	"github.com/urfave/cli"
 )
 
+var channelSize = 128
+
 // makeNode sets up node; opening badgerDB instance and returning the Node container
 func makeNode(ctx *cli.Context) (*dot.Node, *dot.Config, error) {
 	cfg, err := getConfig(ctx)
@@ -320,8 +322,8 @@ func createNetworkService(fig *dot.Config, gendata *genesis.Data, stateService *
 		NoMDNS:       fig.Network.NoMDNS,
 	}
 
-	networkMsgRec := make(chan network.Message)
-	networkMsgSend := make(chan network.Message)
+	networkMsgRec := make(chan network.Message, channelSize)
+	networkMsgSend := make(chan network.Message, channelSize)
 
 	networkService, err := network.NewService(&networkConfig, networkMsgSend, networkMsgRec)
 	if err != nil {

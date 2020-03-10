@@ -18,6 +18,7 @@ package network
 
 import (
 	log "github.com/ChainSafe/log15"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 // gossip submodule
@@ -35,7 +36,7 @@ func newGossip(host *host) *gossip {
 }
 
 // handleMessage broadcasts messages that have not been seen
-func (g *gossip) handleMessage(msg Message) {
+func (g *gossip) handleMessage(msg Message, from peer.ID) {
 
 	// check if message has not been seen
 	if !g.hasSeen[msg.IDString()] {
@@ -50,6 +51,6 @@ func (g *gossip) handleMessage(msg Message) {
 		)
 
 		// broadcast message to connected peers
-		g.host.broadcast(msg)
+		g.host.broadcastExcluding(msg, from)
 	}
 }
