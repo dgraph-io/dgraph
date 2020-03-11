@@ -44,12 +44,11 @@ func TestCountIndex(t *testing.T) {
 	edgeCount := make([]int, total+100000)
 	uidLocks := make([]sync.Mutex, total+100000)
 
-	dg, err := getClient()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: "value: [string] .",
 	}); err != nil {

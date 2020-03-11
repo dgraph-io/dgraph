@@ -65,12 +65,11 @@ func TestParallelIndexing(t *testing.T) {
 		t.Fatalf("error in assignig UIDs :: %v", err)
 	}
 
-	dg, err := getClient()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: `
 			balance_int: int .

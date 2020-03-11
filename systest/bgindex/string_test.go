@@ -44,13 +44,11 @@ func TestStringIndex(t *testing.T) {
 	acctsBal := make(map[int]int, numAccts)
 	var lock sync.Mutex
 
-	// dg, err := testutil.DgraphClient(testutil.SockAddr)
-	dg, err := getClient()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: "balance: string .",
 	}); err != nil {

@@ -21,39 +21,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
 )
-
-func getClient() (*dgo.Dgraph, error) {
-	ports := []int{9180, 9182, 9183, 9184, 9185, 9186}
-	conns := make([]api.DgraphClient, len(ports))
-	for i, port := range ports {
-		conn, err := grpc.Dial(fmt.Sprintf("localhost:%v", port), grpc.WithInsecure())
-		if err != nil {
-			return nil, err
-		}
-
-		conns[i] = api.NewDgraphClient(conn)
-	}
-	dg := dgo.NewDgraphClient(conns...)
-
-	for {
-		// keep retrying until we succeed or receive a non-retriable error
-		err := dg.Login(context.Background(), "groot", "password")
-		if err == nil || !strings.Contains(err.Error(), "Please retry") {
-			return dg, err
-		}
-		time.Sleep(time.Second)
-	}
-}
 
 func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
 	defer wg.Done()

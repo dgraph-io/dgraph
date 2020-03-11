@@ -39,12 +39,11 @@ import (
 
 func TestReverseIndex(t *testing.T) {
 	total := 100000
-	dg, err := getClient()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: "balance: [uid] .",
 	}); err != nil {
