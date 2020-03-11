@@ -105,6 +105,7 @@ func TestCountIndex(t *testing.T) {
 		nb := acctsBal[uid]
 		switch rand.Intn(1000) % 3 {
 		case 0:
+			// add new account
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> "%v" .`, uid, nb)),
@@ -118,6 +119,7 @@ func TestCountIndex(t *testing.T) {
 			if nb <= 0 {
 				return
 			}
+			// delete the last account
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <balance> "%v" .`, uid, nb-1)),

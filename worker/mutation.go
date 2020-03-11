@@ -118,14 +118,16 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 }
 
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
-	// wait until schema modification for all predicate is complete. We cannot have two
-	// background tasks running for the same predicate. This is a race condition, we typically
-	// won't propose an index update if an index update is already going on. In this case, looks
-	// like the receiver of the update had probably finished the previous index update, but some
-	// follower (or perhaps leader) had not finished it.
-	// In other words, before reaching here, the proposer P would have checked that no indexing
-	// is in progress (could also be because proposer was done earlier than others). If P was still
-	// indexing when the req was received, it would have rejected the Alter request. Only if P is
+	// Wait until schema modification for all predicates is complete. There cannot be two
+	// background tasks running as this is a race condition. We typically won't propose an
+	// index update if one is already going on. If that's not the case, then the receiver
+	// of the update had probably finished the previous index update but some follower
+	// (or perhaps leader) had not finished it.
+	// In other words, the proposer checks whether there is another indexing in progress.
+	// If that's the case, the alter request is rejected. Otherwise, the request is accepted.
+	// Before reaching here, the proposer P would have checked that no indexing is in progress
+	// (could also be because proposer was done earlier than others). If P was still indexing
+	// when the req was received, it would have rejected the Alter request. Only if P is
 	// not indexing, it would accept and propose the request.
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
@@ -154,7 +156,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	wg.Add(1)
 	defer wg.Done()
 	buildIndxes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
-		// we should only start building indexes once this function has returned.
+		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
 		// and write indexes for another predicate simultaneously. because that could
 		// cause writes to badger to fail leading to undesired indexing failures.
@@ -194,8 +196,8 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			CurrentSchema: su,
 		}
 		querySchema := rebuild.GetQuerySchema()
-		// Sets only in memory, we will update it on disk only after
-		// schema mutations are successful and written to disk.
+		// Sets the schema only in memory. The schema is written to
+		// disk only after schema mutations are successful.
 		schema.State().Set(su.Predicate, querySchema)
 		schema.State().SetMutSchema(su.Predicate, su)
 
