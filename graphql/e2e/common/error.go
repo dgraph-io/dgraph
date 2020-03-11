@@ -275,10 +275,6 @@ func (dg *panicClient) Mutate(
 	panic(panicMsg)
 }
 
-type contextClient struct {
-	context context.Context
-}
-
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
 // It mocks Dgraph like panicCatcher.
 func clientInfoLogin(t *testing.T) {
