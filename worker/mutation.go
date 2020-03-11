@@ -203,6 +203,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		schema.State().Set(su.Predicate, querySchema)
 		schema.State().SetMutSchema(su.Predicate, su)
 
+		// TODO(Aman): If we return an error, we may not have right schema reflected.
 		if err := rebuild.DropIndexes(ctx); err != nil {
 			return err
 		}
