@@ -67,10 +67,57 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, gqlErr
 	}
 
-	return &operation{op: op,
+	operation := &operation{op: op,
 		vars:     vars,
 		query:    req.Query,
 		doc:      doc,
 		inSchema: s,
-	}, nil
+	}
+
+	// recursively expand fragments in operation as selection set fields
+	for _, s := range op.SelectionSet {
+		recursivelyExpandFragmentSelections(s.(*ast.Field), operation)
+	}
+
+	return operation, nil
+}
+
+// recursivelyExpandFragmentSelections puts a fragment's selection set directly inside this
+// field's selection set, and does it recursively for all the fields in this field's selection
+// set. This eventually expands all the fragment references anywhere in the hierarchy.
+func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
+	// find all valid type names that this field satisfies
+	typeName := field.Definition.Type.Name()
+	satisfies := []string{typeName}
+	var additionalTypes []*ast.Definition
+	switch op.inSchema.schema.Types[typeName].Kind {
+	case ast.Interface:
+		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
+	case ast.Union:
+		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
+	case ast.Object:
+		additionalTypes = op.inSchema.schema.Implements[typeName]
+	default:
+		// return, as fragment can't be present on a field which is not Interface, Union or Object
+		return
+	}
+	for _, typ := range additionalTypes {
+		satisfies = append(satisfies, typ.Name)
+	}
+
+	// collect all fields from any satisfying fragments into selectionSet
+	collectedFields := collectFields(&requestContext{
+		RawQuery:  op.query,
+		Variables: op.vars,
+		Doc:       op.doc,
+	}, field.SelectionSet, satisfies)
+	field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
+	for _, collectedField := range collectedFields {
+		field.SelectionSet = append(field.SelectionSet, collectedField.Field)
+	}
+
+	// recursively run for this field's selectionSet
+	for _, f := range field.SelectionSet {
+		recursivelyExpandFragmentSelections(f.(*ast.Field), op)
+	}
 }

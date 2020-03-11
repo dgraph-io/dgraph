@@ -363,8 +363,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 						allResolved[storeAt] = &Resolved{Err: err}
 					})
 
-				// recursively expand fragments in query as selection set fields
-				q.RecursivelyExpandFragmentSelections()
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
 		}
@@ -404,8 +402,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			}
 
 			var res *Resolved
-			// recursively expand fragments in mutation as selection set fields
-			m.RecursivelyExpandFragmentSelections()
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			resp.WithError(res.Err)
 			resp.AddData(res.Data)
