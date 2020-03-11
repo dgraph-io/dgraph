@@ -97,6 +97,9 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	// RecursivelyExpandFragmentSelections puts a fragment's selection set directly inside this
+	// field's selection set, and does it recursively for all the fields in this field's selection
+	// set. This eventually expands all the fragment references anywhere in the hierarchy.
 	RecursivelyExpandFragmentSelections()
 }
 

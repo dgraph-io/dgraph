@@ -130,18 +130,17 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		}
 		fragment humanFrag on Human {
 			starships {
-				...starshipFrag
+				... on Starship {
+					id
+					name
+					length
+				}
 			}
 			totalCredits
 			ename
 		}
 		fragment droidFrag on Droid {
 			primaryFunction
-		}
-		fragment starshipFrag on Starship {
-			id
-			name
-			length
 		}
 		`,
 	}
@@ -208,14 +207,13 @@ func fragmentInQueryOnObject(t *testing.T) {
 		}
 		fragment humanFrag on Human {
 			starships {
-				...starshipFrag
+				... on Starship {
+					id
+					name
+					length
+				}
 			}
 			totalCredits
-		}
-		fragment starshipFrag on Starship {
-			id
-			name
-			length
 		}
 		`,
 	}
