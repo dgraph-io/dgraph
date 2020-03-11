@@ -67,7 +67,7 @@ func parseFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, err
 		var valueType api.Facet_ValType
 		switch v := facetVal.(type) {
 		case string:
-			if t, err := time.Parse(time.RFC3339, v); err == nil {
+			if t, err := types.ParseTime(v); err == nil {
 				valueType = api.Facet_DATETIME
 				jsonValue = t
 			} else {
