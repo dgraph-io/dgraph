@@ -17,7 +17,6 @@
 package state
 
 import (
-	"io/ioutil"
 	"math/big"
 	"runtime"
 	"sync"
@@ -31,12 +30,7 @@ import (
 )
 
 func TestConcurrencySetHeader(t *testing.T) {
-	datadir, err := ioutil.TempDir("", "./test_data")
-	require.Nil(t, err)
-
-	db, err := database.NewBadgerDB(datadir)
-	require.Nil(t, err)
-
+	db := database.NewMemDatabase()
 	blockDB := NewBlockDB(db)
 
 	threads := runtime.NumCPU()
@@ -62,7 +56,7 @@ func TestConcurrencySetHeader(t *testing.T) {
 				Digest:    [][]byte{},
 			}
 
-			err = bs.SetHeader(header)
+			err := bs.SetHeader(header)
 			require.Nil(t, err)
 
 			res, err := bs.GetHeader(header.Hash())

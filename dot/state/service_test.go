@@ -41,8 +41,37 @@ func newTestService(t *testing.T) (state *Service) {
 	return state
 }
 
+func newTestMemDBService() *Service {
+	state := NewService("")
+	state.UseMemDB()
+	return state
+}
+
 func TestService_Start(t *testing.T) {
 	state := newTestService(t)
+
+	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tr := trie.NewEmptyTrie(nil)
+
+	err = state.Initialize(genesisHeader, tr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = state.Start()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	state.Stop()
+}
+
+func TestMemDB_Start(t *testing.T) {
+	state := newTestMemDBService()
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 	if err != nil {

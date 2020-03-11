@@ -1,7 +1,6 @@
 package blocktree
 
 import (
-	"io/ioutil"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -48,7 +47,7 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 	}
 
-	// create tree branches
+	// create tree branches3
 	for _, branch := range branches {
 		for i := int(branch.depth.Uint64()); i <= depth; i++ {
 			block := &types.Block{
@@ -69,15 +68,7 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 }
 
 func TestStoreBlockTree(t *testing.T) {
-	dataDir, err := ioutil.TempDir("", "./test_data")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testDb, err := database.NewBadgerDB(dataDir)
-	if err != nil {
-		t.Fatal(err)
-	}
+	db := database.NewMemDatabase()
 
 	zeroHash, err := common.HexToHash("0x00")
 	if err != nil {
@@ -89,14 +80,14 @@ func TestStoreBlockTree(t *testing.T) {
 		Number:     big.NewInt(0),
 	}
 
-	bt := createTestBlockTree(header, 100, testDb)
+	bt := createTestBlockTree(header, 100, db)
 
 	err = bt.Store()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	resBt := NewBlockTreeFromGenesis(header, testDb)
+	resBt := NewBlockTreeFromGenesis(header, db)
 	err = resBt.Load()
 	if err != nil {
 		t.Fatal(err)

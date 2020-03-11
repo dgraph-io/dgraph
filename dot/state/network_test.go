@@ -37,7 +37,7 @@ var testPeers = &[]common.PeerInfo{{PeerID: "alice", BestHash: common.Hash{}, Be
 
 // test state.Network
 func TestNetworkState(t *testing.T) {
-	state := newTestService(t)
+	state := newTestMemDBService()
 
 	header := &types.Header{
 		Number:    big.NewInt(0),

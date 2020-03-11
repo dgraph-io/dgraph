@@ -17,7 +17,6 @@
 package state
 
 import (
-	"io/ioutil"
 	"math/big"
 	"reflect"
 	"testing"
@@ -31,14 +30,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
-	datadir, err := ioutil.TempDir("", "./test_data")
-	require.Nil(t, err)
-
-	db, err := database.NewBadgerDB(datadir)
-
+func newTestBlockState(header *types.Header) *BlockState {
+	db := database.NewMemDatabase()
 	blockDb := NewBlockDB(db)
-	require.Nil(t, err)
 
 	if header == nil {
 		return &BlockState{
@@ -53,7 +47,7 @@ func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
 }
 
 func TestSetAndGetHeader(t *testing.T) {
-	bs := newTestBlockState(t, nil)
+	bs := newTestBlockState(nil)
 	defer bs.db.db.Close()
 
 	header := &types.Header{
@@ -78,7 +72,7 @@ func TestSetAndGetHeader(t *testing.T) {
 }
 
 func TestGetBlockByNumber(t *testing.T) {
-	bs := newTestBlockState(t, nil)
+	bs := newTestBlockState(nil)
 	defer bs.db.db.Close()
 
 	// Create a header & blockData
@@ -125,7 +119,7 @@ func TestAddBlock(t *testing.T) {
 		Number: big.NewInt(0),
 	}
 
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(genesisHeader)
 	defer bs.db.db.Close()
 
 	// Create header
@@ -201,7 +195,7 @@ func TestGetSlotForBlock(t *testing.T) {
 		StateRoot: trie.EmptyHash,
 	}
 
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(genesisHeader)
 	defer bs.db.db.Close()
 
 	preDigest, err := common.HexToBytes("0x014241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")

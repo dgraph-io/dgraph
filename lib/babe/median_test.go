@@ -20,7 +20,6 @@ func TestMedian_OddLength(t *testing.T) {
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
 	}
-
 }
 
 func TestMedian_EvenLength(t *testing.T) {
@@ -120,15 +119,8 @@ func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState 
 }
 
 func TestSlotTime(t *testing.T) {
-	babesession, dbSrv := createTestSessionWithState(t, nil)
-	defer func() {
-		err := dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
-	addBlocksToState(t, babesession, 100, dbSrv.Block, uint64(0))
+	babesession := createTestSession(t, nil)
+	addBlocksToState(t, babesession, 100, babesession.blockState, uint64(0))
 
 	res, err := babesession.slotTime(103, 20)
 	if err != nil {
@@ -143,15 +135,7 @@ func TestSlotTime(t *testing.T) {
 }
 
 func TestEstimateCurrentSlot(t *testing.T) {
-	babesession, dbSrv := createTestSessionWithState(t, nil)
-
-	defer func() {
-		err := dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
+	babesession := createTestSession(t, nil)
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)
 	babesession.authorityIndex = 0
@@ -191,7 +175,7 @@ func TestEstimateCurrentSlot(t *testing.T) {
 
 	arrivalTime := uint64(time.Now().Unix()) - slot.duration
 
-	err = dbSrv.Block.AddBlockWithArrivalTime(block, arrivalTime)
+	err = babesession.blockState.AddBlockWithArrivalTime(block, arrivalTime)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,25 +191,18 @@ func TestEstimateCurrentSlot(t *testing.T) {
 }
 
 func TestGetCurrentSlot(t *testing.T) {
-	babesession, dbSrv := createTestSessionWithState(t, nil)
-
-	defer func() {
-		err := dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
+	babesession := createTestSession(t, nil)
 
 	// 100 blocks / 1000 ms/s
 	// TODO: use time.Duration
-	addBlocksToState(t, babesession, 100, dbSrv.Block, uint64(time.Now().Unix())-(babesession.config.SlotDuration/10))
+	addBlocksToState(t, babesession, 100, babesession.blockState, uint64(time.Now().Unix())-(babesession.config.SlotDuration/10))
 
 	res, err := babesession.getCurrentSlot()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	expected := uint64(101)
+	expected := uint64(100)
 
 	if res != expected && res != expected+1 {
 		t.Fatalf("Fail: got %d expected %d", res, expected)

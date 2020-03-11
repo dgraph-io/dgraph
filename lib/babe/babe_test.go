@@ -17,7 +17,6 @@
 package babe
 
 import (
-	"io/ioutil"
 	"math"
 	"math/big"
 	"reflect"
@@ -73,6 +72,23 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 		cfg.TransactionQueue = state.NewTransactionQueue()
 	}
 
+	if cfg.BlockState == nil || cfg.StorageState == nil {
+		dbSrv := state.NewService("")
+		dbSrv.UseMemDB()
+		err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = dbSrv.Start()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		cfg.BlockState = dbSrv.Block
+		cfg.StorageState = dbSrv.Storage
+	}
+
 	babesession, err := NewSession(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -81,84 +97,13 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	return babesession
 }
 
-func createTestSessionWithState(t *testing.T, cfg *SessionConfig) (*Session, *state.Service) {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
-
-	if cfg == nil {
-		cfg = &SessionConfig{
-			Runtime: rt,
-		}
-	}
-
-	if cfg.Kill == nil {
-		cfg.Kill = make(chan struct{})
-	}
-
-	if cfg.Runtime == nil {
-		cfg.Runtime = rt
-	}
-
-	var err error
-	if cfg.Keypair == nil {
-		cfg.Keypair, err = sr25519.GenerateKeypair()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if cfg.AuthData == nil {
-		auth := &AuthorityData{
-			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
-			Weight: 1,
-		}
-		cfg.AuthData = []*AuthorityData{auth}
-	}
-
-	if cfg.TransactionQueue == nil {
-		cfg.TransactionQueue = state.NewTransactionQueue()
-	}
-
-	dataDir, err := ioutil.TempDir("", "./test_data")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	dbSrv := state.NewService(dataDir)
-	err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = dbSrv.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cfg.BlockState = dbSrv.Block
-	cfg.StorageState = dbSrv.Storage
-
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return babesession, dbSrv
-}
-
 func TestKill(t *testing.T) {
 	killChan := make(chan struct{})
 	cfg := &SessionConfig{
 		Kill: killChan,
 	}
 
-	babesession, dbSrv := createTestSessionWithState(t, cfg)
-	defer func() {
-		err := dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
+	babesession := createTestSession(t, cfg)
 	err := babesession.Start()
 	if err != nil {
 		t.Fatal(err)
@@ -285,14 +230,7 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		TransactionQueue: TransactionQueue,
 	}
 
-	babesession, dbSrv := createTestSessionWithState(t, cfg)
-	defer func() {
-		err := dbSrv.Stop()
-		if err != nil {
-			t.Fatal(err)
-		}
-	}()
-
+	babesession := createTestSession(t, cfg)
 	err := babesession.configurationFromRuntime()
 	if err != nil {
 		t.Fatal(err)

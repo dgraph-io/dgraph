@@ -12,120 +12,81 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestProcessBlockRequestAndBlockAnnounce(t *testing.T) {
-	testCases := []struct {
-		name          string
-		blockAnnounce *network.BlockAnnounceMessage
-		msgType       int
-		msgTypeString string
-	}{
-		{
-			name: "should respond with a BlockRequestMessage",
-			blockAnnounce: &network.BlockAnnounceMessage{
-				Number:         big.NewInt(1),
-				ParentHash:     common.Hash{},
-				StateRoot:      common.Hash{},
-				ExtrinsicsRoot: common.Hash{},
-				Digest:         [][]byte{},
-			},
-			msgType:       network.BlockRequestMsgType, //1
-			msgTypeString: "BlockRequestMsgType",
-		},
-		{
-			name: "should respond with a BlockAnnounceMessage",
-			blockAnnounce: &network.BlockAnnounceMessage{
-				Number:         big.NewInt(2),
-				ParentHash:     common.Hash{},
-				StateRoot:      common.Hash{},
-				ExtrinsicsRoot: common.Hash{},
-				Digest:         [][]byte{},
-			},
-			msgType:       network.BlockAnnounceMsgType, //3
-			msgTypeString: "BlockAnnounceMsgType",
-		},
+func TestProcessBlockRequest(t *testing.T) {
+	msgRec := make(chan network.Message)
+	msgSend := make(chan network.Message)
+
+	cfg := &Config{
+		Keystore:        keystore.NewKeystore(),
+		MsgSend:         msgSend,
+		MsgRec:          msgRec,
+		IsBabeAuthority: false,
 	}
 
-	for _, test := range testCases {
+	s := newTestService(t, cfg)
+	err := s.Start()
+	require.Nil(t, err)
 
-		localTest := test
-		t.Run(test.name, func(t *testing.T) {
-			msgRec := make(chan network.Message)
-			msgSend := make(chan network.Message)
-			newBlocks := make(chan types.Block)
+	defer func() {
+		err = s.Stop()
+		require.Nil(t, err)
+	}()
 
-			// Create header
-			header0 := &types.Header{
-				Number:     big.NewInt(1),
-				ParentHash: genesisHeader.Hash(),
-			}
+	blockAnnounce := &network.BlockAnnounceMessage{
+		Number:     big.NewInt(3),
+		ParentHash: genesisHeader.Hash(),
+	}
+	// simulate message sent from network service
+	msgRec <- blockAnnounce
 
-			// BlockBody with fake extrinsics
-			blockBody0 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	select {
+	case msg := <-msgSend:
+		msgType := msg.GetType()
+		require.Equal(t, network.BlockRequestMsgType, msgType)
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
+	}
 
-			block0 := &types.Block{
-				Header: header0,
-				Body:   &blockBody0,
-			}
+}
 
-			cfg := &Config{
-				MsgSend:   msgSend,
-				Keystore:  keystore.NewKeystore(),
-				NewBlocks: newBlocks,
-			}
+func TestProcessBlockAnnounce(t *testing.T) {
+	msgSend := make(chan network.Message)
+	newBlocks := make(chan types.Block)
 
-			if localTest.msgType == network.BlockRequestMsgType {
-				cfg.IsBabeAuthority = false
-				cfg.NewBlocks = nil
-				cfg.MsgRec = msgRec
-			}
+	cfg := &Config{
+		MsgSend:         msgSend,
+		Keystore:        keystore.NewKeystore(),
+		NewBlocks:       newBlocks,
+		IsBabeAuthority: false,
+	}
 
-			s, dbSrv := newTestService(t, cfg)
-			defer func() {
-				err := dbSrv.Stop()
-				if err != nil {
-					t.Fatal(err)
-				}
-			}()
+	s := newTestService(t, cfg)
+	err := s.Start()
+	require.Nil(t, err)
 
-			err := s.Start()
-			require.Nil(t, err)
+	expected := &network.BlockAnnounceMessage{
+		Number:         big.NewInt(1),
+		ParentHash:     genesisHeader.Hash(),
+		StateRoot:      common.Hash{},
+		ExtrinsicsRoot: common.Hash{},
+		Digest:         nil,
+	}
 
-			if localTest.msgType == network.BlockAnnounceMsgType {
-				// Add the block0 to the DB
-				err = s.blockState.AddBlock(block0)
-				require.Nil(t, err)
-			}
+	// simulate block sent from BABE session
+	newBlocks <- types.Block{
+		Header: &types.Header{
+			Number:     big.NewInt(1),
+			ParentHash: genesisHeader.Hash(),
+		},
+		Body: types.NewBody([]byte{}),
+	}
 
-			defer func() {
-				err = s.Stop()
-				require.Nil(t, err)
-			}()
-
-			if localTest.msgType == network.BlockAnnounceMsgType {
-				// simulate block sent from BABE session
-				newBlocks <- types.Block{
-					Header: &types.Header{
-						Number:     big.NewInt(2),
-						ParentHash: header0.Hash(),
-					},
-					Body: types.NewBody([]byte{}),
-				}
-			} else if localTest.msgType == network.BlockRequestMsgType {
-				blockAnnounce := &network.BlockAnnounceMessage{
-					Number:     big.NewInt(2),
-					ParentHash: header0.Hash(),
-				}
-				// simulate message sent from network service
-				msgRec <- blockAnnounce
-			}
-
-			select {
-			case msg := <-msgSend:
-				msgType := msg.GetType()
-				require.Equal(t, localTest.msgType, msgType)
-			case <-time.After(TestMessageTimeout):
-				t.Error("timeout waiting for message")
-			}
-		})
+	select {
+	case msg := <-msgSend:
+		msgType := msg.GetType()
+		require.Equal(t, network.BlockAnnounceMsgType, msgType)
+		require.Equal(t, expected, msg)
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
 	}
 }
