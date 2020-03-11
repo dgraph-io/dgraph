@@ -49,6 +49,7 @@ func TestCountIndex(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
+	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: "value: [string] .",
 	}); err != nil {

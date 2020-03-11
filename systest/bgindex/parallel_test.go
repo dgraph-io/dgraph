@@ -70,6 +70,7 @@ func TestParallelIndexing(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
+	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: `
 			balance_int: int .
@@ -120,7 +121,7 @@ func TestParallelIndexing(t *testing.T) {
 			Schema: `balance_float: float @index(float) .`,
 		}); err != nil && !strings.Contains(err.Error(), "is already being modified") {
 			t.Fatalf("error in adding indexes :: %v\n", err)
-		} else {
+		} else if err == nil {
 			break
 		}
 		time.Sleep(time.Second)
