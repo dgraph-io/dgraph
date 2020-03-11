@@ -57,7 +57,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 	*http.Response, error) {
 
 	client := &http.Client{}
-	numRetries := 2
+	numRetries := 3
 
 	var resp *http.Response
 	var err error

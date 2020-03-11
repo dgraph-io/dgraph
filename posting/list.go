@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/algo"
@@ -35,7 +36,6 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -354,7 +354,7 @@ func TypeID(edge *pb.DirectedEdge) types.TypeID {
 
 func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	// There could be a collision if the user gives us a value with Lang = "en" and later gives
-	// us a value = "en" for the same predicate. We would end up overwritting his older lang
+	// us a value = "en" for the same predicate. We would end up overwriting his older lang
 	// value.
 
 	// All edges with a value without LANGTAG, have the same UID. In other words,
