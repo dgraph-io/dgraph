@@ -189,7 +189,7 @@ func TestCountIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			fmt.Errorf("error in json.Unmarshal :: %w", err)
+			return fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		if len(data.Q) != 1 && data.Q[0].Count != 0 {
@@ -202,7 +202,7 @@ func TestCountIndex(t *testing.T) {
 		q := fmt.Sprintf(`{ q(func: eq(count(value), "%v")) {uid}}`, b)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
-			fmt.Errorf("error in query: %v :: %w", q, err)
+			return fmt.Errorf("error in query: %v :: %w", q, err)
 		}
 		var data struct {
 			Q []struct {
@@ -210,7 +210,7 @@ func TestCountIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			fmt.Errorf("error in json.Unmarshal :: %w", err)
+			return fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		actual := make([]int, len(data.Q))

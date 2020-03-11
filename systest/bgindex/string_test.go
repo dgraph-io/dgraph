@@ -172,7 +172,7 @@ func TestStringIndex(t *testing.T) {
 		q := fmt.Sprintf(`{ q(func: uid(%v)) {balance}}`, uid)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
-			fmt.Errorf("error in query: %v :: %w", q, err)
+			return fmt.Errorf("error in query: %v :: %w", q, err)
 		}
 		var data struct {
 			Q []struct {
@@ -180,7 +180,7 @@ func TestStringIndex(t *testing.T) {
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
-			fmt.Errorf("error in json.Unmarshal :: %w", err)
+			return fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
 		if len(data.Q) != 0 {
