@@ -30,7 +30,6 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
-	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
@@ -275,8 +274,25 @@ func (dg *panicClient) Mutate(
 	panic(panicMsg)
 }
 
+type contextClient struct {
+	context context.Context
+}
+
+func (cc *contextClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	cc.context = ctx
+	return nil, nil
+}
+
+func (cc *contextClient) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	cc.context = ctx
+	return nil, nil, nil
+}
+
 // propagateClientRemoteIP check whether the client info(IP address) is propagated in the request.
-// It mocks Dgraph like panicCatcher.
+// It mocks Dgraph like contextClient.
 func propagateClientRemoteIP(t *testing.T) {
 	postQuery := &GraphQLParams{
 		Query: `query {
@@ -288,16 +304,17 @@ func propagateClientRemoteIP(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	fns := &resolve.ResolverFns{}
-	var loginCtx context.Context
-	errFunc := func(name string) error { return nil }
-	mErr := resolve.MutationResolverFunc(
-		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
-			loginCtx = ctx
-			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
-		})
+	postCtxClient := &contextClient{}
+	fns := &resolve.ResolverFns{
+		Qrw: resolve.NewQueryRewriter(),
+		Arw: resolve.NewAddRewriter,
+		Urw: resolve.NewUpdateRewriter,
+		Drw: resolve.NewDeleteRewriter(),
+		Qe:  postCtxClient,
+		Me:  postCtxClient,
+	}
 
-	resolverFactory := resolve.NewResolverFactory(nil, mErr).
+	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
@@ -307,8 +324,8 @@ func propagateClientRemoteIP(t *testing.T) {
 	defer ts.Close()
 
 	_ = postQuery.ExecuteAsPost(t, ts.URL)
-	require.NotNil(t, loginCtx)
-	peerInfo, found := peer.FromContext(loginCtx)
+	require.NotNil(t, postCtxClient.context)
+	peerInfo, found := peer.FromContext(postCtxClient.context)
 	require.True(t, found)
 	require.NotNil(t, peerInfo.Addr.String())
 }

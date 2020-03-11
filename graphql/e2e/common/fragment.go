@@ -122,6 +122,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			...commonCharacterFrag
 			...humanFrag
 			...droidFrag
+			...postFrag
 		}
 		fragment commonCharacterFrag on Character {
 			id
@@ -141,6 +142,9 @@ func fragmentInQueryOnInterface(t *testing.T) {
 		}
 		fragment droidFrag on Droid {
 			primaryFunction
+		}
+		fragment postFrag on Post {
+			title
 		}
 		`,
 	}
@@ -195,6 +199,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 				...employeeFrag
 				...characterFrag
 				...humanFrag
+				...postFrag
 			}
 		}
 		fragment employeeFrag on Employee {
@@ -214,6 +219,9 @@ func fragmentInQueryOnObject(t *testing.T) {
 				}
 			}
 			totalCredits
+		}
+		fragment postFrag on Post {
+			title
 		}
 		`,
 	}
