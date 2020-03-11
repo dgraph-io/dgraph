@@ -27,12 +27,12 @@ const adminTypes = `
 		destination: String!
 
 		"""
-		Access key credentail for the destination.
+		Access key credential for the destination.
 		"""
 		accessKey: String
 
 		"""
-		Secret key credentail for the destination.
+		Secret key credential for the destination.
 		"""		
 		secretKey: String
 
@@ -47,7 +47,7 @@ const adminTypes = `
 		anonymous: Boolean
 
 		"""
-		Force a full, rather than incremental backup.
+		Force a full backup instead of an incremental backup.
 		"""	
 		forceFull: Boolean
 	}
@@ -59,7 +59,7 @@ const adminTypes = `
 	type LoginResponse {
 
 		"""
-		JWT token that should be used in future request after this login.
+		JWT token that should be used in future requests after this login.
 		"""	
 		accessJWT: String
 
@@ -76,7 +76,7 @@ const adminTypes = `
 	type User @secret(field: "password", pred: "dgraph.password") {
 
 		"""
-		Username for the user.  Dgraph ensures that user names are unique.
+		Username for the user.  Dgraph ensures that usernames are unique.
 		"""
 		name: String! @id @dgraph(pred: "dgraph.xid")
 
@@ -113,6 +113,9 @@ const adminTypes = `
 		* 5 (101) : READ+MODIFY
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
+
+		Permission 0, which is equal to to permission for a predicate, blocks all read, 
+		write and modify operations.
 		"""	
 		permission: Int! @dgraph(pred: "dgraph.rule.permission")
 	}
@@ -167,6 +170,9 @@ const adminTypes = `
 		* 5 (101) : READ+MODIFY
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
+
+		Permission 0, which is equal to to permission for a predicate, blocks all read, 
+		write and modify operations.
 		"""
 		permission: Int!
 	}
@@ -252,23 +258,23 @@ const adminMutations = `
 	login(userId: String, password: String, refreshToken: String): LoginPayload
 
 	"""
-	Add a user.  When linking to groups, if the group doesn't exist it is created, if the group
+	Add a user.  When linking to groups: if the group doesn't exist it is created; if the group
 	exists, the new user is linked to the existing group.  It's possible to both create new
 	groups and link to existing groups in the one mutation.
 
-	Dgraph ensures that user names are unique, hence attempting to add an existing user results
+	Dgraph ensures that usernames are unique, hence attempting to add an existing user results
 	in an error.
 	"""
 	addUser(input: [AddUserInput!]!): AddUserPayload
 
 	"""
-	Add a new group and (optionally) set the rules for the group.  
+	Add a new group and (optionally) set the rules for the group.
 	"""
 	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
 	"""
-	Update users, their passwords and groups.  As with AddUser, when linking to groups, if the
-	group doesn't exist it is created, if the group exists, the new user is linked to the existing 
+	Update users, their passwords and groups.  As with AddUser, when linking to groups: if the
+	group doesn't exist it is created; if the group exists, the new user is linked to the existing 
 	group.  If the filter doesn't match any users, the mutation has no effect.
 	"""
 	updateUser(input: UpdateUserInput!): AddUserPayload

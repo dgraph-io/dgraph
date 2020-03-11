@@ -55,13 +55,13 @@ const (
 		id: ID!
 
 		"""
-		Input schema (GraphQL types) that was used in most recent schema update.
+		Input schema (GraphQL types) that was used in the latest schema update.
 		"""
 		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema generated from 'schema' field.  This is the schema that is
-		being served by Dgraph at /graphql.
+		The GraphQL schema that was generated from the 'schema' field.  
+		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
 	}
@@ -103,7 +103,7 @@ const (
 		uptime: Int
 
 		"""
-		Time in Unix epoch time that the node last contacted a zero node.
+		Time in Unix epoch time that the node was last contacted by another Zero or Alpha node.
 		"""
 		lastEcho: Int
 	}
@@ -197,7 +197,8 @@ const (
 	input ConfigInput {
 
 		"""
-		Memory used for the lru cache of data from disk.
+		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
 	}
