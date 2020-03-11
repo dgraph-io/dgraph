@@ -65,7 +65,7 @@ func (e *Executor) processMutationCh(ch chan *subMutation) {
 			glog.Errorf("Error while commiting to disk: %+v", err)
 		}
 		// TODO(Animesh): We might not need this wait.
-		// writer.Wait()
+		writer.Wait()
 	}
 }
 
