@@ -275,17 +275,15 @@ func (dg *panicClient) Mutate(
 	panic(panicMsg)
 }
 
-// clientInfoLogin check whether the client info(IP address) is propagated in the request.
+// propagateClientRemoteIP check whether the client info(IP address) is propagated in the request.
 // It mocks Dgraph like panicCatcher.
-func clientInfoLogin(t *testing.T) {
-	loginQuery := &GraphQLParams{
-		Query: `mutation {
-  						login(input: {userId: "groot", password: "password"}) {
-    						response {
-      							accessJWT
-    						}
-  						}
-					}`,
+func propagateClientRemoteIP(t *testing.T) {
+	postQuery := &GraphQLParams{
+		Query: `query {
+					queryPost {
+						title
+					}
+				}`,
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
@@ -308,7 +306,7 @@ func clientInfoLogin(t *testing.T) {
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
-	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	_ = postQuery.ExecuteAsPost(t, ts.URL)
 	require.NotNil(t, loginCtx)
 	peerInfo, found := peer.FromContext(loginCtx)
 	require.True(t, found)
