@@ -592,8 +592,16 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
-	x.PrintVersion()
+	x.InitSentry(enc.EeBuild)
+	defer x.FlushSentry()
+	x.ConfigureSentryScope("alpha")
+	x.WrapPanics()
 
+	// Simulate a Sentry exception or panic event as shown below.
+	// x.CaptureSentryException(errors.New("alpha exception"))
+	// x.Panic(errors.New("alpha manual panic will send 2 events"))
+
+	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
 	glog.Infof("x.WorkerConfig: %+v", x.WorkerConfig)
 	glog.Infof("worker.Config: %+v", worker.Config)

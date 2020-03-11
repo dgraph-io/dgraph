@@ -18,20 +18,21 @@ package schema
 
 import (
 	"bytes"
+	"context"
 	"encoding/hex"
 	"fmt"
 	"sync"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
+	"github.com/pkg/errors"
 	"golang.org/x/net/trace"
 
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -39,10 +40,27 @@ var (
 	pstore *badger.DB
 )
 
+// We maintain two schemas for a predicate if a background task is building indexes
+// for that predicate. Now, we need to use the new schema for mutations whereas
+// a query schema for queries. While calling functions in this package, we need
+// to set the context correctly as to which schema should be returned.
+// Query schema is defined as (old schema - tokenizers to drop based on new schema).
+type contextKey int
+
+const (
+	isWrite contextKey = iota
+)
+
+// GetWriteContext returns a context that sets the schema context for writing.
+func GetWriteContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, isWrite, true)
+}
+
 func (s *state) init() {
 	s.predicate = make(map[string]*pb.SchemaUpdate)
 	s.types = make(map[string]*pb.TypeUpdate)
 	s.elog = trace.NewEventLog("Dgraph", "Schema")
+	s.mutSchema = make(map[string]*pb.SchemaUpdate)
 }
 
 type state struct {
@@ -51,6 +69,8 @@ type state struct {
 	predicate map[string]*pb.SchemaUpdate
 	types     map[string]*pb.TypeUpdate
 	elog      trace.EventLog
+	// mutSchema holds the schema update that is being applied in the background.
+	mutSchema map[string]*pb.SchemaUpdate
 }
 
 // State returns the struct holding the current schema.
@@ -68,6 +88,10 @@ func (s *state) DeleteAll() {
 
 	for typ := range s.types {
 		delete(s.types, typ)
+	}
+
+	for pred := range s.mutSchema {
+		delete(s.mutSchema, pred)
 	}
 }
 
@@ -87,6 +111,7 @@ func (s *state) Delete(attr string) error {
 	}
 
 	delete(s.predicate, attr)
+	delete(s.mutSchema, attr)
 	return nil
 }
 
@@ -139,6 +164,20 @@ func (s *state) Set(pred string, schema *pb.SchemaUpdate) {
 	s.elog.Printf(logUpdate(schema, pred))
 }
 
+// SetMutSchema sets the mutation schema for the given predicate.
+func (s *state) SetMutSchema(pred string, schema *pb.SchemaUpdate) {
+	s.Lock()
+	defer s.Unlock()
+	s.mutSchema[pred] = schema
+}
+
+// DeleteMutSchema deletes the schema for given predicate from mutSchema.
+func (s *state) DeleteMutSchema(pred string) {
+	s.Lock()
+	defer s.Unlock()
+	delete(s.mutSchema, pred)
+}
+
 // SetType sets the type for the given predicate in memory.
 // schema mutations must flow through the update function, which are synced to the db.
 func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
@@ -149,11 +188,20 @@ func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
 }
 
 // Get gets the schema for the given predicate.
-func (s *state) Get(pred string) (pb.SchemaUpdate, bool) {
+func (s *state) Get(ctx context.Context, pred string) (pb.SchemaUpdate, bool) {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-	schema, has := s.predicate[pred]
-	if !has {
+	// If this is write context, mutSchema will have the updated schema.
+	// If mutSchema doesn't have the predicate key, we use the schema from s.predicate.
+	if isWrite {
+		if schema, ok := s.mutSchema[pred]; ok {
+			return *schema, true
+		}
+	}
+
+	schema, ok := s.predicate[pred]
+	if !ok {
 		return pb.SchemaUpdate{}, false
 	}
 	return *schema, true
@@ -181,26 +229,22 @@ func (s *state) TypeOf(pred string) (types.TypeID, error) {
 }
 
 // IsIndexed returns whether the predicate is indexed or not
-func (s *state) IsIndexed(pred string) bool {
+func (s *state) IsIndexed(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
+	if isWrite {
+		// TODO(Aman): we could return the query schema if it is a delete.
+		if schema, ok := s.mutSchema[pred]; ok && len(schema.Tokenizer) > 0 {
+			return true
+		}
+	}
+
 	if schema, ok := s.predicate[pred]; ok {
 		return len(schema.Tokenizer) > 0
 	}
-	return false
-}
 
-// IndexedFields returns the list of indexed fields
-func (s *state) IndexedFields() []string {
-	s.RLock()
-	defer s.RUnlock()
-	var out []string
-	for k, v := range s.predicate {
-		if len(v.Tokenizer) > 0 {
-			out = append(out, k)
-		}
-	}
-	return out
+	return false
 }
 
 // Predicates returns the list of predicates for given group
@@ -226,13 +270,24 @@ func (s *state) Types() []string {
 }
 
 // Tokenizer returns the tokenizer for given predicate
-func (s *state) Tokenizer(pred string) []tok.Tokenizer {
+func (s *state) Tokenizer(ctx context.Context, pred string) []tok.Tokenizer {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
-	schema, ok := s.predicate[pred]
-	x.AssertTruef(ok, "schema state not found for %s", pred)
-	var tokenizers []tok.Tokenizer
-	for _, it := range schema.Tokenizer {
+	var su *pb.SchemaUpdate
+	if isWrite {
+		if schema, ok := s.mutSchema[pred]; ok {
+			su = schema
+		}
+	}
+	if su == nil {
+		if schema, ok := s.predicate[pred]; ok {
+			su = schema
+		}
+	}
+	x.AssertTruef(su != nil, "schema state not found for %s", pred)
+	tokenizers := make([]tok.Tokenizer, 0, len(su.Tokenizer))
+	for _, it := range su.Tokenizer {
 		t, found := tok.GetTokenizer(it)
 		x.AssertTruef(found, "Invalid tokenizer %s", it)
 		tokenizers = append(tokenizers, t)
@@ -241,9 +296,9 @@ func (s *state) Tokenizer(pred string) []tok.Tokenizer {
 }
 
 // TokenizerNames returns the tokenizer names for given predicate
-func (s *state) TokenizerNames(pred string) []string {
+func (s *state) TokenizerNames(ctx context.Context, pred string) []string {
 	var names []string
-	tokenizers := s.Tokenizer(pred)
+	tokenizers := s.Tokenizer(ctx, pred)
 	for _, t := range tokenizers {
 		names = append(names, t.Name())
 	}
@@ -252,8 +307,8 @@ func (s *state) TokenizerNames(pred string) []string {
 
 // HasTokenizer is a convenience func that checks if a given tokenizer is found in pred.
 // Returns true if found, else false.
-func (s *state) HasTokenizer(id byte, pred string) bool {
-	for _, t := range s.Tokenizer(pred) {
+func (s *state) HasTokenizer(ctx context.Context, id byte, pred string) bool {
+	for _, t := range s.Tokenizer(ctx, pred) {
 		if t.Identifier() == id {
 			return true
 		}
@@ -262,9 +317,15 @@ func (s *state) HasTokenizer(id byte, pred string) bool {
 }
 
 // IsReversed returns whether the predicate has reverse edge or not
-func (s *state) IsReversed(pred string) bool {
+func (s *state) IsReversed(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
+	if isWrite {
+		if schema, ok := s.mutSchema[pred]; ok && schema.Directive == pb.SchemaUpdate_REVERSE {
+			return true
+		}
+	}
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Directive == pb.SchemaUpdate_REVERSE
 	}
@@ -272,9 +333,15 @@ func (s *state) IsReversed(pred string) bool {
 }
 
 // HasCount returns whether we want to mantain a count index for the given predicate or not.
-func (s *state) HasCount(pred string) bool {
+func (s *state) HasCount(ctx context.Context, pred string) bool {
+	isWrite, _ := ctx.Value(isWrite).(bool)
 	s.RLock()
 	defer s.RUnlock()
+	if isWrite {
+		if schema, ok := s.mutSchema[pred]; ok && schema.Count {
+			return true
+		}
+	}
 	if schema, ok := s.predicate[pred]; ok {
 		return schema.Count
 	}
@@ -315,6 +382,13 @@ func (s *state) HasNoConflict(pred string) bool {
 	return s.predicate[pred].GetNoConflict()
 }
 
+// IndexingInProgress checks whether indexing is going on for a given predicate.
+func (s *state) IndexingInProgress() bool {
+	s.RLock()
+	defer s.RUnlock()
+	return len(s.mutSchema) > 0
+}
+
 // Init resets the schema state, setting the underlying DB to the given pointer.
 func Init(ps *badger.DB) {
 	pstore = ps
@@ -346,6 +420,7 @@ func Load(predicate string) error {
 	}
 	State().Set(predicate, &s)
 	State().elog.Printf(logUpdate(&s, predicate))
+	delete(State().mutSchema, predicate)
 	glog.Infoln(logUpdate(&s, predicate))
 	return nil
 }
