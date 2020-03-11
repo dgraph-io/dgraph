@@ -65,13 +65,21 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		return w
 	}
 
-	_, err = w.FirstIndex()
+	first, err := w.FirstIndex()
 	if err == errNotFound {
 		ents := make([]raftpb.Entry, 1)
 		x.Check(w.reset(ents))
+		first = 1
 	} else {
 		x.Check(err)
 	}
+
+	// If db is not closed properly, there might be ranges for which delete entries are not
+	// inserted. So iterate in reverse order starting from (FirstIndex-2).
+	batch := w.db.NewWriteBatch()
+	defer batch.Cancel()
+	x.Check(w.deleteFrom(batch, first-2, true))
+	x.Check(batch.Flush())
 
 	return w
 }
@@ -82,7 +90,7 @@ func (w *DiskStorage) processDeleteRange() {
 		for r := range w.deleteChan {
 			batch := w.db.NewWriteBatch()
 			if err := w.deleteUntil(batch, r.from, r.until); err != nil {
-				glog.Errorf("deleteuntil failed with error: %s, from: %d, until: %d\n",
+				glog.Errorf("deleteUntil failed with error: %s, from: %d, until: %d\n",
 					err, r.from, r.until)
 			}
 
@@ -423,7 +431,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
 
-	if err := w.deleteFrom(batch, 0); err != nil {
+	if err := w.deleteFrom(batch, 0, false); err != nil {
 		return err
 	}
 
@@ -454,12 +462,13 @@ func (w *DiskStorage) deleteKeys(batch *badger.WriteBatch, keys []string) error 
 }
 
 // Delete entries in the range of index [from, inf).
-func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
+func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64, reverse bool) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		start := w.EntryKey(from)
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
+		opt.Reverse = reverse
 		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
@@ -720,7 +729,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 	laste := entries[len(entries)-1].Index
 	w.cache.Store(lastKey, laste) // Update the last index cache.
 	if laste < last {
-		return w.deleteFrom(batch, laste+1)
+		return w.deleteFrom(batch, laste+1, false)
 	}
 	return nil
 }
