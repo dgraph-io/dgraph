@@ -118,7 +118,7 @@ function QuerySchema
 function DoExport
 {
   INFO "running export"
-  docker exec alpha1 curl -Ss localhost:$HTTP_PORT/admin/export &>/dev/null
+  docker exec alpha1 curl -Ss -H "Content-Type: application/json" localhost:$HTTP_PORT/admin -XPOST -d '{ "query": "mutation { export(input: {format: \"rdf\"}) { response { code message } }}" }' &>/dev/null
   sleep 2
   docker cp alpha1:/data/alpha1/export .
   sleep 1

@@ -16,12 +16,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,34 +31,32 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	minio "github.com/minio/minio-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
-	backupDir  = "./data/backups"
-	restoreDir = "./data/restore"
-	testDirs   = []string{backupDir, restoreDir}
+	copyBackupDir = "./data/backups_copy"
+	restoreDir    = "./data/restore"
+	testDirs      = []string{restoreDir}
 
-	mc             *minio.Client
-	bucketName     = "dgraph-backup"
-	backupDst      = "minio://minio1:9001/dgraph-backup?secure=false"
-	localBackupDst = "minio://localhost:9001/dgraph-backup?secure=false"
+	alphaBackupDir = "/data/backups"
+
+	alphaContainers = []string{
+		"alpha1",
+		"alpha2",
+		"alpha3",
+	}
 )
 
-func TestBackupMinio(t *testing.T) {
+func TestBackupFilesystem(t *testing.T) {
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
-	mc, err = testutil.NewMinioClient()
-	require.NoError(t, err)
-	require.NoError(t, mc.MakeBucket(bucketName, ""))
 
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
@@ -100,16 +99,12 @@ func TestBackupMinio(t *testing.T) {
 	}
 	require.True(t, moveOk)
 
-	// Setup environmental variables for use during restore.
-	os.Setenv("MINIO_ACCESS_KEY", "accesskey")
-	os.Setenv("MINIO_SECRET_KEY", "secretkey")
-
 	// Setup test directories.
 	dirSetup(t)
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
-	restored := runRestore(t, "", math.MaxUint64)
+	restored := runRestore(t, copyBackupDir, "", math.MaxUint64)
 
 	checks := []struct {
 		blank, expected string
@@ -137,7 +132,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
-	restored = runRestore(t, "", incr1.Txn.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr1.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -161,7 +156,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second incremental backup.
 	_ = runBackup(t, 9, 3)
-	restored = runRestore(t, "", incr2.Txn.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr2.Txn.CommitTs)
 
 	checks = []struct {
 		blank, expected string
@@ -185,7 +180,7 @@ func TestBackupMinio(t *testing.T) {
 
 	// Perform second full backup.
 	dirs := runBackupInternal(t, true, 12, 4)
-	restored = runRestore(t, "", incr3.Txn.CommitTs)
+	restored = runRestore(t, copyBackupDir, "", incr3.Txn.CommitTs)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -201,10 +196,10 @@ func TestBackupMinio(t *testing.T) {
 		require.EqualValues(t, check.expected, restored[original.Uids[check.blank]])
 	}
 
-	// Remove the full backup dirs and verify restore catches the error.
+	// Remove the full backup testDirs and verify restore catches the error.
 	require.NoError(t, os.RemoveAll(dirs[0]))
 	require.NoError(t, os.RemoveAll(dirs[3]))
-	runFailingRestore(t, backupDir, "", incr3.Txn.CommitTs)
+	runFailingRestore(t, copyBackupDir, "", incr3.Txn.CommitTs)
 
 	// Clean up test directories.
 	dirCleanup(t)
@@ -216,15 +211,27 @@ func runBackup(t *testing.T, numExpectedFiles, numExpectedDirs int) []string {
 
 func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	numExpectedDirs int) []string {
-	forceFullStr := "false"
-	if forceFull {
-		forceFullStr = "true"
-	}
+	backupRequest := `mutation backup($dst: String!, $ff: Boolean!) {
+			backup(input: {destination: $dst, forceFull: $ff}) {
+				response {
+					code
+					message
+				}
+			}
+		}`
 
-	resp, err := http.PostForm("http://localhost:8180/admin/backup", url.Values{
-		"destination": []string{backupDst},
-		"force_full":  []string{forceFullStr},
-	})
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: backupRequest,
+		Variables: map[string]interface{}{
+			"dst": alphaBackupDir,
+			"ff":  forceFull,
+		},
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	buf, err := ioutil.ReadAll(resp.Body)
@@ -234,17 +241,17 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
 
-	files := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+	files := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.HasSuffix(path, ".backup")
 	})
 	require.Equal(t, numExpectedFiles, len(files))
 
-	dirs := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
-		return isdir && strings.HasPrefix(path, "data/backups/dgraph.")
+	dirs := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
+		return isdir && strings.HasPrefix(path, "data/backups_copy/dgraph.")
 	})
 	require.Equal(t, numExpectedDirs, len(dirs))
 
-	manifests := x.WalkPathFunc(backupDir, func(path string, isdir bool) bool {
+	manifests := x.WalkPathFunc(copyBackupDir, func(path string, isdir bool) bool {
 		return !isdir && strings.Contains(path, "manifest.json")
 	})
 	require.Equal(t, numExpectedDirs, len(manifests))
@@ -252,17 +259,14 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	return dirs
 }
 
-func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string {
+func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) map[string]string {
 	// Recreate the restore directory to make sure there's no previous data when
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
-	require.NoError(t, err)
+	t.Logf("--- Restoring from: %q", backupLocation)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	require.NoError(t, result.Err)
 
 	for i, pdir := range []string{"p1", "p2", "p3"} {
 		pdir = filepath.Join("./data/restore", pdir)
@@ -270,9 +274,11 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.NoError(t, err)
 		require.Equal(t, uint32(i+1), groupId)
 	}
+
 	pdir := "./data/restore/p1"
 	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
+	t.Logf("--- Restored values: %+v\n", restored)
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
 	require.NoError(t, err)
@@ -281,9 +287,6 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
-
-	require.NoError(t, err)
-	t.Logf("--- Restored values: %+v\n", restored)
 
 	return restored
 }
@@ -294,9 +297,9 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	_, err := backup.RunRestore("./data/restore", backupLocation, lastDir)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "expected a BackupNum value of 1")
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	require.Error(t, result.Err)
+	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
 
 func dirSetup(t *testing.T) {
@@ -305,35 +308,41 @@ func dirSetup(t *testing.T) {
 
 	for _, dir := range testDirs {
 		if err := os.MkdirAll(dir, os.ModePerm); err != nil {
-			t.Fatalf("Error while creaing directory: %s", err.Error())
+			t.Fatalf("Error creating directory: %s", err.Error())
+		}
+	}
+
+	for _, alpha := range alphaContainers {
+		cmd := []string{"mkdir", "-p", alphaBackupDir}
+		if err := testutil.DockerExec(alpha, cmd...); err != nil {
+			t.Fatalf("Error executing command in docker container: %s", err.Error())
 		}
 	}
 }
 
 func dirCleanup(t *testing.T) {
-	if err := os.RemoveAll("./data"); err != nil {
-		t.Fatalf("Error removing direcotory: %s", err.Error())
+	if err := os.RemoveAll(restoreDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+
+	cmd := []string{"bash", "-c", "rm -rf /data/backups/dgraph.*"}
+	if err := testutil.DockerExec(alphaContainers[0], cmd...); err != nil {
+		t.Fatalf("Error executing command in docker container: %s", err.Error())
 	}
 }
 
 func copyToLocalFs(t *testing.T) {
-	// List all the folders in the bucket.
-	lsCh1 := make(chan struct{})
-	defer close(lsCh1)
-	objectCh1 := mc.ListObjectsV2(bucketName, "", false, lsCh1)
-	for object := range objectCh1 {
-		require.NoError(t, object.Err)
-		dstDir := backupDir + "/" + object.Key
-		os.MkdirAll(dstDir, os.ModePerm)
-
-		// Get all the files in that folder and copy them to the local filesystem.
-		lsCh2 := make(chan struct{})
-		objectCh2 := mc.ListObjectsV2(bucketName, "", true, lsCh2)
-		for object := range objectCh2 {
-			require.NoError(t, object.Err)
-			dstFile := backupDir + "/" + object.Key
-			mc.FGetObject(bucketName, object.Key, dstFile, minio.GetObjectOptions{})
-		}
-		close(lsCh2)
+	// The original backup files are not accessible because docker creates all files in
+	// the shared volume as the root user. This restriction is circumvented by using
+	// "docker cp" to create a copy that is not owned by the root user.
+	if err := os.RemoveAll(copyBackupDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	srcPath := "alpha1:/data/backups"
+	if err := testutil.DockerCp(srcPath, copyBackupDir); err != nil {
+		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}
 }

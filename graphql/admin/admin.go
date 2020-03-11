@@ -108,8 +108,57 @@ const (
 		lastEcho: Int
 	}
 
+	type MembershipState {
+		counter: Int
+		groups: [ClusterGroup]
+		zeros: [Member]
+		maxLeaseId: Int
+		maxTxnTs: Int
+		maxRaftId: Int
+		removed: [Member]
+		cid: String
+		license: License
+	}
+
+	type ClusterGroup {
+		id: Int
+		members: [Member]
+		tablets: [Tablet]
+		snapshotTs: Int
+		checksum: Int
+	}
+
+	type Member {
+		id: Int
+		groupId: Int
+		addr: String
+		leader: Boolean
+		amDead: Boolean
+		lastUpdate: Int
+		clusterInfoOnly: Boolean
+		forceGroupId: Boolean
+	}
+
+	type Tablet {
+		groupId: Int
+		predicate: String
+		force: Boolean
+		space: Int
+		remove: Boolean
+		readOnly: Boolean
+		moveTs: Int
+	}
+
+	type License {
+		user: String
+		maxNodes: Int
+		expiryTs: Int
+		enabled: Boolean
+	}
+
 	directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 	directive @id on FIELD_DEFINITION
+	directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 
 	type UpdateGQLSchemaPayload {
@@ -162,6 +211,7 @@ const (
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
+		state: MembershipState
 
 		` + adminQueries + `
 	}
@@ -230,7 +280,7 @@ type adminServer struct {
 func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
@@ -257,7 +307,7 @@ func newAdminResolver(
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 
 	rf := newAdminResolverFactory()
@@ -336,15 +386,22 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
-		WithQueryResolver("health",
-			func(q schema.Query) resolve.QueryResolver {
-				health := &healthResolver{}
+		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
+			health := &healthResolver{}
 
-				return resolve.NewQueryResolver(
-					health,
-					health,
-					resolve.AliasQueryCompletion())
-			}).
+			return resolve.NewQueryResolver(
+				health,
+				health,
+				resolve.AliasQueryCompletion())
+		}).
+		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
+			state := &stateResolver{}
+
+			return resolve.NewQueryResolver(
+				state,
+				state,
+				resolve.AliasQueryCompletion())
+		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -568,7 +625,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					resolve.NewAddRewriter(),
+					NewAddGroupRewriter(),
 					resolve.DgraphAsQueryExecutor(),
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))
@@ -584,7 +641,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewMutationResolver(
-					resolve.NewUpdateRewriter(),
+					NewUpdateGroupRewriter(),
 					resolve.DgraphAsQueryExecutor(),
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdMutationCompletion(m.Name()))

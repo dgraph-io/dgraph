@@ -2198,3 +2198,137 @@ func TestFacetsWithExpand(t *testing.T) {
 		}
 	}`, js)
 }
+
+func TestCountFacetsFilteringUidListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			filtered_count: count(friend) @facets(eq(since, "2006-01-02T15:04:05"))
+			full_count: count(friend)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"filtered_count": 2,
+					"full_count": 5
+				},
+				{
+					"name": "Michale",
+					"filtered_count": 1,
+					"full_count": 3
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringUidPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			filtered_count: count(boss) @facets(eq(company, "company1"))
+			full_count: count(boss)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"filtered_count": 1,
+					"full_count": 1
+				},
+				{
+					"name": "Michale",
+					"filtered_count": 0,
+					"full_count": 0
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 23)) {
+			name
+			french_origin_count: count(name) @facets(eq(origin, "french"))
+			french_spanish_count: count(name) @facets(eq(origin, "spanish"))
+			full_count: count(name)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
+					"full_count": 1
+				},
+				{
+					"name": "Rick Grimes",
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
+					"full_count": 1
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 12000)) {
+			name
+			alt_name
+			filtered_count: count(alt_name) @facets(eq(origin, "french"))
+			full_count: count(alt_name)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"alt_name": [
+						"Michelle",
+						"Michelin"
+					],
+					"filtered_count": 1,
+					"full_count": 2
+				},
+				{
+					"alt_name": [
+						"Potter"
+					],
+					"filtered_count": 0,
+					"full_count": 1
+				}
+			]
+		}
+	}`, js)
+}

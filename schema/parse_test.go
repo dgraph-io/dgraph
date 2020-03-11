@@ -17,13 +17,14 @@
 package schema
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"github.com/dgraph-io/badger/v2"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -115,11 +116,6 @@ age:int @index(int) .
 name: string .
 address: string @index(term) .`
 
-func TestSchemaIndex(t *testing.T) {
-	require.NoError(t, ParseBytes([]byte(schemaIndexVal1), 1))
-	require.Equal(t, 2, len(State().IndexedFields()))
-}
-
 var schemaIndexVal2 = `
 name: string @index(exact, exact) .
 address: string @index(term) .
@@ -196,10 +192,9 @@ func TestSchemaIndexCustom(t *testing.T) {
 			List:      true,
 		}},
 	})
-	require.True(t, State().IsIndexed("name"))
-	require.False(t, State().IsReversed("name"))
-	require.Equal(t, "int", State().Tokenizer("age")[0].Name())
-	require.Equal(t, 3, len(State().IndexedFields()))
+	require.True(t, State().IsIndexed(context.Background(), "name"))
+	require.False(t, State().IsReversed(context.Background(), "name"))
+	require.Equal(t, "int", State().Tokenizer(context.Background(), "age")[0].Name())
 }
 
 func TestParse(t *testing.T) {

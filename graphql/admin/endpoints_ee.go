@@ -73,15 +73,13 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User {
+	type User @secret(field: "password", pred: "dgraph.password") {
 
 		"""
 		Username for the user.  Dgraph ensures that user names are unique.
 		"""
 		name: String! @id @dgraph(pred: "dgraph.xid")
 
-		# TODO - Update this to actual secret after password PR is merged here.
-		password: String! @dgraph(pred: "dgraph.password")
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
@@ -96,7 +94,6 @@ const adminTypes = `
 	}
 
 	type Rule {
-		id: ID!
 
 		"""
 		Predicate to which the rule applies.
@@ -152,12 +149,10 @@ const adminTypes = `
 	}
 
 	input RuleRef {
-		id: ID
-
 		"""
 		Predicate to which the rule applies.
 		"""	
-		predicate: String
+		predicate: String!
 
 		"""
 		Permissions that apply for the rule.  Represented following the UNIX file permission 
@@ -173,7 +168,7 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 		"""
-		permission: Int
+		permission: Int!
 	}
 
 	input UserFilter {
@@ -213,14 +208,18 @@ const adminTypes = `
 		not: UserFilter
 	}
 
-	input GroupPatch {
-		rules: [RuleRef]
+	input SetGroupPatch {
+		rules: [RuleRef!]!
+	}
+
+	input RemoveGroupPatch {
+		rules: [String!]!
 	}
 
 	input UpdateGroupInput {
 		filter: GroupFilter!
-		set: GroupPatch
-		remove: GroupPatch
+		set: SetGroupPatch
+		remove: RemoveGroupPatch
 	}
 
 	type AddUserPayload {
@@ -260,12 +259,12 @@ const adminMutations = `
 	Dgraph ensures that user names are unique, hence attempting to add an existing user results
 	in an error.
 	"""
-	addUser(input: [AddUserInput]): AddUserPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
 
 	"""
 	Add a new group and (optionally) set the rules for the group.  
 	"""
-	addGroup(input: [AddGroupInput]): AddGroupPayload
+	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
 	"""
 	Update users, their passwords and groups.  As with AddUser, when linking to groups, if the
@@ -275,7 +274,7 @@ const adminMutations = `
 	updateUser(input: UpdateUserInput!): AddUserPayload
 
 	"""
-	Update or add rules to groups. If the filter doesn't match any groups, 
+	Add rules to, or remove rules from, groups. If the filter doesn't match any groups, 
 	the mutation has no effect.
 	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
