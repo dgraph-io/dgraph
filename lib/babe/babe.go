@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"sync"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
@@ -34,22 +35,32 @@ import (
 
 // Session contains the VRF keys for the validator, as well as BABE configuation data
 type Session struct {
+	// Storage interfaces
 	blockState       BlockState
 	storageState     StorageState
-	keypair          *sr25519.Keypair
-	rt               *runtime.Runtime
-	config           *Configuration
-	randomness       [sr25519.VrfOutputLength]byte
-	authorityIndex   uint64
-	authorityData    []*AuthorityData
-	epochThreshold   *big.Int // validator threshold for this epoch
 	transactionQueue TransactionQueue
-	startSlot        uint64
-	slotToProof      map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
-	newBlocks        chan<- types.Block            // send blocks to core service
-	done             chan<- struct{}               // lets core know when the epoch is done
-	kill             <-chan struct{}               // kill session if this is closed
-	killed           bool
+
+	// BABE authority keypair
+	keypair *sr25519.Keypair
+
+	// Current runtime
+	rt *runtime.Runtime
+
+	// Epoch configuration data
+	config         *Configuration
+	randomness     [sr25519.VrfOutputLength]byte
+	authorityIndex uint64
+	authorityData  []*AuthorityData
+	epochThreshold *big.Int // validator threshold for this epoch
+	startSlot      uint64
+	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
+
+	// Channels for inter-process communication
+	newBlocks chan<- types.Block // send blocks to core service
+	done      chan<- struct{}    // lets core know when the epoch is done
+	kill      <-chan struct{}    // kill session if this is closed
+	lock      sync.Mutex
+	closed    bool
 }
 
 // SessionConfig struct
@@ -90,7 +101,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		startSlot:        cfg.StartSlot,
 		done:             cfg.Done,
 		kill:             cfg.Kill,
-		killed:           false,
+		closed:           false,
 	}
 
 	err := babeSession.configurationFromRuntime()
@@ -140,15 +151,24 @@ func (b *Session) Start() error {
 }
 
 func (b *Session) stop() {
-	if b.newBlocks != nil {
-		close(b.newBlocks)
-		b.newBlocks = nil
-	}
+	b.lock.Lock()
+	defer b.lock.Unlock()
 
-	if b.done != nil {
+	if !b.closed {
+		close(b.newBlocks)
 		close(b.done)
-		b.done = nil
+		b.closed = true
 	}
+}
+
+func (b *Session) safeSend(msg types.Block) error {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	if b.closed {
+		return errors.New("session has been stopped")
+	}
+	b.newBlocks <- msg
+	return nil
 }
 
 // AuthorityData returns the data related to the authority
@@ -180,7 +200,13 @@ func (b *Session) setAuthorityIndex() error {
 
 func (b *Session) checkForKill() {
 	<-b.kill
-	b.killed = true
+	b.stop()
+}
+
+func (b *Session) isClosed() bool {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	return b.closed
 }
 
 func (b *Session) invokeBlockAuthoring() {
@@ -217,10 +243,10 @@ func (b *Session) invokeBlockAuthoring() {
 	}
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
-		if b.killed {
-			// session has been killed, exit
+		if b.isClosed() {
 			return
 		}
+
 		b.handleSlot(slotNum)
 		time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
 	}
@@ -258,13 +284,11 @@ func (b *Session) handleSlot(slotNum uint64) {
 		log.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
 		log.Debug("[babe] built block", "header", block.Header, "body", block.Body)
 
-		if b.killed {
-			// session killed, return
-			log.Warn("[babe] session killed before block could be sent to core")
+		err = b.safeSend(*block)
+		if err != nil {
+			log.Error("[babe] Failed to send block to core", "error", err)
 			return
 		}
-
-		b.newBlocks <- *block
 	}
 }
 

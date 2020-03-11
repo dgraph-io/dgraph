@@ -48,6 +48,14 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 		cfg.Kill = make(chan struct{})
 	}
 
+	if cfg.Done == nil {
+		cfg.Done = make(chan struct{})
+	}
+
+	if cfg.NewBlocks == nil {
+		cfg.NewBlocks = make(chan types.Block)
+	}
+
 	if cfg.Runtime == nil {
 		cfg.Runtime = rt
 	}
@@ -99,8 +107,10 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 
 func TestKill(t *testing.T) {
 	killChan := make(chan struct{})
+	doneChan := make(chan struct{})
 	cfg := &SessionConfig{
 		Kill: killChan,
+		Done: doneChan,
 	}
 
 	babesession := createTestSession(t, cfg)
@@ -110,8 +120,9 @@ func TestKill(t *testing.T) {
 	}
 
 	close(killChan)
+	<-doneChan
 
-	if babesession.newBlocks != nil || babesession.done != nil {
+	if !babesession.closed {
 		t.Fatalf("did not kill session")
 	}
 }

@@ -19,6 +19,8 @@ package network
 import (
 	"bufio"
 	"context"
+	"errors"
+	"sync"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -33,18 +35,26 @@ var _ services.Service = &Service{}
 
 // Service describes a network service
 type Service struct {
-	ctx               context.Context
-	cfg               *Config
-	host              *host
-	mdns              *mdns
-	status            *status
-	gossip            *gossip
-	msgRec            <-chan Message
-	msgSend           chan<- Message
-	noBootstrap       bool
-	noMDNS            bool
-	noStatus          bool            // internal option
-	noGossip          bool            // internal option
+	ctx    context.Context
+	cfg    *Config
+	host   *host
+	mdns   *mdns
+	status *status
+	gossip *gossip
+
+	// Channels for inter-process communication
+	// as well as a lock for safe channel closures
+	msgRec  <-chan Message
+	msgSend chan<- Message
+	lock    sync.Mutex
+	closed  bool
+
+	// Configuration options
+	noBootstrap bool
+	noMDNS      bool
+	noStatus    bool // internal option
+	noGossip    bool // internal option
+
 	requestedBlockIDs map[uint64]bool // track requested block id messages
 }
 
@@ -73,6 +83,7 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 		gossip:            newGossip(host),
 		msgRec:            msgRec,
 		msgSend:           msgSend,
+		closed:            false,
 		noBootstrap:       cfg.NoBootstrap,
 		noMDNS:            cfg.NoMDNS,
 		noStatus:          cfg.NoStatus,
@@ -127,7 +138,17 @@ func (s *Service) Stop() error {
 		log.Error("[network] Failed to close host", "error", err)
 	}
 
-	// TODO: close s.msgSend, need channel close handling
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	// close channel to core service
+	if !s.closed {
+		if s.msgSend != nil {
+			close(s.msgSend)
+		}
+		s.closed = true
+	}
+
 	return nil
 }
 
@@ -146,6 +167,16 @@ func (s *Service) receiveCoreMessages() {
 		// broadcast message to connected peers
 		s.host.broadcast(msg)
 	}
+}
+
+func (s *Service) safeMsgSend(msg Message) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.closed {
+		return errors.New("service has been stopped")
+	}
+	s.msgSend <- msg
+	return nil
 }
 
 // handleConn starts processes that manage the connection
@@ -245,8 +276,11 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 		// check if status is disabled or peer status is confirmed
 		if s.noStatus || s.status.confirmed(peer) {
 
-			// send non-status message from confirmed peer to core service
-			s.msgSend <- msg
+			err := s.safeMsgSend(msg)
+			if err != nil {
+				log.Error("[network] Failed to send message", "error", err)
+			}
+
 		}
 
 		// check if gossip is enabled

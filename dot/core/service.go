@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	mrand "math/rand"
+	"sync"
 	"time"
 
 	"golang.org/x/exp/rand"
@@ -49,23 +50,36 @@ var maxResponseSize = 8 // maximum number of block datas to reply with in a Bloc
 // BABE session, and network service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
-	blockState        BlockState
-	storageState      StorageState
-	transactionQueue  TransactionQueue
-	rt                *runtime.Runtime
-	codeHash          common.Hash
-	bs                *babe.Session
-	keys              *keystore.Keystore
-	blkRec            <-chan types.Block     // receive blocks from BABE session
-	msgRec            <-chan network.Message // receive messages from network service
-	epochDone         <-chan struct{}        // receive from this channel when BABE epoch changes
-	babeKill          chan<- struct{}        // close this channel to kill current BABE session
-	msgSend           chan<- network.Message // send messages to network service
-	isBabeAuthority   bool
+	// State interfaces
+	blockState       BlockState
+	storageState     StorageState
+	transactionQueue TransactionQueue
+
+	// Current runtime and hash of the current runtime code
+	rt       *runtime.Runtime
+	codeHash common.Hash
+
+	// Current BABE session
+	bs              *babe.Session
+	isBabeAuthority bool
+
+	// Keystore
+	keys *keystore.Keystore
+
+	// Channels for inter-process communication
+	msgRec    <-chan network.Message // receive messages from network service
+	msgSend   chan<- network.Message // send messages to network service
+	blkRec    <-chan types.Block     // receive blocks from BABE session
+	epochDone <-chan struct{}        // receive from this channel when BABE epoch changes
+	babeKill  chan<- struct{}        // close this channel to kill current BABE session
+	lock      sync.Mutex
+	closed    bool
+
+	// TODO: add to network state
 	requestedBlockIDs map[uint64]bool // track requested block id messages
 }
 
-// Config holds the config obj
+// Config holds the configuration for the core Service.
 type Config struct {
 	BlockState       BlockState
 	StorageState     StorageState
@@ -127,6 +141,7 @@ func NewService(cfg *Config) (*Service, error) {
 			epochDone:        epochDone,
 			babeKill:         babeKill,
 			isBabeAuthority:  true,
+			closed:           false,
 		}
 
 		authData, err := srv.retrieveAuthorityData()
@@ -168,6 +183,7 @@ func NewService(cfg *Config) (*Service, error) {
 			storageState:     cfg.StorageState,
 			transactionQueue: cfg.TransactionQueue,
 			isBabeAuthority:  false,
+			closed:           false,
 		}
 	}
 
@@ -204,15 +220,18 @@ func (s *Service) Start() error {
 // Stop stops the core service
 func (s *Service) Stop() error {
 
-	// close message channel to network service
-	if s.msgSend != nil {
-		close(s.msgSend)
-		s.msgSend = nil
-	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
-	if s.isBabeAuthority && s.babeKill != nil {
-		close(s.babeKill)
-		s.babeKill = nil
+	// close channel to network service and BABE service
+	if !s.closed {
+		if s.msgSend != nil {
+			close(s.msgSend)
+		}
+		if s.isBabeAuthority {
+			close(s.babeKill)
+		}
+		s.closed = true
 	}
 
 	return nil
@@ -234,6 +253,26 @@ func (s *Service) retrieveAuthorityData() ([]*babe.AuthorityData, error) {
 // getLatestSlot returns the slot for the block at the head of the chain
 func (s *Service) getLatestSlot() (uint64, error) {
 	return s.blockState.GetSlotForBlock(s.blockState.HighestBlockHash())
+}
+
+func (s *Service) safeMsgSend(msg network.Message) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.closed {
+		return errors.New("service has been stopped")
+	}
+	s.msgSend <- msg
+	return nil
+}
+
+func (s *Service) safeBabeKill() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if s.closed {
+		return errors.New("service has been stopped")
+	}
+	close(s.babeKill)
+	return nil
 }
 
 func (s *Service) handleBabeSession() {
@@ -344,13 +383,10 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		Digest:         block.Header.Digest,
 	}
 
-	// send block announce message to network service
-	if s.msgSend == nil {
-		// service has been stopped, return
-		return nil
+	err = s.safeMsgSend(msg)
+	if err != nil {
+		return err
 	}
-
-	s.msgSend <- msg
 
 	// TODO: check if host status message needs to be updated based on new block
 	// information, if so, generate host status message and send to network service
@@ -446,12 +482,10 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		// send block request message to network service
 		log.Debug("send blockRequest message to network service")
 
-		// TODO: safe channel checking
-		if s.msgSend == nil {
-			return nil
+		err = s.safeMsgSend(blockRequest)
+		if err != nil {
+			return err
 		}
-
-		s.msgSend <- blockRequest
 	}
 
 	return nil
@@ -553,9 +587,7 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 		BlockData: responseData,
 	}
 
-	s.msgSend <- blockResponse
-
-	return nil
+	return s.safeMsgSend(blockResponse)
 }
 
 // ProcessBlockResponseMessage attempts to validate and add the block to the
@@ -709,10 +741,12 @@ func (s *Service) checkForRuntimeChanges() error {
 		}
 
 		// kill babe session, handleBabeSession will reload it with the new runtime
-		if s.isBabeAuthority && s.babeKill == nil {
-			close(s.babeKill)
+		if s.isBabeAuthority {
+			err = s.safeBabeKill()
+			if err != nil {
+				return err
+			}
 		}
-		s.babeKill = nil
 	}
 
 	return nil
