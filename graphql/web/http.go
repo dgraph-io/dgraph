@@ -147,7 +147,7 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}()
-	return ch, nil
+	return ch, ctx.Err()
 }
 
 func (gh *graphqlHandler) Handler() http.Handler {
