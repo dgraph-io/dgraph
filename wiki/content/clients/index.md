@@ -572,6 +572,11 @@ type Person {
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 
+We build indexes in the background so that mutations and queries are not blocked.
+In such a case, the new schema may not be reflected right away. You could poll the
+schema to check whether indexing has been completed. New alter requests will be
+rejected until the background indexing task is finished.
+
 Other operations can be performed via the `/alter` endpoint as well. A specific
 predicate or the entire database can be dropped.
 

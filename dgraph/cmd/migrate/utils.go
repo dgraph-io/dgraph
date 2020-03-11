@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 )
@@ -119,7 +120,7 @@ func getColumnValues(columns []string, dataTypes []dataType,
 		case datetimeType:
 			valuePtrs = append(valuePtrs, new(mysql.NullTime))
 		default:
-			panic(fmt.Sprintf("detected unsupported type %s on column %s",
+			x.Panic(errors.Errorf("detected unsupported type %s on column %s",
 				dataTypes[i], columns[i]))
 		}
 	}

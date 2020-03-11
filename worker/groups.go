@@ -198,6 +198,7 @@ func (g *groupi) proposeInitialTypes() {
 
 func (g *groupi) proposeInitialSchema() {
 	initialSchema := schema.InitialSchema()
+	ctx := context.Background()
 	for _, s := range initialSchema {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
@@ -205,7 +206,7 @@ func (g *groupi) proposeInitialSchema() {
 			g.upsertSchema(s, nil)
 		} else if gid == 0 {
 			g.upsertSchema(s, nil)
-		} else if curr, _ := schema.State().Get(s.Predicate); gid == g.groupId() &&
+		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
