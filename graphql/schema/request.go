@@ -86,6 +86,15 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 // field's selection set, and does it recursively for all the fields in this field's selection
 // set. This eventually expands all the fragment references anywhere in the hierarchy.
 func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
+	// This happens in case of introspection queries, as they don't have any types in graphql schema
+	// but explicit resolvers defined. So, when the parser parses the raw request, it is not able to
+	// find a definition for such fields in the schema. Introspection queries are already handling
+	// fragments, so it is fine to not do it for them. But, in future, if anything doesn't have
+	// associated types for them in graphql schema, then it needs to handle fragment expansion by
+	// itself.
+	if field.Definition == nil {
+		return
+	}
 	// find all valid type names that this field satisfies
 	typeName := field.Definition.Type.Name()
 	satisfies := []string{typeName}

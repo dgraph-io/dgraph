@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
@@ -278,43 +279,31 @@ type contextClient struct {
 	context context.Context
 }
 
-func (cc *contextClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	cc.context = ctx
-	return nil, nil
-}
-
-func (cc *contextClient) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	cc.context = ctx
-	return nil, nil, nil
-}
-
-// propagateClientRemoteIP check whether the client info(IP address) is propagated in the request.
-// It mocks Dgraph like contextClient.
-func propagateClientRemoteIP(t *testing.T) {
-	postQuery := &GraphQLParams{
-		Query: `query {
-					queryPost {
-						title
-					}
-				}`,
+// clientInfoLogin check whether the client info(IP address) is propagated in the request.
+// It mocks Dgraph like panicCatcher.
+func clientInfoLogin(t *testing.T) {
+	loginQuery := &GraphQLParams{
+		Query: `mutation {
+  						login(input: {userId: "groot", password: "password"}) {
+    						response {
+      							accessJWT
+    						}
+  						}
+					}`,
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	postCtxClient := &contextClient{}
-	fns := &resolve.ResolverFns{
-		Qrw: resolve.NewQueryRewriter(),
-		Arw: resolve.NewAddRewriter,
-		Urw: resolve.NewUpdateRewriter,
-		Drw: resolve.NewDeleteRewriter(),
-		Qe:  postCtxClient,
-		Me:  postCtxClient,
-	}
+	fns := &resolve.ResolverFns{}
+	var loginCtx context.Context
+	errFunc := func(name string) error { return nil }
+	mErr := resolve.MutationResolverFunc(
+		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
+			loginCtx = ctx
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+		})
 
-	resolverFactory := resolve.NewResolverFactory(nil, nil).
+	resolverFactory := resolve.NewResolverFactory(nil, mErr).
 		WithConventionResolvers(gqlSchema, fns)
 
 	resolvers := resolve.New(gqlSchema, resolverFactory)
@@ -323,9 +312,9 @@ func propagateClientRemoteIP(t *testing.T) {
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
 
-	_ = postQuery.ExecuteAsPost(t, ts.URL)
-	require.NotNil(t, postCtxClient.context)
-	peerInfo, found := peer.FromContext(postCtxClient.context)
+	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	require.NotNil(t, loginCtx)
+	peerInfo, found := peer.FromContext(loginCtx)
 	require.True(t, found)
 	require.NotNil(t, peerInfo.Addr.String())
 }
