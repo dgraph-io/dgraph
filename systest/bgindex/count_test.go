@@ -40,9 +40,9 @@ import (
 
 func TestCountIndex(t *testing.T) {
 	total := 10000
-	numAccts := uint64(total)
-	acctsBal := make([]int, total+100000)
-	acctsLock := make([]sync.Mutex, total+100000)
+	numUIDs := uint64(total)
+	edgeCount := make([]int, total+100000)
+	uidLocks := make([]sync.Mutex, total+100000)
 
 	dg, err := getClient()
 	if err != nil {
@@ -51,7 +51,7 @@ func TestCountIndex(t *testing.T) {
 
 	testutil.DropAll(t, dg)
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "balance: [string] .",
+		Schema: "value: [string] .",
 	}); err != nil {
 		t.Fatalf("error in setting up schema :: %v\n", err)
 	}
@@ -60,17 +60,16 @@ func TestCountIndex(t *testing.T) {
 		t.Fatalf("error in assigning UIDs :: %v", err)
 	}
 
-	// first insert bank accounts
-	fmt.Println("inserting accounts")
+	fmt.Println("inserting values")
 	th := y.NewThrottle(10000)
-	for i := 1; i <= int(numAccts); i++ {
+	for i := 1; i <= int(numUIDs); i++ {
 		th.Do()
 		go func(uid int) {
 			defer th.Done(nil)
 			bb := &bytes.Buffer{}
-			acctsBal[uid] = rand.Intn(1000)
-			for j := 0; j < acctsBal[uid]; j++ {
-				_, err := bb.WriteString(fmt.Sprintf("<%v> <balance> \"%v\" .\n", uid, j))
+			edgeCount[uid] = rand.Intn(1000)
+			for j := 0; j < edgeCount[uid]; j++ {
+				_, err := bb.WriteString(fmt.Sprintf("<%v> <value> \"%v\" .\n", uid, j))
 				if err != nil {
 					panic(err)
 				}
@@ -87,62 +86,57 @@ func TestCountIndex(t *testing.T) {
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "balance: [string] @count .",
+		Schema: "value: [string] @count .",
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
 
-	if resp, err := dg.NewReadOnlyTxn().Query(context.Background(), "schema{}"); err != nil {
-		t.Fatalf("error in adding indexes :: %v\n", err)
-	} else {
-		fmt.Printf("schema after alter: %v\n", string(resp.Json))
-	}
-
 	// perform mutations until ctrl+c
 	mutateUID := func(uid int) {
-		acctsLock[uid].Lock()
-		defer acctsLock[uid].Unlock()
-		nb := acctsBal[uid]
+		uidLocks[uid].Lock()
+		defer uidLocks[uid].Unlock()
+		ec := edgeCount[uid]
 		switch rand.Intn(1000) % 3 {
 		case 0:
-			// add new account
+			// add new edge
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
-				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> "%v" .`, uid, nb)),
+				SetNquads: []byte(fmt.Sprintf(`<%v> <value> "%v" .`, uid, ec)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
 				t.Fatalf("error in mutation :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
-			nb++
+			ec++
 		case 1:
-			if nb <= 0 {
+			if ec <= 0 {
 				return
 			}
-			// delete the last account
+			// delete an edge
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
-				DelNquads: []byte(fmt.Sprintf(`<%v> <balance> "%v" .`, uid, nb-1)),
+				DelNquads: []byte(fmt.Sprintf(`<%v> <value> "%v" .`, uid, ec-1)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
 				t.Fatalf("error in deletion :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
-			nb--
+			ec--
 		case 2:
-			uid = int(atomic.AddUint64(&numAccts, 1))
+			// new uid with one edge
+			uid = int(atomic.AddUint64(&numUIDs, 1))
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
-				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> "0" .`, uid)),
+				SetNquads: []byte(fmt.Sprintf(`<%v> <value> "0" .`, uid)),
 			}); err != nil && !errors.Is(err, dgo.ErrAborted) {
 				t.Fatalf("error in insertion :: %v\n", err)
 			} else if errors.Is(err, dgo.ErrAborted) {
 				return
 			}
-			nb = 1
+			ec = 1
 		}
 
-		acctsBal[uid] = nb
+		edgeCount[uid] = ec
 	}
 
 	// perform mutations until ctrl+c
@@ -156,7 +150,7 @@ func TestCountIndex(t *testing.T) {
 			case <-quit:
 				return
 			default:
-				n := int(atomic.LoadUint64(&numAccts))
+				n := int(atomic.LoadUint64(&numUIDs))
 				mutateUID(rand.Intn(n) + 1)
 				atomic.AddUint64(&counter, 1)
 			}
@@ -168,45 +162,44 @@ func TestCountIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: eq(count(balance), "3")) {uid}}`, dg)
+	checkSchemaUpdate(`{ q(func: eq(count(value), "3")) {uid}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")
 
 	// compute count index
-	balIndex := make(map[int][]int)
-	for uid := 1; uid <= int(numAccts); uid++ {
-		bal := acctsBal[uid]
-		balIndex[bal] = append(balIndex[bal], uid)
+	countIndex := make(map[int][]int)
+	for uid := 1; uid <= int(numUIDs); uid++ {
+		val := edgeCount[uid]
+		countIndex[val] = append(countIndex[val], uid)
 	}
-	for _, aa := range balIndex {
+	for _, aa := range countIndex {
 		sort.Ints(aa)
 	}
 
 	checkDelete := func(uid int) error {
-		q := fmt.Sprintf(`{ q(func: uid(%v)) {balance:count(balance)}}`, uid)
+		q := fmt.Sprintf(`{ q(func: uid(%v)) {value:count(value)}}`, uid)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
 			return fmt.Errorf("error in query: %v :: %w", q, err)
 		}
 		var data struct {
 			Q []struct {
-				Balance int
+				Count int
 			}
 		}
 		if err := json.Unmarshal(resp.Json, &data); err != nil {
 			fmt.Errorf("error in json.Unmarshal :: %w", err)
 		}
 
-		if len(data.Q) != 1 && data.Q[0].Balance != 0 {
+		if len(data.Q) != 1 && data.Q[0].Count != 0 {
 			return fmt.Errorf("found a deleted UID, %v", uid)
 		}
 		return nil
 	}
 
-	// check values now
-	checkBalance := func(b int, uids []int) error {
-		q := fmt.Sprintf(`{ q(func: eq(count(balance), "%v")) {uid}}`, b)
+	checkValue := func(b int, uids []int) error {
+		q := fmt.Sprintf(`{ q(func: eq(count(value), "%v")) {uid}}`, b)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
 		if err != nil {
 			fmt.Errorf("error in query: %v :: %w", q, err)
@@ -246,7 +239,7 @@ func TestCountIndex(t *testing.T) {
 		key int
 		err string
 	}
-	ch := make(chan pair, numAccts)
+	ch := make(chan pair, numUIDs)
 
 	fmt.Println("starting to query")
 	var count uint64
@@ -257,35 +250,35 @@ func TestCountIndex(t *testing.T) {
 		for {
 			time.Sleep(2 * time.Second)
 			cur := atomic.LoadUint64(&count)
-			fmt.Printf("%v/%v done\n", cur, len(balIndex))
-			if int(cur) == len(balIndex) {
+			fmt.Printf("%v/%v done\n", cur, len(countIndex))
+			if int(cur) == len(countIndex) {
 				break
 			}
 		}
 	}()
 
-	for balance, uids := range balIndex {
+	for value, uids := range countIndex {
 		th.Do()
-		go func(bal int, uidList []int) {
+		go func(val int, uidList []int) {
 			defer th.Done(nil)
-			if bal <= 0 {
+			if val <= 0 {
 				for _, uid := range uidList {
 					if err := checkDelete(uid); err != nil {
 						ch <- pair{uid, err.Error()}
 					}
 				}
 			} else {
-				if err := checkBalance(bal, uidList); err != nil {
-					ch <- pair{bal, err.Error()}
+				if err := checkValue(val, uidList); err != nil {
+					ch <- pair{val, err.Error()}
 				}
 			}
 			atomic.AddUint64(&count, 1)
-		}(balance, uids)
+		}(value, uids)
 	}
 	th.Finish()
 
 	close(ch)
 	for p := range ch {
-		t.Fatalf("failed for %v, :: %v\n", p.key, p.err)
+		t.Errorf("failed for %v, :: %v\n", p.key, p.err)
 	}
 }

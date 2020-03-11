@@ -55,7 +55,7 @@ func TestReverseIndex(t *testing.T) {
 		t.Fatalf("error in assigning UIDs :: %v", err)
 	}
 
-	// first insert bank accounts
+	// Insert edges from uid to (uid+1)
 	fmt.Println("inserting edges")
 	for i := 1; i < total; {
 		bb := &bytes.Buffer{}
@@ -86,6 +86,7 @@ func TestReverseIndex(t *testing.T) {
 	mutateUID := func(uid int) {
 		switch uid % 4 {
 		case 0:
+			// insert an edge from (uid-2) to uid
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> <%v> .`, uid-2, uid)),
@@ -96,6 +97,7 @@ func TestReverseIndex(t *testing.T) {
 			}
 			updated.Store(uid, nil)
 		case 1:
+			// add new uid and edge from (uid-1) to uid
 			v := atomic.AddInt64(&numEdges, 1)
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
@@ -104,6 +106,7 @@ func TestReverseIndex(t *testing.T) {
 				t.Fatalf("error in insertion :: %v\n", err)
 			}
 		case 2:
+			// delete an existing edge from uid-1 to uid
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <balance> <%v> .`, uid-1, uid)),
@@ -114,6 +117,7 @@ func TestReverseIndex(t *testing.T) {
 			}
 			updated.Store(uid, nil)
 		case 3:
+			// add two new edges, uid+1 to uid AND uid-2 to uid, already have uid to uid-1
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				SetNquads: []byte(fmt.Sprintf("<%v> <balance> <%v> .\n<%v> <balance> <%v> .",
@@ -175,6 +179,7 @@ func TestReverseIndex(t *testing.T) {
 		_, ok := updated.Load(i)
 		switch {
 		case !ok || i > total || i%4 == 1:
+			// Expect exactly one edge, uid-1 to uid
 			if len(data.Q) != 1 || len(data.Q[0].Balance) != 1 {
 				return fmt.Errorf("length not equal, no mod, got: %+v", data)
 			}
@@ -186,6 +191,7 @@ func TestReverseIndex(t *testing.T) {
 				return fmt.Errorf("value not equal, got: %+v", data)
 			}
 		case i%4 == 0:
+			// Expect two edges, uid-2 to uid AND uid-1 to uid
 			if len(data.Q) != 1 || len(data.Q[0].Balance) != 2 {
 				return fmt.Errorf("length not equal, got: %+v", data)
 			}
@@ -203,10 +209,12 @@ func TestReverseIndex(t *testing.T) {
 				return fmt.Errorf("value not equal, got: %+v", data)
 			}
 		case i%4 == 2:
+			// This was deleted, so no edges expected
 			if len(data.Q) != 0 {
 				return fmt.Errorf("length not equal, del, got: %+v", data)
 			}
 		case i%4 == 3:
+			// Expect 3 edges from uid-2, uid-1 and uid+1
 			if len(data.Q) != 1 || len(data.Q[0].Balance) != 3 {
 				return fmt.Errorf("length not equal, got: %+v", data)
 			}
@@ -270,6 +278,6 @@ func TestReverseIndex(t *testing.T) {
 
 	close(ch)
 	for p := range ch {
-		t.Fatalf("failed for %v, :: %v\n", p.uid, p.err)
+		t.Errorf("failed for %v, :: %v\n", p.uid, p.err)
 	}
 }

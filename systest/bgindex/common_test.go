@@ -63,10 +63,12 @@ func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
 			return
 		case <-time.After(2 * time.Second):
 		}
+
 		fmt.Println("mutations:", atomic.LoadUint64(counter))
 	}
 }
 
+// blocks until query returns no error.
 func checkSchemaUpdate(query string, dg *dgo.Dgraph) {
 	for {
 		time.Sleep(2 * time.Second)

@@ -88,17 +88,12 @@ func TestStringIndex(t *testing.T) {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
 
-	if resp, err := dg.NewReadOnlyTxn().Query(context.Background(), "schema{}"); err != nil {
-		t.Fatalf("error in adding indexes :: %v\n", err)
-	} else {
-		fmt.Printf("current schema: %v\n", resp)
-	}
-
 	// perform mutations until ctrl+c
 	mutateUID := func(uid int) {
 		nb := rand.Intn(total * 100)
 		switch uid % 3 {
 		case 0:
+			// change the balance to new random value.
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				SetNquads: []byte(fmt.Sprintf(`<%v> <balance> "%v" .`, uid, nb)),
@@ -108,6 +103,7 @@ func TestStringIndex(t *testing.T) {
 				return
 			}
 		case 1:
+			// delete this uid.
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
 				DelNquads: []byte(fmt.Sprintf(`<%v> <balance> * .`, uid)),
@@ -118,6 +114,7 @@ func TestStringIndex(t *testing.T) {
 			}
 			nb = -1
 		case 2:
+			// add new uid.
 			uid = int(atomic.AddUint64(&numAccts, 1))
 			if _, err := dg.NewTxn().Mutate(context.Background(), &api.Mutation{
 				CommitNow: true,
@@ -162,7 +159,7 @@ func TestStringIndex(t *testing.T) {
 	swg.Wait()
 	fmt.Println("mutations done")
 
-	// compute reverse index
+	// compute index
 	balIndex := make(map[int][]int)
 	for uid, bal := range acctsBal {
 		balIndex[bal] = append(balIndex[bal], uid)
@@ -192,7 +189,6 @@ func TestStringIndex(t *testing.T) {
 		return nil
 	}
 
-	// check values now
 	checkBalance := func(b int, uids []int) error {
 		q := fmt.Sprintf(`{ q(func: anyoftext(balance, "%v")) {uid}}`, b)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)

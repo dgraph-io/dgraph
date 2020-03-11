@@ -96,7 +96,7 @@ func TestParallelIndexing(t *testing.T) {
 		t.Fatalf("error in adding float predicate :: %v\n", err)
 	}
 
-	fmt.Println("building indexes in background")
+	fmt.Println("building indexes in background for int and string data")
 	if err := dg.Alter(context.Background(), &api.Operation{
 		Schema: `
 			balance_int: int @index(int) .
@@ -115,6 +115,7 @@ func TestParallelIndexing(t *testing.T) {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
 
+	// Wait until previous indexing is complete.
 	for {
 		if err := dg.Alter(context.Background(), &api.Operation{
 			Schema: `balance_float: float @index(float) .`,
@@ -126,13 +127,11 @@ func TestParallelIndexing(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 
-	fmt.Println("waiting for indexing to complete")
-	s := `
-		balance_int: int @index(int) .
-		balance_str: string @index(fulltext, term, exact) .
-		balance_float: float @index(float) .`
+	fmt.Println("waiting for float indexing to complete")
+	s := `balance_float: float @index(float) .`
 	testutil.WaitForAlter(context.Background(), dg, s)
 
+	// balance should be same as uid.
 	checkBalance := func(b int, pred string) error {
 		q := fmt.Sprintf(`{ q(func: eq(%v, "%v")) {uid}}`, pred, b)
 		resp, err := dg.NewReadOnlyTxn().Query(context.Background(), q)
@@ -199,6 +198,6 @@ func TestParallelIndexing(t *testing.T) {
 
 	close(ch)
 	for p := range ch {
-		t.Fatalf("failed for %v, :: %v\n", p.key, p.err)
+		t.Errorf("failed for %v, :: %v\n", p.key, p.err)
 	}
 }

@@ -152,10 +152,12 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		return nil
 	}
 
+	// This wg allows waiting until setup for all the predicates is complete
+	// befor running buildIndexes for any of those predicates.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
-	buildIndxes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
 		// and write indexes for another predicate simultaneously. because that could
@@ -209,7 +211,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 
 		if rebuild.NeedIndexRebuild() {
-			go buildIndxes(su, rebuild)
+			go buildIndexes(su, rebuild)
 		} else if err := updateSchema(su); err != nil {
 			return err
 		}
