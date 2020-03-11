@@ -1,3 +1,21 @@
+/*
+ * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// Package worker contains code for pb.worker communication to perform
+// queries and mutations.
 package worker
 
 import (
@@ -9,7 +27,7 @@ import (
 	"github.com/golang/glog"
 )
 
-type runMutPayload struct {
+type subMutation struct {
 	edges   []*pb.DirectedEdge
 	ctx     context.Context
 	startTs uint64
@@ -17,16 +35,16 @@ type runMutPayload struct {
 
 type Executor struct {
 	sync.RWMutex
-	predChan map[string]chan *runMutPayload
+	predChan map[string]chan *subMutation
 }
 
 func newExecutor() *Executor {
 	return &Executor{
-		predChan: make(map[string]chan *runMutPayload),
+		predChan: make(map[string]chan *subMutation),
 	}
 }
 
-func (e *Executor) processMutationCh(ch chan *runMutPayload) {
+func (e *Executor) processMutationCh(ch chan *subMutation) {
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
 		ptxn := posting.NewTxn(payload.startTs)
@@ -46,10 +64,12 @@ func (e *Executor) processMutationCh(ch chan *runMutPayload) {
 		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
 			glog.Errorf("Error while commiting to disk: %+v", err)
 		}
+		// TODO(Animesh): We might not need this wait.
+		// writer.Wait()
 	}
 }
 
-func (e *Executor) getChannel(pred string) (ch chan *runMutPayload) {
+func (e *Executor) getChannel(pred string) (ch chan *subMutation) {
 	e.RLock()
 	ch, ok := e.predChan[pred]
 	e.RUnlock()
@@ -64,22 +84,22 @@ func (e *Executor) getChannel(pred string) (ch chan *runMutPayload) {
 		e.Unlock()
 		return ch
 	}
-	ch = make(chan *runMutPayload, 1000)
+	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
 	e.Unlock()
 	go e.processMutationCh(ch)
 	return ch
 }
 
-func (e *Executor) addEdges(ctx context.Context, StartTs uint64, edges []*pb.DirectedEdge) {
-	payloadMap := make(map[string]*runMutPayload)
+func (e *Executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+	payloadMap := make(map[string]*subMutation)
 
 	for _, edge := range edges {
 		payload, ok := payloadMap[edge.Attr]
 		if !ok {
-			payloadMap[edge.Attr] = &runMutPayload{
+			payloadMap[edge.Attr] = &subMutation{
 				ctx:     ctx,
-				startTs: StartTs,
+				startTs: startTs,
 			}
 			payload = payloadMap[edge.Attr]
 		}
