@@ -207,7 +207,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 		}
 		fragment humanFrag on Human {
 			starships {
-				... on Starship {
+				... {
 					id
 					name
 					length
