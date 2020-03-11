@@ -973,7 +973,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		// Check if the list (or any of it's parts if it's been previously split) have
 		// become too big. Split the list if that is the case.
 		out.newMinTs = maxCommitTs
-		out.splitUpList()
+		out.recursiveSplit()
 		out.removeEmptySplits()
 	} else {
 		out.plist.Splits = nil
@@ -1357,6 +1357,26 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 // shouldSplit returns true if the given plist should be split in two.
 func shouldSplit(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+}
+
+func (out *rollupOutput) recursiveSplit() {
+	// Call splitUpList. Otherwise the map of startUids to parts won't be initialized.
+	out.splitUpList()
+
+	// Keep calling splitUpList until all the parts cannot be further split.
+	for {
+		needsSplit := false
+		for _, part := range out.parts {
+			if shouldSplit(part) {
+				needsSplit = true
+			}
+		}
+
+		if !needsSplit {
+			return
+		}
+		out.splitUpList()
+	}
 }
 
 // splitUpList checks the list and splits it in smaller parts if needed.
