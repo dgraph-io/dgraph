@@ -80,54 +80,41 @@ type operation struct {
 }
 
 const (
-	opRollUp = iota + 1
+	opRollup = iota + 1
 	opSnapshot
-	opBGIndex
+	opIndexing
 )
-
-// startRollUp will check whether rollup is already going on. If not,
-// it will return a context that can be used to cancel the rollup if needed.
-func (n *node) startRollUp() (context.Context, error) {
-	n.opsLock.Lock()
-	defer n.opsLock.Unlock()
-
-	if len(n.ops) > 0 {
-		return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	n.ops[opRollUp] = &operation{cancel: cancel, done: make(chan struct{}, 1)}
-	return ctx, nil
-}
 
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
-func (n *node) startTask(id int) error {
+func (n *node) startTask(inCtx context.Context, id int) (context.Context, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
-	// For bgindex, we may not call stopTask.
-	if !schema.State().IndexingInProgress() {
-		delete(n.ops, opBGIndex)
-	}
-
 	switch id {
-	case opSnapshot, opBGIndex:
-		if rop, has := n.ops[opRollUp]; has {
+	case opRollup:
+		if len(n.ops) > 0 {
+			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
+		}
+	case opSnapshot, opIndexing:
+		if rop, has := n.ops[opRollup]; has {
 			glog.Info("Found a rollup going on. Cancelling rollup!")
 			rop.cancel()
 			<-rop.done
 			glog.Info("Rollup cancelled.")
 		} else if _, has := n.ops[id]; has {
-			return errors.Errorf("another operation is already running, ops:%v", n.ops)
+			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
 		}
-		n.ops[id] = &operation{done: make(chan struct{}, 1)}
-		glog.Infof("Operation started with id: %d", id)
 	default:
-		glog.Infof("Got an unhandled operation %d. Ignoring...", id)
+		glog.Errorf("Got an unhandled operation %d. Ignoring...", id)
+		return inCtx, nil
 	}
 
-	return nil
+	ctx, cancel := context.WithCancel(inCtx)
+	n.ops[id] = &operation{cancel: cancel, done: make(chan struct{})}
+	glog.Infof("Operation started with id: %d", id)
+	return ctx, nil
 }
 
 // stopTask will delete the entry from the map that keep tracks of the ops
@@ -143,12 +130,10 @@ func (n *node) stopTask(id int) {
 
 	// Cancel the context and delete op from the operations map.
 	delete(n.ops, id)
-	if op.cancel != nil {
-		op.cancel()
-	}
+	op.cancel()
 
 	// Signal that task is completed or cancelled.
-	op.done <- struct{}{}
+	close(op.done)
 	glog.Infof("Operation completed with id: %d", id)
 }
 
@@ -709,7 +694,8 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
-	if err := n.startTask(opSnapshot); err != nil {
+	// ignoring the returned context
+	if _, err := n.startTask(context.Background(), opSnapshot); err != nil {
 		return err
 	}
 	defer n.stopTask(opSnapshot)
@@ -1156,11 +1142,11 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	ctx, err := n.startRollUp()
+	ctx, err := n.startTask(context.Background(), opRollup)
 	if err != nil {
 		return err
 	}
-	defer n.stopTask(opRollUp)
+	defer n.stopTask(opRollup)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
