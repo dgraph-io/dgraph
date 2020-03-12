@@ -426,6 +426,8 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 // announce messages (block announce messages include the header but the full
 // block is required to execute `core_execute_block`).
 func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
+	log.Trace("[core] got BlockAnnounceMessage")
+
 	blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
 	if !ok {
 		return errors.New("could not cast network.Message to BlockAnnounceMessage")
@@ -444,13 +446,13 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		}
 
 		log.Info("[core] saved block", "number", header.Number, "hash", header.Hash())
-
 	} else {
 		return err
 	}
 
 	bestNum, err := s.blockState.BestBlockNumber()
 	if err != nil {
+		log.Error("[core] BlockAnnounceMessage", "error", err)
 		return err
 	}
 
@@ -508,6 +510,7 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 		// check if we have start block
 		block, err := s.blockState.GetBlockByNumber(big.NewInt(int64(start)))
 		if err != nil {
+			log.Error("[core] cannot get starting block", "number", start)
 			return err
 		}
 
@@ -523,6 +526,8 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 	} else {
 		endHash = s.blockState.BestBlockHash()
 	}
+
+	log.Trace("[core] got BlockRequestMessage", "startHash", startHash, "endHash", endHash)
 
 	// get sub-chain of block hashes
 	subchain := s.blockState.SubChain(startHash, endHash)
@@ -594,6 +599,8 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 // chain by calling `core_execute_block`. Valid blocks are stored in the block
 // database to become part of the canonical chain.
 func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
+	log.Trace("[core] got BlockResponseMessage")
+
 	blockData := msg.(*network.BlockResponseMessage).BlockData
 
 	bestNum, err := s.blockState.BestBlockNumber()

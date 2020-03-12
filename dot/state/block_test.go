@@ -72,45 +72,31 @@ func TestSetAndGetHeader(t *testing.T) {
 }
 
 func TestGetBlockByNumber(t *testing.T) {
-	bs := newTestBlockState(nil)
-	defer bs.db.db.Close()
+	genesisHeader := &types.Header{
+		Number: big.NewInt(0),
+	}
 
-	// Create a header & blockData
+	bs := newTestBlockState(genesisHeader)
+
 	blockHeader := &types.Header{
-		Number: big.NewInt(1),
-		Digest: [][]byte{},
-	}
-	hash := blockHeader.Hash()
-
-	// BlockBody with fake extrinsics
-	blockBody := &types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-
-	blockData := &types.BlockData{
-		Hash:   hash,
-		Header: blockHeader.AsOptional(),
-		Body:   blockBody.AsOptional(),
+		ParentHash: genesisHeader.Hash(),
+		Number:     big.NewInt(1),
+		Digest:     [][]byte{},
 	}
 
-	// Set the block's header & blockData in the blockState
-	// SetHeader also sets mapping [blockNumber : hash] in DB
-	err := bs.SetHeader(blockHeader)
-	require.Nil(t, err)
-
-	err = bs.SetBlockData(blockData)
-	require.Nil(t, err)
-
-	// Get block & check if it's the same as the expectedBlock
-	expectedBlock := &types.Block{
+	block := &types.Block{
 		Header: blockHeader,
-		Body:   blockBody,
+		Body:   &types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
 	}
+
+	// AddBlock also sets mapping [blockNumber : hash] in DB
+	err := bs.AddBlock(block)
+	require.Nil(t, err)
 
 	retBlock, err := bs.GetBlockByNumber(blockHeader.Number)
 	require.Nil(t, err)
 
-	retBlock.Header.Hash()
-
-	require.Equal(t, expectedBlock, retBlock, "Could not validate returned retBlock as expected")
+	require.Equal(t, block, retBlock, "Could not validate returned retBlock as expected")
 
 }
 
