@@ -59,8 +59,8 @@ func failedToDial(err error) bool {
 
 // helper method to create and start a new network service
 func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan Message, msgRec chan Message) {
-	msgRec = make(chan Message)
-	msgSend = make(chan Message)
+	msgRec = make(chan Message, 4)
+	msgSend = make(chan Message, 4)
 
 	// same for all network tests use the createTestService helper method
 	cfg.BlockState = &MockBlockState{} // required

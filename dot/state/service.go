@@ -133,6 +133,10 @@ func initializeBlockTree(db database.Database, genesisHeader *types.Header) erro
 
 // Start initializes the Storage database and the Block database.
 func (s *Service) Start() error {
+	if !s.isMemDB && (s.Storage != nil || s.Block != nil || s.Network != nil) {
+		return nil
+	}
+
 	db := s.db
 	if !s.isMemDB {
 		datadir, err := filepath.Abs(s.dbPath)
@@ -218,6 +222,7 @@ func (s *Service) Stop() error {
 	if err != nil {
 		return err
 	}
+
 	log.Trace("[state] stop", "best block hash", hash)
 
 	return s.db.Close()
