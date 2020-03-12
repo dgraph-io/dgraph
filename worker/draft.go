@@ -99,7 +99,7 @@ func (n *node) startRollUp() (context.Context, error) {
 	return ctx, nil
 }
 
-// startTask is used to check whether the an op is already going on.
+// startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
 func (n *node) startTask(id int) error {
@@ -149,7 +149,7 @@ func (n *node) stopTask(id int) {
 
 	// Signal that task is completed or cancelled.
 	op.done <- struct{}{}
-	glog.Infof("Operation complete with id: %d", id)
+	glog.Infof("Operation completed with id: %d", id)
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
