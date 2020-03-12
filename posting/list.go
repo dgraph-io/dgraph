@@ -430,10 +430,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		mpost.Uid = t.ValueId
 	}
 
-	if x.WorkerConfig.LudicrousMode {
-		return nil
-	}
-
 	// Check whether this mutation is an update for a predicate of type uid.
 	pk, err := x.Parse(l.key)
 	if err != nil {
@@ -447,6 +443,10 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
 		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
 			hex.EncodeToString(l.key), mpost)
+	}
+
+	if x.WorkerConfig.LudicrousMode {
+		return nil
 	}
 
 	// We ensure that commit marks are applied to posting lists in the right
