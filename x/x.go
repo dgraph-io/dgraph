@@ -280,7 +280,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 
@@ -323,7 +323,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 
@@ -908,6 +908,25 @@ func RunVlogGC(store *badger.DB, closer *y.Closer) {
 			runGC()
 		case <-mandatoryVlogTicker.C:
 			runGC()
+		}
+	}
+}
+
+type DB interface {
+	Sync() error
+}
+
+func StoreSync(db DB, closer *y.Closer) {
+	defer closer.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := db.Sync(); err != nil {
+				glog.Errorf("Error while calling db sync: %+v", err)
+			}
+		case <-closer.HasBeenClosed():
+			return
 		}
 	}
 }

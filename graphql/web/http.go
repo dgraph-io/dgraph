@@ -147,7 +147,7 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}()
-	return ch, nil
+	return ch, ctx.Err()
 }
 
 func (gh *graphqlHandler) Handler() http.Handler {
@@ -165,7 +165,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	if !gh.isValid() {
-		panic("graphqlHandler not initialised")
+		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
 	ctx = x.AttachAccessJwt(ctx, r)

@@ -68,6 +68,7 @@ if [[ ! -z "$TEAMCITY_VERSION" ]]; then
 fi
 
 Info "running regression queries"
+export SCHEMA_FILE
 go test -v -tags systest || FOUND_DIFFS=1
 
 Info "bringing down zero and alpha and data volumes"
