@@ -16,68 +16,53 @@
 
 package gssmr
 
-import (
-	"github.com/ChainSafe/gossamer/dot"
-	"github.com/ChainSafe/gossamer/lib/utils"
-)
+var (
+	// GlobalConfig
 
-const (
-	// DefaultNode Default node implementation
-	DefaultNode = "gssmr"
-	// DefaultConfigPath Default toml configuration path
-	DefaultConfigPath = "./node/gssmr/config.toml"
-	// DefaultGenesisPath Default genesis configuration path
-	DefaultGenesisPath = "./node/gssmr/genesis.json"
+	// DefaultName Default node name
+	DefaultName = string("gssmr")
+	// DefaultID Default node ID
+	DefaultID = string("gssmr")
+	// DefaultConfig Default toml configuration path
+	DefaultConfig = string("./node/gssmr/config.toml")
+	// DefaultGenesis Default genesis configuration path
+	DefaultGenesis = string("./node/gssmr/genesis.json")
+	// DefaultDataDir Default node data directory
+	DefaultDataDir = string("~/.gossamer/gssmr")
+
+	// AccountConfig
+
+	// DefaultKey Default account key
+	DefaultKey = string("")
+	// DefaultUnlock Default account unlock
+	DefaultUnlock = string("")
+
+	// CoreConfig
+
+	// DefaultAuthority true if BABE block producer
+	DefaultAuthority = true
+
+	// NetworkConfig
 
 	// DefaultNetworkPort network port
-	DefaultNetworkPort = 7001
-	// DefaultNetworkProtocolID ID
-	DefaultNetworkProtocolID = "/gossamer/gssmr/0"
+	DefaultNetworkPort = uint32(7001)
+	// DefaultNetworkBootnodes network bootnodes
+	DefaultNetworkBootnodes = []string(nil)
+	// DefaultNetworkProtocolID network protocol
+	DefaultNetworkProtocolID = string("/gossamer/gssmr/0")
+	// DefaultRoles Default node roles
+	DefaultRoles = byte(1) // full node
+	// DefaultNoBootstrap disables bootstrap
+	DefaultNoBootstrap = false
+	// DefaultNoMDNS disables mDNS discovery
+	DefaultNoMDNS = false
 
-	// DefaultRPCHTTPHost Default host interface for the HTTP RPC server
-	DefaultRPCHTTPHost = "localhost"
-	// DefaultRPCHTTPPort http port
-	DefaultRPCHTTPPort = 8545
-)
+	// RPCConfig
 
-var (
-	// DefaultNetworkBootnodes Must be non-nil to match toml parsing semantics
-	DefaultNetworkBootnodes = []string{}
-
-	// DefaultRPCModules holds defaults RPC modules
+	// DefaultRPCHTTPHost rpc host
+	DefaultRPCHTTPHost = string("localhost")
+	// DefaultRPCHTTPPort rpc port
+	DefaultRPCHTTPPort = uint32(8545)
+	// DefaultRPCModules rpc modules
 	DefaultRPCModules = []string{"system", "author"}
 )
-
-var (
-	// DefaultGlobalConfig Global
-	DefaultGlobalConfig = dot.GlobalConfig{
-		DataDir:   utils.DataDir(DefaultNode),
-		Roles:     byte(1), // full node
-		Authority: true,    // BABE block producer
-	}
-
-	// DefaultNetworkConfig Network
-	DefaultNetworkConfig = dot.NetworkConfig{
-		Bootnodes:   DefaultNetworkBootnodes,
-		ProtocolID:  DefaultNetworkProtocolID,
-		Port:        DefaultNetworkPort,
-		NoBootstrap: false,
-		NoMDNS:      false,
-	}
-
-	// DefaultRPCConfig RPC
-	DefaultRPCConfig = dot.RPCConfig{
-		Host:    DefaultRPCHTTPHost,
-		Port:    DefaultRPCHTTPPort,
-		Modules: DefaultRPCModules,
-	}
-)
-
-// DefaultConfig is the default settings used when a config.toml file is not passed in during instantiation
-func DefaultConfig() *dot.Config {
-	return &dot.Config{
-		Global:  DefaultGlobalConfig,
-		Network: DefaultNetworkConfig,
-		RPC:     DefaultRPCConfig,
-	}
-}

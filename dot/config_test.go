@@ -17,56 +17,146 @@
 package dot
 
 import (
-	"os"
-	"path"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/stretchr/testify/require"
 )
 
-// NewTestConfig returns a new test configuration using the provided datadir
-func NewTestConfig(datadir string) *Config {
-	return &Config{
-		Global: GlobalConfig{
-			DataDir:   datadir,
-			Roles:     byte(1),
-			Authority: false,
-		},
-		Network: NetworkConfig{
-			Bootnodes:   []string{},
-			ProtocolID:  "/gossamer/test/0",
-			Port:        7001,
-			NoBootstrap: false,
-			NoMDNS:      false,
-		},
-		RPC: RPCConfig{
-			Host:    "localhost",
-			Port:    8545,
-			Modules: []string{"system"},
-		},
-	}
+// TestLoadConfig tests loading a toml configuration file
+func TestLoadConfig(t *testing.T) {
+	cfg, cfgFile := NewTestConfigWithFile(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Global.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	err = LoadConfig(cfg, cfgFile.Name())
+	require.Nil(t, err)
+
+	// TODO: improve dot config tests
+	require.NotNil(t, cfg)
 }
 
-// TestLoadConfig tests loading toml configuration file for ksmcc
-func TestLoadConfig(t *testing.T) {
-	dir := path.Join(os.TempDir(), "gossamer-test", t.Name())
-	defer os.RemoveAll(dir)
+// TestExportConfig tests exporting a toml configuration file
+func TestExportConfig(t *testing.T) {
+	cfg, cfgFile := NewTestConfigWithFile(t)
+	require.NotNil(t, cfg)
 
-	fp := "../tests/exports/config.toml"
-	cfg := NewTestConfig(dir)
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
 
-	err := LoadConfig(fp, cfg)
+	defer utils.RemoveTestDir(t)
+
+	cfg.Global.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	file := ExportConfig(cfg, cfgFile.Name())
+
+	// TODO: improve dot config tests
+	require.NotNil(t, file)
+}
+
+// Gssmr Node
+
+// TestLoadConfigGssmr tests loading the toml configuration file for ksmcc
+func TestLoadConfigGssmr(t *testing.T) {
+	cfg := GssmrConfig()
+	require.NotNil(t, cfg)
+
+	cfg.Global.DataDir = utils.NewTestDir(t)
+	cfg.Global.Genesis = "../node/gssmr/genesis.json"
+
+	defer utils.RemoveTestDir(t)
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	err = LoadConfig(cfg, "../node/gssmr/config.toml")
+	require.Nil(t, err)
+
+	// TODO: improve dot config tests
+	require.NotNil(t, cfg)
+}
+
+// TestExportConfigGssmr tests exporting the toml configuration file
+func TestExportConfigGssmr(t *testing.T) {
+	cfg := GssmrConfig()
+	require.NotNil(t, cfg)
+
+	gssmrConfig := cfg.Global.Config
+	gssmrGenesis := cfg.Global.Genesis
+	gssmrDataDir := cfg.Global.DataDir
+	cfg.Global.DataDir = utils.NewTestDir(t)
+	cfg.Global.Genesis = "../node/gssmr/genesis.json"
+
+	defer utils.RemoveTestDir(t)
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	cfg.Global.Config = gssmrConfig
+	cfg.Global.Genesis = gssmrGenesis
+	cfg.Global.DataDir = gssmrDataDir
+
+	file := ExportConfig(cfg, "../node/gssmr/config.toml")
+
+	// TODO: improve dot config tests
+	require.NotNil(t, file)
+}
+
+// Ksmcc Node
+
+// TestLoadConfigKsmcc tests loading the toml configuration file for ksmcc
+func TestLoadConfigKsmcc(t *testing.T) {
+	cfg := KsmccConfig()
+	require.NotNil(t, cfg)
+
+	cfg.Global.DataDir = utils.NewTestDir(t)
+	cfg.Global.Genesis = "../node/ksmcc/genesis.json"
+
+	defer utils.RemoveTestDir(t)
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	err = LoadConfig(cfg, "../node/ksmcc/config.toml")
+
+	// TODO: improve dot config tests
 	require.Nil(t, err)
 }
 
-// TestExportConfig tests exporting toml configuration file
-func TestExportConfig(t *testing.T) {
-	dir := path.Join(os.TempDir(), "gossamer-test", t.Name())
-	defer os.RemoveAll(dir)
+// TestExportConfigKsmcc tests exporting the toml configuration file
+func TestExportConfigKsmcc(t *testing.T) {
+	cfg := KsmccConfig()
+	require.NotNil(t, cfg)
 
-	fp := "../tests/exports/config.toml"
-	cfg := NewTestConfig(dir)
+	ksmccConfig := cfg.Global.Config
+	ksmccGenesis := cfg.Global.Genesis
+	ksmccDataDir := cfg.Global.DataDir
+	cfg.Global.DataDir = utils.NewTestDir(t)
+	cfg.Global.Genesis = "../node/ksmcc/genesis.json"
 
-	file := ExportConfig(fp, cfg)
+	defer utils.RemoveTestDir(t)
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	cfg.Global.Config = ksmccConfig
+	cfg.Global.Genesis = ksmccGenesis
+	cfg.Global.DataDir = ksmccDataDir
+
+	file := ExportConfig(cfg, "../node/ksmcc/config.toml")
+
+	// TODO: improve dot config tests
 	require.NotNil(t, file)
 }

@@ -19,39 +19,47 @@ package main
 import (
 	"fmt"
 	"os"
-	"path"
-	"strconv"
+
+	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/utils"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
+// app is the cli application
 var app = cli.NewApp()
 
 var (
-	dumpConfigCommand = cli.Command{
-		Action:      FixFlagOrder(dumpConfig),
-		Name:        "dumpconfig",
-		Usage:       "Show configuration values",
-		ArgsUsage:   "",
-		Flags:       AllFlags(),
-		Category:    "CONFIGURATION DEBUGGING",
-		Description: `The dumpconfig command shows configuration values.`,
+	// exportCommand defines the "export" subcommand (ie, `gossamer export`)
+	exportCommand = cli.Command{
+		Action:    FixFlagOrder(exportAction),
+		Name:      "export",
+		Usage:     "Export configuration values to TOML configuration file",
+		ArgsUsage: "",
+		Flags:     AllFlags(),
+		Category:  "CONFIGURATION",
+		Description: "The export command exports configuration values from the command flags to a TOML configuration file.\n" +
+			"\tUsage: gossamer export --config node/custom/config.toml --datadir ~/.gossamer/custom --genesis ~/node/custom/genesis.json --protocol /gossamer/custom/0",
 	}
+	// initCommand defines the "init" subcommand (ie, `gossamer init`)
 	initCommand = cli.Command{
-		Action:      FixFlagOrder(initNode),
-		Name:        "init",
-		Usage:       "Initialize node genesis state",
-		ArgsUsage:   "",
-		Flags:       append(CLIFlags, NodeFlags...),
-		Category:    "INITIALIZATION",
-		Description: `The init command initializes the node with a genesis state. Usage: gossamer init --genesis genesis.json`,
+		Action:    FixFlagOrder(initAction),
+		Name:      "init",
+		Usage:     "Initialize node databases and load genesis data to state",
+		ArgsUsage: "",
+		Flags:     AllFlags(),
+		Category:  "INITIALIZATION",
+		Description: "The init command initializes the node databases and loads the genesis data from the genesis configuration file to state.\n" +
+			"\tUsage: gossamer init --genesis genesis.json",
 	}
+	// accountCommand defines the "account" subcommand (ie, `gossamer account`)
 	accountCommand = cli.Command{
-		Action:   FixFlagOrder(handleAccounts),
+		Action:   FixFlagOrder(accountAction),
 		Name:     "account",
 		Usage:    "manage gossamer keystore",
-		Flags:    append(CLIFlags, append(NodeFlags, AccountFlags...)...),
+		Flags:    AllFlags(),
 		Category: "KEYSTORE",
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
@@ -62,26 +70,28 @@ var (
 	}
 )
 
-// init initializes gossamer
+// init initializes the cli application
 func init() {
-	app.Action = gossamer
+	app.Action = gossamerAction
 	app.Copyright = "Copyright 2019 ChainSafe Systems Authors"
 	app.Name = "gossamer"
 	app.Usage = "Official gossamer command-line interface"
 	app.Author = "ChainSafe Systems 2019"
 	app.Version = "0.0.1"
 	app.Commands = []cli.Command{
-		dumpConfigCommand,
+		exportCommand,
 		initCommand,
 		accountCommand,
 	}
 	app.Flags = append(app.Flags, CLIFlags...)
-	app.Flags = append(app.Flags, NodeFlags...)
+	app.Flags = append(app.Flags, GlobalFlags...)
 	app.Flags = append(app.Flags, AccountFlags...)
+	app.Flags = append(app.Flags, CoreFlags...)
 	app.Flags = append(app.Flags, NetworkFlags...)
 	app.Flags = append(app.Flags, RPCFlags...)
 }
 
+// main runs the cli application
 func main() {
 	if err := app.Run(os.Args); err != nil {
 		_, _ = fmt.Fprintln(os.Stderr, err)
@@ -89,73 +99,67 @@ func main() {
 	}
 }
 
-func startLogger(ctx *cli.Context) error {
-	logger := log.Root()
-	handler := logger.GetHandler()
-	var lvl log.Lvl
+// gossamerAction is the root action for the gossamer command, creates a node
+// configuration, loads the keystore, initializes the node if not initialized,
+// then creates and starts the node and node services
+func gossamerAction(ctx *cli.Context) error {
 
-	if lvlToInt, err := strconv.Atoi(ctx.String(VerbosityFlag.Name)); err == nil {
-		lvl = log.Lvl(lvlToInt)
-	} else if lvl, err = log.LvlFromString(ctx.String(VerbosityFlag.Name)); err != nil {
-		return err
-	}
-	log.Root().SetHandler(log.LvlFilterHandler(lvl, handler))
-
-	return nil
-}
-
-// initNode loads the genesis file and loads the initial state into the DB
-func initNode(ctx *cli.Context) error {
-	err := startLogger(ctx)
-	if err != nil {
-		log.Error("[gossamer] Failed to start logger", "error", err)
-		return err
-	}
-
-	// initialize node (initialize databases and load genesis data)
-	err = initializeNode(ctx)
-	if err != nil {
-		log.Error("[gossamer] Failed to initialize node", "error", err)
-		return err
-	}
-
-	return nil
-}
-
-// gossamer is the main entrypoint into the gossamer system
-func gossamer(ctx *cli.Context) error {
-	err := startLogger(ctx)
-	if err != nil {
-		log.Error("[gossamer] Failed to start logger", "error", err)
-		return err
-	}
-
-	// check command arguments
+	// check for unknown command arguments
 	if arguments := ctx.Args(); len(arguments) > 0 {
 		return fmt.Errorf("failed to read command argument: %q", arguments[0])
 	}
 
-	// check if node has been initialized
-	if !nodeInitialized(ctx) {
-
-		log.Warn("[gossamer] Node has not been initialized, initializing new node...")
-
-		// initialize node (initialize databases and load genesis data)
-		err = initializeNode(ctx)
-		if err != nil {
-			log.Error("[gossamer] Failed to initialize node", "error", err)
-			return err
-		}
-	}
-
-	// create node services
-	node, _, err := makeNode(ctx)
+	// start gossamer logger
+	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[gossamer] Failed to create node services", "error", err)
+		log.Error("[cmd] Failed to start logger", "error", err)
 		return err
 	}
 
-	log.Info("[gossamer] Starting node...", "name", node.Name)
+	// create new dot configuration (the dot configuration is created within the
+	// cli application from the flag values provided)
+	cfg, err := createDotConfig(ctx)
+	if err != nil {
+		log.Error("[cmd] Failed to create node configuration", "error", err)
+		return err
+	}
+
+	// expand data directory and update node configuration (performed separate
+	// from createDotConfig because dot config should not include expanded path)
+	cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
+
+	// check if node has not been initialized
+	if !dot.NodeInitialized(cfg) {
+
+		log.Warn("[cmd] Node has not been initialized, initializing new node...")
+
+		err = dot.InitNode(cfg)
+		if err != nil {
+			log.Error("[cmd] Failed to initialize node", "error", err)
+			return err
+		}
+
+	}
+
+	ks, err := keystore.LoadKeystore(cfg.Account.Key)
+	if err != nil {
+		log.Error("[cmd] Failed to load keystore", "error", err)
+		return err
+	}
+
+	err = unlockKeystore(ks, cfg.Global.DataDir, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
+	if err != nil {
+		log.Error("[cmd] Failed to unlock keystore", "error", err)
+		return err
+	}
+
+	node, err := dot.NewNode(cfg, ks)
+	if err != nil {
+		log.Error("[cmd] Failed to create node services", "error", err)
+		return err
+	}
+
+	log.Info("[cmd] Starting node...", "name", node.Name)
 
 	// start node
 	node.Start()
@@ -163,40 +167,39 @@ func gossamer(ctx *cli.Context) error {
 	return nil
 }
 
-// nodeInitialized returns true if, within the configured data directory for the
-// node, the state database has been created and the gensis data has been loaded
-func nodeInitialized(ctx *cli.Context) bool {
-	cfg, err := getConfig(ctx)
+// initAction is the action for the "init" subcommand, initializes the trie and
+// state databases and loads initial state from the configured genesis file
+func initAction(ctx *cli.Context) error {
+	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[gossamer] Failed to get node configuration", "error", err)
-		return false
+		log.Error("[cmd] Failed to start logger", "error", err)
+		return err
 	}
 
-	// check if key registry exists
-	registry := path.Join(cfg.Global.DataDir, "KEYREGISTRY")
-	_, err = os.Stat(registry)
-	if os.IsNotExist(err) {
-		log.Warn(
-			"[gossamer] Node has not been initialized",
-			"datadir", cfg.Global.DataDir,
-			"error", "failed to locate KEYREGISTRY file in data directory",
-		)
-		return false
+	cfg, err := createDotConfig(ctx)
+	if err != nil {
+		log.Error("[cmd] Failed to create node configuration", "error", err)
+		return err
 	}
 
-	// check if manifest exists
-	manifest := path.Join(cfg.Global.DataDir, "MANIFEST")
-	_, err = os.Stat(manifest)
-	if os.IsNotExist(err) {
-		log.Warn(
-			"[gossamer] Node has not been initialized",
-			"datadir", cfg.Global.DataDir,
-			"error", "failed to locate MANIFEST file in data directory",
-		)
-		return false
+	// expand data directory and update node configuration (performed separate
+	// from createDotConfig because dot config should not include expanded path)
+	cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
+
+	// check if node has been initialized
+	if dot.NodeInitialized(cfg) {
+
+		// TODO: do we want to handle initialized node differently?
+		log.Warn("[cmd] Node has already been initialized, reinitializing node")
+
 	}
 
-	// TODO: investigate cheap way to confirm valid genesis data has been loaded
+	// initialize node (initialize databases and load genesis data)
+	err = dot.InitNode(cfg)
+	if err != nil {
+		log.Error("[cmd] Failed to initialize node", "error", err)
+		return err
+	}
 
-	return true
+	return nil
 }

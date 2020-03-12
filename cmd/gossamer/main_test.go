@@ -33,9 +33,20 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type TestExecCommand struct {
+	*testing.T
+	Func    template.FuncMap
+	Data    interface{}
+	Cleanup func()
+	cmd     *exec.Cmd
+	stdout  *bufio.Reader
+	stdin   io.WriteCloser
+	stderr  *testlog
+	Err     error
+}
+
 type testgossamer struct {
 	*TestExecCommand
-
 	Datadir   string
 	Etherbase string
 }
@@ -44,6 +55,16 @@ type testlog struct {
 	t   *testing.T
 	mu  sync.Mutex
 	buf bytes.Buffer
+}
+
+func init() {
+	reexec.Register("gossamer-test", func() {
+		if err := app.Run(os.Args); err != nil {
+			_, _ = fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	})
 }
 
 func (tl *testlog) Write(b []byte) (n int, err error) {
@@ -57,24 +78,6 @@ func (tl *testlog) Write(b []byte) (n int, err error) {
 	defer tl.mu.Unlock()
 	tl.buf.Write(b)
 	return len(b), err
-}
-
-type TestExecCommand struct {
-	*testing.T
-
-	Func    template.FuncMap
-	Data    interface{}
-	Cleanup func()
-
-	cmd    *exec.Cmd
-	stdout *bufio.Reader
-	stdin  io.WriteCloser
-	stderr *testlog
-	Err    error
-}
-
-func NewTestExecCommand(t *testing.T, data interface{}) *TestExecCommand {
-	return &TestExecCommand{T: t, Data: data}
 }
 
 func (tt *TestExecCommand) Run(name string, args ...string) {
@@ -158,20 +161,13 @@ func (tt *TestExecCommand) StderrText() string {
 	return tt.stderr.buf.String()
 }
 
-func init() {
-	reexec.Register("gossamer-test", func() {
-		if err := app.Run(os.Args); err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		os.Exit(0)
-	})
+func newTestCommand(t *testing.T, data interface{}) *TestExecCommand {
+	return &TestExecCommand{T: t, Data: data}
 }
 
-func runGossamer(t *testing.T, args ...string) *testgossamer {
+func runTestGossamer(t *testing.T, args ...string) *testgossamer {
 	tt := &testgossamer{}
-	tt.TestExecCommand = NewTestExecCommand(t, tt)
-
+	tt.TestExecCommand = newTestCommand(t, tt)
 	tt.Run("gossamer-test", args...)
 	return tt
 }
@@ -183,17 +179,24 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestGossamerInvalidCommand(t *testing.T) {
-
-	gossamer := runGossamer(t, "potato")
+func TestInvalidCommand(t *testing.T) {
+	gossamer := runTestGossamer(t, "potato")
 
 	gossamer.ExpectExit()
 
 	expectedMessages := []string{
 		"failed to read command argument: \"potato\"",
 	}
+
 	for _, m := range expectedMessages {
 		require.Contains(t, gossamer.StderrText(), m)
 	}
-
 }
+
+// TODO: TestGossmaerCommand test "gossamer" does not error
+
+// TODO: TestExportCommand test "gossamer export" does not error
+
+// TODO: TestInitCommand test "gossamer init" does not error
+
+// TODO: TestAccountCommand test "gossamer account" does not error

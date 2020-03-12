@@ -1,16 +1,27 @@
 [global]
-data-dir = "~/.gossamer/gssmr"
-roles = 1
+name = "gssmr"
+id = "gssmr"
+config = "./node/gssmr/config.toml"
+genesis = "./node/gssmr/genesis.json"
+datadir = "~/.gossamer/gssmr"
+
+[account]
+key = ""
+unlock = ""
+
+[core]
 authority = true
 
 [network]
-bootstrap-nodes = []
-protocol-id = "/gossamer/gssmr/0"
 port = 7001
-no-bootstrap = false
-no-mdns = false
+bootnodes = []
+protocol = "/gossamer/gssmr/0"
+roles = 1
+nobootstrap = false
+nomdns = false
 
 [rpc]
+enabled = false
 port = 8545
 host = "localhost"
 modules = ["system", "author"]

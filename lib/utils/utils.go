@@ -17,6 +17,8 @@
 package utils
 
 import (
+	"fmt"
+	"io/ioutil"
 	"os"
 	"os/user"
 	"path"
@@ -25,8 +27,41 @@ import (
 	"strings"
 )
 
+// HomeDir returns the user's current HOME directory
+func HomeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
+}
+
+// Exists returns true if the named file or directory exists, otherwise false
+func Exists(fp string) bool {
+	if _, err := os.Stat(fp); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
+// ExpandDir expands a tilde prefix path to a full home path
+func ExpandDir(targetPath string) string {
+	if strings.HasPrefix(targetPath, "~\\") || strings.HasPrefix(targetPath, "~/") {
+		if homeDir := HomeDir(); homeDir != "" {
+			targetPath = homeDir + targetPath[1:]
+		}
+	} else if strings.HasPrefix(targetPath, ".\\") || strings.HasPrefix(targetPath, "./") {
+		targetPath, _ = filepath.Abs(targetPath)
+	}
+	return path.Clean(os.ExpandEnv(targetPath))
+}
+
 // DataDir attempts to create a data directory using the given name within the
-// .gossamer directory within the user's HOME directory, returns absolute path
+// gossamer directory within the user's HOME directory, returns absolute path
 // or, if unable to locate HOME directory, returns within current directory
 func DataDir(name string) string {
 	home := HomeDir()
@@ -42,35 +77,69 @@ func DataDir(name string) string {
 	return name
 }
 
-// HomeDir returns the user's current HOME directory
-func HomeDir() string {
-	if home := os.Getenv("HOME"); home != "" {
-		return home
-	}
-	if usr, err := user.Current(); err == nil {
-		return usr.HomeDir
-	}
-	return ""
-}
-
-// ExpandDir expands a tilde prefix path to a full home path
-func ExpandDir(targetPath string) string {
-	if strings.HasPrefix(targetPath, "~\\") || strings.HasPrefix(targetPath, "~/") {
-		if homeDir := HomeDir(); homeDir != "" {
-			targetPath = homeDir + targetPath[1:]
-		}
-	} else if strings.HasPrefix(targetPath, ".\\") || strings.HasPrefix(targetPath, "./") {
-		targetPath, _ = filepath.Abs(targetPath)
-	}
-	return path.Clean(os.ExpandEnv(targetPath))
-}
-
-// Exists returns true if the named file or directory exists, otherwise false
-func Exists(fp string) bool {
-	if _, err := os.Stat(fp); err != nil {
-		if os.IsNotExist(err) {
-			return false
+// KeystoreDir returns the absolute filepath of the keystore directory
+func KeystoreDir(datadir string) (keystorepath string, err error) {
+	// datadir specified, set keystore filepath to absolute path of [datadir]/keystore
+	if datadir != "" {
+		keystorepath, err = filepath.Abs(datadir + "/keystore")
+		if err != nil {
+			return "", fmt.Errorf("failed to create absolute filepath: %s", err)
 		}
 	}
-	return true
+
+	// if datadir does not exist, create it
+	if _, err = os.Stat(datadir); os.IsNotExist(err) {
+		err = os.Mkdir(datadir, os.ModePerm)
+		if err != nil {
+			return "", fmt.Errorf("failed to create data directory: %s", err)
+		}
+	}
+
+	// if datadir/keystore does not exist, create it
+	if _, err = os.Stat(keystorepath); os.IsNotExist(err) {
+		err = os.Mkdir(keystorepath, os.ModePerm)
+		if err != nil {
+			return "", fmt.Errorf("failed to create keystore directory: %s", err)
+		}
+	}
+
+	return keystorepath, nil
+}
+
+// KeystoreFiles returns the filenames of all the keys in the datadir's keystore
+func KeystoreFiles(datadir string) ([]string, error) {
+	keystorepath, err := KeystoreDir(datadir)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get keystore directory: %s", err)
+	}
+
+	files, err := ioutil.ReadDir(keystorepath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read keystore directory: %s", err)
+	}
+
+	keys := []string{}
+
+	for _, f := range files {
+		ext := filepath.Ext(f.Name())
+		if ext == ".key" {
+			keys = append(keys, f.Name())
+		}
+	}
+
+	return keys, nil
+}
+
+// KeystoreFilepaths lists all the keys in the datadir/keystore/ directory and returns them as a list of filepaths
+func KeystoreFilepaths(datadir string) ([]string, error) {
+	keys, err := KeystoreFiles(datadir)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, key := range keys {
+		fmt.Printf("[%d] %s\n", i, key)
+	}
+
+	return keys, nil
 }

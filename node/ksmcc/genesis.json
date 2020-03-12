@@ -1,6 +1,6 @@
 {
-  "name": "Kusama CC3",
-  "id": "ksmcc3",
+  "name": "ksmcc",
+  "id": "ksmcc",
   "bootNodes": [
     "/dns4/p2p.cc3-0.kusama.network/tcp/30100/p2p/12D3KooWDgtynm4S9M3m6ZZhXYu2RrWKdvkCSScc25xKDVSg1Sjd",
     "/dns4/p2p.cc3-1.kusama.network/tcp/30100/p2p/12D3KooWNpGriWPmf621Lza9UWU9eLLBdCFaErf6d4HSK7Bcqnv4",
@@ -12,23 +12,7 @@
     "/dns4/kusama-bootnode-0.paritytech.net/tcp/30334/ws/p2p/12D3KooWSueCPH3puP2PcvqPJdNaDNF3jMZjtJtDiSy35pWrbt5h",
     "/dns4/kusama-bootnode-1.paritytech.net/tcp/30333/p2p/12D3KooWQKqane1SqWJNWMQkbia9qiMWXkcHtAdfW5eVF8hbwEDw"
   ],
-  "telemetryEndpoints": [
-    [
-      "wss://telemetry.polkadot.io/submit/",
-      0
-    ]
-  ],
-  "protocolId": "ksmcc3",
-  "properties": {
-    "ss58Format": 2,
-    "tokenDecimals": 12,
-    "tokenSymbol": "KSM"
-  },
-  "consensusEngine": null,
-  "forkBlocks": null,
-  "badBlocks": [
-    "0x15b1b925b0aa5cfe43c88cd024f74258cb5cfe3af424882c901014e8acd0d241"
-  ],
+  "protocolId": "/gossamer/ksmcc/0",
   "genesis": {
     "raw": [
       {

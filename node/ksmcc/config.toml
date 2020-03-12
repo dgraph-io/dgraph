@@ -1,16 +1,27 @@
 [global]
-data-dir = "~/.gossamer/ksmcc"
-roles = 1
+name = "ksmcc"
+id = "ksmcc"
+config = "./node/ksmcc/config.toml"
+genesis = "./node/ksmcc/genesis.json"
+datadir = "~/.gossamer/ksmcc"
+
+[account]
+key = ""
+unlock = ""
+
+[core]
 authority = false
 
 [network]
-bootstrap-nodes = []
-protocol-id = "/gossamer/ksmcc/0"
 port = 7001
-no-bootstrap = false
-no-mdns = false
+bootnodes = []
+protocol = "/gossamer/ksmcc/0"
+roles = 1
+nobootstrap = false
+nomdns = false
 
 [rpc]
+enabled = false
 port = 8545
 host = "localhost"
 modules = ["system"]

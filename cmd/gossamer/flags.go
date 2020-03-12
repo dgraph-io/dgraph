@@ -21,6 +21,17 @@ import (
 	"github.com/urfave/cli"
 )
 
+// CLI flags
+var (
+	// VerbosityFlag cli service settings
+	VerbosityFlag = cli.StringFlag{
+		Name:  "verbosity",
+		Usage: "Supports levels crit (silent) to trce (trace)",
+		Value: log.LvlInfo.String(),
+	}
+)
+
+// Global node configuration flags
 var (
 	// NodeFlag node implementation name
 	NodeFlag = cli.StringFlag{
@@ -32,27 +43,20 @@ var (
 		Name:  "config",
 		Usage: "TOML configuration file",
 	}
-	// DataDirFlag data directory for node
-	DataDirFlag = cli.StringFlag{
-		Name:  "datadir",
-		Usage: "Data directory for the node",
-	}
-	// RolesFlag role of the node (0 = no network, 1 = full node, ...)
-	RolesFlag = cli.StringFlag{
-		Name:  "roles",
-		Usage: "Roles of the gossamer node",
-	}
-	// VerbosityFlag cli service settings
-	VerbosityFlag = cli.StringFlag{
-		Name:  "verbosity",
-		Usage: "Supports levels crit (silent) to trce (trace)",
-		Value: log.LvlInfo.String(),
-	}
 	// GenesisFlag Path to genesis JSON file
 	GenesisFlag = cli.StringFlag{
 		Name:  "genesis",
 		Usage: "Path to genesis JSON file",
 	}
+	// DataDirFlag data directory for node
+	DataDirFlag = cli.StringFlag{
+		Name:  "datadir",
+		Usage: "Data directory for the node",
+	}
+)
+
+// Core service configuration flags
+var (
 	// AuthorityFlag is used as bool flag to set node as authority or not
 	AuthorityFlag = cli.BoolFlag{
 		Name:  "authority",
@@ -60,22 +64,27 @@ var (
 	}
 )
 
-// Network flags
+// Network service configuration flags
 var (
-	// BootnodesFlag Network service settings
-	BootnodesFlag = cli.StringFlag{
-		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for network discovery bootstrap",
-	}
 	// PortFlag Set network listening port
 	PortFlag = cli.UintFlag{
 		Name:  "port",
 		Usage: "Set network listening port",
 	}
-	// ProtocolIDFlag Set protocol id
-	ProtocolIDFlag = cli.StringFlag{
+	// BootnodesFlag Network service settings
+	BootnodesFlag = cli.StringFlag{
+		Name:  "bootnodes",
+		Usage: "Comma separated enode URLs for network discovery bootstrap",
+	}
+	// ProtocolFlag Set protocol id
+	ProtocolFlag = cli.StringFlag{
 		Name:  "protocol",
 		Usage: "Set protocol id",
+	}
+	// RolesFlag role of the node (0 = no network, 1 = full node, ...)
+	RolesFlag = cli.StringFlag{
+		Name:  "roles",
+		Usage: "Roles of the gossamer node",
 	}
 	// NoBootstrapFlag Disables network bootstrapping
 	NoBootstrapFlag = cli.BoolFlag{
@@ -89,7 +98,7 @@ var (
 	}
 )
 
-// RPC flags
+// RPC service configuration flags
 var (
 	// RPCEnabledFlag Enable the HTTP-RPC
 	RPCEnabledFlag = cli.BoolFlag{
@@ -106,8 +115,8 @@ var (
 		Name:  "rpcport",
 		Usage: "HTTP-RPC server listening port",
 	}
-	// RPCModuleFlag API modules to enable via HTTP-RPC
-	RPCModuleFlag = cli.StringFlag{
+	// RPCModulesFlag API modules to enable via HTTP-RPC
+	RPCModulesFlag = cli.StringFlag{
 		Name:  "rpcmods",
 		Usage: "API modules to enable via HTTP-RPC, comma separated list",
 	}
@@ -167,14 +176,12 @@ var (
 	CLIFlags = []cli.Flag{
 		VerbosityFlag,
 	}
-	// NodeFlags node flags
-	NodeFlags = []cli.Flag{
+	// GlobalFlags node flags
+	GlobalFlags = []cli.Flag{
 		NodeFlag,
 		ConfigFlag,
-		DataDirFlag,
-		RolesFlag,
 		GenesisFlag,
-		AuthorityFlag,
+		DataDirFlag,
 	}
 	// AccountFlags account flags
 	AccountFlags = []cli.Flag{
@@ -188,11 +195,16 @@ var (
 		Sr25519Flag,
 		Secp256k1Flag,
 	}
+	// CoreFlags core service flags
+	CoreFlags = []cli.Flag{
+		AuthorityFlag,
+	}
 	// NetworkFlags network flags
 	NetworkFlags = []cli.Flag{
 		PortFlag,
-		ProtocolIDFlag,
 		BootnodesFlag,
+		ProtocolFlag,
+		RolesFlag,
 		NoBootstrapFlag,
 		NoMDNSFlag,
 	}
@@ -201,15 +213,16 @@ var (
 		RPCEnabledFlag,
 		RPCHostFlag,
 		RPCPortFlag,
-		RPCModuleFlag,
+		RPCModulesFlag,
 	}
 )
 
 // AllFlags returns all cli flags
 func AllFlags() (flags []cli.Flag) {
 	flags = append(flags, CLIFlags...)
-	flags = append(flags, NodeFlags...)
+	flags = append(flags, GlobalFlags...)
 	flags = append(flags, AccountFlags...)
+	flags = append(flags, CoreFlags...)
 	flags = append(flags, NetworkFlags...)
 	flags = append(flags, RPCFlags...)
 	return flags
@@ -221,7 +234,7 @@ func FixFlagOrder(f func(ctx *cli.Context) error) func(*cli.Context) error {
 		for _, flagName := range ctx.FlagNames() {
 			if ctx.IsSet(flagName) {
 				if err := ctx.GlobalSet(flagName, ctx.String(flagName)); err != nil {
-					log.Error("[gossamer] Failed to fix flag order", "flag", flagName)
+					log.Error("[cmd] Failed to fix flag order", "flag", flagName)
 				}
 			}
 		}

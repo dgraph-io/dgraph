@@ -24,6 +24,9 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ChainSafe/gossamer/node/gssmr"
+	"github.com/ChainSafe/gossamer/node/ksmcc"
+
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 )
@@ -31,48 +34,48 @@ import (
 // Config is a collection of configurations throughout the system
 type Config struct {
 	Global  GlobalConfig  `toml:"global"`
+	Account AccountConfig `toml:"account"`
+	Core    CoreConfig    `toml:"core"`
 	Network NetworkConfig `toml:"network"`
 	RPC     RPCConfig     `toml:"rpc"`
 }
 
 // GlobalConfig is to marshal/unmarshal toml global config vars
 type GlobalConfig struct {
-	DataDir   string `toml:"data-dir"`
-	Roles     byte   `toml:"roles"`
-	Authority bool   `toml:"authority"`
+	Name    string `toml:"name"`
+	ID      string `toml:"id"`
+	Config  string `toml:"config"`
+	Genesis string `toml:"genesis"`
+	DataDir string `toml:"datadir"`
 }
 
-// NetworkConfig is to marshal/unmarshal toml p2p vars
+// AccountConfig is to marshal/unmarshal account config vars
+type AccountConfig struct {
+	Key    string `toml:"key"`
+	Unlock string `toml:"unlock"`
+}
+
+// NetworkConfig is to marshal/unmarshal toml network config vars
 type NetworkConfig struct {
-	Bootnodes   []string `toml:"bootstrap-nodes"`
-	ProtocolID  string   `toml:"protocol-id"`
 	Port        uint32   `toml:"port"`
-	NoBootstrap bool     `toml:"no-bootstrap"`
-	NoMDNS      bool     `toml:"no-mdns"`
+	Bootnodes   []string `toml:"bootnodes"`
+	ProtocolID  string   `toml:"protocol"`
+	Roles       byte     `toml:"roles"`
+	NoBootstrap bool     `toml:"nobootstrap"`
+	NoMDNS      bool     `toml:"nomdns"`
 }
 
-// RPCConfig is to marshal/unmarshal toml RPC vars
+// CoreConfig is to marshal/unmarshal toml core config vars
+type CoreConfig struct {
+	Authority bool `toml:"authority"`
+}
+
+// RPCConfig is to marshal/unmarshal toml RPC config vars
 type RPCConfig struct {
+	Enabled bool     `toml:"enabled"`
 	Port    uint32   `toml:"port"`
 	Host    string   `toml:"host"`
 	Modules []string `toml:"modules"`
-}
-
-// These settings ensure that TOML keys use the same names as Go struct fields.
-var tomlSettings = toml.Config{
-	NormFieldName: func(rt reflect.Type, key string) string {
-		return key
-	},
-	FieldToKey: func(rt reflect.Type, field string) string {
-		return field
-	},
-	MissingField: func(rt reflect.Type, field string) error {
-		link := ""
-		if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
-			link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
-		}
-		return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
-	},
 }
 
 // String will return the json representation for a Config
@@ -81,18 +84,100 @@ func (c *Config) String() string {
 	return string(out)
 }
 
-// LoadConfig loads the contents from config toml and inits Config object
-func LoadConfig(fp string, cfg *Config) error {
+// GssmrConfig returns a new test configuration using the provided datadir
+func GssmrConfig() *Config {
+	return &Config{
+		Global: GlobalConfig{
+			Name:    gssmr.DefaultName,
+			ID:      gssmr.DefaultID,
+			Config:  gssmr.DefaultConfig,
+			Genesis: gssmr.DefaultGenesis,
+			DataDir: gssmr.DefaultDataDir,
+		},
+		Account: AccountConfig{
+			Key:    gssmr.DefaultKey,
+			Unlock: gssmr.DefaultUnlock,
+		},
+		Core: CoreConfig{
+			Authority: gssmr.DefaultAuthority,
+		},
+		Network: NetworkConfig{
+			Port:        gssmr.DefaultNetworkPort,
+			Bootnodes:   gssmr.DefaultNetworkBootnodes,
+			ProtocolID:  gssmr.DefaultNetworkProtocolID,
+			Roles:       gssmr.DefaultRoles,
+			NoBootstrap: gssmr.DefaultNoBootstrap,
+			NoMDNS:      gssmr.DefaultNoMDNS,
+		},
+		RPC: RPCConfig{
+			Port:    gssmr.DefaultRPCHTTPPort,
+			Host:    gssmr.DefaultRPCHTTPHost,
+			Modules: gssmr.DefaultRPCModules,
+		},
+	}
+}
+
+// KsmccConfig returns a "ksmcc" node configuration
+func KsmccConfig() *Config {
+	return &Config{
+		Global: GlobalConfig{
+			Name:    ksmcc.DefaultName,
+			ID:      ksmcc.DefaultID,
+			Config:  ksmcc.DefaultConfig,
+			Genesis: ksmcc.DefaultGenesis,
+			DataDir: ksmcc.DefaultDataDir,
+		},
+		Account: AccountConfig{
+			Key:    ksmcc.DefaultKey,
+			Unlock: ksmcc.DefaultUnlock,
+		},
+		Core: CoreConfig{
+			Authority: ksmcc.DefaultAuthority,
+		},
+		Network: NetworkConfig{
+			Port:        ksmcc.DefaultNetworkPort,
+			Bootnodes:   ksmcc.DefaultNetworkBootnodes,
+			ProtocolID:  ksmcc.DefaultNetworkProtocolID,
+			Roles:       ksmcc.DefaultRoles,
+			NoBootstrap: ksmcc.DefaultNoBootstrap,
+			NoMDNS:      ksmcc.DefaultNoMDNS,
+		},
+		RPC: RPCConfig{
+			Port:    ksmcc.DefaultRPCHTTPPort,
+			Host:    ksmcc.DefaultRPCHTTPHost,
+			Modules: ksmcc.DefaultRPCModules,
+		},
+	}
+}
+
+// LoadConfig loads the values from the toml configuration file into the provided configuration
+func LoadConfig(cfg *Config, fp string) error {
 	fp, err := filepath.Abs(fp)
 	if err != nil {
-		log.Error("[dot] Failed to create absolute filepath", "error", err)
+		log.Error("[dot] Failed to create absolute path for toml configuration file", "error", err)
 		return err
 	}
 
 	file, err := os.Open(filepath.Clean(fp))
 	if err != nil {
-		log.Error("[dot] Failed to open file", "error", err)
+		log.Error("[dot] Failed to open toml configuration file", "error", err)
 		return err
+	}
+
+	var tomlSettings = toml.Config{
+		NormFieldName: func(rt reflect.Type, key string) string {
+			return key
+		},
+		FieldToKey: func(rt reflect.Type, field string) string {
+			return field
+		},
+		MissingField: func(rt reflect.Type, field string) error {
+			link := ""
+			if unicode.IsUpper(rune(rt.Name()[0])) && rt.PkgPath() != "main" {
+				link = fmt.Sprintf(", see https://godoc.org/%s#%s for available fields", rt.PkgPath(), rt.Name())
+			}
+			return fmt.Errorf("field '%s' is not defined in %s%s", field, rt.String(), link)
+		},
 	}
 
 	if err = tomlSettings.NewDecoder(file).Decode(&cfg); err != nil {
@@ -103,8 +188,8 @@ func LoadConfig(fp string, cfg *Config) error {
 	return nil
 }
 
-// ExportConfig encodes a state type into a TOML file.
-func ExportConfig(fp string, cfg *Config) *os.File {
+// ExportConfig exports a dot configuration to a toml configuration file
+func ExportConfig(cfg *Config, fp string) *os.File {
 	var (
 		newFile *os.File
 		err     error

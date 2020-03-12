@@ -157,15 +157,18 @@ func (s *Service) receiveCoreMessages() {
 	for {
 		// receive message from core service
 		msg := <-s.msgRec
+		if msg != nil {
 
-		log.Debug(
-			"[network] Broadcasting message from core service",
-			"host", s.host.id(),
-			"type", msg.GetType(),
-		)
+			log.Debug(
+				"[network] Broadcasting message from core service",
+				"host", s.host.id(),
+				"type", msg.GetType(),
+			)
 
-		// broadcast message to connected peers
-		s.host.broadcast(msg)
+			// broadcast message to connected peers
+			s.host.broadcast(msg)
+
+		}
 	}
 }
 
