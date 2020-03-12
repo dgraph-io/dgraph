@@ -35,7 +35,7 @@ Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
 backups can be used to restore a new Dgraph cluster to the previous state from
-the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}),
+the backup. Unlike [exports]({{< relref "deploy/index.md#exporting-database" >}}),
 binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure Backup
@@ -69,7 +69,7 @@ environment variables:
 To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
-[whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
+[whitelisted for admin operations]({{< relref "deploy/index.md#whitelisting-admin-operations" >}}).
 Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 #### Backup to Amazon S3
@@ -624,7 +624,7 @@ mutation {
 {{% notice "note" %}}
 This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
 For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
-[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
+[export the database](https://docs.dgraph.io/deploy/#exporting-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
 preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
 {{% /notice %}}
 

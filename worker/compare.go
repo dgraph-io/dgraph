@@ -16,6 +16,12 @@
 
 package worker
 
+import (
+	"errors"
+
+	"github.com/dgraph-io/dgraph/x"
+)
+
 func evalCompare(cmp string, lv, rv int64) bool {
 	switch cmp {
 	case "le":
@@ -29,5 +35,6 @@ func evalCompare(cmp string, lv, rv int64) bool {
 	case "eq":
 		return lv == rv
 	}
-	panic("EvalCompare: unreachable")
+	x.Panic(errors.New("EvalCompare: unreachable"))
+	return false
 }

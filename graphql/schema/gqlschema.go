@@ -49,80 +49,80 @@ const (
 	// GraphQL valid and for the completion algorithm to use to build in search
 	// capability into the schema.
 	schemaExtras = `
-scalar DateTime
-
-enum DgraphIndex {
-	int
-	float
-	bool
-	hash
-	exact
-	term
-	fulltext
-	trigram
-	regexp
-	year
-	month
-	day
-	hour
-}
-
-directive @hasInverse(field: String!) on FIELD_DEFINITION
-directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
-directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
-directive @id on FIELD_DEFINITION
-directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-
-input IntFilter {
-	eq: Int
-	le: Int
-	lt: Int
-	ge: Int
-	gt: Int
-}
-
-input FloatFilter {
-	eq: Float
-	le: Float
-	lt: Float
-	ge: Float
-	gt: Float
-}
-
-input DateTimeFilter {
-	eq: DateTime
-	le: DateTime
-	lt: DateTime
-	ge: DateTime
-	gt: DateTime
-}
-
-input StringTermFilter {
-	allofterms: String
-	anyofterms: String
-}
-
-input StringRegExpFilter {
-	regexp: String
-}
-
-input StringFullTextFilter {
-	alloftext: String
-	anyoftext: String
-}
-
-input StringExactFilter {
-	eq: String
-	le: String
-	lt: String
-	ge: String
-	gt: String
-}
-
-input StringHashFilter {
-	eq: String
-}
-`
+ scalar DateTime
+ 
+ enum DgraphIndex {
+	 int
+	 float
+	 bool
+	 hash
+	 exact
+	 term
+	 fulltext
+	 trigram
+	 regexp
+	 year
+	 month
+	 day
+	 hour
+ }
+ 
+ directive @hasInverse(field: String!) on FIELD_DEFINITION
+ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+ directive @id on FIELD_DEFINITION
+ directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+ 
+ input IntFilter {
+	 eq: Int
+	 le: Int
+	 lt: Int
+	 ge: Int
+	 gt: Int
+ }
+ 
+ input FloatFilter {
+	 eq: Float
+	 le: Float
+	 lt: Float
+	 ge: Float
+	 gt: Float
+ }
+ 
+ input DateTimeFilter {
+	 eq: DateTime
+	 le: DateTime
+	 lt: DateTime
+	 ge: DateTime
+	 gt: DateTime
+ }
+ 
+ input StringTermFilter {
+	 allofterms: String
+	 anyofterms: String
+ }
+ 
+ input StringRegExpFilter {
+	 regexp: String
+ }
+ 
+ input StringFullTextFilter {
+	 alloftext: String
+	 anyoftext: String
+ }
+ 
+ input StringExactFilter {
+	 eq: String
+	 le: String
+	 lt: String
+	 ge: String
+	 gt: String
+ }
+ 
+ input StringHashFilter {
+	 eq: String
+ }
+ `
 )
 
 // Filters for Boolean and enum aren't needed in here schemaExtras because they are
@@ -268,7 +268,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.Panic(gqlErr)
 	}
 
 	// Cache the interface definitions in a map. They could also be defined after types which
@@ -431,8 +431,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		addFilterType(sch, defn)
 		addTypeOrderable(sch, defn)
 		addFieldFilters(sch, defn)
-		sch.Query.Fields = append(sch.Query.Fields, generateQueryFields(sch, defn)...)
-		sch.Subscription.Fields = append(sch.Subscription.Fields, generateQueryFields(sch, defn)...)
+		addQueries(sch, defn)
 	}
 }
 
@@ -918,11 +917,11 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 }
 
-func generateGetQuery(defn *ast.Definition) *ast.FieldDefinition {
+func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
-		return nil
+		return
 	}
 
 	qry := &ast.FieldDefinition{
@@ -954,10 +953,11 @@ func generateGetQuery(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		})
 	}
-	return qry
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
-func getFilterForSchema(schema *ast.Schema, defn *ast.Definition) *ast.FieldDefinition {
+func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
 		Name: "query" + defn.Name,
 		Type: &ast.Type{
@@ -969,14 +969,16 @@ func getFilterForSchema(schema *ast.Schema, defn *ast.Definition) *ast.FieldDefi
 	addFilterArgument(schema, qry)
 	addOrderArgument(schema, qry)
 	addPaginationArguments(qry)
-	return qry
+
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
-func generatePasswordQuery(defn *ast.Definition) *ast.FieldDefinition {
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 	hasIDField := hasID(defn)
 	hasXIDField := hasXID(defn)
 	if !hasIDField && !hasXIDField {
-		return nil
+		return
 	}
 
 	idField := getIDField(defn)
@@ -985,7 +987,7 @@ func generatePasswordQuery(defn *ast.Definition) *ast.FieldDefinition {
 	}
 	passwordField := getPasswordField(defn)
 	if passwordField == nil {
-		return nil
+		return
 	}
 
 	qry := &ast.FieldDefinition{
@@ -1007,20 +1009,14 @@ func generatePasswordQuery(defn *ast.Definition) *ast.FieldDefinition {
 			},
 		},
 	}
-	return qry
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
-func generateQueryFields(schema *ast.Schema, defn *ast.Definition) []*ast.FieldDefinition {
-	fields := make([]*ast.FieldDefinition, 0)
-	query := generateGetQuery(defn)
-	if query != nil {
-		fields = append(fields, query)
-	}
-	query = generatePasswordQuery(defn)
-	if query != nil {
-		fields = append(fields, query)
-	}
-	return append(fields, getFilterForSchema(schema, defn))
+func addQueries(schema *ast.Schema, defn *ast.Definition) {
+	addGetQuery(schema, defn)
+	addPasswordQuery(schema, defn)
+	addFilterQuery(schema, defn)
 }
 
 func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
@@ -1388,7 +1384,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// the generated definitions.
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.Panic(gqlErr)
 	}
 	for _, defn := range docExtras.Definitions {
 		printed[defn.Name] = true
@@ -1445,7 +1441,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Mutations\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+	x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Subscriptions\n#######################\n\n"))
 	x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))

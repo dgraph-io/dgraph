@@ -458,7 +458,7 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 
 	index := 1 + 2 + len(p.Attr) + 1
 	if index >= len(keyCopy) {
-		panic("Cannot write to key. Key is too small")
+		Panic(errors.New("Cannot write to key. Key is too small"))
 	}
 	keyCopy[index] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
