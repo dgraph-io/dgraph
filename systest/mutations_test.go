@@ -1881,11 +1881,12 @@ func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
 	op := &api.Operation{DropAll: true}
 	require.NoError(t, c.Alter(ctx, op))
 
-	err := c.Alter(ctx, &api.Operation{
+	op = &api.Operation{
 		Schema: `
 		best_friend: uid .
 		name: string @index(exact) .`,
-	})
+	}
+	err := c.Alter(ctx, op)
 	require.NoError(t, err)
 	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
