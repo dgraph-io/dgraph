@@ -69,7 +69,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	if err == errNotFound {
 		ents := make([]raftpb.Entry, 1)
 		x.Check(w.reset(ents))
-		first = 1
+		return w
 	} else {
 		x.Check(err)
 	}
