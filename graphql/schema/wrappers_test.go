@@ -323,3 +323,70 @@ func TestCheckNonNulls(t *testing.T) {
 		})
 	}
 }
+
+func TestAuth(t *testing.T) {
+	gqlSchema, err := FromString(`
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
+directive @id on FIELD_DEFINITION
+
+type Todo @auth(
+    query: {
+        or: [
+          { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+          { rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})" },
+          { rule: "isPublic {eq: true}" },
+          { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+        ]
+    },
+    add: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+    update: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+    delete: { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+) {
+    id: ID!
+    title: String
+    text: String
+    isPublic: Boolean
+    sharedWith: [User]
+    owner: User
+}
+
+type User @auth(
+  add: { rule: "$MyApp.Role: { eq: ADD-BOT }" },
+  update: { rule: "filter: { username: { eq: $X-MyApp-User } }" }
+){
+  username: String! @id
+  todos: [Todo]
+}
+	`)
+	require.NoError(t, err)
+
+	TodoAuth := &AuthContainer{
+		Query: &RuleNode{
+			Or: []*RuleNode{
+				{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
+				{Rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})"},
+				{Rule: "isPublic {eq: true}"},
+				{Rule: "$X-MyApp-Role: {eq: ADMIN}"},
+			},
+		},
+		Add:    &RuleNode{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
+		Update: &RuleNode{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
+		Delete: &RuleNode{Rule: "$X-MyApp-Role: {eq: ADMIN}"},
+	}
+
+	require.Equal(t, gqlSchema.AuthRule("Todo"), TodoAuth)
+
+	UserAuth := &AuthContainer{
+		Add:    &RuleNode{Rule: "$MyApp.Role: { eq: ADD-BOT }"},
+		Update: &RuleNode{Rule: "filter: { username: { eq: $X-MyApp-User } }"},
+	}
+
+	require.Equal(t, gqlSchema.AuthRule("User"), UserAuth)
+}

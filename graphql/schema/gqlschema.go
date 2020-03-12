@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 	secretDirective = "secret"
+	authDirective   = "auth"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -67,11 +68,22 @@ enum DgraphIndex {
 	hour
 }
 
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+
+directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
 
 input IntFilter {
 	eq: Int
@@ -237,6 +249,7 @@ var directiveValidators = map[string]directiveValidator{
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
 	secretDirective:  passwordValidation,
+	authDirective:    authValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,

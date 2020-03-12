@@ -62,6 +62,7 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
+	AuthRule(name string) *AuthContainer
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -163,6 +164,8 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// Map from typename to auth rules
+	authRules map[string]*AuthContainer
 }
 
 type operation struct {
@@ -211,6 +214,10 @@ func (s *schema) Mutations(t MutationType) []string {
 		}
 	}
 	return result
+}
+
+func (s *schema) AuthRule(name string) *AuthContainer {
+	return s.authRules[name]
 }
 
 func (o *operation) IsQuery() bool {
@@ -458,6 +465,97 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+type RuleNode struct {
+	Or  []*RuleNode
+	And []*RuleNode
+	Not *RuleNode
+
+	Rule string
+}
+
+type AuthContainer struct {
+	Query  *RuleNode
+	Add    *RuleNode
+	Update *RuleNode
+	Delete *RuleNode
+}
+
+func parseRules(rule map[string]interface{}) *RuleNode {
+	var ruleNode RuleNode
+
+	or, ok := rule["or"].([]interface{})
+	if ok {
+		for _, node := range or {
+			ruleNode.Or = append(ruleNode.Or,
+				parseRules(node.(map[string]interface{})))
+		}
+	}
+
+	and, ok := rule["and"].([]interface{})
+	if ok {
+		for _, node := range and {
+			ruleNode.And = append(ruleNode.And,
+				parseRules(node.(map[string]interface{})))
+		}
+	}
+
+	not, ok := rule["not"].(map[string]interface{})
+	if ok {
+		ruleNode.Not = parseRules(not)
+	}
+
+	ruleString, ok := rule["rule"].(string)
+	if ok {
+		ruleNode.Rule = ruleString
+	}
+
+	return &ruleNode
+}
+
+func parseAuthDirective(directive map[string]interface{}) *AuthContainer {
+	var container AuthContainer
+
+	query, ok := directive["query"].(map[string]interface{})
+	if ok {
+		container.Query = parseRules(query)
+	}
+
+	add, ok := directive["add"].(map[string]interface{})
+	if ok {
+		container.Add = parseRules(add)
+	}
+
+	update, ok := directive["update"].(map[string]interface{})
+	if ok {
+		container.Update = parseRules(update)
+	}
+
+	delete, ok := directive["delete"].(map[string]interface{})
+	if ok {
+		container.Delete = parseRules(delete)
+	}
+
+	return &container
+}
+
+func authRules(s *ast.Schema) map[string]*AuthContainer {
+	authRules := make(map[string]*AuthContainer)
+	var emptyMap map[string]interface{}
+
+	for _, typ := range s.Types {
+		name := typeName(typ)
+		for _, directive := range typ.Directives {
+			if directive.Name != "auth" {
+				continue
+			}
+
+			authRules[name] = parseAuthDirective(directive.ArgumentMap(emptyMap))
+		}
+	}
+
+	return authRules
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) Schema {
 	dgraphPredicate := dgraphMapping(s)
@@ -466,6 +564,7 @@ func AsSchema(s *ast.Schema) Schema {
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
+		authRules:       authRules(s),
 	}
 }
 
