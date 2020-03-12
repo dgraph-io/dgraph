@@ -139,17 +139,23 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	}
 
 	// Ensure that rollup is not running.
-	if err := gr.Node.startTask(opBGIndex); err != nil {
+	wrtCtx := schema.GetWriteContext(context.Background())
+	if tmpCtx, err := gr.Node.startTask(wrtCtx, opIndexing); err != nil {
 		return err
+	} else {
+		wrtCtx = tmpCtx
 	}
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
-		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
 		if err := updateSchema(update); err != nil {
 			return err
+		}
+
+		if !schema.State().IndexingInProgress() {
+			gr.Node.stopTask(opIndexing)
 		}
 
 		glog.Infof("Done schema update %+v\n", update)
