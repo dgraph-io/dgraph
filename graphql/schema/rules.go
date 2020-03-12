@@ -57,8 +57,19 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 		var errMesg string
 
 		if defn.Name == "Query" || defn.Name == "Mutation" {
-			errMesg = "You don't need to define the GraphQL Query or Mutation types." +
-				" Those are built automatically for you."
+			for _, fld := range defn.Fields {
+				// If we find any query or mutation field defined without a @custom directive, that
+				// is an error for us.
+				custom := fld.Directives.ForName("custom")
+				if custom == nil {
+					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
+						"with @custom directive. Other fields are built automatically for you."
+					break
+				}
+			}
+			if errMesg == "" {
+				return nil
+			}
 		} else {
 			errMesg = fmt.Sprintf(
 				"%s is a reserved word, so you can't declare a type with this name. "+
@@ -212,7 +223,9 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqler
 }
 
 func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	// return nil
 	if field.Arguments != nil {
+		fmt.Printf("arg: %+v\n", field.Arguments[0])
 		return gqlerror.ErrorPosf(
 			field.Position,
 			"Type %s; Field %s: You can't give arguments to fields.",
@@ -223,7 +236,7 @@ func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerr
 }
 
 func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
-	//field name cannot be a reserved word
+	// field name cannot be a reserved word
 	if isReservedKeyWord(field.Name) {
 		return gqlerror.ErrorPosf(
 			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+

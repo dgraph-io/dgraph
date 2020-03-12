@@ -31,8 +31,8 @@ invalid_schemas:
         getAuthro(id: ID): Author!
       }
     errlist: [
-      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
-      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":4, "column":6}]},
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields with @custom directive. Other fields are built automatically for you.", "locations":[{"line":1, "column":6}]},
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields with @custom directive. Other fields are built automatically for you.", "locations":[{"line":4, "column":6}]},
     ]
 
   -
@@ -809,4 +809,18 @@ valid_schemas:
       }
       type Y {
         f1: [X] @dgraph(pred: "f1")
+      }
+
+  -
+    name: "Query, Mutation in initial schema with @custom directive"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthro(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"})
+      }
+      type Mutation {
+        getAuthro(id: ID): Author! @custom(http: {url: "blah.com", method: "POST"})
       }

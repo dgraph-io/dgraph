@@ -67,11 +67,17 @@ enum DgraphIndex {
 	hour
 }
 
+input CustomHTTP {
+	url: String!
+	method: String!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -337,10 +343,12 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
+		fmt.Printf("typ: %+v, defn: %+v\n", typ, defn)
 
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
+			fmt.Printf("field: %+v\n", field)
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
