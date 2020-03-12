@@ -88,7 +88,7 @@ const (
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
-func (n *node) startTask(inCtx context.Context, id int) (context.Context, error) {
+func (n *node) startTask(id int) (context.Context, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -108,10 +108,10 @@ func (n *node) startTask(inCtx context.Context, id int) (context.Context, error)
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %d. Ignoring...", id)
-		return inCtx, nil
+		return nil, nil
 	}
 
-	ctx, cancel := context.WithCancel(inCtx)
+	ctx, cancel := context.WithCancel(context.Background())
 	n.ops[id] = &operation{cancel: cancel, done: make(chan struct{})}
 	glog.Infof("Operation started with id: %d", id)
 	return ctx, nil
@@ -695,7 +695,7 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
 	// ignoring the returned context
-	if _, err := n.startTask(context.Background(), opSnapshot); err != nil {
+	if _, err := n.startTask(opSnapshot); err != nil {
 		return err
 	}
 	defer n.stopTask(opSnapshot)
@@ -1142,7 +1142,7 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	ctx, err := n.startTask(context.Background(), opRollup)
+	ctx, err := n.startTask(opRollup)
 	if err != nil {
 		return err
 	}
