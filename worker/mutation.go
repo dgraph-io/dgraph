@@ -23,20 +23,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
+
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -137,6 +136,11 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 		glog.Infoln("waiting for indexing to complete")
 		time.Sleep(time.Second * 2)
+	}
+
+	// Ensure that rollup is not running.
+	if err := gr.Node.startTask(opBGIndex); err != nil {
+		return err
 	}
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
