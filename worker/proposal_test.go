@@ -80,7 +80,7 @@ func TestLimiterDeadlock(t *testing.T) {
 				"Total proposals: ", atomic.LoadInt64(&currentCount),
 				"Pending proposal: ", atomic.LoadInt64(&pending),
 				"Completed Proposals: ", atomic.LoadInt64(&completed),
-				"Aboted Proposals: ", atomic.LoadInt64(&aborted),
+				"Aborted Proposals: ", atomic.LoadInt64(&aborted),
 				"IOU: ", l.iou)
 		}
 	}()
@@ -109,7 +109,7 @@ func TestLimiterDeadlock(t *testing.T) {
 
 	// After trying all the proposals, (completed + aborted) should be equal to  tried proposal.
 	require.True(t, toTry == completed+aborted,
-		fmt.Sprintf("Tried: %d, Compteted: %d, Aboted: %d", toTry, completed, aborted))
+		fmt.Sprintf("Tried: %d, Compteted: %d, Aborted: %d", toTry, completed, aborted))
 }
 
 func BenchmarkRateLimiter(b *testing.B) {
