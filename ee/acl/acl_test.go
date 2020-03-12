@@ -684,7 +684,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		})
 	}
 
-	testutil.AssignUids(101)
+	require.NoError(t, testutil.AssignUids(101))
 	mutation = &api.Mutation{
 		SetNquads: []byte(`
 			<100> <name> "100th User" .
