@@ -78,7 +78,7 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @custom(http: CustomHTTP) on OBJECT | FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
@@ -1444,9 +1444,12 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Query\n#######################\n\n"))
 	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Mutations\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+
+	if len(schema.Mutation.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Mutations\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+	}
 
 	return sch.String()
 }

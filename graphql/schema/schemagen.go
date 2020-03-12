@@ -112,12 +112,21 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
+	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn || defn.Name == "Query" {
 			continue
 		}
 		defns = append(defns, defn.Name)
+		if defn.Kind == ast.Object {
+			custom := defn.Directives.ForName(customDirective)
+			if custom != nil {
+				continue
+			}
+		}
+		typesToComplete = append(typesToComplete, defn.Name)
+
 	}
 
 	expandSchema(doc)
@@ -132,8 +141,8 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	dgSchema := genDgSchema(sch, defns)
-	completeSchema(sch, defns)
+	dgSchema := genDgSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete)
 
 	return &handler{
 		input:          input,

@@ -2,17 +2,9 @@
 # Input Schema
 #######################
 
-type Post {
+type User @custom {
 	id: ID!
-	title: String!
-	text: String
-	postType: PostType!
-}
-
-enum PostType {
-	Statement
-	Question
-	Answer
+	name: String!
 }
 
 #######################
@@ -103,85 +95,19 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	numUids: Int
-}
-
-type DeletePostPayload {
-	msg: String
-	numUids: Int
-}
-
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	numUids: Int
-}
-
 #######################
 # Generated Enums
 #######################
 
-enum PostOrderable {
-	title
-	text
-}
-
 #######################
 # Generated Inputs
 #######################
-
-input AddPostInput {
-	title: String!
-	text: String
-	postType: PostType!
-}
-
-input PostFilter {
-	id: [ID!]
-	not: PostFilter
-}
-
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
-}
-
-input PostPatch {
-	title: String
-	text: String
-	postType: PostType
-}
-
-input PostRef {
-	id: ID
-	title: String
-	text: String
-	postType: PostType
-}
-
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PostPatch
-	remove: PostPatch
-}
 
 #######################
 # Generated Query
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
 }
 
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
-}
