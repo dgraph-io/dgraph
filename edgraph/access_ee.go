@@ -677,7 +677,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 {
+		if len(gq.Attr) > 0 && gq.Attr != "uid" {
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {
@@ -778,9 +778,6 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result) error {
 	}
 
 	if len(blockedPreds) != 0 {
-		if _, ok := blockedPreds["uid"]; ok {
-			delete(blockedPreds, "uid")
-		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 	}
 
