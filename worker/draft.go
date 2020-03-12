@@ -85,10 +85,6 @@ const (
 	opBGIndex
 )
 
-var (
-	errOpInProgress = errors.New("another operation is already running")
-)
-
 // startRollUp will check whether rollup is already going on. If not,
 // it will return a context that can be used to cancel the rollup if needed.
 func (n *node) startRollUp() (context.Context, error) {
@@ -96,7 +92,7 @@ func (n *node) startRollUp() (context.Context, error) {
 	defer n.opsLock.Unlock()
 
 	if len(n.ops) > 0 {
-		return nil, errOpInProgress
+		return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	n.ops[opRollUp] = &operation{cancel: cancel, done: make(chan struct{}, 1)}
@@ -123,9 +119,10 @@ func (n *node) startTask(id int) error {
 			<-rop.done
 			glog.Info("Rollup cancelled.")
 		} else if _, has := n.ops[id]; has {
-			return errOpInProgress
+			return errors.Errorf("another operation is already running, ops:%v", n.ops)
 		}
-		n.ops[opSnapshot] = &operation{done: make(chan struct{}, 1)}
+		n.ops[id] = &operation{done: make(chan struct{}, 1)}
+		glog.Infof("Operation started with id: %d", id)
 	default:
 		glog.Infof("Got an unhandled operation %d. Ignoring...", id)
 	}
