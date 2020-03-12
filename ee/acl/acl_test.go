@@ -680,19 +680,30 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		t.Run(tc.description, func(t *testing.T) {
 			resp, err := userClient.NewTxn().Query(ctx, tc.input)
 			require.Nil(t, err)
-			require.Equal(t, tc.output, string(resp.Json))
+			testutil.CompareJSON(t, tc.output, string(resp.Json))
 		})
 	}
 
+	testutil.AssignUids(101)
+	mutation = &api.Mutation{
+		SetNquads: []byte(`
+			<100> <name> "100th User" .
+			<100> <age> "100" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
 	uidQuery := `
 	{
-		me(func: has(name)) {
+		me(func: uid(100)) {
 			uid
 			name
+			age
 		}
 	}
 	`
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
 	require.Nil(t, err)
-	require.Contains(t, string(resp.Json), "uid")
+	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }
