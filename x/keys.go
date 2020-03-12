@@ -45,8 +45,8 @@ const (
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	// byteSplit signals that the key stores an individual part of a multi-part list.
-	byteSplit = byte(0x04)
+	// ByteSplit signals that the key stores an individual part of a multi-part list.
+	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 )
@@ -100,13 +100,13 @@ func TypeKey(attr string) []byte {
 // DataKey generates a data key with the given attribute and UID.
 // The structure of a data key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix or byteSplit if part of a multi-part list)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteData)
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key and the first byte will be sets to byteSplit.
+//   the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
 	totalLen := prefixLen + 1 + 8
@@ -123,7 +123,7 @@ func DataKey(attr string, uid uint64) []byte {
 // ReverseKey generates a reverse key with the given attribute and UID.
 // The structure of a reverse key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix or byteSplit if part of a multi-part list)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteReverse)
@@ -146,7 +146,7 @@ func ReverseKey(attr string, uid uint64) []byte {
 // IndexKey generates a index key with the given attribute and term.
 // The structure of an index key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix or byteSplit if part of a multi-part list)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteIndex)
@@ -205,12 +205,12 @@ type ParsedKey struct {
 
 // IsData returns whether the key is a data key.
 func (p ParsedKey) IsData() bool {
-	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == byteSplit) && p.byteType == ByteData
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteData
 }
 
 // IsReverse returns whether the key is a reverse key.
 func (p ParsedKey) IsReverse() bool {
-	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == byteSplit) && p.byteType == ByteReverse
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteReverse
 }
 
 // IsCountOrCountRev returns whether the key is a count or a count rev key.
@@ -220,17 +220,17 @@ func (p ParsedKey) IsCountOrCountRev() bool {
 
 // IsCount returns whether the key is a count key.
 func (p ParsedKey) IsCount() bool {
-	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == byteSplit) && p.byteType == ByteCount
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteCount
 }
 
 // IsCountRev returns whether the key is a count rev key.
 func (p ParsedKey) IsCountRev() bool {
-	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == byteSplit) && p.byteType == ByteCountRev
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteCountRev
 }
 
 // IsIndex returns whether the key is an index key.
 func (p ParsedKey) IsIndex() bool {
-	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == byteSplit) && p.byteType == ByteIndex
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteIndex
 }
 
 // IsSchema returns whether the key is a schema key.
@@ -425,9 +425,9 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
-	// Change the first byte (i.e the key prefix) to byteSplit to signal this is an
+	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
 	// individual part of a single list key.
-	keyCopy[0] = byteSplit
+	keyCopy[0] = ByteSplit
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 
 	return keyCopy, nil
@@ -443,7 +443,7 @@ func Parse(key []byte) (ParsedKey, error) {
 		return p, nil
 	}
 
-	p.HasStartUid = key[0] == byteSplit
+	p.HasStartUid = key[0] == ByteSplit
 
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
