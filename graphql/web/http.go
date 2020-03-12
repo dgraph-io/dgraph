@@ -26,9 +26,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
-	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"go.opencensus.io/trace"
@@ -37,6 +35,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -57,11 +56,15 @@ type IServeGraphQL interface {
 type graphqlHandler struct {
 	resolver *resolve.RequestResolver
 	handler  http.Handler
+	poller   *subscription.Poller
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
-	gh := &graphqlHandler{resolver: resolver}
+func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver) IServeGraphQL {
+	gh := &graphqlHandler{
+		resolver: resolver,
+		poller:   subscription.NewPoller(schemaEpoch, resolver),
+	}
 	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
 	return gh
 }
@@ -71,6 +74,7 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 }
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
+	gh.poller.UpdateResolver(resolver)
 	gh.resolver = resolver
 }
 
@@ -112,42 +116,17 @@ func (gs *graphqlSubscription) Subscribe(
 		Query:         document,
 		Variables:     variableValues,
 	}
-	ch := make(chan interface{}, 10)
-	// TODO: @balajijinnah.
-	// - Cancel the subscription if there a schema change.
-	// - Batch same request in a one polling go routine.
-	res := gs.graphqlHandler.Resolve(ctx, req)
-	if len(res.Errors) != 0 {
-		return nil, res.Errors
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
+	if err != nil {
+		return nil, err
 	}
-	ch <- res.Output()
-	prevHash := farm.Fingerprint64(res.Data.Bytes())
 
-	// Poll the server for every one second.
 	go func() {
-		for {
-			time.Sleep(time.Second)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				res = gs.graphqlHandler.Resolve(ctx, req)
-				if len(res.Errors) != 0 {
-					ch <- res.Output()
-					close(ch)
-					return
-				}
-				hash := farm.Fingerprint64(res.Data.Bytes())
-				if hash == prevHash {
-					continue
-				}
-				prevHash = hash
-				// Update the client if there is change.
-				ch <- res.Output()
-			}
-		}
+		<-ctx.Done()
+		// Delete the subscriber if the context is done.
+		gs.graphqlHandler.poller.TerminateSubscription(res.BucketID, res.SubscriptionID)
 	}()
-	return ch, ctx.Err()
+	return res.UpdateCh, ctx.Err()
 }
 
 func (gh *graphqlHandler) Handler() http.Handler {

@@ -18,7 +18,9 @@ package subscription
 
 import (
 	"context"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -32,13 +34,15 @@ type Poller struct {
 	resolver       *resolve.RequestResolver
 	pollRegistry   map[uint64]map[uint64]chan interface{}
 	subscriptionID uint64
+	globalEpoch    *uint64
 }
 
 // NewPoller returns Poller.
-func NewPoller(resolver *resolve.RequestResolver) *Poller {
+func NewPoller(globalEpoch *uint64, resolver *resolve.RequestResolver) *Poller {
 	return &Poller{
 		resolver:     resolver,
 		pollRegistry: make(map[uint64]map[uint64]chan interface{}),
+		globalEpoch:  globalEpoch,
 	}
 }
 
@@ -74,11 +78,14 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	if !ok {
 		subscriptions = make(map[uint64]chan interface{})
 	}
-	if len(subscriptions) != 0 {
+
+	subscriptions[subscriptionID] = updateCh
+	p.pollRegistry[bucketID] = subscriptions
+
+	if len(subscriptions) != 1 {
 		// Already there is subscription for this bucket. So,no need to poll the server. We can
 		// use the existing polling routine to publish the update.
-		subscriptions[subscriptionID] = updateCh
-		p.pollRegistry[bucketID] = subscriptions
+
 		return &SubscriberResponse{
 			BucketID:       bucketID,
 			SubscriptionID: subscriptionID,
@@ -86,13 +93,26 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 		}, nil
 	}
 
+	localEpoch := atomic.LoadUint64(p.globalEpoch)
+	resolver := p.resolver
 	// There is no go rountine running to poll the server. So, run one to publish the updates.
 	go func() {
 		pollID := uint64(0)
 		for {
 			pollID++
 			time.Sleep(time.Second)
-			res := p.resolver.Resolve(context.TODO(), req)
+
+			globalEpoch := atomic.LoadUint64(p.globalEpoch)
+			if localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {
+				// There is a schema change since local epoch is diffrent from global schema epoch.
+				// We'll terminate all the subscription for this bucket. So, that all client can
+				// reconnect and listen for new schema.
+				p.TerminateSusbcriptions(bucketID)
+				return
+			}
+
+			res := resolver.Resolve(context.TODO(), req)
+
 			currentHash := farm.Fingerprint64(res.Data.Bytes())
 
 			if prevHash == currentHash {
@@ -109,7 +129,9 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 					return
 				}
 				p.Unlock()
+				continue
 			}
+			prevHash = currentHash
 
 			p.Lock()
 			subscribers, ok := p.pollRegistry[bucketID]
@@ -132,6 +154,28 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	}, nil
 }
 
+// UpdateResolver will update the resolver.
+func (p *Poller) UpdateResolver(resolver *resolve.RequestResolver) {
+	p.Lock()
+	defer p.Unlock()
+	p.resolver = resolver
+}
+
+// TerminateSusbcriptions will terminate all the subscriptions of the given bucketID.
+func (p *Poller) TerminateSusbcriptions(bucketID uint64) {
+	p.Lock()
+	defer p.Unlock()
+	subscriptions, ok := p.pollRegistry[bucketID]
+	if !ok {
+		return
+	}
+	for _, updateCh := range subscriptions {
+		// Closing the channel will close the graphQL websocket connection as well.
+		close(updateCh)
+	}
+	p.pollRegistry[bucketID] = make(map[uint64]chan interface{})
+}
+
 // TerminateSubscription will terminate the polling subscription.
 func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 	p.Lock()
@@ -139,6 +183,10 @@ func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 	subscriptions, ok := p.pollRegistry[bucketID]
 	if !ok {
 		return
+	}
+	updateCh, ok := subscriptions[subscriptionID]
+	if ok {
+		close(updateCh)
 	}
 	delete(subscriptions, subscriptionID)
 	p.pollRegistry[bucketID] = subscriptions

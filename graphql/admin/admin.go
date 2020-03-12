@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -205,18 +206,20 @@ type adminServer struct {
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
 	fns               *resolve.ResolverFns
 	withIntrospection bool
+	globalEpoch       *uint64
 }
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
+func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
+	web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
-	mainServer := web.NewServer(resolvers)
+	mainServer := web.NewServer(globalEpoch, resolvers)
 
 	fns := &resolve.ResolverFns{
 		Qrw: resolve.NewQueryRewriter(),
@@ -224,8 +227,8 @@ func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, we
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
 	}
-	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, closer)
-	adminServer := web.NewServer(adminResolvers)
+	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
+	adminServer := web.NewServer(globalEpoch, adminResolvers)
 
 	return mainServer, adminServer
 }
@@ -235,6 +238,7 @@ func newAdminResolver(
 	gqlServer web.IServeGraphQL,
 	fns *resolve.ResolverFns,
 	withIntrospection bool,
+	epoch *uint64,
 	closer *y.Closer) *resolve.RequestResolver {
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
@@ -250,6 +254,7 @@ func newAdminResolver(
 		gqlServer:         gqlServer,
 		fns:               fns,
 		withIntrospection: withIntrospection,
+		globalEpoch:       epoch,
 	}
 
 	prefix := x.DataKey("dgraph.graphql.schema", 0)
@@ -636,6 +641,9 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 		resolverFactory.WithSchemaIntrospection()
 	}
 
+	// Increment the Epoch when you get a new schema. So, that subscription's local epoch
+	// will match against global epoch to terminate the current subscriptions.
+	atomic.AddUint64(as.globalEpoch, 1)
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 }
 

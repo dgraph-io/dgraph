@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	_ "net/http/pprof" // http profiler
@@ -30,6 +31,7 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -453,7 +455,22 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
-	mainServer, adminServer := admin.NewServers(introspection, closer)
+
+	// Global Epoch is a lockless synchronization mechanism for graphql service.
+	// It's is just an atomic counter used by the graphql subscription to update its state.
+	// It's is used to detect the schema changes and, server exit.
+
+	// Implementation for schema change:
+	// The global epoch is incremented when there is a schema change.
+	// Polling goroutine acquires the current epoch count as a local epoch.
+	// The local epoch count is checked against the global epoch,
+	// If there is change then we terminate the subscription.
+
+	// Implementation for server exit:
+	// The global epoch is set to maxUint64 while exiting the server.
+	// By using this information polling goroutine terminates the subscription.
+	globalEpoch := uint64(0)
+	mainServer, adminServer := admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 
 	whitelist := func(h http.Handler) http.Handler {
@@ -495,6 +512,7 @@ func setupServer(closer *y.Closer) {
 	go func() {
 		defer wg.Done()
 		<-worker.ShutdownCh
+		atomic.StoreUint64(&globalEpoch, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
 		if err := grpcListener.Close(); err != nil {
