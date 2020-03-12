@@ -707,6 +707,20 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
+  # -
+  #   name: "@custom directive with wrong argument name"
+  #   input: |
+  #     type Author {
+  #       id: ID!
+  #     }
+
+  #     type Query {
+  #       getAuthro(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+  #     }
+  #   errlist: [
+  #     {"message": "Random",
+  #     "locations":[{"line":1, "column":6}]},
+  #   ]
 
 
 valid_schemas:

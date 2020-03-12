@@ -223,9 +223,10 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqler
 }
 
 func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
-	// return nil
+	if typ.Name == "Query" || typ.Name == "Mutation" {
+		return nil
+	}
 	if field.Arguments != nil {
-		fmt.Printf("arg: %+v\n", field.Arguments[0])
 		return gqlerror.ErrorPosf(
 			field.Position,
 			"Type %s; Field %s: You can't give arguments to fields.",
@@ -614,6 +615,13 @@ func passwordValidation(sch *ast.Schema,
 	dir *ast.Directive) *gqlerror.Error {
 
 	return passwordDirectiveValidation(typ)
+}
+
+func customDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	return nil
 }
 
 func idValidation(sch *ast.Schema,

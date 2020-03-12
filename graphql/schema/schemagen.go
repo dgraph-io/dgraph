@@ -114,7 +114,7 @@ func NewHandler(input string) (Handler, error) {
 
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
-		if defn.BuiltIn {
+		if defn.BuiltIn || defn.Name == "Query" {
 			continue
 		}
 		defns = append(defns, defn.Name)

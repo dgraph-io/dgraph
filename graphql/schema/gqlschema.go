@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 	secretDirective = "secret"
+	customDirective = "custom"
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -243,6 +244,7 @@ var directiveValidators = map[string]directiveValidator{
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
 	secretDirective:  passwordValidation,
+	customDirective:  customDirectiveValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
@@ -343,12 +345,10 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
-		fmt.Printf("typ: %+v, defn: %+v\n", typ, defn)
 
 		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
 
 		for _, field := range typ.Fields {
-			fmt.Printf("field: %+v\n", field)
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
@@ -388,11 +388,17 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned the the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
-
-	sch.Query = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Query",
-		Fields: make([]*ast.FieldDefinition, 0),
+	query := sch.Types["Query"]
+	if query != nil {
+		query.Kind = ast.Object
+		sch.Query = query
+		delete(sch.Types, "Query")
+	} else {
+		sch.Query = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Query",
+			Fields: make([]*ast.FieldDefinition, 0),
+		}
 	}
 
 	sch.Mutation = &ast.Definition{
