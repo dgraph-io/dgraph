@@ -25,6 +25,7 @@ import (
 	"sort"
 
 	"github.com/dgryski/go-farm"
+	"github.com/pkg/errors"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/dgraph/algo"
@@ -36,7 +37,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/protobuf/proto"
-	"github.com/pkg/errors"
 )
 
 var (
@@ -389,7 +389,7 @@ func TypeID(edge *pb.DirectedEdge) types.TypeID {
 
 func fingerprintEdge(t *pb.DirectedEdge) uint64 {
 	// There could be a collision if the user gives us a value with Lang = "en" and later gives
-	// us a value = "en" for the same predicate. We would end up overwritting his older lang
+	// us a value = "en" for the same predicate. We would end up overwriting his older lang
 	// value.
 
 	// All edges with a value without LANGTAG, have the same UID. In other words,
@@ -442,7 +442,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
 			hex.EncodeToString(l.key))
 	}
-	pred, ok := schema.State().Get(t.Attr)
+	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
 
@@ -939,7 +939,7 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		// Check if the list (or any of it's parts if it's been previously split) have
 		// become too big. Split the list if that is the case.
 		out.newMinTs = maxCommitTs
-		out.splitUpList()
+		out.recursiveSplit()
 		out.removeEmptySplits()
 	} else {
 		out.plist.Splits = nil
@@ -1284,6 +1284,26 @@ func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
 // shouldSplit returns true if the given plist should be split in two.
 func shouldSplit(plist *pb.PostingList) bool {
 	return plist.Size() >= maxListSize && len(plist.Pack.Blocks) > 1
+}
+
+func (out *rollupOutput) recursiveSplit() {
+	// Call splitUpList. Otherwise the map of startUids to parts won't be initialized.
+	out.splitUpList()
+
+	// Keep calling splitUpList until all the parts cannot be further split.
+	for {
+		needsSplit := false
+		for _, part := range out.parts {
+			if shouldSplit(part) {
+				needsSplit = true
+			}
+		}
+
+		if !needsSplit {
+			return
+		}
+		out.splitUpList()
+	}
 }
 
 // splitUpList checks the list and splits it in smaller parts if needed.

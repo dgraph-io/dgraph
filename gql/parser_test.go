@@ -2964,6 +2964,21 @@ func TestLangsInvalid9(t *testing.T) {
 		"The * symbol cannot be used as a valid language inside functions")
 }
 
+func TestLangsInvalid10(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@.:*
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
