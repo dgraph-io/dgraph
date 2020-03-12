@@ -337,7 +337,9 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 
 	if singleUidUpdate {
 		// This handles the special case when adding a value to predicates of type uid.
-		// The current value should be deleted in favor of this value.
+		// The current value should be deleted in favor of this value. This needs to
+		// be done because the fingerprint for the value is not math.MaxUint64 as is
+		// the case with the rest of the scalar predicates.
 		plist := &pb.PostingList{}
 		plist.Postings = append(plist.Postings, mpost)
 
@@ -348,7 +350,9 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 				return nil
 			}
 
-			// Mark all other values as deleted.
+			// Mark all other values as deleted. By the end of the iteration, the
+			// list of postings will contain deleted operations and only one set
+			// for the mutation stored in mpost.
 			objCopy := proto.Clone(obj).(*pb.Posting)
 			objCopy.Op = Del
 			plist.Postings = append(plist.Postings, objCopy)
@@ -358,6 +362,8 @@ func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) erro
 			return err
 		}
 
+		// Update the mutation map with the new plist. Return here since the code below
+		// does not apply for predicates of type uid.
 		l.mutationMap[mpost.StartTs] = plist
 		return nil
 	}
