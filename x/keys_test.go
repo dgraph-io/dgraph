@@ -55,7 +55,7 @@ func TestDataKey(t *testing.T) {
 	}
 }
 
-func TestParseDataKeysWithStartUid(t *testing.T) {
+func TestParseDataKeyWithStartUid(t *testing.T) {
 	var uid uint64
 	startUid := uint64(math.MaxUint64)
 	for uid = 0; uid < 1001; uid++ {
