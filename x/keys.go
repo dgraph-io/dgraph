@@ -425,8 +425,8 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	// individual part of a single list key.
 	keyCopy[0] = ByteSplit
 
+	// Append the start uid at the end of the key.
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
-
 	return keyCopy, nil
 }
 
