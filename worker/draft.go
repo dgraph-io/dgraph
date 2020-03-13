@@ -272,10 +272,13 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	if txn.ShouldAbort() {
-		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return zero.ErrConflict
+	var txn *posting.Txn
+	if !x.WorkerConfig.LudicrousMode {
+		txn = posting.Oracle().RegisterStartTs(m.StartTs)
+		if txn.ShouldAbort() {
+			span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
+			return zero.ErrConflict
+		}
 	}
 
 	// Discard the posting lists from cache to release memory at the end.
