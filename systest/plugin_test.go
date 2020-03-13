@@ -31,6 +31,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/tok"
 )
 
 func TestPlugins(t *testing.T) {
@@ -80,6 +81,7 @@ func TestPlugins(t *testing.T) {
 		check(t, cluster.client.Alter(ctx, &api.Operation{
 			Schema: initialSchema,
 		}))
+		check(t, testutil.WaitForAlter(ctx, cluster.client, initialSchema))
 
 		txn := cluster.client.NewTxn()
 		_, err = txn.Mutate(ctx, &api.Mutation{SetJson: []byte(setJSON)})
@@ -92,6 +94,11 @@ func TestPlugins(t *testing.T) {
 			check(t, err)
 			testutil.CompareJSON(t, test.wantResult, string(reply.GetJson()))
 		}
+	}
+
+	// Need to do this so that schema.Parse in testutil.WaitForAlter doesn't complain.
+	for _, soFile := range soFiles {
+		tok.LoadCustomTokenizer(soFile)
 	}
 
 	suite(

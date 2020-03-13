@@ -199,18 +199,22 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided")
 	}
-	startTs := proposal.Mutations.StartTs
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		// MaxAssigned would ensure that everything that's committed up until this point
+		// would be picked up in building indexes. Any uncommitted txns would be cancelled
+		// by detectPendingTxns below.
+		startTs := posting.Oracle().MaxAssigned()
+
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
-			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
-				return err
-			}
+		}
+		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+			return err
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {

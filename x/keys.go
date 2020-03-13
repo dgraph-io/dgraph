@@ -424,6 +424,7 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
 	// individual part of a single list key.
 	keyCopy[0] = ByteSplit
+
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
 
 	return keyCopy, nil

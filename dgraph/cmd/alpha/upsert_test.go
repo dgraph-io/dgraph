@@ -1613,8 +1613,6 @@ func TestUpsertWithValueVar(t *testing.T) {
 	require.NoError(t, alterSchema(`amount: int .`))
 	res, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	b, _ := json.MarshalIndent(res, "", "  ")
-	fmt.Printf("%s\n", b)
 
 	const (
 		// this upsert block increments the value of the counter by one

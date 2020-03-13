@@ -126,7 +126,7 @@ func escapedString(str string) string {
 		// All valid stings should be able to be escaped to a JSON string so
 		// it's safe to panic here. Marshal has to return an error because it
 		// accepts an interface.
-		panic("Could not marshal string to JSON string")
+		x.Panic(errors.New("Could not marshal string to JSON string"))
 	}
 	return string(byt)
 }

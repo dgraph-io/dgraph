@@ -87,6 +87,7 @@ func (exp *Experiment) verify() {
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
+	require.NoError(exp.t, testutil.WaitForAlter(ctx, dg, exp.schema))
 
 	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})
@@ -134,14 +135,14 @@ func TestNquadsFromJson1(t *testing.T) {
 name
 age
 married
-address 
+address
 }}`,
 		expected: `{"alice": [
 {"name": "Alice",
 "age": 26,
 "married": true,
 "address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
+]}
 `}
 	exp.verify()
 }

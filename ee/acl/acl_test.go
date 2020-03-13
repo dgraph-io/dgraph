@@ -1873,3 +1873,60 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 	// cleanup
 	deleteGroup(t, grootJwt, groupName)
 }
+
+func TestAllowUIDAccess(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+	require.NoError(t, testutil.WaitForAlter(ctx, dg, op.Schema))
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	require.NoError(t, testutil.AssignUids(101))
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			<100> <name> "100th User" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	// give read access of <name> to alice
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	uidQuery := `
+	{
+		me(func: uid(100)) {
+			uid
+			name
+		}
+	}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
+	require.Nil(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
+}
