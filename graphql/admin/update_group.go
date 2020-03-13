@@ -46,7 +46,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType)
+			variable := varGen.Next(ruleType, "")
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -92,7 +92,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 				continue
 			}
 
-			variable := varGen.Next(ruleType)
+			variable := varGen.Next(ruleType, "")
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[
