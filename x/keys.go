@@ -287,53 +287,49 @@ func (p ParsedKey) SkipType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteData
-	k[1] = 0
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteIndex
-	k[1] = 0
 	return buf
 }
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteReverse
-	k[1] = 0
 	return buf
 }
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	if reverse {
 		k[0] = ByteCountRev
 	} else {
 		k[0] = ByteCount
 	}
-	k[1] = 0
 	return buf
 }
 
