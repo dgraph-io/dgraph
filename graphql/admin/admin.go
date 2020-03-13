@@ -228,7 +228,7 @@ const (
 		"""
 		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
 		if no format is given), or 'json'.
-		see : https://docs.dgraph.io/deploy/#export-database
+		See : https://docs.dgraph.io/deploy/#export-database
 		"""
 		export(input: ExportInput!): ExportPayload
 

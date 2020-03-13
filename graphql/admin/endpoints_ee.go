@@ -114,7 +114,7 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to to permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read, 
 		write and modify operations.
 		"""	
 		permission: Int! @dgraph(pred: "dgraph.rule.permission")
@@ -171,7 +171,7 @@ const adminTypes = `
 		* 6 (110) : READ+WRITE
 		* 7 (111) : READ+WRITE+MODIFY
 
-		Permission 0, which is equal to to permission for a predicate, blocks all read, 
+		Permission 0, which is equal to no permission for a predicate, blocks all read, 
 		write and modify operations.
 		"""
 		permission: Int!
@@ -280,7 +280,7 @@ const adminMutations = `
 	updateUser(input: UpdateUserInput!): AddUserPayload
 
 	"""
-	Add rules to, or remove rules from, groups. If the filter doesn't match any groups, 
+	Add or remove rules for groups. If the filter doesn't match any groups, 
 	the mutation has no effect.
 	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
