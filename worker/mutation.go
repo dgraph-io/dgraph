@@ -21,6 +21,7 @@ import (
 	"context"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/golang/glog"
@@ -130,27 +131,29 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// not indexing, it would accept and propose the request.
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
-	for {
-		if !schema.State().IndexingInProgress() {
-			break
-		}
-		glog.Infoln("waiting for indexing to complete")
-		time.Sleep(time.Second * 2)
-	}
+	gr.Node.waitForTask(opIndexing)
 
-	// There is a race condition between starting a current indexing task vs stopping
-	// the previous task. We know, no other indexing procedure is running right now,
-	// and we can safely call stopTask before starting the current indexing task.
-	gr.Node.stopTask(opIndexing)
+	// done is used to ensure that we only stop the indexing task once.
+	var done uint32
+	stopIndexing := func() {
+		if !schema.State().IndexingInProgress() {
+			if atomic.CompareAndSwapUint32(&done, 0, 1) {
+				gr.Node.stopTask(opIndexing)
+			}
+		}
+	}
 
 	// Ensure that rollup is not running.
 	wrtCtx, err := gr.Node.startTask(opIndexing)
 	if err != nil {
 		return err
 	}
+	defer stopIndexing()
+	// wrtCtx is used by the background tasks.
 	wrtCtx = schema.GetWriteContext(wrtCtx)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
+		defer stopIndexing()
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
@@ -163,7 +166,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	}
 
 	// This wg allows waiting until setup for all the predicates is complete
-	// befor running buildIndexes for any of those predicates.
+	// before running buildIndexes for any of those predicates.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
@@ -186,10 +189,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			if loadErr != nil {
 				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
 			}
-		}
-
-		if !schema.State().IndexingInProgress() {
-			gr.Node.stopTask(opIndexing)
 		}
 	}
 

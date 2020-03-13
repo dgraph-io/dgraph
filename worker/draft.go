@@ -91,6 +91,15 @@ const (
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
 func (n *node) startTask(id int) (context.Context, error) {
+	// This needs to be done here to avoid the deadlock.
+	var done <-chan struct{} = nil
+	defer func() {
+		if done == nil {
+			return
+		}
+		<-done
+	}()
+
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
@@ -100,11 +109,11 @@ func (n *node) startTask(id int) (context.Context, error) {
 			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
 		}
 	case opSnapshot, opIndexing:
-		if rop, has := n.ops[opRollup]; has {
+		if op, has := n.ops[opRollup]; has {
 			glog.Info("Found a rollup going on. Cancelling rollup!")
-			rop.cancel()
-			rop.cancelled = true
-			<-rop.done
+			op.cancel()
+			op.cancelled = true
+			done = op.done
 			glog.Info("Rollup cancelled.")
 		} else if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
@@ -140,6 +149,16 @@ func (n *node) stopTask(id int) {
 	// Signal that task is completed or cancelled.
 	close(op.done)
 	glog.Infof("Operation completed with id: %d", id)
+}
+
+func (n *node) waitForTask(id int) {
+	n.opsLock.Lock()
+	op, ok := n.ops[id]
+	n.opsLock.Unlock()
+	if !ok {
+		return
+	}
+	<-op.done
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
