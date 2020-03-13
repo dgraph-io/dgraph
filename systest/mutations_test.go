@@ -90,6 +90,7 @@ func TestSystem(t *testing.T) {
 	t.Run("infer schema as list JSON", wrap(InferSchemaAsListJSON))
 	t.Run("force schema as list JSON", wrap(ForceSchemaAsListJSON))
 	t.Run("force schema as single JSON", wrap(ForceSchemaAsSingleJSON))
+	t.Run("overwrite uid predicates", wrap(OverwriteUidPredicates))
 }
 
 func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
@@ -1873,4 +1874,61 @@ func ForceSchemaAsSingleJSON(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"schema": [{"predicate":"person"}, {"predicate":"nickname"}]}`,
 		string(resp.Json))
+}
+
+func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+	op := &api.Operation{DropAll: true}
+	require.NoError(t, c.Alter(ctx, op))
+
+	op = &api.Operation{
+		Schema: `
+		best_friend: uid .
+		name: string @index(exact) .`,
+	}
+	err := c.Alter(ctx, op)
+	require.NoError(t, err)
+	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
+
+	txn := c.NewTxn()
+	_, err = txn.Mutate(context.Background(), &api.Mutation{
+		CommitNow: true,
+		SetNquads: []byte(`
+		_:alice <name> "Alice" .
+		_:bob <name> "Bob" .
+		_:alice <best_friend> _:bob .`),
+	})
+	require.NoError(t, err)
+
+	q := `{
+  me(func: eq(name, Alice)) {
+	name
+	best_friend {
+		name
+	}
+  }
+}`
+	resp, err := c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
+		string(resp.GetJson()))
+
+	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
+	upsertMutation := &api.Mutation{
+		SetNquads: []byte(`
+		_:carol <name> "Carol" .
+		uid(alice) <best_friend> _:carol .`),
+	}
+	req := &api.Request{
+		Query:     upsertQuery,
+		Mutations: []*api.Mutation{upsertMutation},
+		CommitNow: true,
+	}
+	_, err = c.NewTxn().Do(ctx, req)
+	require.NoError(t, err)
+
+	resp, err = c.NewReadOnlyTxn().Query(ctx, q)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Carol"}}]}`,
+		string(resp.GetJson()))
 }

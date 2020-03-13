@@ -36,6 +36,7 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/protobuf/proto"
 )
 
 var (
@@ -310,7 +311,7 @@ func hasDeleteAll(mpost *pb.Posting) bool {
 }
 
 // Ensure that you either abort the uncommitted postings or commit them before calling me.
-func (l *List) updateMutationLayer(mpost *pb.Posting) {
+func (l *List) updateMutationLayer(mpost *pb.Posting, singleUidUpdate bool) error {
 	l.AssertLock()
 	x.AssertTrue(mpost.Op == Set || mpost.Op == Del)
 
@@ -322,26 +323,60 @@ func (l *List) updateMutationLayer(mpost *pb.Posting) {
 			l.mutationMap = make(map[uint64]*pb.PostingList)
 		}
 		l.mutationMap[mpost.StartTs] = plist
-		return
+		return nil
 	}
+
 	plist, ok := l.mutationMap[mpost.StartTs]
 	if !ok {
-		plist := &pb.PostingList{}
-		plist.Postings = append(plist.Postings, mpost)
+		plist = &pb.PostingList{}
 		if l.mutationMap == nil {
 			l.mutationMap = make(map[uint64]*pb.PostingList)
 		}
 		l.mutationMap[mpost.StartTs] = plist
-		return
 	}
+
+	if singleUidUpdate {
+		// This handles the special case when adding a value to predicates of type uid.
+		// The current value should be deleted in favor of this value. This needs to
+		// be done because the fingerprint for the value is not math.MaxUint64 as is
+		// the case with the rest of the scalar predicates.
+		plist := &pb.PostingList{}
+		plist.Postings = append(plist.Postings, mpost)
+
+		err := l.iterate(mpost.StartTs, 0, func(obj *pb.Posting) error {
+			// Ignore values which have the same uid as they will get replaced
+			// by the current value.
+			if obj.Uid == mpost.Uid {
+				return nil
+			}
+
+			// Mark all other values as deleted. By the end of the iteration, the
+			// list of postings will contain deleted operations and only one set
+			// for the mutation stored in mpost.
+			objCopy := proto.Clone(obj).(*pb.Posting)
+			objCopy.Op = Del
+			plist.Postings = append(plist.Postings, objCopy)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		// Update the mutation map with the new plist. Return here since the code below
+		// does not apply for predicates of type uid.
+		l.mutationMap[mpost.StartTs] = plist
+		return nil
+	}
+
 	// Even if we have a delete all in this transaction, we should still pick up any updates since.
 	for i, prev := range plist.Postings {
 		if prev.Uid == mpost.Uid {
 			plist.Postings[i] = mpost
-			return
+			return nil
 		}
 	}
 	plist.Postings = append(plist.Postings, mpost)
+	return nil
 }
 
 // TypeID returns the typeid of destination vertex
@@ -400,7 +435,21 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 		t.ValueId = fingerprintEdge(t)
 		mpost.Uid = t.ValueId
 	}
-	l.updateMutationLayer(mpost)
+
+	// Check whether this mutation is an update for a predicate of type uid.
+	pk, err := x.Parse(l.key)
+	if err != nil {
+		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
+			hex.EncodeToString(l.key))
+	}
+	pred, ok := schema.State().Get(ctx, t.Attr)
+	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
+		pk.IsData() && mpost.Op == Set && mpost.PostingType == pb.Posting_REF
+
+	if err != l.updateMutationLayer(mpost, isSingleUidUpdate) {
+		return errors.Wrapf(err, "cannot update mutation layer of key %s with value %+v",
+			hex.EncodeToString(l.key), mpost)
+	}
 
 	if x.WorkerConfig.LudicrousMode {
 		return nil
@@ -410,11 +459,6 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
 	var conflictKey uint64
-	pk, err := x.Parse(l.key)
-	if err != nil {
-		return errors.Wrapf(err, "cannot parse key when adding mutation to list with key %s",
-			hex.EncodeToString(l.key))
-	}
 	switch {
 	case schema.State().HasNoConflict(t.Attr):
 		break
