@@ -40,12 +40,19 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+type HTTPResolverConfig struct {
+	URL    string
+	Method string
+	Body   string
+}
+
 // Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
+	HTTPQuery            QueryType    = "http"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -112,6 +119,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
+	HTTPResolver() HTTPResolverConfig
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -196,7 +204,7 @@ type query field
 func (s *schema) Queries(t QueryType) []string {
 	var result []string
 	for _, q := range s.schema.Query.Fields {
-		if queryType(q.Name) == t {
+		if queryType(q.Name, q.Directives.ForName("custom")) == t {
 			result = append(result, q.Name)
 		}
 	}
@@ -753,11 +761,13 @@ func (q *query) GetObjectName() string {
 }
 
 func (q *query) QueryType() QueryType {
-	return queryType(q.Name())
+	return queryType(q.Name(), q.field.Directives.ForName("custom"))
 }
 
-func queryType(name string) QueryType {
+func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
+	case custom != nil:
+		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
 	case name == "__schema" || name == "__type":
@@ -789,6 +799,20 @@ func (q *query) TypeName(dgraphTypes []interface{}) string {
 
 func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
+}
+
+func (q *query) HTTPResolver() HTTPResolverConfig {
+	// We have to fetch the original definition of the query from the name of the query to be
+	// able to get the value stored in custom directive.
+	// TODO - This should be cached later.
+	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
+	custom := query.Directives.ForName("custom")
+	httpArg := custom.Arguments.ForName("http")
+	rc := HTTPResolverConfig{
+		URL:    httpArg.Value.Children.ForName("url").String(),
+		Method: httpArg.Value.Children.ForName("method").String(),
+	}
+	return rc
 }
 
 func (m *mutation) Name() string {

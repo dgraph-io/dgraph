@@ -215,6 +215,12 @@ func (rf *resolverFactory) WithConventionResolvers(
 		})
 	}
 
+	for _, q := range s.Queries(schema.HTTPQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewHTTPResolver(nil, nil, StdQueryCompletion())
+		})
+	}
+
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
