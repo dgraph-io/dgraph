@@ -47,6 +47,14 @@ func newExecutor() *Executor {
 func (e *Executor) processMutationCh(ch chan *subMutation) {
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
+		select {
+		case <-ShutdownCh:
+			// Ignore all the unfinished mutation after shutdown signal.
+			glog.Infof("Ignoring further unfinished mutations")
+			return
+		default:
+
+		}
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
 			for {
