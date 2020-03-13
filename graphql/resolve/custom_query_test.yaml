@@ -1,0 +1,95 @@
+-
+  name: "custom GET query returning users"
+  gqlquery: |
+    query {
+      myFavoriteMovies {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  httpresponse: |
+    {
+      "myFavoriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Star Wars",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek"
+        }
+      ]
+    }
+  resolvedresponse: |
+    {
+      "myFavoriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Star Wars",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek",
+          "director": []
+        }
+      ]
+    }
+
+-
+  name: "custom GET query returning users one of which becomes null"
+  gqlquery: |
+    query {
+      myFavoriteMovies {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  httpresponse: |
+    {
+      "myFavoriteMovies": [
+        {
+          "id": "0x1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek"
+        }
+      ]
+    }
+  resolvedresponse: |
+    {
+      "myFavoriteMovies": [
+        null,
+        {
+          "id": "0x3",
+          "name": "Star Trek",
+          "director": []
+        }
+      ]
+    }

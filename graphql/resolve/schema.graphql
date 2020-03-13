@@ -111,3 +111,10 @@ type ComputerOwner {
 type User @secret(field: "pwd") {
 	name: String! @id
 }
+
+type Query {
+        myFavoriteMovies: [Movie] @custom(http: {
+                url: "http://myapi.com/favMovies",
+                method: "GET"
+        })
+}

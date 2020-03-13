@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"sync"
 
@@ -217,7 +218,8 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPResolver(nil, nil, StdQueryCompletion())
+			// TODO - Initiate the client with the correct defaults, timeout etc.
+			return NewHTTPResolver(&http.Client{}, nil, nil, StdQueryCompletion())
 		})
 	}
 

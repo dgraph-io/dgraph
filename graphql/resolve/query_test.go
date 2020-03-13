@@ -17,13 +17,16 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"gopkg.in/yaml.v2"
@@ -64,6 +67,68 @@ func TestQueryRewriting(t *testing.T) {
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+		})
+	}
+}
+
+type HTTPRewritingCase struct {
+	Name             string
+	GQLQuery         string
+	HTTPResponse     string
+	ResolvedResponse string
+}
+
+// RoundTripFunc .
+type RoundTripFunc func(req *http.Request) *http.Response
+
+// RoundTrip .
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req), nil
+}
+
+//NewTestClient returns *http.Client with Transport replaced to avoid making real calls
+func NewTestClient(fn RoundTripFunc) *http.Client {
+	return &http.Client{
+		Transport: RoundTripFunc(fn),
+	}
+}
+
+func newClient(expectedResponse string) *http.Client {
+	return NewTestClient(func(req *http.Request) *http.Response {
+		return &http.Response{
+			StatusCode: 200,
+			// Send response to be tested
+			Body: ioutil.NopCloser(bytes.NewBufferString(expectedResponse)),
+			// Must be set to non-nil value or it panics
+			Header: make(http.Header),
+		}
+	})
+}
+
+func TestCustomHTTPQuery(t *testing.T) {
+	b, err := ioutil.ReadFile("custom_query_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []HTTPRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query: tcase.GQLQuery,
+				})
+			require.NoError(t, err)
+			gqlQuery := test.GetQuery(t, op)
+
+			client := newClient(tcase.HTTPResponse)
+			resolver := NewHTTPResolver(client, nil, nil, StdQueryCompletion())
+			resolved := resolver.Resolve(context.Background(), gqlQuery)
+			res := `{` + string(resolved.Data) + `}`
+			testutil.CompareJSON(t, tcase.ResolvedResponse, res)
 		})
 	}
 }

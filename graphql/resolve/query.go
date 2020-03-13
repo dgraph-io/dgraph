@@ -137,13 +137,17 @@ func introspectionExecution(q schema.Query) QueryExecutionFunc {
 
 // a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
 type httpResolver struct {
+	*http.Client
 	httpRewriter    QueryRewriter
 	httpExecutor    QueryExecutor
 	resultCompleter ResultCompleter
 }
 
-func NewHTTPResolver(qr QueryRewriter, qe QueryExecutor, rc ResultCompleter) QueryResolver {
-	return &httpResolver{httpRewriter: qr, httpExecutor: qe, resultCompleter: rc}
+func NewHTTPResolver(hc *http.Client,
+	qr QueryRewriter,
+	qe QueryExecutor,
+	rc ResultCompleter) QueryResolver {
+	return &httpResolver{hc, qr, qe, rc}
 }
 
 func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -161,7 +165,7 @@ func (hr *httpResolver) rewriteAndExecute(
 	ctx context.Context, query schema.Query) ([]byte, error) {
 
 	hrc := query.HTTPResolver()
-	resp, err := http.Get(hrc.URL)
+	resp, err := hr.Get(hrc.URL)
 	if err != nil {
 		return nil, err
 	}

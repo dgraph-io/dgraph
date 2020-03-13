@@ -809,8 +809,8 @@ func (q *query) HTTPResolver() HTTPResolverConfig {
 	custom := query.Directives.ForName("custom")
 	httpArg := custom.Arguments.ForName("http")
 	rc := HTTPResolverConfig{
-		URL:    httpArg.Value.Children.ForName("url").String(),
-		Method: httpArg.Value.Children.ForName("method").String(),
+		URL:    httpArg.Value.Children.ForName("url").Raw,
+		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 	return rc
 }
