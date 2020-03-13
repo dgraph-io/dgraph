@@ -138,12 +138,17 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		time.Sleep(time.Second * 2)
 	}
 
+	// There is a race condition between starting a current indexing task vs stopping
+	// the previous task. We know, no other indexing procedure is running right now,
+	// and we can safely call stopTask before starting the current indexing task.
+	gr.Node.stopTask(opIndexing)
+
 	// Ensure that rollup is not running.
-	tmpCtx, err := gr.Node.startTask(opIndexing)
+	wrtCtx, err := gr.Node.startTask(opIndexing)
 	if err != nil {
 		return err
 	}
-	wrtCtx := schema.GetWriteContext(tmpCtx)
+	wrtCtx = schema.GetWriteContext(wrtCtx)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
@@ -151,10 +156,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		}
 		if err := updateSchema(update); err != nil {
 			return err
-		}
-
-		if !schema.State().IndexingInProgress() {
-			gr.Node.stopTask(opIndexing)
 		}
 
 		glog.Infof("Done schema update %+v\n", update)
@@ -185,6 +186,10 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 			if loadErr != nil {
 				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
 			}
+		}
+
+		if !schema.State().IndexingInProgress() {
+			gr.Node.stopTask(opIndexing)
 		}
 	}
 

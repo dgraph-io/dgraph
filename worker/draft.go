@@ -77,6 +77,8 @@ type operation struct {
 	cancel context.CancelFunc
 	// done is used to wait for the task until it is either cancelled or completed.
 	done chan struct{}
+	// cancelled is used to ensure that we do not cancel the context twice.
+	cancelled bool
 }
 
 const (
@@ -101,9 +103,10 @@ func (n *node) startTask(id int) (context.Context, error) {
 		if rop, has := n.ops[opRollup]; has {
 			glog.Info("Found a rollup going on. Cancelling rollup!")
 			rop.cancel()
+			rop.cancelled = true
 			<-rop.done
 			glog.Info("Rollup cancelled.")
-		} else if _, has := n.ops[id]; has {
+		} else if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
 		}
 	default:
@@ -118,7 +121,7 @@ func (n *node) startTask(id int) (context.Context, error) {
 }
 
 // stopTask will delete the entry from the map that keep tracks of the ops
-// and then signal that taks has been cancelled/completed for waiting task.
+// and then signal that tasks has been cancelled/completed for waiting task.
 func (n *node) stopTask(id int) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -130,7 +133,9 @@ func (n *node) stopTask(id int) {
 
 	// Cancel the context and delete op from the operations map.
 	delete(n.ops, id)
-	op.cancel()
+	if !op.cancelled {
+		op.cancel()
+	}
 
 	// Signal that task is completed or cancelled.
 	close(op.done)
