@@ -68,7 +68,7 @@ type node struct {
 
 	pendingSize int64
 
-	ex *Executor
+	ex *executor
 }
 
 type op int
@@ -389,19 +389,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-	var txn *posting.Txn
-	if !x.WorkerConfig.LudicrousMode {
-		txn = posting.Oracle().RegisterStartTs(m.StartTs)
-		if txn.ShouldAbort() {
-			span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-			return zero.ErrConflict
-		}
-	}
-
-	// Discard the posting lists from cache to release memory at the end.
-	if !x.WorkerConfig.LudicrousMode {
-		defer txn.Update()
-	}
 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
@@ -421,6 +408,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		n.ex.addEdges(ctx, m.StartTs, m.Edges)
 		return nil
 	}
+
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+
+	if txn.ShouldAbort() {
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
+		return zero.ErrConflict
+	}
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
