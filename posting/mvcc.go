@@ -260,6 +260,7 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 	l := lCache.Get(string(key))
 	if l != nil {
 		// No need to clone the immutable layer or the key since mutations will not modify it.
+		l.Lock()
 		lCopy := &List{
 			minTs: l.minTs,
 			maxTs: l.maxTs,
@@ -268,12 +269,11 @@ func getNew(key []byte, pstore *badger.DB) (*List, error) {
 		}
 		if l.mutationMap != nil {
 			lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-			l.Lock()
 			for ts, pl := range l.mutationMap {
 				lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
 			}
-			l.Unlock()
 		}
+		l.Unlock()
 		return lCopy, nil
 
 	}

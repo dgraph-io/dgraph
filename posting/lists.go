@@ -152,6 +152,10 @@ func (c *SampleCache) Del(key string) {
 func (c *SampleCache) Set(key string, l *List) {
 	c.Lock()
 	defer c.Unlock()
+	if prev, ok := c.cache[key]; ok && prev.maxVersion() > l.maxVersion() {
+		glog.Infof("Would not set the key. Prev: %d. Now: %d\n", prev.maxVersion(), l.maxVersion())
+		return
+	}
 	c.cache[key] = l
 }
 

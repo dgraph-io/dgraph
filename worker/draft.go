@@ -1082,6 +1082,9 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
+	// HACK: Let's avoid doing any rollups for now.
+	return nil
+
 	writer := posting.NewTxnWriter(pstore)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
@@ -1135,18 +1138,24 @@ func (n *node) rollupLists(readTs uint64) error {
 		atomic.AddUint64(&numKeys, 1)
 		kvs, err := l.Rollup()
 		// delete the list while rollup.
-		posting.RemoveCacheFor(key)
+
+		// NOTE: This is not the right time to remove the cache.
+		// posting.RemoveCacheFor(key)
+
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
 		// size calculations.
 		for _, kv := range kvs {
 			addTo(kvs[0].Key, int64(kv.Size()))
 		}
-
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Write(list)
+		err := writer.Write(list)
+		for _, kv := range list.Kv {
+			posting.RemoveCacheFor(kv.Key)
+		}
+		return err
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err
