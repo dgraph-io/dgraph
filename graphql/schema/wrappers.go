@@ -465,12 +465,107 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+type AuthVariable int
+
+const (
+	Constant AuthVariable = iota
+	Op
+	JwtVar
+	GqlTyp
+)
+
+type RuleAst struct {
+	name  string
+	typ   AuthVariable
+	value *RuleAst
+}
+
+var operations = map[string]bool{
+	"filter": true,
+	"eq":     true,
+}
+
+var punctuations = map[byte]bool{
+	'{': true,
+	'}': true,
+	':': true,
+	'(': true,
+	')': true,
+	' ': true,
+}
+
+type Parser struct {
+	index int
+	str   *string
+}
+
+func (p *Parser) init(str *string) {
+	p.str = str
+	p.index = 0
+}
+
+func (p *Parser) skipPunc() {
+	for ; p.index != len(*p.str) && punctuations[(*p.str)[p.index]]; p.index += 1 {
+	}
+}
+
+func (p *Parser) getNextWord() string {
+	start := p.index
+	for ; p.index != len(*p.str) && !punctuations[(*p.str)[p.index]]; p.index += 1 {
+	}
+
+	word := (*p.str)[start:p.index]
+	p.skipPunc()
+
+	return word
+}
+
+func (p *Parser) isEmpty() bool {
+	return p.index == len(*p.str)
+}
+
+func (ap *AuthParser) buildRuleAST(rule string) *RuleAst {
+	var ast *RuleAst
+	var p Parser
+
+	builder := &ast
+	typ := ap.currentTyp
+
+	p.init(&rule)
+	p.skipPunc()
+
+	for !p.isEmpty() {
+		rule := &RuleAst{}
+		word := p.getNextWord()
+
+		rule.name = word
+
+		if word[0] == '$' {
+			rule.typ = JwtVar
+			rule.name = word[1:]
+		} else if operations[word] {
+			rule.typ = Op
+		} else if field := typ.Fields.ForName(word); field != nil {
+			name := field.Type.Name()
+			typ = ap.s.Types[name]
+			rule.typ = GqlTyp
+		} else {
+			rule.typ = Constant
+		}
+
+		*builder = rule
+		builder = &rule.value
+	}
+
+	return ast
+}
+
 type RuleNode struct {
 	Or  []*RuleNode
 	And []*RuleNode
 	Not *RuleNode
 
-	Rule string
+	Rule *RuleAst
 }
 
 type AuthContainer struct {
@@ -480,14 +575,20 @@ type AuthContainer struct {
 	Delete *RuleNode
 }
 
-func parseRules(rule map[string]interface{}) *RuleNode {
+type AuthParser struct {
+	s *ast.Schema
+
+	currentTyp *ast.Definition
+}
+
+func (ap *AuthParser) parseRules(rule map[string]interface{}) *RuleNode {
 	var ruleNode RuleNode
 
 	or, ok := rule["or"].([]interface{})
 	if ok {
 		for _, node := range or {
 			ruleNode.Or = append(ruleNode.Or,
-				parseRules(node.(map[string]interface{})))
+				ap.parseRules(node.(map[string]interface{})))
 		}
 	}
 
@@ -495,44 +596,44 @@ func parseRules(rule map[string]interface{}) *RuleNode {
 	if ok {
 		for _, node := range and {
 			ruleNode.And = append(ruleNode.And,
-				parseRules(node.(map[string]interface{})))
+				ap.parseRules(node.(map[string]interface{})))
 		}
 	}
 
 	not, ok := rule["not"].(map[string]interface{})
 	if ok {
-		ruleNode.Not = parseRules(not)
+		ruleNode.Not = ap.parseRules(not)
 	}
 
 	ruleString, ok := rule["rule"].(string)
 	if ok {
-		ruleNode.Rule = ruleString
+		ruleNode.Rule = ap.buildRuleAST(ruleString)
 	}
 
 	return &ruleNode
 }
 
-func parseAuthDirective(directive map[string]interface{}) *AuthContainer {
+func (p *AuthParser) parseAuthDirective(directive map[string]interface{}) *AuthContainer {
 	var container AuthContainer
 
 	query, ok := directive["query"].(map[string]interface{})
 	if ok {
-		container.Query = parseRules(query)
+		container.Query = p.parseRules(query)
 	}
 
 	add, ok := directive["add"].(map[string]interface{})
 	if ok {
-		container.Add = parseRules(add)
+		container.Add = p.parseRules(add)
 	}
 
 	update, ok := directive["update"].(map[string]interface{})
 	if ok {
-		container.Update = parseRules(update)
+		container.Update = p.parseRules(update)
 	}
 
 	delete, ok := directive["delete"].(map[string]interface{})
 	if ok {
-		container.Delete = parseRules(delete)
+		container.Delete = p.parseRules(delete)
 	}
 
 	return &container
@@ -541,6 +642,9 @@ func parseAuthDirective(directive map[string]interface{}) *AuthContainer {
 func authRules(s *ast.Schema) map[string]*AuthContainer {
 	authRules := make(map[string]*AuthContainer)
 	var emptyMap map[string]interface{}
+	var p AuthParser
+
+	p.s = s
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
@@ -549,7 +653,8 @@ func authRules(s *ast.Schema) map[string]*AuthContainer {
 				continue
 			}
 
-			authRules[name] = parseAuthDirective(directive.ArgumentMap(emptyMap))
+			p.currentTyp = typ
+			authRules[name] = p.parseAuthDirective(directive.ArgumentMap(emptyMap))
 		}
 	}
 

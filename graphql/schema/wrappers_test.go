@@ -367,25 +367,106 @@ type User @auth(
 	`)
 	require.NoError(t, err)
 
+	ownerRule := &RuleAst{
+		name: "owner",
+		typ:  GqlTyp,
+		value: &RuleAst{
+			name: "filter",
+			typ:  Op,
+			value: &RuleAst{
+				name: "username",
+				typ:  GqlTyp,
+				value: &RuleAst{
+					name: "eq",
+					typ:  Op,
+					value: &RuleAst{
+						name: "X-MyApp-User",
+						typ:  JwtVar,
+					},
+				},
+			},
+		},
+	}
+
+	sharedWithRule := &RuleAst{
+		name: "sharedWith",
+		typ:  GqlTyp,
+		value: &RuleAst{
+			name: "filter",
+			typ:  Op,
+			value: &RuleAst{
+				name: "username",
+				typ:  GqlTyp,
+				value: &RuleAst{
+					name: "eq",
+					typ:  Op,
+					value: &RuleAst{
+						name: "X-MyApp-User",
+						typ:  JwtVar,
+					},
+				},
+			},
+		},
+	}
+
+	isPublicRule := &RuleAst{
+		name: "isPublic",
+		typ:  GqlTyp,
+		value: &RuleAst{
+			name: "eq",
+			typ:  Op,
+			value: &RuleAst{
+				name: "true",
+				typ:  Constant,
+			},
+		},
+	}
+
+	isAdmin := &RuleAst{
+		name: "X-MyApp-Role",
+		typ:  JwtVar,
+		value: &RuleAst{
+			name: "eq",
+			typ:  Op,
+			value: &RuleAst{
+				name: "ADMIN",
+				typ:  Constant,
+			},
+		},
+	}
+
+	isAddBot := &RuleAst{
+		name: "MyApp.Role",
+		typ:  JwtVar,
+		value: &RuleAst{
+			name: "eq",
+			typ:  Op,
+			value: &RuleAst{
+				name: "ADD-BOT",
+				typ:  Constant,
+			},
+		},
+	}
+
 	TodoAuth := &AuthContainer{
 		Query: &RuleNode{
 			Or: []*RuleNode{
-				{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
-				{Rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})"},
-				{Rule: "isPublic {eq: true}"},
-				{Rule: "$X-MyApp-Role: {eq: ADMIN}"},
+				{Rule: ownerRule},
+				{Rule: sharedWithRule},
+				{Rule: isPublicRule},
+				{Rule: isAdmin},
 			},
 		},
-		Add:    &RuleNode{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
-		Update: &RuleNode{Rule: "owner (filter: { username: { eq: $X-MyApp-User }})"},
-		Delete: &RuleNode{Rule: "$X-MyApp-Role: {eq: ADMIN}"},
+		Add:    &RuleNode{Rule: ownerRule},
+		Update: &RuleNode{Rule: ownerRule},
+		Delete: &RuleNode{Rule: isAdmin},
 	}
 
 	require.Equal(t, gqlSchema.AuthRule("Todo"), TodoAuth)
 
 	UserAuth := &AuthContainer{
-		Add:    &RuleNode{Rule: "$MyApp.Role: { eq: ADD-BOT }"},
-		Update: &RuleNode{Rule: "filter: { username: { eq: $X-MyApp-User } }"},
+		Add:    &RuleNode{Rule: isAddBot},
+		Update: &RuleNode{Rule: ownerRule.value},
 	}
 
 	require.Equal(t, gqlSchema.AuthRule("User"), UserAuth)
