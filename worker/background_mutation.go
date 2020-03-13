@@ -58,13 +58,12 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		for _, edge := range payload.edges {
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
-				switch {
-				case err == nil:
+				if err == nil {
 					break
-				case err != posting.ErrRetry:
+				}
+				if err != posting.ErrRetry {
 					glog.Errorf("Error while mutating: %v", err)
 					break
-				default:
 				}
 			}
 		}
