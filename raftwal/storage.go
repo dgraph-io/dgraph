@@ -40,22 +40,24 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
-	cache      *sync.Map
-	deleteChan chan deleteRange
+	cache           *sync.Map
+	deleteRangeChan chan indexRange
 }
 
-type deleteRange struct {
+type indexRange struct {
 	from, until uint64
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map),
-		deleteChan: make(chan deleteRange, 16)}
+		deleteRangeChan: make(chan indexRange, 16)}
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
-	w.processDeleteRange()
+
+	// TODO: Figure out a way to close this.
+	go w.processDeleteRange()
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -69,37 +71,29 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	if err == errNotFound {
 		ents := make([]raftpb.Entry, 1)
 		x.Check(w.reset(ents))
-		return w
 	} else {
 		x.Check(err)
 	}
 
 	// If db is not closed properly, there might be ranges for which delete entries are not
-	// inserted. So iterate in reverse order starting from (FirstIndex-2).
-	batch := w.db.NewWriteBatch()
-	defer batch.Cancel()
-	x.Check(w.deleteFrom(batch, first-2, true))
-	x.Check(batch.Flush())
+	// inserted. So insert delete entries for those ranges starting from 0 to (first-1).
+	w.deleteRangeChan <- indexRange{0, first - 1}
 
 	return w
 }
 
 func (w *DiskStorage) processDeleteRange() {
-	// TODO: Figure out a way to close this.
-	go func() {
-		for r := range w.deleteChan {
-			batch := w.db.NewWriteBatch()
-			if err := w.deleteUntil(batch, r.from, r.until); err != nil {
-				glog.Errorf("deleteUntil failed with error: %s, from: %d, until: %d\n",
-					err, r.from, r.until)
-			}
-
-			if err := batch.Flush(); err != nil {
-				glog.Errorf("batch flush failed while deleting range from: %d, until: %d "+
-					"with error: %s,\n", r.from, r.until, err)
-			}
+	batch := w.db.NewWriteBatch()
+	for r := range w.deleteRangeChan {
+		if err := w.deleteRange(batch, r.from, r.until); err != nil {
+			glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
+				err, r.from, r.until)
 		}
-	}()
+	}
+
+	if err := batch.Flush(); err != nil {
+		glog.Errorf("processDeleteRange batch flush failed with error: %s,\n", err)
+	}
 }
 
 var idKey = []byte("raftid")
@@ -278,6 +272,10 @@ var (
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
+	// Previously we used to get snapshot key from cache. If it is not found in cache, we used to
+	// proceed futher(check firstindex in cache and badger). Now since we are deleting index ranges
+	// in background after taking snapshot, we should check for last snapshot in WAL(Badger). If no
+	// snapshot is found, then we can move forward.
 	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
 	}
@@ -311,9 +309,9 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 
 // Delete all entries from [from, until), i.e. excluding until.
 // Keep the entry at the snapshot index, for simplification of logic.
-// It is the application's responsibility to not attempt to deleteUntil an index
+// It is the application's responsibility to not attempt to deleteRange an index
 // greater than raftLog.applied.
-func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, from, until uint64) error {
+func (w *DiskStorage) deleteRange(batch *badger.WriteBatch, from, until uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -431,7 +429,7 @@ func (w *DiskStorage) reset(es []raftpb.Entry) error {
 	batch := w.db.NewWriteBatch()
 	defer batch.Cancel()
 
-	if err := w.deleteFrom(batch, 0, false); err != nil {
+	if err := w.deleteFrom(batch, 0); err != nil {
 		return err
 	}
 
@@ -462,13 +460,12 @@ func (w *DiskStorage) deleteKeys(batch *badger.WriteBatch, keys []string) error 
 }
 
 // Delete entries in the range of index [from, inf).
-func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64, reverse bool) error {
+func (w *DiskStorage) deleteFrom(batch *badger.WriteBatch, from uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		start := w.EntryKey(from)
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
-		opt.Reverse = reverse
 		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
@@ -665,8 +662,10 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 		return err
 	}
 
+	// deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
+	// first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
 	// TODO: should we block here?
-	w.deleteChan <- deleteRange{first - 1, snap.Metadata.Index}
+	w.deleteRangeChan <- indexRange{first - 1, snap.Metadata.Index}
 	return nil
 }
 
@@ -729,7 +728,7 @@ func (w *DiskStorage) addEntries(batch *badger.WriteBatch, entries []raftpb.Entr
 	laste := entries[len(entries)-1].Index
 	w.cache.Store(lastKey, laste) // Update the last index cache.
 	if laste < last {
-		return w.deleteFrom(batch, laste+1, false)
+		return w.deleteFrom(batch, laste+1)
 	}
 	return nil
 }
