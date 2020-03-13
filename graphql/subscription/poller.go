@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgryski/go-farm"
+	"github.com/golang/glog"
 )
 
 // Poller is used to poll user subscription query.
@@ -78,7 +79,7 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	if !ok {
 		subscriptions = make(map[uint64]chan interface{})
 	}
-
+	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 	subscriptions[subscriptionID] = updateCh
 	p.pollRegistry[bucketID] = subscriptions
 
@@ -186,6 +187,7 @@ func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 	}
 	updateCh, ok := subscriptions[subscriptionID]
 	if ok {
+		glog.Infof("Terminating subscription for the subscription ID %d", subscriptionID)
 		close(updateCh)
 	}
 	delete(subscriptions, subscriptionID)
