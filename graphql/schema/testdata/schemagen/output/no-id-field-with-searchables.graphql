@@ -163,3 +163,11 @@ type Mutation {
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}

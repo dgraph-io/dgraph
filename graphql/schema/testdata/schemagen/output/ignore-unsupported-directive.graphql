@@ -184,3 +184,12 @@ type Mutation {
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getProduct(id: ID!): Product
+	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+}

@@ -394,3 +394,18 @@ type Mutation {
 	updateStarship(input: UpdateStarshipInput!): UpdateStarshipPayload
 	deleteStarship(filter: StarshipFilter!): DeleteStarshipPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getCharacter(id: ID!): Character
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+	getDroid(id: ID!): Droid
+	queryDroid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
+	getStarship(id: ID!): Starship
+	queryStarship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
+}

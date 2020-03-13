@@ -105,3 +105,23 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 	i, err := w.Write(js)
 	return int64(i), err
 }
+
+// Output returns json interface of the response
+func (r *Response) Output() interface{} {
+	if r == nil {
+		return struct {
+			Errors json.RawMessage `json:"errors,omitempty"`
+			Data   json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
+			Data:   []byte("null"),
+		}
+	}
+	return struct {
+		Errors []*x.GqlError   `json:"errors,omitempty"`
+		Data   json.RawMessage `json:"data,omitempty"`
+	}{
+		Errors: r.Errors,
+		Data:   r.Data.Bytes(),
+	}
+}
