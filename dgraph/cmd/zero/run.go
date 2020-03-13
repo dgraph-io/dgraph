@@ -27,6 +27,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/golang/glog"
+	"github.com/spf13/cobra"
 	"go.opencensus.io/plugin/ocgrpc"
 	otrace "go.opencensus.io/trace"
 	"go.opencensus.io/zpages"
@@ -39,8 +41,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/spf13/cobra"
 )
 
 type options struct {
@@ -52,6 +52,7 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
+	LudicrousMode     bool
 }
 
 var opts options
@@ -169,10 +170,7 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
-	}
-
-	x.WorkerConfig = x.WorkerOptions{
-		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
+		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {

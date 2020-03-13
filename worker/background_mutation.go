@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 Dgraph Labs, Inc. and Contributors
+ * Copyright 2016-2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,18 +33,18 @@ type subMutation struct {
 	startTs uint64
 }
 
-type Executor struct {
+type executor struct {
 	sync.RWMutex
 	predChan map[string]chan *subMutation
 }
 
-func newExecutor() *Executor {
-	return &Executor{
+func newExecutor() *executor {
+	return &executor{
 		predChan: make(map[string]chan *subMutation),
 	}
 }
 
-func (e *Executor) processMutationCh(ch chan *subMutation) {
+func (e *executor) processMutationCh(ch chan *subMutation) {
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
 		select {
@@ -53,33 +53,33 @@ func (e *Executor) processMutationCh(ch chan *subMutation) {
 			glog.Infof("Ignoring further unfinished mutations")
 			return
 		default:
-
 		}
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
-				if err == nil {
+				switch {
+				case err == nil:
 					break
-				}
-				if err != posting.ErrRetry {
-					glog.Errorf("Error while mutating: %+v", err)
+				case err != posting.ErrRetry:
+					glog.Errorf("Error while mutating: %v", err)
 					break
+				default:
 				}
 			}
 		}
 		ptxn.Update()
 		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
-			glog.Errorf("Error while commiting to disk: %+v", err)
+			glog.Errorf("Error while commiting to disk: %v", err)
 		}
 		// TODO(Animesh): We might not need this wait.
 		if err := writer.Wait(); err != nil {
-			glog.Errorf("Error while waiting for writes: %+v", err)
+			glog.Errorf("Error while waiting for writes: %v", err)
 		}
 	}
 }
 
-func (e *Executor) getChannel(pred string) (ch chan *subMutation) {
+func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	e.RLock()
 	ch, ok := e.predChan[pred]
 	e.RUnlock()
@@ -89,19 +89,18 @@ func (e *Executor) getChannel(pred string) (ch chan *subMutation) {
 
 	// Create a new channel for `pred`.
 	e.Lock()
+	defer e.Unlock()
 	ch, ok = e.predChan[pred]
 	if ok {
-		e.Unlock()
 		return ch
 	}
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
-	e.Unlock()
 	go e.processMutationCh(ch)
 	return ch
 }
 
-func (e *Executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
 	payloadMap := make(map[string]*subMutation)
 
 	for _, edge := range edges {
