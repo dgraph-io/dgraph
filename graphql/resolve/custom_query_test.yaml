@@ -2,7 +2,7 @@
   name: "custom GET query returning users"
   gqlquery: |
     query {
-      myFavoriteMovies {
+      myFavoriteMovies(id: "0x1", name: "Michael") {
         id
         name
         director {
@@ -30,6 +30,8 @@
         }
       ]
     }
+  url: http://myapi.com/favMovies/0x1?name=Michael&num=
+  method: GET
   resolvedresponse: |
     {
       "myFavoriteMovies": [
@@ -55,7 +57,7 @@
   name: "custom GET query returning users one of which becomes null"
   gqlquery: |
     query {
-      myFavoriteMovies {
+      myFavoriteMovies(id: "0x1", name: "Michael") {
         id
         name
         director {
@@ -82,6 +84,54 @@
         }
       ]
     }
+  url: http://myapi.com/favMovies/0x1?name=Michael&num=
+  method: GET
+  resolvedresponse: |
+    {
+      "myFavoriteMovies": [
+        null,
+        {
+          "id": "0x3",
+          "name": "Star Trek",
+          "director": []
+        }
+      ]
+    }
+
+-
+  name: "custom GET query gets URL filled from GraphQL variables"
+  gqlquery: |
+    query users($id: ID!) {
+      myFavoriteMovies(id: $id, name: "Michael", num: 10) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  variables: { "id": "0x9" }
+  httpresponse: |
+    {
+      "myFavoriteMovies": [
+        {
+          "id": "0x1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek"
+        }
+      ]
+    }
+  url: http://myapi.com/favMovies/0x9?name=Michael&num=10
+  method: GET
   resolvedresponse: |
     {
       "myFavoriteMovies": [

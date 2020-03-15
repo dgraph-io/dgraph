@@ -74,8 +74,11 @@ func TestQueryRewriting(t *testing.T) {
 type HTTPRewritingCase struct {
 	Name             string
 	GQLQuery         string
+	Variables        map[string]interface{}
 	HTTPResponse     string
 	ResolvedResponse string
+	Method           string
+	URL              string
 }
 
 // RoundTripFunc .
@@ -93,12 +96,14 @@ func NewTestClient(fn RoundTripFunc) *http.Client {
 	}
 }
 
-func newClient(expectedResponse string) *http.Client {
+func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 	return NewTestClient(func(req *http.Request) *http.Response {
+		require.Equal(t, hrc.Method, req.Method)
+		require.Equal(t, hrc.URL, req.URL.String())
 		return &http.Response{
 			StatusCode: 200,
 			// Send response to be tested
-			Body: ioutil.NopCloser(bytes.NewBufferString(expectedResponse)),
+			Body: ioutil.NopCloser(bytes.NewBufferString(hrc.HTTPResponse)),
 			// Must be set to non-nil value or it panics
 			Header: make(http.Header),
 		}
@@ -119,12 +124,13 @@ func TestCustomHTTPQuery(t *testing.T) {
 		t.Run(tcase.Name, func(t *testing.T) {
 			op, err := gqlSchema.Operation(
 				&schema.Request{
-					Query: tcase.GQLQuery,
+					Query:     tcase.GQLQuery,
+					Variables: tcase.Variables,
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			client := newClient(tcase.HTTPResponse)
+			client := newClient(t, tcase)
 			resolver := NewHTTPResolver(client, nil, nil, StdQueryCompletion())
 			resolved := resolver.Resolve(context.Background(), gqlQuery)
 			res := `{` + string(resolved.Data) + `}`

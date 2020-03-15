@@ -113,8 +113,8 @@ type User @secret(field: "pwd") {
 }
 
 type Query {
-        myFavoriteMovies: [Movie] @custom(http: {
-                url: "http://myapi.com/favMovies",
+        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+                url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
                 method: "GET"
         })
 }

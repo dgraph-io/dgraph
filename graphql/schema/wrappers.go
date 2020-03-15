@@ -812,6 +812,16 @@ func (q *query) HTTPResolver() HTTPResolverConfig {
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
+
+	argMap := q.field.ArgumentMap(q.op.vars)
+	for _, arg := range query.Arguments {
+		val := argMap[arg.Name]
+		if val == nil {
+			// Instead of replacing value to nil, we replace it with an empty string.
+			val = ""
+		}
+		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, fmt.Sprintf("%v", val))
+	}
 	return rc
 }
 

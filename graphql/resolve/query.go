@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"io/ioutil"
 	"net/http"
@@ -163,9 +164,13 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 
 func (hr *httpResolver) rewriteAndExecute(
 	ctx context.Context, query schema.Query) ([]byte, error) {
-
 	hrc := query.HTTPResolver()
-	resp, err := hr.Get(hrc.URL)
+	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := hr.Do(req)
 	if err != nil {
 		return nil, err
 	}
