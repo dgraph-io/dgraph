@@ -62,7 +62,8 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
-	AuthRule(name string) *AuthContainer
+	AuthTypeRules(typeName string) *AuthContainer
+	AuthFieldRules(typeName, fieldName string) *AuthContainer
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -165,7 +166,7 @@ type schema struct {
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
 	// Map from typename to auth rules
-	authRules map[string]*AuthContainer
+	authRules map[string]*TypeAuth
 }
 
 type operation struct {
@@ -216,8 +217,12 @@ func (s *schema) Mutations(t MutationType) []string {
 	return result
 }
 
-func (s *schema) AuthRule(name string) *AuthContainer {
-	return s.authRules[name]
+func (s *schema) AuthTypeRules(typeName string) *AuthContainer {
+	return s.authRules[typeName].rules
+}
+
+func (s *schema) AuthFieldRules(typeName, fieldName string) *AuthContainer {
+	return s.authRules[typeName].fields[fieldName]
 }
 
 func (o *operation) IsQuery() bool {
@@ -639,8 +644,13 @@ func (p *AuthParser) parseAuthDirective(directive map[string]interface{}) *AuthC
 	return &container
 }
 
-func authRules(s *ast.Schema) map[string]*AuthContainer {
-	authRules := make(map[string]*AuthContainer)
+type TypeAuth struct {
+	rules  *AuthContainer
+	fields map[string]*AuthContainer
+}
+
+func authRules(s *ast.Schema) map[string]*TypeAuth {
+	authRules := make(map[string]*TypeAuth)
 	var emptyMap map[string]interface{}
 	var p AuthParser
 
@@ -648,13 +658,21 @@ func authRules(s *ast.Schema) map[string]*AuthContainer {
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
-		for _, directive := range typ.Directives {
-			if directive.Name != "auth" {
-				continue
-			}
+		auth := typ.Directives.ForName("auth")
+		p.currentTyp = typ
+		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
 
-			p.currentTyp = typ
-			authRules[name] = p.parseAuthDirective(directive.ArgumentMap(emptyMap))
+		if auth != nil {
+			authRules[name].rules = p.parseAuthDirective(auth.ArgumentMap(emptyMap))
+
+		}
+
+		for _, field := range typ.Fields {
+			auth := field.Directives.ForName("auth")
+			if auth != nil {
+				authRules[name].fields[field.Name] =
+					p.parseAuthDirective(auth.ArgumentMap(emptyMap))
+			}
 		}
 	}
 

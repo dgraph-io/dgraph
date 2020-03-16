@@ -353,8 +353,15 @@ type Todo @auth(
     title: String
     text: String
     isPublic: Boolean
+    dateCompleted: String @auth(
+        add: { rule: "DENY" },
+        update: { rule: "filter: { dateCompleted: { eq: null } })" }
+    )
     sharedWith: [User]
     owner: User
+    somethingPrivate: String @auth(
+        query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
+    )
 }
 
 type User @auth(
@@ -462,12 +469,45 @@ type User @auth(
 		Delete: &RuleNode{Rule: isAdmin},
 	}
 
-	require.Equal(t, gqlSchema.AuthRule("Todo"), TodoAuth)
+	DateCompleted := &AuthContainer{
+		Add: &RuleNode{
+			Rule: &RuleAst{
+				name: "DENY",
+				typ:  Constant,
+			},
+		},
+		Update: &RuleNode{
+			Rule: &RuleAst{
+				name: "filter",
+				typ:  Op,
+				value: &RuleAst{
+					name: "dateCompleted",
+					typ:  GqlTyp,
+					value: &RuleAst{
+						name: "eq",
+						typ:  Op,
+						value: &RuleAst{
+							name: "null",
+							typ:  Constant,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	require.Equal(t, gqlSchema.AuthTypeRules("Todo"), TodoAuth)
 
 	UserAuth := &AuthContainer{
 		Add:    &RuleNode{Rule: isAddBot},
 		Update: &RuleNode{Rule: ownerRule.value},
 	}
 
-	require.Equal(t, gqlSchema.AuthRule("User"), UserAuth)
+	require.Equal(t, gqlSchema.AuthTypeRules("User"), UserAuth)
+
+	require.Equal(t, gqlSchema.AuthFieldRules("Todo", "somethingPrivate"),
+		&AuthContainer{Query: &RuleNode{Rule: ownerRule}})
+
+	require.Equal(t, gqlSchema.AuthFieldRules("Todo", "dateCompleted"),
+		DateCompleted)
 }
