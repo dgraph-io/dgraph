@@ -75,12 +75,8 @@ type node struct {
 type operation struct {
 	// id of the operation.
 	id int
-	// ctx is the context that should be used by this operation.
-	ctx context.Context
-	// cancel is used to signal that task should be cancelled.
-	cancel context.CancelFunc
-	// done is used to wait for the task until it is either cancelled or completed.
-	done chan struct{}
+	// closer is used to signal and wait for the operation to finish/cancel.
+	closer *y.Closer
 }
 
 const (
@@ -104,8 +100,7 @@ func (n *node) startTask(id int) (*operation, error) {
 	case opSnapshot, opIndexing:
 		if op, has := n.ops[opRollup]; has {
 			glog.Info("Found a rollup going on. Cancelling rollup!")
-			op.cancel()
-			<-op.done
+			op.closer.SignalAndWait()
 			glog.Info("Rollup cancelled.")
 		} else if len(n.ops) > 0 {
 			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
@@ -115,8 +110,7 @@ func (n *node) startTask(id int) (*operation, error) {
 		return nil, nil
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	op := &operation{id: id, ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	op := &operation{id: id, closer: y.NewCloser(1)}
 	n.ops[id] = op
 	glog.Infof("Operation started with id: %d", id)
 	return op, nil
@@ -125,15 +119,11 @@ func (n *node) startTask(id int) (*operation, error) {
 // stopTask will delete the entry from the map that keep tracks of the ops
 // and then signal that tasks has been cancelled/completed for waiting task.
 func (n *node) stopTask(op *operation) {
-	// Signal that task is completed or cancelled.
-	op.cancel()
-	// Needs to be done before we acquire the lock to avoid deadlock.
-	close(op.done)
+	op.closer.Done()
 
 	n.opsLock.Lock()
 	delete(n.ops, op.id)
 	n.opsLock.Unlock()
-
 	glog.Infof("Operation completed with id: %d", op.id)
 }
 
@@ -144,7 +134,7 @@ func (n *node) waitForTask(id int) {
 	if !ok {
 		return
 	}
-	<-op.done
+	op.closer.Wait()
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -1222,8 +1212,16 @@ func (n *node) rollupLists(readTs uint64) error {
 	stream.Send = func(list *bpb.KVList) error {
 		return writer.Write(list)
 	}
-
-	if err := stream.Orchestrate(op.ctx); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-op.closer.HasBeenClosed():
+			cancel()
+		}
+	}()
+	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
 	if err := writer.Flush(); err != nil {

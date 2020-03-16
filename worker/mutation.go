@@ -154,7 +154,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		// in case background indexing is running, we should call it here again.
 		defer stopIndexing(op)
 
-		wrtCtx := schema.GetWriteContext(op.ctx)
+		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
