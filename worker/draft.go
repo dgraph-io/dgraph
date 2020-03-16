@@ -1172,7 +1172,6 @@ func (n *node) calcTabletSizes(readTs uint64) error {
 		atomic.AddInt64(size, delta)
 	}
 
-	writer := posting.NewTxnWriter(pstore)
 	stream := pstore.NewStreamAt(readTs)
 	stream.LogPrefix = "Tablet Size Calculation"
 	stream.Prefix = []byte{x.DefaultPrefix}
@@ -1197,13 +1196,6 @@ func (n *node) calcTabletSizes(readTs uint64) error {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-op.closer.HasBeenClosed():
-			cancel()
-		}
-	}()
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
