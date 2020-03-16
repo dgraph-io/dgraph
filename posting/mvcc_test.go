@@ -31,6 +31,8 @@ func TestRollupTimestamp(t *testing.T) {
 	addEdgeToUID(t, "rollup", 1, 3, 3, 4)
 	addEdgeToUID(t, "rollup", 1, 4, 5, 6)
 
+	// Delete the cached posting list.
+	lCache.Del(key)
 	l, err := GetNoStore(key)
 	require.NoError(t, err)
 
@@ -46,6 +48,8 @@ func TestRollupTimestamp(t *testing.T) {
 	}
 	addMutation(t, l, edge, Del, 9, 10, false)
 
+	// Delete the cached posting list.
+	lCache.Del(key)
 	nl, err := getNew(key, pstore)
 	require.NoError(t, err)
 
@@ -64,6 +68,7 @@ func TestPostingListRead(t *testing.T) {
 	key := x.DataKey("emptypl", 1)
 
 	assertLength := func(readTs, sz int) {
+		lCache.Del(key)
 		nl, err := getNew(key, pstore)
 		require.NoError(t, err)
 		uidList, err := nl.Uids(ListOptions{ReadTs: uint64(readTs)})

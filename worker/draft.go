@@ -164,6 +164,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			return err
 		}
 
+		// Clear all the cache.
+		posting.ResetCache()
+
 		if groups().groupId() == 1 {
 			initialSchema := schema.InitialSchema()
 			for _, s := range initialSchema {
@@ -215,6 +218,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
 			return err
+		}
+
+		if len(proposal.Mutations.Schema) > 0 {
+			// Clear cache If there is a schema update. Because, index rebuilder will invalidate
+			// the state.
+			posting.ResetCache()
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -590,6 +599,12 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
 	}
 
+	for _, status := range delta.Txns {
+		txn := posting.Oracle().GetTxn(status.StartTs)
+		// Clear all the cached list.
+		txn.RemoveCachedKeys()
+	}
+	//posting.WaitForCache()
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
 	return nil
@@ -1067,6 +1082,9 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
+	// HACK: Let's avoid doing any rollups for now.
+	return nil
+
 	writer := posting.NewTxnWriter(pstore)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
@@ -1119,6 +1137,10 @@ func (n *node) rollupLists(readTs uint64) error {
 		}
 		atomic.AddUint64(&numKeys, 1)
 		kvs, err := l.Rollup()
+		// delete the list while rollup.
+
+		// NOTE: This is not the right time to remove the cache.
+		// posting.RemoveCacheFor(key)
 
 		// If there are multiple keys, the posting list was split into multiple
 		// parts. The key of the first part is the right key to use for tablet
@@ -1126,11 +1148,14 @@ func (n *node) rollupLists(readTs uint64) error {
 		for _, kv := range kvs {
 			addTo(kvs[0].Key, int64(kv.Size()))
 		}
-
 		return &bpb.KVList{Kv: kvs}, err
 	}
 	stream.Send = func(list *bpb.KVList) error {
-		return writer.Write(list)
+		err := writer.Write(list)
+		for _, kv := range list.Kv {
+			posting.RemoveCacheFor(kv.Key)
+		}
+		return err
 	}
 	if err := stream.Orchestrate(context.Background()); err != nil {
 		return err

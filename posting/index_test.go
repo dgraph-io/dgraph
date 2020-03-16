@@ -252,7 +252,10 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      pb.DirectedEdge_SET,
 	}
-	l, err := GetNoStore(x.DataKey(attr, src))
+	key := x.DataKey(attr, src)
+	// Delete the cached posting list.
+	lCache.Del(key)
+	l, err := GetNoStore(key)
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)

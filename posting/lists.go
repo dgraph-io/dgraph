@@ -130,13 +130,68 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore *badger.DB
 	closer *y.Closer
+	lCache *SampleCache
 )
+
+type SampleCache struct {
+	sync.Mutex
+	cache map[string]*List
+}
+
+func (c *SampleCache) Get(key string) *List {
+	c.Lock()
+	defer c.Unlock()
+	return c.cache[key]
+}
+func (c *SampleCache) Del(key string) {
+	c.Lock()
+	defer c.Unlock()
+	delete(c.cache, key)
+}
+
+func (c *SampleCache) Set(key string, l *List) {
+	c.Lock()
+	defer c.Unlock()
+	if prev, ok := c.cache[key]; ok && prev.maxVersion() > l.maxVersion() {
+		glog.Infof("Would not set the key. Prev: %d. Now: %d\n", prev.maxVersion(), l.maxVersion())
+		return
+	}
+	c.cache[key] = l
+}
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
+
+	// Initialize cache.
+	// /var err error
+	lCache = &SampleCache{
+		cache: make(map[string]*List),
+	}
+	// x.Check(err)
+	// go func() {
+	// 	m := lCache.Metrics
+
+	// 	ticker := time.NewTicker(5 * time.Second)
+	// 	for range ticker.C {
+	// 		ostats.Record(context.Background(),
+	// 			x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
+	// 			x.CacheAddedKeys.M(int64(m.KeysAdded())),
+	// 			x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
+	// 			x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
+	// 			x.CacheHits.M(int64(m.Hits())),
+	// 			x.CacheHitRatio.M(m.Ratio()),
+	// 			x.CacheMiss.M(int64(m.Misses())),
+	// 			x.CacheAddedBytes.M(int64(m.CostAdded())),
+	// 			x.CacheEvictedBytes.M(int64(m.CostEvicted())),
+	// 			x.CacheDroppedSet.M(int64(m.SetsDropped())),
+	// 			x.CacheRejectedSet.M(int64(m.SetsRejected())),
+	// 			x.CacheDroppedGets.M(int64(m.GetsDropped())),
+	// 			x.CacheKeptGets.M(int64(m.GetsKept())))
+	// 	}
+	// }()
 }
 
 // Cleanup waits until the closer has finished processing.
