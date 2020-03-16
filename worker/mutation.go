@@ -135,24 +135,24 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
-	stopIndexing := func() {
+	stopIndexing := func(op *operation) {
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
-				gr.Node.stopTask(opIndexing)
+				gr.Node.stopTask(op)
 			}
 		}
 	}
 
 	// Ensure that rollup is not running.
-	wrtCtx, err := gr.Node.startTask(opIndexing)
+	op, err := gr.Node.startTask(opIndexing)
 	if err != nil {
 		return err
 	}
-	defer stopIndexing()
+	defer stopIndexing(op)
 
 	// wrtCtx is used by the background tasks.
-	wrtCtx = schema.GetWriteContext(wrtCtx)
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
+		wrtCtx := schema.GetWriteContext(op.ctx)
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	wg.Add(1)
 	defer wg.Done()
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
-		defer stopIndexing()
+		defer stopIndexing(op)
 
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
