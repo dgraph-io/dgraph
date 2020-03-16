@@ -130,9 +130,9 @@ func (fj *fastJsonNode) IsEmpty() bool {
 }
 
 var (
-	boolTrueBytes    = []byte("true")
-	boolFalseBytes   = []byte("false")
-	emptyStringBytes = []byte(`""`)
+	boolTrue    = []byte("true")
+	boolFalse   = []byte("false")
+	emptyString = []byte(`""`)
 )
 
 func valToBytes(v types.Val) ([]byte, error) {
@@ -142,24 +142,29 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
+		// In types.Convert(), we always convert to int64 for IntID type. fmt.Sprintf is slow
+		// and hence we are using strconv.FormatInt() here. Since int64 and int are most common int
+		// types we are using FormatInt for those.
 		switch num := v.Value.(type) {
-		case int64: // In types.Convert(), we always convert to int64 in types.Convert().
-			return []byte(strconv.Itoa(int(num))), nil
+		case int64:
+			return []byte(strconv.FormatInt(num, 10)), nil
+		case int:
+			return []byte(strconv.FormatInt(int64(num), 10)), nil
 		default:
-			return []byte(strconv.Itoa(num.(int))), nil
+			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
-			return boolTrueBytes, nil
+			return boolTrue, nil
 		}
-		return boolFalseBytes, nil
+		return boolFalse, nil
 	case types.DateTimeID:
 		// Return empty string instead of zero-time value string - issue#3166
 		t := v.Value.(time.Time)
 		if t.IsZero() {
-			return emptyStringBytes, nil
+			return emptyString, nil
 		}
 		return t.MarshalJSON()
 	case types.GeoID:
