@@ -21,22 +21,22 @@ import (
 	"context"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -117,6 +117,17 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
+func undoSchemaUpdate(predicate string) {
+	maxRetries := 10
+	loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+		return schema.Load(predicate)
+	})
+
+	if loadErr != nil {
+		glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+	}
+}
+
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
 	// Wait until schema modification for all predicates is complete. There cannot be two
 	// background tasks running as this is a race condition. We typically won't propose an
@@ -131,15 +142,29 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// not indexing, it would accept and propose the request.
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
-	for {
+	gr.Node.waitForTask(opIndexing)
+
+	// done is used to ensure that we only stop the indexing task once.
+	var done uint32
+	stopIndexing := func(op *operation) {
 		if !schema.State().IndexingInProgress() {
-			break
+			if atomic.CompareAndSwapUint32(&done, 0, 1) {
+				gr.Node.stopTask(op)
+			}
 		}
-		glog.Infoln("waiting for indexing to complete")
-		time.Sleep(time.Second * 2)
 	}
 
+	// Ensure that rollup is not running.
+	op, err := gr.Node.startTask(opIndexing)
+	if err != nil {
+		return err
+	}
+	defer stopIndexing(op)
+
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
+		// in case background indexing is running, we should call it here again.
+		defer stopIndexing(op)
+
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
@@ -153,7 +178,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	}
 
 	// This wg allows waiting until setup for all the predicates is complete
-	// befor running buildIndexes for any of those predicates.
+	// before running buildIndexes for any of those predicates.
 	var wg sync.WaitGroup
 	wg.Add(1)
 	defer wg.Done()
@@ -167,15 +192,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		// undo schema changes in case re-indexing fails.
 		if err := buildIndexesHelper(update, rebuild); err != nil {
 			glog.Errorf("error in building indexes, aborting :: %v\n", err)
-
-			maxRetries := 10
-			loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-				return schema.Load(update.Predicate)
-			})
-
-			if loadErr != nil {
-				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-			}
+			undoSchemaUpdate(update.Predicate)
 		}
 	}
 
@@ -204,10 +221,15 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		schema.State().SetMutSchema(su.Predicate, su)
 
 		// TODO(Aman): If we return an error, we may not have right schema reflected.
-		if err := rebuild.DropIndexes(ctx); err != nil {
-			return err
+		setup := func() error {
+			if err := rebuild.DropIndexes(ctx); err != nil {
+				return err
+			}
+			return rebuild.BuildData(ctx)
 		}
-		if err := rebuild.BuildData(ctx); err != nil {
+		if err := setup(); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(su.Predicate)
 			return err
 		}
 

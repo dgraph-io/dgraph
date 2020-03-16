@@ -77,6 +77,17 @@ type List struct {
 	maxTs       uint64 // max commit timestamp seen for this list.
 }
 
+// NewList returns a new list with an immutable layer set to plist and the
+// timestamp of the immutable layer set to minTs.
+func NewList(key []byte, plist *pb.PostingList, minTs uint64) *List {
+	return &List{
+		key:         key,
+		plist:       plist,
+		mutationMap: make(map[uint64]*pb.PostingList),
+		minTs:       minTs,
+	}
+}
+
 func (l *List) maxVersion() uint64 {
 	l.RLock()
 	defer l.RUnlock()
@@ -818,7 +829,7 @@ func (out *rollupOutput) marshalPostingListPart(
 	baseKey []byte, startUid uint64, plist *pb.PostingList) (*bpb.KV, error) {
 	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
-	key, err := x.GetSplitKey(baseKey, startUid)
+	key, err := x.SplitKey(baseKey, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,
 			"cannot generate split key for list with base key %s and start UID %d",
@@ -1235,7 +1246,6 @@ func (l *List) findPosting(readTs uint64, uid uint64) (found bool, pos *pb.Posti
 // Facets gives facets for the posting representing value.
 func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	listType bool) ([]*pb.Facets, error) {
-
 	l.RLock()
 	defer l.RUnlock()
 
@@ -1261,7 +1271,7 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 }
 
 func (l *List) readListPart(startUid uint64) (*pb.PostingList, error) {
-	key, err := x.GetSplitKey(l.key, startUid)
+	key, err := x.SplitKey(l.key, startUid)
 	if err != nil {
 		return nil, errors.Wrapf(err,
 			"cannot generate key for list with base key %s and start UID %d",

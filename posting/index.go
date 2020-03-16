@@ -479,7 +479,7 @@ func deleteTokensFor(attr, tokenizerName string, hasLang bool) error {
 	// Also delete all the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
 	prefix = pk.IndexPrefix()
-	prefix[len(prefix)-1] = x.ByteSplit
+	prefix[0] = x.ByteSplit
 	prefix = append(prefix, tokenizer.Identifier())
 	return pstore.DropPrefix(prefix)
 }
@@ -494,7 +494,7 @@ func deleteReverseEdges(attr string) error {
 	// Also delete all the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
 	prefix = pk.ReversePrefix()
-	prefix[len(prefix)-1] = x.ByteSplit
+	prefix[0] = x.ByteSplit
 
 	return pstore.DropPrefix(prefix)
 }
@@ -511,13 +511,14 @@ func deleteCountIndex(attr string) error {
 	// Also delete all the parts of any list that has been split into multiple parts.
 	// Such keys have a different prefix (the last byte is set to 1).
 	prefix := pk.CountPrefix(false)
-	prefix[len(prefix)-1] = x.ByteSplit
+	prefix[0] = x.ByteSplit
 	if err := pstore.DropPrefix(prefix); err != nil {
 		return err
 	}
 
+	// Delete parts for count-reverse index.
 	prefix = pk.CountPrefix(true)
-	prefix[len(prefix)-1] = x.ByteSplit
+	prefix[0] = x.ByteSplit
 	return pstore.DropPrefix(prefix)
 }
 

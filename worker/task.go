@@ -915,6 +915,11 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 		return nil, errors.Errorf("Language tags can only be used with predicates of string type"+
 			" having @lang directive in schema. Got: [%v]", attr)
 	}
+	if len(q.Langs) == 1 && q.Langs[0] == "*" {
+		// Reset the Langs fields. The ExpandAll field is set to true already so there's no
+		// more need to store the star value in this field.
+		q.Langs = nil
+	}
 
 	typ, err := schema.State().TypeOf(attr)
 	if err != nil {

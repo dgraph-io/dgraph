@@ -253,6 +253,8 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightSquare)
 		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
+		case r == lsThan:
+			return lexIRIRef
 		case isNameBegin(r):
 			return lexArgName
 		case r == '#':
