@@ -74,12 +74,11 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 }
 
 func processQueryWithNamespace(ctx context.Context, t *testing.T, query string, namespace string) (string, error) {
-	txn := client.NewTxn()
+	txn := client.NewNamespacedTxn(namespace)
 	defer txn.Discard(ctx)
 
 	res, err := txn.Do(ctx, &api.Request{
 		Query:     query,
-		Namespace: namespace,
 	})
 
 	response := map[string]interface{}{}
@@ -91,12 +90,11 @@ func processQueryWithNamespace(ctx context.Context, t *testing.T, query string, 
 }
 
 func getSchemaWithNamespace(ctx context.Context, t *testing.T, query string, namespace string) (string, error) {
-	txn := client.NewTxn()
+	txn := client.NewNamespacedTxn(namespace)
 	defer txn.Discard(ctx)
 
 	res, err := txn.Do(ctx, &api.Request{
 		Query:     query,
-		Namespace: namespace,
 	})
 	fmt.Println(res.Json)
 	response := map[string]interface{}{}
@@ -142,11 +140,10 @@ func processQueryWithVars(t *testing.T, query string,
 }
 
 func addTriplesToCluster(triples string, namespace string) error {
-	txn := client.NewTxn()
+	txn := client.NewNamespacedTxn(namespace)
 	ctx := context.Background()
 	defer txn.Discard(ctx)
 	_, err := txn.Do(ctx, &api.Request{
-		Namespace: namespace,
 		Mutations: []*api.Mutation{&api.Mutation{
 			SetNquads: []byte(triples),
 		}},
@@ -172,7 +169,7 @@ func deleteTriplesInCluster(triples string) {
 }
 
 func deleteTriplesInClusterWithNamespace(triples string, namespace string) {
-	txn := client.NewTxn()
+	txn := client.NewNamespacedTxn(namespace)
 	ctx := context.Background()
 	defer txn.Discard(ctx)
 
