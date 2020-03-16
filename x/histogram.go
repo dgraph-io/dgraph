@@ -15,6 +15,7 @@
 package x
 
 import (
+	"errors"
 	"sync"
 	"time"
 
@@ -41,7 +42,8 @@ type slidingHistogram struct {
 // details.
 func newSlidingHistogram(duration time.Duration, maxVal int64, sigFigs int) *slidingHistogram {
 	if duration <= 0 {
-		panic("cannot create a sliding histogram with nonpositive duration")
+		Panic(errors.New(
+			"cannot create a sliding histogram with nonpositive duration"))
 	}
 	return &slidingHistogram{
 		nextT:    time.Now(),

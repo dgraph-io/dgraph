@@ -173,9 +173,9 @@ type predicateSet map[string]struct{}
 // are passed as arguments.
 type loadFn func(reader io.Reader, groupId int, preds predicateSet) (uint64, error)
 
-// Load will scan location l for backup files in the given backup series and load them
+// LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func Load(location, backupId string, fn loadFn) LoadResult {
+func LoadBackup(location, backupId string, fn loadFn) LoadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
 		return LoadResult{0, 0, err}
@@ -190,8 +190,8 @@ func Load(location, backupId string, fn loadFn) LoadResult {
 	return h.Load(uri, backupId, fn)
 }
 
-// ListManifests scans location l for backup files and returns the list of manifests.
-func ListManifests(l string) (map[string]*Manifest, error) {
+// ListBackupManifests scans location l for backup files and returns the list of manifests.
+func ListBackupManifests(l string) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err

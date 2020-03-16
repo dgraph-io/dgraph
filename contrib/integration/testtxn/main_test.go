@@ -371,6 +371,9 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}
+	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
+		log.Fatal(err)
+	}
 
 	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
@@ -424,9 +427,11 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}
+	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
+		log.Fatal(err)
+	}
 
 	txn := s.dg.NewTxn()
-
 	mu := &api.Mutation{
 		CommitNow: true,
 		SetJson:   []byte(`{"name": "Manish"}`),
@@ -933,8 +938,7 @@ func TestTxnDiscardBeforeCommit(t *testing.T) {
 }
 
 func alterSchema(dg *dgo.Dgraph, schema string) {
-	op := api.Operation{}
-	op.Schema = schema
-	err := dg.Alter(ctxb, &op)
-	x.Check(err)
+	op := api.Operation{Schema: schema}
+	x.Check(dg.Alter(ctxb, &op))
+	x.Check(testutil.WaitForAlter(ctxb, dg, schema))
 }

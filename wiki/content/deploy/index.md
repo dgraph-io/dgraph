@@ -63,7 +63,7 @@ curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
 {{% notice "note" %}}
-Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#export-database) before running this script and reimported to the new cluster running the updated version.
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#exporting-database) before running this script and reimported to the new cluster running the updated version.
 {{% /notice %}}
 
 ### Manual download [optional]
@@ -1660,6 +1660,36 @@ enabled the browser will prompt you for a client certificate to use. Select the
 certificate you've just installed in the step above and queries/mutations will
 succeed.
 
+### Using Curl with Client authentication
+
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.
+
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default),
+use the option `--cacert`. For instance (for an export request):
+
+```
+curl --cacert ./tls/ca.crt https://localhost:8080/admin/export
+```
+
+If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`,
+in addition to the `--cacert` option, also use the `--cert` and `--key` options.
+For instance (for an export request):
+
+``` 
+curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
+```
+
+Refer to the `curl` documentation for further information on its TLS options.
+
+### Access Data Using a Client
+
+Some examples of connecting via a [Client](/clients) when TLS is in use can be found below:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
+- [dgraph-js](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls)
+- [dgo](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/tree/master/examples/tls)
+
 ### Troubleshooting Ratel's Client authentication
 
 If you are getting errors in Ratel when server's TLS is enabled try opening
@@ -2054,7 +2084,7 @@ See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-st
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
 
-### Whitelist Admin Operations
+### Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
 You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
@@ -2065,7 +2095,7 @@ dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third R
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
 
-### Restrict Mutation Operations
+### Restricting Mutation Operations
 
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
@@ -2088,7 +2118,7 @@ you need to perform an alter operation with that predicate and its schema type.
 dgraph alpha --mutations strict
 ```
 
-### Secure Alter Operations
+### Securing Alter Operations
 
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
@@ -2122,7 +2152,7 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 {{% /notice %}}
 
 
-### Export Database
+### Exporting Database
 
 An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
@@ -2171,7 +2201,7 @@ mutation {
 
 Currently, "rdf" and "json" are the only formats supported.
 
-### Shutdown Database
+### Shutting Down Database
 
 A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
 {{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
@@ -2192,7 +2222,7 @@ mutation {
 
 This stops the Alpha on which the command is executed and not the entire cluster.
 
-### Delete database
+### Deleting database
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
 
@@ -2200,17 +2230,17 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
+* [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete,
 * Delete (maybe do an export first) the `p` and `w` directories, then
 * Restart Dgraph.
 
-### Upgrade Database
+### Upgrading Database
 
 Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps to safely export and restart.
 
-1. Start an [export]({{< relref "#export-database">}})
+1. Start an [export]({{< relref "#exporting-database">}})
 2. Ensure it is successful
-3. [Shutdown Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
 5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
 6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
