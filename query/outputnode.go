@@ -146,10 +146,8 @@ func valToBytes(v types.Val) ([]byte, error) {
 		// and hence we are using strconv.FormatInt() here. Since int64 and int are most common int
 		// types we are using FormatInt for those.
 		switch num := v.Value.(type) {
-		case int64:
+		case int64, int:
 			return []byte(strconv.FormatInt(num, 10)), nil
-		case int:
-			return []byte(strconv.FormatInt(int64(num), 10)), nil
 		default:
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
