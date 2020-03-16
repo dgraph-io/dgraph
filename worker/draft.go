@@ -127,6 +127,7 @@ func (n *node) startTask(id int) (*operation, error) {
 func (n *node) stopTask(op *operation) {
 	// Signal that task is completed or cancelled.
 	op.cancel()
+	// Needs to be done before we acquire the lock to avoid deadlock.
 	close(op.done)
 
 	n.opsLock.Lock()
