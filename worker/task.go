@@ -1989,12 +1989,15 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 }
 
 type facetsFunc struct {
-	name       string
-	key        string
-	args       []string
-	tokens     []string
-	val        types.Val
-	fnType     FuncType
+	name   string
+	key    string
+	args   []string
+	tokens []string
+	val    types.Val
+	fnType FuncType
+	// typesToVal stores converted vals of the function val for all common types. Converting
+	// function val to particular type val(check applyFacetsTree()) consumes significant amount of
+	// time. This maps helps in doing conversion only once(check preprocessFilter()).
 	typesToVal map[types.TypeID]types.Val
 }
 type facetsTree struct {
