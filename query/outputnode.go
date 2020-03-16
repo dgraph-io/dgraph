@@ -839,7 +839,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			// add value for count(uid) nodes if any.
 			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
 		default:
-			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
+			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 && pc.Params.Langs[0] != "*" {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
@@ -876,7 +876,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 					}
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
-					if lang != "" {
+					if lang != "" && lang != "*" {
 						fieldNameWithTag += "@" + lang
 					}
 					encodeAsList := pc.List && len(lang) == 0
