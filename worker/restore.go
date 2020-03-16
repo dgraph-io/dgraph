@@ -137,9 +137,12 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 					return 0, errors.Wrapf(err, "while reading backup posting list")
 				}
 				pl := posting.FromBackupPostingList(backupPl)
+				shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
 
-				if parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
-					// This key is storing part of a multi-part list. Write each individual
+				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
+					// This covers two cases.
+					// 1. The list is not big enough to be split.
+					// 2. This key is storing part of a multi-part list. Write each individual
 					// part without rolling the key first. This part is here for backwards
 					// compatibility. New backups are not affected because there was a change
 					// to roll up lists into a single one.
