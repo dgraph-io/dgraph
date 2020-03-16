@@ -92,14 +92,14 @@ func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringR
 // Health returns the information about the health of the network
 func (sm *SystemModule) Health(r *http.Request, req *EmptyRequest, res *SystemHealthResponse) error {
 	health := sm.networkAPI.Health()
-	res.Health = *health
+	res.Health = health
 	return nil
 }
 
 // NetworkState returns the network state (basic information about the host)
 func (sm *SystemModule) NetworkState(r *http.Request, req *EmptyRequest, res *SystemNetworkStateResponse) error {
 	networkState := sm.networkAPI.NetworkState()
-	res.NetworkState = *networkState
+	res.NetworkState = networkState
 	return nil
 }
 

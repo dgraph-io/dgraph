@@ -29,4 +29,8 @@ type BlockState interface {
 
 // NetworkState interface for network state methods
 //nolint:golint
-type NetworkState interface{}
+type NetworkState interface {
+	SetHealth(common.Health)
+	SetNetworkState(common.NetworkState)
+	SetPeers([]common.PeerInfo)
+}

@@ -13,8 +13,8 @@ type BlockAPI interface{}
 
 // NetworkAPI interface for network state methods
 type NetworkAPI interface {
-	Health() *common.Health
-	NetworkState() *common.NetworkState
+	Health() common.Health
+	NetworkState() common.NetworkState
 	Peers() []common.PeerInfo
 }
 

@@ -194,10 +194,7 @@ func (s *Service) Start() error {
 	}
 
 	// create network state
-	s.Network, err = NewNetworkState(db)
-	if err != nil {
-		return fmt.Errorf("cannot make network state: %s", err)
-	}
+	s.Network = NewNetworkState()
 
 	// create transaction queue
 	s.TransactionQueue = NewTransactionQueue()

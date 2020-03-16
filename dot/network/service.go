@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -30,6 +31,9 @@ import (
 	libp2pnetwork "github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 )
+
+// NetworkStateTimeout is the set time interval that we update network state
+const NetworkStateTimeout = time.Minute
 
 var _ services.Service = &Service{}
 
@@ -44,7 +48,8 @@ type Service struct {
 	syncer *syncer
 
 	// State interfaces
-	blockState BlockState
+	blockState   BlockState
+	networkState NetworkState
 
 	// Channels for inter-process communication
 	// as well as a lock for safe channel closures
@@ -77,20 +82,21 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 	}
 
 	network := &Service{
-		ctx:         ctx,
-		cfg:         cfg,
-		host:        host,
-		mdns:        newMDNS(host),
-		status:      newStatus(host),
-		gossip:      newGossip(host),
-		syncer:      newSyncer(host, cfg.BlockState),
-		blockState:  cfg.BlockState,
-		msgRec:      msgRec,
-		msgSend:     msgSend,
-		closed:      false,
-		noBootstrap: cfg.NoBootstrap,
-		noMDNS:      cfg.NoMDNS,
-		noStatus:    cfg.NoStatus,
+		ctx:          ctx,
+		cfg:          cfg,
+		host:         host,
+		mdns:         newMDNS(host),
+		status:       newStatus(host),
+		gossip:       newGossip(host),
+		syncer:       newSyncer(host, cfg.BlockState),
+		blockState:   cfg.BlockState,
+		networkState: cfg.NetworkState,
+		msgRec:       msgRec,
+		msgSend:      msgSend,
+		closed:       false,
+		noBootstrap:  cfg.NoBootstrap,
+		noMDNS:       cfg.NoMDNS,
+		noStatus:     cfg.NoStatus,
 	}
 
 	return network, err
@@ -98,6 +104,9 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 
 // Start starts the network service
 func (s *Service) Start() error {
+
+	// update network state
+	go s.updateNetworkState()
 
 	// receive messages from core service
 	go s.receiveCoreMessages()
@@ -153,6 +162,18 @@ func (s *Service) Stop() error {
 	}
 
 	return nil
+}
+
+// updateNetworkState updates the network state at the set time interval
+func (s *Service) updateNetworkState() {
+	for {
+		s.networkState.SetHealth(s.Health())
+		s.networkState.SetNetworkState(s.NetworkState())
+		s.networkState.SetPeers(s.Peers())
+
+		// how frequently we update network state
+		time.Sleep(NetworkStateTimeout)
+	}
 }
 
 // receiveCoreMessages broadcasts messages from the core service
@@ -321,8 +342,8 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 }
 
 // Health returns information about host needed for the rpc server
-func (s *Service) Health() *common.Health {
-	return &common.Health{
+func (s *Service) Health() common.Health {
+	return common.Health{
 		Peers:           s.host.peerCount(),
 		IsSyncing:       false, // TODO
 		ShouldHavePeers: !s.noBootstrap,
@@ -330,8 +351,8 @@ func (s *Service) Health() *common.Health {
 }
 
 // NetworkState returns information about host needed for the rpc server and the runtime
-func (s *Service) NetworkState() *common.NetworkState {
-	return &common.NetworkState{
+func (s *Service) NetworkState() common.NetworkState {
+	return common.NetworkState{
 		PeerID: s.host.id().String(),
 	}
 }

@@ -17,119 +17,51 @@
 package state
 
 import (
-	"fmt"
-
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
-	"github.com/ChainSafe/gossamer/lib/scale"
 )
-
-var networkPrefix = []byte("network")
-
-var healthKey = []byte("health")
-var networkStateKey = []byte("networkstate")
-var peersKey = []byte("peers")
-
-// NetworkDB stores network information in an underlying database
-type NetworkDB struct {
-	db database.Database
-}
-
-// Put appends `network` to the key and sets the key-value pair in the db
-func (networkDB *NetworkDB) Put(key, value []byte) error {
-	key = append(networkPrefix, key...)
-	return networkDB.db.Put(key, value)
-}
-
-// Get appends `network` to the key and retrieves the value from the db
-func (networkDB *NetworkDB) Get(key []byte) ([]byte, error) {
-	key = append(networkPrefix, key...)
-	return networkDB.db.Get(key)
-}
 
 // NetworkState defines fields for manipulating the state of network
 type NetworkState struct {
-	db *NetworkDB
+	Health       common.Health
+	NetworkState common.NetworkState
+	Peers        []common.PeerInfo
 }
 
-// NewNetworkDB instantiates a badgerDB instance for storing relevant BlockData
-func NewNetworkDB(db database.Database) *NetworkDB {
-	return &NetworkDB{
-		db,
-	}
-}
-
-// NewNetworkState creates NetworkState with a network database in DataDir
-func NewNetworkState(db database.Database) (*NetworkState, error) {
-	if db == nil {
-		return nil, fmt.Errorf("cannot have nil database")
-	}
-
+// NewNetworkState creates NetworkState
+func NewNetworkState() *NetworkState {
 	return &NetworkState{
-		db: NewNetworkDB(db),
-	}, nil
+		Health:       common.Health{},
+		NetworkState: common.NetworkState{},
+		Peers:        []common.PeerInfo{},
+	}
 }
 
 // GetHealth retrieves network health from the database
-func (ns *NetworkState) GetHealth() (*common.Health, error) {
-	res := new(common.Health)
-	data, err := ns.db.Get(healthKey)
-	if err != nil {
-		return res, err
-	}
-	err = scale.DecodePtr(data, res)
-	return res, err
+func (ns *NetworkState) GetHealth() common.Health {
+	return ns.Health
 }
 
 // SetHealth sets network health in the database
-func (ns *NetworkState) SetHealth(health *common.Health) error {
-	enc, err := scale.Encode(health)
-	if err != nil {
-		return err
-	}
-	err = ns.db.Put(healthKey, enc)
-	return err
+func (ns *NetworkState) SetHealth(health common.Health) {
+	ns.Health = health
 }
 
 // GetNetworkState retrieves network state from the database
-func (ns *NetworkState) GetNetworkState() (*common.NetworkState, error) {
-	res := new(common.NetworkState)
-	data, err := ns.db.Get(networkStateKey)
-	if err != nil {
-		return res, err
-	}
-	err = scale.DecodePtr(data, res)
-	return res, err
+func (ns *NetworkState) GetNetworkState() common.NetworkState {
+	return ns.NetworkState
 }
 
 // SetNetworkState sets network state in the database
-func (ns *NetworkState) SetNetworkState(networkState *common.NetworkState) error {
-	enc, err := scale.Encode(networkState)
-	if err != nil {
-		return err
-	}
-	err = ns.db.Put(networkStateKey, enc)
-	return err
+func (ns *NetworkState) SetNetworkState(networkState common.NetworkState) {
+	ns.NetworkState = networkState
 }
 
 // GetPeers retrieves network state from the database
-func (ns *NetworkState) GetPeers() ([]common.PeerInfo, error) {
-	peerInfoType := new([]common.PeerInfo)
-	data, err := ns.db.Get(peersKey)
-	if err != nil {
-		return *peerInfoType, err
-	}
-
-	output, err := scale.Decode(data, *peerInfoType)
-	return output.([]common.PeerInfo), err
+func (ns *NetworkState) GetPeers() []common.PeerInfo {
+	return ns.Peers
 }
 
 // SetPeers sets network state in the database
-func (ns *NetworkState) SetPeers(peers *[]common.PeerInfo) error {
-	enc, err := scale.Encode(*peers)
-	if err != nil {
-		return err
-	}
-	err = ns.db.Put(peersKey, enc)
-	return err
+func (ns *NetworkState) SetPeers(peers []common.PeerInfo) {
+	ns.Peers = peers
 }
