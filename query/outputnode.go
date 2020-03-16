@@ -142,11 +142,11 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
-		switch v.Value.(type) {
+		switch num := v.Value.(type) {
 		case int64: // In types.Convert(), we always convert to int64 in types.Convert().
-			return []byte(strconv.Itoa(int(v.Value.(int64)))), nil
+			return []byte(strconv.Itoa(int(num))), nil
 		default:
-			return []byte(strconv.Itoa(v.Value.(int))), nil
+			return []byte(strconv.Itoa(num.(int))), nil
 		}
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil

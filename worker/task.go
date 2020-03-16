@@ -1901,9 +1901,9 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 				return false, err
 			}
 
-			v, ok := ftree.function.typesToValMap[fVal.Tid]
+			v, ok := ftree.function.typesToVal[fVal.Tid]
 			if !ok {
-				// Not found in map and hence convert is here.
+				// Not found in map and hence convert it here.
 				v, err = types.Convert(ftree.function.val, fVal.Tid)
 				if err != nil {
 					// ignore facet if not of appropriate type.
@@ -1926,7 +1926,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		return false, errors.Errorf("Fn %s not supported in facets filtering.", ftree.function.name)
 	}
 
-	res := make([]bool, 0, 2)
+	res := make([]bool, 0, 2) // We can have max two children for a node.
 	for _, c := range ftree.children {
 		r, err := applyFacetsTree(postingFacets, c)
 		if err != nil {
@@ -1989,19 +1989,24 @@ func filterOnStandardFn(fname string, fcTokens []string, argTokens []string) (bo
 }
 
 type facetsFunc struct {
-	name          string
-	key           string
-	args          []string
-	tokens        []string
-	val           types.Val
-	fnType        FuncType
-	typesToValMap map[types.TypeID]types.Val
+	name       string
+	key        string
+	args       []string
+	tokens     []string
+	val        types.Val
+	fnType     FuncType
+	typesToVal map[types.TypeID]types.Val
 }
 type facetsTree struct {
 	op       string
 	children []*facetsTree
 	function *facetsFunc
 }
+
+// commonTypeIDs is list of type ids which are more common. In preprocessFilter() we keep converted
+// values for these typeIDs at every function node.
+var commonTypeIDs = [...]types.TypeID{types.StringID, types.IntID, types.FloatID,
+	types.DateTimeID, types.BoolID, types.DefaultID}
 
 func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	if tree == nil {
@@ -2026,10 +2031,8 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 		switch fnType {
 		case compareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
-			ftree.function.typesToValMap = make(map[types.TypeID]types.Val)
-			typeIDs := []types.TypeID{types.StringID, types.IntID, types.FloatID,
-				types.DateTimeID, types.BoolID, types.DefaultID}
-			for _, typeID := range typeIDs {
+			ftree.function.typesToVal = make(map[types.TypeID]types.Val, len(commonTypeIDs))
+			for _, typeID := range commonTypeIDs {
 				// TODO: if conversion is not possible we are not putting anything to map. In
 				// applyFacetsTree we check if entry for a type is not present, we try to convert
 				// it. This double conversion can be avoided.
@@ -2037,7 +2040,7 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 				if err != nil {
 					continue
 				}
-				ftree.function.typesToValMap[typeID] = cv
+				ftree.function.typesToVal[typeID] = cv
 			}
 		case standardFn:
 			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)

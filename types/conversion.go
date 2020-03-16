@@ -55,6 +55,7 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				*res = data
 			case StringID, DefaultID:
+				// We never modify from Val, so this should be safe.
 				*res = *(*string)(unsafe.Pointer(&data))
 			case IntID:
 				if len(data) < 8 {
