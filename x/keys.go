@@ -387,7 +387,7 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 
 	if backupKey.StartUid > 0 {
 		var err error
-		key, err = GetSplitKey(key, backupKey.StartUid)
+		key, err = SplitKey(key, backupKey.StartUid)
 		Check(err)
 	}
 	return key
@@ -416,11 +416,14 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
-func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
+// SplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
+func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
+	if keyCopy[0] != DefaultPrefix {
+		return nil, errors.Errorf("only keys with default prefix can have a split key")
+	}
 	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
 	// individual part of a single list key.
 	keyCopy[0] = ByteSplit

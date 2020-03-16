@@ -159,7 +159,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		// The function returns a nil list instead. This is safe to do because all
 		// public methods of the List object are no-ops and the list is being already
 		// accessed via the main key in the places where this code is reached (e.g rollups).
-		return nil, nil
+		return nil, ErrInvalidKey
 	}
 
 	l := new(List)
