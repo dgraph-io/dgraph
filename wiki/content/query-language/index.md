@@ -2138,6 +2138,24 @@ If data exists and new indices are specified in a schema mutation, any index not
 Reverse edges are also computed if specified by a schema mutation.
 
 
+### Indexes in Background
+
+Starting Dgraph version `20.3.0`, the indexes for predicates are computed in the background
+even after the `Alter` operation completes. This requires that you wait for indexing to complete
+before running queries. A query will fail if it uses indexes that are still being computed.
+It is possible that all the alphas have not finished computing indexes. In such a case, the alphas
+that have not yet computed the indexes will return an error. An alter operation will also fail
+if one is already in progress. Mutations can be executed while indexing is going on.
+
+You could find examples here in order to wait for indexing to complete:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j/pull/135)
+- [dgo](https://github.com/dgraph-io/dgo/pull/117)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/pull/120)
+
+We also plan to add a simpler API soon to check whether indexing is already going on.
+
+
 ### Predicate name rules
 
 Any alphanumeric combination of a predicate name is permitted.
