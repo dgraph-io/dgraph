@@ -1179,6 +1179,7 @@ func (n *node) rollupLists(readTs uint64) error {
 
 	writer := posting.NewTxnWriter(pstore)
 	stream := pstore.NewStreamAt(readTs)
+	stream.Prefix = []byte{x.DefaultPrefix}
 	stream.LogPrefix = "Rolling up"
 	stream.ChooseKey = func(item *badger.Item) bool {
 		switch item.UserMeta() {

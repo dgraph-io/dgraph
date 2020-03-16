@@ -1065,7 +1065,7 @@ func TestMultiPartListMarshal(t *testing.T) {
 	require.Equal(t, key, kvs[0].Key)
 
 	for i, startUid := range ol.plist.Splits {
-		partKey, err := x.GetSplitKey(key, startUid)
+		partKey, err := x.SplitKey(key, startUid)
 		require.NoError(t, err)
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)
