@@ -666,6 +666,9 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 
 // Query handles queries or mutations
 func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, error) {
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 	return s.doQuery(ctx, req, NeedAuthorize)
 }
 
