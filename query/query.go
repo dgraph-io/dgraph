@@ -857,8 +857,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	// If the lang is set to *, query all the languages.
 	if len(sg.Params.Langs) == 1 && sg.Params.Langs[0] == "*" {
 		sg.Params.ExpandAll = true
-		sg.Params.Langs = nil
 	}
+
 	// count is to limit how many results we want.
 	first := calculateFirstN(sg)
 
