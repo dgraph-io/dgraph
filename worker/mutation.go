@@ -117,6 +117,17 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
+func undoSchemaUpdate(predicate string) {
+	maxRetries := 10
+	loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+		return schema.Load(predicate)
+	})
+
+	if loadErr != nil {
+		glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
+	}
+}
+
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
 	// Wait until schema modification for all predicates is complete. There cannot be two
 	// background tasks running as this is a race condition. We typically won't propose an
@@ -181,15 +192,7 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		// undo schema changes in case re-indexing fails.
 		if err := buildIndexesHelper(update, rebuild); err != nil {
 			glog.Errorf("error in building indexes, aborting :: %v\n", err)
-
-			maxRetries := 10
-			loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-				return schema.Load(update.Predicate)
-			})
-
-			if loadErr != nil {
-				glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-			}
+			undoSchemaUpdate(update.Predicate)
 		}
 	}
 
@@ -218,10 +221,15 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		schema.State().SetMutSchema(su.Predicate, su)
 
 		// TODO(Aman): If we return an error, we may not have right schema reflected.
-		if err := rebuild.DropIndexes(ctx); err != nil {
-			return err
+		setup := func() error {
+			if err := rebuild.DropIndexes(ctx); err != nil {
+				return err
+			}
+			return rebuild.BuildData(ctx)
 		}
-		if err := rebuild.BuildData(ctx); err != nil {
+		if err := setup(); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(su.Predicate)
 			return err
 		}
 
