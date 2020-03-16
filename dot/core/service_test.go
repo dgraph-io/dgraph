@@ -69,25 +69,25 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 		cfg.NewBlocks = make(chan types.Block)
 	}
 
-	dbSrv := state.NewService("")
-	dbSrv.UseMemDB()
+	stateSrvc := state.NewService("")
+	stateSrvc.UseMemDB()
 
-	err := dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
+	err := stateSrvc.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = dbSrv.Start()
+	err = stateSrvc.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if cfg.BlockState == nil {
-		cfg.BlockState = dbSrv.Block
+		cfg.BlockState = stateSrvc.Block
 	}
 
 	if cfg.StorageState == nil {
-		cfg.StorageState = dbSrv.Storage
+		cfg.StorageState = stateSrvc.Storage
 	}
 
 	s, err := NewService(cfg)
@@ -97,6 +97,7 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 
 	return s
 }
+
 func TestStartService(t *testing.T) {
 	s := newTestService(t, nil)
 	err := s.Start()

@@ -22,11 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	mrand "math/rand"
 	"sync"
-	"time"
-
-	"golang.org/x/exp/rand"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -74,9 +70,6 @@ type Service struct {
 	babeKill  chan<- struct{}        // close this channel to kill current BABE session
 	lock      sync.Mutex
 	closed    bool
-
-	// TODO: add to network state
-	requestedBlockIDs map[uint64]bool // track requested block id messages
 }
 
 // Config holds the configuration for the core Service.
@@ -186,8 +179,6 @@ func NewService(cfg *Config) (*Service, error) {
 			closed:           false,
 		}
 	}
-
-	srv.requestedBlockIDs = make(map[uint64]bool)
 
 	// core service
 	return srv, nil
@@ -461,25 +452,17 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 	// check if we should send block request message
 	if bestNum.Cmp(messageBlockNumMinusOne) == -1 {
 
-		//generate random ID
-		s1 := rand.NewSource(uint64(time.Now().UnixNano()))
-		seed := rand.New(s1).Uint64()
-		randomID := mrand.New(mrand.NewSource(int64(seed))).Uint64()
-
 		buf := make([]byte, 8)
 		binary.LittleEndian.PutUint64(buf, uint64(bestNum.Int64()))
 
 		blockRequest := &network.BlockRequestMessage{
-			ID:            randomID, // random
-			RequestedData: 3,        // block header + body
+			ID:            header.Number.Uint64(), // best block id
+			RequestedData: 3,                      // block header + body
 			StartingBlock: append([]byte{1}, buf...),
 			EndBlockHash:  optional.NewHash(true, header.Hash()),
 			Direction:     1,
 			Max:           optional.NewUint32(false, 0),
 		}
-
-		//track request
-		s.requestedBlockIDs[randomID] = true
 
 		// send block request message to network service
 		log.Debug("send blockRequest message to network service")

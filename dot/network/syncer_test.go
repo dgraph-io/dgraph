@@ -28,9 +28,38 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestRequestedBlockIDs tests adding and removing block ids from requestedBlockIDs
+func TestRequestedBlockIDs(t *testing.T) {
+	dataDir := path.Join(os.TempDir(), "gossamer-test", t.Name())
+	defer os.RemoveAll(dataDir)
+
+	config := &Config{
+		DataDir:     dataDir,
+		Port:        7001,
+		RandSeed:    1,
+		NoBootstrap: true,
+		NoMDNS:      true,
+	}
+
+	node, _, _ := createTestService(t, config)
+
+	hasRequestedBlockID := node.syncer.hasRequestedBlockID(1)
+	require.Equal(t, false, hasRequestedBlockID)
+
+	node.syncer.addRequestedBlockID(1)
+
+	hasRequestedBlockID = node.syncer.hasRequestedBlockID(1)
+	require.Equal(t, true, hasRequestedBlockID)
+
+	node.syncer.removeRequestedBlockID(1)
+
+	hasRequestedBlockID = node.syncer.hasRequestedBlockID(1)
+	require.Equal(t, false, hasRequestedBlockID)
+}
+
 // have a peer send a message status with a block ahead
 // test exchanged messages after peer connected are correct
-func TestSendBlockRequestMessage(t *testing.T) {
+func TestHandleStatusMessage(t *testing.T) {
 	dataDirA := path.Join(os.TempDir(), "gossamer-test", "nodeA")
 	defer os.RemoveAll(dataDirA)
 
