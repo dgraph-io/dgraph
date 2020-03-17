@@ -158,7 +158,7 @@ var (
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
-			Aggregation: view.Sum(),
+			Aggregation: view.LastValue(),
 			TagKeys:     allTagKeys,
 		},
 		{
