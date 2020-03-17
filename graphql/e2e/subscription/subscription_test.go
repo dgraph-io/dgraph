@@ -110,7 +110,6 @@ func TestSubscription(t *testing.T) {
 	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient.RecvMsg()
-
 	require.NoError(t, err)
 
 	// Check the latest update.
@@ -132,7 +131,7 @@ func TestSubscription(t *testing.T) {
 	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient.RecvMsg()
-
 	require.NoError(t, err)
+
 	require.Nil(t, res)
 }

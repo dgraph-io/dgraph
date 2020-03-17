@@ -31,7 +31,7 @@ type Options struct {
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
 	// PollInterval is the polling interval for graphql subscription. Units are in seconds.
-	PollInterval int
+	PollInterval time.Duration
 }
 
 // Config stores the global instance of this package's options.

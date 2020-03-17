@@ -122,8 +122,9 @@ func (gs *graphqlSubscription) Subscribe(
 	}
 
 	go func() {
+		// Context is cancelled when a client disconnects, so delete subscription after client
+		// disconnects.
 		<-ctx.Done()
-		// Delete the subscriber if the context is done.
 		gs.graphqlHandler.poller.TerminateSubscription(res.BucketID, res.SubscriptionID)
 	}()
 	return res.UpdateCh, ctx.Err()
