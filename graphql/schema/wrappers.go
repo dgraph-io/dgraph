@@ -17,9 +17,12 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"text/scanner"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -1238,4 +1241,79 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 		}
 	}
 	return nil
+}
+
+func isName(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			continue
+		case r >= 'A' && r <= 'Z':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// Given a template for a body with variables defined, this function parses the body, substitutes
+// the variables and returns the final JSON.
+// for e.g.
+// { author: $id, post: { id: $postID }} with variables {"id": "0x3", postID: "0x9"} should return
+// { "author" : "0x3", "post": { "id": "0x9" }}
+// If the final result is not a valid JSON, then an error is returned.
+func parseCustomBody(body string, variables map[string]interface{}) ([]byte, error) {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(body))
+
+	result := new(bytes.Buffer)
+	parsingVariable := false
+	depth := 0
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		text := s.TokenText()
+		switch {
+		case text == "{":
+			result.WriteString(text)
+			depth++
+		case text == "}":
+			depth--
+			result.WriteString(text)
+		case text == ":" || text == "," || text == "[" || text == "]":
+			result.WriteString(text)
+		case text == "$":
+			parsingVariable = true
+		case isName(text):
+			// Name could either be a key or be part of a variable after dollar.
+			if parsingVariable {
+				variable := "$" + text
+				// Look it up in the map and replace.
+				val, ok := variables[text]
+				if !ok {
+					return nil, errors.Errorf("Couldn't find variable: %s in variables map",
+						variable)
+				}
+				switch v := val.(type) {
+				case string:
+					fmt.Fprintf(result, `"%s"`, v)
+				default:
+					fmt.Fprintf(result, "%v", val)
+				}
+				parsingVariable = false
+				continue
+			}
+			result.WriteString(fmt.Sprintf(`"%s"`, text))
+		default:
+			return nil, errors.Errorf("Invalid character: %s while parsing body template", text)
+		}
+	}
+	if depth != 0 {
+		return nil, errors.New("found unmatched curly braces while parsing body template")
+	}
+
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
+		return nil, errors.Errorf("Coudn't unmarshal HTTP body: %s as JSON", result.Bytes())
+	}
+	return result.Bytes(), nil
 }

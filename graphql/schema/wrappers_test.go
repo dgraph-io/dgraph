@@ -272,7 +272,7 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 func TestCheckNonNulls(t *testing.T) {
 
 	gqlSchema, err := FromString(`
-	type T { 
+	type T {
 		req: String!
 		notReq: String
 		alsoReq: String!
@@ -319,6 +319,46 @@ func TestCheckNonNulls(t *testing.T) {
 				require.NoError(t, err)
 			} else {
 				require.EqualError(t, err, test.err.Error())
+			}
+		})
+	}
+}
+
+func TestParseCustomBody(t *testing.T) {
+	tcases := []struct {
+		name        string
+		variables   map[string]interface{}
+		template    string
+		expected    string
+		expectedErr error
+	}{
+		{
+			"substitutes variables correctly",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			`{ author: $id, post: { id: $postID }}`,
+			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			nil,
+		},
+		{
+			"substitutes variables with multiple properties correctly",
+			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
+				"text": "Random comment", "age": 28},
+			`{ author: $id, admin: $admin, post: { id: $postID, comments: [{ text: $text }] },
+			   age: $age}`,
+			`{ "author": "0x3", "admin": false, "post": { "id": "0x9",
+			   "comments": [{ "text": "Random comment"}]}, "age": 28}`,
+			nil,
+		},
+	}
+
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			b, err := parseCustomBody(test.template, test.variables)
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+				require.JSONEq(t, test.expected, string(b))
+			} else {
+				require.EqualError(t, err, test.expectedErr.Error())
 			}
 		})
 	}
