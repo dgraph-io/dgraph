@@ -26,6 +26,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/scale"
 )
 
@@ -152,7 +153,7 @@ func (sm *StatusMessage) IDString() string {
 type BlockRequestMessage struct {
 	ID            uint64
 	RequestedData byte
-	StartingBlock []byte // first byte 0 = block hash (32 byte), first byte 1 = block number (int64)
+	StartingBlock *variadic.Uint64OrHash // first byte 0 = block hash (32 byte), first byte 1 = block number (int64)
 	EndBlockHash  *optional.Hash
 	Direction     byte
 	Max           *optional.Uint32
@@ -184,20 +185,11 @@ func (bm *BlockRequestMessage) Encode() ([]byte, error) {
 
 	encMsg = append(encMsg, bm.RequestedData)
 
-	if len(bm.StartingBlock) == 0 {
+	startingBlockArray, err := bm.StartingBlock.Encode()
+	if err != nil || len(startingBlockArray) == 0 {
 		return nil, fmt.Errorf("invalid BlockRequestMessage")
 	}
-
-	if bm.StartingBlock[0] == 1 {
-		encMsg = append(encMsg, bm.StartingBlock[0])
-		num := bm.StartingBlock[1:]
-		if len(num) < 8 {
-			num = common.AppendZeroes(num, 8)
-		}
-		encMsg = append(encMsg, num...)
-	} else {
-		encMsg = append(encMsg, bm.StartingBlock...)
-	}
+	encMsg = append(encMsg, startingBlockArray...)
 
 	if bm.EndBlockHash == nil || !bm.EndBlockHash.Exists() {
 		encMsg = append(encMsg, []byte{0, 0}...)
@@ -233,26 +225,10 @@ func (bm *BlockRequestMessage) Decode(r io.Reader) error {
 		return err
 	}
 
-	// starting block is a variable type; if next byte is 0 it is Hash, if next byte is 1 it is uint64
-	startingBlockType, err := common.ReadByte(r)
+	bm.StartingBlock = &variadic.Uint64OrHash{}
+	err = bm.StartingBlock.Decode(r)
 	if err != nil {
 		return err
-	}
-
-	if startingBlockType == 0 {
-		hash := make([]byte, 32)
-		_, err = r.Read(hash)
-		if err != nil {
-			return err
-		}
-		bm.StartingBlock = append([]byte{startingBlockType}, hash...)
-	} else {
-		num := make([]byte, 8)
-		_, err = r.Read(num)
-		if err != nil {
-			return err
-		}
-		bm.StartingBlock = append([]byte{startingBlockType}, num...)
 	}
 
 	// EndBlockHash is an optional type, if next byte is 0 it doesn't exist

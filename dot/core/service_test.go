@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
@@ -433,7 +434,7 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 	request := &network.BlockRequestMessage{
 		ID:            1,
 		RequestedData: 3,
-		StartingBlock: []byte{1, 1, 0, 0, 0, 0, 0, 0, 0},
+		StartingBlock: variadic.NewUint64OrHash([]byte{1, 1, 0, 0, 0, 0, 0, 0, 0}),
 		EndBlockHash:  optional.NewHash(true, endHash),
 		Direction:     1,
 		Max:           optional.NewUint32(false, 0),

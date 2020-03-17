@@ -25,6 +25,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
@@ -35,7 +36,7 @@ var TestMessage = &BlockRequestMessage{
 	ID:            1,
 	RequestedData: 1,
 	// TODO: investigate starting block mismatch with different slice length
-	StartingBlock: []byte{1, 1, 1, 1, 1, 1, 1, 1, 1},
+	StartingBlock: variadic.NewUint64OrHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1}),
 	EndBlockHash:  optional.NewHash(true, common.Hash{}),
 	Direction:     1,
 	Max:           optional.NewUint32(true, 1),

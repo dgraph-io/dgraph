@@ -13,6 +13,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/common/variadic"
 
 	log "github.com/ChainSafe/log15"
 )
@@ -129,7 +130,7 @@ func (s *Syncer) sendBlockRequest() error {
 	blockRequest := &network.BlockRequestMessage{
 		ID:            randomID, // random
 		RequestedData: 3,        // block header + body
-		StartingBlock: append([]byte{1}, buf...),
+		StartingBlock: variadic.NewUint64OrHash(append([]byte{1}, buf...)),
 		EndBlockHash:  optional.NewHash(false, common.Hash{}),
 		Direction:     1,
 		Max:           optional.NewUint32(false, 0),
