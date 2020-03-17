@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
@@ -58,7 +59,9 @@ func TestCalculateSnapshot(t *testing.T) {
 
 	db, err := openBadger(dir)
 	require.NoError(t, err)
-	ds := raftwal.Init(db, 0, 0)
+	dsCloser := y.NewCloser(1)
+	defer dsClodsCloser.SignalAndWait()
+	ds := raftwal.Init(db, 0, 0, dsCloser)
 
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry

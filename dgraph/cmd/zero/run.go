@@ -220,7 +220,8 @@ func run() {
 	// zero out from memory
 	kvOpt.EncryptionKey = nil
 
-	store := raftwal.Init(kv, opts.nodeId, 0)
+	storeCloser := y.NewCloser(1)
+	store := raftwal.Init(kv, opts.nodeId, 0, storeCloser)
 
 	// Initialize the servers.
 	var st state
@@ -267,6 +268,8 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Stop Raft store.
+		storeCloser.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 		st.node.trySnapshot(0)

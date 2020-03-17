@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
@@ -49,15 +50,13 @@ type indexRange struct {
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
-func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
+func Init(db *badger.DB, id uint64, gid uint32, closer *y.Closer) *DiskStorage {
 	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map),
 		deleteRangeChan: make(chan indexRange, 16)}
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
-
-	// TODO: Figure out a way to close this.
-	go w.processDeleteRange()
+	w.processDeleteRange(closer)
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -82,7 +81,9 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 	return w
 }
 
-func (w *DiskStorage) processDeleteRange() {
+func (w *DiskStorage) processDeleteRange(closer *y.Closer) {
+	defer closer.Done()
+
 	batch := w.db.NewWriteBatch()
 	for r := range w.deleteRangeChan {
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {

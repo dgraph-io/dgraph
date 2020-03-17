@@ -52,6 +52,7 @@ type groupi struct {
 	triggerCh    chan struct{} // Used to trigger membership sync
 	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *y.Closer
+	storeCloser  *y.Closer // Closer for raftwal storage.
 
 	// Group checksum is used to determine if the tablets served by the groups have changed from
 	// the membership information that the Alpha has. If so, Alpha cannot service a read.
@@ -141,7 +142,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
+	gr.storeCloser = y.NewCloser(1)
+	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid, gr.storeCloser)
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")

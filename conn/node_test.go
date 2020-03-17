@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/stretchr/testify/require"
@@ -67,7 +68,9 @@ func TestProposal(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	store := raftwal.Init(db, 0, 0)
+	storeCloser := y.NewCloser(1)
+	defer storeCloser.SignalAndWait()
+	store := raftwal.Init(db, 0, 0, storeCloser)
 
 	rc := &pb.RaftContext{Id: 1}
 	n := NewNode(rc, store)
