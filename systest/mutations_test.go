@@ -1862,7 +1862,6 @@ func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
 	}
 	err := c.Alter(ctx, op)
 	require.NoError(t, err)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
