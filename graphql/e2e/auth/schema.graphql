@@ -20,7 +20,7 @@ type Todo @auth(
         update: { rule: "filter: { dateCompleted: { eq: null } })" }
     )
     sharedWith: [User]
-    owner: User
+    owner: User @hasInverse(field: "todos")
     somethingPrivate: String @auth(
         query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
     )

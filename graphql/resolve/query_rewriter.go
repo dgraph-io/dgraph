@@ -59,15 +59,53 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
-		return dgQuery, nil
+		return addAuth(dgQuery, gqlQuery), nil
 
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery), nil
+		dgQuery := rewriteAsQuery(gqlQuery)
+		return addAuth(dgQuery, gqlQuery), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
+	queriedType := field.Type()
+	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
+
+	var query gql.GraphQuery
+	query.Children = append(query.Children, dgQuery)
+
+	if authRules != nil && authRules.Query != nil {
+		authFilter := authRules.Query.GetFilter()
+
+		if dgQuery.Filter != nil {
+			dgQuery.Filter = &gql.FilterTree{
+				Op: "and",
+				Child: []*gql.FilterTree{
+					authFilter,
+					dgQuery.Filter,
+				},
+			}
+		} else {
+			dgQuery.Filter = authFilter
+		}
+
+		queries := authRules.Query.GetQueries()
+		i := 0
+		for _, q := range queries {
+			if q != nil {
+				queries[i] = q
+				i++
+			}
+		}
+
+		query.Children = append(query.Children, queries[:i]...)
+	}
+
+	return &query
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
@@ -242,6 +280,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
+
 	return dgQuery
 }
 

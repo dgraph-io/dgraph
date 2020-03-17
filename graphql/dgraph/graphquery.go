@@ -34,7 +34,13 @@ func AsString(query *gql.GraphQuery) string {
 
 	var b strings.Builder
 	x.Check2(b.WriteString("query {\n"))
-	writeQuery(&b, query, "  ", true)
+	if query.Var == "" && query.Alias == "" && query.Attr == "" {
+		for _, i := range query.Children {
+			writeQuery(&b, i, "  ", true)
+		}
+	} else {
+		writeQuery(&b, query, "  ", true)
+	}
 	x.Check2(b.WriteString("}"))
 
 	return b.String()
@@ -55,6 +61,10 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 
 	if query.Func != nil {
 		writeRoot(b, query)
+	}
+
+	if query.Cascade {
+		x.Check2(b.WriteString(" @cascade"))
 	}
 
 	if query.Filter != nil {
