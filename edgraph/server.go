@@ -802,8 +802,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
 
-	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
-
 	defer func() {
 		v := x.TagValueStatusOK
 		if rerr != nil {
