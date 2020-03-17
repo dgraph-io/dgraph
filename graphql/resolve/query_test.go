@@ -79,6 +79,7 @@ type HTTPRewritingCase struct {
 	ResolvedResponse string
 	Method           string
 	URL              string
+	Body             string
 }
 
 // RoundTripFunc .
@@ -100,6 +101,12 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 	return NewTestClient(func(req *http.Request) *http.Response {
 		require.Equal(t, hrc.Method, req.Method)
 		require.Equal(t, hrc.URL, req.URL.String())
+		if hrc.Body != "" {
+			body, err := ioutil.ReadAll(req.Body)
+			require.NoError(t, err)
+			require.JSONEq(t, hrc.Body, string(body))
+		}
+
 		return &http.Response{
 			StatusCode: 200,
 			// Send response to be tested

@@ -122,7 +122,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
-	HTTPResolver() HTTPResolverConfig
+	HTTPResolver() (HTTPResolverConfig, error)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -804,28 +804,43 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
-func (q *query) HTTPResolver() HTTPResolverConfig {
+func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	// We have to fetch the original definition of the query from the name of the query to be
 	// able to get the value stored in custom directive.
 	// TODO - This should be cached later.
 	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
 	custom := query.Directives.ForName("custom")
 	httpArg := custom.Arguments.ForName("http")
+	// TODO - What if url and method aren't there? That should be an error.
 	rc := HTTPResolverConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 
 	argMap := q.field.ArgumentMap(q.op.vars)
+	vars := make(map[string]interface{})
+	// Let's collect the value of query args in vars map and use that for constructing the body
+	// from the template below.
 	for _, arg := range query.Arguments {
 		val := argMap[arg.Name]
+		vars[arg.Name] = val
 		if val == nil {
 			// Instead of replacing value to nil, we replace it with an empty string.
 			val = ""
 		}
 		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, fmt.Sprintf("%v", val))
 	}
-	return rc
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		body, err := substitueVarsInBody(bodyTemplate, vars)
+		if err != nil {
+			return rc, err
+		}
+		rc.Body = string(body)
+	}
+	return rc, nil
 }
 
 func (m *mutation) Name() string {
@@ -1263,7 +1278,7 @@ func isName(s string) bool {
 // { author: $id, post: { id: $postID }} with variables {"id": "0x3", postID: "0x9"} should return
 // { "author" : "0x3", "post": { "id": "0x9" }}
 // If the final result is not a valid JSON, then an error is returned.
-func parseCustomBody(body string, variables map[string]interface{}) ([]byte, error) {
+func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte, error) {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(body))
 

@@ -164,7 +164,10 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 
 func (hr *httpResolver) rewriteAndExecute(
 	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc := query.HTTPResolver()
+	hrc, err := query.HTTPResolver()
+	if err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
 	if err != nil {
 		return nil, err
