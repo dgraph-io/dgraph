@@ -169,28 +169,28 @@ func TestBlockTree_Subchain(t *testing.T) {
 
 // TODO: Need to define leftmost (see BlockTree.LongestPath)
 //func TestBlockTree_LongestPath_LeftMost(t *testing.T) {
-//	bt := createFlatTree(t, 1)
-//
-//	// Insert a block to create a competing path
-//	extraBlock := types.Block{
-//		SlotNumber:   nil,
-//		ParentHash: zeroHash,
-//		Number:  big.NewInt(1),
-//		Hash:         common.Hash{0xAB},
-//	}
-//
-//	bt.AddBlock(extraBlock)
-//
-//	expectedPath := []*node{
-//		bt.GetNode(common.Hash{0x00}),
-//		bt.GetNode(common.Hash{0xAB}),
-//	}
-//
-//	longestPath := bt.LongestPath()
-//
-//	for i, n := range longestPath {
-//		if n.hash != expectedPath[i].hash {
-//			t.Errorf("expected Hash: 0x%X got: 0x%X\n", expectedPath[i].hash, n.hash)
-//		}
-//	}
 //}
+
+func TestBlockTree_GetNode(t *testing.T) {
+	header := &types.Header{
+		ParentHash: zeroHash,
+		Number:     big.NewInt(0),
+	}
+
+	bt, branches := createTestBlockTree(header, 16, nil)
+
+	for _, branch := range branches {
+		block := &types.Block{
+			Header: &types.Header{
+				ParentHash: branch.hash,
+				Number:     branch.depth,
+			},
+			Body: &types.Body{},
+		}
+
+		err := bt.AddBlock(block)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+}

@@ -20,6 +20,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"sync"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
@@ -59,6 +60,8 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	if cfg.Runtime == nil {
 		cfg.Runtime = rt
 	}
+
+	cfg.SyncLock = &sync.Mutex{}
 
 	var err error
 	if cfg.Keypair == nil {

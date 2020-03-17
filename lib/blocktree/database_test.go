@@ -11,16 +11,16 @@ import (
 	"github.com/ChainSafe/gossamer/lib/database"
 )
 
-func createTestBlockTree(header *types.Header, depth int, db database.Database) *BlockTree {
+type testBranch struct {
+	hash  Hash
+	depth *big.Int
+}
+
+func createTestBlockTree(header *types.Header, depth int, db database.Database) (*BlockTree, []testBranch) {
 	bt := NewBlockTreeFromGenesis(header, db)
 	previousHash := header.Hash()
 
 	// branch tree randomly
-	type testBranch struct {
-		hash  Hash
-		depth *big.Int
-	}
-
 	branches := []testBranch{}
 	r := *rand.New(rand.NewSource(rand.Int63()))
 
@@ -64,7 +64,7 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 	}
 
-	return bt
+	return bt, branches
 }
 
 func TestStoreBlockTree(t *testing.T) {
@@ -80,7 +80,7 @@ func TestStoreBlockTree(t *testing.T) {
 		Number:     big.NewInt(0),
 	}
 
-	bt := createTestBlockTree(header, 100, db)
+	bt, _ := createTestBlockTree(header, 100, db)
 
 	err = bt.Store()
 	if err != nil {

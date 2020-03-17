@@ -17,6 +17,7 @@
 package modules
 
 import (
+	"math/big"
 	"os"
 	"path"
 	"testing"
@@ -42,6 +43,7 @@ func newNetworkService(t *testing.T) *network.Service {
 		NoStatus:     true,
 		NetworkState: &state.NetworkState{},
 		DataDir:      testDir,
+		SyncChan:     make(chan *big.Int),
 	}
 
 	srv, err := network.NewService(cfg, nil, nil)

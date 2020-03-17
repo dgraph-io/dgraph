@@ -19,10 +19,7 @@ package network
 import (
 	"math/big"
 
-	"github.com/ChainSafe/gossamer/lib/common/optional"
-
 	log "github.com/ChainSafe/log15"
-	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 // syncer submodule
@@ -30,14 +27,19 @@ type syncer struct {
 	host              *host
 	blockState        BlockState
 	requestedBlockIDs map[uint64]bool // track requested block id messages
+
+	// Chain synchronization channel; send block numbers into this channel when a status message is received with
+	// a higher block number than ours
+	syncChan chan<- *big.Int
 }
 
 // newSyncer creates a new syncer instance from the host
-func newSyncer(host *host, blockState BlockState) *syncer {
+func newSyncer(host *host, blockState BlockState, syncChan chan<- *big.Int) *syncer {
 	return &syncer{
 		host:              host,
 		blockState:        blockState,
 		requestedBlockIDs: make(map[uint64]bool),
+		syncChan:          syncChan,
 	}
 }
 
@@ -62,7 +64,7 @@ func (s *syncer) removeRequestedBlockID(blockID uint64) {
 
 // handleStatusMesssage sends a block request message if peer best block
 // number is greater than host best block number
-func (s *syncer) handleStatusMesssage(peer peer.ID, statusMessage *StatusMessage) {
+func (s *syncer) handleStatusMesssage(statusMessage *StatusMessage) {
 
 	// get latest block header from block state
 	latestHeader, err := s.blockState.BestBlockHeader()
@@ -75,25 +77,7 @@ func (s *syncer) handleStatusMesssage(peer peer.ID, statusMessage *StatusMessage
 
 	// check if peer block number is greater than host block number
 	if latestHeader.Number.Cmp(bestBlockNum) == -1 {
-
-		// store requested block ids in syncer submodule (non-persistent state)
-		s.addRequestedBlockID(latestHeader.Number.Uint64())
-
-		currentHash := latestHeader.Hash()
-
-		blockRequestMessage := &BlockRequestMessage{
-			ID:            latestHeader.Number.Uint64(), // block id
-			RequestedData: 3,                            // block body
-			StartingBlock: append([]byte{0}, currentHash[:]...),
-			EndBlockHash:  optional.NewHash(true, latestHeader.Hash()),
-			Direction:     1,
-			Max:           optional.NewUint32(false, 0),
-		}
-
-		// send block request message
-		err := s.host.send(peer, blockRequestMessage)
-		if err != nil {
-			log.Error("[network] Failed to send block request message to peer", "error", err)
-		}
+		log.Debug("[network] sending new block to syncer", "number", statusMessage.BestBlockNumber)
+		s.syncChan <- bestBlockNum
 	}
 }

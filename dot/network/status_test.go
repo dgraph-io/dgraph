@@ -20,8 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/utils"
 )
@@ -114,23 +112,4 @@ func TestStatus(t *testing.T) {
 	if !nodeB.status.confirmed(nodeA.host.h.ID()) {
 		t.Error("node B did not confirm status of node A")
 	}
-}
-
-// createTestServiceWithBlockState is a helper method to create and start a new network service
-func createTestServiceWithBlockState(t *testing.T, cfg *Config, blockState *MockBlockState) (node *Service, msgSend chan Message, msgRec chan Message) {
-	msgRec = make(chan Message)
-	msgSend = make(chan Message)
-
-	cfg.BlockState = blockState
-	cfg.NetworkState = &MockNetworkState{}
-	cfg.ProtocolID = TestProtocolID
-
-	var err error
-	node, err = NewService(cfg, msgSend, msgRec)
-	require.Nil(t, err)
-
-	err = node.Start()
-	require.Nil(t, err)
-
-	return node, msgSend, msgRec
 }

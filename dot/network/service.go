@@ -81,6 +81,10 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 		return nil, err
 	}
 
+	if cfg.SyncChan == nil {
+		return nil, errors.New("syncChan is nil")
+	}
+
 	network := &Service{
 		ctx:          ctx,
 		cfg:          cfg,
@@ -88,7 +92,7 @@ func NewService(cfg *Config, msgSend chan<- Message, msgRec <-chan Message) (*Se
 		mdns:         newMDNS(host),
 		status:       newStatus(host),
 		gossip:       newGossip(host),
-		syncer:       newSyncer(host, cfg.BlockState),
+		syncer:       newSyncer(host, cfg.BlockState, cfg.SyncChan),
 		blockState:   cfg.BlockState,
 		networkState: cfg.NetworkState,
 		msgRec:       msgRec,
@@ -335,7 +339,7 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 			if s.status.confirmed(peer) {
 
 				// send a block request message if peer best block number is greater than host best block number
-				s.syncer.handleStatusMesssage(peer, msg.(*StatusMessage))
+				s.syncer.handleStatusMesssage(msg.(*StatusMessage))
 			}
 		}
 	}

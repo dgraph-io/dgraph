@@ -31,19 +31,18 @@ var slotTail = uint64(12)
 // returns the estimated current slot number, without median algorithm
 func (b *Session) estimateCurrentSlot() (uint64, error) {
 	// estimate slot of highest block we've received
-	// TODO: change this to BestBlockHash. however this requires us to have at least `slotTail` number of blocks in our state
-	head := b.blockState.HighestBlockHash()
+	head := b.blockState.BestBlockHash()
 
 	slot, err := b.blockState.GetSlotForBlock(head)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("cannot get slot for head of chain: %s", err)
 	}
 
 	// find arrival time of chain head
 	// note: this assumes that the block arrived within the slot it was produced, may be off
 	arrivalTime, err := b.blockState.GetArrivalTime(head)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("cannot get arrival time for head of chain: %s", err)
 	}
 
 	// use slot duration to count up
@@ -100,11 +99,6 @@ func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) {
 	startNumber := tail.Sub(deepestBlock.Number, tail)
 
 	start, err := b.blockState.GetBlockByNumber(startNumber)
-	if err != nil {
-		return 0, err
-	}
-
-	err = b.configurationFromRuntime()
 	if err != nil {
 		return 0, err
 	}

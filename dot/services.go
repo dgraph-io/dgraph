@@ -18,6 +18,7 @@ package dot
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -62,7 +63,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Service, networkMsgSend chan network.Message, networkMsgRec chan network.Message) (*core.Service, error) {
+func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Service, networkMsgSend chan network.Message, networkMsgRec chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
 	log.Info(
 		"[dot] Creating core service...",
 		"authority", cfg.Core.Authority,
@@ -90,6 +91,7 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 		MsgRec:           networkMsgSend, // message channel from network service to core service
 		MsgSend:          networkMsgRec,  // message channel from core service to network service
 		IsBabeAuthority:  cfg.Core.Authority,
+		SyncChan:         syncChan,
 	}
 
 	// create new core service
@@ -105,7 +107,7 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 // Network Service
 
 // createNetworkService creates a network service from the command configuration and genesis data
-func createNetworkService(cfg *Config, stateSrvc *state.Service) (*network.Service, chan network.Message, chan network.Message) {
+func createNetworkService(cfg *Config, stateSrvc *state.Service, syncChan chan *big.Int) (*network.Service, chan network.Message, chan network.Message) {
 	log.Info(
 		"[dot] Creating network service...",
 		"port", cfg.Network.Port,
@@ -127,6 +129,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service) (*network.Servi
 		Roles:        cfg.Network.Roles,
 		NoBootstrap:  cfg.Network.NoBootstrap,
 		NoMDNS:       cfg.Network.NoMDNS,
+		SyncChan:     syncChan,
 	}
 
 	networkMsgRec := make(chan network.Message)
