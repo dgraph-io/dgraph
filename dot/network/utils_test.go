@@ -17,10 +17,10 @@
 package network
 
 import (
-	"os"
-	"path"
 	"reflect"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 // list of IPFS peers, for testing only
@@ -62,9 +62,8 @@ func TestStringsToAddrInfos(t *testing.T) {
 }
 
 func TestGenerateKey(t *testing.T) {
-	testDir := path.Join(os.TempDir(), "gossamer-test")
-
-	defer os.RemoveAll(testDir)
+	testDir := utils.NewTestDir(t)
+	defer utils.RemoveTestDir(t)
 
 	keyA, err := generateKey(0, testDir)
 	if err != nil {

@@ -17,20 +17,19 @@
 package network
 
 import (
-	"os"
-	"path"
 	"reflect"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/utils"
 
 	"github.com/stretchr/testify/require"
 )
 
 // test buildIdentity method
 func TestBuildIdentity(t *testing.T) {
-	testDir := path.Join(os.TempDir(), "gossamer-test")
-	defer os.RemoveAll(testDir)
+	testDir := utils.NewTestDir(t)
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir: testDir,
@@ -79,8 +78,8 @@ func TestBuildIdentity(t *testing.T) {
 
 // test build configuration method
 func TestBuild(t *testing.T) {
-	testDataDir := path.Join(os.TempDir(), "gossamer-test")
-	defer os.RemoveAll(testDataDir)
+	testDataDir := utils.NewTestDataDir(t, "node")
+	defer utils.RemoveTestDir(t)
 
 	testBlockState := &state.BlockState{}
 	testNetworkState := &state.NetworkState{}

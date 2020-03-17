@@ -17,26 +17,23 @@
 package state
 
 import (
-	"io/ioutil"
 	"math/big"
 	"math/rand"
-	"os"
 	"reflect"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 // helper method to create and start test state service
 func newTestService(t *testing.T) (state *Service) {
-	dir, err := ioutil.TempDir(os.TempDir(), "test_data")
-	if err != nil {
-		t.Fatal("failed to create temp dir: " + err.Error())
-	}
+	testDir := utils.NewTestDir(t)
+	defer utils.RemoveTestDir(t)
 
-	state = NewService(dir)
+	state = NewService(testDir)
 
 	return state
 }
@@ -149,12 +146,12 @@ func addBlocksToState(blockState *BlockState, depth int) {
 }
 
 func TestService_BlockTree(t *testing.T) {
-	dir, err := ioutil.TempDir(os.TempDir(), "test_data")
-	if err != nil {
-		t.Fatal("failed to create temp dir: " + err.Error())
-	}
+	testDir := utils.NewTestDir(t)
 
-	state := NewService(dir)
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
+
+	state := NewService(testDir)
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 	if err != nil {
@@ -177,7 +174,7 @@ func TestService_BlockTree(t *testing.T) {
 
 	state.Stop()
 
-	state2 := NewService(dir)
+	state2 := NewService(testDir)
 
 	err = state2.Start()
 	if err != nil {

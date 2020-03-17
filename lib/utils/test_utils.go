@@ -28,26 +28,49 @@ const TestDir = "./test_data"
 
 // NewTestDir create new test data directory
 func NewTestDir(t *testing.T) string {
-	dir := path.Join(TestDir, t.Name())
+	testDir := path.Join(TestDir, t.Name())
 
 	err := os.Mkdir(TestDir, os.ModePerm)
-	if err != nil && !Exists(TestDir) {
+	if err != nil && !PathExists(TestDir) {
 		fmt.Println(fmt.Errorf("failed to create test directory: %s", err))
 	}
 
-	err = os.Mkdir(dir, os.ModePerm)
-	if err != nil && !Exists(dir) {
+	err = os.Mkdir(testDir, os.ModePerm)
+	if err != nil && !PathExists(testDir) {
 		fmt.Println(fmt.Errorf("failed to create test directory: %s", err))
 	}
 
-	return dir
+	return testDir
+}
+
+// NewTestDataDir create new test data directory
+func NewTestDataDir(t *testing.T, name string) string {
+	testDir := path.Join(TestDir, t.Name())
+	dataDir := path.Join(testDir, name)
+
+	err := os.Mkdir(TestDir, os.ModePerm)
+	if err != nil && !PathExists(TestDir) {
+		fmt.Println(fmt.Errorf("failed to create test directory: %s", err))
+	}
+
+	err = os.Mkdir(testDir, os.ModePerm)
+	if err != nil && !PathExists(testDir) {
+		fmt.Println(fmt.Errorf("failed to create test directory: %s", err))
+	}
+
+	err = os.Mkdir(dataDir, os.ModePerm)
+	if err != nil && !PathExists(dataDir) {
+		fmt.Println(fmt.Errorf("failed to create test data directory: %s", err))
+	}
+
+	return dataDir
 }
 
 // RemoveTestDir removes the test data directory
 func RemoveTestDir(t *testing.T) {
-	dir := path.Join(TestDir, t.Name())
-	err := os.RemoveAll(dir)
-	if err != nil && !Exists(dir) {
+	testDir := path.Join(TestDir, t.Name())
+	err := os.RemoveAll(testDir)
+	if err != nil && !PathExists(testDir) {
 		fmt.Println(fmt.Errorf("failed to remove test directory: %s", err))
 	}
 }

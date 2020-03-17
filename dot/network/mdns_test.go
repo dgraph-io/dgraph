@@ -17,9 +17,10 @@
 package network
 
 import (
-	"os"
 	"testing"
 	"time"
+
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 // wait time to discover and connect using mdns discovery
@@ -27,8 +28,10 @@ var TestMDNSTimeout = time.Second
 
 // test mdns discovery service (discovers and connects)
 func TestMDNS(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -43,8 +46,7 @@ func TestMDNS(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,

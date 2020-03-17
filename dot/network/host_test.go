@@ -17,16 +17,19 @@
 package network
 
 import (
-	"os"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 // test host connect method
 func TestConnect(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -42,8 +45,7 @@ func TestConnect(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,
@@ -96,8 +98,10 @@ func TestConnect(t *testing.T) {
 
 // test host bootstrap method on start
 func TestBootstrap(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -115,8 +119,7 @@ func TestBootstrap(t *testing.T) {
 
 	addrA := nodeA.host.multiaddrs()[0]
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:   dataDirB,
@@ -162,8 +165,10 @@ func TestBootstrap(t *testing.T) {
 
 // test host ping method
 func TestPing(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -179,8 +184,7 @@ func TestPing(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,
@@ -229,8 +233,10 @@ func TestPing(t *testing.T) {
 
 // test host send method
 func TestSend(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -246,8 +252,7 @@ func TestSend(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,
@@ -299,8 +304,10 @@ func TestSend(t *testing.T) {
 
 // test host broadcast method
 func TestBroadcast(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -316,8 +323,7 @@ func TestBroadcast(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,
@@ -348,8 +354,7 @@ func TestBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dataDirC := newTestDataDir(t, "nodeC")
-	defer os.RemoveAll(dataDirC)
+	dataDirC := utils.NewTestDataDir(t, "")
 
 	configC := &Config{
 		DataDir:     dataDirC,
@@ -412,8 +417,10 @@ func TestBroadcast(t *testing.T) {
 
 // test host send method with existing stream
 func TestExistingStream(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -434,8 +441,7 @@ func TestExistingStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,

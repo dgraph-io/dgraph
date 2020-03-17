@@ -16,4 +16,48 @@
 
 package utils
 
-// TODO: add utils tests
+import (
+	"path"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+// TestNewTestDir tests the NewTestDir method
+func TestNewTestDir(t *testing.T) {
+	testDir := NewTestDir(t)
+
+	expected := path.Join(TestDir, t.Name())
+
+	require.Equal(t, expected, testDir)
+	require.Equal(t, PathExists(testDir), true)
+
+	RemoveTestDir(t)
+}
+
+// TestNewTestDataDir tests the NewTestDataDir method
+func TestNewTestDataDir(t *testing.T) {
+	dataDir := "test"
+
+	testDir := NewTestDataDir(t, dataDir)
+
+	expected := path.Join(TestDir, t.Name(), dataDir)
+
+	require.Equal(t, expected, testDir)
+	require.Equal(t, PathExists(testDir), true)
+
+	RemoveTestDir(t)
+}
+
+// TestRemoveTestDir tests the RemoveTestDir method
+func TestRemoveTestDir(t *testing.T) {
+	testDir := NewTestDir(t)
+
+	expected := path.Join(TestDir, t.Name())
+
+	require.Equal(t, expected, testDir)
+	require.Equal(t, PathExists(testDir), true)
+
+	RemoveTestDir(t)
+	require.Equal(t, PathExists(testDir), false)
+}

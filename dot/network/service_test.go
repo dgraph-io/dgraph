@@ -17,8 +17,6 @@
 package network
 
 import (
-	"os"
-	"path"
 	"reflect"
 	"strings"
 	"testing"
@@ -26,6 +24,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
 var TestProtocolID = "/gossamer/test/0"
@@ -46,11 +45,6 @@ var TestMessageTimeout = 3 * time.Second
 
 // time between connection retries (BackoffBase default 5 seconds)
 var TestBackoffTimeout = 5 * time.Second
-
-// newTestDataDir returns the path of a test directory
-func newTestDataDir(t *testing.T, name string) string {
-	return path.Join(os.TempDir(), "gossamer-test", t.Name(), name)
-}
 
 // failedToDial returns true if "failed to dial" error, otherwise false
 func failedToDial(err error) bool {
@@ -82,8 +76,10 @@ func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan M
 
 // test network service starts
 func TestStartService(t *testing.T) {
-	dataDir := path.Join(os.TempDir(), "gossamer-test", "node")
-	defer os.RemoveAll(dataDir)
+	dataDir := utils.NewTestDataDir(t, "node")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	config := &Config{
 		DataDir:     dataDir,
@@ -98,8 +94,10 @@ func TestStartService(t *testing.T) {
 
 // test broacast messages from core service
 func TestBroadcastMessages(t *testing.T) {
-	dataDirA := newTestDataDir(t, "nodeA")
-	defer os.RemoveAll(dataDirA)
+	dataDirA := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
 		DataDir:     dataDirA,
@@ -115,8 +113,7 @@ func TestBroadcastMessages(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := newTestDataDir(t, "nodeB")
-	defer os.RemoveAll(dataDirB)
+	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
 	configB := &Config{
 		DataDir:     dataDirB,

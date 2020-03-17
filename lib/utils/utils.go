@@ -27,6 +27,16 @@ import (
 	"strings"
 )
 
+// PathExists returns true if the named file or directory exists, otherwise false
+func PathExists(p string) bool {
+	if _, err := os.Stat(p); err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+	}
+	return true
+}
+
 // HomeDir returns the user's current HOME directory
 func HomeDir() string {
 	if home := os.Getenv("HOME"); home != "" {
@@ -36,16 +46,6 @@ func HomeDir() string {
 		return usr.HomeDir
 	}
 	return ""
-}
-
-// Exists returns true if the named file or directory exists, otherwise false
-func Exists(fp string) bool {
-	if _, err := os.Stat(fp); err != nil {
-		if os.IsNotExist(err) {
-			return false
-		}
-	}
-	return true
 }
 
 // ExpandDir expands a tilde prefix path to a full home path

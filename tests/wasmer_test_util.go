@@ -63,7 +63,7 @@ func GetRuntimeVars(targetRuntime string) (string, string) {
 
 // GetRuntimeBlob checks if the test wasm @testRuntimeFilePath exists and if not, it fetches it from @testRuntimeURL
 func GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL string) (n int64, err error) {
-	if utils.Exists(testRuntimeFilePath) {
+	if utils.PathExists(testRuntimeFilePath) {
 		return 0, nil
 	}
 
