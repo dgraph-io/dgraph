@@ -161,6 +161,15 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
+	x.InitSentry(enc.EeBuild)
+	defer x.FlushSentry()
+	x.ConfigureSentryScope("zero")
+	x.WrapPanics()
+
+	// Simulate a Sentry exception or panic event as shown below.
+	// x.CaptureSentryException(errors.New("zero exception"))
+	// x.Panic(errors.New("zero manual panic will send 2 events"))
+
 	x.PrintVersion()
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
@@ -199,15 +208,6 @@ func run() {
 	if len(opts.myAddr) == 0 {
 		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
-
-	x.InitSentry(enc.EeBuild)
-	defer x.FlushSentry()
-	x.ConfigureSentryScope("zero")
-	x.WrapPanics()
-
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("zero exception"))
-	// x.Panic(errors.New("zero manual panic will send 2 events"))
 
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
 	x.Check(err)
@@ -260,8 +260,14 @@ func run() {
 
 	// handle signals
 	go func() {
+		var sigCnt int
 		for sig := range sdCh {
 			glog.Infof("--- Received %s signal", sig)
+			sigCnt++
+			if sigCnt >= 2 {
+				glog.Infof("ignoring...")
+				continue
+			}
 			signal.Stop(sdCh)
 			st.zero.closer.Signal()
 		}
