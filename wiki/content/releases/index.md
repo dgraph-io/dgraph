@@ -2,8 +2,22 @@
 title = "Dgraph Releases"
 +++
 
+Dgraph releases starting with v20.03 follow [calendar versioning](https://calver.org).
+You can watch the [Announce][] Discuss category to know about the latest releases and other important announcements.
+
+[Announce]: https://discuss.dgraph.io/c/announce
+
+## Release series
+
  Dgraph Release Series | Current Release | Supported? | First Release Date | End of life
 -----------------------|-----------------|------------|--------------------|------------
- 1.2.x                 | 1.2.1           | Yes        | January 2020       | January 2021
- 1.1.x                 | 1.1.1           | Yes        | January 2020       | January 2021
- 1.0.x                 | 1.0.18          | No         | December 2017      | March 2020
+ v20.03.x              | Unreleased      | -          | -                  | -
+ v1.2.x                | [v1.2.1][]      | Yes        | January 2020       | January 2021
+ v1.1.x                | [v1.1.1][]      | Yes        | January 2020       | January 2021
+ v1.0.x                | [v1.0.18][]     | No         | December 2017      | March 2020
+
+
+[v1.2.1]: https://discuss.dgraph.io/t/dgraph-v1-2-1-release/5949
+[v1.1.1]: https://discuss.dgraph.io/t/dgraph-v1-1-1-release/5664
+[v1.0.18]: https://discuss.dgraph.io/t/dgraph-v1-0-18-release/5663
+
