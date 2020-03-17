@@ -130,31 +130,58 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 				maxUid = parsedKey.Uid
 			}
 
-			var restoreVal []byte
 			switch kv.GetUserMeta()[0] {
 			case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
-				var err error
 				backupPl := &pb.BackupPostingList{}
 				if err := backupPl.Unmarshal(kv.Value); err != nil {
 					return 0, errors.Wrapf(err, "while reading backup posting list")
 				}
-				restoreVal, err = posting.FromBackupPostingList(backupPl).Marshal()
-				if err != nil {
-					return 0, errors.Wrapf(err, "while converting backup posting list")
+				pl := posting.FromBackupPostingList(backupPl)
+				shouldSplit := pl.Size() >= (1<<20)/2 && len(pl.Pack.Blocks) > 1
+
+				if !shouldSplit || parsedKey.HasStartUid || len(pl.GetSplits()) > 0 {
+					// This covers two cases.
+					// 1. The list is not big enough to be split.
+					// 2. This key is storing part of a multi-part list. Write each individual
+					// part without rolling the key first. This part is here for backwards
+					// compatibility. New backups are not affected because there was a change
+					// to roll up lists into a single one.
+					restoreVal, err := pl.Marshal()
+					if err != nil {
+						return 0, errors.Wrapf(err, "while converting backup posting list")
+					}
+					kv.Key = restoreKey
+					kv.Value = restoreVal
+					if err := loader.Set(kv); err != nil {
+						return 0, err
+					}
+				} else {
+					// This is a complete list. It should be rolled up to avoid writing
+					// a list that is too big to be read back from disk.
+					l := posting.NewList(restoreKey, pl, kv.Version)
+					kvs, err := l.Rollup()
+					if err != nil {
+						// TODO: wrap errors in this file for easier debugging.
+						return 0, err
+					}
+					for _, kv := range kvs {
+						if err := loader.Set(kv); err != nil {
+							return 0, err
+						}
+					}
 				}
 
 			case posting.BitSchemaPosting:
-				restoreVal = kv.Value
+				// Schema and type keys are not stored in an intermediate format so their
+				// value can be written as is.
+				kv.Key = restoreKey
+				if err := loader.Set(kv); err != nil {
+					return 0, err
+				}
 
 			default:
 				return 0, errors.Errorf(
 					"Unexpected meta %d for key %s", kv.UserMeta[0], hex.Dump(kv.Key))
-			}
-
-			kv.Key = restoreKey
-			kv.Value = restoreVal
-			if err := loader.Set(kv); err != nil {
-				return 0, err
 			}
 		}
 	}

@@ -20,11 +20,35 @@ package admin
 
 const adminTypes = `
 	input BackupInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
 		destination: String!
+
+		"""
+		Access key credential for the destination.
+		"""
 		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
 		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
 		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
 		anonymous: Boolean
+
+		"""
+		Force a full backup instead of an incremental backup.
+		"""	
 		forceFull: Boolean
 	}
 
@@ -33,7 +57,15 @@ const adminTypes = `
 	}
 
 	type LoginResponse {
+
+		"""
+		JWT token that should be used in future requests after this login.
+		"""	
 		accessJWT: String
+
+		"""
+		Refresh token that can be used to re-login after accessJWT expires.
+		"""	
 		refreshJWT: String
 	}
 
@@ -42,23 +74,49 @@ const adminTypes = `
 	}
 
 	type User @secret(field: "password", pred: "dgraph.password") {
+
+		"""
+		Username for the user.  Dgraph ensures that usernames are unique.
+		"""
 		name: String! @id @dgraph(pred: "dgraph.xid")
+
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
 	type Group {
+
+		"""
+		Name of the group.  Dgraph ensures uniqueness of group names.
+		"""
 		name: String! @id @dgraph(pred: "dgraph.xid")
 		users: [User] @dgraph(pred: "~dgraph.user.group")
 		rules: [Rule] @dgraph(pred: "dgraph.acl.rule")
 	}
 
 	type Rule {
+
+		"""
+		Predicate to which the rule applies.
+		"""	
 		predicate: String! @dgraph(pred: "dgraph.rule.predicate")
-		# TODO - Change permission to enum type once we figure out how to map enum strings to Int
-		# while storing it in Dgraph.
-		# We also need validation in Dgraph on ther permitted value of permission to be between [0,7]
-		# If we change permission to be an ENUM and only allow ACL mutations through the GraphQL API
-		# then we don't need this validation in Dgrpah.
+
+		"""
+		Permissions that apply for the rule.  Represented following the UNIX file permission 
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
+
+		The options are:
+		* 1 (binary 001) : MODIFY
+		* 2 (010) : WRITE
+		* 3 (011) : WRITE+MODIFY
+		* 4 (100) : READ
+		* 5 (101) : READ+MODIFY
+		* 6 (110) : READ+WRITE
+		* 7 (111) : READ+WRITE+MODIFY
+
+		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		write and modify operations.
+		"""	
 		permission: Int! @dgraph(pred: "dgraph.rule.permission")
 	}
 
@@ -94,7 +152,28 @@ const adminTypes = `
 	}
 
 	input RuleRef {
+		"""
+		Predicate to which the rule applies.
+		"""	
 		predicate: String!
+
+		"""
+		Permissions that apply for the rule.  Represented following the UNIX file permission 
+		convention. That is, 4 (binary 100) represents READ, 2 (binary 010) represents WRITE, 
+		and 1 (binary 001) represents MODIFY (the permission to change a predicate’s schema).
+
+		The options are:
+		* 1 (binary 001) : MODIFY
+		* 2 (010) : WRITE
+		* 3 (011) : WRITE+MODIFY
+		* 4 (100) : READ
+		* 5 (101) : READ+MODIFY
+		* 6 (110) : READ+WRITE
+		* 7 (111) : READ+WRITE+MODIFY
+
+		Permission 0, which is equal to no permission for a predicate, blocks all read, 
+		write and modify operations.
+		"""
 		permission: Int!
 	}
 
@@ -166,36 +245,56 @@ const adminTypes = `
 	}`
 
 const adminMutations = `
+
+	"""
+	Start a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
+	"""
 	backup(input: BackupInput!) : BackupPayload
 
+	"""
+	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
+	If login is not successful an error is returned.
+	"""
 	login(userId: String, password: String, refreshToken: String): LoginPayload
-	# ACL related endpoints.
-	# 1. If user and group don't exist both are created and linked.
-	# 2. If user doesn't exist but group does, then user is created and both are linked.
-	# 3. If user exists and group doesn't exist, then two errors are returned i.e. User exists
-	# and group doesn't exist.
-	# 4. If user and group exists, then error that user exists.
+
+	"""
+	Add a user.  When linking to groups: if the group doesn't exist it is created; if the group
+	exists, the new user is linked to the existing group.  It's possible to both create new
+	groups and link to existing groups in the one mutation.
+
+	Dgraph ensures that usernames are unique, hence attempting to add an existing user results
+	in an error.
+	"""
 	addUser(input: [AddUserInput!]!): AddUserPayload
+
+	"""
+	Add a new group and (optionally) set the rules for the group.
+	"""
 	addGroup(input: [AddGroupInput!]!): AddGroupPayload
 
-	# update user allows updating a user's password or updating their groups. If the group
-	# doesn't exist, then it is created, otherwise linked to the user. If the user filter
-	# doesn't return anything then nothing happens.
+	"""
+	Update users, their passwords and groups.  As with AddUser, when linking to groups: if the
+	group doesn't exist it is created; if the group exists, the new user is linked to the existing 
+	group.  If the filter doesn't match any users, the mutation has no effect.
+	"""
 	updateUser(input: UpdateUserInput!): AddUserPayload
-	# update group only allows adding/removing rules to a group.
+
+	"""
+	Add or remove rules for groups. If the filter doesn't match any groups, 
+	the mutation has no effect.
+	"""
 	updateGroup(input: UpdateGroupInput!): AddGroupPayload
 
 	deleteGroup(filter: GroupFilter!): DeleteGroupPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload`
 
 const adminQueries = `
-	# ACL related endpoints
-	# TODO - The endpoints below work fine for members of guardians group but they should only
-	# return a subset of the data for other users. Test that and add validation in the server
-	# for them.
 	getUser(name: String!): User
 	getGroup(name: String!): Group
 
+	"""
+	Get the currently logged in user.
+	"""
 	getCurrentUser: User
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
