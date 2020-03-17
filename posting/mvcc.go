@@ -88,6 +88,13 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	for _, kv := range kvs {
 		hash := z.MemHash(kv.Key)
 		ir.versions[hash] = kv.Version
+
+		// Just to see if writes are causing the issue or if it is writes in the range of reads.
+		// Artificially set the value to nil and version to really low.
+		// The following three lines can be taken out.
+		kv.Value = nil
+		kv.UserMeta = []byte{BitEmptyPosting}
+		kv.Version = 1 // Artifically set it to really low.
 	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
