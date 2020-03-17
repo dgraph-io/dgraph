@@ -56,7 +56,7 @@ func Init(db *badger.DB, id uint64, gid uint32, closer *y.Closer) *DiskStorage {
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
-	w.processDeleteRange(closer)
+	go w.processDeleteRange(closer)
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -85,10 +85,17 @@ func (w *DiskStorage) processDeleteRange(closer *y.Closer) {
 	defer closer.Done()
 
 	batch := w.db.NewWriteBatch()
-	for r := range w.deleteRangeChan {
-		if err := w.deleteRange(batch, r.from, r.until); err != nil {
-			glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
-				err, r.from, r.until)
+
+loop:
+	for {
+		select {
+		case r := <-w.deleteRangeChan:
+			if err := w.deleteRange(batch, r.from, r.until); err != nil {
+				glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
+					err, r.from, r.until)
+			}
+		case <-closer.HasBeenClosed():
+			break loop
 		}
 	}
 

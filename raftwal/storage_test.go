@@ -200,7 +200,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	}
 
 	batch := db.NewWriteBatch()
-	require.NoError(t, ds.deleteUntil(batch, 0, 4))
+	require.NoError(t, ds.deleteRange(batch, 0, 4))
 	require.NoError(t, batch.Flush())
 	ds.cache.Store(firstKey, 0)
 	first, err = ds.FirstIndex()
@@ -244,7 +244,7 @@ func TestStorageCompact(t *testing.T) {
 		first, err := ds.FirstIndex()
 		require.NoError(t, err)
 		batch := db.NewWriteBatch()
-		err = ds.deleteUntil(batch, first-1, tt.i)
+		err = ds.deleteRange(batch, first-1, tt.i)
 		require.NoError(t, batch.Flush())
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
