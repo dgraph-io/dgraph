@@ -83,6 +83,8 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		if ver, ok := ir.versions[hash]; ok && kv.Version <= ver {
 			glog.Infof("Same version for key: %x. Ignoring.\n", kv.Key)
 			return nil
+		} else {
+			glog.Infof("Rolled up Key: %x. Version: %d. Meta: %x\n", kv.Key, kv.Version, kv.UserMeta)
 		}
 	}
 	for _, kv := range kvs {
@@ -92,9 +94,9 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		// Just to see if writes are causing the issue or if it is writes in the range of reads.
 		// Artificially set the value to nil and version to really low.
 		// The following three lines can be taken out.
-		kv.Value = nil
-		kv.UserMeta = []byte{BitEmptyPosting}
-		kv.Version = 1 // Artifically set it to really low.
+		// kv.Value = nil
+		// kv.UserMeta = []byte{BitEmptyPosting}
+		// kv.Version = 1 // Artifically set it to really low.
 	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
