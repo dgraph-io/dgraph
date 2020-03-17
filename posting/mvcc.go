@@ -60,6 +60,7 @@ var (
 				return new([][]byte)
 			},
 		},
+		versions: make(map[uint64]uint64),
 	}
 )
 
