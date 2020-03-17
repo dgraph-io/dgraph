@@ -17,7 +17,9 @@
 package posting
 
 import (
+	"sync/atomic"
 	"context"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"math/rand"
@@ -25,6 +27,7 @@ import (
 	"sort"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
@@ -484,6 +487,106 @@ func TestMillion(t *testing.T) {
 	require.Equal(t, commits, len(l.Uids), "List of Uids received: %+v", l.Uids)
 	for i, uid := range l.Uids {
 		require.Equal(t, uint64(i+1)*2, uid)
+	}
+}
+
+const mutate_cnt int = 100000 
+var ts uint64
+
+func TestParallelMutateRollupRead(t *testing.T) {
+	// Ensure list is stored in a single part.
+	maxListSize = math.MaxInt32
+
+	key := x.DataKey("balance", 1332)
+
+	commit := make(chan int)
+	go mutate(t, key, commit)
+	done1 := make(chan bool)
+	go rolluplocal(t, key, done1)
+	go readpl(t, key)
+
+	_ = <-commit
+	done1 <- true
+
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	val, err := ol.Value(uint64(2*mutate_cnt + 1))
+	newint, err := strconv.Atoi(string(val.Value.([]byte)))
+	t.Logf("Final Value = %v", newint)
+}
+
+func mutate(t *testing.T, key []byte, commitCh chan int) {
+	for i := 0; i < mutate_cnt; i++ {
+		startTs := atomic.AddUint64(&ts, 2)
+		addEdgeToValue(t, "balance", 1332, strconv.Itoa(i+1), startTs-1, startTs)
+		if i%10000 == 0 {
+			fmt.Printf("mutate at %v\n", i)
+		}
+	}
+	commitCh <- 1
+	return
+}
+
+func rolluplocal(t *testing.T, key []byte, done chan bool) {
+	writer := NewTxnWriter(pstore)
+	count := 0
+	for {
+		ol, err := getNew(key, ps)
+		require.NoError(t, err)
+		count++
+		if count%1000 == 0 {
+			fmt.Printf("Rolling up %d times\n", count)
+		}
+		kvs, err := ol.Rollup()
+		require.NoError(t, err)
+		for _, kv := range kvs {
+			require.NoError(t, writer.SetAt(kv.Key, kv.Value, kv.UserMeta[0], kv.Version))
+		}
+		writer.Flush()
+		select {
+		case <-done:
+			writer.Flush()
+			return
+		default:
+		}
+		time.Sleep(time.Millisecond * 10)
+	}
+}
+
+func readpl(t *testing.T, key []byte) {
+	var oldint int
+	count := 0
+	for {
+		//time.Sleep(time.Millisecond * 1)
+
+		ol, err := getNew(key, ps)
+		require.NotNil(t, ol)
+		require.NoError(t, err)
+
+		readTs := atomic.LoadUint64(&ts)
+
+		newVal, _ := ol.Value(readTs)
+		if err == ErrNoValue || newVal.Value == nil {
+			continue
+		} else {
+			x.Check(err)
+		}
+		newint, err := strconv.Atoi(string(newVal.Value.([]byte)))
+		if err != nil {
+			continue
+		}
+		count++
+		if count%1000000 == 0 {
+			fmt.Printf("Reading at ts = %v, val = %v\n", readTs, newint)
+		}
+		require.NotEqual(t, newint, 0)
+		if oldint != 0 {
+			if newint < oldint {
+				fmt.Printf("Value decreased, old val = %v, new val = %v\n", oldint, newint)
+			}
+			require.GreaterOrEqual(t, newint, oldint)
+		}
+		oldint = newint
 	}
 }
 
