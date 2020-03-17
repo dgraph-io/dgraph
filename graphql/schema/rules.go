@@ -637,6 +637,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name,
 		)
 	}
+	// TODO - Validate the URL/method and body template here.
 
 	return nil
 }

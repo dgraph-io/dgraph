@@ -434,3 +434,22 @@ schemas:
       }
       A.p: string .
       A.q: string .
+
+  -
+    name: "custom types shouldn't be part of Dgraph schema"
+    input: |
+      type A @custom {
+        id: ID!
+        p: String @deprecated
+        q: String @deprecated(reason: "just because it is")
+      }
+
+      type B {
+        id: ID!
+        p: String
+      }
+    output: |
+      type B {
+        B.p
+      }
+      B.p: string .

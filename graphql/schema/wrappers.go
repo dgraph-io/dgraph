@@ -216,6 +216,9 @@ func (s *schema) Queries(t QueryType) []string {
 
 func (s *schema) Mutations(t MutationType) []string {
 	var result []string
+	if s.schema.Mutation == nil {
+		return nil
+	}
 	for _, m := range s.schema.Mutation.Fields {
 		if mutationType(m.Name) == t {
 			result = append(result, m.Name)
@@ -811,7 +814,6 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
 	custom := query.Directives.ForName("custom")
 	httpArg := custom.Arguments.ForName("http")
-	// TODO - What if url and method aren't there? That should be an error.
 	rc := HTTPResolverConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
@@ -825,7 +827,8 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 		val := argMap[arg.Name]
 		vars[arg.Name] = val
 		if val == nil {
-			// Instead of replacing value to nil, we replace it with an empty string.
+			// Instead of replacing value to nil for optional arguments, we replace it with an
+			// empty string.
 			val = ""
 		}
 		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, fmt.Sprintf("%v", val))
