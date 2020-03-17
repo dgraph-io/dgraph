@@ -459,8 +459,9 @@ func setupServer(closer *y.Closer) {
 	whitelist := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !handlerInit(w, r, map[string]bool{
-				http.MethodPost: true,
-				http.MethodGet:  true,
+				http.MethodPost:    true,
+				http.MethodGet:     true,
+				http.MethodOptions: true,
 			}) {
 				return
 			}

@@ -91,7 +91,7 @@ pushd $basedir/dgraph
   lastCommitSHA1=$(git rev-parse --short HEAD)
   gitBranch=$(git rev-parse --abbrev-ref HEAD)
   lastCommitTime=$(git log -1 --format=%ci)
-  release_version=$TAG
+  release_version=$(git describe --always --tags)
 popd
 
 # Regenerate protos. Should not be different from what's checked in.
