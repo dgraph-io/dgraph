@@ -265,7 +265,11 @@ func run() {
 			glog.Infof("--- Received %s signal", sig)
 			sigCnt++
 			if sigCnt >= 2 {
-				glog.Infof("ignoring...")
+				if sigCnt == 3 {
+					glog.Infof("--- Got interrupt signal 3rd time. Aborting now.")
+					os.Exit(1)
+				}
+				glog.Infof("--- Ignoring 2nd interrupt signal.")
 				continue
 			}
 			signal.Stop(sdCh)
