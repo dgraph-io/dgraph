@@ -212,7 +212,7 @@ EOF
 
 function StopServers
 {
-  INFO "stoping containers"
+  INFO "stopping containers"
   DockerCompose -f $DOCKER_CONF down
 }
 
