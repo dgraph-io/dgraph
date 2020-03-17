@@ -98,7 +98,7 @@ func (creds *Credentials) hasCredentials() bool {
 	if creds == nil {
 		return false
 	}
-	return creds.accessKey != "" && creds.secretKey != ""
+	return creds.accessKey != "" || creds.secretKey != "" || creds.sessionToken != ""
 }
 
 func (creds *Credentials) isAnonymous() bool {
