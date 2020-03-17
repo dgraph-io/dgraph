@@ -192,6 +192,8 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Int("poll_interval", 1, "polling interval for graphql subscription. Units are in"+
+		"seconds.")
 }
 
 func setupCustomTokenizers() {
@@ -609,7 +611,7 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
-
+	x.Config.PollInterval = Alpha.Conf.GetInt("poll_interval")
 	x.InitSentry(enc.EeBuild)
 	defer x.FlushSentry()
 	x.ConfigureSentryScope("alpha")

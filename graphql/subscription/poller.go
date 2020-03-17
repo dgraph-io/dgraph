@@ -25,6 +25,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
@@ -101,7 +102,7 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 		pollID := uint64(0)
 		for {
 			pollID++
-			time.Sleep(time.Second)
+			time.Sleep(time.Second * time.Duration(x.Config.PollInterval))
 
 			globalEpoch := atomic.LoadUint64(p.globalEpoch)
 			if localEpoch != globalEpoch || globalEpoch == math.MaxUint64 {
