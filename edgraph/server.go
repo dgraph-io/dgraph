@@ -773,11 +773,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
-		v := x.TagValueStatusOK
-		if rerr != nil {
-			v = x.TagValueStatusError
-		}
-		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		timeSpentMs := x.SinceMs(l.Start)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
@@ -796,6 +791,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 
 	span.Annotatef(nil, "Request received: %v", req)
 	if isQuery {
+		v := x.TagValueStatusOK
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
 			measurements = append(measurements, x.PendingQueries.M(-1))
@@ -804,6 +801,16 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if isMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
+
+	isGraphQL, _ := ctx.Value(isGraphQL).(bool)
+
+	defer func() {
+		v := x.TagValueStatusOK
+		if rerr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
+	}()
 
 	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {

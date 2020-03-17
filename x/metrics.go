@@ -151,14 +151,14 @@ var (
 			Name:        PendingQueries.Name(),
 			Measure:     PendingQueries,
 			Description: PendingQueries.Description(),
-			Aggregation: view.LastValue(),
+			Aggregation: view.Sum(),
 			TagKeys:     allTagKeys,
 		},
 		{
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
-			Aggregation: view.LastValue(),
+			Aggregation: view.Sum(),
 			TagKeys:     allTagKeys,
 		},
 		{
@@ -186,7 +186,7 @@ var (
 			Name:        ActiveMutations.Name(),
 			Measure:     ActiveMutations,
 			Description: ActiveMutations.Description(),
-			Aggregation: view.LastValue(),
+			Aggregation: view.Sum(),
 			TagKeys:     allTagKeys,
 		},
 		{
