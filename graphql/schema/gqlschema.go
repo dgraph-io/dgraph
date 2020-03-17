@@ -409,7 +409,6 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 
 	for _, key := range definitions {
 		defn := sch.Types[key]
-
 		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
 			continue
 		}

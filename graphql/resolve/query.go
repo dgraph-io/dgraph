@@ -153,7 +153,7 @@ func NewHTTPResolver(hc *http.Client,
 
 func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
 	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveQuery")
+	stop := x.SpanTimer(span, "resolveHTTPQuery")
 	defer stop()
 
 	res, err := hr.rewriteAndExecute(ctx, query)

@@ -718,8 +718,8 @@ invalid_schemas:
   #       getAuthro(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
   #     }
   #   errlist: [
-  #     {"message": "Random",
-  #     "locations":[{"line":1, "column":6}]},
+  #     {"message": "Type Query; Field getAuthro: http argument for @custom directive should not be empty.",
+  #     "locations":[{"line":6, "column":31}]},
   #   ]
 
 

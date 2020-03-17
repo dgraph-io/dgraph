@@ -621,6 +621,23 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
+
+	httpArg := dir.Arguments.ForName("http")
+	if httpArg == nil || httpArg.Value.String() == "" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: http argument for @custom directive should not be empty.",
+			typ.Name, field.Name,
+		)
+	}
+	if httpArg.Value.Kind != ast.ObjectValue {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: http argument for @custom directive should of type Object.",
+			typ.Name, field.Name,
+		)
+	}
+
 	return nil
 }
 

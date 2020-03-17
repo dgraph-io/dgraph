@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -218,8 +219,10 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			// TODO - Initiate the client with the correct defaults, timeout etc.
-			return NewHTTPResolver(&http.Client{}, nil, nil, StdQueryCompletion())
+			return NewHTTPResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, nil, nil, StdQueryCompletion())
 		})
 	}
 

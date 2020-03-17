@@ -382,7 +382,7 @@ func TestParseCustomBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, err := parseCustomBody(test.template, test.variables)
+			b, err := substitueVarsInBody(test.template, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.JSONEq(t, test.expected, string(b))
