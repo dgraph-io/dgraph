@@ -153,9 +153,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
 	}
 	if pk.HasStartUid {
-		// Trying to read a single part of a multi part list. This type of list
-		// should be read once using the canonical list (with startUid equal to zero).
-		return nil, ErrInvalidKey
+		// Return a nil error. This is a temporary fix for this branch. The actual
+		// fix involves changing the data format so it cannot go in this release.
+		return nil, nil
 	}
 
 	l := new(List)
@@ -183,16 +183,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
-
-			// If this list is a multi-part list, advance past the keys holding the parts.
-			if len(l.plist.GetSplits()) > 0 {
-				lastKey, err := x.GetSplitKey(key, math.MaxUint64)
-				if err != nil {
-					return nil, errors.Wrapf(err,
-						"while advancing past the end of multi-part list with key [%v]", key)
-				}
-				it.Seek(lastKey)
-			}
 
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
