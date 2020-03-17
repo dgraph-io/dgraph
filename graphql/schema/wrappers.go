@@ -1290,7 +1290,7 @@ func parseCustomBody(body string, variables map[string]interface{}) ([]byte, err
 				// Look it up in the map and replace.
 				val, ok := variables[text]
 				if !ok {
-					return nil, errors.Errorf("Couldn't find variable: %s in variables map",
+					return nil, errors.Errorf("couldn't find variable: %s in variables map",
 						variable)
 				}
 				switch v := val.(type) {
@@ -1304,7 +1304,7 @@ func parseCustomBody(body string, variables map[string]interface{}) ([]byte, err
 			}
 			result.WriteString(fmt.Sprintf(`"%s"`, text))
 		default:
-			return nil, errors.Errorf("Invalid character: %s while parsing body template", text)
+			return nil, errors.Errorf("invalid character: %s while parsing body template", text)
 		}
 	}
 	if depth != 0 {
@@ -1313,7 +1313,7 @@ func parseCustomBody(body string, variables map[string]interface{}) ([]byte, err
 
 	m := make(map[string]interface{})
 	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, errors.Errorf("Coudn't unmarshal HTTP body: %s as JSON", result.Bytes())
+		return nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
 	}
 	return result.Bytes(), nil
 }

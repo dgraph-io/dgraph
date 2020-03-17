@@ -349,6 +349,35 @@ func TestParseCustomBody(t *testing.T) {
 			   "comments": [{ "text": "Random comment"}]}, "age": 28}`,
 			nil,
 		},
+		{
+			"variable not found error",
+			map[string]interface{}{"postID": "0x9"},
+			`{ author: $id, post: { id: $postID }}`,
+			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			errors.New("couldn't find variable: $id in variables map"),
+		},
+		{
+			"json unmarshal error",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			`{ author: $id, post: { id $postID }}`,
+			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			errors.New("couldn't unmarshal HTTP body: {\"author\":\"0x3\",\"post\":{\"id\"\"0x9\"}}" +
+				" as JSON"),
+		},
+		{
+			"unmatched brackets error",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			`{{ author: $id, post: { id: $postID }}`,
+			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			errors.New("found unmatched curly braces while parsing body template"),
+		},
+		{
+			"invalid character error",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			`(author: $id, post: { id: $postID }}`,
+			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			errors.New("invalid character: ( while parsing body template"),
+		},
 	}
 
 	for _, test := range tcases {
