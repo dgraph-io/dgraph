@@ -972,10 +972,10 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		}
 	}
 
+	out.newMinTs = maxCommitTs
 	if split {
 		// Check if the list (or any of it's parts if it's been previously split) have
 		// become too big. Split the list if that is the case.
-		out.newMinTs = maxCommitTs
 		out.recursiveSplit()
 		out.removeEmptySplits()
 	} else {
