@@ -243,7 +243,7 @@ StopServers
 
 popd >/dev/null
 
-INFO "verifing schema is same before export and after bulk import"
+INFO "verifying schema is same before export and after bulk import"
 diff -b dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
 INFO "schema is correct"
 
