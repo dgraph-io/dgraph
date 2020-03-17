@@ -129,6 +129,12 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
+var (
+	boolTrue    = []byte("true")
+	boolFalse   = []byte("false")
+	emptyString = []byte(`""`)
+)
+
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.StringID, types.DefaultID:
@@ -136,19 +142,29 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
-		return []byte(fmt.Sprintf("%d", v.Value)), nil
+		// In types.Convert(), we always convert to int64 for IntID type. fmt.Sprintf is slow
+		// and hence we are using strconv.FormatInt() here. Since int64 and int are most common int
+		// types we are using FormatInt for those.
+		switch num := v.Value.(type) {
+		case int64:
+			return []byte(strconv.FormatInt(num, 10)), nil
+		case int:
+			return []byte(strconv.FormatInt(int64(num), 10)), nil
+		default:
+			return []byte(fmt.Sprintf("%d", v.Value)), nil
+		}
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
-			return []byte("true"), nil
+			return boolTrue, nil
 		}
-		return []byte("false"), nil
+		return boolFalse, nil
 	case types.DateTimeID:
 		// Return empty string instead of zero-time value string - issue#3166
 		t := v.Value.(time.Time)
 		if t.IsZero() {
-			return []byte(`""`), nil
+			return emptyString, nil
 		}
 		return t.MarshalJSON()
 	case types.GeoID:
