@@ -3136,26 +3136,28 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 			Name: "Country3",
 			States: []*state{
 				{Code: "S4", Name: "State4", Capital: "Cap4"},
+				{Code: "S5", Name: "State5", Capital: "Cap5"},
 			},
 		},
 		{
 			Name: "Country4",
 			States: []*state{
 				{Code: "S4", Name: "State4"},
+				{Code: "S5"},
 			},
 		},
 		{
 			Name: "Country5",
 			States: []*state{
-				{Code: "S5", Name: "State5"},
-				{Code: "S5", Name: "State"},
+				{Code: "S6", Name: "State6"},
+				{Code: "S6", Name: "State"},
 			},
 		},
 	}
 	addCountryParams.Variables["input"] = newCountries1
 	gqlResponse = postExecutor(t, graphqlURL, addCountryParams)
 
-	expectedErrors := getDuplicateXIDErrors("addCountry", []string{"S4", "S5", "S5"})
+	expectedErrors := getDuplicateXIDErrors("addCountry", []string{"S4", "S5", "S6", "S6"})
 	require.Equal(t, expectedErrors, gqlResponse.Errors)
 
 	addedCountries := actualResult.AddCountry.Country

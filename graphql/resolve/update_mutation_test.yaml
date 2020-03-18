@@ -375,20 +375,20 @@
     - deletejson: |
         {
                 "Computer.owners": [{
-                        "uid" : "uid(ComputerOwner2)",
+                        "uid" : "uid(ComputerOwnercomputerOwnerName)",
                         "ComputerOwner.computers": {
                                 "uid": "uid(x)"
                         }
                 }],
                 "uid" : "uid(x)"
         }
-      cond: "@if(eq(len(ComputerOwner2), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(ComputerOwnercomputerOwnerName), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateComputer(func: type(Computer)) @filter(eq(Computer.name, "computerName")) {
         uid
       }
-      ComputerOwner2 as ComputerOwner2(func: eq(ComputerOwner.name, "computerOwnerName")) @filter(type(ComputerOwner)) {
+      ComputerOwnercomputerOwnerName as ComputerOwnercomputerOwnerName(func: eq(ComputerOwner.name, "computerOwnerName")) @filter(type(ComputerOwner)) {
         uid
       }
     }
@@ -676,7 +676,7 @@
             "dgraph.type": ["Country"],
             "Country.name": "New Country",
             "Country.states": [ {
-              "uid": "_:State3",
+              "uid": "_:Statedg",
               "dgraph.type": ["State"],
               "State.code": "dg",
               "State.name": "Dgraph",
@@ -686,7 +686,7 @@
             } ]
           }
         }
-      cond: "@if(eq(len(State3), 0) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Statedg), 0) AND gt(len(x), 0))"
     - setjson: |
         { "uid" : "uid(x)",
           "Author.country": {
@@ -694,7 +694,7 @@
             "dgraph.type": ["Country"],
             "Country.name": "New Country",
             "Country.states": [ {
-              "uid": "uid(State3)",
+              "uid": "uid(Statedg)",
               "State.country": {
                 "uid": "_:Country2"
               }
@@ -705,19 +705,19 @@
         [
           {
             "uid": "uid(Country4)",
-            "Country.states": [{"uid": "uid(State3)"}]
+            "Country.states": [{"uid": "uid(Statedg)"}]
           }
         ]
-      cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Statedg), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
         uid
       }
-      State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
+      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(State3)) {
+      var(func: uid(Statedg)) {
         Country4 as State.country
       }
     }
@@ -756,7 +756,7 @@
             "dgraph.type": ["Country"],
             "Country.name": "New Country",
             "Country.states": [ {
-              "uid": "uid(State3)",
+              "uid": "uid(Statedg)",
               "State.country": {
                 "uid": "_:Country2"
               }
@@ -767,19 +767,19 @@
         [
           {
             "uid": "uid(Country4)",
-            "Country.states": [{"uid": "uid(State3)"}]
+            "Country.states": [{"uid": "uid(Statedg)"}]
           }
         ]
-      cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Statedg), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
         uid
       }
-      State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
+      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(State3)) {
+      var(func: uid(Statedg)) {
         Country4 as State.country
       }
     }

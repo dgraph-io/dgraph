@@ -96,15 +96,15 @@
     getting injected and all data transformed to underlying Dgraph edge names"
   dgmutations:
     - setjson: |
-        { "uid":"_:User1",
+        { "uid":"_:UserA.N.__space__Author",
           "dgraph.type":["User"],
           "User.name":"A.N. Author",
           "User.pwd":"Password"
         }
-      cond: "@if(eq(len(User1), 0))"
+      cond: "@if(eq(len(UserA.N.__space__Author), 0))"
   dgquery: |-
     query {
-      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
+      UserA.N.__space__Author as UserA.N.__space__Author(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
         uid
       }
     }
@@ -283,7 +283,7 @@
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
   dgquery: |-
     query {
-      State1 as State1(func: eq(State.code, "nsw")) @filter(type(State)) {
+      Statensw as Statensw(func: eq(State.code, "nsw")) @filter(type(State)) {
         uid
       }
       Country2 as Country2(func: uid(0x12)) @filter(type(Country)) {
@@ -292,16 +292,16 @@
     }
   dgmutations:
     - setjson: |
-        { "uid" : "_:State1",
+        { "uid" : "_:Statensw",
           "dgraph.type": ["State"],
           "State.name": "NSW",
           "State.code": "nsw",
           "State.country": {
             "uid": "0x12",
-            "Country.states": [ { "uid": "_:State1" } ]
+            "Country.states": [ { "uid": "_:Statensw" } ]
           }
         }
-      cond: "@if(eq(len(State1), 0) AND eq(len(Country2), 1))"
+      cond: "@if(eq(len(Statensw), 0) AND eq(len(Country2), 1))"
 
 -
   name: "Add mutation using code on type which also has an ID field"
@@ -323,18 +323,18 @@
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
   dgquery: |-
     query {
-      Editor1 as Editor1(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
+      Editoreditor as Editoreditor(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
         uid
       }
     }
   dgmutations:
     - setjson: |
-        { "uid" : "_:Editor1",
+        { "uid" : "_:Editoreditor",
           "dgraph.type": ["Editor"],
           "Editor.name": "A.N. Editor",
           "Editor.code": "editor"
         }
-      cond: "@if(eq(len(Editor1), 0))"
+      cond: "@if(eq(len(Editoreditor), 0))"
 
 -
   name: "Deep add mutation"
@@ -834,10 +834,10 @@
   explanation: "The add mutation has two options depending on if dg exists"
   dgquery: |-
     query {
-      State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
+      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(State2)) {
+      var(func: uid(Statedg)) {
         Country3 as State.country
       }
     }
@@ -848,7 +848,7 @@
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "_:State2",
+            "uid": "_:Statedg",
             "dgraph.type": ["State"],
             "State.code": "dg",
             "State.name": "Dgraph",
@@ -857,14 +857,14 @@
             }
           } ]
         }
-      cond: "@if(eq(len(State2), 0))"
+      cond: "@if(eq(len(Statedg), 0))"
     - setjson: |
         {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "uid(State2)",
+            "uid": "uid(Statedg)",
             "State.country": {
               "uid": "_:Country1"
             }
@@ -874,10 +874,10 @@
         [
           {
             "uid": "uid(Country3)",
-            "Country.states": [{"uid": "uid(State2)"}]
+            "Country.states": [{"uid": "uid(Statedg)"}]
           }
         ]
-      cond: "@if(eq(len(State2), 1))"
+      cond: "@if(eq(len(Statedg), 1))"
 
 -
   name: "Add mutation with deep xid that must be reference"
@@ -902,10 +902,10 @@
     because it's missing required field name"
   dgquery: |-
     query {
-      State2 as State2(func: eq(State.code, "dg")) @filter(type(State)) {
+      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(State2)) {
+      var(func: uid(Statedg)) {
         Country3 as State.country
       }
     }
@@ -916,7 +916,7 @@
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "uid(State2)",
+            "uid": "uid(Statedg)",
             "State.country": {
               "uid": "_:Country1"
             }
@@ -926,10 +926,10 @@
         [
           {
             "uid": "uid(Country3)",
-            "Country.states": [{"uid": "uid(State2)"}]
+            "Country.states": [{"uid": "uid(Statedg)"}]
           }
         ]
-      cond: "@if(eq(len(State2), 1))"
+      cond: "@if(eq(len(Statedg), 1))"
 
 
 -

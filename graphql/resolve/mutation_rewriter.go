@@ -88,6 +88,15 @@ type VariableGenerator int
 // then they will get same variable name.
 func (c *VariableGenerator) Next(typ schema.Type, xidVal string) string {
 	if xidVal != "" {
+		// replace all spaces with `__space__`, otherwise invalid variable name will be formed.
+		// Not just stripping out all the spaces as that would lead to some different xid values
+		// being represented by the same variable name. e.g., xid values `User A` and `UserA` of
+		// type User would both be represented by `UserUserA`. Similarly, if we had just replaced
+		// spaces with `_`, then again `User A` and `User_A` would collide in variable name. So,
+		// choosing `__space__` as it is less probable for such a term to be present in user input.
+		// We could have used a hash, but even hashes collide, and if any error occurs because of
+		// collision, then in case of hash it would be a bit hard to find, while for `__space__` it
+		// would be easier as the variable name can be easily determined by a human :)
 		xidVal = strings.ReplaceAll(xidVal, " ", "__space__")
 		return fmt.Sprintf("%s%s", typ.Name(), xidVal)
 	}
@@ -110,10 +119,11 @@ func NewDeleteRewriter() MutationRewriter {
 	return &deleteRewriter{}
 }
 
+// newXidMetadata returns a new empty *xidMetadata for storing the metadata.
 func newXidMetadata() *xidMetadata {
 	return &xidMetadata{
-		variableObjMap: make(map[string]interface{}),
-		queryExists:    make(map[string]bool),
+		variableObjMap: make(map[string]interface{}, 0),
+		queryExists:    make(map[string]bool, 0),
 	}
 }
 
@@ -716,6 +726,10 @@ func rewriteObject(
 			variable = varGen.Next(typ, xidString)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
+				// if we already encountered an object with same xid earlier, then we give error if:
+				// 1. We are at top level, as no duplicates are allowed for top level
+				// 2. OR, we are in a deep mutation and this obj is different from its first
+				// encounter
 				if atTopLevel || !reflect.DeepEqual(xidObj, obj) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s",
@@ -804,6 +818,8 @@ func rewriteObject(
 			nil)
 	}
 
+	// if this object has an xid, then we don't need to rewrite its children if we have encountered
+	// it earlier
 	if xidString == "" || xidEncounteredFirstTime {
 		for field, val := range obj {
 			var frags []*mutationFragment
@@ -985,6 +1001,8 @@ func asXIDReference(
 
 	addInverseLink(result, srcField, srcUID)
 
+	// add the query only if it has not been added already, otherwise we will be assigning same
+	// variable name more than once in queries, resulting in dgraph error
 	if !xidMetadata.queryExists[xidVariable] {
 		frag.queries = []*gql.GraphQuery{xidQuery(xidVariable, xidString, xidFieldName, typ)}
 		xidMetadata.queryExists[xidVariable] = true
