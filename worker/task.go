@@ -401,7 +401,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
-			case err == posting.ErrNoValue || len(vals) == 0:
+			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
