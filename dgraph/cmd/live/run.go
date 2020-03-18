@@ -197,8 +197,7 @@ func processSchemaFile(ctx context.Context, opt options, dgraphClient *dgo.Dgrap
 	op := &api.Operation{}
 	op.Schema = string(b)
 	op.Namespace = opt.namespace
-	// Q: Do we need to set this? Ask Balaji
-	//op.CreateNamespace = opt.namespace
+
 	return dgraphClient.Alter(ctx, op)
 }
 
