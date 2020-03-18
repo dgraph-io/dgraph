@@ -192,13 +192,10 @@ func fragmentInQueryOnObject(t *testing.T) {
 	queryHumanParams := &GraphQLParams{
 		Query: `query {
 			queryHuman(filter: null) {
-				...employeeFrag
+				ename
 				...characterFrag
 				...humanFrag
 			}
-		}
-		fragment employeeFrag on Employee {
-			ename
 		}
 		fragment characterFrag on Character {
 			id
