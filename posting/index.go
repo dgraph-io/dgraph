@@ -546,12 +546,15 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
-		WithNumVersionsToKeep(math.MaxInt64).
+		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
-		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
+		WithTableLoadingMode(options.FileIO).
+		WithKeepL0InMemory(false)
+
+	dbOpts.ValueLogLoadingMode = options.FileIO
 
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {

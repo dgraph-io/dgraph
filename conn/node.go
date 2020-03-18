@@ -46,6 +46,7 @@ var (
 
 // Node represents a node participating in the RAFT protocol.
 type Node struct {
+	Applied y.WaterMark
 	x.SafeMutex
 
 	joinLock sync.Mutex
@@ -73,7 +74,6 @@ type Node struct {
 	// applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
-	Applied y.WaterMark
 
 	heartbeatsOut int64
 	heartbeatsIn  int64

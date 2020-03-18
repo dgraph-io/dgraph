@@ -86,7 +86,7 @@ const (
 	// Dgraph uses the maximum size for the most flexibility (4GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
-	GrpcMaxSize = 4 << 30
+	GrpcMaxSize = 4 << 15
 
 	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
