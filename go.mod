@@ -29,7 +29,7 @@ require (
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.3.3
+	github.com/golang/protobuf v1.3.5
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.4.0
