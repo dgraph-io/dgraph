@@ -2881,3 +2881,338 @@ func passwordTest(t *testing.T) {
 
 	deleteUser(t, *newUser)
 }
+func duplicateXidInSingleMutation(t *testing.T) {
+	t.Run("topLevelUniqueXIDsTest", topLevelUniqueXIDsTest)
+	t.Run("topLevelDuplicateXIDsTest", topLevelDuplicateXIDsTest)
+	t.Run("deepMutationUniqueXIDsTest", deepMutationUniqueXIDsTest)
+	t.Run("deepMutationDuplicateXIDsTest", deepMutationDuplicateXIDsTest)
+}
+
+func topLevelUniqueXIDsTest(t *testing.T) {
+	newStates := []*state{
+		{Name: "State1", Code: "S1"},
+		{Name: "State2", Code: "S2"},
+		{Name: "State3", Code: "S3"},
+	}
+
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($input: [AddStateInput!]!) {
+			addState(input: $input) {
+				state {
+					xcode
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newStates},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addStateParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddState struct {
+			State []*state
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+	require.ElementsMatch(t, actualResult.AddState.State, newStates)
+
+	// adding the same states now should give errors
+	newStates = append(newStates, &state{Name: "State4", Code: "S4"})
+	addStateParams.Variables["input"] = newStates
+	gqlResponse = postExecutor(t, graphqlURL, addStateParams)
+
+	expectedErrors := getExistingXIDErrors("addState", "State", []string{"S1", "S2", "S3"})
+	require.Equal(t, expectedErrors, gqlResponse.Errors)
+
+	err = json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+	require.Len(t, actualResult.AddState.State, 1)
+	require.Equal(t, actualResult.AddState.State[0], newStates[3])
+
+	// cleanup
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": newStates[0].Code},
+		"or": map[string]interface{}{
+			"xcode": map[string]interface{}{"eq": newStates[1].Code},
+			"or": map[string]interface{}{
+				"xcode": map[string]interface{}{"eq": newStates[2].Code},
+				"or": map[string]interface{}{
+					"xcode": map[string]interface{}{"eq": newStates[3].Code},
+				},
+			},
+		},
+	}
+	deleteState(t, filter, deleteStateExpected, nil)
+}
+
+func topLevelDuplicateXIDsTest(t *testing.T) {
+	newStates := []*state{
+		{Name: "State1", Code: "S1"},
+		{Name: "State2", Code: "S1"},
+		{Name: "State3", Code: "S2"},
+	}
+
+	addStateParams := &GraphQLParams{
+		Query: `mutation addState($input: [AddStateInput!]!) {
+			addState(input: $input) {
+				state {
+					xcode
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newStates},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addStateParams)
+
+	expectedErrors := getDuplicateXIDErrors("addState", []string{"S1"})
+	require.Equal(t, expectedErrors, gqlResponse.Errors)
+
+	var actualResult struct {
+		AddState struct {
+			State []*state
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+	require.Nil(t, actualResult.AddState.State)
+}
+
+func deepMutationUniqueXIDsTest(t *testing.T) {
+	newCountries := []*country{
+		{
+			Name: "Country0",
+			States: []*state{
+				{Name: "State1", Code: "S1"},
+				{Name: "State2", Code: "S2"},
+			},
+		},
+		{
+			Name: "Country1",
+			States: []*state{
+				{Name: "State3", Code: "S3"},
+				{Name: "State4", Code: "S4"},
+			},
+		},
+	}
+
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: [AddCountryInput!]!) {
+			addCountry(input: $input) {
+				country {
+					id
+					name
+					states {
+						xcode
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountries},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddCountry struct {
+			Country []*country
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+
+	ignoreOpts := append(ignoreOpts(), sliceSorter())
+	if diff := cmp.Diff(actualResult.AddCountry.Country, newCountries, ignoreOpts...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	// cleanup
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": newCountries[0].States[0].Code},
+		"or": map[string]interface{}{
+			"xcode": map[string]interface{}{"eq": newCountries[0].States[1].Code},
+			"or": map[string]interface{}{
+				"xcode": map[string]interface{}{"eq": newCountries[1].States[0].Code},
+				"or": map[string]interface{}{
+					"xcode": map[string]interface{}{"eq": newCountries[1].States[1].Code},
+				},
+			},
+		},
+	}
+	cleanUp(t, actualResult.AddCountry.Country, nil, nil)
+	deleteState(t, filter, deleteStateExpected, nil)
+}
+
+func deepMutationDuplicateXIDsTest(t *testing.T) {
+	newState := addState(t, "California", postExecutor)
+	requireState(t, newState.ID, newState, postExecutor)
+	newState.ID = ""
+	newState.Country = nil
+
+	newCountries := []*country{
+		{
+			Name: "Country0",
+			States: []*state{
+				{Code: newState.Code, Name: "State0"},
+				{Code: "S1", Name: "State1"},
+				{Code: "S2", Name: "State2"},
+			},
+		},
+		{
+			Name: "Country1",
+			States: []*state{
+				{Code: newState.Code},
+				{Code: "S1"},
+				{Code: "S2", Name: "State2"},
+			},
+		},
+		{
+			Name: "Country2",
+			States: []*state{
+				{Code: "S3", Name: "State3"},
+				{Code: "S3", Name: "State3"},
+				{Code: "S3"},
+			},
+		},
+	}
+
+	addCountryParams := &GraphQLParams{
+		Query: `mutation addCountry($input: [AddCountryInput!]!) {
+			addCountry(input: $input) {
+				country {
+					id
+					name
+					states {
+						xcode
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newCountries},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addCountryParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddCountry struct {
+			Country []*country
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+
+	ignoreOpts := append(ignoreOpts(), sliceSorter())
+	if diff := cmp.Diff(actualResult.AddCountry.Country, []*country{
+		{
+			Name:   newCountries[0].Name,
+			States: []*state{newState, newCountries[0].States[1], newCountries[0].States[2]},
+		},
+		{
+			Name:   newCountries[1].Name,
+			States: []*state{newState, newCountries[0].States[1], newCountries[0].States[2]},
+		},
+		{
+			Name:   newCountries[2].Name,
+			States: []*state{newCountries[2].States[0]},
+		},
+	}, ignoreOpts...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	// creating duplicate xids with different structure should give errors
+	newCountries1 := []*country{
+		{
+			Name: "Country3",
+			States: []*state{
+				{Code: "S4", Name: "State4"},
+			},
+		},
+		{
+			Name: "Country4",
+			States: []*state{
+				{Code: "S4", Name: "State"},
+			},
+		},
+		{
+			Name: "Country5",
+			States: []*state{
+				{Code: "S5", Name: "State5"},
+				{Code: "S5", Name: "State"},
+			},
+		},
+	}
+	addCountryParams.Variables["input"] = newCountries1
+	gqlResponse = postExecutor(t, graphqlURL, addCountryParams)
+
+	expectedErrors := getDuplicateXIDErrors("addCountry", []string{"S4", "S5", "S5"})
+	require.Equal(t, expectedErrors, gqlResponse.Errors)
+
+	newCountries = actualResult.AddCountry.Country
+	actualResult.AddCountry.Country = nil
+	err = json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+	require.Nil(t, actualResult.AddCountry.Country)
+
+	// cleanup
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": newCountries[0].States[0].Code},
+		"or": map[string]interface{}{
+			"xcode": map[string]interface{}{"eq": newCountries[0].States[1].Code},
+			"or": map[string]interface{}{
+				"xcode": map[string]interface{}{"eq": newCountries[0].States[2].Code},
+				"or": map[string]interface{}{
+					"xcode": map[string]interface{}{"eq": newCountries[2].States[0].Code},
+				},
+			},
+		},
+	}
+	cleanUp(t, newCountries, nil, nil)
+	deleteState(t, filter, deleteStateExpected, nil)
+}
+
+func sliceSorter() cmp.Option {
+	return cmpopts.SortSlices(func(v1, v2 interface{}) bool {
+		switch t1 := v1.(type) {
+		case *country:
+			t2 := v2.(*country)
+			return t1.Name < t2.Name
+		case *state:
+			t2 := v2.(*state)
+			return t1.Name < t2.Name
+		}
+		return v1.(string) < v2.(string)
+	})
+}
+
+func getDuplicateXIDErrors(mutationName string, xidVals []string) x.GqlErrorList {
+	var errs x.GqlErrorList
+	for _, xidVal := range xidVals {
+		errs = append(errs, &x.GqlError{
+			Message: fmt.Sprintf("couldn't rewrite mutation %s because failed to rewrite mutation"+
+				" payload because duplicate XID found: %s", mutationName, xidVal),
+		})
+	}
+	return errs
+}
+
+func getExistingXIDErrors(mutationName, typ string, xidVals []string) x.GqlErrorList {
+	var errs x.GqlErrorList
+	for _, xidVal := range xidVals {
+		errs = append(errs, &x.GqlError{
+			Message: fmt.Sprintf("couldn't rewrite query for mutation %s because id %s already"+
+				" exists for type %s", mutationName, xidVal, typ),
+		})
+	}
+	return errs
+}

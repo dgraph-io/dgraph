@@ -11,7 +11,7 @@ type Country {
 type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
-        name: String!
+        name: String
         country: Country @dgraph(pred: "inCountry")
 }
 

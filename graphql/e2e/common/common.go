@@ -278,6 +278,7 @@ func RunAll(t *testing.T) {
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
+	t.Run("duplicate xid in single mutation", duplicateXidInSingleMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
