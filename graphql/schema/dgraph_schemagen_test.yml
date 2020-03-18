@@ -438,18 +438,27 @@ schemas:
   -
     name: "custom types shouldn't be part of Dgraph schema"
     input: |
-      type A @custom {
-        id: ID!
-        p: String @deprecated
-        q: String @deprecated(reason: "just because it is")
+      interface C {
+        c: String
       }
 
-      type B {
+      type A implements C @custom {
+        id: ID!
+        p: String
+        q: String
+      }
+
+      type B implements C {
         id: ID!
         p: String
       }
     output: |
+      type C {
+        C.c
+      }
+      C.c: string .
       type B {
+        C.c
         B.p
       }
       B.p: string .
