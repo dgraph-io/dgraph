@@ -27,6 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -90,13 +91,6 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	for _, kv := range kvs {
 		hash := z.MemHash(kv.Key)
 		ir.versions[hash] = kv.Version
-
-		// Just to see if writes are causing the issue or if it is writes in the range of reads.
-		// Artificially set the value to nil and version to really low.
-		// The following three lines can be taken out.
-		// kv.Value = nil
-		// kv.UserMeta = []byte{BitEmptyPosting}
-		// kv.Version = 1 // Artifically set it to really low.
 	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
@@ -119,34 +113,40 @@ func (ir *incrRollupi) addKeyToBatch(key []byte) {
 }
 
 // Process will rollup batches of 64 keys in a go routine.
-func (ir *incrRollupi) Process() {
+func (ir *incrRollupi) Process(closer *y.Closer) {
+	defer closer.Done()
+
+	writer := NewTxnWriter(pstore)
+	defer writer.Flush()
+
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
 	limiter := time.NewTicker(100 * time.Millisecond)
-	writer := NewTxnWriter(pstore)
-
-	for batch := range ir.keysCh {
-		currTs := time.Now().Unix()
-		for _, key := range *batch {
-			hash := z.MemHash(key)
-			if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
-				// Key not present or Key present but last roll up was more than 10 sec ago.
-				// Add/Update map and rollup.
-				m[hash] = currTs
-				glog.Infof("Rolling up key: %x %q\n", key, key)
-				if err := ir.rollUpKey(writer, key); err != nil {
-					glog.Warningf("Error %v rolling up key %v\n", err, key)
-					continue
+	for {
+		select {
+		case <-closer.HasBeenClosed():
+			return
+		case batch := <-ir.keysCh:
+			currTs := time.Now().Unix()
+			for _, key := range *batch {
+				hash := z.MemHash(key)
+				if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
+					// Key not present or Key present but last roll up was more than 10 sec ago.
+					// Add/Update map and rollup.
+					m[hash] = currTs
+					if err := ir.rollUpKey(writer, key); err != nil {
+						glog.Warningf("Error %v rolling up key %v\n", err, key)
+						continue
+					}
 				}
 			}
-		}
-		// clear the batch and put it back in Sync keysPool
-		*batch = (*batch)[:0]
-		ir.keysPool.Put(batch)
+			// clear the batch and put it back in Sync keysPool
+			*batch = (*batch)[:0]
+			ir.keysPool.Put(batch)
 
-		// throttle to 1 batch = 64 rollups per 100 ms.
-		<-limiter.C
+			// throttle to 1 batch = 64 rollups per 100 ms.
+			<-limiter.C
+		}
 	}
-	// keysCh is closed. This should never happen.
 }
 
 // ShouldAbort returns whether the transaction should be aborted.

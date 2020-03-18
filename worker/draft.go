@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -54,29 +55,21 @@ type node struct {
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh  chan []*pb.Proposal
-	rollupCh chan uint64 // Channel to run posting list rollups.
-	ctx      context.Context
-	gid      uint32
-	closer   *y.Closer
+	applyCh chan []*pb.Proposal
+	ctx     context.Context
+	gid     uint32
+	closer  *y.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[int]*operation
+	ops     map[int]*y.Closer
 	opsLock sync.Mutex
 
 	canCampaign bool
 	elog        trace.EventLog
 
 	pendingSize int64
-}
-
-type operation struct {
-	// id of the operation.
-	id int
-	// closer is used to signal and wait for the operation to finish/cancel.
-	closer *y.Closer
 }
 
 const (
@@ -88,53 +81,59 @@ const (
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
-func (n *node) startTask(id int) (*operation, error) {
+func (n *node) startTask(id int) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
+
+	stopTask := func(id int) {
+		n.opsLock.Lock()
+		delete(n.ops, id)
+		n.opsLock.Unlock()
+		glog.Infof("Operation completed with id: %v", id)
+
+		// If we were doing any other operation, let's restart rollups.
+		if id != opRollup {
+			x.Check2(n.startTask(opRollup))
+		}
+	}
+
+	closer := y.NewCloser(1)
 
 	switch id {
 	case opRollup:
 		if len(n.ops) > 0 {
-			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
+			return nil, errors.Errorf("another operation is already running")
 		}
+		go posting.IncrRollup.Process(closer)
+
 	case opSnapshot, opIndexing:
-		if op, has := n.ops[opRollup]; has {
-			glog.Info("Found a rollup going on. Cancelling rollup!")
-			op.closer.SignalAndWait()
-			glog.Info("Rollup cancelled.")
+		if roCloser, has := n.ops[opRollup]; has {
+			roCloser.SignalAndWait()
 		} else if len(n.ops) > 0 {
-			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
+			return nil, errors.Errorf("another operation is already running")
 		}
 	default:
-		glog.Errorf("Got an unhandled operation %d. Ignoring...", id)
+		glog.Errorf("Got an unhandled operation %v. Ignoring...", id)
 		return nil, nil
 	}
 
-	op := &operation{id: id, closer: y.NewCloser(1)}
-	n.ops[id] = op
-	glog.Infof("Operation started with id: %d", id)
-	return op, nil
-}
-
-// stopTask will delete the entry from the map that keep tracks of the ops
-// and then signal that tasks has been cancelled/completed for waiting task.
-func (n *node) stopTask(op *operation) {
-	op.closer.Done()
-
-	n.opsLock.Lock()
-	delete(n.ops, op.id)
-	n.opsLock.Unlock()
-	glog.Infof("Operation completed with id: %d", op.id)
+	n.ops[id] = closer
+	glog.Infof("Operation started with id: %v", id)
+	go func(id int, closer *y.Closer) {
+		closer.Wait()
+		stopTask(id)
+	}(id, closer)
+	return closer, nil
 }
 
 func (n *node) waitForTask(id int) {
 	n.opsLock.Lock()
-	op, ok := n.ops[id]
+	closer, ok := n.ops[id]
 	n.opsLock.Unlock()
 	if !ok {
 		return
 	}
-	op.closer.Wait()
+	closer.Wait()
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -157,11 +156,10 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []*pb.Proposal, 1000),
-		rollupCh: make(chan uint64, 3),
-		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
-		ops:      make(map[int]*operation),
+		applyCh: make(chan []*pb.Proposal, 1000),
+		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:  y.NewCloser(3), // Matches CLOSER:1
+		ops:     make(map[int]*y.Closer),
 	}
 	return n
 }
@@ -502,37 +500,28 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
-		// Roll up all posting lists as a best-effort operation.
-		n.rollupCh <- snap.ReadTs
+		// We can now discard all invalid versions of keys below this ts.
+		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
 }
 
-func (n *node) processRollups() {
+func (n *node) processTabletSizes() {
 	defer n.closer.Done()                   // CLOSER:1
 	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
 	defer tick.Stop()
 
-	var readTs, last uint64
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
 			return
-		case readTs = <-n.rollupCh:
 		case <-tick.C:
-			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
-			if readTs <= last {
-				break // Break out of the select case.
-			}
-			if err := n.calcTabletSizes(readTs); err != nil {
+			if err := n.calcTabletSizes(); err != nil {
 				// If we encounter error here, we don't need to do anything about
 				// it. Just let the user know.
-				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
-			} else {
-				last = readTs // Update last only if we succeeded.
-				glog.Infof("Last rollup at Ts %d: OK.\n", readTs)
+				glog.Errorf("Error while calculating tablet sizes: %v", err)
 			}
 		}
 	}
@@ -694,11 +683,11 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
-	op, err := n.startTask(opSnapshot)
+	closer, err := n.startTask(opSnapshot)
 	if err != nil {
 		return err
 	}
-	defer n.stopTask(op)
+	defer closer.Done()
 
 	// In some edge cases, the Zero leader might not have been able to update
 	// the status of Alpha leader. So, instead of blocking forever on waiting
@@ -1140,10 +1129,7 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 }
 
 // calcTabletSizes updates the tablet sizes for the keys.
-func (n *node) calcTabletSizes(readTs uint64) error {
-	// We can now discard all invalid versions of keys below this ts.
-	pstore.SetDiscardTs(readTs)
-
+func (n *node) calcTabletSizes() error {
 	if !n.AmLeader() {
 		// Only leader needs to calculate the tablet sizes.
 		return nil
@@ -1172,7 +1158,8 @@ func (n *node) calcTabletSizes(readTs uint64) error {
 		atomic.AddInt64(size, delta)
 	}
 
-	stream := pstore.NewStreamAt(readTs)
+	// TODO: Remove all this.
+	stream := pstore.NewStreamAt(math.MaxUint64)
 	stream.LogPrefix = "Tablet Size Calculation"
 	stream.Prefix = []byte{x.DefaultPrefix}
 	stream.ChooseKey = func(item *badger.Item) bool {
@@ -1563,10 +1550,10 @@ func (n *node) InitAndStartNode() {
 			n.canCampaign = true
 		}
 	}
-	go n.processRollups()
+	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	go posting.IncrRollup.Process()
+	n.startTask(opRollup)
 	go n.Run()
 }
 
