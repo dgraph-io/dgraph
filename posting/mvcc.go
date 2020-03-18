@@ -38,12 +38,10 @@ import (
 
 // incrRollupi is used to batch keys for rollup incrementally.
 type incrRollupi struct {
-	sync.Mutex
 	// keysCh is populated with batch of 64 keys that needs to be rolled up during reads
 	keysCh chan *[][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
 	keysPool *sync.Pool
-	versions map[uint64]uint64 // Keeps track of key versions.
 }
 
 var (
@@ -61,7 +59,6 @@ var (
 				return new([][]byte)
 			},
 		},
-		versions: make(map[uint64]uint64),
 	}
 )
 
@@ -75,22 +72,6 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	kvs, err := l.Rollup()
 	if err != nil {
 		return err
-	}
-
-	ir.Lock()
-	defer ir.Unlock()
-	for _, kv := range kvs {
-		hash := z.MemHash(kv.Key)
-		if ver, ok := ir.versions[hash]; ok && kv.Version <= ver {
-			glog.Infof("Same version for key: %x. Ignoring.\n", kv.Key)
-			return nil
-		} else {
-			glog.Infof("Rolled up Key: %x. Version: %d. Meta: %x\n", kv.Key, kv.Version, kv.UserMeta)
-		}
-	}
-	for _, kv := range kvs {
-		hash := z.MemHash(kv.Key)
-		ir.versions[hash] = kv.Version
 	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
