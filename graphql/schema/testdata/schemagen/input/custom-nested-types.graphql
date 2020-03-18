@@ -13,3 +13,9 @@ type User implements Person @custom {
     cars: [Car]
 }
 
+type Query {
+    getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+        url: "http://my-api.com",
+        method: "GET"
+    })
+}

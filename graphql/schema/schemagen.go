@@ -143,6 +143,10 @@ func NewHandler(input string) (Handler, error) {
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
 
+	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
+		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
+
 	return &handler{
 		input:          input,
 		dgraphSchema:   dgSchema,

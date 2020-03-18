@@ -102,3 +102,11 @@ input StringHashFilter {
 	eq: String
 }
 
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+}
+
