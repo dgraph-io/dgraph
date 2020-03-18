@@ -17,28 +17,29 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Changed
 
-- Wrap errors thrown in posting/list.go for easier debugging. ([#4880][]).	
-- Print keys using hex encoding in error messages in list.go. ([#4891][]).	
+- Wrap errors thrown in posting/list.go for easier debugging. ([#4880][])
+- Print keys using hex encoding in error messages in list.go. ([#4891][])
 
 ### Fixed
 
-- Do not include empty nodes in the export output. ([#4896][]). 
-- Fix error when lexing language list. ([#4784][]).
-- Properly initialize posting package in debug tool. ([#4893][]).
-- Handle special characters in schema and type queries. Fixes [#4933][]. ([#4937][]). 	
-- Overwrite values for uid predicates.  Fixes [#4879][]. ([#4883][]).
-- Split keys during backup restore. ([#4912][]).
-- Disable @* language queries when the predicate does not support langs. ([#4881][]).	
-- Fix bug in exporting types with reverse predicates. Fixes [#4856][]. ([#4857][]).
-- Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.)
-- Fix point-in-time Prometheus metrics. Fixes [#4532][]. ([#4948][]).
-- Split lists in the bulk loader. ([#4967][]).
+- Do not include empty nodes in the export output. ([#4896][])
+- Fix error when lexing language list. ([#4784][])
+- Properly initialize posting package in debug tool. ([#4893][])
+- Handle special characters in schema and type queries. Fixes [#4933][]. ([#4937][])
+- Overwrite values for uid predicates.  Fixes [#4879][]. ([#4883][])
+- Split keys during backup restore. ([#4912][])
+- Disable @* language queries when the predicate does not support langs. ([#4881][])
+- Fix bug in exporting types with reverse predicates. Fixes [#4856][]. ([#4857][])
+- Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.) ([#4951][])
+- Fix point-in-time Prometheus metrics. Fixes [#4532][]. ([#4948][])
+- Split lists in the bulk loader. ([#4967][])
 - Enterprise features
-  - ACL: Allow uid access. ([#4922][]).
-  - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][]).	
-  - Backups: Verify host when default and custom credentials are used. Fixes [#4855][]. ([#4858][]).
+  - ACL: Allow uid access. ([#4922][])
+  - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][])
+  - Backups: Verify host when default and custom credentials are used. Fixes [#4855][]. ([#4858][])
 
 [#4967]: https://github.com/dgraph-io/dgraph/issues/4967
+[#4951]: https://github.com/dgraph-io/dgraph/issues/4951
 [#4532]: https://github.com/dgraph-io/dgraph/issues/4532
 [#4948]: https://github.com/dgraph-io/dgraph/issues/4948
 [#4893]: https://github.com/dgraph-io/dgraph/issues/4893
