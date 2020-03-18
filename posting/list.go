@@ -798,6 +798,12 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 		kvs = append(kvs, kv)
 	}
 
+	// Sort the KVs by their key so that the main part of the list is at the
+	// start of the list and all other parts appear in the order of their start UID.
+	sort.Slice(kvs, func(i, j int) bool {
+		return bytes.Compare(kvs[i].Key, kvs[j].Key) <= 0
+	})
+
 	return kvs, nil
 }
 
@@ -946,10 +952,10 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 		}
 	}
 
+	out.newMinTs = maxCommitTs
 	if split {
 		// Check if the list (or any of it's parts if it's been previously split) have
 		// become too big. Split the list if that is the case.
-		out.newMinTs = maxCommitTs
 		out.recursiveSplit()
 		out.removeEmptySplits()
 	} else {
