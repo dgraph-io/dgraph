@@ -791,8 +791,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 
 	span.Annotatef(nil, "Request received: %v", req)
 	if isQuery {
-		v := x.TagValueStatusOK
-		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		ostats.Record(ctx, x.PendingQueries.M(1), x.NumQueries.M(1))
 		defer func() {
 			measurements = append(measurements, x.PendingQueries.M(-1))
@@ -803,6 +801,9 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	}
 
 	defer func() {
+		// Tag "ok" or "error" status after measurements since the accumulative
+		// metrics don't need the status key. The status is useful for the
+		// request latency metrics.
 		v := x.TagValueStatusOK
 		if rerr != nil {
 			v = x.TagValueStatusError
