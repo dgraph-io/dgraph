@@ -30,7 +30,7 @@ type Options struct {
 	QueryEdgeLimit uint64
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
-	// PollInterval is the polling interval for graphql subscription. Units are in seconds.
+	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
 }
 
