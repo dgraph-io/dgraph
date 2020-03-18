@@ -102,6 +102,10 @@ predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
 
+  # Wait for background indexing to finish.
+  # TODO: Use better way of waiting once it's available.
+  sleep 5
+
   curl -H "Content-Type: application/rdf" localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
   set {
