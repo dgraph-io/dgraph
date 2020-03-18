@@ -11,6 +11,10 @@ INFO()  { echo "$ME: $@";     }
 ERROR() { echo >&2 "$ME: $@"; }
 FATAL() { ERROR "$@"; exit 1; }
 
+function DockerCompose {
+    docker-compose -p dgraph "$@"
+}
+
 set -e
 
 INFO "rebuilding dgraph"
@@ -45,7 +49,7 @@ function ErrorExit
 function StartZero
 {
   INFO "starting zero container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --detach zero1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --detach zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
     if docker logs zero1 2>&1 | grep -q 'CID set'; then
@@ -63,11 +67,11 @@ function StartAlpha
   local p_dir=$1
 
   INFO "starting alpha container"
-  docker-compose -f $DOCKER_CONF up --force-recreate --no-start alpha1
+  DockerCompose -f $DOCKER_CONF up --force-recreate --no-start alpha1
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  docker-compose -f $DOCKER_CONF up --detach alpha1
+  DockerCompose -f $DOCKER_CONF up --detach alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
@@ -84,7 +88,7 @@ function StartAlpha
 function ResetCluster
 {
     INFO "restarting cluster with only one zero and alpha"
-    docker-compose -f $DOCKER_CONF down
+    DockerCompose -f $DOCKER_CONF down
     StartZero
     StartAlpha
 }
@@ -97,6 +101,10 @@ predicate_with_no_uid_count:string  .
 predicate_with_default_type:default  .
 predicate_with_index_no_uid_count:string @index(exact) .
 ' &>/dev/null
+
+  # Wait for background indexing to finish.
+  # TODO: Use better way of waiting once it's available.
+  sleep 5
 
   curl -H "Content-Type: application/rdf" localhost:$HTTP_PORT/mutate?commitNow=true -X POST -d $'
 {
@@ -208,8 +216,8 @@ EOF
 
 function StopServers
 {
-  INFO "stoping containers"
-  docker-compose -f $DOCKER_CONF down
+  INFO "stopping containers"
+  DockerCompose -f $DOCKER_CONF down
 }
 
 function Cleanup
@@ -239,7 +247,7 @@ StopServers
 
 popd >/dev/null
 
-INFO "verifing schema is same before export and after bulk import"
+INFO "verifying schema is same before export and after bulk import"
 diff -b dir1/schema.out dir2/schema.out || FATAL "schema incorrect"
 INFO "schema is correct"
 
