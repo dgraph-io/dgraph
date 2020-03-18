@@ -55,6 +55,9 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "MovieDirector.name",
 		"type": "string"
 	}, {
+		"predicate": "State.capital",
+		"type": "string"
+	}, {
 		"predicate": "State.name",
 		"type": "string"
 	}, {
@@ -230,6 +233,8 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "State.xcode"
 		}, {
 			"name": "State.name"
+		}, {
+			"name": "State.capital"
 		}, {
 			"name": "inCountry"
 		}],

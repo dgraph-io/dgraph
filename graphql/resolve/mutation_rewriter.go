@@ -88,6 +88,7 @@ type VariableGenerator int
 // then they will get same variable name.
 func (c *VariableGenerator) Next(typ schema.Type, xidVal string) string {
 	if xidVal != "" {
+		xidVal = strings.ReplaceAll(xidVal, " ", "__space__")
 		return fmt.Sprintf("%s%s", typ.Name(), xidVal)
 	}
 	*c++
@@ -715,7 +716,7 @@ func rewriteObject(
 			variable = varGen.Next(typ, xidString)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
-				if atTopLevel || !(len(obj) == 1 || reflect.DeepEqual(xidObj, obj)) {
+				if atTopLevel || !reflect.DeepEqual(xidObj, obj) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s",
 						xidString)

@@ -140,6 +140,7 @@ type state struct {
 	ID      string   `json:"id,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	Code    string   `json:"xcode,omitempty"`
+	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
 }
 

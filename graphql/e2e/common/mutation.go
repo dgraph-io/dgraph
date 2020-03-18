@@ -3062,24 +3062,24 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 			Name: "Country0",
 			States: []*state{
 				{Code: newState.Code, Name: "State0"},
-				{Code: "S1", Name: "State1"},
-				{Code: "S2", Name: "State2"},
+				{Code: "S1", Name: "State1", Capital: "Cap1"},
+				{Code: "S2", Name: "State2", Capital: "Cap2"},
 			},
 		},
 		{
 			Name: "Country1",
 			States: []*state{
-				{Code: newState.Code},
-				{Code: "S1"},
-				{Code: "S2", Name: "State2"},
+				{Code: newState.Code, Name: "State0"},
+				{Code: "S1", Name: "State1", Capital: "Cap1"},
+				{Code: "S2", Name: "State2", Capital: "Cap2"},
 			},
 		},
 		{
 			Name: "Country2",
 			States: []*state{
-				{Code: "S3", Name: "State3"},
-				{Code: "S3", Name: "State3"},
-				{Code: "S3"},
+				{Code: "S3", Name: "State3", Capital: "Cap3"},
+				{Code: "S3", Name: "State3", Capital: "Cap3"},
+				{Code: "S3", Name: "State3", Capital: "Cap3"},
 			},
 		},
 	}
@@ -3093,6 +3093,7 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 					states {
 						xcode
 						name
+						capital
 					}
 				}
 			}
@@ -3134,13 +3135,13 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 		{
 			Name: "Country3",
 			States: []*state{
-				{Code: "S4", Name: "State4"},
+				{Code: "S4", Name: "State4", Capital: "Cap4"},
 			},
 		},
 		{
 			Name: "Country4",
 			States: []*state{
-				{Code: "S4", Name: "State"},
+				{Code: "S4", Name: "State4"},
 			},
 		},
 		{
@@ -3157,7 +3158,7 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 	expectedErrors := getDuplicateXIDErrors("addCountry", []string{"S4", "S5", "S5"})
 	require.Equal(t, expectedErrors, gqlResponse.Errors)
 
-	newCountries = actualResult.AddCountry.Country
+	addedCountries := actualResult.AddCountry.Country
 	actualResult.AddCountry.Country = nil
 	err = json.Unmarshal(gqlResponse.Data, &actualResult)
 	require.NoError(t, err)
@@ -3177,7 +3178,7 @@ func deepMutationDuplicateXIDsTest(t *testing.T) {
 			},
 		},
 	}
-	cleanUp(t, newCountries, nil, nil)
+	cleanUp(t, addedCountries, nil, nil)
 	deleteState(t, filter, deleteStateExpected, nil)
 }
 

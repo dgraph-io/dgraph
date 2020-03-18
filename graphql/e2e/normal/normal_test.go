@@ -162,6 +162,9 @@ func TestSchema_Normal(t *testing.T) {
 			"predicate": "State.country",
 			"type": "uid"
 		}, {
+			"predicate": "State.capital",
+			"type": "string"
+		}, {
 			"predicate": "State.name",
 			"type": "string"
 		}, {
@@ -297,6 +300,8 @@ func TestSchema_Normal(t *testing.T) {
 				"name": "State.xcode"
 			}, {
 				"name": "State.name"
+			}, {
+				"name": "State.capital"
 			}, {
 				"name": "State.country"
 			}],
