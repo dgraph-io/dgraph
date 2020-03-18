@@ -185,6 +185,9 @@ func (r *reducer) encodeAndWrite(
 		}
 
 		kv.StreamId = streamId
+		if pk.HasStartUid {
+			kv.StreamId |= 0x80000000
+		}
 	}
 
 	// Once we have processed all records from single stream, we can mark that stream as done.
@@ -353,16 +356,24 @@ func (r *reducer) toList(mapEntries []*pb.MapEntry, list *bpb.KVList) int {
 		}
 
 		pl.Pack = codec.Encode(uids, 256)
-		val, err := pl.Marshal()
-		x.Check(err)
-		kv := &bpb.KV{
-			Key:      y.Copy(currentKey),
-			Value:    val,
-			UserMeta: []byte{posting.BitCompletePosting},
-			Version:  r.state.writeTs,
+		shouldSplit := pl.Size() > (1<<20)/2 && len(pl.Pack.Blocks) > 1
+		if shouldSplit {
+			l := posting.NewList(y.Copy(currentKey), pl, r.state.writeTs)
+			kvs, err := l.Rollup()
+			x.Check(err)
+			list.Kv = append(list.Kv, kvs...)
+		} else {
+			val, err := pl.Marshal()
+			x.Check(err)
+			kv := &bpb.KV{
+				Key:      y.Copy(currentKey),
+				Value:    val,
+				UserMeta: []byte{posting.BitCompletePosting},
+				Version:  r.state.writeTs,
+			}
+			list.Kv = append(list.Kv, kv)
 		}
-		size += kv.Size()
-		list.Kv = append(list.Kv, kv)
+
 		uids = uids[:0]
 		pl.Reset()
 	}
