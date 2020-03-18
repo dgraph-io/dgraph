@@ -47,7 +47,7 @@ type DiskStorage struct {
 }
 
 type indexRange struct {
-	from, until uint64
+	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
@@ -91,23 +91,33 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 func (w *DiskStorage) processIndexRange() {
 	defer w.Closer.Done()
 
-	batch := w.db.NewWriteBatch()
+	slurp := func(r indexRange) {
+		batch := w.db.NewWriteBatch()
+		if err := w.deleteRange(batch, r.from, r.until); err != nil {
+			glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
+				err, r.from, r.until)
+		}
+		if err := batch.Flush(); err != nil {
+			glog.Errorf("processDeleteRange batch flush failed with error: %s,\n", err)
+		}
+	}
 
 loop:
 	for {
 		select {
 		case r := <-w.indexRangeChan:
-			if err := w.deleteRange(batch, r.from, r.until); err != nil {
-				glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
-					err, r.from, r.until)
-			}
+			slurp(r)
 		case <-w.Closer.HasBeenClosed():
 			break loop
 		}
 	}
 
-	if err := batch.Flush(); err != nil {
-		glog.Errorf("processIndexRange batch flush failed with error: %s,\n", err)
+	// As we have already shutdown the node, it is safe to close indexRangeChan.
+	// node.processApplyChan() calls CreteSnapshot, which internally sends values on this chan.
+	close(w.indexRangeChan)
+
+	for r := range w.indexRangeChan {
+		slurp(r)
 	}
 }
 
@@ -287,10 +297,9 @@ var (
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
-	// Previously we used to get snapshot key from cache. If it is not found in cache, we used to
-	// proceed futher(check firstindex in cache and badger). Now since we are deleting index ranges
-	// in background after taking snapshot, we should check for last snapshot in WAL(Badger). If no
-	// snapshot is found, then we can move forward.
+	// We are deleting index ranges in background after taking snapshot, so we should check for last
+	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
+	// check firstKey.
 	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
 		return snap.Metadata.Index + 1, nil
 	}
@@ -679,7 +688,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 
 	// deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
 	// first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
-	// TODO: should we block here?
+	// TODO: If deleteRangeChan is full, it might block mutations.
 	w.indexRangeChan <- indexRange{first - 1, snap.Metadata.Index}
 	return nil
 }
