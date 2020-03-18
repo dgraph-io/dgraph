@@ -122,8 +122,8 @@ func NewDeleteRewriter() MutationRewriter {
 // newXidMetadata returns a new empty *xidMetadata for storing the metadata.
 func newXidMetadata() *xidMetadata {
 	return &xidMetadata{
-		variableObjMap: make(map[string]interface{}, 0),
-		queryExists:    make(map[string]bool, 0),
+		variableObjMap: make(map[string]interface{}),
+		queryExists:    make(map[string]bool),
 	}
 }
 
