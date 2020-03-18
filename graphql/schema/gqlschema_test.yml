@@ -707,20 +707,50 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
-  # -
-  #   name: "@custom directive with wrong argument name"
-  #   input: |
-  #     type Author {
-  #       id: ID!
-  #     }
+  -
+    name: "@custom directive with wrong argument name"
+    input: |
+      type Author {
+        id: ID!
+      }
 
-  #     type Query {
-  #       getAuthro(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
-  #     }
-  #   errlist: [
-  #     {"message": "Type Query; Field getAuthro: http argument for @custom directive should not be empty.",
-  #     "locations":[{"line":6, "column":31}]},
-  #   ]
+      type Query {
+        getAuthor(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor: http argument for @custom directive should not be empty.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
+    name: "@custom directive with wrong url"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "123", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; url field inside @custom directive is invalid.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
+    name: "@custom directive with wrong value for method"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST.",
+      "locations":[{"line":6, "column":31}]},
+    ]
 
 
 valid_schemas:
@@ -833,8 +863,8 @@ valid_schemas:
       }
 
       type Query {
-        getAuthro(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"})
+        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
       }
       type Mutation {
-        getAuthro(id: ID): Author! @custom(http: {url: "blah.com", method: "POST"})
+        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
       }

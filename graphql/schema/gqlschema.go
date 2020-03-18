@@ -408,6 +408,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 
 	for _, key := range definitions {
+		if key == "Query" {
+			continue
+		}
 		defn := sch.Types[key]
 		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
 			continue
@@ -1372,6 +1375,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
+		if typName == "Query" {
+			// This would be printed later in schema.Query
+			continue
+		}
 		switch typ.Kind {
 		case ast.Interface:
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))

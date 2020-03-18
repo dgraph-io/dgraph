@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -637,7 +638,33 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name,
 		)
 	}
-	// TODO - Validate the URL/method and body template here.
+	u := httpArg.Value.Children.ForName("url")
+	if u == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; url field inside @custom directive is mandatory.", typ.Name,
+			field.Name)
+	}
+	if _, err := url.ParseRequestURI(u.Raw); err != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; url field inside @custom directive is invalid.", typ.Name,
+			field.Name)
+	}
+	method := httpArg.Value.Children.ForName("method")
+	if method == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; method field inside @custom directive is mandatory.", typ.Name,
+			field.Name)
+	}
+	if method.Raw != "GET" && method.Raw != "POST" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
+			typ.Name, field.Name)
+
+	}
 
 	return nil
 }

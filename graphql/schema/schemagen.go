@@ -115,7 +115,7 @@ func NewHandler(input string) (Handler, error) {
 	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
-		if defn.BuiltIn || defn.Name == "Query" {
+		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
