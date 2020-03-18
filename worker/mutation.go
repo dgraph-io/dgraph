@@ -142,28 +142,28 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// not indexing, it would accept and propose the request.
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
-	gr.Node.waitForTask(opIndexing)
+	x.WaitForTask(x.TaskIndexing)
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
-	stopIndexing := func(op *operation) {
+	stopIndexing := func(task *x.Task) {
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
-				gr.Node.stopTask(op)
+				x.StopTask(task)
 			}
 		}
 	}
 
 	// Ensure that rollup is not running.
-	op, err := gr.Node.startTask(opIndexing)
+	task, err := x.StartTask(x.TaskIndexing)
 	if err != nil {
 		return err
 	}
-	defer stopIndexing(op)
+	defer stopIndexing(task)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		// in case background indexing is running, we should call it here again.
-		defer stopIndexing(op)
+		defer stopIndexing(task)
 
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {

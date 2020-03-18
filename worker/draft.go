@@ -62,79 +62,10 @@ type node struct {
 
 	streaming int32 // Used to avoid calculating snapshot
 
-	// Used to track the ops going on in the system.
-	ops     map[int]*operation
-	opsLock sync.Mutex
-
 	canCampaign bool
 	elog        trace.EventLog
 
 	pendingSize int64
-}
-
-type operation struct {
-	// id of the operation.
-	id int
-	// closer is used to signal and wait for the operation to finish/cancel.
-	closer *y.Closer
-}
-
-const (
-	opRollup = iota + 1
-	opSnapshot
-	opIndexing
-)
-
-// startTask is used to check whether an op is already going on.
-// If rollup is going on, we cancel and wait for rollup to complete
-// before we return. If the same task is already going, we return error.
-func (n *node) startTask(id int) (*operation, error) {
-	n.opsLock.Lock()
-	defer n.opsLock.Unlock()
-
-	switch id {
-	case opRollup:
-		if len(n.ops) > 0 {
-			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
-		}
-	case opSnapshot, opIndexing:
-		if op, has := n.ops[opRollup]; has {
-			glog.Info("Found a rollup going on. Cancelling rollup!")
-			op.closer.SignalAndWait()
-			glog.Info("Rollup cancelled.")
-		} else if len(n.ops) > 0 {
-			return nil, errors.Errorf("another operation is already running, ops:%v", n.ops)
-		}
-	default:
-		glog.Errorf("Got an unhandled operation %d. Ignoring...", id)
-		return nil, nil
-	}
-
-	op := &operation{id: id, closer: y.NewCloser(1)}
-	n.ops[id] = op
-	glog.Infof("Operation started with id: %d", id)
-	return op, nil
-}
-
-// stopTask will delete the entry from the map that keep tracks of the ops
-// and then signal that tasks has been cancelled/completed for waiting task.
-func (n *node) stopTask(op *operation) {
-	op.closer.Done()
-
-	n.opsLock.Lock()
-	delete(n.ops, op.id)
-	n.opsLock.Unlock()
-	glog.Infof("Operation completed with id: %d", op.id)
-}
-
-func (n *node) waitForTask(id int) {
-	n.opsLock.Lock()
-	op, ok := n.ops[id]
-	n.opsLock.Unlock()
-	if !ok {
-		return
-	}
-	op.closer.Wait()
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -161,7 +92,6 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		rollupCh: make(chan uint64, 3),
 		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:   y.NewCloser(3), // Matches CLOSER:1
-		ops:      make(map[int]*operation),
 	}
 	return n
 }
@@ -694,11 +624,11 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
-	op, err := n.startTask(opSnapshot)
+	task, err := x.StartTask(x.TaskSnapshot)
 	if err != nil {
 		return err
 	}
-	defer n.stopTask(op)
+	defer x.StopTask(task)
 
 	// In some edge cases, the Zero leader might not have been able to update
 	// the status of Alpha leader. So, instead of blocking forever on waiting
@@ -1142,11 +1072,11 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 // rollupLists would consolidate all the deltas that constitute one posting
 // list, and write back a complete posting list.
 func (n *node) rollupLists(readTs uint64) error {
-	op, err := n.startTask(opRollup)
+	task, err := x.StartTask(x.TaskRollup)
 	if err != nil {
 		return err
 	}
-	defer n.stopTask(op)
+	defer x.StopTask(task)
 
 	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
 	amLeader := n.AmLeader()
@@ -1218,7 +1148,7 @@ func (n *node) rollupLists(readTs uint64) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-		case <-op.closer.HasBeenClosed():
+		case <-task.Closer.HasBeenClosed():
 			cancel()
 		}
 	}()
