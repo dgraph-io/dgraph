@@ -119,14 +119,13 @@ func NewHandler(input string) (Handler, error) {
 			continue
 		}
 		defns = append(defns, defn.Name)
-		if defn.Kind == ast.Object {
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
 			custom := defn.Directives.ForName(customDirective)
 			if custom != nil {
 				continue
 			}
 		}
 		typesToComplete = append(typesToComplete, defn.Name)
-
 	}
 
 	expandSchema(doc)

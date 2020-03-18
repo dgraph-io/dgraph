@@ -1,0 +1,15 @@
+type Car @custom {
+    id: ID!
+    name: String!
+}
+
+interface Person @custom {
+    age: Int!
+}
+
+type User implements Person @custom {
+    id: ID!
+    name: String!
+    cars: [Car]
+}
+

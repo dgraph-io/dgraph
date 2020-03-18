@@ -1431,18 +1431,27 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Types\n#######################\n\n"))
-	x.Check2(sch.WriteString(object.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Enums\n#######################\n\n"))
-	x.Check2(sch.WriteString(enum.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Inputs\n#######################\n\n"))
-	x.Check2(sch.WriteString(input.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Query\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
+	if len(object.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Types\n#######################\n\n"))
+		x.Check2(sch.WriteString(object.String()))
+	}
+	if len(enum.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Enums\n#######################\n\n"))
+		x.Check2(sch.WriteString(enum.String()))
+	}
+	if len(input.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Inputs\n#######################\n\n"))
+		x.Check2(sch.WriteString(input.String()))
+	}
+
+	if len(schema.Query.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Query\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
+	}
 
 	if len(schema.Mutation.Fields) > 0 {
 		x.Check2(sch.WriteString(
