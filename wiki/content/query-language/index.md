@@ -1840,7 +1840,7 @@ The `_all_` keyword requires that the nodes have types. Dgraph will look for all
 the types that have been assigned to a node, query the types to check which
 attributes they have, and use those to compute the list of predicates to expand.
 
-For example, consider a node that has types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have
 the following definitions:
 
 ```
@@ -1870,7 +1870,7 @@ veterinarian
 
 {{% notice "note" %}}
 For `string` predicates, `expand` only returns values not tagged with a language
-(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+(see [language preference]({{< relref "#language-support" >}})).  So it's often
 required to add `name@fr` or `name@.` as well to an expand query.
 {{% /notice  %}}
 
@@ -2136,6 +2136,53 @@ If data is already stored before the mutation, existing values are not checked t
 If data exists and new indices are specified in a schema mutation, any index not in the updated list is dropped and a new index is created for every new tokenizer specified.
 
 Reverse edges are also computed if specified by a schema mutation.
+
+
+### Indexes in Background
+
+Starting Dgraph version `20.3.0`, indexes are computed in the background,
+and thus indexing may still be running after an Alter operation returns.
+This requires that you wait for indexing to complete before running queries
+that require newly created indices. Such queries will fail with an error
+notifying that a given predicate is not indexed or doesn't have reverse edges.
+
+An alter operation will also fail if one is already in progress with an error
+`schema is already being modified. Please retry`. Though, mutations can
+be successfully executed while indexing is going on.
+
+For example, let's say we execute an Alter operation with the following schema:
+
+```
+name: string @index(fulltext, term) .
+age: int @index(int) @upsert .
+friend: [uid] @count @reverse .
+```
+
+Once the Alter operation returns, Dgraph will report the following schema
+and start background tasks to compute all the new indexes:
+
+```
+name: string .
+age: int @upsert .
+friend: [uid] .
+```
+
+When indexes are done computing, Dgraph will start reporting the indexes in the
+schema. In a multi-node cluster, it is possible that the alphas will finish
+computing indexes at different times. Alphas may return different schema in such
+a case until all the indexes are done computing on all the Alphas.
+
+Background indexing task may fail if an unexpected error occurs while computing
+the indexes. You should retry the Alter operation in order to update the schema,
+or sync the schema across all the alphas.
+
+You can find examples here in order to wait for indexing to complete:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j/pull/135)
+- [dgo](https://github.com/dgraph-io/dgo/pull/117)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/pull/120)
+
+We also plan to add a simpler API soon to check the status of background indexing.
 
 
 ### Predicate name rules
