@@ -25,7 +25,6 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -262,18 +261,20 @@ func handleWal(db *badger.DB) error {
 	fmt.Printf("rids: %v\n", rids)
 	fmt.Printf("gids: %v\n", gids)
 
-	closer := y.NewCloser(0)
 	for rid := range rids {
 		for gid := range gids {
 			fmt.Printf("Iterating with Raft Id = %d Groupd Id = %d\n", rid, gid)
-			store := raftwal.Init(db, rid, gid, closer)
+			store := raftwal.Init(db, rid, gid)
 			switch {
 			case len(opt.wsetSnapshot) > 0:
-				return overwriteSnapshot(db, store)
+				err := overwriteSnapshot(db, store)
+				store.Closer.SignalAndWait()
+				return err
 
 			default:
 				printRaft(db, store)
 			}
+			store.Closer.SignalAndWait()
 		}
 	}
 	return nil

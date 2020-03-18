@@ -40,7 +40,6 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/stretchr/testify/require"
 	"go.etcd.io/etcd/raft"
 	pb "go.etcd.io/etcd/raft/raftpb"
@@ -53,9 +52,8 @@ func TestStorageTerm(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -105,9 +103,8 @@ func TestStorageEntries(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -152,9 +149,8 @@ func TestStorageLastIndex(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -184,9 +180,8 @@ func TestStorageFirstIndex(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -219,9 +214,8 @@ func TestStorageCompact(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -272,9 +266,8 @@ func TestStorageCreateSnapshot(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
@@ -311,9 +304,8 @@ func TestStorageAppend(t *testing.T) {
 
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
-	closer := y.NewCloser(1)
-	defer closer.SignalAndWait()
-	ds := Init(db, 0, 0, closer)
+	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {

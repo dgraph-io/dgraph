@@ -142,8 +142,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.triggerCh = make(chan struct{}, 1)
 
 	// Initialize DiskStorage and pass it along.
-	gr.storeCloser = y.NewCloser(1)
-	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid, gr.storeCloser)
+	store := raftwal.Init(walStore, x.WorkerConfig.RaftId, gid)
 	gr.Node = newNode(store, gid, x.WorkerConfig.RaftId, x.WorkerConfig.MyAddr)
 
 	x.Checkf(schema.LoadFromDb(), "Error while initializing schema")

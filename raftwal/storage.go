@@ -41,8 +41,9 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
-	cache           *sync.Map
-	deleteRangeChan chan indexRange
+	cache          *sync.Map
+	Closer         *y.Closer
+	indexRangeChan chan indexRange
 }
 
 type indexRange struct {
@@ -50,13 +51,19 @@ type indexRange struct {
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
-func Init(db *badger.DB, id uint64, gid uint32, closer *y.Closer) *DiskStorage {
-	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map),
-		deleteRangeChan: make(chan indexRange, 16)}
+// To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
+func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
+	w := &DiskStorage{db: db,
+		id:             id,
+		gid:            gid,
+		cache:          new(sync.Map),
+		Closer:         y.NewCloser(1),
+		indexRangeChan: make(chan indexRange, 16),
+	}
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
-	go w.processDeleteRange(closer)
+	go w.processIndexRange()
 
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
@@ -74,33 +81,33 @@ func Init(db *badger.DB, id uint64, gid uint32, closer *y.Closer) *DiskStorage {
 		x.Check(err)
 	}
 
-	// If db is not closed properly, there might be ranges for which delete entries are not
+	// If db is not closed properly, there might be index ranges for which delete entries are not
 	// inserted. So insert delete entries for those ranges starting from 0 to (first-1).
-	w.deleteRangeChan <- indexRange{0, first - 1}
+	w.indexRangeChan <- indexRange{0, first - 1}
 
 	return w
 }
 
-func (w *DiskStorage) processDeleteRange(closer *y.Closer) {
-	defer closer.Done()
+func (w *DiskStorage) processIndexRange() {
+	defer w.Closer.Done()
 
 	batch := w.db.NewWriteBatch()
 
 loop:
 	for {
 		select {
-		case r := <-w.deleteRangeChan:
+		case r := <-w.indexRangeChan:
 			if err := w.deleteRange(batch, r.from, r.until); err != nil {
 				glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
 					err, r.from, r.until)
 			}
-		case <-closer.HasBeenClosed():
+		case <-w.Closer.HasBeenClosed():
 			break loop
 		}
 	}
 
 	if err := batch.Flush(); err != nil {
-		glog.Errorf("processDeleteRange batch flush failed with error: %s,\n", err)
+		glog.Errorf("processIndexRange batch flush failed with error: %s,\n", err)
 	}
 }
 
@@ -673,7 +680,7 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	// deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
 	// first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
 	// TODO: should we block here?
-	w.deleteRangeChan <- indexRange{first - 1, snap.Metadata.Index}
+	w.indexRangeChan <- indexRange{first - 1, snap.Metadata.Index}
 	return nil
 }
 

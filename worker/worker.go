@@ -116,7 +116,7 @@ func BlockingStop() {
 	groups().Node.closer.SignalAndWait()
 
 	glog.Infof("Stopping raftwal store...")
-	groups().storeCloser.SignalAndWait()
+	groups().Node.Store.Closer.SignalAndWait()
 
 	glog.Infof("Stopping worker server...")
 	workerServer.Stop()
