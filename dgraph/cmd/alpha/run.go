@@ -192,7 +192,7 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
-	flag.Duration("graphql_poll_interval", 1, "polling interval for graphql subscription.")
+	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 }
 
 func setupCustomTokenizers() {
