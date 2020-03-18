@@ -63,7 +63,7 @@ type node struct {
 	streaming int32 // Used to avoid calculating snapshot
 
 	// Used to track the ops going on in the system.
-	ops     map[int]*y.Closer
+	ops     map[op]*y.Closer
 	opsLock sync.Mutex
 
 	canCampaign bool
@@ -72,8 +72,23 @@ type node struct {
 	pendingSize int64
 }
 
+type op int
+
+func (id op) String() string {
+	switch id {
+	case opRollup:
+		return "opRollup"
+	case opSnapshot:
+		return "opSnapshot"
+	case opIndexing:
+		return "opIndexing"
+	default:
+		return "unknown"
+	}
+}
+
 const (
-	opRollup = iota + 1
+	opRollup op = iota + 1
 	opSnapshot
 	opIndexing
 )
@@ -81,19 +96,20 @@ const (
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
-func (n *node) startTask(id int) (*y.Closer, error) {
+func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 
-	stopTask := func(id int) {
+	stopTask := func(id op) {
 		n.opsLock.Lock()
 		delete(n.ops, id)
 		n.opsLock.Unlock()
-		glog.Infof("Operation completed with id: %v", id)
+		glog.Infof("Operation completed with id: %s", id)
 
 		// If we were doing any other operation, let's restart rollups.
 		if id != opRollup {
-			x.Check2(n.startTask(opRollup))
+			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
+			n.startTask(opRollup)
 		}
 	}
 
@@ -113,20 +129,20 @@ func (n *node) startTask(id int) (*y.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 	default:
-		glog.Errorf("Got an unhandled operation %v. Ignoring...", id)
+		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
 		return nil, nil
 	}
 
 	n.ops[id] = closer
-	glog.Infof("Operation started with id: %v", id)
-	go func(id int, closer *y.Closer) {
+	glog.Infof("Operation started with id: %s", id)
+	go func(id op, closer *y.Closer) {
 		closer.Wait()
 		stopTask(id)
 	}(id, closer)
 	return closer, nil
 }
 
-func (n *node) waitForTask(id int) {
+func (n *node) waitForTask(id op) {
 	n.opsLock.Lock()
 	closer, ok := n.ops[id]
 	n.opsLock.Unlock()
@@ -159,7 +175,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		applyCh: make(chan []*pb.Proposal, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  y.NewCloser(3), // Matches CLOSER:1
-		ops:     make(map[int]*y.Closer),
+		ops:     make(map[op]*y.Closer),
 	}
 	return n
 }
