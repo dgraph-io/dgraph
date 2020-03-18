@@ -42,6 +42,7 @@ type incrRollupi struct {
 	keysCh chan *[][]byte
 	// keysPool is sync.Pool to share the batched keys to rollup.
 	keysPool *sync.Pool
+	count    uint64
 }
 
 var (
@@ -72,6 +73,12 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 	kvs, err := l.Rollup()
 	if err != nil {
 		return err
+	}
+	const N = uint64(1000)
+	if glog.V(2) {
+		if count := atomic.AddUint64(&ir.count, 1); count%N == 0 {
+			glog.V(2).Infof("Rolled up %d keys", count)
+		}
 	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
@@ -110,13 +117,12 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 			currTs := time.Now().Unix()
 			for _, key := range *batch {
 				hash := z.MemHash(key)
-				if elem, ok := m[hash]; !ok || (currTs-elem >= 10) {
+				if elem := m[hash]; currTs-elem >= 10 {
 					// Key not present or Key present but last roll up was more than 10 sec ago.
 					// Add/Update map and rollup.
 					m[hash] = currTs
 					if err := ir.rollUpKey(writer, key); err != nil {
 						glog.Warningf("Error %v rolling up key %v\n", err, key)
-						continue
 					}
 				}
 			}
@@ -257,8 +263,15 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
+
+	// We use the following block of code to trigger incremental rollup on this key.
 	const maxDeltaCount = 2
 	deltaCount := 0
+	defer func() {
+		if deltaCount >= maxDeltaCount {
+			IncrRollup.addKeyToBatch(key)
+		}
+	}()
 
 	// Iterates from highest Ts to lowest Ts
 	for it.Valid() {
@@ -317,11 +330,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		}
 		it.Next()
 	}
-
-	if deltaCount >= maxDeltaCount {
-		IncrRollup.addKeyToBatch(key)
-	}
-
 	return l, nil
 }
 
