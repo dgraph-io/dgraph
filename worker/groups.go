@@ -52,7 +52,6 @@ type groupi struct {
 	triggerCh    chan struct{} // Used to trigger membership sync
 	blockDeletes *sync.Mutex   // Ensure that deletion won't happen when move is going on.
 	closer       *y.Closer
-	storeCloser  *y.Closer // Closer for raftwal storage.
 
 	// Group checksum is used to determine if the tablets served by the groups have changed from
 	// the membership information that the Alpha has. If so, Alpha cannot service a read.
