@@ -27,7 +27,6 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Properly initialize posting package in debug tool. ([#4893][])
 - Handle special characters in schema and type queries. Fixes [#4933][]. ([#4937][])
 - Overwrite values for uid predicates.  Fixes [#4879][]. ([#4883][])
-- Split keys during backup restore. ([#4912][])
 - Disable @* language queries when the predicate does not support langs. ([#4881][])
 - Fix bug in exporting types with reverse predicates. Fixes [#4856][]. ([#4857][])
 - Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.) ([#4951][])
@@ -38,6 +37,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
   - ACL: Allow uid access. ([#4922][])
   - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][])
   - Backups: Verify host when default and custom credentials are used. Fixes [#4855][]. ([#4858][])
+  - Backups: Split lists when restoring from backup. ([#4912][])
+
 
 [#4967]: https://github.com/dgraph-io/dgraph/issues/4967
 [#4951]: https://github.com/dgraph-io/dgraph/issues/4951
