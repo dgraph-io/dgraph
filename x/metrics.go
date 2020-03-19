@@ -105,6 +105,8 @@ var (
 		20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
 		650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
 
+	// Use this tag for the metric view if it needs status or method granularity.
+	// Metrics would be viewed separately for different tag values.
 	allTagKeys = []tag.Key{
 		KeyStatus, KeyMethod,
 	}
@@ -151,15 +153,15 @@ var (
 			Name:        PendingQueries.Name(),
 			Measure:     PendingQueries,
 			Description: PendingQueries.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
 			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 		{
 			Name:        MemoryInUse.Name(),
@@ -186,15 +188,15 @@ var (
 			Name:        ActiveMutations.Name(),
 			Measure:     ActiveMutations,
 			Description: ActiveMutations.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        AlphaHealth.Name(),
 			Measure:     AlphaHealth,
 			Description: AlphaHealth.Description(),
 			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 	}
 )
