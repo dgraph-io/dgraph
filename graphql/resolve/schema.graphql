@@ -11,6 +11,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
+        capital: String
 }
 
 type Author {

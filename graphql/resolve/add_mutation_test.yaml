@@ -96,15 +96,15 @@
     getting injected and all data transformed to underlying Dgraph edge names"
   dgmutations:
     - setjson: |
-        { "uid":"_:UserA.N.__space__Author",
+        { "uid":"_:User2",
           "dgraph.type":["User"],
           "User.name":"A.N. Author",
           "User.pwd":"Password"
         }
-      cond: "@if(eq(len(UserA.N.__space__Author), 0))"
+      cond: "@if(eq(len(User2), 0))"
   dgquery: |-
     query {
-      UserA.N.__space__Author as UserA.N.__space__Author(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
+      User2 as User2(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
         uid
       }
     }
@@ -283,25 +283,25 @@
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
   dgquery: |-
     query {
-      Statensw as Statensw(func: eq(State.code, "nsw")) @filter(type(State)) {
+      State2 as State2(func: eq(State.code, "nsw")) @filter(type(State)) {
         uid
       }
-      Country2 as Country2(func: uid(0x12)) @filter(type(Country)) {
+      Country3 as Country3(func: uid(0x12)) @filter(type(Country)) {
         uid
       }
     }
   dgmutations:
     - setjson: |
-        { "uid" : "_:Statensw",
+        { "uid" : "_:State2",
           "dgraph.type": ["State"],
           "State.name": "NSW",
           "State.code": "nsw",
           "State.country": {
             "uid": "0x12",
-            "Country.states": [ { "uid": "_:Statensw" } ]
+            "Country.states": [ { "uid": "_:State2" } ]
           }
         }
-      cond: "@if(eq(len(Statensw), 0) AND eq(len(Country2), 1))"
+      cond: "@if(eq(len(State2), 0) AND eq(len(Country3), 1))"
 
 -
   name: "Add mutation using code on type which also has an ID field"
@@ -323,18 +323,18 @@
   explanation: "The add mutation should get rewritten into a Dgraph upsert mutation"
   dgquery: |-
     query {
-      Editoreditor as Editoreditor(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
+      Editor2 as Editor2(func: eq(Editor.code, "editor")) @filter(type(Editor)) {
         uid
       }
     }
   dgmutations:
     - setjson: |
-        { "uid" : "_:Editoreditor",
+        { "uid" : "_:Editor2",
           "dgraph.type": ["Editor"],
           "Editor.name": "A.N. Editor",
           "Editor.code": "editor"
         }
-      cond: "@if(eq(len(Editoreditor), 0))"
+      cond: "@if(eq(len(Editor2), 0))"
 
 -
   name: "Deep add mutation"
@@ -834,11 +834,11 @@
   explanation: "The add mutation has two options depending on if dg exists"
   dgquery: |-
     query {
-      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
+      State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(Statedg)) {
-        Country3 as State.country
+      var(func: uid(State3)) {
+        Country4 as State.country
       }
     }
   dgmutations:
@@ -848,7 +848,7 @@
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "_:Statedg",
+            "uid": "_:State3",
             "dgraph.type": ["State"],
             "State.code": "dg",
             "State.name": "Dgraph",
@@ -857,14 +857,14 @@
             }
           } ]
         }
-      cond: "@if(eq(len(Statedg), 0))"
+      cond: "@if(eq(len(State3), 0))"
     - setjson: |
         {
           "uid": "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "uid(Statedg)",
+            "uid": "uid(State3)",
             "State.country": {
               "uid": "_:Country1"
             }
@@ -873,11 +873,11 @@
       deletejson: |
         [
           {
-            "uid": "uid(Country3)",
-            "Country.states": [{"uid": "uid(Statedg)"}]
+            "uid": "uid(Country4)",
+            "Country.states": [{"uid": "uid(State3)"}]
           }
         ]
-      cond: "@if(eq(len(Statedg), 1))"
+      cond: "@if(eq(len(State3), 1))"
 
 -
   name: "Add mutation with deep xid that must be reference"
@@ -902,11 +902,11 @@
     because it's missing required field name"
   dgquery: |-
     query {
-      Statedg as Statedg(func: eq(State.code, "dg")) @filter(type(State)) {
+      State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
-      var(func: uid(Statedg)) {
-        Country3 as State.country
+      var(func: uid(State3)) {
+        Country4 as State.country
       }
     }
   dgmutations:
@@ -916,7 +916,7 @@
           "dgraph.type": ["Country"],
           "Country.name": "Dgraph Land",
           "Country.states": [ {
-            "uid": "uid(Statedg)",
+            "uid": "uid(State3)",
             "State.country": {
               "uid": "_:Country1"
             }
@@ -925,11 +925,11 @@
       deletejson: |
         [
           {
-            "uid": "uid(Country3)",
-            "Country.states": [{"uid": "uid(Statedg)"}]
+            "uid": "uid(Country4)",
+            "Country.states": [{"uid": "uid(State3)"}]
           }
         ]
-      cond: "@if(eq(len(Statedg), 1))"
+      cond: "@if(eq(len(State3), 1))"
 
 
 -
@@ -991,4 +991,382 @@
         }
       cond: "@if(eq(len(Movie2), 1))"
 
+-
+  name: "Top Level Duplicate XIDs Test"
+  gqlmutation: |
+    mutation addState($input: [AddStateInput!]!) {
+      addState(input: $input) {
+        state {
+          code
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {"name": "State1", "code": "S1"},
+        {"name": "State2", "code": "S1"},
+        {"name": "State3", "code": "S2"}
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input at top level, it should return error."
+  error:
+    message: "failed to rewrite mutation payload because duplicate XID found: S1"
 
+-
+  name: "Deep Mutation Duplicate XIDs with same object Test"
+  gqlmutation: |
+    mutation addCountry($input: [AddCountryInput!]!) {
+      addCountry(input: $input) {
+        country {
+          id
+          name
+          states {
+            code
+            name
+            capital
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Country0",
+          "states": [
+            {"code": "S1", "name": "State1", "capital": "Cap1"}
+          ]
+        },
+        {
+          "name": "Country1",
+          "states": [
+            {"code": "S1", "name": "State1", "capital": "Cap1"}
+          ]
+        },
+        {
+          "name": "Country2",
+          "states": [
+            {"code": "S2", "name": "State2", "capital": "Cap2"},
+            {"code": "S2", "name": "State2", "capital": "Cap2"}
+          ]
+        }
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
+  is same, it should not return error."
+  dgquery: |-
+    query {
+      State3 as State3(func: eq(State.code, "S1")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State3)) {
+        Country4 as State.country
+      }
+      var(func: uid(State3)) {
+        Country7 as State.country
+      }
+      State10 as State10(func: eq(State.code, "S2")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State10)) {
+        Country11 as State.country
+      }
+      var(func: uid(State10)) {
+        Country13 as State.country
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "Country.name":"Country0",
+          "Country.states":[{
+              "State.capital":"Cap1",
+              "State.code":"S1",
+              "State.country":{"uid":"_:Country1"},
+              "State.name":"State1",
+              "dgraph.type":["State"],
+              "uid":"_:State3"
+            }],
+          "dgraph.type":["Country"],
+          "uid":"_:Country1"
+        }
+      cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "Country.name": "Country0",
+          "Country.states": [
+            {
+              "State.country": {
+                "uid": "_:Country1"
+              },
+              "uid": "uid(State3)"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country1"
+        }
+      deletejson: |
+        [
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State3)"
+              }
+            ],
+            "uid": "uid(Country4)"
+          }
+        ]
+      cond: "@if(eq(len(State3), 1))"
+    - setjson: |
+        {
+          "Country.name": "Country1",
+          "Country.states": [
+            {
+              "State.country": {
+                "uid": "_:Country5"
+              },
+              "dgraph.type": [
+                "State"
+              ],
+              "uid": "_:State3"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country5"
+        }
+      cond: "@if(eq(len(State3), 0))"
+    - setjson: |
+        {
+          "Country.name": "Country1",
+          "Country.states": [
+            {
+              "State.country": {
+                "uid": "_:Country5"
+              },
+              "uid": "uid(State3)"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country5"
+        }
+      deletejson: |
+        [
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State3)"
+              }
+            ],
+            "uid": "uid(Country7)"
+          }
+        ]
+      cond: "@if(eq(len(State3), 1))"
+    - setjson: |
+        {
+          "Country.name": "Country2",
+          "Country.states": [
+            {
+              "State.capital": "Cap2",
+              "State.code": "S2",
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "State.name": "State2",
+              "dgraph.type": [
+                "State"
+              ],
+              "uid": "_:State10"
+            },
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "dgraph.type": [
+                "State"
+              ],
+              "uid": "_:State10"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country8"
+        }
+      cond: "@if(eq(len(State10), 0) AND eq(len(State10), 0))"
+    - setjson: |
+        {
+          "Country.name": "Country2",
+          "Country.states": [
+            {
+              "State.capital": "Cap2",
+              "State.code": "S2",
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "State.name": "State2",
+              "dgraph.type": [
+                "State"
+              ],
+              "uid": "_:State10"
+            },
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "uid": "uid(State10)"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country8"
+        }
+      deletejson: |
+        [
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State10)"
+              }
+            ],
+            "uid": "uid(Country13)"
+          }
+        ]
+      cond: "@if(eq(len(State10), 0) AND eq(len(State10), 1))"
+    - setjson: |
+        {
+          "Country.name": "Country2",
+          "Country.states": [
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "uid": "uid(State10)"
+            },
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "dgraph.type": [
+                "State"
+              ],
+              "uid": "_:State10"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country8"
+        }
+      deletejson: |
+        [
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State10)"
+              }
+            ],
+            "uid": "uid(Country11)"
+          }
+        ]
+      cond: "@if(eq(len(State10), 1) AND eq(len(State10), 0))"
+    - setjson: |
+        {
+          "Country.name": "Country2",
+          "Country.states": [
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "uid": "uid(State10)"
+            },
+            {
+              "State.country": {
+                "uid": "_:Country8"
+              },
+              "uid": "uid(State10)"
+            }
+          ],
+          "dgraph.type": [
+            "Country"
+          ],
+          "uid": "_:Country8"
+        }
+      deletejson: |
+        [
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State10)"
+              }
+            ],
+            "uid": "uid(Country11)"
+          },
+          {
+            "Country.states": [
+              {
+                "uid": "uid(State10)"
+              }
+            ],
+            "uid": "uid(Country13)"
+          }
+        ]
+      cond: "@if(eq(len(State10), 1) AND eq(len(State10), 1))"
+
+-
+  name: "Deep Mutation Duplicate XIDs with different object Test"
+  gqlmutation: |
+    mutation addCountry($input: [AddCountryInput!]!) {
+      addCountry(input: $input) {
+        country {
+          id
+          name
+          states {
+            code
+            name
+            capital
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "name": "Country0",
+          "states": [
+            {"code": "S1", "name": "State1", "capital": "Cap1"},
+            {"code": "S2", "name": "State2", "capital": "Cap2"}
+          ]
+        },
+        {
+          "name": "Country1",
+          "states": [
+            {"code": "S1", "name": "State1"},
+            {"code": "S2"}
+          ]
+        },
+        {
+          "name": "Country2",
+          "states": [
+            {"code": "S3", "name": "State3"},
+            {"code": "S3", "name": "State"}
+          ]
+        }
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input to deep mutation but the object structure
+  is different, it should return error."
+  error:
+    message: |-
+      failed to rewrite mutation payload because duplicate XID found: S1
+      failed to rewrite mutation payload because duplicate XID found: S2
+      failed to rewrite mutation payload because duplicate XID found: S3
+      failed to rewrite mutation payload because duplicate XID found: S3

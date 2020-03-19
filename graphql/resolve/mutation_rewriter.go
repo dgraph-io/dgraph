@@ -81,27 +81,38 @@ type mutationBuilder func(frag *mutationFragment) ([]byte, error)
 type resultChecker func(map[string]interface{}) error
 
 // A VariableGenerator generates unique variable names.
-type VariableGenerator int
+type VariableGenerator struct {
+	counter       int
+	xidVarNameMap map[string]string
+}
+
+func NewVariableGenerator() *VariableGenerator {
+	return &VariableGenerator{
+		counter:       0,
+		xidVarNameMap: make(map[string]string),
+	}
+}
 
 // Next gets the Next variable name for the given type and xid value.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (c *VariableGenerator) Next(typ schema.Type, xidVal string) string {
-	if xidVal != "" {
-		// replace all spaces with `__space__`, otherwise invalid variable name will be formed.
-		// Not just stripping out all the spaces as that would lead to some different xid values
-		// being represented by the same variable name. e.g., xid values `User A` and `UserA` of
-		// type User would both be represented by `UserUserA`. Similarly, if we had just replaced
-		// spaces with `_`, then again `User A` and `User_A` would collide in variable name. So,
-		// choosing `__space__` as it is less probable for such a term to be present in user input.
-		// We could have used a hash, but even hashes collide, and if any error occurs because of
-		// collision, then in case of hash it would be a bit hard to find, while for `__space__` it
-		// would be easier as the variable name can be easily determined by a human :)
-		xidVal = strings.ReplaceAll(xidVal, " ", "__space__")
-		return fmt.Sprintf("%s%s", typ.Name(), xidVal)
+func (v *VariableGenerator) Next(typ schema.Type, xidVal string) string {
+	// return previously allocated variable name for repeating xidVal
+	key := typ.Name() + xidVal
+	if varName, ok := v.xidVarNameMap[key]; ok {
+		return varName
 	}
-	*c++
-	return fmt.Sprintf("%s%v", typ.Name(), int(*c))
+
+	// create new variable name
+	v.counter++
+	varName := fmt.Sprintf("%s%v", typ.Name(), v.counter)
+
+	// save it, if it was created for xidVal
+	if xidVal != "" {
+		v.xidVarNameMap[key] = varName
+	}
+
+	return varName
 }
 
 // NewAddRewriter returns new MutationRewriter for add & update mutations.
@@ -213,10 +224,10 @@ func (mrw *AddRewriter) Rewrite(
 		return mrw.handleMultipleMutations(m)
 	}
 
-	varGen := VariableGenerator(0)
+	varGen := NewVariableGenerator()
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	xidMd := newXidMetadata()
-	mrw.frags = [][]*mutationFragment{rewriteObject(mutatedType, nil, "", &varGen, true, val,
+	mrw.frags = [][]*mutationFragment{rewriteObject(mutatedType, nil, "", varGen, true, val,
 		xidMd)}
 	mutations, err := mutationsFromFragments(
 		mrw.frags[0],
@@ -240,7 +251,7 @@ func (mrw *AddRewriter) handleMultipleMutations(
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
-	varGen := VariableGenerator(0)
+	varGen := NewVariableGenerator()
 	xidMd := newXidMetadata()
 	var errs error
 	var mutationsAll []*dgoapi.Mutation
@@ -248,7 +259,7 @@ func (mrw *AddRewriter) handleMultipleMutations(
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		frag := rewriteObject(mutatedType, nil, "", &varGen, true, obj, xidMd)
+		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
 		mrw.frags = append(mrw.frags, frag)
 
 		mutations, err := mutationsFromFragments(
@@ -362,11 +373,11 @@ func (urw *UpdateRewriter) Rewrite(
 	xidMd := newXidMetadata()
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := VariableGenerator(0)
+	varGen := NewVariableGenerator()
 
 	if setArg != nil {
 		urw.setFrags =
-			rewriteObject(mutatedType, nil, srcUID, &varGen, true,
+			rewriteObject(mutatedType, nil, srcUID, varGen, true,
 				setArg.(map[string]interface{}), xidMd)
 		addUpdateCondition(urw.setFrags)
 		mutSet, errSet = mutationsFromFragments(
@@ -384,7 +395,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if delArg != nil {
 		urw.delFrags =
-			rewriteObject(mutatedType, nil, srcUID, &varGen, false,
+			rewriteObject(mutatedType, nil, srcUID, varGen, false,
 				delArg.(map[string]interface{}), xidMd)
 		addUpdateCondition(urw.delFrags)
 		mutDel, errDel = mutationsFromFragments(
@@ -539,7 +550,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 			m.MutationType())
 	}
 
-	varGen := VariableGenerator(0)
+	varGen := NewVariableGenerator()
 	qry := RewriteUpsertQueryFromMutation(m)
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 

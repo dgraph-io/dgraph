@@ -35,7 +35,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := resolve.VariableGenerator(0)
+	varGen := resolve.NewVariableGenerator()
 	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
