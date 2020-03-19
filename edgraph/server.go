@@ -88,7 +88,7 @@ var (
 )
 
 var (
-	errIndexingInProgress = errors.New("indexing is in progress. Please retry later")
+	errIndexingInProgress = errors.New("errIndexingInProgress: Please retry later")
 )
 
 // Server implements protos.DgraphServer

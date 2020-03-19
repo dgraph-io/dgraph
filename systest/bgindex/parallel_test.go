@@ -111,7 +111,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-	}); err != nil && !strings.Contains(err.Error(), "is already being modified") {
+	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
 
@@ -119,7 +119,7 @@ func TestParallelIndexing(t *testing.T) {
 	for {
 		if err := dg.Alter(context.Background(), &api.Operation{
 			Schema: `balance_float: float @index(float) .`,
-		}); err != nil && !strings.Contains(err.Error(), "is already being modified") {
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 			t.Fatalf("error in adding indexes :: %v\n", err)
 		} else if err == nil {
 			break
