@@ -334,7 +334,7 @@ func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
 	// While exporting type definitions, "<" and ">" brackets must be written around
-	// the name of everse predicates or Dgraph won't be able to parse the exported schema.
+	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
 	if strings.HasPrefix(update.Predicate, "~") {
 		x.Check2(builder.WriteString("<"))
 		x.Check2(builder.WriteString(update.Predicate))
