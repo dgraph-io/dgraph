@@ -17,10 +17,7 @@
 package resolve
 
 import (
-	"bytes"
 	"context"
-	"io/ioutil"
-	"net/http"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -134,51 +131,4 @@ func introspectionExecution(q schema.Query) QueryExecutionFunc {
 	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 		return schema.Introspect(q)
 	})
-}
-
-// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
-type httpResolver struct {
-	*http.Client
-	httpRewriter    QueryRewriter
-	httpExecutor    QueryExecutor
-	resultCompleter ResultCompleter
-}
-
-func NewHTTPResolver(hc *http.Client,
-	qr QueryRewriter,
-	qe QueryExecutor,
-	rc ResultCompleter) QueryResolver {
-	return &httpResolver{hc, qr, qe, rc}
-}
-
-func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
-	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveHTTPQuery")
-	defer stop()
-
-	res, err := hr.rewriteAndExecute(ctx, query)
-
-	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
-	return &Resolved{Data: completed, Err: err}
-}
-
-func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc, err := query.HTTPResolver()
-	if err != nil {
-		return nil, err
-	}
-	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := hr.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	return b, err
 }
