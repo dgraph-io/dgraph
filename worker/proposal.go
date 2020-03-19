@@ -17,6 +17,7 @@
 package worker
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"sync/atomic"
@@ -32,7 +33,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 )
 
 const baseTimeout time.Duration = 4 * time.Second
@@ -158,12 +158,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 	// Do a type check here if schema is present
 	// In very rare cases invalid entries might pass through raft, which would
 	// be persisted, we do best effort schema check while writing
+	ctx = schema.GetWriteContext(ctx)
 	if proposal.Mutations != nil {
 		for _, edge := range proposal.Mutations.Edges {
 			if err := checkTablet(edge.Attr); err != nil {
 				return err
 			}
-			su, ok := schema.State().Get(edge.Attr)
+			su, ok := schema.State().Get(ctx, edge.Attr)
 			if !ok {
 				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {

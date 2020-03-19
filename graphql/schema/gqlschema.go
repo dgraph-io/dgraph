@@ -22,9 +22,9 @@ import (
 	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 const (
@@ -38,6 +38,10 @@ const (
 	dgraphTypeArg   = "type"
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
+	secretDirective = "secret"
+
+	deprecatedDirective = "deprecated"
+	NumUid              = "numUids"
 
 	Typename = "__typename"
 
@@ -67,6 +71,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -141,6 +146,11 @@ type directiveValidator func(
 type searchTypeIndex struct {
 	gqlType string
 	dgIndex string
+}
+
+var numUids = &ast.FieldDefinition{
+	Name: NumUid,
+	Type: &ast.Type{NamedType: "Int"},
 }
 
 // search arg -> supported GraphQL type
@@ -218,6 +228,7 @@ var scalarToDgraph = map[string]string{
 	"Float":    "float",
 	"String":   "string",
 	"DateTime": "dateTime",
+	"Password": "password",
 }
 
 var directiveValidators = map[string]directiveValidator{
@@ -225,6 +236,14 @@ var directiveValidators = map[string]directiveValidator{
 	searchDirective:  searchValidation,
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
+	secretDirective:  passwordValidation,
+	deprecatedDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
 }
 
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
@@ -232,11 +251,7 @@ var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gq
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
-	for _, d := range src.Directives {
-		if d.Name != inverseDirective {
-			dirs = append(dirs, d)
-		}
-	}
+	dirs = append(dirs, src.Directives...)
 
 	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
 	// them. We add arguments for filters and order statements later.
@@ -253,7 +268,7 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.Panic(gqlErr)
 	}
 
 	// Cache the interface definitions in a map. They could also be defined after types which
@@ -282,6 +297,10 @@ func expandSchema(doc *ast.SchemaDocument) {
 					fields = append(fields, copyAstFieldDef(field))
 				}
 				defn.Fields = append(fields, defn.Fields...)
+				passwordDirective := i.Directives.ForName("secret")
+				if passwordDirective != nil {
+					defn.Directives = append(defn.Directives, passwordDirective)
+				}
 			}
 		}
 	}
@@ -325,6 +344,9 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 			errs = append(errs, applyFieldValidations(typ, field)...)
 
 			for _, dir := range field.Directives {
+				if directiveValidators[dir.Name] == nil {
+					continue
+				}
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
@@ -408,9 +430,9 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 }
 
 func addInputType(schema *ast.Schema, defn *ast.Definition) {
-	schema.Types[defn.Name+"Input"] = &ast.Definition{
+	schema.Types["Add"+defn.Name+"Input"] = &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   defn.Name + "Input",
+		Name:   "Add" + defn.Name + "Input",
 		Fields: getFieldsWithoutIDType(schema, defn),
 	}
 }
@@ -445,7 +467,7 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 	if !hasFilterable(defn) {
 		return
 	}
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -463,13 +485,13 @@ func addUpdateType(schema *ast.Schema, defn *ast.Definition) {
 			&ast.FieldDefinition{
 				Name: "set",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			},
 			&ast.FieldDefinition{
 				Name: "remove",
 				Type: &ast.Type{
-					NamedType: "Patch" + defn.Name,
+					NamedType: defn.Name + "Patch",
 				},
 			}),
 	}
@@ -490,10 +512,10 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 
 	patchDefn := &ast.Definition{
 		Kind:   ast.InputObject,
-		Name:   "Patch" + defn.Name,
+		Name:   defn.Name + "Patch",
 		Fields: nonIDFields,
 	}
-	schema.Types["Patch"+defn.Name] = patchDefn
+	schema.Types[defn.Name+"Patch"] = patchDefn
 
 	for _, fld := range patchDefn.Fields {
 		fld.Type.NonNull = false
@@ -831,7 +853,7 @@ func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	schema.Types["Add"+defn.Name+"Payload"] = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Add" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{qry},
+		Fields: []*ast.FieldDefinition{qry, numUids},
 	}
 }
 
@@ -843,7 +865,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	// This covers the case where the Type only had one field (which had @id directive).
 	// Since we don't allow updating the field with @id directive we don't need to generate any
 	// update payload.
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -864,7 +886,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		Kind: ast.Object,
 		Name: "Update" + defn.Name + "Payload",
 		Fields: []*ast.FieldDefinition{
-			qry,
+			qry, numUids,
 		},
 	}
 }
@@ -884,6 +906,7 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 					NamedType: "String",
 				},
 			},
+			numUids,
 		},
 	}
 }
@@ -943,8 +966,47 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	schema.Query.Fields = append(schema.Query.Fields, qry)
 }
 
+func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
+	hasIDField := hasID(defn)
+	hasXIDField := hasXID(defn)
+	if !hasIDField && !hasXIDField {
+		return
+	}
+
+	idField := getIDField(defn)
+	if !hasIDField {
+		idField = getXIDField(defn)
+	}
+	passwordField := getPasswordField(defn)
+	if passwordField == nil {
+		return
+	}
+
+	qry := &ast.FieldDefinition{
+		Name: "check" + defn.Name + "Password",
+		Type: &ast.Type{
+			NamedType: defn.Name,
+		},
+		Arguments: []*ast.ArgumentDefinition{
+			{
+				Name: idField[0].Name,
+				Type: idField[0].Type,
+			},
+			{
+				Name: passwordField.Name,
+				Type: &ast.Type{
+					NamedType: "String",
+					NonNull:   true,
+				},
+			},
+		},
+	}
+	schema.Query.Fields = append(schema.Query.Fields, qry)
+}
+
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
 	addGetQuery(schema, defn)
+	addPasswordQuery(schema, defn)
 	addFilterQuery(schema, defn)
 }
 
@@ -958,7 +1020,7 @@ func addAddMutation(schema *ast.Schema, defn *ast.Definition) {
 			{
 				Name: "input",
 				Type: &ast.Type{
-					NamedType: "[" + defn.Name + "Input!]",
+					NamedType: "[Add" + defn.Name + "Input!]",
 					NonNull:   true,
 				},
 			},
@@ -972,7 +1034,7 @@ func addUpdateMutation(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
-	if _, ok := schema.Types["Patch"+defn.Name]; !ok {
+	if _, ok := schema.Types[defn.Name+"Patch"]; !ok {
 		return
 	}
 
@@ -1055,6 +1117,13 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		// Remove edges which have a reverse predicate as they should only be updated through their
+		// forward edge.
+		fname := fieldName(fld, defn.Name)
+		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
+			continue
+		}
+
 		// Even if a field isn't referenceable with an ID or XID, it can still go into an
 		// input/update type because it can be created (but not linked by reference) as
 		// part of the mutation.
@@ -1068,7 +1137,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 
 		fldList = append(fldList, createField(schema, fld))
 	}
-	return fldList
+
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
@@ -1086,7 +1160,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 
 		fldList = append(fldList, createField(schema, fld))
 	}
-	return fldList
+
+	pd := getPasswordField(defn)
+	if pd == nil {
+		return fldList
+	}
+	return append(fldList, pd)
 }
 
 func getIDField(defn *ast.Definition) ast.FieldList {
@@ -1099,6 +1178,18 @@ func getIDField(defn *ast.Definition) ast.FieldList {
 			fldList = append(fldList, &newFld)
 			break
 		}
+	}
+	return fldList
+}
+
+func getPasswordField(defn *ast.Definition) *ast.FieldDefinition {
+	var fldList *ast.FieldDefinition
+	for _, directive := range defn.Directives {
+		fd := convertPasswordDirective(directive)
+		if fd == nil {
+			continue
+		}
+		fldList = fd
 	}
 	return fldList
 }
@@ -1149,10 +1240,19 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	}
 
 	direcArgs := make([]string, len(direcs))
+	idx := 0
 
-	for idx, dir := range direcs {
+	for _, dir := range direcs {
+		if directiveValidators[dir.Name] == nil {
+			continue
+		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
+		idx++
 	}
+	if idx == 0 {
+		return ""
+	}
+	direcArgs = direcArgs[:idx]
 
 	return " " + strings.Join(direcArgs, " ")
 }
@@ -1275,7 +1375,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// the generated definitions.
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
-		panic(gqlErr)
+		x.Panic(gqlErr)
 	}
 	for _, defn := range docExtras.Definitions {
 		printed[defn.Name] = true

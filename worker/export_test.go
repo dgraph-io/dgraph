@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -37,14 +38,13 @@ import (
 
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
-
-	"github.com/dgraph-io/dgraph/lex"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -56,6 +56,9 @@ var personType = &pb.TypeUpdate{
 		},
 		{
 			Predicate: "friend",
+		},
+		{
+			Predicate: "~friend",
 		},
 		{
 			Predicate: "friend_not_served",
@@ -76,7 +79,10 @@ func populateGraphExport(t *testing.T) {
 		"<1> <friend_not_served> <5> <author0> .",
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
+		`<7> <name> "node_to_delete" .`,
 	}
+	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
+	edgeToDelete := `<7> <name> "node_to_delete" .`
 	idMap := map[string]uint64{
 		"1": 1,
 		"2": 2,
@@ -84,10 +90,11 @@ func populateGraphExport(t *testing.T) {
 		"4": 4,
 		"5": 5,
 		"6": 6,
+		"7": 7,
 	}
 
 	l := &lex.Lexer{}
-	for _, edge := range rdfEdges {
+	processEdge := func(edge string, set bool) {
 		nq, err := chunker.ParseRDF(edge, l)
 		require.NoError(t, err)
 		rnq := gql.NQuad{NQuad: &nq}
@@ -95,8 +102,17 @@ func populateGraphExport(t *testing.T) {
 		require.NoError(t, err)
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)
-		addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		if set {
+			addEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		} else {
+			delEdge(t, e, getOrCreate(x.DataKey(e.Attr, e.Entity)))
+		}
 	}
+
+	for _, edge := range rdfEdges {
+		processEdge(edge, true)
+	}
+	processEdge(edgeToDelete, false)
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
@@ -322,26 +338,53 @@ func TestExportJson(t *testing.T) {
 	checkExportSchema(t, schemaFileList)
 }
 
+const exportRequest = `mutation export($format: String!) {
+	export(input: {format: $format}) {
+		response {
+			code
+		}
+	}
+}`
+
 func TestExportFormat(t *testing.T) {
 	tmpdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	resp, err := http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=json")
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query:     exportRequest,
+		Variables: map[string]interface{}{"format": "json"},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=rdf")
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+	testutil.RequireNoGraphQLErrors(t, resp)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?format=xml")
+	params.Variables["format"] = "rdf"
+	b, err = json.Marshal(params)
 	require.NoError(t, err)
-	require.NotEqual(t, resp.StatusCode, http.StatusOK)
 
-	resp, err = http.Get("http://" + testutil.SockAddrHttp + "/admin/export?output=rdf")
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
-	require.Equal(t, resp.StatusCode, http.StatusOK)
+	testutil.RequireNoGraphQLErrors(t, resp)
+
+	params.Variables["format"] = "xml"
+	b, err = json.Marshal(params)
+	require.NoError(t, err)
+	resp, err = http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var result *testutil.GraphQLResponse
+	err = json.Unmarshal(b, &result)
+	require.NoError(t, err)
+	require.NotNil(t, result.Errors)
 }
 
 type skv struct {

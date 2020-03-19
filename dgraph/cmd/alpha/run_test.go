@@ -107,10 +107,22 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
-	if err != nil {
-		return errors.Wrapf(err, "while running request with retries")
+	for {
+		_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
+		if err != nil && strings.Contains(err.Error(), "is already being modified") {
+			time.Sleep(time.Second)
+			continue
+		} else if err != nil {
+			return errors.Wrapf(err, "while running request with retries")
+		} else {
+			break
+		}
 	}
+
+	if err := waitForAlter(s); err != nil {
+		return errors.Wrapf(err, "while waiting for alter to complete")
+	}
+
 	return nil
 }
 
@@ -122,6 +134,48 @@ func alterSchemaWithRetry(s string) error {
 		}
 	}
 	return err
+}
+
+// waitForAlter waits for the alter operation to complete.
+func waitForAlter(s string) error {
+	ps, err := schema.Parse(s)
+	if err != nil {
+		return err
+	}
+
+	for {
+		resp, _, err := queryWithTs("schema{}", "application/graphql+-", "false", 0)
+		if err != nil {
+			return err
+		}
+
+		var result struct {
+			Data struct {
+				Schema []*pb.SchemaNode
+			}
+		}
+		if err := json.Unmarshal([]byte(resp), &result); err != nil {
+			return err
+		}
+
+		actual := make(map[string]*pb.SchemaNode)
+		for _, rs := range result.Data.Schema {
+			actual[rs.Predicate] = rs
+		}
+
+		done := true
+		for _, su := range ps.Preds {
+			if n, ok := actual[su.Predicate]; !ok || !testutil.SameIndexes(su, n) {
+				done = false
+				break
+			}
+		}
+		if done {
+			return nil
+		}
+
+		time.Sleep(time.Second)
+	}
 }
 
 func dropAll() error {
@@ -229,12 +283,13 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
+
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]}}`, output)
+			"list":true}],`+x.InitialTypes+`}}`, output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -404,7 +459,7 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchemaWithRetry(s2))
+	require.Error(t, alterSchema(s2))
 }
 
 // add index
@@ -1065,7 +1120,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
-			"list":true}]}}`, res)
+			"list":true}],`+x.InitialTypes+`}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1312,7 +1367,7 @@ func TestDropAll(t *testing.T) {
 		`{"data":{"schema":[`+
 			x.AclPredicates+","+x.GraphqlPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
-				"list":true}]}}`, output)
+				"list":true}],`+x.InitialTypes+`}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1665,7 +1720,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/login")
+	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/admin")
 
 	r := m.Run()
 	os.Exit(r)

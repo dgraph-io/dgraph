@@ -44,6 +44,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -101,22 +102,27 @@ input StringHashFilter {
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddGenrePayload {
 	genre(order: GenreOrder, first: Int, offset: Int): [Genre]
+	numUids: Int
 }
 
 type AddPostPayload {
 	post(order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 #######################
@@ -139,14 +145,24 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	name: String
+	posts: [PostRef]
+}
+
+input AddGenreInput {
+	name: String!
+}
+
+input AddPostInput {
+	content: String!
+	author: AuthorRef!
+	genre: GenreRef
+}
+
 input AuthorFilter {
 	id: [ID!]
 	not: AuthorFilter
-}
-
-input AuthorInput {
-	name: String
-	posts: [PostRef]
 }
 
 input AuthorOrder {
@@ -155,14 +171,15 @@ input AuthorOrder {
 	then: AuthorOrder
 }
 
-input AuthorRef {
-	id: ID
+input AuthorPatch {
 	name: String
 	posts: [PostRef]
 }
 
-input GenreInput {
-	name: String!
+input AuthorRef {
+	id: ID
+	name: String
+	posts: [PostRef]
 }
 
 input GenreOrder {
@@ -173,17 +190,6 @@ input GenreOrder {
 
 input GenreRef {
 	name: String
-}
-
-input PatchAuthor {
-	name: String
-	posts: [PostRef]
-}
-
-input PostInput {
-	content: String!
-	author: AuthorRef!
-	genre: GenreRef
 }
 
 input PostOrder {
@@ -200,8 +206,8 @@ input PostRef {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 #######################
@@ -220,9 +226,9 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [PostInput!]!): AddPostPayload
-	addAuthor(input: [AuthorInput!]!): AddAuthorPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addGenre(input: [GenreInput!]!): AddGenrePayload
+	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 }

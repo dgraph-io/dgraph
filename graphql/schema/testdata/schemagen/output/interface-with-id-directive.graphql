@@ -42,6 +42,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -99,22 +100,27 @@ input StringHashFilter {
 
 type AddBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 type AddLibraryPayload {
 	library(first: Int, offset: Int): [Library]
+	numUids: Int
 }
 
 type DeleteBookPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteLibraryItemPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateBookPayload {
 	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	numUids: Int
 }
 
 #######################
@@ -135,17 +141,21 @@ enum LibraryItemOrderable {
 # Generated Inputs
 #######################
 
+input AddBookInput {
+	refID: String!
+	title: String
+	author: String
+}
+
+input AddLibraryInput {
+	items: [LibraryItemRef]
+}
+
 input BookFilter {
 	refID: StringHashFilter
 	and: BookFilter
 	or: BookFilter
 	not: BookFilter
-}
-
-input BookInput {
-	refID: String!
-	title: String
-	author: String
 }
 
 input BookOrder {
@@ -154,14 +164,15 @@ input BookOrder {
 	then: BookOrder
 }
 
-input BookRef {
-	refID: String
+input BookPatch {
 	title: String
 	author: String
 }
 
-input LibraryInput {
-	items: [LibraryItemRef]
+input BookRef {
+	refID: String
+	title: String
+	author: String
 }
 
 input LibraryItemFilter {
@@ -185,15 +196,10 @@ input LibraryRef {
 	items: [LibraryItemRef]
 }
 
-input PatchBook {
-	title: String
-	author: String
-}
-
 input UpdateBookInput {
 	filter: BookFilter!
-	set: PatchBook
-	remove: PatchBook
+	set: BookPatch
+	remove: BookPatch
 }
 
 #######################
@@ -214,8 +220,8 @@ type Query {
 
 type Mutation {
 	deleteLibraryItem(filter: LibraryItemFilter!): DeleteLibraryItemPayload
-	addBook(input: [BookInput!]!): AddBookPayload
+	addBook(input: [AddBookInput!]!): AddBookPayload
 	updateBook(input: UpdateBookInput!): UpdateBookPayload
 	deleteBook(filter: BookFilter!): DeleteBookPayload
-	addLibrary(input: [LibraryInput!]!): AddLibraryPayload
+	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 }

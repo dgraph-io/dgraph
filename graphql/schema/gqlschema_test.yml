@@ -578,6 +578,136 @@ invalid_schemas:
       "locations":[{"line":1, "column":9}]}
     ]
 
+  -
+    name: "Dgraph directive with reverse pred argument on scalar field produces an error"
+    input: |
+      type X {
+        f1: String! @dgraph(pred:"~movie")
+        f2: String! @dgraph(pred:"<~movie>")
+      }
+    errlist: [
+      {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":2, "column":3}]},
+      {"message": "Type X; Field f2 is of type String, but reverse predicate in @dgraph directive
+      only applies to fields with object types.",
+      "locations":[{"line":3, "column":3}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument on field without a corresponding reverse field is an error"
+    input: |
+      type Y {
+        g1: String!
+      }
+
+      type X {
+        f1: [Y!] @dgraph(pred:"~movie")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: pred argument: ~movie is not supported as forward edge doesn't exist for type Y.",
+      "locations":[{"line":6, "column":13}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1") @hasInverse(field: "f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument along with hasInverse in forward direction
+      produces an error"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1") @hasInverse(field: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: @hasInverse directive is not allowed when pred argument in
+      @dgraph directive starts with a ~.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Field with a dgraph directive with reverse pred argument should be a list"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "f1")
+      }
+      type Y {
+        f1: X @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type Y; Field f1: with a dgraph directive that starts with ~ should be of type
+      list.",
+      "locations":[{"line":5, "column":10}]}
+    ]
+
+
+  -
+    name: "Empty field in secret directive"
+    input: |
+      type X @secret(field:""){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; Argument \"field\" of secret directive is empty",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "Multiple secret directive"
+    input: |
+      type X @secret(field:"password") @secret(field: "psss"){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; has more than one secret fields password,psss",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
+  -
+    name: "Conflicting secret directive and field"
+    input: |
+      type X @secret(field:"f1"){
+        f1: String!
+      }
+    errlist: [
+      {"message": "Type X; has a secret directive and field of the same name f1",
+      "locations":[{"line":1, "column":6}]},
+    ]
+
+
 
 valid_schemas:
   -
@@ -669,4 +799,14 @@ valid_schemas:
       }
       enum E {
         A
+      }
+
+  -
+    name: "dgraph directive with correct reverse field works"
+    input: |
+      type X {
+        f1: [Y] @dgraph(pred: "~f1")
+      }
+      type Y {
+        f1: [X] @dgraph(pred: "f1")
       }

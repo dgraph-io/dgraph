@@ -182,11 +182,23 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
+{{% notice "note" %}}
+
+In functions, language lists (including the `@*` notation) are not allowed.
+Untagged predicates, Single language tags, and `.` notation work as described
+above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
+In [full-text search functions]({{< relref "#full-text-search" >}})
+(`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
+the default (English) full-text tokenizer is used. This does not mean that
+the value with the `en` tag will be searched when querying the untagged value,
+but that untagged values will be treated as English text. If you don't want that
+to be the case, use the appropriate tag for the desired language, both for
+mutating and querying the value.
+
+{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -212,9 +224,19 @@ Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have 
 
 ## Functions
 
-{{% notice "note" %}}Functions can only be applied to [indexed]({{< relref "#indexing">}}) predicates.{{% /notice %}}
+Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
 
-Functions allow filtering based on properties of nodes or variables.  Functions can be applied in the query root or in filters.
+{{% notice "note" %}}Support for filters on non-indexed predicates was added with Dgraph `v1.2.0`.
+{{% /notice %}}
+
+Comparison functions (`eq`, `ge`, `gt`, `le`, `lt`) in the query root (aka `func:`) can only
+be applied on [indexed predicates]({{< relref "#indexing">}}). Since v1.2, comparison functions
+can now be used on [@filter]({{<relref "#applying-filters">}}) directives even on predicates
+that have not been indexed.
+Filtering on non-indexed predicates can be slow for large datasets, as they require
+iterating over all of the possible values at the level where the filter is being used.
+
+All other functions, in the query root or in the filter can only be applied to indexed predicates.
 
 For functions on string valued predicates, if no language preference is given, the function is applied to all languages and strings without a language tag; if a language preference is given, the function is applied only to strings of the given language.
 
@@ -468,7 +490,7 @@ Syntax Examples:
 
 Schema Types: `int`, `float`, `bool`, `string`, `dateTime`
 
-Index Required: An index is required for the `eq(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index Required: An index is required for the `eq(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -530,7 +552,7 @@ With `IE` replaced by
 
 Schema Types: `int`, `float`, `string`, `dateTime`
 
-Index required: An index is required for the `IE(predicate, ...)` forms (see table below).  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
+Index required: An index is required for the `IE(predicate, ...)` forms (see table below) when used at query root.  For `count(predicate)` at the query root, the `@count` index is required. For variables the values have been calculated as part of the query, so no index is required.
 
 | Type       | Index Options |
 |:-----------|:--------------|
@@ -1786,19 +1808,31 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 }
 {{< /runnable >}}
 
-
-
 ## Expand Predicates
 
 The `expand()` function can be used to expand the predicates out of a node. To
- use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
 Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
-There are four ways to use the `expand` function.
+There are two ways to use the `expand` function.
 
-* Predicates can be stored in a variable and passed to `expand()` to expand all
-  the predicates in the variable.
+* Types can be passed to `expand()` to expand all the predicates in the type.
+
+Query example: List the movies from the Harry Potter series:
+
+{{< runnable >}}
+{
+  all(func: eq(name@en, "Harry Potter")) @filter(type(Series)) {
+    name@en
+    expand(Series) {
+      name@en
+      expand(Film)
+    }
+  }
+}
+{{< /runnable >}}
+
 * If `_all_` is passed as an argument to `expand()`, the predicates to be
 expanded will be the union of fields in the types assigned to a given node.
 
@@ -1806,7 +1840,7 @@ The `_all_` keyword requires that the nodes have types. Dgraph will look for all
 the types that have been assigned to a node, query the types to check which
 attributes they have, and use those to compute the list of predicates to expand.
 
-For example, consider a node that has types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have
 the following definitions:
 
 ```
@@ -1834,9 +1868,11 @@ owner
 veterinarian
 ```
 
+{{% notice "note" %}}
 For `string` predicates, `expand` only returns values not tagged with a language
-(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+(see [language preference]({{< relref "#language-support" >}})).  So it's often
 required to add `name@fr` or `name@.` as well to an expand query.
+{{% /notice  %}}
 
 ### Filtering during expand.
 
@@ -1946,7 +1982,7 @@ You can also apply `@normalize` on nested query blocks. It will work similarly b
 {{< /runnable >}}
 
 
-## Ignorereflex directive
+## IgnoreReflex directive
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
@@ -2102,6 +2138,53 @@ If data exists and new indices are specified in a schema mutation, any index not
 Reverse edges are also computed if specified by a schema mutation.
 
 
+### Indexes in Background
+
+Starting Dgraph version `20.3.0`, indexes are computed in the background,
+and thus indexing may still be running after an Alter operation returns.
+This requires that you wait for indexing to complete before running queries
+that require newly created indices. Such queries will fail with an error
+notifying that a given predicate is not indexed or doesn't have reverse edges.
+
+An alter operation will also fail if one is already in progress with an error
+`schema is already being modified. Please retry`. Though, mutations can
+be successfully executed while indexing is going on.
+
+For example, let's say we execute an Alter operation with the following schema:
+
+```
+name: string @index(fulltext, term) .
+age: int @index(int) @upsert .
+friend: [uid] @count @reverse .
+```
+
+Once the Alter operation returns, Dgraph will report the following schema
+and start background tasks to compute all the new indexes:
+
+```
+name: string .
+age: int @upsert .
+friend: [uid] .
+```
+
+When indexes are done computing, Dgraph will start reporting the indexes in the
+schema. In a multi-node cluster, it is possible that the alphas will finish
+computing indexes at different times. Alphas may return different schema in such
+a case until all the indexes are done computing on all the Alphas.
+
+Background indexing task may fail if an unexpected error occurs while computing
+the indexes. You should retry the Alter operation in order to update the schema,
+or sync the schema across all the alphas.
+
+You can find examples here in order to wait for indexing to complete:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j/pull/135)
+- [dgo](https://github.com/dgraph-io/dgo/pull/117)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/pull/120)
+
+We also plan to add a simpler API soon to check the status of background indexing.
+
+
 ### Predicate name rules
 
 Any alphanumeric combination of a predicate name is permitted.
@@ -2183,6 +2266,18 @@ concurrent upserts.
 This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
+```
+
+### Noconflict directive
+
+The NoConflict directive prevents conflict detection at the predicate level. This is an experimental feature and not a
+recommended directive but exists to help avoid conflicts for predicates that don't have high
+correctness requirements. This can cause data loss, especially when used for predicates with count
+index.
+
+This is how you specify the `@noconflict` directive for a predicate.
+```
+email: string @index(exact) @noconflict .
 ```
 
 ### RDF Types

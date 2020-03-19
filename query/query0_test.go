@@ -17,10 +17,9 @@
 package query
 
 import (
+	"context"
 	"os"
 	"testing"
-
-	context "golang.org/x/net/context"
 
 	"github.com/stretchr/testify/require"
 
@@ -2247,7 +2246,6 @@ func TestFilterUsingLenFunction(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		t.Log("Running: ", tc.name)
 		js := processQueryNoErr(t, tc.in)
 		require.JSONEq(t, tc.out, js)
 	}

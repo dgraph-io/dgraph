@@ -1063,6 +1063,22 @@
     }
 
 -
+  name: "Get with XID where no ID in type"
+  gqlquery: |
+    query {
+      getState(code: "NSW") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      getState(func: eq(State.code, "NSW")) @filter(type(State)) {
+        name : State.name
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "Query editor using code"
   gqlquery: |
     query {
@@ -1094,3 +1110,61 @@
       }
     }
 
+-
+  name: "Query along reverse edge is converted appropriately"
+  gqlquery: |
+    query {
+      queryMovie {
+        name
+        director {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryMovie(func: type(Movie)) {
+        name : Movie.name
+        director : ~directed.movies {
+          name : MovieDirector.name
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "deprecated fields can be queried"
+  gqlquery: |
+    query {
+      queryCategory {
+        iAmDeprecated
+      }
+    }
+
+  dgquery: |-
+    query {
+      queryCategory(func: type(Category)) {
+        iAmDeprecated : Category.iAmDeprecated
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Password query"
+  gqlquery: |
+    query {
+      checkUserPassword(name: "0x1", pwd: "Password") {
+        name
+      }
+    }
+  dgquery: |-
+    query {
+      checkUserPassword(func: eq(User.name, "0x1")) @filter((eq(val(pwd), 1))) {
+        name : User.name
+        dgraph.uid : uid
+      }
+      checkPwd(func: eq(User.name, "0x1")) {
+        pwd as checkpwd(User.pwd, "Password")
+      }
+    }

@@ -120,11 +120,12 @@ func TestQueryTokensPoint(t *testing.T) {
 		toks, qd, err := queryTokens(qt, data, 0.0)
 		require.NoError(t, err)
 
-		if qt == QueryTypeWithin {
+		switch qt {
+		case QueryTypeWithin:
 			require.Len(t, toks, 1)
-		} else if qt == QueryTypeContains {
+		case QueryTypeContains:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+1)
-		} else {
+		default:
 			require.Len(t, toks, MaxCellLevel-MinCellLevel+2)
 		}
 		require.NotNil(t, qd)
@@ -245,6 +246,16 @@ func TestMatchesFilterContainsPoint(t *testing.T) {
 	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
 	require.NoError(t, err)
 	require.False(t, qd.MatchesFilter(us))
+
+	// Test with a different polygon (Sudan)
+	sudan, err := loadPolygon("testdata/sudan.json")
+	require.NoError(t, err)
+
+	p = geom.NewPoint(geom.XY).MustSetCoords(geom.Coord{0, 0})
+	data = formDataPoint(t, p)
+	_, qd, err = queryTokens(QueryTypeContains, data, 0.0)
+	require.NoError(t, err)
+	require.False(t, qd.MatchesFilter(sudan))
 }
 
 /*

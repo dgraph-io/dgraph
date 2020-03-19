@@ -33,6 +33,9 @@ import (
 var (
 	// ErrTsTooOld is returned when a transaction is too old to be applied.
 	ErrTsTooOld = errors.Errorf("Transaction is too old")
+	// ErrInvalidKey is returned when trying to read a posting list using
+	// an invalid key (e.g the key to a single part of a larger multi-part list).
+	ErrInvalidKey = errors.Errorf("cannot read posting list using multi-part list key")
 )
 
 // ShouldAbort returns whether the transaction should be aborted.
@@ -141,6 +144,24 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
 func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
+	// Previously, ReadPostingList was not checking that a multi-part list could only
+	// be read via the main key. This lead to issues during rollup because multi-part
+	// lists ended up being rolled-up multiple times. This issue was caught by the
+	// uid-set Jepsen test.
+	pk, err := x.Parse(key)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while reading posting list with key [%v]", key)
+	}
+	if pk.HasStartUid {
+		// Trying to read a single part of a multi part list. This type of list
+		// should be read using using the main key because the information needed
+		// to access the whole list is stored there.
+		// The function returns a nil list instead. This is safe to do because all
+		// public methods of the List object are no-ops and the list is being already
+		// accessed via the main key in the places where this code is reached (e.g rollups).
+		return nil, ErrInvalidKey
+	}
+
 	l := new(List)
 	l.key = key
 	l.plist = new(pb.PostingList)
@@ -166,6 +187,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 				return nil, err
 			}
 			l.minTs = item.Version()
+
 			// No need to do Next here. The outer loop can take care of skipping
 			// more versions of the same key.
 			return l, nil

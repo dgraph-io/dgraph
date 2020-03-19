@@ -7,10 +7,10 @@ import (
 
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 const introspectionQuery = `
@@ -124,6 +124,20 @@ func TestIntrospectionQuery(t *testing.T) {
 		onlyField: String
 	}`
 
+	deprecatedSchema := `
+	type TestDeprecatedObject {
+		dep: String @deprecated
+		depReason: String @deprecated(reason: "because")
+		notDep: String
+	}
+
+	enum TestDeprecatedEnum {
+		dep @deprecated
+		depReason @deprecated(reason: "because")
+		notDep
+	}
+	`
+
 	iprefix := "testdata/introspection/input"
 	oprefix := "testdata/introspection/output"
 
@@ -154,37 +168,85 @@ func TestIntrospectionQuery(t *testing.T) {
 			filepath.Join(iprefix, "type_complex_object_name_filter.txt"),
 			filepath.Join(oprefix, "type_complex_object_name_filter.json"),
 		},
+		{"Deprecated directive on type with deprecated",
+			simpleSchema + deprecatedSchema,
+			filepath.Join(iprefix, "type_withdeprecated.txt"),
+			filepath.Join(oprefix, "type_withdeprecated.json"),
+		},
+		{"Deprecated directive on type without deprecated",
+			simpleSchema + deprecatedSchema,
+			filepath.Join(iprefix, "type_withoutdeprecated.txt"),
+			filepath.Join(oprefix, "type_withoutdeprecated.json"),
+		},
+		{"Deprecated directive on enum with deprecated",
+			simpleSchema + deprecatedSchema,
+			filepath.Join(iprefix, "enum_withdeprecated.txt"),
+			filepath.Join(oprefix, "enum_withdeprecated.json"),
+		},
+		{"Deprecated directive on enum without deprecated",
+			simpleSchema + deprecatedSchema,
+			filepath.Join(iprefix, "enum_withoutdeprecated.txt"),
+			filepath.Join(oprefix, "enum_withoutdeprecated.json"),
+		},
 	}
 
 	for _, tt := range tests {
-		sch := gqlparser.MustLoadSchema(
-			&ast.Source{Name: "schema.graphql", Input: tt.schema})
+		t.Run(tt.name, func(t *testing.T) {
+			sch := gqlparser.MustLoadSchema(
+				&ast.Source{Name: "schema.graphql", Input: tt.schema})
 
-		q, err := ioutil.ReadFile(tt.queryFile)
-		require.NoError(t, err)
+			q, err := ioutil.ReadFile(tt.queryFile)
+			require.NoError(t, err)
 
-		doc, gqlErr := parser.ParseQuery(&ast.Source{Input: string(q)})
-		require.Nil(t, gqlErr)
-		listErr := validator.Validate(sch, doc)
-		require.Equal(t, 0, len(listErr))
+			doc, gqlErr := parser.ParseQuery(&ast.Source{Input: string(q)})
+			require.Nil(t, gqlErr)
+			listErr := validator.Validate(sch, doc)
+			require.Equal(t, 0, len(listErr))
 
-		op := doc.Operations.ForName("")
-		oper := &operation{op: op,
-			vars:     map[string]interface{}{},
-			query:    string(q),
-			doc:      doc,
-			inSchema: &schema{schema: sch},
-		}
-		require.NotNil(t, op)
+			op := doc.Operations.ForName("")
+			oper := &operation{op: op,
+				vars:     map[string]interface{}{},
+				query:    string(q),
+				doc:      doc,
+				inSchema: &schema{schema: sch},
+			}
+			require.NotNil(t, op)
 
-		queries := oper.Queries()
-		resp, err := Introspect(queries[0])
-		require.NoError(t, err)
+			queries := oper.Queries()
+			resp, err := Introspect(queries[0])
+			require.NoError(t, err)
 
-		expectedBuf, err := ioutil.ReadFile(tt.outputFile)
-		require.NoError(t, err)
-		testutil.CompareJSON(t, string(expectedBuf), string(resp))
+			expectedBuf, err := ioutil.ReadFile(tt.outputFile)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, string(expectedBuf), string(resp))
+		})
 	}
+}
+
+func TestIntrospectionQueryMissingNameArg(t *testing.T) {
+	sch := gqlparser.MustLoadSchema(
+		&ast.Source{Name: "schema.graphql", Input: `
+		schema {
+			query: TestType
+		}
+	
+		type TestType {
+			testField: String
+		}
+	`})
+	missingNameArgQuery := `
+	{
+    	__type {
+	        name
+    	}
+	}`
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: missingNameArgQuery})
+	require.Nil(t, gqlErr)
+
+	listErr := validator.Validate(sch, doc)
+	require.Equal(t, 1, len(listErr))
+	require.Equal(t, "Field \"__type\" argument \"name\" of type \"String!\" is required but not provided.", listErr[0].Message)
 }
 
 func TestIntrospectionQueryWithVars(t *testing.T) {
@@ -245,8 +307,6 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 }
 
 func TestFullIntrospectionQuery(t *testing.T) {
-	// The output doesn't quite match the output in the graphql-js repo. Look into this later.
-	// https://github.com/graphql/graphql-js/blob/master/src/type/__tests__/introspection-test.js#L35
 	sch := gqlparser.MustLoadSchema(
 		&ast.Source{Name: "schema.graphql", Input: `
 	schema {

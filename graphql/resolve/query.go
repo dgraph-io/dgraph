@@ -23,7 +23,6 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -35,7 +34,7 @@ type QueryResolver interface {
 
 // A QueryRewriter can build a Dgraph gql.GraphQuery from a GraphQL query,
 type QueryRewriter interface {
-	Rewrite(q schema.Query) (*gql.GraphQuery, error)
+	Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
 }
 
 // A QueryExecutor can execute a gql.GraphQuery and return a result.  The result of
@@ -50,7 +49,7 @@ type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
 
 // QueryRewritingFunc is an adapter that allows us to build a QueryRewriter from
 // a function.  Based on the http.HandlerFunc pattern.
-type QueryRewritingFunc func(q schema.Query) (*gql.GraphQuery, error)
+type QueryRewritingFunc func(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
 
 // QueryExecutionFunc is an adapter that allows us to compose query execution and
 // build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
@@ -62,8 +61,8 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 }
 
 // Rewrite calls qr(q)
-func (qr QueryRewritingFunc) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
-	return qr(q)
+func (qr QueryRewritingFunc) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
+	return qr(ctx, q)
 }
 
 // Query calls qe(ctx, query)
@@ -88,7 +87,7 @@ func NoOpQueryExecution() QueryExecutionFunc {
 
 // NoOpQueryRewrite does nothing and returns a nil rewriting.
 func NoOpQueryRewrite() QueryRewritingFunc {
-	return QueryRewritingFunc(func(q schema.Query) (*gql.GraphQuery, error) {
+	return QueryRewritingFunc(func(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
 		return nil, nil
 	})
 }
@@ -114,15 +113,15 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 func (qr *queryResolver) rewriteAndExecute(
 	ctx context.Context, query schema.Query) ([]byte, error) {
 
-	dgQuery, err := qr.queryRewriter.Rewrite(query)
+	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
 	}
 
 	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
 	if err != nil {
-		glog.Infof("[%s] query execution failed : %s", api.RequestID(ctx), err)
-		return nil, schema.GQLWrapf(err, "[%s] failed to resolve query", api.RequestID(ctx))
+		glog.Infof("Dgraph query execution failed : %s", err)
+		return nil, schema.GQLWrapf(err, "Dgraph query failed")
 	}
 
 	return resp, nil

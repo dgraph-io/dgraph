@@ -89,6 +89,16 @@ func populateClusterWithFacets() error {
 	bossFacet := "(company = \"company1\")"
 	triples += fmt.Sprintf("<1> <boss> <34> %s .\n", bossFacet)
 
+	friendFacets7 := "(since=2006-01-02T15:04:05, fastfriend=true, score=100, from=\"delhi\")"
+	friendFacets8 := "(since=2007-01-02T15:04:05, fastfriend=false, score=100)"
+	friendFacets9 := "(since=2008-01-02T15:04:05, fastfriend=true, score=200, from=\"bengaluru\")"
+	triples += fmt.Sprintf("<33> <friend> <25> %s .\n", friendFacets7)
+	triples += fmt.Sprintf("<33> <friend> <31> %s .\n", friendFacets8)
+	triples += fmt.Sprintf("<33> <friend> <34> %s .\n", friendFacets9)
+
+	triples += fmt.Sprintf("<34> <friend> <31> %s .\n", friendFacets8)
+	triples += fmt.Sprintf("<34> <friend> <25> %s .\n", friendFacets9)
+
 	err := addTriplesToCluster(triples)
 
 	// Mark the setup as done so that the next tests do not have to perform it.
@@ -331,6 +341,273 @@ func TestOrderdescFacetsWithFilters(t *testing.T) {
 								"name":"Glenn Rhee"
 							}
 						]
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderby(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:score, orderdesc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Andrea"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Roger"
+							}
+						],
+						"friend|score": {
+							"0": 100,
+							"1": 100,
+							"2": 200
+						},
+						"friend|since": {
+							"0": "2007-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2008-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderbyMultipleUIDs(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33, 34)) {
+				name
+				friend @facets(orderdesc:since, orderasc:score) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Andrea"
+							},
+							{
+								"name": "Daryl Dixon"
+							}
+						],
+						"friend|score": {
+							"0": 200,
+							"1": 100,
+							"2": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2007-01-02T15:04:05Z",
+							"2": "2006-01-02T15:04:05Z"
+						}
+					},
+					{
+						"name": "Roger",
+						"friend": [
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|score": {
+							"0": 200,
+							"1": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2007-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderbyNonsortableFacet(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:score, orderasc:fastfriend) {
+					name
+				}
+			}
+		}
+	`
+
+	js := processQueryNoErr(t, query)
+	// Since fastfriend is of bool type, it is not sortable.
+	// Hence result should be sorted by score.
+	require.JSONEq(t, `
+		{
+			"data": {
+			"me": [
+				{
+				"name": "Michale",
+				"friend": [
+					{
+					"name": "Daryl Dixon"
+					},
+					{
+					"name": "Andrea"
+					},
+					{
+					"name": "Roger"
+					}
+				],
+				"friend|fastfriend": {
+					"0": true,
+					"1": false,
+					"2": true
+				},
+				"friend|score": {
+					"0": 100,
+					"1": 100,
+					"2": 200
+				}
+				}
+			]
+			}
+		}
+	`, js)
+}
+
+func TestFacetsMultipleOrderbyAllFacets(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(fastfriend, from, orderdesc:score, orderasc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|fastfriend": {
+							"0": true,
+							"1": true,
+							"2": false
+						},
+						"friend|from": {
+							"0": "bengaluru",
+							"1": "delhi"
+						},
+						"friend|score": {
+							"0": 200,
+							"1": 100,
+							"2": 100
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2007-01-02T15:04:05Z"
+						}
+					}
+				]
+			}
+		}
+	`, js)
+}
+
+// This test tests multiple order by on facets where some facets in not present in all records.
+func TestFacetsMultipleOrderbyMissingFacets(t *testing.T) {
+	populateClusterWithFacets()
+	query := `
+		{
+			me(func: uid(33)) {
+				name
+				friend @facets(orderasc:from, orderdesc:since) {
+					name
+				}
+			}
+		}
+	`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+		{
+			"data": {
+				"me": [
+					{
+						"name": "Michale",
+						"friend": [
+							{
+								"name": "Roger"
+							},
+							{
+								"name": "Daryl Dixon"
+							},
+							{
+								"name": "Andrea"
+							}
+						],
+						"friend|from": {
+							"0": "bengaluru",
+							"1": "delhi"
+						},
+						"friend|since": {
+							"0": "2008-01-02T15:04:05Z",
+							"1": "2006-01-02T15:04:05Z",
+							"2": "2007-01-02T15:04:05Z"
+						}
 					}
 				]
 			}
@@ -1916,6 +2193,140 @@ func TestFacetsWithExpand(t *testing.T) {
 						"hindi",
 						"english"
 					]
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringUidListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			filtered_count: count(friend) @facets(eq(since, "2006-01-02T15:04:05"))
+			full_count: count(friend)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"filtered_count": 2,
+					"full_count": 5
+				},
+				{
+					"name": "Michale",
+					"filtered_count": 1,
+					"full_count": 3
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringUidPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 33)) {
+			name
+			filtered_count: count(boss) @facets(eq(company, "company1"))
+			full_count: count(boss)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"filtered_count": 1,
+					"full_count": 1
+				},
+				{
+					"name": "Michale",
+					"filtered_count": 0,
+					"full_count": 0
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 23)) {
+			name
+			french_origin_count: count(name) @facets(eq(origin, "french"))
+			french_spanish_count: count(name) @facets(eq(origin, "spanish"))
+			full_count: count(name)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
+					"full_count": 1
+				},
+				{
+					"name": "Rick Grimes",
+					"french_origin_count": 1,
+					"french_spanish_count": 0,
+					"full_count": 1
+				}
+			]
+		}
+	}`, js)
+}
+
+func TestCountFacetsFilteringScalarListPredicate(t *testing.T) {
+	populateClusterWithFacets()
+
+	query := `{
+		q(func: uid(1, 12000)) {
+			name
+			alt_name
+			filtered_count: count(alt_name) @facets(eq(origin, "french"))
+			full_count: count(alt_name)
+		}
+	}`
+
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `
+	{
+		"data": {
+			"q": [
+				{
+					"name": "Michonne",
+					"alt_name": [
+						"Michelle",
+						"Michelin"
+					],
+					"filtered_count": 1,
+					"full_count": 2
+				},
+				{
+					"alt_name": [
+						"Potter"
+					],
+					"filtered_count": 0,
+					"full_count": 1
 				}
 			]
 		}

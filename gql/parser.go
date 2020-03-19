@@ -73,8 +73,7 @@ type GraphQuery struct {
 	FacetsFilter     *FilterTree
 	GroupbyAttrs     []GroupByAttr
 	FacetVar         map[string]string
-	FacetOrder       string
-	FacetDesc        bool
+	FacetsOrder      []*FacetOrder
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.
@@ -108,6 +107,12 @@ type GroupByAttr struct {
 	Attr  string
 	Alias string
 	Langs []string
+}
+
+// FacetOrder stores ordering for single facet key.
+type FacetOrder struct {
+	Key  string
+	Desc bool // true if ordering should be decending by this facet.
 }
 
 // pair denotes the key value pair that is part of the GraphQL query root in parenthesis.
@@ -469,6 +474,9 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
+			if !v.IsGraphQLVar {
+				continue
+			}
 			if f.Func.Name == uidFunc {
 				// This is to support GraphQL variables in uid functions.
 				idVal, ok := vmap[v.Value]
@@ -1605,7 +1613,7 @@ func getValueArg(val string) (string, error) {
 }
 
 func validFuncName(name string) bool {
-	if isGeoFunc(name) || isInequalityFn(name) {
+	if isGeoFunc(name) || IsInequalityFn(name) {
 		return true
 	}
 
@@ -1706,7 +1714,7 @@ L:
 						return nil,
 							itemInFunc.Errorf("Multiple variables not allowed in len function")
 					}
-					if !isInequalityFn(function.Name) {
+					if !IsInequalityFn(function.Name) {
 						return nil,
 							itemInFunc.Errorf("len function only allowed inside inequality" +
 								" function")
@@ -1755,7 +1763,7 @@ L:
 				case isGeoFunc(function.Name):
 					err = parseGeoArgs(it, function)
 
-				case isInequalityFn(function.Name):
+				case IsInequalityFn(function.Name):
 					err = parseIneqArgs(it, function)
 
 				default:
@@ -1902,11 +1910,10 @@ L:
 }
 
 type facetRes struct {
-	f          *pb.FacetParams
-	ft         *FilterTree
-	vmap       map[string]string
-	facetOrder string
-	orderdesc  bool
+	f           *pb.FacetParams
+	ft          *FilterTree
+	vmap        map[string]string
+	facetsOrder []*FacetOrder
 }
 
 func parseFacets(it *lex.ItemIterator) (res facetRes, err error) {
@@ -2006,15 +2013,15 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 
 	facetVar := make(map[string]string)
 	var facets pb.FacetParams
-	var orderdesc bool
-	var orderkey string
+	var facetsOrder []*FacetOrder
 
 	if _, ok := tryParseItemType(it, itemRightRound); ok {
 		// @facets() just parses to an empty set of facets.
-		res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+		res.f, res.vmap, res.facetsOrder = &facets, facetVar, facetsOrder
 		return res, true, nil
 	}
 
+	facetsOrderKeys := make(map[string]struct{})
 	for {
 		// We've just consumed a leftRound or a comma.
 
@@ -2041,12 +2048,13 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 				Alias: facetItem.alias,
 			})
 			if facetItem.ordered {
-				if orderkey != "" {
+				if _, ok := facetsOrderKeys[facetItem.name]; ok {
 					return res, false,
-						facetItemIt.Errorf("Invalid use of orderasc/orderdesc in facets")
+						it.Errorf("Sorting by facet: [%s] can only be done once", facetItem.name)
 				}
-				orderdesc = facetItem.orderdesc
-				orderkey = facetItem.name
+				facetsOrderKeys[facetItem.name] = struct{}{}
+				facetsOrder = append(facetsOrder,
+					&FacetOrder{Key: facetItem.name, Desc: facetItem.orderdesc})
 			}
 		}
 
@@ -2066,7 +2074,7 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 			}
 			out = append(out, facets.Param[flen-1])
 			facets.Param = out
-			res.f, res.vmap, res.facetOrder, res.orderdesc = &facets, facetVar, orderkey, orderdesc
+			res.f, res.vmap, res.facetsOrder = &facets, facetVar, facetsOrder
 			return res, true, nil
 		}
 		if item, ok := tryParseItemType(it, itemComma); !ok {
@@ -2401,8 +2409,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 		switch {
 		case res.f != nil:
 			curp.FacetVar = res.vmap
-			curp.FacetOrder = res.facetOrder
-			curp.FacetDesc = res.orderdesc
+			curp.FacetsOrder = res.facetsOrder
 			if curp.Facets != nil {
 				return item.Errorf("Only one facets allowed")
 			}
@@ -2467,7 +2474,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	item := it.Item()
 	var langs []string
-	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
+	for ; item.Typ == itemName || item.Typ == itemPeriod || item.Typ == itemStar; item = it.Item() {
 		langs = append(langs, item.Val)
 		it.Next()
 		if it.Item().Typ == itemColon {
@@ -3218,7 +3225,7 @@ func isGeoFunc(name string) bool {
 	return name == "near" || name == "contains" || name == "within" || name == "intersects"
 }
 
-func isInequalityFn(name string) bool {
+func IsInequalityFn(name string) bool {
 	switch name {
 	case "eq", "le", "ge", "gt", "lt":
 		return true

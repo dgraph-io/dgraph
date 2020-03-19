@@ -17,18 +17,19 @@
 package worker
 
 import (
-	"github.com/dgraph-io/badger/v2"
-
 	"bytes"
+	"context"
 
+	"github.com/pkg/errors"
+
+	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 )
 
-func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
+func verifyStringIndex(ctx context.Context, attr string, funcType FuncType) (string, bool) {
 	var requiredTokenizer tok.Tokenizer
 	switch funcType {
 	case fullTextSearchFn:
@@ -39,12 +40,12 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 		requiredTokenizer = tok.TermTokenizer{}
 	}
 
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return requiredTokenizer.Name(), false
 	}
 
 	id := requiredTokenizer.Identifier()
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(ctx, attr) {
 		if t.Identifier() == id {
 			return requiredTokenizer.Name(), true
 		}
@@ -52,11 +53,11 @@ func verifyStringIndex(attr string, funcType FuncType) (string, bool) {
 	return requiredTokenizer.Name(), false
 }
 
-func verifyCustomIndex(attr string, tokenizerName string) bool {
-	if !schema.State().IsIndexed(attr) {
+func verifyCustomIndex(ctx context.Context, attr string, tokenizerName string) bool {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return false
 	}
-	for _, t := range schema.State().Tokenizer(attr) {
+	for _, t := range schema.State().Tokenizer(ctx, attr) {
 		if t.Identifier() >= tok.IdentCustom && t.Name() == tokenizerName {
 			return true
 		}
@@ -76,13 +77,13 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 	return tok.GetTermTokens(funcArgs)
 }
 
-func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
+func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(attr) {
+	if !schema.State().IsIndexed(ctx, attr) {
 		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
 	}
 
-	tokenizers := schema.State().Tokenizer(attr)
+	tokenizers := schema.State().Tokenizer(ctx, attr)
 	for _, t := range tokenizers {
 		// If function is eq and we found a tokenizer thats !Lossy(), lets return it
 		switch f {
@@ -110,16 +111,17 @@ func pickTokenizer(attr string, f string) (tok.Tokenizer, error) {
 
 // getInequalityTokens gets tokens ge / le compared to given token using the first sortable
 // index that is found for the predicate.
-func getInequalityTokens(readTs uint64, attr, f string,
+func getInequalityTokens(ctx context.Context, readTs uint64, attr, f, lang string,
 	ineqValue types.Val) ([]string, string, error) {
-	tokenizer, err := pickTokenizer(attr, f)
+	tokenizer, err := pickTokenizer(ctx, attr, f)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Get the token for the value passed in function.
 	// XXX: the lang should be query.Langs, but it only matters in edge case test below.
-	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tok.GetLangTokenizer(tokenizer, "en"))
+	tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
+	ineqTokens, err := tok.BuildTokens(ineqValue.Value, tokenizer)
 	if err != nil {
 		return nil, "", err
 	}

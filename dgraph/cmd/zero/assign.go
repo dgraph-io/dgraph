@@ -17,8 +17,9 @@
 package zero
 
 import (
+	"context"
+
 	otrace "go.opencensus.io/trace"
-	"golang.org/x/net/context"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"

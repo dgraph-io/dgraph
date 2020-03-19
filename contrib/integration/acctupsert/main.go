@@ -83,14 +83,18 @@ func setup(c *dgo.Dgraph) {
 	x.Check(c.Alter(ctx, &api.Operation{
 		DropAll: true,
 	}))
-	x.Check(c.Alter(ctx, &api.Operation{
+	op := &api.Operation{
 		Schema: `
 			first:  string   @index(term) @upsert .
 			last:   string   @index(hash) @upsert .
 			age:    int      @index(int)  @upsert .
 			when:   int                   .
 		`,
-	}))
+	}
+	x.Check(c.Alter(ctx, op))
+	if err := testutil.WaitForAlter(ctx, c, op.Schema); err != nil {
+		x.Check(err)
+	}
 }
 
 func doUpserts(c *dgo.Dgraph) {
@@ -121,12 +125,13 @@ func upsert(c *dgo.Dgraph, acc account) {
 			lastStatus = time.Now()
 		}
 		err := tryUpsert(c, acc)
-		if err == nil {
+		switch err {
+		case nil:
 			atomic.AddUint64(&successCount, 1)
 			return
-		} else if err == dgo.ErrAborted {
+		case dgo.ErrAborted:
 			// pass
-		} else {
+		default:
 			fmt.Printf("ERROR: %v", err)
 		}
 		atomic.AddUint64(&retryCount, 1)

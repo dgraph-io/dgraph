@@ -1801,6 +1801,34 @@ func TestParseSchemaTypeMulti(t *testing.T) {
 	require.Equal(t, len(res.Schema.Fields), 0)
 }
 
+func TestParseSchemaSpecialChars(t *testing.T) {
+	query := `
+		schema (pred: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 2)
+	require.Equal(t, len(res.Schema.Types), 0)
+	require.Equal(t, res.Schema.Predicates[0], "Person")
+	require.Equal(t, res.Schema.Predicates[1], "人物")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeSpecialChars(t *testing.T) {
+	query := `
+		schema (type: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "人物")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
 func TestParseSchemaError(t *testing.T) {
 	query := `
 		schema () {
@@ -2964,6 +2992,21 @@ func TestLangsInvalid9(t *testing.T) {
 		"The * symbol cannot be used as a valid language inside functions")
 }
 
+func TestLangsInvalid10(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@.:*
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
+}
+
 func TestLangsFilter(t *testing.T) {
 	query := `
 	query {
@@ -3407,8 +3450,78 @@ func TestParseFacets(t *testing.T) {
 	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
 	require.NotNil(t, res.Query[0].Children[0].Facets)
 	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
-	require.Equal(t, "closeness", res.Query[0].Children[0].FacetOrder)
-	require.True(t, res.Query[0].Children[0].FacetDesc)
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+}
+
+func TestParseOrderbyMultipleFacets(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: since) {
+				name
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+}
+
+func TestParseOrderbyMultipleFacetsWithAlias(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: since, score, location:from) {
+				name
+			}
+		}
+	}
+`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.NotNil(t, res.Query[0])
+	require.Equal(t, []string{"friends"}, childAttrs(res.Query[0]))
+	require.NotNil(t, res.Query[0].Children[0].Facets)
+	require.Equal(t, []string{"name"}, childAttrs(res.Query[0].Children[0]))
+	require.Equal(t, 2, len(res.Query[0].Children[0].FacetsOrder))
+	require.Equal(t, "closeness", res.Query[0].Children[0].FacetsOrder[0].Key)
+	require.True(t, res.Query[0].Children[0].FacetsOrder[0].Desc)
+	require.Equal(t, "since", res.Query[0].Children[0].FacetsOrder[1].Key)
+	require.False(t, res.Query[0].Children[0].FacetsOrder[1].Desc)
+	require.Equal(t, 4, len(res.Query[0].Children[0].Facets.Param))
+	require.Nil(t, res.Query[0].Children[0].FacetsFilter)
+	require.Empty(t, res.Query[0].Children[0].FacetVar)
+	for _, param := range res.Query[0].Children[0].Facets.Param {
+		if param.Key == "from" {
+			require.Equal(t, "location", param.Alias)
+			break
+		}
+	}
+}
+
+func TestParseOrderbySameFacetsMultipleTimes(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(0x1)) {
+			friends @facets(orderdesc: closeness, orderasc: closeness) {
+				name
+			}
+		}
+	}
+`
+	_, err := Parse(Request{Str: query})
+	require.Contains(t, err.Error(),
+		"Sorting by facet: [closeness] can only be done once")
 }
 
 func TestParseOrderbyFacet(t *testing.T) {
@@ -5065,4 +5178,63 @@ func TestParseExpandFilterErr(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}
+
+func TestFilterWithDollar(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "$yo")
+}
+
+func TestFilterWithDollarError(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, $yo)) {
+		  name
+		  description
+		}
+	  }
+	`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+}
+
+func TestFilterWithVar(t *testing.T) {
+	query := `query data($a: string = "dgraph")
+	{
+		data(func: eq(name, "Bob"), first:5) @filter(eq(description, $a)) {
+			name
+			description
+		  }
+	}`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "dgraph")
+}
+
+func TestFilterWithEmpty(t *testing.T) {
+	query := `{
+		names(func: has(name)) @filter(eq(name, "")) {
+		  count(uid)
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
 }

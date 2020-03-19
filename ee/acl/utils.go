@@ -106,8 +106,8 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 // Acl represents the permissions in the ACL system.
 // An Acl can have a predicate and permission for that predicate.
 type Acl struct {
-	Predicate string `json:"predicate"`
-	Perm      int32  `json:"perm"`
+	Predicate string `json:"dgraph.rule.predicate"`
+	Perm      int32  `json:"dgraph.rule.permission"`
 }
 
 // Group represents a group in the ACL system.
@@ -115,7 +115,7 @@ type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
-	Acls    string `json:"dgraph.group.acl"`
+	Rules   []Acl  `json:"dgraph.acl.rule"`
 }
 
 // GetUid returns the UID of the group.

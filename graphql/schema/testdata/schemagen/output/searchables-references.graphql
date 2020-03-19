@@ -42,6 +42,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -99,26 +100,32 @@ input StringHashFilter {
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddPostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 #######################
@@ -140,6 +147,18 @@ enum PostOrderable {
 # Generated Inputs
 #######################
 
+input AddAuthorInput {
+	name: String!
+	dob: DateTime
+	posts: [PostRef]
+}
+
+input AddPostInput {
+	title: String!
+	text: String
+	datePublished: DateTime
+}
+
 input AuthorFilter {
 	id: [ID!]
 	name: StringHashFilter
@@ -148,16 +167,16 @@ input AuthorFilter {
 	not: AuthorFilter
 }
 
-input AuthorInput {
-	name: String!
-	dob: DateTime
-	posts: [PostRef]
-}
-
 input AuthorOrder {
 	asc: AuthorOrderable
 	desc: AuthorOrderable
 	then: AuthorOrder
+}
+
+input AuthorPatch {
+	name: String
+	dob: DateTime
+	posts: [PostRef]
 }
 
 input AuthorRef {
@@ -165,18 +184,6 @@ input AuthorRef {
 	name: String
 	dob: DateTime
 	posts: [PostRef]
-}
-
-input PatchAuthor {
-	name: String
-	dob: DateTime
-	posts: [PostRef]
-}
-
-input PatchPost {
-	title: String
-	text: String
-	datePublished: DateTime
 }
 
 input PostFilter {
@@ -188,16 +195,16 @@ input PostFilter {
 	not: PostFilter
 }
 
-input PostInput {
-	title: String!
-	text: String
-	datePublished: DateTime
-}
-
 input PostOrder {
 	asc: PostOrderable
 	desc: PostOrderable
 	then: PostOrder
+}
+
+input PostPatch {
+	title: String
+	text: String
+	datePublished: DateTime
 }
 
 input PostRef {
@@ -216,14 +223,14 @@ input StringFullTextFilter_StringTermFilter {
 
 input UpdateAuthorInput {
 	filter: AuthorFilter!
-	set: PatchAuthor
-	remove: PatchAuthor
+	set: AuthorPatch
+	remove: AuthorPatch
 }
 
 input UpdatePostInput {
 	filter: PostFilter!
-	set: PatchPost
-	remove: PatchPost
+	set: PostPatch
+	remove: PostPatch
 }
 
 #######################
@@ -242,10 +249,10 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AuthorInput!]!): AddAuthorPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addPost(input: [PostInput!]!): AddPostPayload
+	addPost(input: [AddPostInput!]!): AddPostPayload
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
