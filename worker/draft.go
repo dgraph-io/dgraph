@@ -149,6 +149,23 @@ func (n *node) waitForTask(id op) {
 	closer.Wait()
 }
 
+func (n *node) stopAllTasks() {
+	defer n.closer.Done() // CLOSER:1
+	<-n.closer.HasBeenClosed()
+
+	var closers []*y.Closer
+	n.opsLock.Lock()
+	for _, closer := range n.ops {
+		closers = append(closers, closer)
+	}
+	n.opsLock.Unlock()
+
+	for _, closer := range closers {
+		closer.SignalAndWait()
+	}
+	glog.Infof("Stopped all ongoing registered tasks.")
+}
+
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
 // sufficient. We don't need to wait for proposals to be applied.
 
@@ -171,7 +188,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// to maintain quorum health.
 		applyCh: make(chan []*pb.Proposal, 1000),
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:  y.NewCloser(3), // Matches CLOSER:1
+		closer:  y.NewCloser(4), // Matches CLOSER:1
 		ops:     make(map[op]*y.Closer),
 	}
 	return n
@@ -1527,6 +1544,7 @@ func (n *node) InitAndStartNode() {
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
 	n.startTask(opRollup)
+	go n.stopAllTasks()
 	go n.Run()
 }
 
