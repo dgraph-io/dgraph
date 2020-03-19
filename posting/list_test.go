@@ -28,6 +28,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -901,7 +902,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 		maxListSize = math.MaxInt32
 	}()
 
-	key := x.DataKey("multi-bal", 1331)
+	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	commits := 0
@@ -927,6 +928,9 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 
 	kvs, err := ol.Rollup()
+	for _, kv := range kvs {
+		require.Equal(t, uint64(size+1), kv.Version)
+	}
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps)
@@ -943,7 +947,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 		maxListSize = math.MaxInt32
 	}()
 
-	key := x.DataKey("bal_del", 1331)
+	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	commits := 0
@@ -1061,11 +1065,8 @@ func TestMultiPartListMarshal(t *testing.T) {
 		return string(kvs[i].Key) < string(kvs[j].Key)
 	})
 
-	key := x.DataKey("multi-bal", 1331)
-	require.Equal(t, key, kvs[0].Key)
-
 	for i, startUid := range ol.plist.Splits {
-		partKey, err := x.SplitKey(key, startUid)
+		partKey, err := x.SplitKey(kvs[0].Key, startUid)
 		require.NoError(t, err)
 		require.Equal(t, partKey, kvs[i+1].Key)
 		part, err := ol.readListPart(startUid)
@@ -1138,7 +1139,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}()
 
 	// Add entries to the maps.
-	key := x.DataKey("del_add", 1331)
+	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	for i := 1; i <= size; i++ {
@@ -1169,7 +1170,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 	// Delete the first half of the previously inserted entries from the list.
 	baseStartTs := uint64(size) + 1
-	for i := 1; i <= 50000; i++ {
+	for i := 1; i <= size/2; i++ {
 		edge := &pb.DirectedEdge{
 			ValueId: uint64(i),
 		}
@@ -1191,7 +1192,9 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	require.NoError(t, writePostingListToDisk(kvs))
 	ol, err = getNew(key, ps)
 	require.NoError(t, err)
-
+	for _, kv := range kvs {
+		require.Equal(t, baseStartTs+uint64(1+size/2), kv.Version)
+	}
 	// Verify that the entries were actually deleted.
 	opt = ListOptions{ReadTs: math.MaxUint64}
 	l, err = ol.Uids(opt)
@@ -1276,7 +1279,7 @@ func TestRecursiveSplits(t *testing.T) {
 
 	// Create a list that should be split recursively.
 	size := int(1e5)
-	key := x.DataKey("recursive", 1331)
+	key := x.DataKey(uuid.New().String(), 1331)
 	ol, err := getNew(key, ps)
 	require.NoError(t, err)
 	commits := 0
