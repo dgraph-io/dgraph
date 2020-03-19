@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -831,7 +832,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 			// empty string.
 			val = ""
 		}
-		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, fmt.Sprintf("%v", val))
+		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
 	}
 
 	bodyArg := httpArg.Value.Children.ForName("body")

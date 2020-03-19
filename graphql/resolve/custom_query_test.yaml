@@ -102,7 +102,7 @@
   name: "custom GET query gets URL filled from GraphQL variables"
   gqlquery: |
     query users($id: ID!) {
-      myFavoriteMovies(id: $id, name: "Michael", num: 10) {
+      myFavoriteMovies(id: $id, name: "Michael Compton", num: 10) {
         id
         name
         director {
@@ -130,7 +130,7 @@
         }
       ]
     }
-  url: http://myapi.com/favMovies/0x9?name=Michael&num=10
+  url: http://myapi.com/favMovies/0x9?name=Michael+Compton&num=10
   method: GET
   resolvedresponse: |
     {
