@@ -268,6 +268,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
+
+	// wait for indexing to complete.
+	for !op.RunInBackground {
+		if !schema.State().IndexingInProgress() {
+			break
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+
 	return empty, err
 }
 
