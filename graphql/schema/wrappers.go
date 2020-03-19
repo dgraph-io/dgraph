@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -45,9 +46,10 @@ type QueryType string
 type MutationType string
 
 type HTTPResolverConfig struct {
-	URL    string
-	Method string
-	Body   string
+	URL            string
+	Method         string
+	Body           string
+	ForwardHeaders http.Header
 }
 
 // Query/Mutation types and arg names
@@ -178,8 +180,9 @@ type schema struct {
 }
 
 type operation struct {
-	op   *ast.OperationDefinition
-	vars map[string]interface{}
+	op     *ast.OperationDefinition
+	vars   map[string]interface{}
+	header http.Header
 
 	// The fields below are used by schema introspection queries.
 	query    string
@@ -844,6 +847,15 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 		}
 		rc.Body = string(body)
 	}
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
+		}
+		rc.ForwardHeaders = headers
+	}
+
 	return rc, nil
 }
 

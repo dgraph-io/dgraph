@@ -1127,6 +1127,7 @@ func (hr *httpResolver) rewriteAndExecute(
 	if err != nil {
 		return nil, err
 	}
+	req.Header = hrc.ForwardHeaders
 
 	resp, err := hr.Do(req)
 	if err != nil {

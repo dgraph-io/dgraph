@@ -80,6 +80,7 @@ type HTTPRewritingCase struct {
 	Method           string
 	URL              string
 	Body             string
+	Headers          map[string][]string
 }
 
 // RoundTripFunc .
@@ -106,6 +107,11 @@ func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
 			require.NoError(t, err)
 			require.JSONEq(t, hrc.Body, string(body))
 		}
+		expectedHeaders := http.Header{}
+		for h, v := range hrc.Headers {
+			expectedHeaders.Set(h, v[0])
+		}
+		require.Equal(t, expectedHeaders, req.Header)
 
 		return &http.Response{
 			StatusCode: 200,
@@ -133,6 +139,11 @@ func TestCustomHTTPQuery(t *testing.T) {
 				&schema.Request{
 					Query:     tcase.GQLQuery,
 					Variables: tcase.Variables,
+					Header: map[string][]string{
+						"bogus":       []string{"header"},
+						"X-App-Token": []string{"val"},
+						"Auth0-Token": []string{"tok"},
+					},
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
