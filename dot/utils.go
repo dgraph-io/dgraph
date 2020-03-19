@@ -40,6 +40,7 @@ func NewTestConfig(t *testing.T) *Config {
 			DataDir: dir,
 			Config:  string(""),
 			Genesis: string(""),
+			Roles:   byte(4), // authority node
 		},
 		Account: AccountConfig{
 			Key:    string(""),
@@ -52,7 +53,6 @@ func NewTestConfig(t *testing.T) *Config {
 			Port:        uint32(7001),
 			Bootnodes:   []string(nil),
 			ProtocolID:  string("/gossamer/test/0"),
-			Roles:       byte(1), // full node
 			NoBootstrap: false,
 			NoMDNS:      false,
 		},

@@ -4,6 +4,7 @@ id = "ksmcc"
 config = "./node/ksmcc/config.toml"
 genesis = "./node/ksmcc/genesis.json"
 datadir = "~/.gossamer/ksmcc"
+roles = 1
 
 [account]
 key = ""
@@ -16,7 +17,6 @@ authority = false
 port = 7001
 bootnodes = []
 protocol = "/gossamer/ksmcc/0"
-roles = 1
 nobootstrap = false
 nomdns = false
 

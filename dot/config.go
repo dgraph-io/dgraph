@@ -47,6 +47,7 @@ type GlobalConfig struct {
 	Config  string `toml:"config"`
 	Genesis string `toml:"genesis"`
 	DataDir string `toml:"datadir"`
+	Roles   byte   `toml:"roles"`
 }
 
 // AccountConfig is to marshal/unmarshal account config vars
@@ -60,7 +61,6 @@ type NetworkConfig struct {
 	Port        uint32   `toml:"port"`
 	Bootnodes   []string `toml:"bootnodes"`
 	ProtocolID  string   `toml:"protocol"`
-	Roles       byte     `toml:"roles"`
 	NoBootstrap bool     `toml:"nobootstrap"`
 	NoMDNS      bool     `toml:"nomdns"`
 }
@@ -84,6 +84,16 @@ func (c *Config) String() string {
 	return string(out)
 }
 
+// NetworkServiceEnabled returns true if the network service is enabled
+func NetworkServiceEnabled(cfg *Config) bool {
+	return cfg.Global.Roles != byte(0)
+}
+
+// RPCServiceEnabled returns true if the rpc service is enabled
+func RPCServiceEnabled(cfg *Config) bool {
+	return cfg.RPC.Enabled
+}
+
 // GssmrConfig returns a new test configuration using the provided datadir
 func GssmrConfig() *Config {
 	return &Config{
@@ -93,6 +103,7 @@ func GssmrConfig() *Config {
 			Config:  gssmr.DefaultConfig,
 			Genesis: gssmr.DefaultGenesis,
 			DataDir: gssmr.DefaultDataDir,
+			Roles:   gssmr.DefaultRoles,
 		},
 		Account: AccountConfig{
 			Key:    gssmr.DefaultKey,
@@ -105,7 +116,6 @@ func GssmrConfig() *Config {
 			Port:        gssmr.DefaultNetworkPort,
 			Bootnodes:   gssmr.DefaultNetworkBootnodes,
 			ProtocolID:  gssmr.DefaultNetworkProtocolID,
-			Roles:       gssmr.DefaultRoles,
 			NoBootstrap: gssmr.DefaultNoBootstrap,
 			NoMDNS:      gssmr.DefaultNoMDNS,
 		},
@@ -126,6 +136,7 @@ func KsmccConfig() *Config {
 			Config:  ksmcc.DefaultConfig,
 			Genesis: ksmcc.DefaultGenesis,
 			DataDir: ksmcc.DefaultDataDir,
+			Roles:   ksmcc.DefaultRoles,
 		},
 		Account: AccountConfig{
 			Key:    ksmcc.DefaultKey,
@@ -138,7 +149,6 @@ func KsmccConfig() *Config {
 			Port:        ksmcc.DefaultNetworkPort,
 			Bootnodes:   ksmcc.DefaultNetworkBootnodes,
 			ProtocolID:  ksmcc.DefaultNetworkProtocolID,
-			Roles:       ksmcc.DefaultRoles,
 			NoBootstrap: ksmcc.DefaultNoBootstrap,
 			NoMDNS:      ksmcc.DefaultNoMDNS,
 		},

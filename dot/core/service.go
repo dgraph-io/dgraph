@@ -83,12 +83,12 @@ type Config struct {
 	TransactionQueue TransactionQueue
 	Keystore         *keystore.Keystore
 	Runtime          *runtime.Runtime
-	MsgRec           <-chan network.Message
-	MsgSend          chan<- network.Message
-	NewBlocks        chan types.Block // only used for testing purposes
 	IsBabeAuthority  bool
 
-	SyncChan chan *big.Int
+	NewBlocks chan types.Block // only used for testing purposes
+	MsgRec    <-chan network.Message
+	MsgSend   chan<- network.Message
+	SyncChan  chan *big.Int
 }
 
 // NewService returns a new core service that connects the runtime, BABE

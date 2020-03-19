@@ -96,6 +96,19 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 		cfg.DataDir = datadir
 	}
 
+	// check --roles flag and update node configuration
+	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
+		b, err := strconv.Atoi(roles)
+		if err != nil {
+			log.Error("[cmd] Failed to convert Roles to byte", "error", err)
+		} else if byte(b) > 4 {
+			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
+			log.Error("[cmd] Invalid roles option provided", "roles", byte(b))
+		} else {
+			cfg.Roles = byte(b)
+		}
+	}
+
 	log.Debug(
 		"[cmd] Global configuration",
 		"name", cfg.Name,
@@ -103,6 +116,7 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 		"config", cfg.Config,
 		"genesis", cfg.Genesis,
 		"datadir", cfg.DataDir,
+		"roles", cfg.Roles,
 	)
 }
 
@@ -127,11 +141,25 @@ func setDotAccountConfig(ctx *cli.Context, cfg *dot.AccountConfig) {
 
 // setDotCoreConfig sets dot.CoreConfig using flag values from the cli context
 func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
-	// check --authority flag and update node configuration
-	if authority := ctx.GlobalBool(AuthorityFlag.Name); authority {
-		cfg.Authority = true
-	} else if ctx.IsSet(AuthorityFlag.Name) && !authority {
-		cfg.Authority = false
+	// check --roles flag and update node configuration
+	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
+		// convert string to byte
+		b, err := strconv.Atoi(roles)
+		if err != nil {
+			log.Error("[cmd] Failed to convert Roles to byte", "error", err)
+		} else if byte(b) == 4 {
+			// if roles byte is 4, act as an authority (see Table D.2)
+			log.Debug("[cmd] Authority enabled", "roles", 4)
+			cfg.Authority = true
+		} else if byte(b) > 4 {
+			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
+			log.Error("[cmd] Invalid roles option provided, authority disabled", "roles", byte(b))
+			cfg.Authority = false
+		} else {
+			// if roles byte is less than 4, do not act as an authority (see Table D.2)
+			log.Debug("[cmd] Authority disabled", "roles", byte(b))
+			cfg.Authority = false
+		}
 	}
 
 	log.Debug(
@@ -162,16 +190,6 @@ func setDotNetworkConfig(ctx *cli.Context, cfg *dot.NetworkConfig) {
 		cfg.ProtocolID = protocol
 	}
 
-	// check --roles flag and update node configuration
-	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
-		b, err := strconv.Atoi(roles)
-		if err != nil {
-			log.Error("[cmd] Failed to convert Roles to byte", "error", err)
-		} else {
-			cfg.Roles = byte(b)
-		}
-	}
-
 	// check --nobootstrap flag and update node configuration
 	if nobootstrap := ctx.GlobalBool(NoBootstrapFlag.Name); nobootstrap {
 		cfg.NoBootstrap = true
@@ -187,7 +205,6 @@ func setDotNetworkConfig(ctx *cli.Context, cfg *dot.NetworkConfig) {
 		"port", cfg.Port,
 		"bootnodes", cfg.Bootnodes,
 		"protocol", cfg.ProtocolID,
-		"roles", cfg.Roles,
 		"nobootstrap", cfg.NoBootstrap,
 		"nomdns", cfg.NoMDNS,
 	)

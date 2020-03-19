@@ -34,15 +34,18 @@ func TestStatus(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
+	msgRecA := make(chan Message)
+
 	configA := &Config{
 		DataDir:     dataDirA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgRec:      msgRecA,
 	}
 
-	nodeA, _, msgRecA := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -72,15 +75,18 @@ func TestStatus(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	msgRecB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgRec:      msgRecB,
 	}
 
-	nodeB, _, msgRecB := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true

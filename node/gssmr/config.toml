@@ -4,6 +4,7 @@ id = "gssmr"
 config = "./node/gssmr/config.toml"
 genesis = "./node/gssmr/genesis.json"
 datadir = "~/.gossamer/gssmr"
+roles = 4
 
 [account]
 key = ""
@@ -16,7 +17,6 @@ authority = true
 port = 7001
 bootnodes = []
 protocol = "/gossamer/gssmr/0"
-roles = 1
 nobootstrap = false
 nomdns = false
 

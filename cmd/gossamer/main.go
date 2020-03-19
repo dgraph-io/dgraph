@@ -86,7 +86,6 @@ func init() {
 	app.Flags = append(app.Flags, CLIFlags...)
 	app.Flags = append(app.Flags, GlobalFlags...)
 	app.Flags = append(app.Flags, AccountFlags...)
-	app.Flags = append(app.Flags, CoreFlags...)
 	app.Flags = append(app.Flags, NetworkFlags...)
 	app.Flags = append(app.Flags, RPCFlags...)
 }

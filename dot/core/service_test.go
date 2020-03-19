@@ -35,19 +35,22 @@ import (
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/tests"
+	"github.com/stretchr/testify/require"
 )
 
-var TestMessageTimeout = 5 * time.Second
+// TestMessageTimeout is the wait time for messages to be exchanged
+var TestMessageTimeout = time.Second
 
-var genesisHeader = &types.Header{
+// TestHeader is a test block header
+var TestHeader = &types.Header{
 	Number:    big.NewInt(0),
 	StateRoot: trie.EmptyHash,
 }
 
+// newTestService creates a new test core service
 func newTestService(t *testing.T, cfg *Config) *Service {
 	if cfg == nil {
 		rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
-
 		cfg = &Config{
 			Runtime:         rt,
 			IsBabeAuthority: false,
@@ -58,34 +61,30 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 		cfg.Keystore = keystore.NewKeystore()
 	}
 
-	if cfg.MsgRec == nil {
-		cfg.MsgRec = make(chan network.Message)
-	}
-
-	if cfg.MsgSend == nil {
-		cfg.MsgSend = make(chan network.Message)
-	}
-
 	if cfg.NewBlocks == nil {
 		cfg.NewBlocks = make(chan types.Block)
 	}
 
+	if cfg.MsgRec == nil {
+		cfg.MsgRec = make(chan network.Message, 10)
+	}
+
+	if cfg.MsgSend == nil {
+		cfg.MsgSend = make(chan network.Message, 10)
+	}
+
 	if cfg.SyncChan == nil {
-		cfg.SyncChan = make(chan *big.Int)
+		cfg.SyncChan = make(chan *big.Int, 10)
 	}
 
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()
 
-	err := stateSrvc.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
-	if err != nil {
-		t.Fatal(err)
-	}
+	err := stateSrvc.Initialize(TestHeader, trie.NewEmptyTrie(nil))
+	require.Nil(t, err)
 
 	err = stateSrvc.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	if cfg.BlockState == nil {
 		cfg.BlockState = stateSrvc.Block
@@ -96,19 +95,17 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	s, err := NewService(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	return s
 }
 
 func TestStartService(t *testing.T) {
 	s := newTestService(t, nil)
+	require.NotNil(t, s) // TODO: improve dot core tests
+
 	err := s.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	s.Stop()
 }
@@ -121,9 +118,7 @@ func TestValidateBlock(t *testing.T) {
 
 	// `core_execute_block` will throw error, no expected result
 	err := s.executeBlock(data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 }
 
 func TestValidateTransaction(t *testing.T) {
@@ -133,9 +128,7 @@ func TestValidateTransaction(t *testing.T) {
 	tx := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}
 
 	validity, err := s.ValidateTransaction(tx)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	// https://github.com/paritytech/substrate/blob/ea2644a235f4b189c8029b9c9eac9d4df64ee91e/core/test-runtime/src/system.rs#L190
 	expected := &transaction.Validity{
@@ -167,9 +160,7 @@ func TestAnnounceBlock(t *testing.T) {
 
 	s := newTestService(t, cfg)
 	err := s.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 	defer s.Stop()
 
 	parent := &types.Header{
@@ -206,15 +197,11 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	pubkey := kp.Public().Encode()
 	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
@@ -230,16 +217,12 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	hash := common.NewHash([]byte{0})
 	body := optional.CoreBody{0xa, 0xb, 0xc, 0xd}
 
-	parentHash := genesisHeader.Hash()
+	parentHash := TestHeader.Hash()
 	stateRoot, err := common.HexToHash("0x2747ab7c0dc38b7f2afba82bd5e2d6acef8c31e09800f660b75ec84a7005099f")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	extrinsicsRoot, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	header := &types.Header{
 		ParentHash:     parentHash,
@@ -270,14 +253,10 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	}
 
 	err = s.ProcessBlockResponseMessage(blockResponse)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	res, err := s.blockState.GetHeader(header.Hash())
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	if !reflect.DeepEqual(res, header) {
 		t.Fatalf("Fail: got %v expected %v", res, header)
@@ -289,15 +268,11 @@ func TestProcessTransactionMessage(t *testing.T) {
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	pubkey := kp.Public().Encode()
 	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
@@ -317,9 +292,7 @@ func TestProcessTransactionMessage(t *testing.T) {
 	msg := &network.TransactionMessage{Extrinsics: []types.Extrinsic{ext}}
 
 	err = s.ProcessTransactionMessage(msg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	bsTx := s.transactionQueue.Peek()
 	bsTxExt := []byte(bsTx.Extrinsic)
@@ -333,7 +306,7 @@ func TestProcessTransactionMessage(t *testing.T) {
 	}
 }
 
-func TestService_NotAuthority(t *testing.T) {
+func TestNotAuthority(t *testing.T) {
 	cfg := &Config{
 		Keystore:        keystore.NewKeystore(),
 		IsBabeAuthority: false,
@@ -345,20 +318,16 @@ func TestService_NotAuthority(t *testing.T) {
 	}
 }
 
-func TestService_CheckForRuntimeChanges(t *testing.T) {
+func TestCheckForRuntimeChanges(t *testing.T) {
 	tt := trie.NewEmptyTrie(nil)
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	pubkey := kp.Public().Encode()
 	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, pubkey...))
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
@@ -373,32 +342,22 @@ func TestService_CheckForRuntimeChanges(t *testing.T) {
 	s := newTestService(t, cfg)
 
 	_, err = tests.GetRuntimeBlob(tests.TESTS_FP, tests.TEST_WASM_URL)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	testRuntime, err := ioutil.ReadFile(tests.TESTS_FP)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	err = s.storageState.SetStorage([]byte(":code"), testRuntime)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	err = s.checkForRuntimeChanges()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 }
 
 func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 	previousHash := blockState.BestBlockHash()
 	previousNum, err := blockState.BestBlockNumber()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	for i := 1; i <= depth; i++ {
 		block := &types.Block{
@@ -412,9 +371,7 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 		previousHash = block.Header.Hash()
 
 		err := blockState.AddBlock(block)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.Nil(t, err)
 	}
 }
 
@@ -455,6 +412,48 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 				"\nreceived:", msgType,
 			)
 		}
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
+	}
+}
+
+func TestProcessBlockAnnounce(t *testing.T) {
+	msgSend := make(chan network.Message)
+	newBlocks := make(chan types.Block)
+
+	cfg := &Config{
+		MsgSend:         msgSend,
+		Keystore:        keystore.NewKeystore(),
+		NewBlocks:       newBlocks,
+		IsBabeAuthority: false,
+	}
+
+	s := newTestService(t, cfg)
+	err := s.Start()
+	require.Nil(t, err)
+
+	expected := &network.BlockAnnounceMessage{
+		Number:         big.NewInt(1),
+		ParentHash:     TestHeader.Hash(),
+		StateRoot:      common.Hash{},
+		ExtrinsicsRoot: common.Hash{},
+		Digest:         nil,
+	}
+
+	// simulate block sent from BABE session
+	newBlocks <- types.Block{
+		Header: &types.Header{
+			Number:     big.NewInt(1),
+			ParentHash: TestHeader.Hash(),
+		},
+		Body: types.NewBody([]byte{}),
+	}
+
+	select {
+	case msg := <-msgSend:
+		msgType := msg.GetType()
+		require.Equal(t, network.BlockAnnounceMsgType, msgType)
+		require.Equal(t, expected, msg)
 	case <-time.After(TestMessageTimeout):
 		t.Error("timeout waiting for message")
 	}

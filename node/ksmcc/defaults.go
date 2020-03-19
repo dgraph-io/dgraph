@@ -29,6 +29,8 @@ var (
 	DefaultGenesis = string("./node/ksmcc/genesis.json")
 	// DefaultDataDir Default node data directory
 	DefaultDataDir = string("~/.gossamer/ksmcc")
+	// DefaultRoles Default node roles
+	DefaultRoles = byte(1) // full node (see Table D.2)
 
 	// AccountConfig
 
@@ -50,8 +52,6 @@ var (
 	DefaultNetworkBootnodes = []string(nil)
 	// DefaultNetworkProtocolID network protocol
 	DefaultNetworkProtocolID = string("/gossamer/ksmcc/0")
-	// DefaultRoles Default node roles
-	DefaultRoles = byte(1) // full node
 	// DefaultNoBootstrap disables bootstrap
 	DefaultNoBootstrap = false
 	// DefaultNoMDNS disables mDNS discovery

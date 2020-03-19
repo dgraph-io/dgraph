@@ -20,6 +20,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
@@ -50,35 +51,6 @@ func TestCreateStateService(t *testing.T) {
 	require.NotNil(t, stateSrvc)
 }
 
-// Network Service
-
-// TestCreateNetworkService tests the createNetworkService method
-func TestCreateNetworkService(t *testing.T) {
-	cfg := NewTestConfig(t)
-	require.NotNil(t, cfg)
-
-	genFile := NewTestGenesisFile(t, cfg)
-	require.NotNil(t, genFile)
-
-	defer utils.RemoveTestDir(t)
-
-	cfg.Global.Genesis = genFile.Name()
-
-	err := InitNode(cfg)
-	require.Nil(t, err)
-
-	stateSrvc, err := createStateService(cfg)
-	require.Nil(t, err)
-
-	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(cfg, stateSrvc, make(chan *big.Int))
-	require.Nil(t, err)
-
-	// TODO: improve dot service tests
-	require.NotNil(t, networkSrvc)
-	require.NotNil(t, networkMsgSend)
-	require.NotNil(t, networkMsgRec)
-}
-
 // Core Service
 
 // TestCreateCoreService tests the createCoreService method
@@ -100,17 +72,49 @@ func TestCreateCoreService(t *testing.T) {
 	stateSrvc, err := createStateService(cfg)
 	require.Nil(t, err)
 
-	_, networkMsgSend, networkMsgRec := createNetworkService(cfg, stateSrvc, nil)
-	require.Nil(t, err)
-
 	ks := keystore.NewKeystore()
 	require.NotNil(t, ks)
 
-	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, networkMsgSend, networkMsgRec, make(chan *big.Int))
+	coreMsgs := make(chan network.Message)
+	networkMsgs := make(chan network.Message)
+	syncChan := make(chan *big.Int)
+
+	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
 	require.Nil(t, err)
 
 	// TODO: improve dot service tests
 	require.NotNil(t, coreSrvc)
+}
+
+// Network Service
+
+// TestCreateNetworkService tests the createNetworkService method
+func TestCreateNetworkService(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Global.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	stateSrvc, err := createStateService(cfg)
+	require.Nil(t, err)
+
+	coreMsgs := make(chan network.Message)
+	networkMsgs := make(chan network.Message)
+	syncChan := make(chan *big.Int)
+
+	networkSrvc, err := createNetworkService(cfg, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	require.Nil(t, err)
+
+	// TODO: improve dot service tests
+	require.NotNil(t, networkSrvc)
 }
 
 // RPC Service
@@ -134,15 +138,17 @@ func TestCreateRPCService(t *testing.T) {
 	stateSrvc, err := createStateService(cfg)
 	require.Nil(t, err)
 
-	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(cfg, stateSrvc, make(chan *big.Int))
-	require.Nil(t, err)
+	coreMsgs := make(chan network.Message)
+	networkMsgs := make(chan network.Message)
 
 	ks := keystore.NewKeystore()
 
-	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, networkMsgSend, networkMsgRec, make(chan *big.Int))
+	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
 	require.Nil(t, err)
 
-	rpcSrvc := createRPCService(cfg, stateSrvc, networkSrvc, coreSrvc)
+	networkSrvc := &network.Service{} // TODO: rpc service without network service
+
+	rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc)
 	require.Nil(t, err)
 
 	// TODO: improve dot service tests

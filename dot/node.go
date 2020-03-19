@@ -24,6 +24,7 @@ import (
 	"path"
 	"syscall"
 
+	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -34,14 +35,14 @@ import (
 // Node is a container for all the components of a node.
 type Node struct {
 	Name      string
-	Services  *services.ServiceRegistry // Registry of all core services
-	IsStarted chan struct{}             // Signals node startup complete
-	stop      chan struct{}             // Used to signal node shutdown
+	Services  *services.ServiceRegistry // registry of all node services
+	IsStarted chan struct{}             // signals node startup complete
+	stop      chan struct{}             // used to signal node shutdown
 	syncChan  chan *big.Int
 }
 
 // InitNode initializes a new dot node from the provided dot node configuration
-// and JSON formatted genesis file
+// and JSON formatted genesis file.
 func InitNode(cfg *Config) error {
 	dataDir := cfg.Global.DataDir
 	genPath := cfg.Global.Genesis
@@ -74,7 +75,7 @@ func InitNode(cfg *Config) error {
 		return err
 	}
 
-	// generates genesis block header from trie and stores it in the state database
+	// generates genesis block header from trie and store it in state database
 	err = loadGenesisBlock(t, dataDir)
 	if err != nil {
 		log.Error("[dot] Failed to load genesis block with state service", "error", err)
@@ -147,6 +148,11 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	var nodeSrvcs []services.Service
 
+	// Message Channels (send and receive messages between services)
+
+	coreMsgs := make(chan network.Message)    // message channel from core service to network service
+	networkMsgs := make(chan network.Message) // message channel from network service to core service
+
 	// State Service
 
 	// create state service and append state service to node services
@@ -160,35 +166,50 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	syncChan := make(chan *big.Int, 128)
 
-	// Network Service
-
-	// create network service and append network service to node services
-	networkSrvc, networkMsgSend, networkMsgRec := createNetworkService(cfg, stateSrvc, syncChan)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create network service: %s", err)
-	}
-	nodeSrvcs = append(nodeSrvcs, networkSrvc)
-
 	// Core Service
 
 	// create core service and append core service to node services
-	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, networkMsgSend, networkMsgRec, syncChan)
+	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create core service: %s", err)
 	}
 	nodeSrvcs = append(nodeSrvcs, coreSrvc)
 
+	// Network Service
+
+	networkSrvc := &network.Service{} // TODO: rpc service without network service
+
+	// check if network service is enabled
+	if enabled := NetworkServiceEnabled(cfg); enabled {
+
+		// create network service and append network service to node services
+		networkSrvc, err = createNetworkService(cfg, stateSrvc, coreMsgs, networkMsgs, syncChan)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create network service: %s", err)
+		}
+		nodeSrvcs = append(nodeSrvcs, networkSrvc)
+
+	} else {
+
+		// do not create or append network service if network service is not enabled
+		log.Debug("[dot] Network service disabled", "network", enabled, "roles", cfg.Global.Roles)
+
+	}
+
 	// RPC Service
 
 	// check if rpc service is enabled
-	if cfg.RPC.Enabled {
+	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc := createRPCService(cfg, stateSrvc, networkSrvc, coreSrvc)
+		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc)
 		nodeSrvcs = append(nodeSrvcs, rpcSrvc)
 
 	} else {
-		log.Debug("[dot] RPC service disabled by default", "rpc", cfg.RPC.Enabled)
+
+		// do not create or append rpc service if rpc service is not enabled
+		log.Debug("[dot] RPC service disabled by default", "rpc", enabled)
+
 	}
 
 	node := &Node{

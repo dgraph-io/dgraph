@@ -30,20 +30,25 @@ func TestGossip(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
+	msgSendA := make(chan Message)
+
 	configA := &Config{
 		DataDir:     dataDirA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendA,
 	}
 
-	nodeA, msgSendA, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noStatus = true
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
+
+	msgSendB := make(chan Message)
 
 	configB := &Config{
 		DataDir:     dataDirB,
@@ -51,9 +56,10 @@ func TestGossip(t *testing.T) {
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendB,
 	}
 
-	nodeB, msgSendB, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noStatus = true
@@ -75,15 +81,18 @@ func TestGossip(t *testing.T) {
 
 	dataDirC := utils.NewTestDataDir(t, "nodeC")
 
+	msgSendC := make(chan Message)
+
 	configC := &Config{
 		DataDir:     dataDirC,
 		Port:        7003,
 		RandSeed:    3,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendC,
 	}
 
-	nodeC, msgSendC, _ := createTestService(t, configC)
+	nodeC := createTestService(t, configC)
 	defer nodeC.Stop()
 
 	nodeC.noStatus = true
@@ -139,6 +148,13 @@ func TestGossip(t *testing.T) {
 		t.Error("node A timeout waiting for message")
 	}
 
+	// node A gossips message to node B
+	select {
+	case <-msgSendB:
+	case <-time.After(TestMessageTimeout):
+		t.Error("node A timeout waiting for message")
+	}
+
 	hasSeenB := nodeB.gossip.hasSeen[TestMessage.IDString()]
 	if hasSeenB == false {
 		t.Error(
@@ -148,20 +164,20 @@ func TestGossip(t *testing.T) {
 		)
 	}
 
-	hasSeenA := nodeA.gossip.hasSeen[TestMessage.IDString()]
-	if hasSeenA == false {
+	hasSeenC := nodeC.gossip.hasSeen[TestMessage.IDString()]
+	if hasSeenC == false {
 		t.Error(
-			"node A did not receive block request message from node B or node C",
-			"\nreceived:", hasSeenA,
+			"node C did not receive block request message from node B",
+			"\nreceived:", hasSeenC,
 			"\nexpected:", true,
 		)
 	}
 
-	hasSeenC := nodeC.gossip.hasSeen[TestMessage.IDString()]
-	if hasSeenC == false {
+	hasSeenA := nodeA.gossip.hasSeen[TestMessage.IDString()]
+	if hasSeenA == false {
 		t.Error(
-			"node C did not receive block request message from node A or node B",
-			"\nreceived:", hasSeenC,
+			"node A did not receive block request message from node C",
+			"\nreceived:", hasSeenA,
 			"\nexpected:", true,
 		)
 	}

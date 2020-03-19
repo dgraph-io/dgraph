@@ -39,7 +39,7 @@ func TestConnect(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -55,7 +55,7 @@ func TestConnect(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeB, _, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -111,7 +111,7 @@ func TestBootstrap(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -129,7 +129,7 @@ func TestBootstrap(t *testing.T) {
 		NoMDNS:    true,
 	}
 
-	nodeB, _, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -178,7 +178,7 @@ func TestPing(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -194,7 +194,7 @@ func TestPing(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeB, _, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -246,7 +246,7 @@ func TestSend(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -254,15 +254,18 @@ func TestSend(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	msgSendB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendB,
 	}
 
-	nodeB, msgSendB, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -317,7 +320,7 @@ func TestBroadcast(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -325,15 +328,18 @@ func TestBroadcast(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	msgSendB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendB,
 	}
 
-	nodeB, msgSendB, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true
@@ -356,15 +362,18 @@ func TestBroadcast(t *testing.T) {
 
 	dataDirC := utils.NewTestDataDir(t, "")
 
+	msgSendC := make(chan Message)
+
 	configC := &Config{
 		DataDir:     dataDirC,
 		Port:        7003,
 		RandSeed:    3,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendC,
 	}
 
-	nodeC, msgSendC, _ := createTestService(t, configC)
+	nodeC := createTestService(t, configC)
 	defer nodeC.Stop()
 
 	nodeC.noGossip = true
@@ -422,15 +431,18 @@ func TestExistingStream(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
+	msgSendA := make(chan Message)
+
 	configA := &Config{
 		DataDir:     dataDirA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendA,
 	}
 
-	nodeA, msgSendA, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -443,15 +455,18 @@ func TestExistingStream(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	msgSendB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendB,
 	}
 
-	nodeB, msgSendB, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true

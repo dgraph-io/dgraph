@@ -53,14 +53,10 @@ var (
 		Name:  "datadir",
 		Usage: "Data directory for the node",
 	}
-)
-
-// Core service configuration flags
-var (
-	// AuthorityFlag is used as bool flag to set node as authority or not
-	AuthorityFlag = cli.BoolFlag{
-		Name:  "authority",
-		Usage: "Set to true if node is a BABE authority, false otherwise.",
+	// RolesFlag role of the node (see Table D.2)
+	RolesFlag = cli.StringFlag{
+		Name:  "roles",
+		Usage: "Roles of the gossamer node",
 	}
 )
 
@@ -80,11 +76,6 @@ var (
 	ProtocolFlag = cli.StringFlag{
 		Name:  "protocol",
 		Usage: "Set protocol id",
-	}
-	// RolesFlag role of the node (0 = no network, 1 = full node, ...)
-	RolesFlag = cli.StringFlag{
-		Name:  "roles",
-		Usage: "Roles of the gossamer node",
 	}
 	// NoBootstrapFlag Disables network bootstrapping
 	NoBootstrapFlag = cli.BoolFlag{
@@ -195,10 +186,6 @@ var (
 		Sr25519Flag,
 		Secp256k1Flag,
 	}
-	// CoreFlags core service flags
-	CoreFlags = []cli.Flag{
-		AuthorityFlag,
-	}
 	// NetworkFlags network flags
 	NetworkFlags = []cli.Flag{
 		PortFlag,
@@ -222,7 +209,6 @@ func AllFlags() (flags []cli.Flag) {
 	flags = append(flags, CLIFlags...)
 	flags = append(flags, GlobalFlags...)
 	flags = append(flags, AccountFlags...)
-	flags = append(flags, CoreFlags...)
 	flags = append(flags, NetworkFlags...)
 	flags = append(flags, RPCFlags...)
 	return flags

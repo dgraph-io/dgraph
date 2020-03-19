@@ -53,14 +53,16 @@ var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service
 type Config struct {
+	// DataDir the data directory for the node
+	DataDir string
+	// Roles a bitmap value that represents the different roles for the sender node (see Table D.2)
+	Roles byte
+
 	// BlockState the block state's interface
 	BlockState BlockState
 	// NetworkState the network state's interface
 	NetworkState NetworkState
-	// DataDir the data directory for the node
-	DataDir string
-	// Roles a bitmap value that represents the different roles for the sender node (see Table E.2)
-	Roles byte
+
 	// Port the network port used for listening
 	Port uint32
 	// RandSeed the seed used to generate the network p2p identity (0 = non-deterministic random seed)
@@ -79,10 +81,16 @@ type Config struct {
 	NoMDNS bool
 	// NoStatus disables the status message exchange protocol
 	NoStatus bool
-	// privateKey the private key for the network p2p identity
-	privateKey crypto.PrivKey
+
+	// MsgRec is the message channel from the core service to the network service
+	MsgRec <-chan Message
+	// MsgSend is the message channel from the network service to the core service
+	MsgSend chan<- Message
 	// SyncChan is the channel for syncing
 	SyncChan chan<- *big.Int
+
+	// privateKey the private key for the network p2p identity
+	privateKey crypto.PrivKey
 }
 
 // build checks the configuration, sets up the private key for the network service,

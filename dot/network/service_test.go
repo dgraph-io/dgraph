@@ -43,7 +43,7 @@ var TestMessage = &BlockRequestMessage{
 }
 
 // maximum wait time for non-status message to be handled
-var TestMessageTimeout = 3 * time.Second
+var TestMessageTimeout = time.Second
 
 // time between connection retries (BackoffBase default 5 seconds)
 var TestBackoffTimeout = 5 * time.Second
@@ -54,57 +54,40 @@ func failedToDial(err error) bool {
 }
 
 // helper method to create and start a new network service
-func createTestService(t *testing.T, cfg *Config) (node *Service, msgSend chan Message, msgRec chan Message) {
-	msgRec = make(chan Message, 4)
-	msgSend = make(chan Message, 4)
+func createTestService(t *testing.T, cfg *Config) (srvc *Service) {
+	if cfg.BlockState == nil {
+		cfg.BlockState = &MockBlockState{}
+	}
 
-	// same for all network tests use the createTestService helper method
-	cfg.BlockState = &MockBlockState{} // required
-	cfg.NetworkState = &MockNetworkState{}
+	if cfg.NetworkState == nil {
+		cfg.NetworkState = &MockNetworkState{}
+	}
+
 	cfg.ProtocolID = TestProtocolID // default "/gossamer/gssmr/0"
 
-	if cfg.SyncChan == nil {
-		cfg.SyncChan = make(chan *big.Int)
+	if cfg.MsgRec == nil {
+		cfg.MsgRec = make(chan Message, 10)
 	}
 
-	node, err := NewService(cfg, msgSend, msgRec)
-	if err != nil {
-		t.Fatal(err)
+	if cfg.MsgSend == nil {
+		cfg.MsgSend = make(chan Message, 10)
 	}
-
-	err = node.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return node, msgSend, msgRec
-}
-
-// createTestServiceWithBlockState is a helper method to create and start a new network service
-func createTestServiceWithBlockState(t *testing.T, cfg *Config, blockState *MockBlockState) (node *Service, msgRec chan Message) {
-	msgRec = make(chan Message)
-	msgSend := make(chan Message)
-
-	cfg.BlockState = blockState
-	cfg.NetworkState = &MockNetworkState{}
-	cfg.ProtocolID = TestProtocolID
 
 	if cfg.SyncChan == nil {
-		cfg.SyncChan = make(chan *big.Int)
+		cfg.SyncChan = make(chan *big.Int, 10)
 	}
 
-	var err error
-	node, err = NewService(cfg, msgSend, msgRec)
+	srvc, err := NewService(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = node.Start()
+	err = srvc.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	return node, msgRec
+	return srvc
 }
 
 // test network service starts
@@ -121,7 +104,7 @@ func TestStartService(t *testing.T) {
 		NoBootstrap: true,
 		NoMDNS:      true,
 	}
-	node, _, _ := createTestService(t, config)
+	node := createTestService(t, config)
 	node.Stop()
 }
 
@@ -132,15 +115,18 @@ func TestBroadcastMessages(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
+	msgRecA := make(chan Message)
+
 	configA := &Config{
 		DataDir:     dataDirA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgRec:      msgRecA,
 	}
 
-	nodeA, _, msgRecA := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -148,15 +134,18 @@ func TestBroadcastMessages(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	msgSendB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgSend:     msgSendB,
 	}
 
-	nodeB, msgSendB, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true

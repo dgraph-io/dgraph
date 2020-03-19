@@ -63,7 +63,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Service, networkMsgSend chan network.Message, networkMsgRec chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
+func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
 	log.Info(
 		"[dot] Creating core service...",
 		"authority", cfg.Core.Authority,
@@ -88,8 +88,8 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 		TransactionQueue: stateSrvc.TransactionQueue,
 		Keystore:         ks,
 		Runtime:          rt,
-		MsgRec:           networkMsgSend, // message channel from network service to core service
-		MsgSend:          networkMsgRec,  // message channel from core service to network service
+		MsgRec:           networkMsgs, // message channel from network service to core service
+		MsgSend:          coreMsgs,    // message channel from core service to network service
 		IsBabeAuthority:  cfg.Core.Authority,
 		SyncChan:         syncChan,
 	}
@@ -107,13 +107,13 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 // Network Service
 
 // createNetworkService creates a network service from the command configuration and genesis data
-func createNetworkService(cfg *Config, stateSrvc *state.Service, syncChan chan *big.Int) (*network.Service, chan network.Message, chan network.Message) {
+func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*network.Service, error) {
 	log.Info(
 		"[dot] Creating network service...",
+		"roles", cfg.Global.Roles,
 		"port", cfg.Network.Port,
 		"bootnodes", cfg.Network.Bootnodes,
 		"protocol", cfg.Network.ProtocolID,
-		"roles", cfg.Network.Roles,
 		"nobootstrap", cfg.Network.NoBootstrap,
 		"nomdns", cfg.Network.NoMDNS,
 	)
@@ -123,30 +123,30 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, syncChan chan *
 		BlockState:   stateSrvc.Block,
 		NetworkState: stateSrvc.Network,
 		DataDir:      cfg.Global.DataDir,
+		Roles:        cfg.Global.Roles,
 		Port:         cfg.Network.Port,
 		Bootnodes:    cfg.Network.Bootnodes,
 		ProtocolID:   cfg.Network.ProtocolID,
-		Roles:        cfg.Network.Roles,
 		NoBootstrap:  cfg.Network.NoBootstrap,
 		NoMDNS:       cfg.Network.NoMDNS,
+		MsgRec:       coreMsgs,    // message channel from core service to network service
+		MsgSend:      networkMsgs, // message channel from network service to core service
 		SyncChan:     syncChan,
 	}
 
-	networkMsgRec := make(chan network.Message)
-	networkMsgSend := make(chan network.Message)
-
-	networkSrvc, err := network.NewService(&networkConfig, networkMsgSend, networkMsgRec)
+	networkSrvc, err := network.NewService(&networkConfig)
 	if err != nil {
 		log.Error("[dot] Failed to create network service", "error", err)
+		return nil, err
 	}
 
-	return networkSrvc, networkMsgSend, networkMsgRec
+	return networkSrvc, nil
 }
 
 // RPC Service
 
 // createRPCService creates the RPC service from the provided core configuration
-func createRPCService(cfg *Config, stateSrvc *state.Service, networkSrvc *network.Service, coreSrvc *core.Service) *rpc.HTTPServer {
+func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service) *rpc.HTTPServer {
 	log.Info(
 		"[dot] Creating rpc service...",
 		"host", cfg.RPC.Host,

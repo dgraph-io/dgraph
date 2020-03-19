@@ -40,7 +40,7 @@ func TestMDNS(t *testing.T) {
 		NoBootstrap: true,
 	}
 
-	nodeA, _, _ := createTestService(t, configA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -55,7 +55,7 @@ func TestMDNS(t *testing.T) {
 		NoBootstrap: true,
 	}
 
-	nodeB, _, _ := createTestService(t, configB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true

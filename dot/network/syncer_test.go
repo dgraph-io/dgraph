@@ -41,7 +41,7 @@ func TestRequestedBlockIDs(t *testing.T) {
 		NoMDNS:      true,
 	}
 
-	node, _, _ := createTestService(t, config)
+	node := createTestService(t, config)
 
 	hasRequestedBlockID := node.syncer.hasRequestedBlockID(1)
 	require.Equal(t, false, hasRequestedBlockID)
@@ -65,20 +65,22 @@ func TestHandleStatusMessage(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
+	heightA := big.NewInt(3)
+	msgRecA := make(chan Message)
 	syncChan := make(chan *big.Int)
 
 	configA := &Config{
 		DataDir:     dataDirA,
+		BlockState:  newMockBlockState(heightA),
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgRec:      msgRecA,
 		SyncChan:    syncChan,
 	}
 
-	heightA := big.NewInt(3)
-	blockStateA := newMockBlockState(heightA)
-	nodeA, msgRecA := createTestServiceWithBlockState(t, configA, blockStateA)
+	nodeA := createTestService(t, configA)
 	defer nodeA.Stop()
 
 	nodeA.noGossip = true
@@ -104,17 +106,21 @@ func TestHandleStatusMessage(t *testing.T) {
 
 	dataDirB := utils.NewTestDataDir(t, "nodeB")
 
+	heightB := big.NewInt(1)
+	msgRecB := make(chan Message)
+
 	configB := &Config{
 		DataDir:     dataDirB,
+		BlockState:  newMockBlockState(heightB),
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
 		NoMDNS:      true,
+		MsgRec:      msgRecB,
 		SyncChan:    syncChan,
 	}
 
-	blockStateB := newMockBlockState(big.NewInt(1))
-	nodeB, msgRecB := createTestServiceWithBlockState(t, configB, blockStateB)
+	nodeB := createTestService(t, configB)
 	defer nodeB.Stop()
 
 	nodeB.noGossip = true

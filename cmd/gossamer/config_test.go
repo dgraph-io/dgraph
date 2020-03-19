@@ -101,6 +101,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 				Config:  string(""), // the value defined in the file
 				Genesis: testCfg.Global.Genesis,
 				DataDir: testCfg.Global.DataDir,
+				Roles:   testCfg.Global.Roles,
 			},
 		},
 		{
@@ -113,6 +114,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 				Config:  testCfg.Global.Config,
 				Genesis: "test_genesis",
 				DataDir: testCfg.Global.DataDir,
+				Roles:   testCfg.Global.Roles,
 			},
 		},
 		{
@@ -125,6 +127,20 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 				Config:  testCfg.Global.Config,
 				Genesis: testCfg.Global.Genesis,
 				DataDir: "test_datadir",
+				Roles:   testCfg.Global.Roles,
+			},
+		},
+		{
+			"Test gossamer --roles",
+			[]string{"config", "roles"},
+			[]interface{}{testCfgFile.Name(), "1"},
+			dot.GlobalConfig{
+				Name:    testCfg.Global.Name,
+				ID:      testCfg.Global.ID,
+				Config:  testCfg.Global.Config,
+				Genesis: testCfg.Global.Genesis,
+				DataDir: testCfg.Global.DataDir,
+				Roles:   byte(1),
 			},
 		},
 	}
@@ -211,11 +227,19 @@ func TestCoreConfigFromFlags(t *testing.T) {
 		expected    dot.CoreConfig
 	}{
 		{
-			"Test gossamer --authority",
-			[]string{"config", "authority"},
-			[]interface{}{testCfgFile.Name(), true},
+			"Test gossamer --roles",
+			[]string{"config", "roles"},
+			[]interface{}{testCfgFile.Name(), "4"},
 			dot.CoreConfig{
-				Authority: testCfg.Core.Authority,
+				Authority: true,
+			},
+		},
+		{
+			"Test gossamer --roles",
+			[]string{"config", "roles"},
+			[]interface{}{testCfgFile.Name(), "0"},
+			dot.CoreConfig{
+				Authority: false,
 			},
 		},
 	}
@@ -257,7 +281,6 @@ func TestNetworkConfigFromFlags(t *testing.T) {
 				Port:        1234,
 				Bootnodes:   testCfg.Network.Bootnodes,
 				ProtocolID:  testCfg.Network.ProtocolID,
-				Roles:       testCfg.Network.Roles,
 				NoBootstrap: testCfg.Network.NoBootstrap,
 				NoMDNS:      testCfg.Network.NoMDNS,
 			},
@@ -270,7 +293,6 @@ func TestNetworkConfigFromFlags(t *testing.T) {
 				Port:        testCfg.Network.Port,
 				Bootnodes:   []string{"peer1", "peer2"},
 				ProtocolID:  testCfg.Network.ProtocolID,
-				Roles:       testCfg.Network.Roles,
 				NoBootstrap: testCfg.Network.NoBootstrap,
 				NoMDNS:      testCfg.Network.NoMDNS,
 			},
@@ -283,20 +305,6 @@ func TestNetworkConfigFromFlags(t *testing.T) {
 				Port:        testCfg.Network.Port,
 				Bootnodes:   testCfg.Network.Bootnodes,
 				ProtocolID:  "/gossamer/test/0",
-				Roles:       testCfg.Network.Roles,
-				NoBootstrap: testCfg.Network.NoBootstrap,
-				NoMDNS:      testCfg.Network.NoMDNS,
-			},
-		},
-		{
-			"Test gossamer --roles",
-			[]string{"config", "roles"},
-			[]interface{}{testCfgFile.Name(), "1"},
-			dot.NetworkConfig{
-				Port:        testCfg.Network.Port,
-				Bootnodes:   testCfg.Network.Bootnodes,
-				ProtocolID:  testCfg.Network.ProtocolID,
-				Roles:       byte(1),
 				NoBootstrap: testCfg.Network.NoBootstrap,
 				NoMDNS:      testCfg.Network.NoMDNS,
 			},
@@ -309,7 +317,6 @@ func TestNetworkConfigFromFlags(t *testing.T) {
 				Port:        testCfg.Network.Port,
 				Bootnodes:   testCfg.Network.Bootnodes,
 				ProtocolID:  testCfg.Network.ProtocolID,
-				Roles:       testCfg.Network.Roles,
 				NoBootstrap: true,
 				NoMDNS:      testCfg.Network.NoMDNS,
 			},
@@ -322,7 +329,6 @@ func TestNetworkConfigFromFlags(t *testing.T) {
 				Port:        testCfg.Network.Port,
 				Bootnodes:   testCfg.Network.Bootnodes,
 				ProtocolID:  testCfg.Network.ProtocolID,
-				Roles:       testCfg.Network.Roles,
 				NoBootstrap: testCfg.Network.NoBootstrap,
 				NoMDNS:      true,
 			},
