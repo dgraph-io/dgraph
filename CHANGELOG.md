@@ -33,6 +33,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.) ([#4951][])
 - Fix point-in-time Prometheus metrics. Fixes [#4532][]. ([#4948][])
 - Split lists in the bulk loader. ([#4967][])
+- Allow remote MySQL server with dgraph migrate tool. Fixes [#4707][]. ([#4860][])
 - Enterprise features
   - ACL: Allow uid access. ([#4922][])
   - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][])
@@ -60,6 +61,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#4816]: https://github.com/dgraph-io/dgraph/issues/4816
 [#4877]: https://github.com/dgraph-io/dgraph/issues/4877
 [#4922]: https://github.com/dgraph-io/dgraph/issues/4922
+[#4707]: https://github.com/dgraph-io/dgraph/issues/4707
+[#4860]: https://github.com/dgraph-io/dgraph/issues/4860
 
 
 ## [2.0.0-beta] - 2020-02-20
