@@ -1168,3 +1168,30 @@
         pwd as checkpwd(User.pwd, "Password")
       }
     }
+
+
+-
+  name: "Comments query should only rewrite fields without custom directive"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        id
+        author
+        title
+        content
+        ups
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        id : uid
+        author : Comment.author
+        title : Comment.title
+        ups : Comment.ups
+        dgraph.uid : uid
+      }
+    }

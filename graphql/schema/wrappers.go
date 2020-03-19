@@ -100,6 +100,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
+	HasCustomDirective() bool
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
@@ -553,6 +554,15 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
+func (f *field) HasCustomDirective() bool {
+	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
+	custom := typeDef.Fields.ForName(f.Name()).Directives.ForName("custom")
+	if custom == nil {
+		return false
+	}
+	return true
+}
+
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
@@ -729,6 +739,10 @@ func (q *query) Include() bool {
 	return true
 }
 
+func (q *query) HasCustomDirective() bool {
+	return (*field)(q).HasCustomDirective()
+}
+
 func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -898,6 +912,10 @@ func (m *mutation) Skip() bool {
 
 func (m *mutation) Include() bool {
 	return true
+}
+
+func (m *mutation) HasCustomDirective() bool {
+	return (*field)(m).HasCustomDirective()
 }
 
 func (m *mutation) Type() Type {
