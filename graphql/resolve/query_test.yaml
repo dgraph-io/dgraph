@@ -1185,7 +1185,7 @@
         }
       }
     }
-  dgquery: |
+  dgquery: |-
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
         id : uid
@@ -1193,5 +1193,34 @@
         title : Comment.title
         ups : Comment.ups
         dgraph.uid : uid
+      }
+    }
+-
+  name: "User query should only rewrite fields without custom directive"
+  gqlquery: |-
+    query {
+      getPost(id: "0x1") {
+        id
+        comments {
+          author
+          title
+          content
+          ups
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        id : uid
+        comments: Post.comments {
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          dgraph.uid : uid
+        }
       }
     }
