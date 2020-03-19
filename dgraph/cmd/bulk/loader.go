@@ -49,7 +49,6 @@ type options struct {
 	OutDir           string
 	ReplaceOutDir    bool
 	TmpDir           string
-	BadgerKeyFile    string // used only in enterprise build. nil otherwise.
 	NumGoroutines    int
 	MapBufSize       uint64
 	SkipMapPhase     bool
@@ -67,6 +66,12 @@ type options struct {
 	ReduceShards int
 
 	shardOutputDirs []string
+
+	// ........... Badger options ..........
+	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
+	BadgerKeyFile string
+	// BadgerCompressionlevel is the compression level to use while writing to badger.
+	BadgerCompressionLevel int
 }
 
 type state struct {
@@ -225,7 +230,10 @@ func (ld *loader) mapStage() {
 func (ld *loader) reduceStage() {
 	ld.prog.setPhase(reducePhase)
 
-	r := reducer{state: ld.state}
+	r := reducer{
+		state:     ld.state,
+		streamIds: make(map[string]uint32),
+	}
 	x.Check(r.run())
 }
 

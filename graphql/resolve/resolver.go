@@ -20,8 +20,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
@@ -111,6 +113,13 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
+// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// that proxies query resolution through Query method in dgraph server, and
+// it doens't require authorization. Currently it's only used for quering
+// gqlschema during init.
+type adminExecutor struct {
+}
+
 // A Resolved is the result of resolving a single query or mutation.
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
@@ -140,15 +149,26 @@ func DgraphAsQueryExecutor() QueryExecutor {
 	return &dgraphExecutor{}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor for dog.
+func AdminQueryExecutor() QueryExecutor {
+	return &adminExecutor{}
+}
+
+// DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
+}
+
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Query(ctx, query)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	return dgraph.Query(ctx, query)
 }
 
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
@@ -187,9 +207,11 @@ func (rf *resolverFactory) WithConventionResolvers(
 	s schema.Schema, fns *ResolverFns) ResolverFactory {
 
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
+	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe, StdQueryCompletion())
+			return NewQueryResolver(fns.Qrw, fns.Qe,
+				StdQueryCompletion())
 		})
 	}
 
@@ -238,6 +260,12 @@ func StdQueryCompletion() CompletionFunc {
 	return removeObjectCompletion(completeDgraphResult)
 }
 
+// AliasQueryCompletion is the completion steps that get run for admin queries
+// those don't have the alias built in like Dgraph queries.
+func AliasQueryCompletion() CompletionFunc {
+	return removeObjectCompletion(injectAliasCompletion(completeResult))
+}
+
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) CompletionFunc {
 	return addPathCompletion(name, addRootFieldCompletion(name, completeDgraphResult))
@@ -281,36 +309,35 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	stop := x.SpanTimer(span, methodResolve)
 	defer stop()
 
-	reqID := api.RequestID(ctx)
-
 	if r == nil {
-		glog.Errorf("[%s] Call to Resolve with nil RequestResolver", reqID)
-		return schema.ErrorResponse(errors.New("Internal error"), reqID)
+		glog.Errorf("Call to Resolve with nil RequestResolver")
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	if r.schema == nil {
-		glog.Errorf("[%s] Call to Resolve with no schema", reqID)
-		return schema.ErrorResponse(errors.New("Internal error"), reqID)
+		glog.Errorf("Call to Resolve with no schema")
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
-		return schema.ErrorResponse(err, reqID)
+		return schema.ErrorResponse(err)
 	}
 
-	resp := &schema.Response{
-		Extensions: &schema.Extensions{
-			RequestID: reqID,
-		},
-	}
+	resp := &schema.Response{}
 
 	if glog.V(3) {
-		b, err := json.Marshal(gqlReq.Variables)
-		if err != nil {
-			glog.Infof("Failed to marshal variables for logging : %s", err)
+		// don't log the introspection queries they are sent too frequently
+		// by GraphQL dev tools
+		if !op.IsQuery() ||
+			(op.IsQuery() && !strings.HasPrefix(op.Queries()[0].Name(), "__")) {
+			b, err := json.Marshal(gqlReq.Variables)
+			if err != nil {
+				glog.Infof("Failed to marshal variables for logging : %s", err)
+			}
+			glog.Infof("Resolving GQL request: \n%s\nWith Variables: \n%s\n",
+				gqlReq.Query, string(b))
 		}
-		glog.Infof("[%s] Resolving GQL request: \n%s\nWith Variables: \n%s\n",
-			reqID, gqlReq.Query, string(b))
 	}
 
 	// A single request can contain either queries or mutations - not both.
@@ -331,7 +358,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 			go func(q schema.Query, storeAt int) {
 				defer wg.Done()
-				defer api.PanicHandler(api.RequestID(ctx),
+				defer api.PanicHandler(
 					func(err error) {
 						allResolved[storeAt] = &Resolved{Err: err}
 					})
@@ -468,6 +495,63 @@ func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 	})
 }
 
+// injectAliasCompletion takes a result with names as per the type names and swaps those for
+// any aliases specified in the query before apply cf.
+func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
+	return CompletionFunc(func(
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+
+		if len(result) == 0 {
+			return nil, schema.AsGQLErrors(err)
+		}
+
+		var val interface{}
+		if marshErr := json.Unmarshal(result, &val); marshErr != nil {
+			return nil,
+				schema.AppendGQLErrs(marshErr,
+					schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
+		}
+
+		var aliased interface{}
+		var resErr error
+		switch val := val.(type) {
+		case []interface{}:
+			aliased, resErr = aliasList(field, val)
+		case map[string]interface{}:
+			aliased, resErr = aliasObject([]schema.Field{field}, val)
+		case interface{}:
+			aliased, resErr = aliasValue(field, val)
+		}
+
+		res, marshErr := json.Marshal(aliased)
+		err = schema.AppendGQLErrs(err, marshErr)
+
+		return cf(ctx, field, res, schema.AppendGQLErrs(err, resErr))
+	})
+}
+
+// completeResult takes a result like {"res":{"a":...,"b":...}} and does the standard
+// object completion.  This is different to doing completion from Dgraph, because that requires
+// handling {"res":[{...}]} even if we expect a single value
+func completeResult(ctx context.Context, field schema.Field, result []byte, e error) (
+	[]byte, error) {
+
+	var val interface{}
+	if err := json.Unmarshal(result, &val); err != nil {
+		return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
+	}
+
+	path := make([]interface{}, 0, maxPathLength(field))
+
+	switch val := val.(type) {
+	case []interface{}:
+		return completeList(path, field, val)
+	case map[string]interface{}:
+		return completeObject(path, field.Type(), []schema.Field{field}, val)
+	}
+	return completeValue(path, field, val)
+}
+
 // Once a result has been returned from Dgraph, that result needs to be worked
 // through for two main reasons:
 //
@@ -564,8 +648,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	}
 
 	dgraphError := func() ([]byte, error) {
-		glog.Errorf("[%s] Could not process Dgraph result : \n%s",
-			api.RequestID(ctx), string(dgResult))
+		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
@@ -580,8 +663,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	var valToComplete map[string]interface{}
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
-		glog.Errorf("[%s] %+v \n Dgraph result :\n%s\n",
-			api.RequestID(ctx),
+		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
 		return nullResponse(),
@@ -612,16 +694,13 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Errorf("[%s] Got a list of length %v from Dgraph when expecting a "+
-					"one-item list.\n"+
-					"GraphQL query was : %s\n",
-					api.RequestID(ctx), len(val), api.QueryString(ctx))
+				glog.Error("Got a list of length %v from Dgraph when expecting a " +
+					"one-item list.\n")
 
 				errs = append(errs,
 					x.GqlErrorf(
 						"Dgraph returned a list, but %s (type %s) was expecting just one item.  "+
-							"The first item in the list was used to produce the result. "+
-							"Logged as a potential bug; see the API log for more details.",
+							"The first item in the list was used to produce the result.",
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
@@ -658,11 +737,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		//
 		// This isn't really an observable GraphQL error, so no need to add anything
 		// to the payload of errors for the result.
-		glog.Errorf("[%s] Top level completeObject didn't return a result.  "+
-			"That's only possible if the query result is non-nullable.  "+
-			"There's something wrong in the GraphQL schema.  \n"+
-			"GraphQL query was : %s\n",
-			api.RequestID(ctx), api.QueryString(ctx))
+		glog.Errorf("Top level completeObject didn't return a result.  " +
+			"That's only possible if the query result is non-nullable.  " +
+			"There's something wrong in the GraphQL schema.")
 		return nullResponse(), append(errs, gqlErrs...)
 	}
 
@@ -956,4 +1033,47 @@ func maxPathLength(f schema.Field) int {
 	}
 
 	return 1 + childMax
+}
+
+// TODO: Include this behavior into the standard algorithm above.
+// That is, allow the completion algorithms to be like a walk through the
+// result structure and then we can apply different behaviors as each point.
+// That should eliminate unpacking and packing the result multiple times and
+// allow the result processing to be really flexible.
+func aliasValue(field schema.Field, val interface{}) (interface{}, error) {
+	switch val := val.(type) {
+	case map[string]interface{}:
+		return aliasObject(field.SelectionSet(), val)
+	case []interface{}:
+		return aliasList(field, val)
+	default:
+		return val, nil
+	}
+}
+
+func aliasList(field schema.Field, values []interface{}) ([]interface{}, error) {
+	var errs error
+	var result []interface{}
+	for _, b := range values {
+		r, err := aliasValue(field, b)
+		errs = schema.AppendGQLErrs(errs, err)
+		result = append(result, r)
+	}
+	return result, errs
+}
+
+func aliasObject(
+	fields []schema.Field,
+	res map[string]interface{}) (interface{}, error) {
+
+	var errs error
+	result := make(map[string]interface{})
+
+	for _, f := range fields {
+		r, err := aliasValue(f, res[f.Name()])
+		result[f.ResponseName()] = r
+		errs = schema.AppendGQLErrs(errs, err)
+	}
+
+	return result, errs
 }

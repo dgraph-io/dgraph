@@ -150,7 +150,7 @@ func safeCreate(name string, overwrite bool, perm os.FileMode) (*os.File, error)
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createCAPair(opt options) error {
+func createCAPair(opt *options) error {
 	cc := certConfig{
 		isCA:    true,
 		until:   defaultCADays,
@@ -170,7 +170,7 @@ func createCAPair(opt options) error {
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createNodePair(opt options) error {
+func createNodePair(opt *options) error {
 	if opt.nodes == nil || len(opt.nodes) == 0 {
 		return nil
 	}
@@ -210,7 +210,7 @@ func createNodePair(opt options) error {
 // if it doesn't already exist or we force it. The key path can differ from the certsDir
 // which case the path must already exist and be writable.
 // Returns nil on success, or an error otherwise.
-func createClientPair(opt options) error {
+func createClientPair(opt *options) error {
 	if opt.client == "" {
 		return nil
 	}
@@ -246,7 +246,11 @@ func createClientPair(opt options) error {
 	return cc.verifyCert(certFile)
 }
 
-func createCerts(opt options) error {
+func createCerts(opt *options) error {
+	if opt == nil {
+		return errors.New("nil options")
+	}
+
 	if opt.dir == "" {
 		return errors.New("Invalid TLS directory")
 	}

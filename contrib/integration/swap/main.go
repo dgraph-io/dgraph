@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -367,7 +368,7 @@ func checkInvariants(c *dgo.Dgraph, uids []string, sentences []string) error {
 		sort.Strings(gotUids)
 		sort.Strings(uids)
 		if !reflect.DeepEqual(gotUids, uids) {
-			panic(fmt.Sprintf(`query: %s\n
+			x.Panic(errors.Errorf(`query: %s\n
 			Uids in index for %q didn't match
 			calculated: %v. Len: %d
 				got:        %v

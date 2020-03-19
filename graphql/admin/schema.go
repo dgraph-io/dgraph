@@ -26,7 +26,6 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -65,6 +64,8 @@ type updateGQLSchemaInput struct {
 
 func (asr *updateSchemaResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+
+	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
 	if err != nil {
@@ -132,23 +133,16 @@ func (asr *updateSchemaResolver) Mutate(
 		asr.newSchema.ID = asr.admin.schema.ID
 	}
 
-	glog.Infof("[%s] Altering Dgraph schema.", api.RequestID(ctx))
-	if glog.V(3) {
-		glog.Infof("[%s] New schema Dgraph:\n\n%s\n", api.RequestID(ctx), asr.newDgraphSchema)
-	}
-
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err,
-			"succeeded in saving GraphQL schema but failed to alter Dgraph schema "+
-				"(you should retry)")
+			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
 
 	asr.admin.resetSchema(asr.newGQLSchema)
 	asr.admin.schema = asr.newSchema
 
-	glog.Infof("[%s] Successfully loaded new GraphQL schema.  Serving New GraphQL API.",
-		api.RequestID(ctx))
+	glog.Infof("Successfully loaded new GraphQL schema.  Serving New GraphQL API.")
 
 	return assigned, result, nil
 }
@@ -157,10 +151,11 @@ func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuer
 	return doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
 }
 
-func (gsr *getSchemaResolver) Rewrite(gqlQuery schema.Query) (*gql.GraphQuery, error) {
+func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
+	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
 	gqlQuery.Rename("queryGQLSchema")
-	return gsr.baseRewriter.Rewrite(gqlQuery)
+	return gsr.baseRewriter.Rewrite(ctx, gqlQuery)
 }
 
 func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

@@ -8,6 +8,6 @@ EXPOSE 8080
 # gRPC API port
 EXPOSE 9080
 
-ADD run.sh .
-RUN chmod +x run.sh
-CMD ["./run.sh"]
+ADD run.sh /run.sh
+RUN chmod +x /run.sh
+CMD ["/run.sh"]

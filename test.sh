@@ -7,7 +7,7 @@
 #   - bash
 #   - curl
 #   - coreutils
-#   - gnu-getop
+#   - gnu-getopt
 #   - findutils
 #
 # Your $PATH must have all required packages in .bashrc:
@@ -256,6 +256,9 @@ if [[ :${TEST_SET}: == *:systest:* ]]; then
 
     Info "Running rebuilding index test"
     RunCmd ./systest/1million/test-reindex.sh || TestFailed
+
+    Info "Running background index test"
+    RunCmd ./systest/bgindex/test-bgindex.sh || TestFailed
 fi
 
 Info "Stopping cluster"

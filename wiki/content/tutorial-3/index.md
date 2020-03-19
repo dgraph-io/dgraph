@@ -282,7 +282,7 @@ Let's try it out.
 {
   best_authors(func: ge(rating, 4.0)) {
     uid
-    author.name
+    author_name
     rating
   }
 }
@@ -377,7 +377,7 @@ Similarly, let's extend our previous query to fetch the tags of these blog posts
       title
       content
       dislikes
-      tags {
+      tagged {
         tag_name
       }
     }
@@ -420,11 +420,11 @@ Here's the query.
     author_name
     rating
 
-    publishes @filter(lt(dislikes, 10)) {
+    published @filter(lt(dislikes, 10)) {
       title
       likes
       dislikes
-      tag {
+      tagged {
         tag_name
       }
     }

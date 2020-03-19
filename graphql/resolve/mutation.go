@@ -18,6 +18,8 @@ package resolve
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -157,6 +159,8 @@ type mutationResolver struct {
 	queryExecutor    QueryExecutor
 	mutationExecutor MutationExecutor
 	resultCompleter  ResultCompleter
+
+	numUids int
 }
 
 func (mr *mutationResolver) Resolve(
@@ -173,15 +177,51 @@ func (mr *mutationResolver) Resolve(
 	res, success, err := mr.rewriteAndExecute(ctx, mutation)
 
 	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
+
+	selSets := mutation.SelectionSet()
+	for _, selSet := range selSets {
+		if selSet.Name() != schema.NumUid {
+			continue
+		}
+
+		s := string(completed)
+		switch {
+		case strings.Contains(s, schema.NumUid):
+			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
+				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
+				mr.numUids)))
+
+		case s[len(s)-1] == '}':
+			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
+				schema.NumUid, mr.numUids))
+
+		default:
+			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
+				schema.NumUid, mr.numUids))
+		}
+		break
+	}
+
 	return &Resolved{
 		Data: completed,
 		Err:  err,
 	}, success
 }
 
+func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
+	result map[string]interface{}) {
+	switch mr.mutationRewriter.(type) {
+	case *AddRewriter:
+		mr.numUids = len(assigned)
+
+	default:
+		mutated := extractMutated(result, mutation.ResponseName())
+		mr.numUids = len(mutated)
+	}
+}
+
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
-
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
 		return nil, resolverFailed,
@@ -194,6 +234,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
+	mr.getNumUids(mutation, assigned, result)
 	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
@@ -217,6 +258,10 @@ func deleteCompletion() CompletionFunc {
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
 
-		return []byte(`{ "msg": "Deleted" }`), err
+		if field.Name() == "msg" {
+			return []byte(`{ "msg": "Deleted" }`), err
+		}
+
+		return []byte(fmt.Sprintf(`{ "%s": null }`, schema.NumUid)), err
 	})
 }
