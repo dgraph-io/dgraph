@@ -441,9 +441,6 @@ fmt.Println(string(resp.Json))
 
 ## C\#
 
-We also have a [simple example](https://github.com/dgraph-io/pydgraph/tree/master/examples/simple)
-project, which contains an end-to-end working example of how to use the Python client.
-
 The official C# client [can be found here](https://github.com/dgraph-io/Dgraph-dotnet).
 Follow the instructions in the [README](https://github.com/dgraph-io/Dgraph-dotnet#readme) to get
 it up and running.
