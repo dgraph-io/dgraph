@@ -109,7 +109,7 @@ func runJSONMutation(m string) error {
 func alterSchema(s string) error {
 	for {
 		_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
-		if err != nil && strings.Contains(err.Error(), "is already being modified") {
+		if err != nil && strings.Contains(err.Error(), "errIndexingInProgress") {
 			time.Sleep(time.Second)
 			continue
 		} else if err != nil {

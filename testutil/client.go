@@ -402,7 +402,7 @@ func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig
 		require.NoError(t, json.Unmarshal(output, &co),
 			"unable to unmarshal the curl output")
 		if len(co.Errors) > 0 {
-			if strings.Contains(co.Errors[0].Message, "schema is already being modified") {
+			if strings.Contains(co.Errors[0].Message, "errIndexingInProgress") {
 				time.Sleep(time.Second)
 				continue
 			}
