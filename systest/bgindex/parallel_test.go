@@ -77,6 +77,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_str: string .
 			balance_float: float .
 		`,
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in setting up schema :: %v\n", err)
 	}
@@ -102,6 +103,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
@@ -111,6 +113,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
+		RunInBackground: true,
 	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
@@ -118,7 +121,8 @@ func TestParallelIndexing(t *testing.T) {
 	// Wait until previous indexing is complete.
 	for {
 		if err := dg.Alter(context.Background(), &api.Operation{
-			Schema: `balance_float: float @index(float) .`,
+			Schema:          `balance_float: float @index(float) .`,
+			RunInBackground: true,
 		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 			t.Fatalf("error in adding indexes :: %v\n", err)
 		} else if err == nil {
