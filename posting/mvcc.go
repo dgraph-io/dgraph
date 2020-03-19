@@ -265,10 +265,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	l.plist = new(pb.PostingList)
 
 	// We use the following block of code to trigger incremental rollup on this key.
-	const maxDeltaCount = 2
 	deltaCount := 0
 	defer func() {
-		if deltaCount >= maxDeltaCount {
+		if deltaCount > 0 {
 			IncrRollup.addKeyToBatch(key)
 		}
 	}()
