@@ -80,7 +80,7 @@ func (id op) String() string {
 	case opIndexing:
 		return "opIndexing"
 	default:
-		return "unknown"
+		return "opUnknown"
 	}
 }
 
@@ -111,7 +111,6 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 	}
 
 	closer := y.NewCloser(1)
-
 	switch id {
 	case opRollup:
 		if len(n.ops) > 0 {
@@ -120,10 +119,12 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		go posting.IncrRollup.Process(closer)
 
 	case opSnapshot, opIndexing:
-		if roCloser, has := n.ops[opRollup]; has {
-			roCloser.SignalAndWait()
-		} else if len(n.ops) > 0 {
-			return nil, errors.Errorf("another operation is already running")
+		for otherId, otherCloser := range n.ops {
+			if otherId == opRollup {
+				otherCloser.SignalAndWait()
+			} else {
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
 		}
 	default:
 		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
@@ -540,7 +541,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 
 func (n *node) processTabletSizes() {
 	defer n.closer.Done()                   // CLOSER:1
-	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
+	tick := time.NewTicker(5 * time.Minute) // Once every 5 minutes seems alright.
 	defer tick.Stop()
 
 	for {
