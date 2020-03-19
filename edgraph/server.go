@@ -88,7 +88,7 @@ var (
 )
 
 var (
-	errIndexingInProgress = errors.New("schema is already being modified. Please retry")
+	errIndexingInProgress = errors.New("errIndexingInProgress. Please retry")
 )
 
 // Server implements protos.DgraphServer
@@ -245,8 +245,17 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// If a background task is already running, we should reject all the new alter requests.
-	if schema.State().IndexingInProgress() {
-		return nil, errIndexingInProgress
+	const numTries = 3
+	for i := 0; i < numTries; i++ {
+		if !schema.State().IndexingInProgress() {
+			break
+		} else if i == numTries-1 {
+			return nil, errIndexingInProgress
+		}
+
+		// Let's wait a bit to see if some really simple indexing
+		// tasks can finish before we reject this request.
+		time.Sleep(time.Second)
 	}
 
 	for _, update := range result.Preds {
@@ -268,6 +277,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
+
+	// wait for indexing to complete.
+	for !op.RunInBackground {
+		if !schema.State().IndexingInProgress() {
+			break
+		}
+
+		time.Sleep(time.Second * 2)
+	}
+
 	return empty, err
 }
 

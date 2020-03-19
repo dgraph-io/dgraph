@@ -86,7 +86,8 @@ func TestCountIndex(t *testing.T) {
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "value: [string] @count .",
+		Schema:          "value: [string] @count .",
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
