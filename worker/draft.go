@@ -106,7 +106,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		// If we were doing any other operation, let's restart rollups.
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
-			x.Check2(n.startTask(opRollup))
+			// If any other operation is running, this would error out. So, ignore error.
+			n.startTask(opRollup)
 		}
 	}
 
@@ -1545,7 +1546,7 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	x.Check2(n.startTask(opRollup))
+	n.startTask(opRollup)
 	go n.stopAllTasks()
 	go n.Run()
 }
