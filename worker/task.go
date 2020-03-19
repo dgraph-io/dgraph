@@ -401,7 +401,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
-			case err == posting.ErrNoValue || len(vals) == 0:
+			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
+				// This branch is taken when the value does not exist in the pl or
+				// the number of values retreived is zero (there could still be facets).
+				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+				// LangMatrix so that all these data structure have predicatble layouts.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
@@ -914,6 +918,11 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	if len(q.Langs) > 0 && !schema.State().HasLang(attr) {
 		return nil, errors.Errorf("Language tags can only be used with predicates of string type"+
 			" having @lang directive in schema. Got: [%v]", attr)
+	}
+	if len(q.Langs) == 1 && q.Langs[0] == "*" {
+		// Reset the Langs fields. The ExpandAll field is set to true already so there's no
+		// more need to store the star value in this field.
+		q.Langs = nil
 	}
 
 	typ, err := schema.State().TypeOf(attr)
@@ -1883,7 +1892,6 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		return true, nil
 	}
 	if ftree.function != nil {
-		fname := strings.ToLower(ftree.function.name)
 		var fc *api.Facet
 		for _, fci := range postingFacets {
 			if fci.Key == ftree.function.key {
@@ -1894,26 +1902,25 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 		if fc == nil { // facet is not there
 			return false, nil
 		}
-		fnType, fname := parseFuncTypeHelper(fname)
-		switch fnType {
-		case compareAttrFn: // lt, gt, le, ge, eq
-			var err error
-			typId, err := facets.TypeIDFor(fc)
-			if err != nil {
-				return false, err
-			}
 
-			v, err := types.Convert(ftree.function.val, typId)
-			if err != nil {
-				// ignore facet if not of appropriate type
-				return false, nil
-			}
+		switch ftree.function.fnType {
+		case compareAttrFn: // lt, gt, le, ge, eq
 			fVal, err := facets.ValFor(fc)
 			if err != nil {
 				return false, err
 			}
 
-			return types.CompareVals(fname, fVal, v), nil
+			v, ok := ftree.function.typesToVal[fVal.Tid]
+			if !ok {
+				// Not found in map and hence convert it here.
+				v, err = types.Convert(ftree.function.val, fVal.Tid)
+				if err != nil {
+					// ignore facet if not of appropriate type.
+					return false, nil
+				}
+			}
+
+			return types.CompareVals(ftree.function.name, fVal, v), nil
 
 		case standardFn: // allofterms, anyofterms
 			facetType, err := facets.TypeIDFor(fc)
@@ -1923,12 +1930,12 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 			if facetType != types.StringID {
 				return false, nil
 			}
-			return filterOnStandardFn(fname, fc.Tokens, ftree.function.tokens)
+			return filterOnStandardFn(ftree.function.name, fc.Tokens, ftree.function.tokens)
 		}
-		return false, errors.Errorf("Fn %s not supported in facets filtering.", fname)
+		return false, errors.Errorf("Fn %s not supported in facets filtering.", ftree.function.name)
 	}
 
-	var res []bool
+	res := make([]bool, 0, 2) // We can have max two children for a node.
 	for _, c := range ftree.children {
 		r, err := applyFacetsTree(postingFacets, c)
 		if err != nil {
@@ -1938,7 +1945,7 @@ func applyFacetsTree(postingFacets []*api.Facet, ftree *facetsTree) (bool, error
 	}
 
 	// we have already checked for number of children in preprocessFilter
-	switch strings.ToLower(ftree.op) {
+	switch ftree.op {
 	case "not":
 		return !res[0], nil
 	case "and":
@@ -1996,6 +2003,11 @@ type facetsFunc struct {
 	args   []string
 	tokens []string
 	val    types.Val
+	fnType FuncType
+	// typesToVal stores converted vals of the function val for all common types. Converting
+	// function val to particular type val(check applyFacetsTree()) consumes significant amount of
+	// time. This maps helps in doing conversion only once(check preprocessFilter()).
+	typesToVal map[types.TypeID]types.Val
 }
 type facetsTree struct {
 	op       string
@@ -2003,27 +2015,45 @@ type facetsTree struct {
 	function *facetsFunc
 }
 
+// commonTypeIDs is list of type ids which are more common. In preprocessFilter() we keep converted
+// values for these typeIDs at every function node.
+var commonTypeIDs = [...]types.TypeID{types.StringID, types.IntID, types.FloatID,
+	types.DateTimeID, types.BoolID, types.DefaultID}
+
 func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	if tree == nil {
 		return nil, nil
 	}
 	ftree := &facetsTree{}
-	ftree.op = tree.Op
+	ftree.op = strings.ToLower(tree.Op)
 	if tree.Func != nil {
 		ftree.function = &facetsFunc{}
-		ftree.function.name = tree.Func.Name
 		ftree.function.key = tree.Func.Key
 		ftree.function.args = tree.Func.Args
 
-		fnType, fname := parseFuncTypeHelper(ftree.function.name)
+		fnType, fname := parseFuncTypeHelper(tree.Func.Name)
 		if len(tree.Func.Args) != 1 {
 			return nil, errors.Errorf("One argument expected in %s, but got %d.",
 				fname, len(tree.Func.Args))
 		}
 
+		ftree.function.name = fname
+		ftree.function.fnType = fnType
+
 		switch fnType {
 		case compareAttrFn:
 			ftree.function.val = types.Val{Tid: types.StringID, Value: []byte(tree.Func.Args[0])}
+			ftree.function.typesToVal = make(map[types.TypeID]types.Val, len(commonTypeIDs))
+			for _, typeID := range commonTypeIDs {
+				// TODO: if conversion is not possible we are not putting anything to map. In
+				// applyFacetsTree we check if entry for a type is not present, we try to convert
+				// it. This double conversion can be avoided.
+				cv, err := types.Convert(ftree.function.val, typeID)
+				if err != nil {
+					continue
+				}
+				ftree.function.typesToVal[typeID] = cv
+			}
 		case standardFn:
 			argTokens, aerr := tok.GetTermTokens(tree.Func.Args)
 			if aerr != nil { // query error ; stop processing.
@@ -2046,7 +2076,7 @@ func preprocessFilter(tree *pb.FilterTree) (*facetsTree, error) {
 	}
 
 	numChild := len(tree.Children)
-	switch strings.ToLower(tree.Op) {
+	switch ftree.op {
 	case "not":
 		if numChild != 1 {
 			return nil, errors.Errorf("Expected 1 child for not but got %d.", numChild)
