@@ -12,7 +12,7 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
-## [1.2.2] - 2020-03-18
+## [1.2.2] - 2020-03-19
 [1.2.2]: https://github.com/dgraph-io/dgraph/compare/v1.2.1...v1.2.2
 
 ### Changed
