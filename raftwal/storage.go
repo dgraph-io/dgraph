@@ -91,7 +91,7 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 func (w *DiskStorage) processIndexRange() {
 	defer w.Closer.Done()
 
-	slurp := func(r indexRange) {
+	processSingleRange := func(r indexRange) {
 		batch := w.db.NewWriteBatch()
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {
 			glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
@@ -106,18 +106,18 @@ loop:
 	for {
 		select {
 		case r := <-w.indexRangeChan:
-			slurp(r)
+			processSingleRange(r)
 		case <-w.Closer.HasBeenClosed():
 			break loop
 		}
 	}
 
 	// As we have already shutdown the node, it is safe to close indexRangeChan.
-	// node.processApplyChan() calls CreteSnapshot, which internally sends values on this chan.
+	// node.processApplyChan() calls CreateSnapshot, which internally sends values on this chan.
 	close(w.indexRangeChan)
 
 	for r := range w.indexRangeChan {
-		slurp(r)
+		processSingleRange(r)
 	}
 }
 
