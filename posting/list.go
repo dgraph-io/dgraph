@@ -1118,7 +1118,10 @@ func (l *List) ValueFor(readTs uint64, langs []string) (rval types.Val, rerr err
 	l.RLock() // All public methods should acquire locks, while private ones should assert them.
 	defer l.RUnlock()
 	p, err := l.postingFor(readTs, langs)
-	if err != nil {
+	switch {
+	case err == ErrNoValue:
+		return rval, err
+	case err != nil:
 		return rval, errors.Wrapf(err, "cannot retrieve value with langs %v from list with key %s",
 			langs, hex.EncodeToString(l.key))
 	}
@@ -1269,7 +1272,10 @@ func (l *List) Facets(readTs uint64, param *pb.FacetParams, langs []string,
 	}
 
 	p, err := l.postingFor(readTs, langs)
-	if err != nil {
+	switch {
+	case err == ErrNoValue:
+		return nil, err
+	case err != nil:
 		return nil, errors.Wrapf(err, "cannot retrieve facet")
 	}
 	fcs = append(fcs, &pb.Facets{Facets: facets.CopyFacets(p.Facets, param)})

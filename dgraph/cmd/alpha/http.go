@@ -21,8 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/graphql/web"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -35,6 +33,8 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -42,7 +42,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
-
 	"google.golang.org/grpc/metadata"
 )
 
@@ -550,6 +549,13 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if err := jsonpb.UnmarshalString(string(b), op); err != nil {
 		op.Schema = string(b)
 	}
+
+	runInBackground, err := parseBool(r, "run_in_background")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	op.RunInBackground = runInBackground
 
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
 	fwd := r.Header.Get("X-Forwarded-For")
