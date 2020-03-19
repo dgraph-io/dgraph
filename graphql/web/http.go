@@ -98,12 +98,15 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 // via GraphQL->Dgraph->GraphQL.  It writes a valid GraphQL JSON response
 // to w.
 func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodOptions {
+		return
+	}
 
 	ctx, span := trace.StartSpan(r.Context(), "handler")
 	defer span.End()
 
 	if !gh.isValid() {
-		panic("graphqlHandler not initialised")
+		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
 	ctx = x.AttachAccessJwt(ctx, r)

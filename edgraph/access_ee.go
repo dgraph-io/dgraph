@@ -671,7 +671,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 {
+		if len(gq.Attr) > 0 && gq.Attr != "uid" {
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {

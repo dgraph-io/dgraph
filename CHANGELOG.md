@@ -94,6 +94,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Algorithms to handle UidPack. ([#4321][])
 - Improved latency in live loader using conflict resolution at client level. ([#4362][])
 - Set ZSTD CompressionLevel to 1. ([#4572][])
+- Splits are now disabled. ([#4672][])
+- Disk based re-indexing: while re-indexing a predicate, the temp data is now written on disk
+  instead of keeping it in memory. This improves index rebuild for large datasets. ([#4440][])
 - Enterprise features
   - **Breaking changes**
     - Change default behavior to block operations with ACLs enabled. ([#4390][])
@@ -121,9 +124,13 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Fix Levenshtein distance calculation with match function.	Fixes [#4494][]. ([#4545][])
 - Add `<xs:integer>` RDF type for int schema type. Fixes [#4460][]. ([#4465][])
 - Allow `@filter` directive with expand queries. Fixes [#3904][]. ([#4404][]).
+- A multi-part posting list should only be accessed via the main key. Accessing the posting list via one of the other keys was causing issues during rollup and adding spurious keys to the database. Now fixed. ([#4574][])
 - Enterprise features
   - Backup types. Fixes [#4507][]. ([#4514][])
 
+[#4440]: https://github.com/dgraph-io/dgraph/pull/4440
+[#4574]: https://github.com/dgraph-io/dgraph/pull/4574
+[#4672]: https://github.com/dgraph-io/dgraph/pull/4672
 [#4530]: https://github.com/dgraph-io/dgraph/issues/4530
 [#4310]: https://github.com/dgraph-io/dgraph/issues/4310
 [#4517]: https://github.com/dgraph-io/dgraph/issues/4517

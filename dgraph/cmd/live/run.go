@@ -43,6 +43,7 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -194,7 +195,11 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	return dgraphClient.Alter(ctx, op)
+	if err := dgraphClient.Alter(ctx, op); err != nil {
+		return err
+	}
+	// TODO(Aman): avoid using functions from testutil.
+	return testutil.WaitForAlter(ctx, dgraphClient, op.Schema)
 }
 
 func (l *loader) uid(val string) string {
@@ -332,8 +337,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
 			WithTableLoadingMode(bopt.MemoryMap).
-			// TODO(Ibrahim): Remove compression level once badger is updated.
-			WithSyncWrites(false).WithZSTDCompressionLevel(1))
+			WithCompression(bopt.ZSTD).
+			WithSyncWrites(false).
+			WithLoadBloomsOnOpen(false).
+			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
 	}

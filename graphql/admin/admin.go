@@ -48,22 +48,63 @@ const (
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
+	"""
+	Data about the GraphQL schema being served by Dgraph.
+	"""
 	type GQLSchema @dgraph(type: "dgraph.graphql") {
 		id: ID!
+
+		"""
+		Input schema (GraphQL types) that was used in the latest schema update.
+		"""
 		schema: String!  @dgraph(type: "dgraph.graphql.schema")
+
+		"""
+		The GraphQL schema that was generated from the 'schema' field.  
+		This is the schema that is being served by Dgraph at /graphql.
+		"""
 		generatedSchema: String!
 	}
 
-	"""Node state is the state of an individual node in the Dgraph cluster """
+	"""
+	A NodeState is the state of an individual node in the Dgraph cluster.
+	"""
 	type NodeState {
-		"""node type : either 'alpha' or 'zero'"""
+
+		"""
+		Node type : either 'alpha' or 'zero'.
+		"""
 		instance: String
+
+		"""
+		Address of the node.
+		"""
 		address: String
-		"""node health status : either 'healthy' or 'unhealthy'"""
+
+		"""
+		Node health status : either 'healthy' or 'unhealthy'.
+		"""
 		status: String
+
+		"""
+		The group this node belongs to in the Dgraph cluster.
+		See : https://docs.dgraph.io/deploy/#cluster-setup.
+		"""
 		group: Int
+
+		"""
+		Version of the Dgraph binary.
+		"""
 		version: String
+
+		"""
+		Time in nanoseconds since the node started.
+		"""
 		uptime: Int
+
+		"""
+		Time in Unix epoch time that the node was last contacted by another Zero or Alpha node.
+		"""
 		lastEcho: Int
 	}
 
@@ -154,6 +195,11 @@ const (
 	}
 
 	input ConfigInput {
+
+		"""
+		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		more than specified here. (default -1 means no set limit)
+		"""
 		lruMb: Float
 	}
 
@@ -172,10 +218,33 @@ const (
 	}
 
 	type Mutation {
+
+		"""
+		Update the Dgraph cluster to serve the input schema.  This may change the GraphQL
+		schema, the types and predicates in the Dgraph schema, and cause indexes to be recomputed.
+		"""
 		updateGQLSchema(input: UpdateGQLSchemaInput!) : UpdateGQLSchemaPayload
+
+		"""
+		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
+		if no format is given), or 'json'.
+		See : https://docs.dgraph.io/deploy/#export-database
+		"""
 		export(input: ExportInput!): ExportPayload
+
+		"""
+		Set (or unset) the cluster draining mode.  In draining mode no further requests are served.
+		"""
 		draining(enable: Boolean): DrainingPayload
+
+		"""
+		Shutdown this node.
+		"""
 		shutdown: ShutdownPayload
+
+		"""
+		Alter the node's config.
+		"""
 		config(input: ConfigInput!): ConfigPayload
 
 		` + adminMutations + `
@@ -212,7 +281,7 @@ type adminServer struct {
 func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 
 	resolvers := resolve.New(gqlSchema, resolverFactoryWithErrorMsg(errNoGraphQLSchema))
@@ -239,7 +308,7 @@ func newAdminResolver(
 
 	adminSchema, err := schema.FromString(graphqlAdminSchema)
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 
 	rf := newAdminResolverFactory()

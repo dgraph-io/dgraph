@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -158,36 +157,37 @@ type director struct {
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLStarted(graphqlAdminURL)
 	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL test server to become available, but it never did.\n"+
-			"Got last error %+v", err.Error()))
+		x.Panic(errors.Errorf(
+			"Waited for GraphQL test server to become available, but it never did.\n"+
+				"Got last error %+v", err.Error()))
 	}
 
 	err = checkGraphQLStarted(graphqlAdminTestAdminURL)
 	if err != nil {
-		panic(fmt.Sprintf("Waited for GraphQL AdminTest server to become available, "+
-			"but it never did.\n Got last error: %+v", err.Error()))
+		x.Panic(errors.Errorf(
+			"Waited for GraphQL AdminTest server to become available, "+
+				"but it never did.\n Got last error: %+v", err.Error()))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 
 	err = populateGraphQLData(client, data)
 	if err != nil {
-		panic(err)
+		x.Panic(err)
 	}
-
 	if err = d.Close(); err != nil {
-		panic(err)
+		x.Panic(err)
 	}
 }
 
@@ -284,6 +284,12 @@ func RunAll(t *testing.T) {
 	t.Run("request validation errors", requestValidationErrors)
 	t.Run("panic catcher", panicCatcher)
 	t.Run("deep mutation errors", deepMutationErrors)
+
+	// fragment tests
+	t.Run("fragment in mutation", fragmentInMutation)
+	t.Run("fragment in query", fragmentInQuery)
+	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
+	t.Run("fragment in query on Object", fragmentInQueryOnObject)
 
 }
 
