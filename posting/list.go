@@ -813,7 +813,7 @@ func (l *List) SingleListRollup() (*bpb.KV, error) {
 	l.RLock()
 	defer l.RUnlock()
 
-	out, err := l.rollup(math.MaxUint64, true)
+	out, err := l.rollup(math.MaxUint64, false)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed when calling List.rollup")
 	}
