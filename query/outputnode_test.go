@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"runtime"
 	"sync"
@@ -93,4 +94,25 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	}
 	_, err := n.normalize()
 	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
+}
+
+func BenchmarkJsonMarshal(b *testing.B) {
+	a := "abcasfasfsadflkjlkjsalfdjsalfjlsajf;llksafs"
+	var result []byte
+
+	b.Run("stringJsonMarshal", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			result = stringJsonMarshal(a)
+		}
+
+		_ = result
+	})
+
+	b.Run("StdJsonMarshal", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			result, _ = json.Marshal(a)
+		}
+
+		_ = result
+	})
 }

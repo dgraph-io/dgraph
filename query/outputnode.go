@@ -133,13 +133,15 @@ var (
 	boolTrue    = []byte("true")
 	boolFalse   = []byte("false")
 	emptyString = []byte(`""`)
+
+	// Used in stringJsonMarshal function.
+	hex        = "0123456789abcdef"
+	escapeHTML = true
 )
 
 // stringJsonMarshal is replacement for json.Marshal() function only for string type.
 // This function is encodeState.string(string, escapeHTML) in "encoding/json/encode.go".
 func stringJsonMarshal(s string) []byte {
-	var hex = "0123456789abcdef"
-	escapeHTML := true
 	var e bytes.Buffer
 	e.WriteByte('"')
 	start := 0
