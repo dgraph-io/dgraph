@@ -773,6 +773,11 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	ctx = x.WithMethod(ctx, methodRequest)
 	defer func() {
 		span.End()
+		v := x.TagValueStatusOK
+		if rerr != nil {
+			v = x.TagValueStatusError
+		}
+		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
 		timeSpentMs := x.SinceMs(l.Start)
 		measurements = append(measurements, x.LatencyMs.M(timeSpentMs))
 		ostats.Record(ctx, measurements...)
@@ -799,17 +804,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if isMutation {
 		ostats.Record(ctx, x.NumMutations.M(1))
 	}
-
-	defer func() {
-		// Tag "ok" or "error" status after measurements since the accumulative
-		// metrics don't need the status key. The status is useful for the
-		// request latency metrics.
-		v := x.TagValueStatusOK
-		if rerr != nil {
-			v = x.TagValueStatusError
-		}
-		ctx, _ = tag.New(ctx, tag.Upsert(x.KeyStatus, v))
-	}()
 
 	qc := &queryContext{req: req, latency: l, span: span, graphql: isGraphQL}
 	if rerr = parseRequest(qc); rerr != nil {
