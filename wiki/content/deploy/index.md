@@ -482,9 +482,9 @@ Considering that you have AWS credentials setup, you can use the below commands 
 `t2-micro` instances with Docker Engine installed on them.
 
 ```sh
-docker-machine create --driver amazonec2 aws01
-docker-machine create --driver amazonec2 aws02
-docker-machine create --driver amazonec2 aws03
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws01
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws02
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws03
 ```
 
 Your output should look like
@@ -499,7 +499,7 @@ Docker is up and running!
 To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
 ```
 
-The command would provision a `t2-micro` instance with a security group called `docker-machine`
+The command would provision a `t2-medium` instance with a security group called `docker-machine`
 (allowing inbound access on 2376 and 22).
 
 You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
@@ -632,7 +632,9 @@ run Dgraph Alpha with `-p p1 -w w1` options.
    the instances. If you plan to replace instances, you should use remote
    storage like
    [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes)
-   instead of local disk. {{% /notice %}}
+   instead of local disk. 
+2. It is required to use at least a image size of `t2.medium` due to memory size constraints. Please refer to [Issue #4555](https://github.com/dgraph-io/dgraph/issues/4555) for more info.
+{{% /notice %}}
 
 You can verify that all services were created successfully by running:
 
