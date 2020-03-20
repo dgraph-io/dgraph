@@ -640,20 +640,22 @@ func (r *RuleAst) getName() string {
 	if r.typ == GqlTyp {
 		return r.dgraphPredicate
 	}
-
-	if r.typ == JwtVar {
-		return "user1"
-	}
-
 	return r.name
 }
 
-func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
+func (r *RuleAst) buildQuery(ruleID int, authVariables map[string]string) *gql.GraphQuery {
 	if !r.hasFilter() {
 		return nil
 	}
 
 	deepVal := r.value.value
+
+	var ruleValue string
+	if deepVal.value.value.typ == JwtVar {
+		ruleValue = authVariables[deepVal.value.value.getName()]
+	} else {
+		ruleValue = deepVal.value.value.getName()
+	}
 
 	dgQuery := &gql.GraphQuery{
 		Cascade: true,
@@ -675,7 +677,7 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 						Name: deepVal.value.getName(),
 						Args: []gql.Arg{
 							{Value: deepVal.getName()},
-							{Value: deepVal.value.value.getName()},
+							{Value: ruleValue},
 						},
 					},
 				},
@@ -710,23 +712,23 @@ func (r *RuleAst) hasFilter() bool {
 	return false
 }
 
-func (r *RuleNode) GetQueries() []*gql.GraphQuery {
+func (r *RuleNode) GetQueries(authVariables map[string]string) []*gql.GraphQuery {
 	var list []*gql.GraphQuery
 
 	for _, i := range r.Or {
-		list = append(list, i.Rule.buildQuery(i.RuleID))
+		list = append(list, i.Rule.buildQuery(i.RuleID, authVariables))
 	}
 
 	for _, i := range r.And {
-		list = append(list, i.Rule.buildQuery(i.RuleID))
+		list = append(list, i.Rule.buildQuery(i.RuleID, authVariables))
 	}
 
 	if r.Not != nil {
-		list = append(list, r.Not.Rule.buildQuery(r.Not.RuleID))
+		list = append(list, r.Not.Rule.buildQuery(r.Not.RuleID, authVariables))
 	}
 
 	if r.Rule != nil {
-		list = append(list, r.Rule.buildQuery(r.RuleID))
+		list = append(list, r.Rule.buildQuery(r.RuleID, authVariables))
 	}
 
 	return list

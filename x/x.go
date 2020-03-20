@@ -24,6 +24,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/dgrijalva/jwt-go"
 	"io"
 	"math"
 	"math/rand"
@@ -246,6 +247,44 @@ func ExtractJwt(ctx context.Context) ([]string, error) {
 	return accessJwt, nil
 }
 
+func ExtractAuthJwt(ctx context.Context) ([]string, error) {
+	// extract the jwt and unmarshal the jwt to get the auth variables.
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, ErrNoJwt
+	}
+
+	accessJwt := md.Get("authorizationJwt")
+	if len(accessJwt) == 0 {
+		return nil, ErrNoJwt
+	}
+	return accessJwt, nil
+}
+
+func ExtractAuthVariables(jwtToken string, authVariables map[string]string) {
+	//TODO: Verify jwt tokens before parsing it.
+	tokens := strings.Split(jwtToken, ".")
+	AssertTrue(len(tokens) == 3)
+	data, err := jwt.DecodeSegment(tokens[1])
+	if err != nil {
+		fmt.Println("Error while decoding jwt auth token:", err)
+		return
+	}
+
+	jsonMap := make(map[string]interface{})
+	err = json.Unmarshal([]byte(data), &jsonMap)
+	if err != nil {
+		fmt.Println("Error while parsing jwt auth token:", err)
+		return
+	}
+
+	newAuthVariables := jsonMap["authVariables"].(map[string]interface{})
+	for key, value := range newAuthVariables {
+		AssertTrue(key[0] == '$')
+		authVariables[key[1:]] = value.(string)
+	}
+}
+
 // WithLocations adds a list of locations to a GqlError and returns the same
 // GqlError (fluent style).
 func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
@@ -297,7 +336,7 @@ func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, "+
-		"X-CSRF-Token, X-Auth-Token, X-Requested-With")
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With, X-Dgraph-AuthorizationToken")
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
@@ -359,6 +398,23 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		md.Append("accessJwt", accessJwt)
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
+	return ctx
+}
+
+// AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
+func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
+	authorizationJwt := r.Header.Get("X-Dgraph-AuthorizationToken")
+	if authorizationJwt == "" {
+		return ctx
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	md.Append("authorizationJwt", authorizationJwt)
+	ctx = metadata.NewIncomingContext(ctx, md)
 	return ctx
 }
 
