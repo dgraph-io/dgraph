@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/x"
 	"sort"
 	"strconv"
 
@@ -38,6 +39,13 @@ func NewQueryRewriter() QueryRewriter {
 // Rewrite rewrites a GraphQL query into a Dgraph GraphQuery.
 func (qr *queryRewriter) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
+
+	authVariables := make(map[string]string)
+	if authJwt, err := x.ExtractAuthJwt(ctx); err == nil {
+		for _, token := range authJwt {
+			x.ExtractAuthVariables(token, authVariables)
+		}
+	}
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -59,11 +67,11 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
-		return addAuth(dgQuery, gqlQuery), nil
+		return addAuth(dgQuery, gqlQuery, authVariables), nil
 
 	case schema.FilterQuery:
 		dgQuery := rewriteAsQuery(gqlQuery)
-		return addAuth(dgQuery, gqlQuery), nil
+		return addAuth(dgQuery, gqlQuery, authVariables), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
@@ -71,7 +79,9 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	}
 }
 
-func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
+func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
+	authVariables map[string]string) *gql.GraphQuery {
+
 	queriedType := field.Type()
 	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
 
@@ -94,12 +104,12 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
 		}
 	}
 
-	query.Children = append(query.Children, addSelectionSet(field)...)
+	query.Children = append(query.Children, addSelectionSet(field, authVariables)...)
 
 	return &query
 }
 
-func addSelectionSet(field schema.Field) []*gql.GraphQuery {
+func addSelectionSet(field schema.Field, authVariables map[string]string) []*gql.GraphQuery {
 	visited := make(map[string]bool)
 	queue := []*schema.Field{&field}
 	result := []*gql.GraphQuery{}
@@ -114,7 +124,7 @@ func addSelectionSet(field schema.Field) []*gql.GraphQuery {
 		authRules := sch.AuthTypeRules(typeName)
 
 		if authRules != nil && authRules.Query != nil {
-			for _, q := range authRules.Query.GetQueries() {
+			for _, q := range authRules.Query.GetQueries(authVariables) {
 				if q != nil {
 					result = append(result, q)
 				}
