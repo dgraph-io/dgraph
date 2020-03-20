@@ -100,7 +100,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
-	HasCustomDirective() bool
+	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
@@ -554,13 +554,21 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
-func (f *field) HasCustomDirective() bool {
+func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
 	custom := typeDef.Fields.ForName(f.Name()).Directives.ForName("custom")
 	if custom == nil {
-		return false
+		return false, nil
 	}
-	return true
+	httpArg := custom.Arguments.ForName("http")
+	bodyArg := httpArg.Value.Children.ForName("body")
+	var rf map[string]bool
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		_, rf, _ = parseBodyTemplate(bodyTemplate)
+	}
+	// TODO - Parse required fields from the body as well.
+	return true, rf
 }
 
 func (f *field) XIDArg() string {
@@ -739,7 +747,7 @@ func (q *query) Include() bool {
 	return true
 }
 
-func (q *query) HasCustomDirective() bool {
+func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
 
@@ -868,11 +876,19 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	bodyArg := httpArg.Value.Children.ForName("body")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
-		body, err := substitueVarsInBody(bodyTemplate, argMap)
+		bt, _, err := parseBodyTemplate(bodyTemplate)
 		if err != nil {
 			return rc, err
 		}
-		rc.Body = string(body)
+		err = substituteVarsInBody(bt, argMap)
+		if err != nil {
+			return rc, err
+		}
+		b, err := json.Marshal(bt)
+		if err != nil {
+			return rc, err
+		}
+		rc.Body = string(b)
 	}
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
@@ -914,7 +930,7 @@ func (m *mutation) Include() bool {
 	return true
 }
 
-func (m *mutation) HasCustomDirective() bool {
+func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
 }
 
@@ -1319,19 +1335,20 @@ func isName(s string) bool {
 	return true
 }
 
-// Given a template for a body with variables defined, this function parses the body, substitutes
-// the variables and returns the final JSON.
+// Given a template for a body with variables defined, this function parses the body
+// and converts it into a JSON representation and returns that.
 // for e.g.
-// { author: $id, post: { id: $postID }} with variables {"id": "0x3", postID: "0x9"} should return
-// { "author" : "0x3", "post": { "id": "0x9" }}
+// { author: $id, post: { id: $postID }}
+// { "author" : "$id", "post": { "id": "$postID" }}
 // If the final result is not a valid JSON, then an error is returned.
-func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte, error) {
+func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, error) {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(body))
 
 	result := new(bytes.Buffer)
 	parsingVariable := false
 	depth := 0
+	requiredFields := make(map[string]bool)
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 		text := s.TokenText()
 		switch {
@@ -1347,35 +1364,73 @@ func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte,
 			parsingVariable = true
 		case isName(text):
 			// Name could either be a key or be part of a variable after dollar.
-			if parsingVariable {
-				variable := "$" + text
-				// Look it up in the map and replace.
-				val, ok := variables[text]
-				if !ok {
-					return nil, errors.Errorf("couldn't find variable: %s in variables map",
-						variable)
-				}
-				switch v := val.(type) {
-				case string:
-					fmt.Fprintf(result, `"%s"`, v)
-				default:
-					fmt.Fprintf(result, "%v", val)
-				}
-				parsingVariable = false
+			if !parsingVariable {
+				result.WriteString(fmt.Sprintf(`"%s"`, text))
 				continue
 			}
-			result.WriteString(fmt.Sprintf(`"%s"`, text))
+			requiredFields[text] = true
+			variable := "$" + text
+			fmt.Fprintf(result, `"%s"`, variable)
+			parsingVariable = false
+
 		default:
-			return nil, errors.Errorf("invalid character: %s while parsing body template", text)
+			return nil, nil, errors.Errorf("invalid character: %s while parsing body template",
+				text)
 		}
 	}
 	if depth != 0 {
-		return nil, errors.New("found unmatched curly braces while parsing body template")
+		return nil, nil, errors.New("found unmatched curly braces while parsing body template")
 	}
 
 	m := make(map[string]interface{})
 	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
+		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
 	}
-	return result.Bytes(), nil
+	return m, requiredFields, nil
+}
+
+// Given a JSON representation for a body with variables defined, this function substitutes
+// the variables and returns the final JSON.
+// for e.g.
+// { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
+// should return { "author" : "0x3", "post": { "id": "0x9" }}
+func substituteVarsInBody(jsonTemplate map[string]interface{},
+	variables map[string]interface{}) error {
+	for k, v := range jsonTemplate {
+		switch val := v.(type) {
+		case string:
+			// Look it up in the map and replace.
+			if !strings.HasPrefix(val, "$") {
+				return errors.Errorf("expected a variable to start with $. Found: %s", val)
+			}
+			vval, ok := variables[val[1:]]
+			if !ok {
+				return errors.Errorf("couldn't find variable: %s in variables map",
+					val)
+			}
+			switch v := vval.(type) {
+			case string:
+				jsonTemplate[k] = v
+			default:
+				jsonTemplate[k] = v
+			}
+		case map[string]interface{}:
+			if err := substituteVarsInBody(val, variables); err != nil {
+				return err
+			}
+		case []interface{}:
+			for _, mv := range val {
+				mapVal, ok := mv.(map[string]interface{})
+				if !ok {
+					// return error
+				}
+				if err := substituteVarsInBody(mapVal, variables); err != nil {
+					return err
+				}
+			}
+		default:
+
+		}
+	}
+	return nil
 }

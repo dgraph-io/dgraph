@@ -153,10 +153,17 @@ func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
 		return
 	}
+	hasUid := false
 	for _, c := range dgQuery.Children {
+		if c.Attr == "uid" {
+			hasUid = true
+		}
 		addUID(c)
 	}
 
+	if hasUid {
+		return
+	}
 	uidChild := &gql.GraphQuery{
 		Attr:  "uid",
 		Alias: "dgraph.uid",
@@ -287,11 +294,24 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			Attr: "dgraph.type",
 		})
 	}
+
+	// These fields might not have been requested by the user directly as part of the query but
+	// are required in the body template for other fields requested within the query. We must
+	// fetch them from Dgraph.
+	requiredFields := make(map[string]bool)
+	addedFields := make(map[string]bool)
 	for _, f := range field.SelectionSet() {
+		hasCustom, rf := f.HasCustomDirective()
+		if hasCustom {
+			for k := range rf {
+				requiredFields[k] = true
+			}
+			continue
+		}
 		// We skip typename because we can generate the information from schema or
 		// dgraph.type depending upon if the type is interface or not. For interface type
 		// we always query dgraph.type and can pick up the value from there.
-		if f.Skip() || !f.Include() || f.Name() == schema.Typename || f.HasCustomDirective() {
+		if f.Skip() || !f.Include() || f.Name() == schema.Typename {
 			continue
 		}
 
@@ -316,7 +336,30 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		addSelectionSetFrom(child, f)
 
+		addedFields[f.Alias()] = true
 		q.Children = append(q.Children, child)
+	}
+
+	rfset := make([]string, 0, len(requiredFields))
+	for fname := range requiredFields {
+		rfset = append(rfset, fname)
+	}
+	sort.Strings(rfset)
+	for _, fname := range rfset {
+		if _, ok := addedFields[fname]; !ok {
+			f := field.Type().Field(fname)
+			child := &gql.GraphQuery{}
+			child.Alias = f.Name()
+
+			if f.Type().Name() == schema.IDType {
+				child.Attr = "uid"
+			} else {
+				child.Attr = field.Type().DgraphPredicate(fname)
+			}
+			// This field is required by other custom fields and hasn't already been added as a
+			// child to be fetched from Dgraph, so let's add it here.
+			q.Children = append(q.Children, child)
+		}
 	}
 }
 
