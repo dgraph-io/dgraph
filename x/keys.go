@@ -438,6 +438,10 @@ func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
+	if len(key) == 0 {
+		return p, errors.Errorf("0 length key")
+	}
+
 	p.bytePrefix = key[0]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
@@ -445,9 +449,15 @@ func Parse(key []byte) (ParsedKey, error) {
 
 	p.HasStartUid = key[0] == ByteSplit
 
+	if len(key) < 3 {
+		return p, errors.Errorf("Invalid format for key %v", key)
+	}
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
+	if len(k) < sz {
+		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
+	}
 	p.Attr = string(k[:sz])
 	k = k[sz:]
 
