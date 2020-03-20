@@ -131,7 +131,7 @@ type Comment {
               url: "http://api-gateway.com/relatedPosts",
               method: "POST",
               operation: "single",
-              body: "{ myId: $id }"})
+              body: "{ myId: $url }"})
 }
 
 type Query {

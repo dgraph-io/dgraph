@@ -1196,11 +1196,66 @@
       }
     }
 -
-  name: "User query should only rewrite fields without custom directive"
+  name: "Comments query should ask for fields needed to process fields with custom directive"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        title
+        content
+        ups
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        title : Comment.title
+        ups : Comment.ups
+        author : Comment.author
+        id : uid
+        url : Comment.url
+      }
+    }
+-
+  name: "Post query should only rewrite fields without custom directive"
   gqlquery: |-
     query {
-      getPost(id: "0x1") {
-        id
+      getPost(postID: "0x1") {
+        postID
+        comments {
+          id
+          author
+          title
+          content
+          ups
+          url
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        postID : uid
+        comments : Post.comments {
+          id : uid
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          url : Comment.url
+        }
+      }
+    }
+-
+  name: "Post query should ask for fields needed to process other fields with custom directive"
+  gqlquery: |-
+    query {
+      getPost(postID: "0x1") {
+        postID
         comments {
           author
           title
@@ -1215,12 +1270,13 @@
   dgquery: |
     query {
       getPost(func: uid(0x1)) @filter(type(Post)) {
-        id : uid
-        comments: Post.comments {
+        postID : uid
+        comments : Post.comments {
           author : Comment.author
           title : Comment.title
           ups : Comment.ups
-          dgraph.uid : uid
+          id : uid
+          url : Comment.url
         }
       }
     }
