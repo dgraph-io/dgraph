@@ -257,7 +257,7 @@ func NewResolverFactory(
 
 // StdQueryCompletion is the completion steps that get run for queries
 func StdQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(completeDgraphResult)
+	return removeObjectCompletion(injectMergeResult(completeDgraphResult))
 }
 
 // AliasQueryCompletion is the completion steps that get run for admin queries
@@ -527,6 +527,146 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 		err = schema.AppendGQLErrs(err, marshErr)
 
 		return cf(ctx, field, res, schema.AppendGQLErrs(err, resErr))
+	})
+}
+
+func createVariableMap(input map[string]interface{}) map[string]interface{} {
+	result := make(map[string]interface{})
+	var uid string
+
+	if val, ok := input["uid"]; ok {
+		uid = val.(string)
+	} else {
+		return input
+	}
+
+	inner := make(map[string]interface{})
+
+	for key, value := range input {
+		if key == "uid" {
+			continue
+		}
+
+		switch v := value.(type) {
+		case []interface{}:
+			if len(v) == 1 {
+				if val, ok := v[0].(map[string]interface{}); ok {
+					inner[key] = createVariableMap(val)
+				}
+			} else {
+				inner[key] = value
+			}
+		case map[string]interface{}:
+			inner[key] = createVariableMap(v)
+		default:
+			inner[key] = value
+		}
+	}
+
+	result[uid] = inner
+
+	return result
+}
+
+func mergeDicts(input, vars *map[string]interface{}) {
+	if _, ok := (*input)["dgraph.uid"].(string); !ok {
+		return
+	}
+
+	uid := (*input)["dgraph.uid"].(string)
+	if variableMap, ok := (*vars)[uid].(map[string]interface{}); ok {
+		for key, value := range variableMap {
+			switch v := value.(type) {
+			case map[string]interface{}:
+				if valI, ok := (*input)[key].([]interface{}); ok && len(valI) == 1 {
+					if childInput, ok := valI[0].(map[string]interface{}); ok {
+						mergeDicts(&childInput, &v)
+						(*input)[key] = []interface{}{childInput}
+					}
+				}
+			default:
+				(*input)[key] = v
+			}
+		}
+	}
+}
+
+func injectMergeResult(cf CompletionFunc) CompletionFunc {
+	return CompletionFunc(func(
+		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+
+		errs := schema.AsGQLErrors(err)
+		if len(result) == 0 {
+			return nil, errs
+		}
+
+		nullResponse := func() []byte {
+			var buf bytes.Buffer
+			x.Check2(buf.WriteString(`{ "`))
+			x.Check2(buf.WriteString(field.ResponseName()))
+			x.Check2(buf.WriteString(`": null }`))
+			return buf.Bytes()
+		}
+
+		var valToComplete map[string]interface{}
+
+		err = json.Unmarshal(result, &valToComplete)
+		if err != nil {
+			glog.Errorf("%+v \n Dgraph result :\n%s\n",
+				errors.Wrap(err, "failed to unmarshal Dgraph query result"),
+				string(result))
+			return nullResponse(),
+				schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
+		}
+
+		variableDict := make(map[string]interface{})
+
+		for name, value := range valToComplete {
+			if !strings.Contains(name, ".") {
+				continue
+			}
+
+			parts := strings.Split(name, ".")
+
+			if val, ok := value.([]interface{}); ok {
+				for _, i := range val {
+					if valI, ok := i.(map[string]interface{}); ok {
+						variableDict[parts[0]] = createVariableMap(valI)
+						break
+					}
+				}
+			}
+		}
+
+		res := make(map[string]interface{})
+
+		for name, value := range valToComplete {
+			if strings.Contains(name, ".") {
+				continue
+			}
+
+			if _, ok := variableDict[name].(map[string]interface{}); !ok {
+				res[name] = value
+				continue
+			}
+			res[name] = []interface{}{}
+
+			if val, ok := value.([]interface{}); ok {
+				for _, i := range val {
+					if valI, ok := i.(map[string]interface{}); ok {
+						if vars, ok := variableDict[name].(map[string]interface{}); ok {
+							mergeDicts(&valI, &vars)
+							res[name] = append(res[name].([]interface{}), valI)
+						}
+					}
+				}
+			}
+		}
+
+		b, _ := json.Marshal(res)
+		result, err = cf(ctx, field, b, err)
+
+		return result, err
 	})
 }
 
