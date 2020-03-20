@@ -448,8 +448,12 @@ func Parse(key []byte) (ParsedKey, error) {
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
-	p.Attr = string(k[:sz])
-	k = k[sz:]
+	if len(k) >= sz {
+		p.Attr = string(k[:sz])
+		k = k[sz:]
+	} else {
+		return p, errors.Errorf("Invalid size %v for key %q", sz, key)
+	}
 
 	switch p.bytePrefix {
 	case byteSchema, byteType:
