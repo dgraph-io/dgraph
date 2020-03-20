@@ -570,6 +570,8 @@ func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[s
 			rule.typ = GqlTyp
 			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
 
+			fmt.Println(rule.name, rule.dgraphPredicate)
+
 			typ = ap.s.Types[name]
 		} else {
 			rule.typ = Constant
@@ -664,7 +666,7 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 		Children: []*gql.GraphQuery{
 			{Attr: "uid"},
 			{
-				Attr: deepVal.getName(),
+				Attr: r.getName(),
 				Children: []*gql.GraphQuery{
 					{Attr: "uid"},
 				},

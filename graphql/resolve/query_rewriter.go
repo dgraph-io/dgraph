@@ -92,20 +92,51 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
 		} else {
 			dgQuery.Filter = authFilter
 		}
+	}
 
-		queries := authRules.Query.GetQueries()
-		i := 0
-		for _, q := range queries {
-			if q != nil {
-				queries[i] = q
-				i++
+	query.Children = append(query.Children, addSelectionSet(field)...)
+
+	return &query
+}
+
+func addSelectionSet(field schema.Field) []*gql.GraphQuery {
+	visited := make(map[string]bool)
+	queue := []*schema.Field{&field}
+	result := []*gql.GraphQuery{}
+
+	sch := field.Operation().Schema()
+
+	for ind := 0; ind < len(queue); ind++ {
+		i := queue[ind]
+		typeName := (*i).Type().Name()
+		visited[typeName] = true
+		fmt.Println("Adding", (*i).Type().Name())
+		authRules := sch.AuthTypeRules(typeName)
+
+		if authRules != nil && authRules.Query != nil {
+			for _, q := range authRules.Query.GetQueries() {
+				if q != nil {
+					result = append(result, q)
+				}
 			}
 		}
 
-		query.Children = append(query.Children, queries[:i]...)
+		for _, f := range field.SelectionSet() {
+			if f.Skip() || !f.Include() || f.Name() == schema.Typename {
+				continue
+			}
+
+			fmt.Println(f.Name(), f.Type().Name(), visited, !visited[f.Type().Name()])
+
+			if len(f.SelectionSet()) > 0 && !visited[f.Type().Name()] {
+				queue = append(queue, &f)
+			}
+		}
+
 	}
 
-	return &query
+	return result
+
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
@@ -326,6 +357,9 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			Attr: "dgraph.type",
 		})
 	}
+
+	sch := field.Operation().Schema()
+
 	for _, f := range field.SelectionSet() {
 		// We skip typename because we can generate the information from schema or
 		// dgraph.type depending upon if the type is interface or not. For interface type
@@ -354,6 +388,25 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		addPagination(child, f)
 
 		addSelectionSetFrom(child, f)
+
+		if len(child.Children) > 0 {
+			authRules := sch.AuthTypeRules(f.Type().Name())
+			if authRules != nil && authRules.Query != nil {
+				filters := authRules.Query.GetFilter()
+				if child.Filter != nil {
+					child.Filter = &gql.FilterTree{
+						Op: "and",
+						Child: []*gql.FilterTree{
+							filters,
+							child.Filter,
+						},
+					}
+				} else {
+					child.Filter = filters
+				}
+
+			}
+		}
 
 		q.Children = append(q.Children, child)
 	}
