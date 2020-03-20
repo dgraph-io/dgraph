@@ -560,14 +560,36 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	if custom == nil {
 		return false, nil
 	}
-	httpArg := custom.Arguments.ForName("http")
-	bodyArg := httpArg.Value.Children.ForName("body")
+
 	var rf map[string]bool
+	httpArg := custom.Arguments.ForName("http")
+
+	bodyArg := httpArg.Value.Children.ForName("body")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
 		_, rf, _ = parseBodyTemplate(bodyTemplate)
 	}
-	// TODO - Parse required fields from the body as well.
+
+	if rf == nil {
+		rf = make(map[string]bool)
+	}
+	rawURL := httpArg.Value.Children.ForName("url").Raw
+	// Error here should be nil as we should have parsed and validated the URL
+	// already.
+	u, _ := url.Parse(rawURL)
+	// Parse variables from the path and query params.
+	elems := strings.Split(u.Path, "/")
+	for _, elem := range elems {
+		if strings.HasPrefix(elem, "$") {
+			rf[elem[1:]] = true
+		}
+	}
+	for k := range u.Query() {
+		val := u.Query().Get(k)
+		if strings.HasPrefix(val, "$") {
+			rf[val[1:]] = true
+		}
+	}
 	return true, rf
 }
 
