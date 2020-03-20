@@ -28,7 +28,6 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         id : uid
         uid : Author.name
-        dgraph.uid : uid
       }
     }
 
@@ -95,7 +94,6 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         id : uid
         name : Author.name
-        dgraph.uid : uid
       }
     }
 
@@ -175,7 +173,6 @@
           author : Post.author {
             authorID : uid
             name : Author.name
-            dgraph.uid : uid
           }
           dgraph.uid : uid
         }
@@ -719,7 +716,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -743,7 +739,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -765,7 +760,6 @@
         name : Character.name
         ename : Employee.ename
         dob : Human.dob
-        dgraph.uid : uid
       }
     }
 
@@ -790,7 +784,6 @@
         name : Character.name
         female : Human.female
         ename : Employee.ename
-        dgraph.uid : uid
       }
     }
 
@@ -819,7 +812,6 @@
         female : Human.female
         ename : Employee.ename
         movies : Director.movies
-        dgraph.uid : uid
       }
     }
 
@@ -1192,7 +1184,7 @@
         author : Comment.author
         title : Comment.title
         ups : Comment.ups
-        dgraph.uid : uid
+        url : Comment.url
       }
     }
 -
@@ -1200,9 +1192,7 @@
   gqlquery: |
     query {
       getComment(id: "0x1") {
-        title
         content
-        ups
         relatedUsers {
           name
         }
@@ -1211,10 +1201,10 @@
   dgquery: |-
     query {
       getComment(func: uid(0x1)) @filter(type(Comment)) {
-        title : Comment.title
-        ups : Comment.ups
         author : Comment.author
         id : uid
+        title : Comment.title
+        ups : Comment.ups
         url : Comment.url
       }
     }

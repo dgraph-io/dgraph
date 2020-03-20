@@ -118,7 +118,7 @@ type Comment {
     author: String!
     title: String
     content: String @custom(http: {
-              url: "http://api-gateway.com/post/content",
+              url: "http://api-gateway.com/post/$ups?myId=$title",
               method: "GET",
               operation: "batch",
               body: "{ myId: $id, theAuthor: $author}",
