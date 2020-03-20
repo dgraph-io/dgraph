@@ -126,6 +126,65 @@ identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
 
+### Backup to Google Cloud Storage via Minio Gateway
+
+#### Run MinIO Gateway for GCS
+
+1. [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for GCS and get the Credentials File
+
+2. Run MinIO GCS Gateway Using Docker
+
+```
+docker run -p 9000:9000 --name gcs-s3 \
+ -v /path/to/credentials.json:/credentials.json \
+ -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
+ -e "MINIO_ACCESS_KEY=minioaccountname" \
+ -e "MINIO_SECRET_KEY=minioaccountkey" \
+ minio/minio gateway gcs yourprojectid
+```
+
+3. Run MinIO GCS Gateway Using the MinIO Binary
+
+```
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+export MINIO_ACCESS_KEY=minioaccesskey
+export MINIO_SECRET_KEY=miniosecretkey
+minio gateway gcs yourprojectid
+```
+
+#### Test Using MinIO Browser
+
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+
+![](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
+
+#### Test Using MinIO Client
+
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+1. Configure the Gateway using MinIO Client
+
+Use the following command to configure the gateway:
+
+```
+mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+```
+
+2. List Containers on GCS
+
+Use the following command to list the containers on GCS:
+
+```
+mc ls mygcs
+```
+A response similar to this one should be displayed:
+
+```
+[2017-02-22 01:50:43 PST]     0B ferenginar/
+[2017-02-26 21:43:51 PST]     0B my-container/
+[2017-02-26 22:10:11 PST]     0B test-container1/
+```
+
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
