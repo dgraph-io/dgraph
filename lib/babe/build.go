@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
@@ -168,17 +169,20 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 
 		// if ret == 0x0001, there is a dispatch error; if ret == 0x01, there is an apply error
 		if ret[0] == 1 || bytes.Equal(ret[:2], []byte{0, 1}) {
-			// TODO: specific error code checking
-			log.Error("[babe] build block apply extrinsic", "error", ret, "extrinsic", extrinsic)
-
+			errTxt, err := determineError(ret)
+			if err != nil {
+				return nil, err
+			}
 			// remove invalid extrinsic from queue
 			b.transactionQueue.Pop()
 
 			// re-add previously popped extrinsics back to queue
 			b.addToQueue(included)
 
-			return nil, errors.New("could not apply extrinsic")
+			return nil, errors.New("Error during apply extrinsic: " + errTxt)
+
 		}
+
 		log.Trace("[babe] build block applied extrinsic", "extrinsic", extrinsic)
 
 		// keep track of included transactions; re-add them to queue later if block building fails
@@ -245,4 +249,65 @@ func extrinsicsToBody(txs []*transaction.ValidTransaction) (*types.Body, error) 
 	}
 
 	return types.NewBodyFromExtrinsics(extrinsics)
+}
+
+func determineError(res []byte) (string, error) {
+	log.Error("[babe] build block apply extrinsic", "error", res)
+	var errTxt strings.Builder
+	var err error
+
+	// when res[0] == 0x01 it is an apply error
+	if res[0] == 1 {
+		_, err = errTxt.WriteString("Apply error, type: ")
+		if bytes.Equal(res[1:], []byte{0}) {
+			_, err = errTxt.WriteString("NoPermission")
+		}
+		if bytes.Equal(res[1:], []byte{1}) {
+			_, err = errTxt.WriteString("BadState")
+		}
+		if bytes.Equal(res[1:], []byte{2}) {
+			_, err = errTxt.WriteString("Validity")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 0}) {
+			_, err = errTxt.WriteString("Call")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 1}) {
+			_, err = errTxt.WriteString("Payment")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 2}) {
+			_, err = errTxt.WriteString("Future")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 3}) {
+			_, err = errTxt.WriteString("Stale")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 4}) {
+			_, err = errTxt.WriteString("BadProof")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 5}) {
+			_, err = errTxt.WriteString("AncientBirthBlock")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 6}) {
+			_, err = errTxt.WriteString("ExhaustsResources")
+		}
+		if bytes.Equal(res[1:], []byte{2, 0, 7}) {
+			_, err = errTxt.WriteString("Custom")
+		}
+		if bytes.Equal(res[1:], []byte{2, 1, 0}) {
+			_, err = errTxt.WriteString("CannotLookup")
+		}
+		if bytes.Equal(res[1:], []byte{2, 1, 1}) {
+			_, err = errTxt.WriteString("NoUnsignedValidator")
+		}
+		if bytes.Equal(res[1:], []byte{2, 1, 2}) {
+			_, err = errTxt.WriteString("Custom")
+		}
+	}
+
+	// when res[:2] == 0x0001 it's a dispatch error
+	if bytes.Equal(res[:2], []byte{0, 1}) {
+		mod := res[2:3]
+		errID := res[3:4]
+		_, err = errTxt.WriteString("Dispatch Error, module: " + string(mod) + " error: " + string(errID))
+	}
+	return errTxt.String(), err
 }
