@@ -97,22 +97,51 @@ func TestNormalizeJSONLimit(t *testing.T) {
 }
 
 func BenchmarkJsonMarshal(b *testing.B) {
-	a := "abcasfasfsadflkjlkjsalfdjsalfjlsajf;llksafs"
+	inputStrings := [][]string{
+		[]string{"smallstring", "abcdef"},
+		[]string{"largestring", string(bytes.Repeat([]byte("a"), 1000))},
+		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
+	}
+
 	var result []byte
 
-	b.Run("stringJsonMarshal", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			result = stringJsonMarshal(a)
-		}
+	for _, input := range inputStrings {
+		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result = stringJsonMarshal(input[1])
+			}
 
-		_ = result
-	})
+			_ = result
+		})
 
-	b.Run("StdJsonMarshal", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			result, _ = json.Marshal(a)
-		}
+		b.Run(fmt.Sprintf("STDJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result, _ = json.Marshal(input[1])
+			}
 
-		_ = result
-	})
+			_ = result
+		})
+	}
+}
+
+func TestStringJsonMarshal(t *testing.T) {
+	inputs := []string{
+		"",
+		"0",
+		"true",
+		"1.909045927350",
+		"nil",
+		"null",
+		"<&>",
+		`quoted"str"ing`,
+	}
+
+	for _, input := range inputs {
+		gm, err := json.Marshal(input)
+		require.NoError(t, err)
+
+		sm := stringJsonMarshal(input)
+
+		require.Equal(t, gm, sm)
+	}
 }
