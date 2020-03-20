@@ -29,6 +29,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -146,24 +147,25 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
-	stopIndexing := func(op *operation) {
+	stopIndexing := func(closer *y.Closer) {
+		// runSchemaMutation can return. stopIndexing could be called by goroutines.
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
-				gr.Node.stopTask(op)
+				closer.Done()
 			}
 		}
 	}
 
 	// Ensure that rollup is not running.
-	op, err := gr.Node.startTask(opIndexing)
+	closer, err := gr.Node.startTask(opIndexing)
 	if err != nil {
 		return err
 	}
-	defer stopIndexing(op)
+	defer stopIndexing(closer)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		// in case background indexing is running, we should call it here again.
-		defer stopIndexing(op)
+		defer stopIndexing(closer)
 
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {

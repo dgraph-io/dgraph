@@ -12,6 +12,60 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
+## [1.2.2] - 2020-03-19
+[1.2.2]: https://github.com/dgraph-io/dgraph/compare/v1.2.1...v1.2.2
+
+### Changed
+
+- Wrap errors thrown in posting/list.go for easier debugging. ([#4880][])
+- Print keys using hex encoding in error messages in list.go. ([#4891][])
+
+### Fixed
+
+- Do not include empty nodes in the export output. ([#4896][])
+- Fix error when lexing language list. ([#4784][])
+- Properly initialize posting package in debug tool. ([#4893][])
+- Handle special characters in schema and type queries. Fixes [#4933][]. ([#4937][])
+- Overwrite values for uid predicates.  Fixes [#4879][]. ([#4883][])
+- Disable @* language queries when the predicate does not support langs. ([#4881][])
+- Fix bug in exporting types with reverse predicates. Fixes [#4856][]. ([#4857][])
+- Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.) ([#4951][])
+- Fix point-in-time Prometheus metrics. Fixes [#4532][]. ([#4948][])
+- Split lists in the bulk loader. ([#4967][])
+- Allow remote MySQL server with dgraph migrate tool. Fixes [#4707][]. ([#4860][])
+- Enterprise features
+  - ACL: Allow uid access. ([#4922][])
+  - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][])
+  - Backups: Verify host when default and custom credentials are used. Fixes [#4855][]. ([#4858][])
+  - Backups: Split lists when restoring from backup. ([#4912][])
+
+
+[#4967]: https://github.com/dgraph-io/dgraph/issues/4967
+[#4951]: https://github.com/dgraph-io/dgraph/issues/4951
+[#4532]: https://github.com/dgraph-io/dgraph/issues/4532
+[#4948]: https://github.com/dgraph-io/dgraph/issues/4948
+[#4893]: https://github.com/dgraph-io/dgraph/issues/4893
+[#4784]: https://github.com/dgraph-io/dgraph/issues/4784
+[#4896]: https://github.com/dgraph-io/dgraph/issues/4896
+[#4856]: https://github.com/dgraph-io/dgraph/issues/4856
+[#4857]: https://github.com/dgraph-io/dgraph/issues/4857
+[#4881]: https://github.com/dgraph-io/dgraph/issues/4881
+[#4912]: https://github.com/dgraph-io/dgraph/issues/4912
+[#4855]: https://github.com/dgraph-io/dgraph/issues/4855 
+[#4858]: https://github.com/dgraph-io/dgraph/issues/4858 
+[#4879]: https://github.com/dgraph-io/dgraph/issues/4879 
+[#4883]: https://github.com/dgraph-io/dgraph/issues/4883 
+[#4933]: https://github.com/dgraph-io/dgraph/issues/4933
+[#4937]: https://github.com/dgraph-io/dgraph/issues/4937
+[#4891]: https://github.com/dgraph-io/dgraph/issues/4891
+[#4880]: https://github.com/dgraph-io/dgraph/issues/4880
+[#4816]: https://github.com/dgraph-io/dgraph/issues/4816
+[#4877]: https://github.com/dgraph-io/dgraph/issues/4877
+[#4922]: https://github.com/dgraph-io/dgraph/issues/4922
+[#4707]: https://github.com/dgraph-io/dgraph/issues/4707
+[#4860]: https://github.com/dgraph-io/dgraph/issues/4860
+
+
 ## [2.0.0-beta] - 2020-02-20
 [2.0.0-beta]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...release/v2.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
