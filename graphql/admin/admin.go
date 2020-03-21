@@ -479,7 +479,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				login,
 				login,
 				login,
-				resolve.StdQueryCompletion())
+				resolve.QueryLikeMutationCompletion())
 		}).
 		WithSchemaIntrospection()
 

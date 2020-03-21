@@ -19,8 +19,6 @@ package resolve
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -144,12 +142,12 @@ func NewMutationResolver(
 	mr MutationRewriter,
 	qe QueryExecutor,
 	me MutationExecutor,
-	rc ResultCompleter) MutationResolver {
+	mc MutationCompleter) MutationResolver {
 	return &mutationResolver{
 		mutationRewriter: mr,
 		queryExecutor:    qe,
 		mutationExecutor: me,
-		resultCompleter:  rc,
+		resultCompleter:  mc,
 	}
 }
 
@@ -158,7 +156,7 @@ type mutationResolver struct {
 	mutationRewriter MutationRewriter
 	queryExecutor    QueryExecutor
 	mutationExecutor MutationExecutor
-	resultCompleter  ResultCompleter
+	resultCompleter  MutationCompleter
 
 	numUids int
 }
@@ -176,31 +174,7 @@ func (mr *mutationResolver) Resolve(
 
 	res, success, err := mr.rewriteAndExecute(ctx, mutation)
 
-	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
-
-	selSets := mutation.SelectionSet()
-	for _, selSet := range selSets {
-		if selSet.Name() != schema.NumUid {
-			continue
-		}
-
-		s := string(completed)
-		switch {
-		case strings.Contains(s, schema.NumUid):
-			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
-				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
-				mr.numUids)))
-
-		case s[len(s)-1] == '}':
-			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
-				schema.NumUid, mr.numUids))
-
-		default:
-			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
-				schema.NumUid, mr.numUids))
-		}
-		break
-	}
+	completed, err := mr.resultCompleter.Complete(ctx, mutation, mr.numUids, res, err)
 
 	return &Resolved{
 		Data: completed,

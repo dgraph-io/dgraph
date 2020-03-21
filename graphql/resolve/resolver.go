@@ -20,11 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"strings"
-	"sync"
-
+	"fmt"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"strings"
+	"sync"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -76,6 +76,14 @@ type ResolverFactory interface {
 // error propagation or massaging error paths.
 type ResultCompleter interface {
 	Complete(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+}
+
+// A MutationCompleter can take a []byte slice representing an intermediate result
+// in resolving mutation's QueryField and applies a completion step - for example, apply GraphQL
+// error propagation or massaging error paths or adding numUids and __typename.
+type MutationCompleter interface {
+	Complete(ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte,
+		error)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
@@ -142,6 +150,23 @@ func (cf CompletionFunc) Complete(
 	err error) ([]byte, error) {
 
 	return cf(ctx, field, result, err)
+}
+
+// MutationCompletionFunc is an adapter that allows us to compose completions and build a
+// MutationCompleter from a function. Based on the http.HandlerFunc pattern.
+type MutationCompletionFunc func(
+	ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte,
+	error)
+
+// Complete calls cf(ctx, field, result, err)
+func (cf MutationCompletionFunc) Complete(
+	ctx context.Context,
+	mutation schema.Mutation,
+	numUids int,
+	result []byte,
+	err error) ([]byte, error) {
+
+	return cf(ctx, mutation, numUids, result, err)
 }
 
 // DgraphAsQueryExecutor builds a QueryExecutor for proxying requests through dgraph.
@@ -266,14 +291,20 @@ func AliasQueryCompletion() CompletionFunc {
 	return removeObjectCompletion(injectAliasCompletion(completeResult))
 }
 
+func QueryLikeMutationCompletion() MutationCompletionFunc {
+	return noopMutationCompletion(removeObjectCompletion(completeDgraphResult))
+}
+
 // StdMutationCompletion is the completion steps that get run for add and update mutations
-func StdMutationCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, completeDgraphResult))
+func StdMutationCompletion(name string) MutationCompletionFunc {
+	return addPathCompletion(name, addRootFieldCompletion(name,
+		addMutationCompletion(removeObjectCompletion(completeDgraphResult))))
 }
 
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
-func StdDeleteCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
+func StdDeleteCompletion(name string) MutationCompletionFunc {
+	return addPathCompletion(name, addRootFieldCompletion(name,
+		addMutationCompletion(removeObjectCompletion(deleteCompletion()))))
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -445,6 +476,62 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 		})
 }
 
+func noopMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
+	return MutationCompletionFunc(func(ctx context.Context, mutation schema.Mutation, numUids int,
+		result []byte, err error) ([]byte, error) {
+		return cf(ctx, mutation.QueryField(), result, err)
+	})
+}
+
+func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
+	return MutationCompletionFunc(func(ctx context.Context, mutation schema.Mutation, numUids int,
+		result []byte, err error) ([]byte, error) {
+
+		queryField := mutation.QueryField()
+		res, err := cf(ctx, queryField, result, err)
+		selSet := mutation.SelectionSet()
+		n := len(selSet)
+
+		if len(res) == 0 && n == 1 && selSet[0].Name() == queryField.Name() {
+			return nil, err
+		}
+
+		addComma := true
+		var b bytes.Buffer
+
+		x.Check2(b.WriteRune('{'))
+		for i := 0; i < n; i++ {
+			field := selSet[i]
+			addComma = true
+
+			switch field.Name() {
+			case schema.NumUid:
+				x.Check2(b.WriteString(fmt.Sprintf(`"%s": %d`, field.ResponseName(), numUids)))
+			case schema.Typename:
+				x.Check2(b.WriteString(fmt.Sprintf(`"%s": "%s"`, field.ResponseName(),
+					mutation.MutatedType().Name())))
+			case queryField.Name():
+				if len(res) > 0 {
+					x.Check2(b.Write(res))
+				} else {
+					addComma = false
+				}
+			default:
+				err = schema.AppendGQLErrs(err, errors.Errorf("encountered unexpected field: %s",
+					field.Name()))
+				addComma = false
+			}
+
+			if addComma && i != n-1 {
+				x.Check2(b.WriteString(", "))
+			}
+		}
+		x.Check2(b.WriteRune('}'))
+
+		return b.Bytes(), err
+	})
+}
+
 // addRootFieldCompletion adds an extra object name to the start of a result.
 //
 // A mutation always looks like
@@ -452,11 +539,11 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 // What's resolved initially is
 //   `foo { ... }`
 // So `addFoo: ...` is added.
-func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+func addRootFieldCompletion(name string, cf MutationCompletionFunc) MutationCompletionFunc {
+	return MutationCompletionFunc(func(
+		ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte, error) {
 
-		res, err := cf(ctx, field, result, err)
+		res, err := cf(ctx, mutation, numUids, result, err)
 
 		var b bytes.Buffer
 		x.Check2(b.WriteString("\""))
@@ -478,11 +565,11 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 // A mutation always looks like
 //   `addFoo(...) { foo { ... } }`
 // But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
-func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+func addPathCompletion(name string, cf MutationCompletionFunc) MutationCompletionFunc {
+	return MutationCompletionFunc(func(
+		ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte, error) {
 
-		res, err := cf(ctx, field, result, err)
+		res, err := cf(ctx, mutation, numUids, result, err)
 
 		resErrs := schema.AsGQLErrors(err)
 		for _, err := range resErrs {
