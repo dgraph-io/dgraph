@@ -282,7 +282,7 @@ Let's try it out.
 {
   best_authors(func: ge(rating, 4.0)) {
     uid
-    author.name
+    author_name
     rating
   }
 }
