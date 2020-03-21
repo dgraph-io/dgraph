@@ -11,7 +11,7 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates curl iputils-ping && \
   rm -rf /var/lib/apt/lists/*
 
-ADD linux /usr/local/bin
+ADD dgraph/dgraph /usr/local/bin/dgraph
 
 EXPOSE 8080
 EXPOSE 9080

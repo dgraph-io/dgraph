@@ -59,12 +59,7 @@ test:
 	./test.sh
 
 image: dgraph
-	@mkdir linux
-	@mv ./dgraph/dgraph ./linux/dgraph
-	@cp ./contrib/Dockerfile .
-	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
-	@rm -r linux
-	@rm Dockerfile
+	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) -f contrib/Dockerfile .
 
 help:
 	@echo
