@@ -4,6 +4,14 @@
 # This gets built as part of release.sh. Must be run from /tmp/build, with the linux binaries
 # already built and placed there.
 
+FROM golang:1.14 AS build
+
+WORKDIR /go/src/app
+COPY go.sum go.mod ./
+RUN go mod download -json
+COPY . ./
+RUN make
+
 FROM ubuntu:latest
 MAINTAINER Dgraph Labs <contact@dgraph.io>
 
@@ -11,7 +19,7 @@ RUN apt-get update && \
   apt-get install -y --no-install-recommends ca-certificates curl iputils-ping && \
   rm -rf /var/lib/apt/lists/*
 
-ADD dgraph/dgraph /usr/local/bin/dgraph
+COPY --from=build /go/src/app/dgraph/dgraph /usr/local/bin/dgraph
 
 EXPOSE 8080
 EXPOSE 9080

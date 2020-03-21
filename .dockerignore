@@ -1,0 +1,3 @@
+/contrib
+/wiki
+# /.git - This is a massive directory, 250mb. However, make does git branch, etc...

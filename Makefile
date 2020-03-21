@@ -58,7 +58,7 @@ test:
 	@echo Running ./test.sh
 	./test.sh
 
-image: dgraph
+image:
 	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) -f contrib/Dockerfile .
 
 help:
