@@ -59,7 +59,9 @@ test:
 	./test.sh
 
 image:
-	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) -f contrib/Dockerfile .
+	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) -f contrib/Dockerfile . \
+		--build-arg "BUILD=${BUILD}" --build-arg "BUILD_DATE=${BUILD_DATE}" \
+		--build-arg "BUILD_BRANCH=${BUILD_BRANCH}" --build-arg "BUILD_VERSION=${BUILD_VERSION}"
 
 help:
 	@echo

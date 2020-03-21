@@ -10,7 +10,16 @@ WORKDIR /go/src/app
 COPY go.sum go.mod ./
 RUN go mod download -json
 COPY . ./
-RUN make
+
+# Putting these args after the go mod so that the go mod download stays in cache
+ARG BUILD
+ARG BUILD_DATE
+ARG BUILD_BRANCH
+ARG BUILD_VERSION
+
+RUN BUILD="${BUILD}" BUILD_DATE="${BUILD_DATE}" BUILD_BRANCH="${BUILD_BRANCH}" BUILD_VERSION="${BUILD_VERSION}" make
+
+# ------------------------------------------------------------------------------
 
 FROM ubuntu:latest
 MAINTAINER Dgraph Labs <contact@dgraph.io>
