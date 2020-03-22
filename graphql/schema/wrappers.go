@@ -221,7 +221,6 @@ func (s *schema) Mutations(t MutationType) []string {
 func (s *schema) AuthTypeRules(typeName string) *AuthContainer {
 	val := s.authRules[typeName]
 	if val == nil {
-		fmt.Println("LOGGGG", typeName)
 		return nil
 	}
 	return s.authRules[typeName].rules
@@ -230,7 +229,6 @@ func (s *schema) AuthTypeRules(typeName string) *AuthContainer {
 func (s *schema) AuthFieldRules(typeName, fieldName string) *AuthContainer {
 	val := s.authRules[typeName]
 	if val == nil {
-		fmt.Println("LOGGGG", typeName)
 		return nil
 	}
 	return s.authRules[typeName].fields[fieldName]

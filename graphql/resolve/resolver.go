@@ -549,13 +549,17 @@ func createVariableMap(input map[string]interface{}) map[string]interface{} {
 
 		switch v := value.(type) {
 		case []interface{}:
-			if len(v) == 1 {
-				if val, ok := v[0].(map[string]interface{}); ok {
-					inner[key] = createVariableMap(val)
+			vars := make(map[string]interface{})
+			for idx, val := range v {
+				if valI, ok := val.(map[string]interface{}); ok {
+					for key, value := range createVariableMap(valI) {
+						vars[key] = value
+					}
+				} else {
+					vars[string(idx)] = value
 				}
-			} else {
-				inner[key] = value
 			}
+			inner[key] = vars
 		case map[string]interface{}:
 			inner[key] = createVariableMap(v)
 		default:
@@ -578,12 +582,17 @@ func mergeDicts(input, vars *map[string]interface{}) {
 		for key, value := range variableMap {
 			switch v := value.(type) {
 			case map[string]interface{}:
-				if valI, ok := (*input)[key].([]interface{}); ok && len(valI) == 1 {
-					if childInput, ok := valI[0].(map[string]interface{}); ok {
-						mergeDicts(&childInput, &v)
-						(*input)[key] = []interface{}{childInput}
+				var result []interface{}
+				if valI, ok := (*input)[key].([]interface{}); ok {
+					for _, childValue := range valI {
+						var childInput map[string]interface{}
+						if childInput, ok = childValue.(map[string]interface{}); ok {
+							mergeDicts(&childInput, &v)
+						}
+						result = append(result, childInput)
 					}
 				}
+				(*input)[key] = result
 			default:
 				(*input)[key] = v
 			}
@@ -628,14 +637,17 @@ func injectMergeResult(cf CompletionFunc) CompletionFunc {
 
 			parts := strings.Split(name, ".")
 
+			variableMap := make(map[string]interface{})
 			if val, ok := value.([]interface{}); ok {
 				for _, i := range val {
 					if valI, ok := i.(map[string]interface{}); ok {
-						variableDict[parts[0]] = createVariableMap(valI)
-						break
+						for key, value := range createVariableMap(valI) {
+							variableMap[key] = value
+						}
 					}
 				}
 			}
+			variableDict[parts[0]] = variableMap
 		}
 
 		res := make(map[string]interface{})

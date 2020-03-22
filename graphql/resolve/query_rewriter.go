@@ -154,8 +154,10 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
 			if authRules != nil && authRules.Query != nil {
 				var query *gql.GraphQuery
+				name := ""
 
 				for i := len(path) - 1; i >= 1; i-- {
+					name = (*path[i]).Name() + name
 					child := &gql.GraphQuery{}
 					f := *path[i]
 					if f.Alias() != "" {
@@ -182,7 +184,7 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 				}
 
 				last := &gql.GraphQuery{
-					Attr: fmt.Sprintf("%s.%d", (*path[0]).ResponseName(), len(result)),
+					Attr: fmt.Sprintf("%s.%s", (*path[0]).ResponseName(), name),
 					Func: &gql.Function{
 						Name: "type",
 						Args: []gql.Arg{{Value: (*path[0]).Type().Name()}},
@@ -198,7 +200,6 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 				}
 
 				result = append(result, last)
-
 				for _, i := range authRules.Query.GetQueries() {
 					if i != nil {
 						result = append(result, i)

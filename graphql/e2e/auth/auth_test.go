@@ -17,13 +17,274 @@
 package auth
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/require"
 )
+
+type user struct {
+	Username string
+	Todos    []*todo
+}
+
+type todo struct {
+	ID               string
+	Title            string
+	IsPublic         bool
+	SomethingPrivate string
+	Owner            *user
+	SharedWith       []*user
+}
+
+const (
+	graphqlURL = "http://localhost:8180/graphql"
+)
+
+func TestQueryAllTodos(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Query: `
+		query {
+                  queryTodo(order:{
+                    asc:title
+                  }) {
+                    title
+                    isPublic
+                    somethingPrivate
+                    owner{
+                      username
+                    }
+                    sharedWith{
+                      username
+                    }
+                  }
+                }
+		`,
+	}
+
+	expected := `
+{
+    "queryTodo": [
+      {
+        "title": "Todo 1",
+        "isPublic": true,
+        "somethingPrivate": "privateInfo",
+        "owner": {
+          "username": "user1"
+        },
+        "sharedWith": [
+          {
+            "username": "user2"
+          }
+        ]
+      },
+      {
+        "title": "Todo 2",
+        "isPublic": false,
+        "somethingPrivate": "privateInfo",
+        "owner": {
+          "username": "user1"
+        },
+        "sharedWith": [
+          {
+            "username": "user2"
+          }
+        ]
+      },
+      {
+        "title": "Todo 3",
+        "isPublic": true,
+        "somethingPrivate": "privateInfo",
+        "owner": {
+          "username": "user1"
+        },
+        "sharedWith": []
+      },
+      {
+        "title": "Todo 4",
+        "isPublic": false,
+        "somethingPrivate": "privateInfo",
+        "owner": {
+          "username": "user1"
+        },
+        "sharedWith": []
+      },
+      {
+        "title": "Todo 5",
+        "isPublic": true,
+        "somethingPrivate": null,
+        "owner": {
+          "username": "user2"
+        },
+        "sharedWith": [
+          {
+            "username": "user1"
+          }
+        ]
+      },
+      {
+        "title": "Todo 6",
+        "isPublic": false,
+        "somethingPrivate": null,
+        "owner": {
+          "username": "user2"
+        },
+        "sharedWith": [
+          {
+            "username": "user1"
+          }
+        ]
+      },
+      {
+        "title": "Todo 7",
+        "isPublic": true,
+        "somethingPrivate": null,
+        "owner": {
+          "username": "user2"
+        },
+        "sharedWith": []
+      }
+    ]
+  }
+	`
+
+	var result, data struct {
+		QueryTodo []*todo
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	err = json.Unmarshal([]byte(expected), &data)
+	require.Nil(t, err)
+
+	if diff := cmp.Diff(result, data); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
+
+func TestQueryAllUsers(t *testing.T) {
+	getUserParams := &common.GraphQLParams{
+		Query: `
+		query {
+                queryUser(order:{
+                  asc: username
+                }){
+                  username
+                  todos (order:{
+                    asc:title
+                  }) {
+                    title
+                    isPublic
+                    somethingPrivate
+                    sharedWith{
+                      username
+                    }
+                  }
+                }
+              }`,
+	}
+
+	expected := `
+{
+"queryUser": [
+      {
+        "username": "user1",
+        "todos": [
+          {
+            "title": "Todo 1",
+            "isPublic": true,
+            "somethingPrivate": "privateInfo",
+            "sharedWith": [
+              {
+                "username": "user2"
+              }
+            ]
+          },
+          {
+            "title": "Todo 2",
+            "isPublic": false,
+            "somethingPrivate": "privateInfo",
+            "sharedWith": [
+              {
+                "username": "user2"
+              }
+            ]
+          },
+          {
+            "title": "Todo 3",
+            "isPublic": true,
+            "somethingPrivate": "privateInfo",
+            "sharedWith": []
+          },
+          {
+            "title": "Todo 4",
+            "isPublic": false,
+            "somethingPrivate": "privateInfo",
+            "sharedWith": []
+          }
+        ]
+      },
+      {
+        "username": "user2",
+        "todos": [
+          {
+            "title": "Todo 5",
+            "isPublic": true,
+            "somethingPrivate": null,
+            "sharedWith": [
+              {
+                "username": "user1"
+              }
+            ]
+          },
+          {
+            "title": "Todo 6",
+            "isPublic": false,
+            "somethingPrivate": null,
+            "sharedWith": [
+              {
+                "username": "user1"
+              }
+            ]
+          },
+          {
+            "title": "Todo 7",
+            "isPublic": true,
+            "somethingPrivate": null,
+            "sharedWith": []
+          }
+        ]
+      }
+    ]
+  }	
+	`
+
+	var result, data struct {
+		QueryUser []*user
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	err = json.Unmarshal([]byte(expected), &data)
+	require.Nil(t, err)
+
+	if diff := cmp.Diff(result, data); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+}
 
 func TestRunAll_Auth(t *testing.T) {
 	//common.RunAll(t)
