@@ -2881,3 +2881,46 @@ func passwordTest(t *testing.T) {
 
 	deleteUser(t, *newUser)
 }
+
+func queryTypenameInMutation(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				state {
+					__typename
+					xcode
+					name
+				}
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"__typename": "State",
+				"xcode": "S1",
+				"name": "State1"
+			}],
+			"__typename": "AddStatePayload"
+		}
+	}`
+
+	var expected, result struct {
+		AddState map[string]interface{}
+	}
+	err := json.Unmarshal([]byte(addStateExpected), &expected)
+	require.NoError(t, err)
+	err = json.Unmarshal(gqlResponse.Data, &result)
+	require.NoError(t, err)
+
+	require.Equal(t, expected, result)
+
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, deleteStateExpected, nil)
+}

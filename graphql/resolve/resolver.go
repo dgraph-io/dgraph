@@ -82,8 +82,8 @@ type ResultCompleter interface {
 // in resolving mutation's QueryField and applies a completion step - for example, apply GraphQL
 // error propagation or massaging error paths or adding numUids and __typename.
 type MutationCompleter interface {
-	Complete(ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte,
-		error)
+	Complete(ctx context.Context, mutation schema.Mutation, numUids int, result []byte,
+		err error) ([]byte, error)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
@@ -158,7 +158,7 @@ type MutationCompletionFunc func(
 	ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte,
 	error)
 
-// Complete calls cf(ctx, field, result, err)
+// Complete calls cf(ctx, mutation, numUids, result, err)
 func (cf MutationCompletionFunc) Complete(
 	ctx context.Context,
 	mutation schema.Mutation,
@@ -291,6 +291,8 @@ func AliasQueryCompletion() CompletionFunc {
 	return removeObjectCompletion(injectAliasCompletion(completeResult))
 }
 
+// QueryLikeMutationCompletion is the completion steps that get run for mutations which return a
+// query like payload. for example: mutation login in /admin
 func QueryLikeMutationCompletion() MutationCompletionFunc {
 	return noopMutationCompletion(removeObjectCompletion(completeDgraphResult))
 }
@@ -476,6 +478,7 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 		})
 }
 
+// noopMutationCompletion just converts a MutationCompletionFunc to CompletionFunc
 func noopMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 	return MutationCompletionFunc(func(ctx context.Context, mutation schema.Mutation, numUids int,
 		result []byte, err error) ([]byte, error) {
@@ -483,6 +486,14 @@ func noopMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 	})
 }
 
+// addMutationCompletion adds munUids and __typename in the mutation payload.
+//
+// A mutation always looks like
+//   `addFoo(...) { foo { ... } }`
+// What's resolved initially is
+//   `foo { ... }`
+// So `numUids` and `__typename` are added if requested. And following is returned:
+//   `{ "foo": { ... }, "numUids": ..., "__typename": ... }`
 func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 	return MutationCompletionFunc(func(ctx context.Context, mutation schema.Mutation, numUids int,
 		result []byte, err error) ([]byte, error) {
@@ -500,8 +511,7 @@ func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 		var b bytes.Buffer
 
 		x.Check2(b.WriteRune('{'))
-		for i := 0; i < n; i++ {
-			field := selSet[i]
+		for i, field := range selSet {
 			addComma = true
 
 			switch field.Name() {
@@ -509,7 +519,7 @@ func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 				x.Check2(b.WriteString(fmt.Sprintf(`"%s": %d`, field.ResponseName(), numUids)))
 			case schema.Typename:
 				x.Check2(b.WriteString(fmt.Sprintf(`"%s": "%s"`, field.ResponseName(),
-					mutation.MutatedType().Name())))
+					mutation.Type().Name())))
 			case queryField.Name():
 				if len(res) > 0 {
 					x.Check2(b.Write(res))

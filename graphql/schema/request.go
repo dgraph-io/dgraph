@@ -137,7 +137,8 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	typeName := field.Definition.Type.Name()
 	typeKind := op.inSchema.schema.Types[typeName].Kind
 	// this field always has to expand any fragment on its own type
-	satisfies := []string{typeName}
+	// "" tackles the case for an inline fragment which doesn't specify type condition
+	satisfies := []string{typeName, ""}
 	var additionalTypes []*ast.Definition
 	switch typeKind {
 	case ast.Interface:
