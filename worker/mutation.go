@@ -152,6 +152,10 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
 				closer.Done()
+
+				if gr.Node.AmLeader() {
+					gr.Node.proposeSnapshot(1)
+				}
 			}
 		}
 	}
