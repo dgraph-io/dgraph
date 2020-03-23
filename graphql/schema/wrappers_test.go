@@ -376,20 +376,20 @@ type User @auth(
 	require.NoError(t, err)
 
 	ownerRule := &RuleAst{
-		name: "owner",
-		typ:  GqlTyp,
-		value: &RuleAst{
-			name: "filter",
-			typ:  Op,
-			value: &RuleAst{
-				name: "username",
-				typ:  GqlTyp,
-				value: &RuleAst{
-					name: "eq",
-					typ:  Op,
-					value: &RuleAst{
-						name: "X-MyApp-User",
-						typ:  JwtVar,
+		Name: "owner",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "filter",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "username",
+				Typ:  GqlTyp,
+				Value: &RuleAst{
+					Name: "eq",
+					Typ:  Op,
+					Value: &RuleAst{
+						Name: "X-MyApp-User",
+						Typ:  JwtVar,
 					},
 				},
 			},
@@ -397,20 +397,20 @@ type User @auth(
 	}
 
 	sharedWithRule := &RuleAst{
-		name: "sharedWith",
-		typ:  GqlTyp,
-		value: &RuleAst{
-			name: "filter",
-			typ:  Op,
-			value: &RuleAst{
-				name: "username",
-				typ:  GqlTyp,
-				value: &RuleAst{
-					name: "eq",
-					typ:  Op,
-					value: &RuleAst{
-						name: "X-MyApp-User",
-						typ:  JwtVar,
+		Name: "sharedWith",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "filter",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "username",
+				Typ:  GqlTyp,
+				Value: &RuleAst{
+					Name: "eq",
+					Typ:  Op,
+					Value: &RuleAst{
+						Name: "X-MyApp-User",
+						Typ:  JwtVar,
 					},
 				},
 			},
@@ -418,40 +418,40 @@ type User @auth(
 	}
 
 	isPublicRule := &RuleAst{
-		name: "isPublic",
-		typ:  GqlTyp,
-		value: &RuleAst{
-			name: "eq",
-			typ:  Op,
-			value: &RuleAst{
-				name: "true",
-				typ:  Constant,
+		Name: "isPublic",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "true",
+				Typ:  Constant,
 			},
 		},
 	}
 
 	isAdmin := &RuleAst{
-		name: "X-MyApp-Role",
-		typ:  JwtVar,
-		value: &RuleAst{
-			name: "eq",
-			typ:  Op,
-			value: &RuleAst{
-				name: "ADMIN",
-				typ:  Constant,
+		Name: "X-MyApp-Role",
+		Typ:  JwtVar,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "ADMIN",
+				Typ:  Constant,
 			},
 		},
 	}
 
 	isAddBot := &RuleAst{
-		name: "MyApp.Role",
-		typ:  JwtVar,
-		value: &RuleAst{
-			name: "eq",
-			typ:  Op,
-			value: &RuleAst{
-				name: "ADD-BOT",
-				typ:  Constant,
+		Name: "MyApp.Role",
+		Typ:  JwtVar,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "ADD-BOT",
+				Typ:  Constant,
 			},
 		},
 	}
@@ -473,23 +473,23 @@ type User @auth(
 	DateCompleted := &AuthContainer{
 		Add: &RuleNode{
 			Rule: &RuleAst{
-				name: "DENY",
-				typ:  Constant,
+				Name: "DENY",
+				Typ:  Constant,
 			},
 		},
 		Update: &RuleNode{
 			Rule: &RuleAst{
-				name: "filter",
-				typ:  Op,
-				value: &RuleAst{
-					name: "dateCompleted",
-					typ:  GqlTyp,
-					value: &RuleAst{
-						name: "eq",
-						typ:  Op,
-						value: &RuleAst{
-							name: "null",
-							typ:  Constant,
+				Name: "filter",
+				Typ:  Op,
+				Value: &RuleAst{
+					Name: "dateCompleted",
+					Typ:  GqlTyp,
+					Value: &RuleAst{
+						Name: "eq",
+						Typ:  Op,
+						Value: &RuleAst{
+							Name: "null",
+							Typ:  Constant,
 						},
 					},
 				},
@@ -506,7 +506,7 @@ type User @auth(
 
 	UserAuth := &AuthContainer{
 		Add:    &RuleNode{Rule: isAddBot},
-		Update: &RuleNode{Rule: ownerRule.value},
+		Update: &RuleNode{Rule: ownerRule.Value},
 	}
 
 	if diff := cmp.Diff(gqlSchema.AuthTypeRules("User"), UserAuth, unexp, ruleID); diff != "" {

@@ -489,9 +489,9 @@ const (
 )
 
 type RuleAst struct {
-	name  string
-	typ   AuthVariable
-	value *RuleAst
+	Name  string
+	Typ   AuthVariable
+	Value *RuleAst
 
 	dgraphPredicate string
 	typInfo         *ast.Definition
@@ -555,25 +555,25 @@ func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[s
 		rule := &RuleAst{}
 		word := p.getNextWord()
 
-		rule.name = word
+		rule.Name = word
 		rule.typInfo = typ
 
 		if word[0] == '$' {
-			rule.typ = JwtVar
-			rule.name = word[1:]
+			rule.Typ = JwtVar
+			rule.Name = word[1:]
 		} else if operations[word] {
-			rule.typ = Op
+			rule.Typ = Op
 		} else if field := typ.Fields.ForName(word); field != nil {
 			name := field.Type.Name()
-			rule.typ = GqlTyp
+			rule.Typ = GqlTyp
 			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
 			typ = ap.s.Types[name]
 		} else {
-			rule.typ = Constant
+			rule.Typ = Constant
 		}
 
 		*builder = rule
-		builder = &rule.value
+		builder = &rule.Value
 	}
 
 	return ast
@@ -632,15 +632,15 @@ type AuthContainer struct {
 }
 
 func (r *RuleAst) getName() string {
-	if r.typ == GqlTyp {
+	if r.Typ == GqlTyp {
 		return r.dgraphPredicate
 	}
 
-	if r.typ == JwtVar {
+	if r.Typ == JwtVar {
 		return "user1"
 	}
 
-	return r.name
+	return r.Name
 }
 
 func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
@@ -648,7 +648,7 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 		return nil
 	}
 
-	deepVal := r.value.value
+	deepVal := r.Value.Value
 
 	dgQuery := &gql.GraphQuery{
 		Cascade: true,
@@ -667,10 +667,10 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 				},
 				Filter: &gql.FilterTree{
 					Func: &gql.Function{
-						Name: deepVal.value.getName(),
+						Name: deepVal.Value.getName(),
 						Args: []gql.Arg{
 							{Value: deepVal.getName()},
-							{Value: deepVal.value.value.getName()},
+							{Value: deepVal.Value.Value.getName()},
 						},
 					},
 				},
@@ -685,10 +685,10 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 func (r *RuleAst) getRuleQuery() *gql.FilterTree {
 	return &gql.FilterTree{
 		Func: &gql.Function{
-			Name: r.value.getName(),
+			Name: r.Value.getName(),
 			Args: []gql.Arg{
 				{Value: r.getName()},
-				{Value: r.value.value.getName()},
+				{Value: r.Value.Value.getName()},
 			},
 		},
 	}
@@ -696,10 +696,10 @@ func (r *RuleAst) getRuleQuery() *gql.FilterTree {
 
 func (r *RuleAst) hasFilter() bool {
 	for r != nil {
-		if r.name == "filter" && r.typ == Op {
+		if r.Name == "filter" && r.Typ == Op {
 			return true
 		}
-		r = r.value
+		r = r.Value
 	}
 
 	return false
@@ -746,10 +746,10 @@ func (r *RuleNode) isRBAC() bool {
 
 	rule := r.Rule
 	for rule != nil {
-		if rule.typ == GqlTyp {
+		if rule.Typ == GqlTyp {
 			return false
 		}
-		rule = rule.value
+		rule = rule.Value
 	}
 
 	return true
