@@ -132,8 +132,7 @@ func TestParallelIndexing(t *testing.T) {
 	}
 
 	fmt.Println("waiting for float indexing to complete")
-	s := `balance_float: float @index(float) .`
-	testutil.WaitForAlter(context.Background(), dg, s)
+	waitForSchemaUpdate(`{ q(func: eq(balance_float, "2.0")) {uid}}`, dg)
 
 	// balance should be same as uid.
 	checkBalance := func(b int, pred string) error {

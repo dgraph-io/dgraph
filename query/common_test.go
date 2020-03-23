@@ -35,10 +35,6 @@ func setSchema(schema string) {
 	if err != nil {
 		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 	}
-
-	if err := testutil.WaitForAlter(context.Background(), client, schema); err != nil {
-		panic(err)
-	}
 }
 
 func dropPredicate(pred string) {
