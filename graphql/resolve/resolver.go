@@ -507,7 +507,7 @@ func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 			return nil, err
 		}
 
-		addComma := true
+		var addComma bool
 		var b bytes.Buffer
 
 		x.Check2(b.WriteRune('{'))
@@ -551,7 +551,8 @@ func addMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
 // So `addFoo: ...` is added.
 func addRootFieldCompletion(name string, cf MutationCompletionFunc) MutationCompletionFunc {
 	return MutationCompletionFunc(func(
-		ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte, error) {
+		ctx context.Context, mutation schema.Mutation, numUids int, result []byte,
+		err error) ([]byte, error) {
 
 		res, err := cf(ctx, mutation, numUids, result, err)
 
@@ -577,7 +578,8 @@ func addRootFieldCompletion(name string, cf MutationCompletionFunc) MutationComp
 // But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
 func addPathCompletion(name string, cf MutationCompletionFunc) MutationCompletionFunc {
 	return MutationCompletionFunc(func(
-		ctx context.Context, mutation schema.Mutation, numUids int, result []byte, err error) ([]byte, error) {
+		ctx context.Context, mutation schema.Mutation, numUids int, result []byte,
+		err error) ([]byte, error) {
 
 		res, err := cf(ctx, mutation, numUids, result, err)
 
