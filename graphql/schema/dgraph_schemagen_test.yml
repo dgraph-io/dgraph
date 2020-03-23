@@ -442,7 +442,7 @@ schemas:
         c: String
       }
 
-      type A implements C @custom {
+      type A implements C @not_dgraph {
         id: ID!
         p: String
         q: String

@@ -1,4 +1,4 @@
-type User @custom {
+type User @not_dgraph {
     id: ID!
     name: String!
 }

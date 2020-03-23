@@ -618,6 +618,13 @@ func passwordValidation(sch *ast.Schema,
 	return passwordDirectiveValidation(typ)
 }
 
+func notDgraphDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	return nil
+}
+
 func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,

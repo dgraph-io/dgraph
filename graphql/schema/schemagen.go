@@ -120,8 +120,8 @@ func NewHandler(input string) (Handler, error) {
 		}
 		defns = append(defns, defn.Name)
 		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
-			custom := defn.Directives.ForName(customDirective)
-			if custom != nil {
+			notInDgraph := defn.Directives.ForName(notDgraphDirective)
+			if notInDgraph != nil {
 				continue
 			}
 		}

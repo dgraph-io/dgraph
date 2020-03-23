@@ -1,13 +1,13 @@
-type Car @custom {
+type Car @not_dgraph {
     id: ID!
     name: String!
 }
 
-interface Person @custom {
+interface Person @not_dgraph {
     age: Int!
 }
 
-type User implements Person @custom {
+type User implements Person @not_dgraph {
     id: ID!
     name: String!
     cars: [Car]
