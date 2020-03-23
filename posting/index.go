@@ -553,7 +553,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
 
-	tmpDB, err := badger.OpenManaged(dbOpts)
+	tmpDB, err := badger.OpenManaged(dbOpts) //Again in managed mode.
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}
@@ -570,8 +570,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
 	// could be replaced with WriteBatch in the code
-	tmpWriter := NewTxnWriter(tmpDB)
-	stream := pstore.NewStreamAt(r.startTs)
+	//tmpWriter := NewTxnWriter(tmpDB)
+	tmpWriter2 := tmpDB.NewWriteBatchAt(r.startTs)
+	stream := pstore.NewStreamAt(r.startTs) //pstore badge is opene in managed mode. Note the "AT"
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -619,8 +620,18 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		if err := tmpWriter.Write(kvList); err != nil {
-			return errors.Wrap(err, "error setting entries in temp badger")
+		// if err := tmpWriter.Write(kvList); err != nil {
+		// 	return errors.Wrap(err, "error setting entries in temp badger")
+		// }
+		// Is it a good idea to support WriteAPI in WriteBatch which takes a list of KVs.?
+		for _, kv := range kvList.Kv {
+			//var meta byte
+			//if len(kv.UserMeta) > 0 {
+			//	meta = kv.UserMeta[0]
+			//}
+			if err := tmpWriter2.Set(kv.Key, kv.Value); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -630,7 +641,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if err := tmpWriter.Flush(); err != nil {
+	if err := tmpWriter2.Flush(); err != nil {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
