@@ -570,8 +570,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
 	// could be replaced with WriteBatch in the code
-	//tmpWriter := NewTxnWriter(tmpDB)
-	tmpWriter2 := tmpDB.NewWriteBatchAt(r.startTs)
+	// WriteBatch can not be used here because it doesn't have an API to allow multiple versions.
+	// We wish to store same keys with diff version/timestamp to identify when doing roll-up
+	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs) //pstore badge is opene in managed mode. Note the "AT"
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
@@ -620,18 +621,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		// if err := tmpWriter.Write(kvList); err != nil {
-		// 	return errors.Wrap(err, "error setting entries in temp badger")
-		// }
-		// Is it a good idea to support WriteAPI in WriteBatch which takes a list of KVs.?
-		for _, kv := range kvList.Kv {
-			//var meta byte
-			//if len(kv.UserMeta) > 0 {
-			//	meta = kv.UserMeta[0]
-			//}
-			if err := tmpWriter2.Set(kv.Key, kv.Value); err != nil {
-				return err
-			}
+		if err := tmpWriter.Write(kvList); err != nil {
+			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
 		return nil
@@ -641,7 +632,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	if err := tmpWriter2.Flush(); err != nil {
+	if err := tmpWriter.Flush(); err != nil {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
@@ -655,18 +646,19 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
-	writer := NewTxnWriter(pstore)
+	//	writer := NewTxnWriter(pstore)
+	batchWriter := pstore.NewWriteBatchAt(r.startTs)
 	tmpStream := tmpDB.NewStreamAt(counter)
 	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		l, err := ReadPostingList(key, itr)
+		l, err := ReadPostingList(key, itr) //Reads all the versions for a key
 		if err != nil {
 			return nil, errors.Wrap(err, "error in reading posting list from pstore")
 		}
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup()
+		kvs, err := l.Rollup() //Merges all the posting list into one posting list.
 		if err != nil {
 			return nil, err
 		}
@@ -681,9 +673,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
+			if err := batchWriter.SetEntry((e).WithDiscard()); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
+			//			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+			//			}
 		}
 
 		return nil
@@ -693,7 +688,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return err
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
-	return writer.Flush()
+	return batchWriter.Flush()
 }
 
 // IndexRebuild holds the info needed to initiate a rebuilt of the indices.
