@@ -43,7 +43,6 @@ import (
 	"github.com/dgraph-io/dgo/v2/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -195,11 +194,7 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 
 	op := &api.Operation{}
 	op.Schema = string(b)
-	if err := dgraphClient.Alter(ctx, op); err != nil {
-		return err
-	}
-	// TODO(Aman): avoid using functions from testutil.
-	return testutil.WaitForAlter(ctx, dgraphClient, op.Schema)
+	return dgraphClient.Alter(ctx, op)
 }
 
 func (l *loader) uid(val string) string {

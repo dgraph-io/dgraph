@@ -2,7 +2,7 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/)
-and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.0.0.html) starting v1.0.0.
+and this project will adhere to [Calendar Versioning](https://calver.org/) starting v20.03.
 
 ## Unreleased
 
@@ -12,8 +12,8 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 
 ### Fixed
 
-## [2.0.0-beta] - 2020-02-20
-[2.0.0-beta]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...release/v2.0
+## [20.03.0-beta.20200320] - 2020-03-20
+[20.03.0-beta.20200320]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0-beta.20200320
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
 
 ### Changed
@@ -21,6 +21,14 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Report GraphQL stats from alpha. ([#4607][])
 - During backup, collapse split posting lists into a single list. ([#4682][]) 
 - Optimize computing reverse reindexing. ([#4755][])
+- Add partition key based iterator to the bulk loader. ([#4841][])
+- Invert s2 loop instead of rebuilding. ([#4782][])
+- Update Badger Version. ([#4935][])
+- Incremental Rollup and Tablet Size Calculation. ([#4972][])
+- Track internal operations and cancel when needed. ([#4916][])
+- Set version when rollup is called with no splits. ([#4945][])
+- Use a different stream writer id for split keys. ([#4875][])
+- Split posting lists recursively. ([#4867][])
 - Enterprise features
   - **Breaking changes**
     - [BREAKING] Underlying schema for ACL has changed. ([#4725][])
@@ -34,6 +42,9 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - GraphQL Admin API: Support export, draining, shutdown and setting lrumb operations. ([#4739][])
 - GraphQL Admin API: duplicate `/health` in GraphQL `/admin` ([#4768][])
 - GraphQL Admin API: Add `/admin/schema` endpoint ([#4777][]) 
+- Perform indexing in background. ([#4819][])
+- Basic Sentry Integration - Capture manual panics with Sentry exception and runtime panics with a wrapper on panic. ([#4756][])
+- Ludicrous Mode. ([#4872][])
 - Enterprise features
   - ACL: Allow users to query data for their groups ([#4774][])
   - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
@@ -46,9 +57,38 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 - Do not include empty nodes in the export output. Fixes [#3610][]. ([#4773][]) 
 - Fix Nquad value conversion in live loader. Fixes [#4468][]. ([#4793][])
 - Use `/tmp` dir to store temporary index. Fixes [#4600][]. ([#4766][])
+- Properly initialize posting package in debug tool. ([#4893][])
+- Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
+- Fix count with facets filter. Fixes [#4659][]. ([#4751][])
+- Change split keys to have a different prefix. Fixes [#4905][]. ([#4908][])
+- Various optimizations for facets filter queries. ([#4923][])
+- Throw errors returned by retrieveValuesAndFacets. Fixes [#4958][]. ([#4970][])
+- Add "runInBackground" option to Alter to run indexing in background. When set to `true`, then the Alter call returns immediately. When set to `false`, the call blocks until indexing is complete. This is set to `false` by default. ([#4981][])
 - **Breaking changes**
   - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][]) 
 
+[#4958]: https://github.com/dgraph-io/dgraph/issues/4958
+[#4905]: https://github.com/dgraph-io/dgraph/issues/4905
+[#4659]: https://github.com/dgraph-io/dgraph/issues/4659
+[#4712]: https://github.com/dgraph-io/dgraph/issues/4712
+[#4893]: https://github.com/dgraph-io/dgraph/issues/4893
+[#4767]: https://github.com/dgraph-io/dgraph/issues/4767
+[#4751]: https://github.com/dgraph-io/dgraph/issues/4751
+[#4908]: https://github.com/dgraph-io/dgraph/issues/4908
+[#4923]: https://github.com/dgraph-io/dgraph/issues/4923
+[#4970]: https://github.com/dgraph-io/dgraph/issues/4970
+[#4981]: https://github.com/dgraph-io/dgraph/issues/4981
+[#4841]: https://github.com/dgraph-io/dgraph/issues/4841
+[#4782]: https://github.com/dgraph-io/dgraph/issues/4782
+[#4935]: https://github.com/dgraph-io/dgraph/issues/4935
+[#4972]: https://github.com/dgraph-io/dgraph/issues/4972
+[#4916]: https://github.com/dgraph-io/dgraph/issues/4916
+[#4945]: https://github.com/dgraph-io/dgraph/issues/4945
+[#4875]: https://github.com/dgraph-io/dgraph/issues/4875
+[#4867]: https://github.com/dgraph-io/dgraph/issues/4867
+[#4872]: https://github.com/dgraph-io/dgraph/issues/4872
+[#4756]: https://github.com/dgraph-io/dgraph/issues/4756
+[#4819]: https://github.com/dgraph-io/dgraph/issues/4819
 [#4755]: https://github.com/dgraph-io/dgraph/issues/4755
 [#4600]: https://github.com/dgraph-io/dgraph/issues/4600
 [#4766]: https://github.com/dgraph-io/dgraph/issues/4766
@@ -74,6 +114,60 @@ and this project will adhere to [Semantic Versioning](http://semver.org/spec/v2.
 [#4773]: https://github.com/dgraph-io/dgraph/issues/4773
 [#4005]: https://github.com/dgraph-io/dgraph/issues/4005
 [#4316]: https://github.com/dgraph-io/dgraph/issues/4316
+
+## [1.2.2] - 2020-03-19
+[1.2.2]: https://github.com/dgraph-io/dgraph/compare/v1.2.1...v1.2.2
+
+### Changed
+
+- Wrap errors thrown in posting/list.go for easier debugging. ([#4880][])
+- Print keys using hex encoding in error messages in list.go. ([#4891][])
+
+### Fixed
+
+- Do not include empty nodes in the export output. ([#4896][])
+- Fix error when lexing language list. ([#4784][])
+- Properly initialize posting package in debug tool. ([#4893][])
+- Handle special characters in schema and type queries. Fixes [#4933][]. ([#4937][])
+- Overwrite values for uid predicates.  Fixes [#4879][]. ([#4883][])
+- Disable @* language queries when the predicate does not support langs. ([#4881][])
+- Fix bug in exporting types with reverse predicates. Fixes [#4856][]. ([#4857][])
+- Do not skip over split keys. (Trying to skip over the split keys sometimes skips over keys belonging to a different split   key. This is a fix just for this release as the actual fix requires changes to the data format.) ([#4951][])
+- Fix point-in-time Prometheus metrics. Fixes [#4532][]. ([#4948][])
+- Split lists in the bulk loader. ([#4967][])
+- Allow remote MySQL server with dgraph migrate tool. Fixes [#4707][]. ([#4860][])
+- Enterprise features
+  - ACL: Allow uid access. ([#4922][])
+  - Backups: Assign maxLeaseId during restore. Fixes [#4816][]. ([#4877][])
+  - Backups: Verify host when default and custom credentials are used. Fixes [#4855][]. ([#4858][])
+  - Backups: Split lists when restoring from backup. ([#4912][])
+
+
+[#4967]: https://github.com/dgraph-io/dgraph/issues/4967
+[#4951]: https://github.com/dgraph-io/dgraph/issues/4951
+[#4532]: https://github.com/dgraph-io/dgraph/issues/4532
+[#4948]: https://github.com/dgraph-io/dgraph/issues/4948
+[#4893]: https://github.com/dgraph-io/dgraph/issues/4893
+[#4784]: https://github.com/dgraph-io/dgraph/issues/4784
+[#4896]: https://github.com/dgraph-io/dgraph/issues/4896
+[#4856]: https://github.com/dgraph-io/dgraph/issues/4856
+[#4857]: https://github.com/dgraph-io/dgraph/issues/4857
+[#4881]: https://github.com/dgraph-io/dgraph/issues/4881
+[#4912]: https://github.com/dgraph-io/dgraph/issues/4912
+[#4855]: https://github.com/dgraph-io/dgraph/issues/4855 
+[#4858]: https://github.com/dgraph-io/dgraph/issues/4858 
+[#4879]: https://github.com/dgraph-io/dgraph/issues/4879 
+[#4883]: https://github.com/dgraph-io/dgraph/issues/4883 
+[#4933]: https://github.com/dgraph-io/dgraph/issues/4933
+[#4937]: https://github.com/dgraph-io/dgraph/issues/4937
+[#4891]: https://github.com/dgraph-io/dgraph/issues/4891
+[#4880]: https://github.com/dgraph-io/dgraph/issues/4880
+[#4816]: https://github.com/dgraph-io/dgraph/issues/4816
+[#4877]: https://github.com/dgraph-io/dgraph/issues/4877
+[#4922]: https://github.com/dgraph-io/dgraph/issues/4922
+[#4707]: https://github.com/dgraph-io/dgraph/issues/4707
+[#4860]: https://github.com/dgraph-io/dgraph/issues/4860
+
 
 ## [1.2.1] - 2020-02-06
 [1.2.1]: https://github.com/dgraph-io/dgraph/compare/v1.2.0...v1.2.1

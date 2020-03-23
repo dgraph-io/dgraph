@@ -82,7 +82,8 @@ func TestStringIndex(t *testing.T) {
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "balance: string @index(fulltext, term, exact) .",
+		Schema:          "balance: string @index(fulltext, term, exact) .",
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}

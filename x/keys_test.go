@@ -232,3 +232,24 @@ func TestBadStartUid(t *testing.T) {
 	key = CountKey("aa", 0, true)
 	testKey(key)
 }
+
+func TestBadKeys(t *testing.T) {
+	// 0-len key
+	key := []byte{}
+	_, err := Parse(key)
+	require.Error(t, err)
+
+	// key of len < 3
+	key = []byte{1}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	key = []byte{1, 2}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	// key of len < sz (key[1], key[2])
+	key = []byte{1, 0x00, 0x04, 1, 2}
+	_, err = Parse(key)
+	require.Error(t, err)
+}
