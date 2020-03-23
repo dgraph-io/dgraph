@@ -49,10 +49,10 @@ var (
 type Node struct {
 	x.SafeMutex
 
-	// This needs to be here for atomics to work on 32 bit machine.
-	// applied is used to keep track of the applied RAFT proposals.
+	// Applied is used to keep track of the applied RAFT proposals.
 	// The stages are proposed -> committed (accepted by cluster) ->
 	// applied (to PL) -> synced (to BadgerDB).
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
 	Applied y.WaterMark
 
 	joinLock sync.Mutex
