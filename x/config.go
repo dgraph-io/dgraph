@@ -78,6 +78,12 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
+	// BadgerTables is the name of the mode used to load the badger tables.
+	BadgerTables string
+	// BadgerVlog is the name of the mode used to load the badger value log.
+	BadgerVlog string
+	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
+	BadgerKeyFile string
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

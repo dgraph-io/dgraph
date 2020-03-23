@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -533,6 +534,40 @@ type rebuilder struct {
 	fn func(uid uint64, pl *List, txn *Txn) error
 }
 
+// getBadgerOptions returns options to be used for temp badger for re-indexing.
+func getBadgerOptions(dir string) badger.Options {
+	dbOpts := badger.DefaultOptions(dir).
+		WithSyncWrites(false).
+		WithNumVersionsToKeep(math.MaxInt32).
+		WithLogger(&x.ToGlog{}).
+		WithCompression(options.None).
+		WithEventLogging(false).
+		WithLogRotatesToFlush(10).
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
+
+	switch x.WorkerConfig.BadgerTables {
+	case "mmap":
+		dbOpts.TableLoadingMode = options.MemoryMap
+	case "ram":
+		dbOpts.TableLoadingMode = options.LoadToRAM
+	case "disk":
+		dbOpts.TableLoadingMode = options.FileIO
+	default:
+		// nothing to do
+	}
+
+	switch x.WorkerConfig.BadgerVlog {
+	case "mmap":
+		dbOpts.ValueLogLoadingMode = options.MemoryMap
+	case "disk":
+		dbOpts.ValueLogLoadingMode = options.FileIO
+	default:
+		// nothing to do
+	}
+
+	return dbOpts
+}
+
 func (r *rebuilder) Run(ctx context.Context) error {
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
@@ -544,16 +579,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	defer os.RemoveAll(tmpIndexDir)
 	glog.V(1).Infof("Rebuilding indexes using the temp folder %s\n", tmpIndexDir)
 
-	dbOpts := badger.DefaultOptions(tmpIndexDir).
-		WithSyncWrites(false).
-		WithNumVersionsToKeep(math.MaxInt64).
-		WithLogger(&x.ToGlog{}).
-		WithCompression(options.None).
-		WithEventLogging(false).
-		WithLogRotatesToFlush(10).
-		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
-
-	tmpDB, err := badger.OpenManaged(dbOpts)
+	tmpDB, err := badger.OpenManaged(getBadgerOptions(tmpIndexDir))
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}

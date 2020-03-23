@@ -585,6 +585,9 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		BadgerTables:        worker.Config.BadgerTables,
+		BadgerVlog:          worker.Config.BadgerVlog,
+		BadgerKeyFile:       worker.Config.BadgerKeyFile,
 	}
 
 	setupCustomTokenizers()
