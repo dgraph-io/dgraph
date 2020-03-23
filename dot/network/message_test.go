@@ -94,7 +94,7 @@ func TestDecodeMessageBlockRequest(t *testing.T) {
 	expected := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash(append([]byte{0}, genesisHash...)),
+		StartingBlock: variadic.NewUint64OrHashFromBytes(append([]byte{0}, genesisHash...)),
 		EndBlockHash:  optional.NewHash(true, endBlock),
 		Direction:     1,
 		Max:           optional.NewUint32(true, 1),
@@ -191,7 +191,7 @@ func TestEncodeBlockRequestMessage_BlockHash(t *testing.T) {
 	bm := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash(append([]byte{0}, genesisHash...)),
+		StartingBlock: variadic.NewUint64OrHashFromBytes(append([]byte{0}, genesisHash...)),
 		EndBlockHash:  optional.NewHash(true, endBlock),
 		Direction:     1,
 		Max:           optional.NewUint32(true, 1),
@@ -221,7 +221,7 @@ func TestEncodeBlockRequestMessage_BlockNumber(t *testing.T) {
 	bm := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash([]byte{1, 1}),
+		StartingBlock: variadic.NewUint64OrHashFromBytes([]byte{1, 1}),
 		EndBlockHash:  optional.NewHash(true, endBlock),
 		Direction:     1,
 		Max:           optional.NewUint32(true, 1),
@@ -257,7 +257,7 @@ func TestDecodeBlockRequestMessage_BlockNumber(t *testing.T) {
 	expected := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash([]byte{1, 1, 0, 0, 0, 0, 0, 0, 0}),
+		StartingBlock: variadic.NewUint64OrHashFromBytes([]byte{1, 1, 0, 0, 0, 0, 0, 0, 0}),
 		EndBlockHash:  optional.NewHash(true, endBlock),
 		Direction:     1,
 		Max:           optional.NewUint32(true, 1),
@@ -285,7 +285,7 @@ func TestEncodeBlockRequestMessage_NoOptionals(t *testing.T) {
 	bm := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash(append([]byte{0}, genesisHash...)),
+		StartingBlock: variadic.NewUint64OrHashFromBytes(append([]byte{0}, genesisHash...)),
 		EndBlockHash:  optional.NewHash(false, common.Hash{}),
 		Direction:     1,
 		Max:           optional.NewUint32(false, 0),
@@ -313,7 +313,7 @@ func TestDecodeBlockRequestMessage_NoOptionals(t *testing.T) {
 	expected := &BlockRequestMessage{
 		ID:            7,
 		RequestedData: 1,
-		StartingBlock: variadic.NewUint64OrHash(append([]byte{0}, genesisHash...)),
+		StartingBlock: variadic.NewUint64OrHashFromBytes(append([]byte{0}, genesisHash...)),
 		EndBlockHash:  optional.NewHash(false, common.Hash{}),
 		Direction:     1,
 		Max:           optional.NewUint32(false, 0),

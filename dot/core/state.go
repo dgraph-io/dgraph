@@ -31,7 +31,7 @@ type BlockState interface {
 	BestBlockHeader() (*types.Header, error)
 	BestBlockNumber() (*big.Int, error)
 	BestBlock() (*types.Block, error)
-	SubChain(start, end common.Hash) []common.Hash
+	SubChain(start, end common.Hash) ([]common.Hash, error)
 	AddBlock(*types.Block) error
 	AddBlockWithArrivalTime(*types.Block, uint64) error
 	SetBlock(*types.Block) error

@@ -147,20 +147,29 @@ func (bt *BlockTree) longestPath() []*node {
 }
 
 // subChain returns the path from the node with Hash start to the node with Hash end
-func (bt *BlockTree) subChain(start Hash, end Hash) []*node {
+func (bt *BlockTree) subChain(start Hash, end Hash) ([]*node, error) {
 	sn := bt.getNode(start)
+	if sn == nil {
+		return nil, fmt.Errorf("start node does not exist")
+	}
 	en := bt.getNode(end)
-	return sn.subChain(en)
+	if en == nil {
+		return nil, fmt.Errorf("end node does not exist")
+	}
+	return sn.subChain(en), nil
 }
 
 // SubBlockchain returns the path from the node with Hash start to the node with Hash end
-func (bt *BlockTree) SubBlockchain(start Hash, end Hash) []Hash {
-	sc := bt.subChain(start, end)
+func (bt *BlockTree) SubBlockchain(start Hash, end Hash) ([]Hash, error) {
+	sc, err := bt.subChain(start, end)
+	if err != nil {
+		return nil, err
+	}
 	var bc []Hash
 	for _, node := range sc {
 		bc = append(bc, node.hash)
 	}
-	return bc
+	return bc, nil
 
 }
 

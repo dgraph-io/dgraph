@@ -25,6 +25,42 @@ import (
 )
 
 func TestNewUint64OrHash(t *testing.T) {
+	hash, err := common.HexToHash("0xdcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := NewUint64OrHash(hash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resValue, ok := res.Value().(common.Hash); !ok || resValue != hash {
+		t.Fatalf("Fail: got %x expected %x", resValue, hash)
+	}
+
+	num := 77
+
+	res, err = NewUint64OrHash(num)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resValue, ok := res.Value().(uint64); !ok || resValue != uint64(num) {
+		t.Fatalf("Fail: got %d expected %d", resValue, num)
+	}
+
+	res, err = NewUint64OrHash(uint64(num))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resValue, ok := res.Value().(uint64); !ok || resValue != uint64(num) {
+		t.Fatalf("Fail: got %d expected %d", resValue, uint64(num))
+	}
+}
+
+func TestNewUint64OrHashFromBytes(t *testing.T) {
 	genesisHash, err := common.HexToBytes("0xdcd1346701ca8396496e52aa2785b1748deb6db09551b72159dcb3e08991025b")
 	if err != nil || genesisHash == nil {
 		t.Fatal(err)
@@ -55,7 +91,7 @@ func TestNewUint64OrHash(t *testing.T) {
 		t.Run(x.description, func(t *testing.T) {
 			data := append([]byte{x.targetFirstByte}, x.targetHash...)
 
-			uint64OrHash := NewUint64OrHash(data)
+			uint64OrHash := NewUint64OrHashFromBytes(data)
 			require.Nil(t, err)
 			require.NotNil(t, uint64OrHash)
 			require.IsType(t, x.expectedType, uint64OrHash.Value())

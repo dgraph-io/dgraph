@@ -158,7 +158,10 @@ func TestBlockTree_Subchain(t *testing.T) {
 	extraBlock.Header.Hash()
 	bt.AddBlock(extraBlock)
 
-	subChain := bt.subChain(hashes[1], hashes[3])
+	subChain, err := bt.subChain(hashes[1], hashes[3])
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	for i, n := range subChain {
 		if n.hash != expectedPath[i] {

@@ -38,11 +38,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestMessageTimeout is the wait time for messages to be exchanged
-var TestMessageTimeout = time.Second
+// testMessageTimeout is the wait time for messages to be exchanged
+var testMessageTimeout = time.Second
 
-// TestHeader is a test block header
-var TestHeader = &types.Header{
+// testGenesisHeader is a test block header
+var testGenesisHeader = &types.Header{
 	Number:    big.NewInt(0),
 	StateRoot: trie.EmptyHash,
 }
@@ -80,7 +80,7 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()
 
-	err := stateSrvc.Initialize(TestHeader, trie.NewEmptyTrie(nil))
+	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie(nil))
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()
@@ -187,7 +187,7 @@ func TestAnnounceBlock(t *testing.T) {
 				"\nreceived:", msgType,
 			)
 		}
-	case <-time.After(TestMessageTimeout):
+	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
 }
@@ -217,7 +217,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	hash := common.NewHash([]byte{0})
 	body := optional.CoreBody{0xa, 0xb, 0xc, 0xd}
 
-	parentHash := TestHeader.Hash()
+	parentHash := testGenesisHeader.Hash()
 	stateRoot, err := common.HexToHash("0x2747ab7c0dc38b7f2afba82bd5e2d6acef8c31e09800f660b75ec84a7005099f")
 	require.Nil(t, err)
 
@@ -255,11 +255,18 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	err = s.ProcessBlockResponseMessage(blockResponse)
 	require.Nil(t, err)
 
-	res, err := s.blockState.GetHeader(header.Hash())
-	require.Nil(t, err)
-
-	if !reflect.DeepEqual(res, header) {
-		t.Fatalf("Fail: got %v expected %v", res, header)
+	select {
+	case resp := <-s.syncer.respIn:
+		msgType := resp.GetType()
+		if !reflect.DeepEqual(msgType, network.BlockResponseMsgType) {
+			t.Error(
+				"received unexpected message type",
+				"\nexpected:", network.BlockResponseMsgType,
+				"\nreceived:", msgType,
+			)
+		}
+	case <-time.After(testMessageTimeout):
+		t.Error("timeout waiting for message")
 	}
 }
 
@@ -387,17 +394,21 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 	addTestBlocksToState(t, 1, s.blockState)
 
 	endHash := s.blockState.BestBlockHash()
+	start, err := variadic.NewUint64OrHash(uint64(1))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	request := &network.BlockRequestMessage{
 		ID:            1,
 		RequestedData: 3,
-		StartingBlock: variadic.NewUint64OrHash([]byte{1, 1, 0, 0, 0, 0, 0, 0, 0}),
+		StartingBlock: start,
 		EndBlockHash:  optional.NewHash(true, endHash),
 		Direction:     1,
 		Max:           optional.NewUint32(false, 0),
 	}
 
-	err := s.ProcessBlockRequestMessage(request)
+	err = s.ProcessBlockRequestMessage(request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -412,7 +423,7 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 				"\nreceived:", msgType,
 			)
 		}
-	case <-time.After(TestMessageTimeout):
+	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
 }
@@ -434,7 +445,7 @@ func TestProcessBlockAnnounce(t *testing.T) {
 
 	expected := &network.BlockAnnounceMessage{
 		Number:         big.NewInt(1),
-		ParentHash:     TestHeader.Hash(),
+		ParentHash:     testGenesisHeader.Hash(),
 		StateRoot:      common.Hash{},
 		ExtrinsicsRoot: common.Hash{},
 		Digest:         nil,
@@ -444,7 +455,7 @@ func TestProcessBlockAnnounce(t *testing.T) {
 	newBlocks <- types.Block{
 		Header: &types.Header{
 			Number:     big.NewInt(1),
-			ParentHash: TestHeader.Hash(),
+			ParentHash: testGenesisHeader.Hash(),
 		},
 		Body: types.NewBody([]byte{}),
 	}
@@ -454,7 +465,7 @@ func TestProcessBlockAnnounce(t *testing.T) {
 		msgType := msg.GetType()
 		require.Equal(t, network.BlockAnnounceMsgType, msgType)
 		require.Equal(t, expected, msg)
-	case <-time.After(TestMessageTimeout):
+	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
 }

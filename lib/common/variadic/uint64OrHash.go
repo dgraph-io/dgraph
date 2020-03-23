@@ -18,6 +18,7 @@ package variadic
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -28,8 +29,28 @@ type Uint64OrHash struct {
 	value interface{}
 }
 
-// NewUint64OrHash returns a new optional.Uint32
-func NewUint64OrHash(data []byte) *Uint64OrHash {
+// NewUint64OrHash returns a new variadic.Uint64OrHash given an int, uint64, or Hash
+func NewUint64OrHash(value interface{}) (*Uint64OrHash, error) {
+	switch v := value.(type) {
+	case int:
+		return &Uint64OrHash{
+			value: uint64(v),
+		}, nil
+	case uint64:
+		return &Uint64OrHash{
+			value: v,
+		}, nil
+	case common.Hash:
+		return &Uint64OrHash{
+			value: v,
+		}, nil
+	default:
+		return nil, errors.New("value is not uint64 or common.Hash")
+	}
+}
+
+// NewUint64OrHashFromBytes returns a new variadic.Uint64OrHash from an encoded variadic uint64 or hash
+func NewUint64OrHashFromBytes(data []byte) *Uint64OrHash {
 	firstByte := data[0]
 	if firstByte == 0 {
 		return &Uint64OrHash{
@@ -46,7 +67,6 @@ func NewUint64OrHash(data []byte) *Uint64OrHash {
 	} else {
 		return nil
 	}
-
 }
 
 // Value returns the interface value.

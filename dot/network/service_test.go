@@ -36,7 +36,7 @@ var TestMessage = &BlockRequestMessage{
 	ID:            1,
 	RequestedData: 1,
 	// TODO: investigate starting block mismatch with different slice length
-	StartingBlock: variadic.NewUint64OrHash([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1}),
+	StartingBlock: variadic.NewUint64OrHashFromBytes([]byte{1, 1, 1, 1, 1, 1, 1, 1, 1}),
 	EndBlockHash:  optional.NewHash(true, common.Hash{}),
 	Direction:     1,
 	Max:           optional.NewUint32(true, 1),

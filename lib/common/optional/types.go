@@ -117,6 +117,9 @@ func NewHash(exists bool, value common.Hash) *Hash {
 
 // Exists returns true if the value is Some, false if it is None.
 func (x *Hash) Exists() bool {
+	if x == nil {
+		return false
+	}
 	return x.exists
 }
 
