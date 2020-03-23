@@ -291,12 +291,6 @@ func AliasQueryCompletion() CompletionFunc {
 	return removeObjectCompletion(injectAliasCompletion(completeResult))
 }
 
-// QueryLikeMutationCompletion is the completion steps that get run for mutations which return a
-// query like payload. for example: mutation login in /admin
-func QueryLikeMutationCompletion() MutationCompletionFunc {
-	return noopMutationCompletion(removeObjectCompletion(completeDgraphResult))
-}
-
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) MutationCompletionFunc {
 	return addPathCompletion(name, addRootFieldCompletion(name,
@@ -478,15 +472,7 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 		})
 }
 
-// noopMutationCompletion just converts a MutationCompletionFunc to CompletionFunc
-func noopMutationCompletion(cf CompletionFunc) MutationCompletionFunc {
-	return MutationCompletionFunc(func(ctx context.Context, mutation schema.Mutation, numUids int,
-		result []byte, err error) ([]byte, error) {
-		return cf(ctx, mutation.QueryField(), result, err)
-	})
-}
-
-// addMutationCompletion adds munUids and __typename in the mutation payload.
+// addMutationCompletion adds numUids and __typename in the mutation payload.
 //
 // A mutation always looks like
 //   `addFoo(...) { foo { ... } }`

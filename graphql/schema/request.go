@@ -172,7 +172,22 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// It helps when __typename is requested for an Object in a fragment on Interface, so we don't
 	// have to fetch dgraph.type from dgraph. Otherwise, each field in the selection set will have
 	// its ObjectDefinition point to an Interface instead of an Object, resulting in wrong output
-	// for __typename.
+	// for __typename. For example:
+	// 		query {
+	//			queryHuman {
+	//				...characterFrag
+	//				...
+	//			}
+	//		}
+	//		fragment characterFrag on Character {
+	//			__typename
+	//			...
+	//		}
+	// Here, queryHuman is guaranteed to return an Object and not an Interface, so dgraph.type is
+	// never fetched for it, thinking that its fields will have their ObjectDefinition point to a
+	// Human. But, when __typename is put into the selection set of queryHuman expanding the
+	// fragment on Character (an Interface), it still has its ObjectDefinition point to Character.
+	// This, if not set to point to Human, will result in __typename being reported as Character.
 	if typeKind == ast.Object {
 		typeDefinition := op.inSchema.schema.Types[typeName]
 		for _, f := range field.SelectionSet {

@@ -2882,7 +2882,7 @@ func passwordTest(t *testing.T) {
 	deleteUser(t, *newUser)
 }
 
-func queryTypenameInMutation(t *testing.T) {
+func queryTypenameInMutationPayload(t *testing.T) {
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
 			addState(input: [{xcode: "S1", name: "State1"}]) {
@@ -2909,18 +2909,57 @@ func queryTypenameInMutation(t *testing.T) {
 			"__typename": "AddStatePayload"
 		}
 	}`
-
-	var expected, result struct {
-		AddState map[string]interface{}
-	}
-	err := json.Unmarshal([]byte(addStateExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal(gqlResponse.Data, &result)
-	require.NoError(t, err)
-
-	require.Equal(t, expected, result)
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
 
 	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, deleteStateExpected, nil)
+}
+
+func ensureAliasAndOrderInMutationPayload(t *testing.T) {
+	// querying __typename, numUids and state with alias, in some initial order
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				type: __typename
+				count: numUids
+				op: state {
+					xcode
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
+	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+
+	// this time querying them in a different order,
+	//this ensures they are returned in the order they were asked.
+	addStateParams = &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S2", name: "State1"}]) {
+				state {
+					xcode
+				}
+				__typename
+				numUids
+			}
+		}`,
+	}
+
+	gqlResponse = addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected = `{"addState":{"state":[{"xcode":"S2"}],"__typename":"AddStatePayload","numUids":1}}`
+	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+
+	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
+	filter := map[string]interface{}{
+		"xcode": map[string]interface{}{"eq": "S1"},
+		"or":    map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}},
+	}
 	deleteState(t, filter, deleteStateExpected, nil)
 }
