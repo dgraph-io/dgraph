@@ -131,8 +131,9 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
-		// TODO(Ibrahim): Remove this once badger is updated.
-		opt.ZSTDCompressionLevel = 1
+		opt.ZSTDCompressionLevel = 3
+		opt.Compression = options.ZSTD
+		opt.LoadBloomsOnOpen = false
 
 		s.WALstore, err = badger.Open(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
@@ -152,6 +153,10 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
+
+		opt.Compression = options.ZSTD
+		opt.ZSTDCompressionLevel = 3
+		opt.LoadBloomsOnOpen = false
 
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")

@@ -45,9 +45,8 @@ const (
 	DefaultPrefix = byte(0x00)
 	byteSchema    = byte(0x01)
 	byteType      = byte(0x02)
-	// ByteSplit is a constant to specify a given key corresponds to a posting list split
-	// into multiple parts.
-	ByteSplit = byte(0x01)
+	// ByteSplit signals that the key stores an individual part of a multi-part list.
+	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 )
@@ -101,26 +100,20 @@ func TypeKey(attr string) []byte {
 // DataKey generates a data key with the given attribute and UID.
 // The structure of a data key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteData)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key.
+//   the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 8
+	totalLen := prefixLen + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteData
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -130,26 +123,20 @@ func DataKey(attr string, uid uint64) []byte {
 // ReverseKey generates a reverse key with the given attribute and UID.
 // The structure of a reverse key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteReverse)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 8
+	totalLen := prefixLen + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteReverse
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -159,26 +146,20 @@ func ReverseKey(attr string, uid uint64) []byte {
 // IndexKey generates a index key with the given attribute and term.
 // The structure of an index key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteIndex)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func IndexKey(attr, term string) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + len(term)
+	totalLen := prefixLen + 1 + len(term)
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteIndex
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term))
@@ -192,13 +173,10 @@ func IndexKey(attr, term string) []byte {
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts. Since count indexes only store one number, this value will
-//   always be zero.
 // next four bytes: value of count.
 func CountKey(attr string, count uint32, reverse bool) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 4
+	totalLen := prefixLen + 1 + 4
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
@@ -207,10 +185,6 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 	} else {
 		rest[0] = ByteCount
 	}
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint32(rest, count)
@@ -231,12 +205,12 @@ type ParsedKey struct {
 
 // IsData returns whether the key is a data key.
 func (p ParsedKey) IsData() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteData
 }
 
 // IsReverse returns whether the key is a reverse key.
 func (p ParsedKey) IsReverse() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteReverse
 }
 
 // IsCountOrCountRev returns whether the key is a count or a count rev key.
@@ -246,17 +220,17 @@ func (p ParsedKey) IsCountOrCountRev() bool {
 
 // IsCount returns whether the key is a count key.
 func (p ParsedKey) IsCount() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCount
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteCount
 }
 
 // IsCountRev returns whether the key is a count rev key.
 func (p ParsedKey) IsCountRev() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCountRev
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteCountRev
 }
 
 // IsIndex returns whether the key is an index key.
 func (p ParsedKey) IsIndex() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteIndex
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.byteType == ByteIndex
 }
 
 // IsSchema returns whether the key is a schema key.
@@ -313,53 +287,49 @@ func (p ParsedKey) SkipType() []byte {
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteData
-	k[1] = 0
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteIndex
-	k[1] = 0
 	return buf
 }
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteReverse
-	k[1] = 0
 	return buf
 }
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	if reverse {
 		k[0] = ByteCountRev
 	} else {
 		k[0] = ByteCount
 	}
-	k[1] = 0
 	return buf
 }
 
@@ -417,7 +387,7 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 
 	if backupKey.StartUid > 0 {
 		var err error
-		key, err = GetSplitKey(key, backupKey.StartUid)
+		key, err = SplitKey(key, backupKey.StartUid)
 		Check(err)
 	}
 	return key
@@ -446,23 +416,20 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
-func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
+// SplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
+func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
-	p, err := Parse(baseKey)
-	if err != nil {
-		return nil, err
+	if keyCopy[0] != DefaultPrefix {
+		return nil, errors.Errorf("only keys with default prefix can have a split key")
 	}
+	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
+	// individual part of a single list key.
+	keyCopy[0] = ByteSplit
 
-	index := 1 + 2 + len(p.Attr) + 1
-	if index >= len(keyCopy) {
-		panic("Cannot write to key. Key is too small")
-	}
-	keyCopy[index] = ByteSplit
+	// Append the start uid at the end of the key.
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
-
 	return keyCopy, nil
 }
 
@@ -471,14 +438,26 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
+	if len(key) == 0 {
+		return p, errors.Errorf("0 length key")
+	}
+
 	p.bytePrefix = key[0]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
+	p.HasStartUid = key[0] == ByteSplit
+
+	if len(key) < 3 {
+		return p, errors.Errorf("Invalid format for key %v", key)
+	}
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
+	if len(k) < sz {
+		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
+	}
 	p.Attr = string(k[:sz])
 	k = k[sz:]
 
@@ -489,9 +468,6 @@ func Parse(key []byte) (ParsedKey, error) {
 	}
 
 	p.byteType = k[0]
-	k = k[1:]
-
-	p.HasStartUid = k[0] == ByteSplit
 	k = k[1:]
 
 	switch p.byteType {

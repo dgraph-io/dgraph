@@ -35,7 +35,7 @@ Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
 backups can be used to restore a new Dgraph cluster to the previous state from
-the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}),
+the backup. Unlike [exports]({{< relref "deploy/index.md#exporting-database" >}}),
 binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure Backup
@@ -69,8 +69,8 @@ environment variables:
 To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
-[whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
-Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
+[whitelisted for admin operations]({{< relref "deploy/index.md#whitelisting-admin-operations" >}}).
+Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 #### Backup to Amazon S3
 
@@ -79,6 +79,7 @@ mutation {
   backup(input: {destination: "s3://s3.us-west-2.amazonaws.com/<bucketname>"}) {
     response {
       message
+      code
     }
   }
 }
@@ -91,6 +92,7 @@ mutation {
   backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>"}) {
     response {
       message
+      code
     }
   }
 }
@@ -108,6 +110,7 @@ mutation {
   backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>?secure=false"}) {
     response {
       message
+      code
     }
   }
 }
@@ -131,6 +134,7 @@ mutation {
   backup(input: {destination: "/path/to/local/directory"}) {
     response {
       message
+      code
     }
   }
 }
@@ -144,7 +148,7 @@ multiple machines and/or containers.
 #### Forcing a Full Backup
 
 By default, an incremental backup will be created if there's another full backup
-in the specified location. To create a full backup, set the `force_full` field
+in the specified location. To create a full backup, set the `forceFull` field
 to `true` in the mutation. Each series of backups can be
 identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
@@ -154,6 +158,7 @@ mutation {
   backup(input: {destination: "/path/to/local/directory", forceFull: true}) {
     response {
       message
+      code
     }
   }
 }
@@ -190,11 +195,15 @@ example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
 and would be loaded to posting directory `p2`.
 
 After running the restore command, the directories inside the `postings`
-directory are copied over to the machines/containers running the alphas and
-`dgraph alpha` is started to load the copied data. For example, in a database
-cluster with two Alpha groups and one replica each, `p1` is moved to the
-location of the first Alpha and `p2` is moved to the location of the second
-Alpha.
+directory need to be manually copied over to the machines/containers running the
+alphas before running the `dgraph alpha` command. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` needs to be moved to
+the location of the first Alpha and `p2` needs to be moved to the location of
+the second Alpha.
+
+By default, Dgraph will look for a posting directory with the name `p`, so make
+sure to rename the directories after moving them. You can also use the `-p`
+option of the `dgraph alpha` command to specify a different path from the default.
 
 #### Restore from Amazon S3
 ```sh
@@ -222,6 +231,7 @@ $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 
 {{% notice "note" %}}
 This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+The Dgraph ACL tool is deprecated and would be removed in the next release. ACL changes can be made by using the `/admin` GraphQL endpoint on any Alpha node.
 {{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
@@ -267,8 +277,7 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 ### Set up ACL Rules
 
-Now that your cluster is running with the ACL feature turned on, you can set up the ACL
-rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground and GraphiQL.
+Now that your cluster is running with the ACL feature turned on, you can set up the ACL rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground or GraphiQL.
 
 A typical workflow is the following:
 
@@ -278,8 +287,10 @@ A typical workflow is the following:
 4. Assign the user to the group
 5. Assign predicate permissions to the group
 
-#### Using the Command Line
-
+#### Using GraphQL Admin API
+{{% notice "note" %}}
+All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
+{{% /notice %}}
 1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`
 as a demo, make sure to choose the correct IP and port for your environment:
 ```graphql
@@ -345,22 +356,15 @@ Now you should see the following output
 }
 ```
 4. Assign the user to the group
-```graphql
-mutation {
-  updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}]}}) {
-    user {
-      name
-    }
-  }
-}
-```
-The command above will add `alice` to the `dev` group. A user can be assigned to multiple groups.
-For example, to assign the user `alice` to both the group `dev` and the group `sre`, the command should be
+To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}, {name: "sre"}]}}) {
     user {
       name
+      groups {
+        name
+    }
     }
   }
 }
@@ -371,6 +375,10 @@ mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "friend", permission: 7}]}}) {
     group {
       name
+      rules {
+        permission
+        predicate
+      }
     }
   }
 }
@@ -389,13 +397,19 @@ mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "name", permission: 7}]}}) {
     group {
       name
+      rules {
+        permission
+        predicate
+      }
     }
   }
 }
 ```
 
 ### Retrieve Users and Groups Information 
-
+{{% notice "note" %}}
+All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
+{{% /notice %}}
 The following examples show how to retrieve information about users and groups.
 
 #### Using a GraphQL tool
@@ -610,7 +624,7 @@ mutation {
 {{% notice "note" %}}
 This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
 For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
-[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
+[export the database](https://docs.dgraph.io/deploy/#exporting-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
 preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
 {{% /notice %}}
 

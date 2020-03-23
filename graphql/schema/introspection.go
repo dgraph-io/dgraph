@@ -109,7 +109,7 @@ func (ec *executionContext) writeStringSlice(v []string) {
 
 // collectFields is our wrapper around graphql.CollectFields which is able to build a tree (after
 // expanding fragments) represented by []graphql.CollectorField. It requires passing the
-// graphql.requestContext to work correctly.
+// graphql.OperationContext to work correctly.
 func collectFields(reqCtx *requestContext, selSet ast.SelectionSet,
 	satisfies []string) []graphql.CollectedField {
 	ctx := &graphql.OperationContext{

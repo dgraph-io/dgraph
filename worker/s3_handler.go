@@ -73,22 +73,11 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		var provider credentials.Provider
 		switch uri.Scheme {
 		case "s3":
-			// s3:///bucket/folder
-			if !strings.Contains(uri.Host, ".") {
-				uri.Host = defaultEndpointS3
-			}
-			if !s3utils.IsAmazonEndpoint(*uri) {
-				return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
-			}
 			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
 			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
 			// Secret Token:      AWS_SESSION_TOKEN.
 			provider = &credentials.EnvAWS{}
-
 		default: // minio
-			if uri.Host == "" {
-				return nil, errors.Errorf("Minio handler requires a host")
-			}
 			// Access Key ID:     MINIO_ACCESS_KEY.
 			// Secret Access Key: MINIO_SECRET_KEY.
 			provider = &credentials.EnvMinio{}
@@ -101,6 +90,22 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		creds.AccessKeyID = h.creds.accessKey
 		creds.SecretAccessKey = h.creds.secretKey
 		creds.SessionToken = h.creds.sessionToken
+	}
+
+	// Verify URI and set default S3 host if needed.
+	switch uri.Scheme {
+	case "s3":
+		// s3:///bucket/folder
+		if !strings.Contains(uri.Host, ".") {
+			uri.Host = defaultEndpointS3
+		}
+		if !s3utils.IsAmazonEndpoint(*uri) {
+			return nil, errors.Errorf("Invalid S3 endpoint %q", uri.Host)
+		}
+	default: // minio
+		if uri.Host == "" {
+			return nil, errors.Errorf("Minio handler requires a host")
+		}
 	}
 
 	secure := uri.Query().Get("secure") != "false" // secure by default
@@ -234,10 +239,10 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, error) {
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return 0, err
+		return LoadResult{0, 0, err}
 	}
 
 	var paths []string
@@ -252,7 +257,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 		}
 	}
 	if len(paths) == 0 {
-		return 0, errors.Errorf("No manifests found at: %s", uri.String())
+		return LoadResult{0, 0, errors.Errorf("No manifests found at: %s", uri.String())}
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
@@ -268,19 +273,20 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(mc, path, &m); err != nil {
-			return 0, errors.Wrapf(err, "While reading %q", path)
+			return LoadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
 	manifests, err = filterManifests(manifests, backupId)
 	if err != nil {
-		return 0, err
+		return LoadResult{0, 0, err}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
 	// backup manifests for each group exist. Each group in manifest must have a backup file,
 	// otherwise this is a failure and the user must remedy.
+	var maxUid uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
 			if glog.V(2) {
@@ -294,29 +300,36 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) (uint64, erro
 			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return 0, errors.Wrapf(err, "Failed to get %q", object)
+				return LoadResult{0, 0, errors.Wrapf(err, "Failed to get %q", object)}
 			}
 			defer reader.Close()
 
 			st, err := reader.Stat()
 			if err != nil {
-				return 0, errors.Wrapf(err, "Stat failed %q", object)
+				return LoadResult{0, 0, errors.Wrapf(err, "Stat failed %q", object)}
 			}
 			if st.Size <= 0 {
-				return 0, errors.Errorf("Remote object is empty or inaccessible: %s", object)
+				return LoadResult{0, 0,
+					errors.Errorf("Remote object is empty or inaccessible: %s", object)}
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
-			if err = fn(reader, int(gid), predSet); err != nil {
-				return 0, err
+
+			groupMaxUid, err := fn(reader, int(gid), predSet)
+			if err != nil {
+				return LoadResult{0, 0, err}
+			}
+			if groupMaxUid > maxUid {
+				maxUid = groupMaxUid
 			}
 		}
 		since = manifest.Since
 	}
-	return since, nil
+
+	return LoadResult{since, maxUid, nil}
 }
 
 // ListManifests loads the manifests in the locations and returns them.
