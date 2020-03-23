@@ -191,6 +191,7 @@ message HealthInfo {
 	int64 uptime = 6;
 	int64 lastEcho = 7;
 	repeated string ongoing = 8;
+	repeated string indexing = 9;
 }
 
 message Tablet {
