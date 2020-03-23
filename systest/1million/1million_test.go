@@ -9269,15 +9269,6 @@ func Test1Million(t *testing.T) {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
-	schemaFile := os.Getenv("SCHEMA_FILE")
-	data, err := ioutil.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("Error in reading the schema: %v", err)
-	}
-	if err := testutil.WaitForAlter(context.Background(), dg, string(data)); err != nil {
-		t.Fatalf("Error in waiting for alter to complete: %v", err)
-	}
-
 	for _, tt := range tc {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 		resp, err := dg.NewTxn().Query(ctx, tt.query)

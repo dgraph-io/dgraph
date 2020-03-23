@@ -278,12 +278,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
 
-	// wait for indexing to complete.
+	// wait for indexing to complete or context to be canceled.
 	for !op.RunInBackground {
-		if !schema.State().IndexingInProgress() {
+		if !schema.State().IndexingInProgress() || ctx.Err() != nil {
 			break
 		}
-
 		time.Sleep(time.Second * 2)
 	}
 

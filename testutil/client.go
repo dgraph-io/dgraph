@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -33,8 +32,6 @@ import (
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -161,60 +158,6 @@ func DgraphClientWithCerts(serviceAddr string, conf *viper.Viper) (*dgo.Dgraph, 
 func DropAll(t *testing.T, dg *dgo.Dgraph) {
 	err := dg.Alter(context.Background(), &api.Operation{DropAll: true})
 	require.NoError(t, err)
-}
-
-// SameIndexes checks whether SchemaUpdate and SchemaNode have same indexes.
-func SameIndexes(su *pb.SchemaUpdate, n *pb.SchemaNode) bool {
-	if (su.Directive == pb.SchemaUpdate_REVERSE) != n.Reverse {
-		return false
-	}
-	if !reflect.DeepEqual(su.Tokenizer, n.Tokenizer) {
-		return false
-	}
-	if su.Count != n.Count {
-		return false
-	}
-	return true
-}
-
-// WaitForAlter waits for schema to have the same indexes as the given schema.
-func WaitForAlter(ctx context.Context, dg *dgo.Dgraph, s string) error {
-	ps, err := schema.Parse(s)
-	if err != nil {
-		return err
-	}
-
-	for {
-		resp, err := dg.NewReadOnlyTxn().Query(ctx, "schema{}")
-		if err != nil {
-			return err
-		}
-
-		var result struct {
-			Schema []*pb.SchemaNode
-		}
-		if err := json.Unmarshal(resp.Json, &result); err != nil {
-			return err
-		}
-
-		actual := make(map[string]*pb.SchemaNode)
-		for _, rs := range result.Schema {
-			actual[rs.Predicate] = rs
-		}
-
-		done := true
-		for _, su := range ps.Preds {
-			if n, ok := actual[su.Predicate]; !ok || !SameIndexes(su, n) {
-				done = false
-				break
-			}
-		}
-		if done {
-			return nil
-		}
-
-		time.Sleep(time.Second)
-	}
 }
 
 // RetryQuery will retry a query until it succeeds or a non-retryable error is received.
@@ -366,7 +309,11 @@ type curlOutput struct {
 	Errors []curlErrorEntry       `json:"errors"`
 }
 
-func verifyOutput(t *testing.T, output curlOutput, failureConfig *CurlFailureConfig) {
+func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) {
+	output := curlOutput{}
+	require.NoError(t, json.Unmarshal(bytes, &output),
+		"unable to unmarshal the curl output")
+
 	if failureConfig.ShouldFail {
 		require.True(t, len(output.Errors) > 0, "no error entry found")
 		if len(failureConfig.DgraphErrMsg) > 0 {
@@ -383,32 +330,23 @@ func verifyOutput(t *testing.T, output curlOutput, failureConfig *CurlFailureCon
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
-	for {
-		queryCmd := exec.Command("curl", args...)
-		output, err := queryCmd.Output()
-		if len(failureConfig.CurlErrMsg) > 0 {
-			// the curl command should have returned an non-zero code
-			require.Error(t, err, "the curl command should have failed")
-			if ee, ok := err.(*exec.ExitError); ok {
-				require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
-					"the curl output does not contain the expected output")
-			}
-			return
-		}
+// VerifyCurlCmd executes the curl command with the given arguments and verifies
+// the result against the expected output.
+func VerifyCurlCmd(t *testing.T, args []string,
+	failureConfig *CurlFailureConfig) {
+	queryCmd := exec.Command("curl", args...)
 
-		require.NoError(t, err, "the curl command should have succeeded")
-		co := curlOutput{}
-		require.NoError(t, json.Unmarshal(output, &co),
-			"unable to unmarshal the curl output")
-		if len(co.Errors) > 0 {
-			if strings.Contains(co.Errors[0].Message, "errIndexingInProgress") {
-				time.Sleep(time.Second)
-				continue
-			}
+	output, err := queryCmd.Output()
+	if len(failureConfig.CurlErrMsg) > 0 {
+		// the curl command should have returned an non-zero code
+		require.Error(t, err, "the curl command should have failed")
+		if ee, ok := err.(*exec.ExitError); ok {
+			require.True(t, strings.Contains(string(ee.Stderr), failureConfig.CurlErrMsg),
+				"the curl output does not contain the expected output")
 		}
-		verifyOutput(t, co, failureConfig)
-		return
+	} else {
+		require.NoError(t, err, "the curl command should have succeeded")
+		verifyOutput(t, output, failureConfig)
 	}
 }
 

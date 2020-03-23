@@ -175,7 +175,6 @@ func NQuadMutationTest(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `xid: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
@@ -252,7 +251,6 @@ func DeleteAllReverseIndex(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: "link: [uid] @reverse ."}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	assignedIds, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
 		SetNquads: []byte("_:a <link> _:b ."),
@@ -301,7 +299,6 @@ func NormalizeEdgeCasesTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: "xid: string @index(exact) ."}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	_, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		CommitNow: true,
@@ -380,7 +377,6 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -454,7 +450,6 @@ func LangAndSortBugTest(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: "name: string @index(exact) @lang ."}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -550,7 +545,6 @@ func SchemaAfterDeleteNode(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: "married: bool ."}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	assigned, err := txn.Mutate(ctx, &api.Mutation{
@@ -605,7 +599,6 @@ func FullTextEqual(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: "text: string @index(fulltext) ."}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	texts := []string{"bat man", "aqua man", "bat cave", "bat", "man", "aqua", "cave"}
 	var rdfs bytes.Buffer
@@ -675,7 +668,6 @@ func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `pred: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	uids, err := c.NewTxn().Mutate(ctx, &api.Mutation{
 		SetNquads: []byte(`_:blank <pred> "first" .`),
@@ -697,7 +689,6 @@ func ScalarToList(t *testing.T, c *dgo.Dgraph) {
 
 	op = &api.Operation{Schema: `pred: [string] @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	resp, err = c.NewTxn().Query(ctx, q)
 	require.NoError(t, err)
 	require.Equal(t, `{"me":[{"pred":["first"]}]}`, string(resp.Json))
@@ -765,7 +756,6 @@ func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `pred: [string] @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	err := c.Alter(ctx, &api.Operation{Schema: `pred: string @index(exact) .`})
 	require.Error(t, err)
@@ -774,7 +764,6 @@ func ListToScalar(t *testing.T, c *dgo.Dgraph) {
 	require.NoError(t, c.Alter(ctx, &api.Operation{DropAttr: `pred`}))
 	op = &api.Operation{Schema: `pred: string @index(exact) .`}
 	err = c.Alter(ctx, op)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	require.NoError(t, err)
 }
 
@@ -831,7 +820,6 @@ func EmptyNamesWithExact(t *testing.T, c *dgo.Dgraph) {
 	ctx := context.Background()
 	op := &api.Operation{Schema: `name: string @index(exact) @lang .`}
 	err := c.Alter(ctx, op)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -866,7 +854,6 @@ func EmptyRoomsWithTermIndex(t *testing.T, c *dgo.Dgraph) {
 	`
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	require.NoError(t, err)
 
 	_, err = c.NewTxn().Mutate(ctx, &api.Mutation{
@@ -1052,7 +1039,6 @@ func HasWithDash(t *testing.T, c *dgo.Dgraph) {
 		Schema: `name: string @index(hash) .`,
 	}
 	check(t, (c.Alter(ctx, op)))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1092,7 +1078,6 @@ func ListGeoFilterTest(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1141,7 +1126,6 @@ func ListRegexFilterTest(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1190,7 +1174,6 @@ func RegexQueryWithVars(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1235,7 +1218,6 @@ func GraphQLVarChild(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1337,7 +1319,6 @@ func MathGe(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
@@ -1477,7 +1458,6 @@ func HasReverseEdge(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `follow: [uid] @reverse .`}
 	check(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	txn := c.NewTxn()
 	defer txn.Discard(ctx)
 
@@ -1583,7 +1563,6 @@ func DropData(t *testing.T, c *dgo.Dgraph) {
 		`,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -1679,7 +1658,6 @@ func ReverseCountIndex(t *testing.T, c *dgo.Dgraph) {
 
 	ctx := context.Background()
 	err := c.Alter(ctx, op)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	require.NoError(t, err)
 
 	mu := &api.Mutation{
@@ -1779,7 +1757,6 @@ func TypePredicateCheck(t *testing.T, c *dgo.Dgraph) {
 	}`
 	ctx = context.Background()
 	err = c.Alter(ctx, op)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 	require.NoError(t, err)
 }
 
@@ -1888,7 +1865,6 @@ func OverwriteUidPredicates(t *testing.T, c *dgo.Dgraph) {
 	}
 	err := c.Alter(ctx, op)
 	require.NoError(t, err)
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err = txn.Mutate(context.Background(), &api.Mutation{
