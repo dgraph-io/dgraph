@@ -126,6 +126,11 @@ identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
 
+```
+# localhost:8080 is the default Alpha HTTP port
+$ curl -XPOST localhost:8080/admin/backup -d "destination=...&force_full=true"
+```
+
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
