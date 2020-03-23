@@ -94,11 +94,11 @@ func (w *DiskStorage) processIndexRange() {
 	processSingleRange := func(r indexRange) {
 		batch := w.db.NewWriteBatch()
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {
-			glog.Errorf("deleteRange failed with error: %s, from: %d, until: %d\n",
+			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
 				err, r.from, r.until)
 		}
 		if err := batch.Flush(); err != nil {
-			glog.Errorf("processDeleteRange batch flush failed with error: %s,\n", err)
+			glog.Errorf("processDeleteRange batch flush failed with error: %v,\n", err)
 		}
 	}
 
