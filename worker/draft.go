@@ -175,24 +175,11 @@ func GetOngoingTasks() []string {
 		return []string{}
 	}
 
-	toStr := func(id int) string {
-		switch id {
-		case opRollup:
-			return "rollup"
-		case opSnapshot:
-			return "snapshot"
-		case opIndexing:
-			return "indexing"
-		default:
-			return "unknown"
-		}
-	}
-
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 	var tasks []string
 	for id := range n.ops {
-		tasks = append(tasks, toStr(id))
+		tasks = append(tasks, id.String())
 	}
 	return tasks
 }
