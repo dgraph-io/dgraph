@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -133,15 +134,25 @@ var (
 	boolTrue    = []byte("true")
 	boolFalse   = []byte("false")
 	emptyString = []byte(`""`)
+
+	// Below variables are used in stringJsonMarshal function.
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	}
+
+	hex        = "0123456789abcdef"
+	escapeHTML = true
 )
 
 // stringJsonMarshal is replacement for json.Marshal() function only for string type.
 // This function is encodeState.string(string, escapeHTML) in "encoding/json/encode.go".
 // It should be in sync with encodeState.string function.
 func stringJsonMarshal(s string) []byte {
-	hex := "0123456789abcdef"
-	escapeHTML := true
-	var e bytes.Buffer
+	e := bufferPool.Get().(*bytes.Buffer)
+	e.Reset()
+
 	e.WriteByte('"')
 	start := 0
 	for i := 0; i < len(s); {
@@ -210,7 +221,9 @@ func stringJsonMarshal(s string) []byte {
 		e.WriteString(s[start:])
 	}
 	e.WriteByte('"')
-	return e.Bytes()
+	buf := append([]byte(nil), e.Bytes()...)
+	bufferPool.Put(e)
+	return buf
 }
 
 func valToBytes(v types.Val) ([]byte, error) {

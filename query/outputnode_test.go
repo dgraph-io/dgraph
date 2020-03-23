@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -98,30 +99,28 @@ func TestNormalizeJSONLimit(t *testing.T) {
 
 func BenchmarkJsonMarshal(b *testing.B) {
 	inputStrings := [][]string{
+		[]string{"largestring", strings.Repeat("a", 1024)},
 		[]string{"smallstring", "abcdef"},
-		[]string{"largestring", string(bytes.Repeat([]byte("a"), 1000))},
 		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
 	}
 
 	var result []byte
 
 	for _, input := range inputStrings {
-		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
-			for i := 0; i < b.N; i++ {
-				result = stringJsonMarshal(input[1])
-			}
-
-			_ = result
-		})
-
 		b.Run(fmt.Sprintf("STDJsonMarshal-%s", input[0]), func(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				result, _ = json.Marshal(input[1])
 			}
+		})
 
-			_ = result
+		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result = stringJsonMarshal(input[1])
+			}
 		})
 	}
+
+	_ = result
 }
 
 func TestStringJsonMarshal(t *testing.T) {
