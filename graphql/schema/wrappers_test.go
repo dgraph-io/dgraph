@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -496,18 +497,29 @@ type User @auth(
 		},
 	}
 
-	require.Equal(t, gqlSchema.AuthTypeRules("Todo"), TodoAuth)
+	unexp := cmpopts.IgnoreUnexported(AuthContainer{}, RuleNode{}, RuleAst{})
+	ruleID := cmpopts.IgnoreFields(RuleNode{}, "RuleID")
+
+	if diff := cmp.Diff(gqlSchema.AuthTypeRules("Todo"), TodoAuth, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
 	UserAuth := &AuthContainer{
 		Add:    &RuleNode{Rule: isAddBot},
 		Update: &RuleNode{Rule: ownerRule.value},
 	}
 
-	require.Equal(t, gqlSchema.AuthTypeRules("User"), UserAuth)
+	if diff := cmp.Diff(gqlSchema.AuthTypeRules("User"), UserAuth, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	require.Equal(t, gqlSchema.AuthFieldRules("Todo", "somethingPrivate"),
-		&AuthContainer{Query: &RuleNode{Rule: ownerRule}})
+	if diff := cmp.Diff(gqlSchema.AuthFieldRules("Todo", "somethingPrivate"),
+		&AuthContainer{Query: &RuleNode{Rule: ownerRule}}, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 
-	require.Equal(t, gqlSchema.AuthFieldRules("Todo", "dateCompleted"),
-		DateCompleted)
+	if diff := cmp.Diff(gqlSchema.AuthFieldRules("Todo", "dateCompleted"),
+		DateCompleted, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }

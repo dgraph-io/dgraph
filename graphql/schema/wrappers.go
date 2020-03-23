@@ -567,9 +567,6 @@ func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[s
 			name := field.Type.Name()
 			rule.typ = GqlTyp
 			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
-
-			fmt.Println(rule.name, rule.dgraphPredicate)
-
 			typ = ap.s.Types[name]
 		} else {
 			rule.typ = Constant
