@@ -2953,7 +2953,8 @@ func ensureAliasAndOrderInMutationPayload(t *testing.T) {
 	gqlResponse = addStateParams.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 
-	addStateExpected = `{"addState":{"state":[{"xcode":"S2"}],"__typename":"AddStatePayload","numUids":1}}`
+	addStateExpected = `{"addState":{"state":[{"xcode":"S2"}],"__typename":"AddStatePayload",` +
+		`"numUids":1}}`
 	require.Equal(t, addStateExpected, string(gqlResponse.Data))
 
 	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
