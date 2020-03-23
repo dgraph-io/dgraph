@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -229,7 +230,12 @@ func stringJsonMarshal(s string) []byte {
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.StringID, types.DefaultID:
-		return stringJsonMarshal(v.Value.(string)), nil
+		switch str := v.Value.(type) {
+		case string:
+			return stringJsonMarshal(str), nil
+		default:
+			return json.Marshal(str)
+		}
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:

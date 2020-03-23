@@ -5,6 +5,9 @@ package query
 
 import "unicode/utf8"
 
+// This file has been taken from go std lib(encoding/json/tables.go).
+// All variable declared here are used in stringJsonMarshal().
+
 // safeSet holds the value true if the ASCII character with the given array
 // position can be represented inside a JSON string without any further
 // escaping.
