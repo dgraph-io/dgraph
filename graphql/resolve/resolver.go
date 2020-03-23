@@ -572,6 +572,31 @@ func createVariableMap(input map[string]interface{}) map[string]interface{} {
 	return result
 }
 
+func buildResult(input map[string]interface{}) []interface{} {
+	result := make([]interface{}, 0)
+
+	for key, value := range input {
+		child := map[string]interface{}{
+			"dgraph.uid": key,
+		}
+		switch v := value.(type) {
+		case map[string]interface{}:
+			for childKey, childValue := range v {
+				if childType, ok := childValue.(map[string]interface{}); ok {
+					child[childKey] = buildResult(childType)
+				} else {
+					child[childKey] = childValue
+				}
+			}
+		default:
+			result = append(result, value)
+		}
+		result = append(result, child)
+	}
+
+	return result
+}
+
 func mergeDicts(input, vars *map[string]interface{}) {
 	if _, ok := (*input)["dgraph.uid"].(string); !ok {
 		return
@@ -582,8 +607,12 @@ func mergeDicts(input, vars *map[string]interface{}) {
 		for key, value := range variableMap {
 			switch v := value.(type) {
 			case map[string]interface{}:
-				var result []interface{}
+				if (*input)[key] == nil {
+					(*input)[key] = buildResult(v)
+					continue
+				}
 				if valI, ok := (*input)[key].([]interface{}); ok {
+					var result []interface{}
 					for _, childValue := range valI {
 						var childInput map[string]interface{}
 						if childInput, ok = childValue.(map[string]interface{}); ok {
@@ -591,13 +620,36 @@ func mergeDicts(input, vars *map[string]interface{}) {
 						}
 						result = append(result, childInput)
 					}
+					(*input)[key] = result
+					continue
 				}
-				(*input)[key] = result
+				if valM, ok := (*input)[key].(map[string]interface{}); ok {
+					mergeDicts(&valM, &v)
+					(*input)[key] = valM
+					continue
+				}
 			default:
 				(*input)[key] = v
 			}
 		}
 	}
+}
+
+func merge(input, toMerge map[string]interface{}) map[string]interface{} {
+	for key, value := range toMerge {
+		if inputValue, ok := input[key]; ok {
+			if toMergeMap, ok := value.(map[string]interface{}); ok {
+				if inputMap, ok := inputValue.(map[string]interface{}); ok {
+					input[key] = merge(inputMap, toMergeMap)
+				}
+			}
+			continue
+		}
+
+		input[key] = value
+	}
+
+	return input
 }
 
 func injectMergeResult(cf CompletionFunc) CompletionFunc {
@@ -636,6 +688,9 @@ func injectMergeResult(cf CompletionFunc) CompletionFunc {
 			}
 
 			parts := strings.Split(name, ".")
+			if _, ok := variableDict[parts[0]]; !ok {
+				variableDict[parts[0]] = make(map[string]interface{})
+			}
 
 			variableMap := make(map[string]interface{})
 			if val, ok := value.([]interface{}); ok {
@@ -647,7 +702,7 @@ func injectMergeResult(cf CompletionFunc) CompletionFunc {
 					}
 				}
 			}
-			variableDict[parts[0]] = variableMap
+			variableDict[parts[0]] = merge(variableDict[parts[0]].(map[string]interface{}), variableMap)
 		}
 
 		res := make(map[string]interface{})

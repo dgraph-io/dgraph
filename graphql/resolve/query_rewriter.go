@@ -132,7 +132,22 @@ func getAuthQueries(field schema.Field) []*gql.GraphQuery {
 
 	}
 
-	result = append(result, generateFieldQueries(field, []*schema.Field{&field})...)
+	fieldQueries := generateFieldQueries(field, []*schema.Field{&field})
+	seen := make(map[string]bool)
+
+	j := 0
+	for _, i := range fieldQueries {
+		if seen[i.Attr] {
+			continue
+		}
+		seen[i.Attr] = true
+		fieldQueries[j] = i
+		j++
+	}
+
+	fieldQueries = fieldQueries[:j]
+
+	result = append(result, fieldQueries...)
 
 	return result
 }
@@ -152,6 +167,7 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 			result = append(result, generateFieldQueries(f, path)...)
 		} else {
 			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
+			filterPut := false
 			if authRules != nil && authRules.Query != nil {
 				var query *gql.GraphQuery
 				name := ""
@@ -177,7 +193,10 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 							Attr: "uid",
 						}, query}
 
-						child.Filter = authRules.Query.GetFilter()
+						if !filterPut {
+							child.Filter = authRules.Query.GetFilter()
+							filterPut = true
+						}
 					}
 
 					query = child
@@ -195,7 +214,7 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 					Cascade: true,
 				}
 
-				if len(path) == 2 {
+				if !filterPut {
 					last.Filter = authRules.Query.GetFilter()
 				}
 
@@ -209,7 +228,6 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 		}
 
 		path = path[:len(path)-1]
-
 	}
 
 	return result
