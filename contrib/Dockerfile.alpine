@@ -1,0 +1,32 @@
+FROM golang:1.14-alpine AS build
+
+WORKDIR /go/src/app
+COPY go.sum go.mod ./
+RUN go mod download -json
+
+RUN apk add --update make gcc musl-dev
+
+COPY . ./
+
+# Putting these args after the go mod so that the go mod download stays in cache
+ARG BUILD
+ARG BUILD_DATE
+ARG BUILD_BRANCH
+ARG BUILD_VERSION
+
+RUN BUILD="${BUILD}" BUILD_DATE="${BUILD_DATE}" BUILD_BRANCH="${BUILD_BRANCH}" BUILD_VERSION="${BUILD_VERSION}" make
+
+# ------------------------------------------------------------------------------
+
+FROM alpine
+MAINTAINER Dgraph Labs <contact@dgraph.io>
+
+COPY --from=build /go/src/app/dgraph/dgraph /usr/local/bin/dgraph
+
+EXPOSE 8080
+EXPOSE 9080
+
+RUN mkdir /dgraph
+WORKDIR /dgraph
+
+CMD ["dgraph"] # Shows the dgraph version and commands available.

@@ -58,10 +58,13 @@ test:
 	@echo Running ./test.sh
 	./test.sh
 
-image:
-	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) -f contrib/Dockerfile . \
+image-%: contrib/Dockerfile.%
+	docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH})-$(subst image-,,$@) -f $< . \
 		--build-arg "BUILD=${BUILD}" --build-arg "BUILD_DATE=${BUILD_DATE}" \
 		--build-arg "BUILD_BRANCH=${BUILD_BRANCH}" --build-arg "BUILD_VERSION=${BUILD_VERSION}"
+
+image: image-ubuntu
+	docker tag dgraph/dgraph:$(subst /,-,${BUILD_BRANCH})-ubuntu dgraph/dgraph:$(subst /,-,${BUILD_BRANCH})
 
 help:
 	@echo
