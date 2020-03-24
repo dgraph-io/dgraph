@@ -19,9 +19,10 @@ package core
 import (
 	"io/ioutil"
 	"math/big"
-	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -35,7 +36,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/tests"
-	"github.com/stretchr/testify/require"
 )
 
 // testMessageTimeout is the wait time for messages to be exchanged
@@ -140,13 +140,7 @@ func TestValidateTransaction(t *testing.T) {
 		Propagate: true,
 	}
 
-	if !reflect.DeepEqual(expected, validity) {
-		t.Error(
-			"received unexpected validity",
-			"\nexpected:", expected,
-			"\nreceived:", validity,
-		)
-	}
+	require.Equal(t, expected, validity)
 }
 
 func TestAnnounceBlock(t *testing.T) {
@@ -180,13 +174,7 @@ func TestAnnounceBlock(t *testing.T) {
 	select {
 	case msg := <-msgSend:
 		msgType := msg.GetType()
-		if !reflect.DeepEqual(msgType, network.BlockAnnounceMsgType) {
-			t.Error(
-				"received unexpected message type",
-				"\nexpected:", network.BlockAnnounceMsgType,
-				"\nreceived:", msgType,
-			)
-		}
+		require.Equal(t, network.BlockAnnounceMsgType, msgType)
 	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
@@ -205,11 +193,13 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 
 	ks := keystore.NewKeystore()
 	ks.Insert(kp)
+	msgSend := make(chan network.Message, 10)
 
 	cfg := &Config{
 		Runtime:         rt,
 		Keystore:        ks,
 		IsBabeAuthority: false,
+		MsgSend:         msgSend,
 	}
 
 	s := newTestService(t, cfg)
@@ -258,13 +248,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 	select {
 	case resp := <-s.syncer.respIn:
 		msgType := resp.GetType()
-		if !reflect.DeepEqual(msgType, network.BlockResponseMsgType) {
-			t.Error(
-				"received unexpected message type",
-				"\nexpected:", network.BlockResponseMsgType,
-				"\nreceived:", msgType,
-			)
-		}
+		require.Equal(t, network.BlockResponseMsgType, msgType)
 	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
@@ -304,13 +288,7 @@ func TestProcessTransactionMessage(t *testing.T) {
 	bsTx := s.transactionQueue.Peek()
 	bsTxExt := []byte(bsTx.Extrinsic)
 
-	if !reflect.DeepEqual(ext, bsTxExt) {
-		t.Error(
-			"received unexpected transaction extrinsic",
-			"\nexpected:", ext,
-			"\nreceived:", bsTxExt,
-		)
-	}
+	require.Equal(t, ext, bsTxExt)
 }
 
 func TestNotAuthority(t *testing.T) {
@@ -391,7 +369,30 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 
 	s := newTestService(t, cfg)
 
-	addTestBlocksToState(t, 1, s.blockState)
+	addTestBlocksToState(t, 2, s.blockState)
+
+	bestHash := s.blockState.BestBlockHash()
+	bestBlock, err := s.blockState.GetBlockByNumber(big.NewInt(1))
+	require.Nil(t, err)
+
+	//set some nils and check no error is thrown
+	bds := &types.BlockData{
+		Hash:          bestHash,
+		Header:        nil,
+		Receipt:       nil,
+		MessageQueue:  nil,
+		Justification: nil,
+	}
+	err = s.blockState.CompareAndSetBlockData(bds)
+	require.Nil(t, err)
+
+	// set receipt message and justification
+	bds = &types.BlockData{
+		Hash:          bestHash,
+		Receipt:       optional.NewBytes(true, []byte("asdf")),
+		MessageQueue:  optional.NewBytes(true, []byte("ghjkl")),
+		Justification: optional.NewBytes(true, []byte("qwerty")),
+	}
 
 	endHash := s.blockState.BestBlockHash()
 	start, err := variadic.NewUint64OrHash(uint64(1))
@@ -399,32 +400,166 @@ func TestService_ProcessBlockRequest(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	request := &network.BlockRequestMessage{
-		ID:            1,
-		RequestedData: 3,
-		StartingBlock: start,
-		EndBlockHash:  optional.NewHash(true, endHash),
-		Direction:     1,
-		Max:           optional.NewUint32(false, 0),
+	err = s.blockState.CompareAndSetBlockData(bds)
+
+	require.Nil(t, err)
+
+	testsCases := []struct {
+		description      string
+		value            *network.BlockRequestMessage
+		expectedMsgType  int
+		expectedMsgValue *network.BlockResponseMessage
+	}{
+		{
+			description: "test get Header and Body",
+			value: &network.BlockRequestMessage{
+				ID:            1,
+				RequestedData: 3,
+				StartingBlock: start,
+				EndBlockHash:  optional.NewHash(true, endHash),
+				Direction:     1,
+				Max:           optional.NewUint32(false, 0),
+			},
+			expectedMsgType: network.BlockResponseMsgType,
+			expectedMsgValue: &network.BlockResponseMessage{
+				ID: 1,
+				BlockData: []*types.BlockData{
+					{
+						Hash:   optional.NewHash(true, bestHash).Value(),
+						Header: bestBlock.Header.AsOptional(),
+						Body:   bestBlock.Body.AsOptional(),
+					},
+				},
+			},
+		},
+		{
+			description: "test get Header",
+			value: &network.BlockRequestMessage{
+				ID:            2,
+				RequestedData: 1,
+				StartingBlock: start,
+				EndBlockHash:  optional.NewHash(true, endHash),
+				Direction:     1,
+				Max:           optional.NewUint32(false, 0),
+			},
+			expectedMsgType: network.BlockResponseMsgType,
+			expectedMsgValue: &network.BlockResponseMessage{
+				ID: 2,
+				BlockData: []*types.BlockData{
+					{
+						Hash:   optional.NewHash(true, bestHash).Value(),
+						Header: bestBlock.Header.AsOptional(),
+						Body:   optional.NewBody(false, nil),
+					},
+				},
+			},
+		},
+		{
+			description: "test get Receipt",
+			value: &network.BlockRequestMessage{
+				ID:            2,
+				RequestedData: 4,
+				StartingBlock: start,
+				EndBlockHash:  optional.NewHash(true, endHash),
+				Direction:     1,
+				Max:           optional.NewUint32(false, 0),
+			},
+			expectedMsgType: network.BlockResponseMsgType,
+			expectedMsgValue: &network.BlockResponseMessage{
+				ID: 2,
+				BlockData: []*types.BlockData{
+					{
+						Hash:    optional.NewHash(true, bestHash).Value(),
+						Header:  optional.NewHeader(false, nil),
+						Body:    optional.NewBody(false, nil),
+						Receipt: bds.Receipt,
+					},
+				},
+			},
+		},
+		{
+			description: "test get MessageQueue",
+			value: &network.BlockRequestMessage{
+				ID:            2,
+				RequestedData: 8,
+				StartingBlock: start,
+				EndBlockHash:  optional.NewHash(true, endHash),
+				Direction:     1,
+				Max:           optional.NewUint32(false, 0),
+			},
+			expectedMsgType: network.BlockResponseMsgType,
+			expectedMsgValue: &network.BlockResponseMessage{
+				ID: 2,
+				BlockData: []*types.BlockData{
+					{
+						Hash:         optional.NewHash(true, bestHash).Value(),
+						Header:       optional.NewHeader(false, nil),
+						Body:         optional.NewBody(false, nil),
+						MessageQueue: bds.MessageQueue,
+					},
+				},
+			},
+		},
+		{
+			description: "test get Justification",
+			value: &network.BlockRequestMessage{
+				ID:            2,
+				RequestedData: 16,
+				StartingBlock: start,
+				EndBlockHash:  optional.NewHash(true, endHash),
+				Direction:     1,
+				Max:           optional.NewUint32(false, 0),
+			},
+			expectedMsgType: network.BlockResponseMsgType,
+			expectedMsgValue: &network.BlockResponseMessage{
+				ID: 2,
+				BlockData: []*types.BlockData{
+					{
+						Hash:          optional.NewHash(true, bestHash).Value(),
+						Header:        optional.NewHeader(false, nil),
+						Body:          optional.NewBody(false, nil),
+						Justification: bds.Justification,
+					},
+				},
+			},
+		},
 	}
 
-	err = s.ProcessBlockRequestMessage(request)
-	if err != nil {
-		t.Fatal(err)
-	}
+	for _, test := range testsCases {
+		t.Run(test.description, func(t *testing.T) {
 
-	select {
-	case resp := <-msgSend:
-		msgType := resp.GetType()
-		if !reflect.DeepEqual(msgType, network.BlockResponseMsgType) {
-			t.Error(
-				"received unexpected message type",
-				"\nexpected:", network.BlockResponseMsgType,
-				"\nreceived:", msgType,
-			)
-		}
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
+			err := s.ProcessBlockRequestMessage(test.value)
+			require.Nil(t, err)
+
+			select {
+			case resp := <-msgSend:
+				msgType := resp.GetType()
+
+				require.Equal(t, test.expectedMsgType, msgType)
+
+				require.Equal(t, test.expectedMsgValue.ID, resp.(*network.BlockResponseMessage).ID)
+
+				require.Len(t, resp.(*network.BlockResponseMessage).BlockData, 2)
+
+				require.Equal(t, test.expectedMsgValue.BlockData[0].Hash, bestHash)
+				require.Equal(t, test.expectedMsgValue.BlockData[0].Header, resp.(*network.BlockResponseMessage).BlockData[0].Header)
+				require.Equal(t, test.expectedMsgValue.BlockData[0].Body, resp.(*network.BlockResponseMessage).BlockData[0].Body)
+
+				if test.expectedMsgValue.BlockData[0].Receipt != nil {
+					require.Equal(t, test.expectedMsgValue.BlockData[0].Receipt, resp.(*network.BlockResponseMessage).BlockData[1].Receipt)
+				}
+
+				if test.expectedMsgValue.BlockData[0].MessageQueue != nil {
+					require.Equal(t, test.expectedMsgValue.BlockData[0].MessageQueue, resp.(*network.BlockResponseMessage).BlockData[1].MessageQueue)
+				}
+
+				if test.expectedMsgValue.BlockData[0].Justification != nil {
+					require.Equal(t, test.expectedMsgValue.BlockData[0].Justification, resp.(*network.BlockResponseMessage).BlockData[1].Justification)
+				}
+			case <-time.After(testMessageTimeout):
+				t.Error("timeout waiting for message")
+			}
+		})
 	}
 }
 

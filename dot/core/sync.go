@@ -2,7 +2,6 @@ package core
 
 import (
 	"errors"
-	"fmt"
 	"math/big"
 	mrand "math/rand"
 	"strings"
@@ -273,49 +272,11 @@ func (s *Syncer) handleBlockResponse(msg *network.BlockResponseMessage) (int64, 
 			}
 		}
 
-		err := s.compareAndSetBlockData(bd)
+		err := s.blockState.CompareAndSetBlockData(bd)
 		if err != nil {
 			return highestInResp, err
 		}
 	}
 
 	return highestInResp, nil
-}
-
-func (s *Syncer) compareAndSetBlockData(bd *types.BlockData) error {
-	if s.blockState == nil {
-		return fmt.Errorf("no blockState")
-	}
-
-	existingData, err := s.blockState.GetBlockData(bd.Hash)
-	if err != nil {
-		// no block data exists, ok
-		return s.blockState.SetBlockData(bd)
-	}
-
-	if existingData == nil {
-		return s.blockState.SetBlockData(bd)
-	}
-
-	if existingData.Header == nil || (!existingData.Header.Exists() && bd.Header.Exists()) {
-		existingData.Header = bd.Header
-	}
-
-	if existingData.Body == nil || (!existingData.Body.Exists && bd.Body.Exists) {
-		existingData.Body = bd.Body
-	}
-
-	if existingData.Receipt == nil || (!existingData.Receipt.Exists() && bd.Receipt.Exists()) {
-		existingData.Receipt = bd.Receipt
-	}
-
-	if existingData.MessageQueue == nil || (!existingData.MessageQueue.Exists() && bd.MessageQueue.Exists()) {
-		existingData.MessageQueue = bd.MessageQueue
-	}
-
-	if existingData.Justification == nil || (!existingData.Justification.Exists() && bd.Justification.Exists()) {
-		existingData.Justification = bd.Justification
-	}
-
-	return s.blockState.SetBlockData(existingData)
 }

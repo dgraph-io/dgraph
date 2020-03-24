@@ -168,11 +168,17 @@ func NewHeader(exists bool, value *CoreHeader) *Header {
 
 // Exists returns true if the value is Some, false if it is None.
 func (x *Header) Exists() bool {
+	if x == nil {
+		return false
+	}
 	return x.exists
 }
 
 // Value returns the value of the header. It returns nil if the header is None.
 func (x *Header) Value() *CoreHeader {
+	if x == nil {
+		return nil
+	}
 	return x.value
 }
 

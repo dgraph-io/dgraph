@@ -34,13 +34,15 @@ type BlockState interface {
 	SubChain(start, end common.Hash) ([]common.Hash, error)
 	AddBlock(*types.Block) error
 	AddBlockWithArrivalTime(*types.Block, uint64) error
-	SetBlock(*types.Block) error
+	CompareAndSetBlockData(bd *types.BlockData) error
+	GetBlockBody(common.Hash) (*types.Body, error)
 	SetHeader(*types.Header) error
 	GetHeader(common.Hash) (*types.Header, error)
+	GetReceipt(common.Hash) ([]byte, error)
+	GetMessageQueue(common.Hash) ([]byte, error)
+	GetJustification(common.Hash) ([]byte, error)
 	GetBlockByNumber(*big.Int) (*types.Block, error)
 	GetBlockByHash(common.Hash) (*types.Block, error)
-	GetBlockData(hash common.Hash) (*types.BlockData, error)
-	SetBlockData(blockData *types.BlockData) error
 	GetArrivalTime(common.Hash) (uint64, error)
 	GenesisHash() common.Hash
 	GetSlotForBlock(common.Hash) (uint64, error)

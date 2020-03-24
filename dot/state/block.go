@@ -17,9 +17,7 @@
 package state
 
 import (
-	"bytes"
 	"encoding/binary"
-
 	"fmt"
 	"math/big"
 	"reflect"
@@ -30,7 +28,6 @@ import (
 	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/database"
 )
 
@@ -107,10 +104,8 @@ func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*Bloc
 		return nil, err
 	}
 
-	err = bs.SetBlock(&types.Block{
-		Header: header,
-		Body:   types.NewBody([]byte{}),
-	})
+	err = bs.SetBlockBody(header.Hash(), types.NewBody([]byte{}))
+
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +117,14 @@ func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*Bloc
 
 var (
 	// Data prefixes
-	headerPrefix      = []byte("hdr") // headerPrefix + hash -> header
-	babeHeaderPrefix  = []byte("hba") // babeHeaderPrefix || epoch || slot -> babeHeader
-	blockDataPrefix   = []byte("bld") // blockDataPrefix + hash -> blockData
-	headerHashPrefix  = []byte("hsh") // headerHashPrefix + encodedBlockNum -> hash
-	arrivalTimePrefix = []byte("arr") // arrivalTimePrefix || hash -> arrivalTime
+	headerPrefix        = []byte("hdr") // headerPrefix + hash -> header
+	babeHeaderPrefix    = []byte("hba") // babeHeaderPrefix || epoch || slot -> babeHeader
+	blockBodyPrefix     = []byte("blb") // blockBodyPrefix + hash -> body
+	headerHashPrefix    = []byte("hsh") // headerHashPrefix + encodedBlockNum -> hash
+	arrivalTimePrefix   = []byte("arr") // arrivalTimePrefix || hash -> arrivalTime
+	receiptPrefix       = []byte("rcp") // receiptPrefix + hash -> receipt
+	messageQueuePrefix  = []byte("mqp") // messageQueuePrefix + hash -> message queue
+	justificationPrefix = []byte("jcp") // justificationPrefix + hash -> justification
 )
 
 // encodeBlockNumber encodes a block number as big endian uint64
@@ -146,9 +144,9 @@ func headerHashKey(number uint64) []byte {
 	return append(headerHashPrefix, encodeBlockNumber(number)...)
 }
 
-// blockDataKey = blockDataPrefix + hash
-func blockDataKey(hash common.Hash) []byte {
-	return append(blockDataPrefix, hash.ToBytes()...)
+// blockBodyKey = blockBodyPrefix + hash
+func blockBodyKey(hash common.Hash) []byte {
+	return append(blockBodyPrefix, hash.ToBytes()...)
 }
 
 // arrivalTimeKey = arrivalTimePrefix + hash
@@ -183,49 +181,6 @@ func (bs *BlockState) GetHeader(hash common.Hash) (*types.Header, error) {
 	return result, err
 }
 
-// GetBlockData returns a BlockData for a given hash
-func (bs *BlockState) GetBlockData(hash common.Hash) (*types.BlockData, error) {
-	result := new(types.BlockData)
-
-	data, err := bs.db.Get(blockDataKey(hash))
-	if err != nil {
-		return nil, err
-	}
-
-	r := &bytes.Buffer{}
-	_, err = r.Write(data)
-	if err != nil {
-		return nil, err
-	}
-
-	err = result.Decode(r)
-	if err != nil {
-		return nil, err
-	}
-
-	if result.Header == nil {
-		result.Header = optional.NewHeader(false, nil)
-	}
-
-	if result.Body == nil {
-		result.Body = optional.NewBody(false, nil)
-	}
-
-	if result.Receipt == nil {
-		result.Receipt = optional.NewBytes(false, nil)
-	}
-
-	if result.MessageQueue == nil {
-		result.MessageQueue = optional.NewBytes(false, nil)
-	}
-
-	if result.Justification == nil {
-		result.Justification = optional.NewBytes(false, nil)
-	}
-
-	return result, nil
-}
-
 // GetBlockByHash returns a block for a given hash
 func (bs *BlockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 	header, err := bs.GetHeader(hash)
@@ -233,16 +188,11 @@ func (bs *BlockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 		return nil, err
 	}
 
-	blockData, err := bs.GetBlockData(hash)
+	blockBody, err := bs.GetBlockBody(hash)
 	if err != nil {
 		return nil, err
 	}
-
-	body, err := types.NewBodyFromOptional(blockData.Body)
-	if err != nil {
-		return nil, err
-	}
-	return &types.Block{Header: header, Body: body}, nil
+	return &types.Block{Header: header, Body: blockBody}, nil
 }
 
 // GetBlockByNumber returns a block for a given blockNumber
@@ -291,35 +241,73 @@ func (bs *BlockState) SetHeader(header *types.Header) error {
 	return nil
 }
 
-// SetBlock will add a block to the DB
-func (bs *BlockState) SetBlock(block *types.Block) error {
-	// Add the blockHeader to the DB
-	err := bs.SetHeader(block.Header)
+// GetBlockBody will return Body for a given hash
+func (bs *BlockState) GetBlockBody(hash common.Hash) (*types.Body, error) {
+	data, err := bs.db.Get(blockBodyKey(hash))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	blockData := &types.BlockData{
-		Hash:   block.Header.Hash(),
-		Header: block.Header.AsOptional(),
-		Body:   block.Body.AsOptional(),
-	}
-	return bs.SetBlockData(blockData)
+	return types.NewBody(data), nil
 }
 
-// SetBlockData will set the block data using given hash and blockData into DB
-func (bs *BlockState) SetBlockData(blockData *types.BlockData) error {
+// SetBlockBody will add a block body to the db
+func (bs *BlockState) SetBlockBody(hash common.Hash, body *types.Body) error {
 	bs.lock.Lock()
 	defer bs.lock.Unlock()
 
-	// Write the encoded header
-	bh, err := blockData.Encode()
-	if err != nil {
-		return err
+	err := bs.db.Put(blockBodyKey(hash), body.AsOptional().Value)
+	return err
+}
+
+// CompareAndSetBlockData will compare empty fields and set all elements in a block data to db
+func (bs *BlockState) CompareAndSetBlockData(bd *types.BlockData) error {
+	var existingData = new(types.BlockData)
+
+	if bd.Header != nil && (existingData.Header == nil || (!existingData.Header.Exists() && bd.Header.Exists())) {
+		existingData.Header = bd.Header
+		header, err := types.NewHeaderFromOptional(existingData.Header)
+		if err != nil && header != nil {
+			err = bs.SetHeader(header)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
-	err = bs.db.Put(blockDataKey(blockData.Hash), bh)
-	return err
+	if bd.Body != nil && (existingData.Body == nil || (!existingData.Body.Exists && bd.Body.Exists)) {
+		existingData.Body = bd.Body
+		err := bs.SetBlockBody(bd.Hash, types.NewBody(existingData.Body.Value))
+		if err != nil {
+			return err
+		}
+	}
+
+	if bd.Receipt != nil && (existingData.Receipt == nil || (!existingData.Receipt.Exists() && bd.Receipt.Exists())) {
+		existingData.Receipt = bd.Receipt
+		err := bs.SetReceipt(bd.Hash, existingData.Receipt.Value())
+		if err != nil {
+			return err
+		}
+	}
+
+	if bd.MessageQueue != nil && (existingData.MessageQueue == nil || (!existingData.MessageQueue.Exists() && bd.MessageQueue.Exists())) {
+		existingData.MessageQueue = bd.MessageQueue
+		err := bs.SetMessageQueue(bd.Hash, existingData.MessageQueue.Value())
+		if err != nil {
+			return err
+		}
+	}
+
+	if bd.Justification != nil && (existingData.Justification == nil || (!existingData.Justification.Exists() && bd.Justification.Exists())) {
+		existingData.Justification = bd.Justification
+		err := bs.SetJustification(bd.Hash, existingData.Justification.Value())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // AddBlock adds a block to the blocktree and the DB with arrival time as current unix time
@@ -359,13 +347,10 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 		return err
 	}
 
-	// add block data to the DB
-	bd := &types.BlockData{
-		Hash:   hash,
-		Header: block.Header.AsOptional(),
-		Body:   block.Body.AsOptional(),
+	err = bs.SetBlockBody(block.Header.Hash(), types.NewBody(block.Body.AsOptional().Value))
+	if err != nil {
+		return err
 	}
-	err = bs.SetBlockData(bd)
 	return err
 }
 
@@ -451,12 +436,12 @@ func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {
 
 // GetArrivalTime returns the arrival time of a block given its hash
 func (bs *BlockState) GetArrivalTime(hash common.Hash) (uint64, error) {
-	time, err := bs.db.db.Get(arrivalTimeKey(hash))
+	arrivalTime, err := bs.db.db.Get(arrivalTimeKey(hash))
 	if err != nil {
 		return 0, err
 	}
 
-	return binary.LittleEndian.Uint64(time), nil
+	return binary.LittleEndian.Uint64(arrivalTime), nil
 }
 
 func (bs *BlockState) setArrivalTime(hash common.Hash, arrivalTime uint64) error {

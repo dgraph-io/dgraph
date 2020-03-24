@@ -482,7 +482,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 		return err
 	}
 
-	_, err = s.blockState.GetBlockData(header.Hash())
+	_, err = s.blockState.GetBlockBody(header.Hash())
 	if err != nil && err.Error() == "Key not found" {
 		// send block request message
 		log.Debug("[core] sending new block to syncer", "number", blockAnnounceMessage.Number)
@@ -506,11 +506,11 @@ func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
 	return s.safeMsgSend(blockResponse)
 }
 
-func (s *Service) createBlockResponse(msg *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {
+func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {
 	var startHash common.Hash
 	var endHash common.Hash
 
-	switch c := msg.StartingBlock.Value().(type) {
+	switch c := blockRequest.StartingBlock.Value().(type) {
 	case uint64:
 		block, err := s.blockState.GetBlockByNumber(big.NewInt(0).SetUint64(c))
 		if err != nil {
@@ -523,8 +523,8 @@ func (s *Service) createBlockResponse(msg *network.BlockRequestMessage) (*networ
 		startHash = c
 	}
 
-	if msg.EndBlockHash.Exists() {
-		endHash = msg.EndBlockHash.Value()
+	if blockRequest.EndBlockHash.Exists() {
+		endHash = blockRequest.EndBlockHash.Value()
 	} else {
 		endHash = s.blockState.BestBlockHash()
 	}
@@ -544,56 +544,58 @@ func (s *Service) createBlockResponse(msg *network.BlockRequestMessage) (*networ
 	responseData := []*types.BlockData{}
 
 	for _, hash := range subchain {
-		data, err := s.blockState.GetBlockData(hash)
-		if err != nil {
-			return nil, err
-		}
 
 		blockData := new(types.BlockData)
 		blockData.Hash = hash
 
-		// TODO: checks for the existence of the following fields should be implemented once #596 is addressed.
+		// set defaults
+		blockData.Header = optional.NewHeader(false, nil)
+		blockData.Body = optional.NewBody(false, nil)
+		blockData.Receipt = optional.NewBytes(false, nil)
+		blockData.MessageQueue = optional.NewBytes(false, nil)
+		blockData.Justification = optional.NewBytes(false, nil)
 
 		// header
-		if msg.RequestedData&1 == 1 {
-			blockData.Header = data.Header
-		} else {
-			blockData.Header = optional.NewHeader(false, nil)
+		if (blockRequest.RequestedData & 1) == 1 {
+			retData, err := s.blockState.GetHeader(hash)
+			if err == nil && retData != nil {
+				blockData.Header = retData.AsOptional()
+			}
 		}
-
 		// body
-		if (msg.RequestedData&2)>>1 == 1 {
-			blockData.Body = data.Body
-		} else {
-			blockData.Body = optional.NewBody(false, nil)
+		if (blockRequest.RequestedData&2)>>1 == 1 {
+			retData, err := s.blockState.GetBlockBody(hash)
+			if err == nil && retData != nil {
+				blockData.Body = retData.AsOptional()
+			}
 		}
-
 		// receipt
-		if (msg.RequestedData&4)>>2 == 1 {
-			blockData.Receipt = data.Receipt
-		} else {
-			blockData.Receipt = optional.NewBytes(false, nil)
+		if (blockRequest.RequestedData&4)>>2 == 1 {
+			retData, err := s.blockState.GetReceipt(hash)
+			if err == nil && retData != nil {
+				blockData.Receipt = optional.NewBytes(true, retData)
+			}
 		}
-
 		// message queue
-		if (msg.RequestedData&8)>>3 == 1 {
-			blockData.MessageQueue = data.MessageQueue
-		} else {
-			blockData.MessageQueue = optional.NewBytes(false, nil)
+		if (blockRequest.RequestedData&8)>>3 == 1 {
+			retData, err := s.blockState.GetMessageQueue(hash)
+			if err == nil && retData != nil {
+				blockData.MessageQueue = optional.NewBytes(true, retData)
+			}
 		}
-
 		// justification
-		if (msg.RequestedData&16)>>4 == 1 {
-			blockData.Justification = data.Justification
-		} else {
-			blockData.Justification = optional.NewBytes(false, nil)
+		if (blockRequest.RequestedData&16)>>4 == 1 {
+			retData, err := s.blockState.GetJustification(hash)
+			if err == nil && retData != nil {
+				blockData.Justification = optional.NewBytes(true, retData)
+			}
 		}
 
 		responseData = append(responseData, blockData)
 	}
 
 	return &network.BlockResponseMessage{
-		ID:        msg.ID,
+		ID:        blockRequest.ID,
 		BlockData: responseData,
 	}, nil
 }
