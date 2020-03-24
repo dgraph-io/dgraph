@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -189,7 +190,7 @@ func fieldName(def *ast.FieldDefinition, typName string) string {
 func getDgraphTypeError(f *ast.FieldDefinition, defName, typStr string) *gqlerror.Error {
 	return gqlerror.ErrorPosf(f.Position,
 		"Type: %s; Field: %s has its dgraph Type: %s; which is different from a previous field"+
-			" with same dgraph predicate name.", defName, f.Name, typStr)
+			" with same dgraph predicate.", defName, f.Name, typStr)
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
@@ -248,7 +249,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 					reverse == "" {
 					errs = append(errs, gqlerror.ErrorPosf(f.Position,
 						"Type: %s; Field: %s has its GraphQL Type: %s; which is different from a"+
-							" previous field with same dgraph predicate name.", def.Name, f.Name,
+							" previous field with same dgraph predicate.", def.Name, f.Name,
 						f.Type.Name()))
 					continue
 				}
@@ -313,7 +314,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 						if ok && edge.typ != typStr {
 							errs = append(errs, getDgraphTypeError(f, def.Name, typStr))
 							continue
-						} else {
+						} else if !ok {
 							edge = dgPred{
 								typ:     typStr,
 								gqlType: f.Type.Name(),
@@ -345,7 +346,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 						if ok && edge.typ != typStr {
 							errs = append(errs, getDgraphTypeError(f, def.Name, typStr))
 							continue
-						} else {
+						} else if !ok {
 							edge = dgPred{
 								typ:     typStr,
 								gqlType: f.Type.Name(),
@@ -398,21 +399,16 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 			}
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
 			if !fld.inherited && !predWritten[fld.name] {
-				var indexStr strings.Builder
-				indexCount := len(f.indexes)
-				if indexCount > 0 {
-					i := 1
-					indexStr.WriteString(" @index(")
+				indexStr := ""
+				if len(f.indexes) > 0 {
+					indexes := make([]string, 0)
 					for index, _ := range f.indexes {
-						indexStr.WriteString(index)
-						if i != indexCount {
-							indexStr.WriteString(", ")
-						}
-						i++
+						indexes = append(indexes, index)
 					}
-					indexStr.WriteString(")")
+					sort.Strings(indexes)
+					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
 				}
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr.String(), f.upsert,
+				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
 					f.reverse)
 				predWritten[fld.name] = true
 			}

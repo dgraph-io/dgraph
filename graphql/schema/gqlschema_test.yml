@@ -707,6 +707,41 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
+  -
+    name: "Conflicting GraphQL types for predicate"
+    input: |
+      type X {
+        f1: String! @dgraph(pred: "name")
+        f2: Y @dgraph(pred: "link")
+      }
+      type Y {
+        f1: Int @dgraph(pred: "name")
+        f2: X @dgraph(pred: "link")
+      }
+    errlist: [
+    {"message": "Type: Y; Field: f1 has its GraphQL Type: Int; which is different from a previous field with same dgraph predicate.",
+     "locations":[{"line":6, "column":3}]},
+    {"message": "Type: Y; Field: f2 has its GraphQL Type: X; which is different from a previous field with same dgraph predicate.",
+     "locations":[{"line":7, "column":3}]},
+    ]
+
+  -
+    name: "Conflicting dgraph types for predicate"
+    input: |
+      type X @secret(field: "f", pred: "pwd"){
+        f1: String @dgraph(pred: "name")
+      }
+      type Y {
+        f1: [String] @dgraph(pred: "name")
+        f2: String @dgraph(pred: "pwd")
+      }
+    errlist: [
+    {"message": "Type: Y; Field: f1 has its dgraph Type: [string]; which is different from a previous field with same dgraph predicate.",
+     "locations":[{"line":5, "column":3}]},
+    {"message": "Type: Y; Field: f2 has its dgraph Type: string; which is different from a previous field with same dgraph predicate.",
+     "locations":[{"line":6, "column":3}]},
+    ]
+
 
 
 valid_schemas:
