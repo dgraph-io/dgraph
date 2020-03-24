@@ -251,8 +251,11 @@ if [[ :${TEST_SET}: == *:systest:* ]]; then
     Info "Running custom test scripts"
     RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
-    Info "Running large load test"
+    Info "Running large bulk load test"
     RunCmd ./systest/21million/test-21million.sh || TestFailed
+
+    # Info "Running large live load test"
+    # RunCmd ./systest/21million/test-21million.sh --loader live || TestFailed
 
     Info "Running rebuilding index test"
     RunCmd ./systest/1million/test-reindex.sh || TestFailed
