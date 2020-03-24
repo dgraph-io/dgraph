@@ -347,6 +347,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
+	errs = append(errs, validateAuthRules(schema)...)
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]

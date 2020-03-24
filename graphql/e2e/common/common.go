@@ -86,6 +86,7 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 	acceptGzip    bool
 	gzipEncoding  bool
+	Authorization string
 }
 
 type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
@@ -176,7 +177,10 @@ func BootstrapServer(schema, data []byte) {
 		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
-	client.Alter(ctx, &api.Operation{DropAll: true})
+	err = client.Alter(ctx, &api.Operation{DropAll: true})
+	if err != nil {
+		x.Panic(err)
+	}
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
@@ -401,6 +405,10 @@ func getQueryEmptyVariable(t *testing.T) {
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+	if params.Authorization != "" {
+		req.Header.Add("X-Dgraph-AuthorizationToken", params.Authorization)
+	}
+
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
@@ -410,6 +418,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 		require.NoError(t, err)
 		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
 	}
+
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
 

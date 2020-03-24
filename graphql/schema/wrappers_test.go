@@ -474,7 +474,7 @@ type User @auth(
 		Add: &RuleNode{
 			Rule: &RuleAst{
 				Name: "DENY",
-				Typ:  Constant,
+				Typ:  SpecialOp,
 			},
 		},
 		Update: &RuleNode{

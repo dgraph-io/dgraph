@@ -486,14 +486,7 @@ const (
 	Op
 	JwtVar
 	GqlTyp
-)
-
-type AuthOp int
-
-const (
-	Filter AuthOp = iota
-	Predicate
-	Jwt
+	SpecialOp
 )
 
 type RuleAst struct {
@@ -508,6 +501,10 @@ type RuleAst struct {
 var operations = map[string]bool{
 	"filter": true,
 	"eq":     true,
+}
+
+var specialOps = map[string]bool{
+	"DENY": true,
 }
 
 var punctuations = map[byte]bool{
@@ -530,13 +527,13 @@ func (p *Parser) init(str *string) {
 }
 
 func (p *Parser) skipPunc() {
-	for ; p.index != len(*p.str) && punctuations[(*p.str)[p.index]]; p.index += 1 {
+	for ; p.index != len(*p.str) && punctuations[(*p.str)[p.index]]; p.index++ {
 	}
 }
 
 func (p *Parser) getNextWord() string {
 	start := p.index
-	for ; p.index != len(*p.str) && !punctuations[(*p.str)[p.index]]; p.index += 1 {
+	for ; p.index != len(*p.str) && !punctuations[(*p.str)[p.index]]; p.index++ {
 	}
 
 	word := (*p.str)[start:p.index]
@@ -576,6 +573,8 @@ func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[s
 			rule.Typ = GqlTyp
 			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
 			typ = ap.s.Types[name]
+		} else if specialOps[word] {
+			rule.Typ = SpecialOp
 		} else {
 			rule.Typ = Constant
 		}
@@ -680,8 +679,7 @@ func (r *RuleAst) GetOperation() *RuleAst {
 	case Op:
 		// Already an operation
 		return r
-	case GqlTyp:
-	case JwtVar:
+	case GqlTyp, JwtVar:
 		if r.Value != nil && r.Value.IsOp() {
 			return r.Value
 		}
@@ -761,7 +759,7 @@ func (r *RuleAst) getRuleQuery(authVariables map[string]string) *gql.FilterTree 
 }
 
 func (r *RuleAst) IsFilter() bool {
-	if r == nil {
+	if r == nil || r.GetOperation() == nil {
 		return false
 	}
 
@@ -912,13 +910,14 @@ type TypeAuth struct {
 	fields map[string]*AuthContainer
 }
 
-func authRules(s *ast.Schema, dgraphPredicate *map[string]map[string]string) map[string]*TypeAuth {
+func authRules(s *ast.Schema) map[string]*TypeAuth {
 	authRules := make(map[string]*TypeAuth)
 	var emptyMap map[string]interface{}
 	var p AuthParser
+	dgraphPreds := dgraphMapping(s)
 
 	p.s = s
-	p.dgraphPredicate = dgraphPredicate
+	p.dgraphPredicate = &dgraphPreds
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
@@ -952,7 +951,7 @@ func AsSchema(s *ast.Schema) Schema {
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
-		authRules:       authRules(s, &dgraphPredicate),
+		authRules:       authRules(s),
 	}
 }
 
@@ -1102,6 +1101,19 @@ func (f *field) SelectionSet() (flds []Field) {
 				field: fld,
 				op:    f.op,
 			})
+		}
+		if fragment, ok := s.(*ast.InlineFragment); ok {
+			// This is the case where an inline fragment is defined within a query
+			// block. Usually this is for requesting some fields for a concrete type
+			// within a query for an interface.
+			for _, s := range fragment.SelectionSet {
+				if fld, ok := s.(*ast.Field); ok {
+					flds = append(flds, &field{
+						field: fld,
+						op:    f.op,
+					})
+				}
+			}
 		}
 	}
 

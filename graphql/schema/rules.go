@@ -39,6 +39,132 @@ func init() {
 
 }
 
+func validateAuthAst(node *RuleAst) gqlerror.List {
+	var errs gqlerror.List
+	if node == nil {
+		return nil
+	}
+
+	fmt.Printf("%+v\n", node)
+	fmt.Printf("%+v\n", node.GetOperation())
+
+	if node.Typ == SpecialOp {
+		//TODO node.Value == nil
+		fmt.Println("Here1")
+		return errs
+	}
+
+	operation := node.GetOperation()
+	if operation == nil {
+		// TODO
+		fmt.Println("Here2")
+		return errs
+	}
+
+	operand := operation.GetOperand()
+	if operand == nil {
+		// TODO
+		fmt.Println("Here3")
+		return errs
+	}
+
+	if !operation.IsFilter() {
+		if operand.Value == nil {
+
+			// TODO
+			fmt.Println("Here4")
+			return errs
+		}
+		return errs
+	} else {
+		errs = append(errs, validateAuthAst(operand)...)
+		if operand.GetOperation().IsFilter() {
+
+			// TODO
+			fmt.Println("Here5")
+			return errs
+		}
+	}
+
+	return errs
+}
+
+func validateAuthNode(node *RuleNode) gqlerror.List {
+	var result gqlerror.List
+	has := make(map[string]bool)
+
+	for _, childNode := range node.Or {
+		result = append(result, validateAuthNode(childNode)...)
+		has["or"] = true
+	}
+
+	for _, childNode := range node.And {
+		result = append(result, validateAuthNode(childNode)...)
+		has["and"] = true
+	}
+
+	if childNode := node.Not; childNode != nil {
+		result = append(result, validateAuthNode(childNode)...)
+		has["not"] = true
+	}
+
+	if ast := node.Rule; ast != nil {
+		has["rule"] = true
+		result = append(result, validateAuthAst(ast)...)
+	}
+
+	if len(has) > 1 {
+
+	}
+
+	return result
+}
+
+func validateAuthRule(rule *AuthContainer) gqlerror.List {
+	var result gqlerror.List
+
+	if rule.Query != nil {
+		result = append(result, validateAuthNode(rule.Query)...)
+	}
+
+	if rule.Add != nil {
+		result = append(result, validateAuthNode(rule.Add)...)
+	}
+
+	if rule.Update != nil {
+		result = append(result, validateAuthNode(rule.Update)...)
+	}
+
+	if rule.Delete != nil {
+		result = append(result, validateAuthNode(rule.Delete)...)
+	}
+
+	return result
+}
+
+func validateAuthRules(schema *ast.Schema) gqlerror.List {
+	rules := authRules(schema)
+	var result gqlerror.List
+
+	for _, rule := range rules {
+		if rule.rules != nil {
+			result = append(result, validateAuthRule(rule.rules)...)
+		}
+
+		for _, fieldRule := range rule.fields {
+			if fieldRule != nil {
+				result = append(result, validateAuthRule(fieldRule)...)
+			}
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
+}
+
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
 	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface {
 		return nil

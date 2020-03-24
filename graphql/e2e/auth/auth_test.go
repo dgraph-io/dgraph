@@ -43,11 +43,13 @@ type todo struct {
 }
 
 const (
-	graphqlURL = "http://localhost:8180/graphql"
+	graphqlURL    = "http://localhost:8180/graphql"
+	authorization = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRoVmFyaWFibGVzIjp7IiRYLU15QXBwLVVzZXIiOiJ1c2VyMSIsIiRYLU15QXBwLVJvbGUiOiJhZG1pbiJ9fQ.iuPtwcdkMgAm7-BJAj1Q7IQbIdnivef99fgvafwnmlA"
 )
 
 func TestQueryAllTodos(t *testing.T) {
 	getUserParams := &common.GraphQLParams{
+		Authorization: authorization,
 		Query: `
 		query {
                   queryTodo(order:{
@@ -173,6 +175,7 @@ func TestQueryAllTodos(t *testing.T) {
 
 func TestQueryAllUsers(t *testing.T) {
 	getUserParams := &common.GraphQLParams{
+		Authorization: authorization,
 		Query: `
 		query {
                 queryUser(order:{

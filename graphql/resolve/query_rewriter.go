@@ -19,9 +19,10 @@ package resolve
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/x"
 	"sort"
 	"strconv"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -83,13 +84,14 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	authVariables map[string]string) *gql.GraphQuery {
 	queriedType := field.Type()
 	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
-
-	if authRules == nil || authRules.Query == nil {
-		return dgQuery
-	}
-
 	var query gql.GraphQuery
 	query.Children = append(query.Children, dgQuery)
+	query.Children = append(query.Children, getAuthQueries(field, authVariables)...)
+
+	if authRules == nil || authRules.Query == nil {
+		return &query
+	}
+
 	authFilter := authRules.Query.GetFilter()
 	if dgQuery.Filter != nil {
 		dgQuery.Filter = &gql.FilterTree{
@@ -103,7 +105,6 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 		dgQuery.Filter = authFilter
 	}
 
-	query.Children = append(query.Children, getAuthQueries(field, authVariables)...)
 	return &query
 }
 
