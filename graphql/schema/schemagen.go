@@ -402,7 +402,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 				indexStr := ""
 				if len(f.indexes) > 0 {
 					indexes := make([]string, 0)
-					for index, _ := range f.indexes {
+					for index := range f.indexes {
 						indexes = append(indexes, index)
 					}
 					sort.Strings(indexes)
