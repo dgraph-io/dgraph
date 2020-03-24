@@ -1240,7 +1240,6 @@ On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
 {{% /notice %}}
 
-* `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
 * `/admin/export` initiates a data [export]({{< relref "#export">}}).
 
@@ -1262,7 +1261,8 @@ query {
     lastEcho
     group
     uptime
-    
+    ongoing
+    indexing
   }
 }
 ```
@@ -1289,7 +1289,9 @@ Here’s an example of JSON returned from the above query:
         "status": "healthy",
         "lastEcho": 1582827418,
         "group": "1",
-        "uptime": 1505
+        "uptime": 1505,
+        "ongoing": ["opIndexing"],
+        "indexing": ["name", "age"]
       }
     ]
   }
