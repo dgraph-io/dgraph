@@ -20,8 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -197,6 +200,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
+		})
+	}
+
+	for _, q := range s.Queries(schema.HTTPQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewHTTPResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -885,4 +897,109 @@ func maxPathLength(f schema.Field) int {
 	}
 
 	return 1 + childMax
+}
+
+// TODO: Include this behavior into the standard algorithm above.
+// That is, allow the completion algorithms to be like a walk through the
+// result structure and then we can apply different behaviors as each point.
+// That should eliminate unpacking and packing the result multiple times and
+// allow the result processing to be really flexible.
+func aliasValue(field schema.Field, val interface{}) (interface{}, error) {
+	switch val := val.(type) {
+	case map[string]interface{}:
+		return aliasObject(field.SelectionSet(), val)
+	case []interface{}:
+		return aliasList(field, val)
+	default:
+		return val, nil
+	}
+}
+
+func aliasList(field schema.Field, values []interface{}) ([]interface{}, error) {
+	var errs error
+	var result []interface{}
+	for _, b := range values {
+		r, err := aliasValue(field, b)
+		errs = schema.AppendGQLErrs(errs, err)
+		result = append(result, r)
+	}
+	return result, errs
+}
+
+func aliasObject(
+	fields []schema.Field,
+	res map[string]interface{}) (interface{}, error) {
+
+	var errs error
+	result := make(map[string]interface{})
+
+	for _, f := range fields {
+		r, err := aliasValue(f, res[f.Name()])
+		result[f.ResponseName()] = r
+		errs = schema.AppendGQLErrs(errs, err)
+	}
+
+	return result, errs
+}
+
+// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
+type httpResolver struct {
+	*http.Client
+	resultCompleter ResultCompleter
+}
+
+// NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
+func NewHTTPResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
+	return &httpResolver{hc, rc}
+}
+
+func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveHTTPQuery")
+	defer stop()
+
+	resolved := hr.rewriteAndExecute(ctx, query)
+
+	hr.resultCompleter.Complete(ctx, resolved)
+	return resolved
+}
+
+func (hr *httpResolver) rewriteAndExecute(
+	ctx context.Context, query schema.Query) *Resolved {
+	emptyResult := func(err error) *Resolved {
+		return &Resolved{
+			Data:  map[string]interface{}{query.Name(): nil},
+			Field: query,
+			Err:   err,
+		}
+	}
+
+	hrc, err := query.HTTPResolver()
+	if err != nil {
+		return emptyResult(err)
+	}
+	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
+	if err != nil {
+		return emptyResult(err)
+	}
+	req.Header = hrc.ForwardHeaders
+
+	resp, err := hr.Do(req)
+	if err != nil {
+		return emptyResult(err)
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return emptyResult(err)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return emptyResult(err)
+	}
+	return &Resolved{
+		Data:  result,
+		Field: query,
+	}
 }

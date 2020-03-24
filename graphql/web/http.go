@@ -173,6 +173,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		res = schema.ErrorResponse(err)
 	} else {
+		gqlReq.Header = r.Header
 		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
 

@@ -31,8 +31,8 @@ invalid_schemas:
         getAuthro(id: ID): Author!
       }
     errlist: [
-      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":1, "column":6}]},
-      {"message":"You don't need to define the GraphQL Query or Mutation types. Those are built automatically for you.", "locations":[{"line":4, "column":6}]},
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields with @custom directive. Other fields are built automatically for you.", "locations":[{"line":1, "column":6}]},
+      {"message":"GraphQL Query and Mutation types are only allowed to have fields with @custom directive. Other fields are built automatically for you.", "locations":[{"line":4, "column":6}]},
     ]
 
   -
@@ -749,7 +749,51 @@ invalid_schemas:
     {"message": "Type Y; Field f8: has type Int, which is different to type X; field f8, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
      "locations":[{"line":21, "column":3}]},
     {"message": "Type Y; Field f10: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
-     "locations":[{"line":22, "column":3}]},
+     "locations":[{"line":22, "column":3}]}]
+
+  -
+    name: "@custom directive with wrong argument name"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor: http argument for @custom directive should not be empty.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
+    name: "@custom directive with wrong url"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "123", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; url field inside @custom directive is invalid.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
+    name: "@custom directive with wrong value for method"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST.",
+      "locations":[{"line":6, "column":31}]},
     ]
 
 
@@ -871,4 +915,18 @@ valid_schemas:
         f3: [String]! @dgraph(pred: "f3")
         f4: [String!]! @dgraph(pred: "f4")
         f5: String @dgraph(pred: "X.f5")
+      }
+
+  -
+    name: "Query, Mutation in initial schema with @custom directive"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+      type Mutation {
+        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
       }

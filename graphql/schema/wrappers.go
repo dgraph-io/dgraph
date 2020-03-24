@@ -17,9 +17,14 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"text/scanner"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -40,12 +45,20 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+type HTTPResolverConfig struct {
+	URL            string
+	Method         string
+	Body           string
+	ForwardHeaders http.Header
+}
+
 // Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
 	FilterQuery          QueryType    = "query"
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
+	HTTPQuery            QueryType    = "http"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -113,6 +126,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
+	HTTPResolver() (HTTPResolverConfig, error)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -168,8 +182,9 @@ type schema struct {
 }
 
 type operation struct {
-	op   *ast.OperationDefinition
-	vars map[string]interface{}
+	op     *ast.OperationDefinition
+	vars   map[string]interface{}
+	header http.Header
 
 	// The fields below are used by schema introspection queries.
 	query    string
@@ -198,7 +213,7 @@ type query field
 func (s *schema) Queries(t QueryType) []string {
 	var result []string
 	for _, q := range s.schema.Query.Fields {
-		if queryType(q.Name) == t {
+		if queryType(q.Name, q.Directives.ForName("custom")) == t {
 			result = append(result, q.Name)
 		}
 	}
@@ -207,6 +222,9 @@ func (s *schema) Queries(t QueryType) []string {
 
 func (s *schema) Mutations(t MutationType) []string {
 	var result []string
+	if s.schema.Mutation == nil {
+		return nil
+	}
 	for _, m := range s.schema.Mutation.Fields {
 		if mutationType(m.Name) == t {
 			result = append(result, m.Name)
@@ -765,11 +783,13 @@ func (q *query) GetObjectName() string {
 }
 
 func (q *query) QueryType() QueryType {
-	return queryType(q.Name())
+	return queryType(q.Name(), q.field.Directives.ForName("custom"))
 }
 
-func queryType(name string) QueryType {
+func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
+	case custom != nil:
+		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
 	case name == "__schema" || name == "__type":
@@ -801,6 +821,54 @@ func (q *query) TypeName(dgraphTypes []interface{}) string {
 
 func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
+}
+
+func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
+	// We have to fetch the original definition of the query from the name of the query to be
+	// able to get the value stored in custom directive.
+	// TODO - This should be cached later.
+	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
+	custom := query.Directives.ForName("custom")
+	httpArg := custom.Arguments.ForName("http")
+	rc := HTTPResolverConfig{
+		URL:    httpArg.Value.Children.ForName("url").Raw,
+		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	argMap := q.field.ArgumentMap(q.op.vars)
+	vars := make(map[string]interface{})
+	// Let's collect the value of query args in vars map and use that for constructing the body
+	// from the template below.
+	for _, arg := range query.Arguments {
+		val := argMap[arg.Name]
+		vars[arg.Name] = val
+		if val == nil {
+			// Instead of replacing value to nil for optional arguments, we replace it with an
+			// empty string.
+			val = ""
+		}
+		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
+	}
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		body, err := substitueVarsInBody(bodyTemplate, vars)
+		if err != nil {
+			return rc, err
+		}
+		rc.Body = string(body)
+	}
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
+		}
+		rc.ForwardHeaders = headers
+	}
+
+	return rc, nil
 }
 
 func (m *mutation) Name() string {
@@ -1242,4 +1310,79 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 	}
 
 	return ""
+}
+
+func isName(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			continue
+		case r >= 'A' && r <= 'Z':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// Given a template for a body with variables defined, this function parses the body, substitutes
+// the variables and returns the final JSON.
+// for e.g.
+// { author: $id, post: { id: $postID }} with variables {"id": "0x3", postID: "0x9"} should return
+// { "author" : "0x3", "post": { "id": "0x9" }}
+// If the final result is not a valid JSON, then an error is returned.
+func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte, error) {
+	var s scanner.Scanner
+	s.Init(strings.NewReader(body))
+
+	result := new(bytes.Buffer)
+	parsingVariable := false
+	depth := 0
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		text := s.TokenText()
+		switch {
+		case text == "{":
+			result.WriteString(text)
+			depth++
+		case text == "}":
+			depth--
+			result.WriteString(text)
+		case text == ":" || text == "," || text == "[" || text == "]":
+			result.WriteString(text)
+		case text == "$":
+			parsingVariable = true
+		case isName(text):
+			// Name could either be a key or be part of a variable after dollar.
+			if parsingVariable {
+				variable := "$" + text
+				// Look it up in the map and replace.
+				val, ok := variables[text]
+				if !ok {
+					return nil, errors.Errorf("couldn't find variable: %s in variables map",
+						variable)
+				}
+				switch v := val.(type) {
+				case string:
+					fmt.Fprintf(result, `"%s"`, v)
+				default:
+					fmt.Fprintf(result, "%v", val)
+				}
+				parsingVariable = false
+				continue
+			}
+			result.WriteString(fmt.Sprintf(`"%s"`, text))
+		default:
+			return nil, errors.Errorf("invalid character: %s while parsing body template", text)
+		}
+	}
+	if depth != 0 {
+		return nil, errors.New("found unmatched curly braces while parsing body template")
+	}
+
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
+		return nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
+	}
+	return result.Bytes(), nil
 }

@@ -34,11 +34,13 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective = "dgraph"
-	dgraphTypeArg   = "type"
-	dgraphPredArg   = "pred"
-	idDirective     = "id"
-	secretDirective = "secret"
+	dgraphDirective    = "dgraph"
+	dgraphTypeArg      = "type"
+	dgraphPredArg      = "pred"
+	idDirective        = "id"
+	secretDirective    = "secret"
+	customDirective    = "custom"
+	notDgraphDirective = "not_dgraph" // types with this directive are not stored in Dgraph.
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -67,11 +69,18 @@ enum DgraphIndex {
 	hour
 }
 
+input CustomHTTP {
+	url: String!
+	method: String!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @not_dgraph on OBJECT
 
 input IntFilter {
 	eq: Int
@@ -232,11 +241,13 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective: hasInverseValidation,
-	searchDirective:  searchValidation,
-	dgraphDirective:  dgraphDirectiveValidation,
-	idDirective:      idValidation,
-	secretDirective:  passwordValidation,
+	inverseDirective:   hasInverseValidation,
+	searchDirective:    searchValidation,
+	dgraphDirective:    dgraphDirectiveValidation,
+	idDirective:        idValidation,
+	secretDirective:    passwordValidation,
+	customDirective:    customDirectiveValidation,
+	notDgraphDirective: notDgraphDirectiveValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
@@ -396,11 +407,17 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 // completeSchema generates all the required types and fields for
 // query/mutation/update for all the types mentioned the the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
-
-	sch.Query = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Query",
-		Fields: make([]*ast.FieldDefinition, 0),
+	query := sch.Types["Query"]
+	if query != nil {
+		query.Kind = ast.Object
+		sch.Query = query
+		delete(sch.Types, "Query")
+	} else {
+		sch.Query = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Query",
+			Fields: make([]*ast.FieldDefinition, 0),
+		}
 	}
 
 	sch.Mutation = &ast.Definition{
@@ -416,8 +433,10 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 
 	for _, key := range definitions {
+		if key == "Query" {
+			continue
+		}
 		defn := sch.Types[key]
-
 		if defn.Kind != ast.Interface && defn.Kind != ast.Object {
 			continue
 		}
@@ -1384,6 +1403,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
+		if typName == "Query" {
+			// This would be printed later in schema.Query
+			continue
+		}
 		switch typ.Kind {
 		case ast.Interface:
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
@@ -1443,24 +1466,38 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Types\n#######################\n\n"))
-	x.Check2(sch.WriteString(object.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Enums\n#######################\n\n"))
-	x.Check2(sch.WriteString(enum.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Inputs\n#######################\n\n"))
-	x.Check2(sch.WriteString(input.String()))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Query\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Mutations\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
-	x.Check2(sch.WriteString(
-		"#######################\n# Generated Subscriptions\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
+	if len(object.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Types\n#######################\n\n"))
+		x.Check2(sch.WriteString(object.String()))
+	}
+	if len(enum.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Enums\n#######################\n\n"))
+		x.Check2(sch.WriteString(enum.String()))
+	}
+	if len(input.String()) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Inputs\n#######################\n\n"))
+		x.Check2(sch.WriteString(input.String()))
+	}
+
+	if len(schema.Query.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Query\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
+	}
+
+	if len(schema.Mutation.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Mutations\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
+	}
+	if len(schema.Subscription.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Subscriptions\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
+	}
 
 	return sch.String()
 }

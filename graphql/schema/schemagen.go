@@ -113,12 +113,20 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
+	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+			notInDgraph := defn.Directives.ForName(notDgraphDirective)
+			if notInDgraph != nil {
+				continue
+			}
+		}
+		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
 	expandSchema(doc)
@@ -133,9 +141,12 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	dgSchema := genDgSchema(sch, defns)
+	dgSchema := genDgSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete)
 
-	completeSchema(sch, defns)
+	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
+		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
 
 	return &handler{
 		input:          input,

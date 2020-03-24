@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -255,8 +256,19 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 		var errMesg string
 
 		if defn.Name == "Query" || defn.Name == "Mutation" {
-			errMesg = "You don't need to define the GraphQL Query or Mutation types." +
-				" Those are built automatically for you."
+			for _, fld := range defn.Fields {
+				// If we find any query or mutation field defined without a @custom directive, that
+				// is an error for us.
+				custom := fld.Directives.ForName("custom")
+				if custom == nil {
+					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
+						"with @custom directive. Other fields are built automatically for you."
+					break
+				}
+			}
+			if errMesg == "" {
+				return nil
+			}
 		} else {
 			errMesg = fmt.Sprintf(
 				"%s is a reserved word, so you can't declare a type with this name. "+
@@ -410,6 +422,9 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqler
 }
 
 func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if typ.Name == "Query" || typ.Name == "Mutation" {
+		return nil
+	}
 	if field.Arguments != nil {
 		return gqlerror.ErrorPosf(
 			field.Position,
@@ -421,7 +436,7 @@ func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerr
 }
 
 func fieldNameCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
-	//field name cannot be a reserved word
+	// field name cannot be a reserved word
 	if isReservedKeyWord(field.Name) {
 		return gqlerror.ErrorPosf(
 			field.Position, "Type %s; Field %s: %s is a reserved keyword and "+
@@ -799,6 +814,64 @@ func passwordValidation(sch *ast.Schema,
 	dir *ast.Directive) *gqlerror.Error {
 
 	return passwordDirectiveValidation(typ)
+}
+
+func notDgraphDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	return nil
+}
+
+func customDirectiveValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+
+	httpArg := dir.Arguments.ForName("http")
+	if httpArg == nil || httpArg.Value.String() == "" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: http argument for @custom directive should not be empty.",
+			typ.Name, field.Name,
+		)
+	}
+	if httpArg.Value.Kind != ast.ObjectValue {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s: http argument for @custom directive should of type Object.",
+			typ.Name, field.Name,
+		)
+	}
+	u := httpArg.Value.Children.ForName("url")
+	if u == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; url field inside @custom directive is mandatory.", typ.Name,
+			field.Name)
+	}
+	if _, err := url.ParseRequestURI(u.Raw); err != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; url field inside @custom directive is invalid.", typ.Name,
+			field.Name)
+	}
+	method := httpArg.Value.Children.ForName("method")
+	if method == nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; method field inside @custom directive is mandatory.", typ.Name,
+			field.Name)
+	}
+	if method.Raw != "GET" && method.Raw != "POST" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
+			typ.Name, field.Name)
+
+	}
+
+	return nil
 }
 
 func idValidation(sch *ast.Schema,

@@ -490,3 +490,31 @@ schemas:
       type C {
         name
       }
+
+  -
+    name: "custom types shouldn't be part of Dgraph schema"
+    input: |
+      interface C {
+        c: String
+      }
+
+      type A implements C @not_dgraph {
+        id: ID!
+        p: String
+        q: String
+      }
+
+      type B implements C {
+        id: ID!
+        p: String
+      }
+    output: |
+      type C {
+        C.c
+      }
+      C.c: string .
+      type B {
+        C.c
+        B.p
+      }
+      B.p: string .

@@ -2,9 +2,9 @@
 # Input Schema
 #######################
 
-type Atype {
-	iamDeprecated: String @deprecated
-	soAmI: String! @deprecated(reason: "because")
+type User @not_dgraph {
+	id: ID!
+	name: String!
 }
 
 #######################
@@ -93,63 +93,10 @@ input StringHashFilter {
 }
 
 #######################
-# Generated Types
-#######################
-
-type AddAtypePayload {
-	atype(order: AtypeOrder, first: Int, offset: Int): [Atype]
-	numUids: Int
-}
-
-#######################
-# Generated Enums
-#######################
-
-enum AtypeOrderable {
-	iamDeprecated
-	soAmI
-}
-
-#######################
-# Generated Inputs
-#######################
-
-input AddAtypeInput {
-	iamDeprecated: String
-	soAmI: String!
-}
-
-input AtypeOrder {
-	asc: AtypeOrderable
-	desc: AtypeOrderable
-	then: AtypeOrder
-}
-
-input AtypeRef {
-	iamDeprecated: String
-	soAmI: String
-}
-
-#######################
 # Generated Query
 #######################
 
 type Query {
-	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
 }
 
-#######################
-# Generated Mutations
-#######################
-
-type Mutation {
-	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
-}
-
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
-}

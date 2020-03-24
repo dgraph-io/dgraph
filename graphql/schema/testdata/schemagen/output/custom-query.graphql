@@ -2,9 +2,9 @@
 # Input Schema
 #######################
 
-type Author @secret(field: "pwd") {
-	name: String! @id
-	token: String
+type User {
+	id: ID!
+	name: String!
 }
 
 #######################
@@ -96,18 +96,18 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeleteAuthorPayload {
+type DeleteUserPayload {
 	msg: String
 	numUids: Int
 }
 
-type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
@@ -115,49 +115,42 @@ type UpdateAuthorPayload {
 # Generated Enums
 #######################
 
-enum AuthorOrderable {
+enum UserOrderable {
 	name
-	token
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddAuthorInput {
+input AddUserInput {
 	name: String!
-	token: String
-	pwd: String!
 }
 
-input AuthorFilter {
-	name: StringHashFilter
-	and: AuthorFilter
-	or: AuthorFilter
-	not: AuthorFilter
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
 }
 
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
+input UserFilter {
+	id: [ID!]
+	not: UserFilter
 }
 
-input AuthorPatch {
-	token: String
-	pwd: String
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input AuthorRef {
+input UserPatch {
 	name: String
-	token: String
-	pwd: String
 }
 
-input UpdateAuthorInput {
-	filter: AuthorFilter!
-	set: AuthorPatch
-	remove: AuthorPatch
+input UserRef {
+	id: ID
+	name: String
 }
 
 #######################
@@ -165,9 +158,9 @@ input UpdateAuthorInput {
 #######################
 
 type Query {
-	getAuthor(name: String!): Author
-	checkAuthorPassword(name: String!, pwd: String!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -175,9 +168,9 @@ type Query {
 #######################
 
 type Mutation {
-	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
-	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
-	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
 #######################
@@ -185,7 +178,6 @@ type Mutation {
 #######################
 
 type Subscription {
-	getAuthor(name: String!): Author
-	checkAuthorPassword(name: String!, pwd: String!): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
