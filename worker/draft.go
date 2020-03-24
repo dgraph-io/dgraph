@@ -49,6 +49,10 @@ import (
 )
 
 type node struct {
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	pendingSize int64
+
+	// embedded struct
 	*conn.Node
 
 	// Fields which are never changed after init.
@@ -65,8 +69,6 @@ type node struct {
 
 	canCampaign bool
 	elog        trace.EventLog
-
-	pendingSize int64
 
 	ex *executor
 }

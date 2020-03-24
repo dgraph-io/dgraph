@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -546,13 +547,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
-		WithNumVersionsToKeep(math.MaxInt64).
+		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
-		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
-
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
