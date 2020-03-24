@@ -567,10 +567,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	// WriteBatch can not be used here because it doesn't have an API to allow writing multiple versions.
-	// We wish to store same keys with diff version/timestamp to ensure that we get all of them back
-	// when doing roll-up. WriteBatch can only be used when we want to write all txns at the same
-	// timestamp.
+	// WriteBatch can not be used here because it doesn't have an API to allow writing
+	// multiple versions. We wish to store same keys with diff version/timestamp to
+	// ensure that we get all of them back when doing roll-up. WriteBatch can only be
+	// used when we want to write all txns at the same timestamp.
 	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
