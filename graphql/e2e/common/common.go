@@ -176,6 +176,7 @@ func BootstrapServer(schema, data []byte) {
 		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	client.Alter(ctx, &api.Operation{DropAll: true})
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {

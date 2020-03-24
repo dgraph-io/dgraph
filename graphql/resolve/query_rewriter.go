@@ -75,27 +75,26 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
 	queriedType := field.Type()
 	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
 
+	if authRules == nil || authRules.Query == nil {
+		return dgQuery
+	}
+
 	var query gql.GraphQuery
 	query.Children = append(query.Children, dgQuery)
-
-	if authRules != nil && authRules.Query != nil {
-		authFilter := authRules.Query.GetFilter()
-
-		if dgQuery.Filter != nil {
-			dgQuery.Filter = &gql.FilterTree{
-				Op: "and",
-				Child: []*gql.FilterTree{
-					authFilter,
-					dgQuery.Filter,
-				},
-			}
-		} else {
-			dgQuery.Filter = authFilter
+	authFilter := authRules.Query.GetFilter()
+	if dgQuery.Filter != nil {
+		dgQuery.Filter = &gql.FilterTree{
+			Op: "and",
+			Child: []*gql.FilterTree{
+				authFilter,
+				dgQuery.Filter,
+			},
 		}
+	} else {
+		dgQuery.Filter = authFilter
 	}
 
 	query.Children = append(query.Children, getAuthQueries(field)...)
-
 	return &query
 }
 
@@ -113,11 +112,7 @@ func getAuthQueries(field schema.Field) []*gql.GraphQuery {
 		authRules := sch.AuthTypeRules(typeName)
 
 		if authRules != nil && authRules.Query != nil {
-			for _, q := range authRules.Query.GetQueries() {
-				if q != nil {
-					result = append(result, q)
-				}
-			}
+			result = append(result, authRules.Query.GetQueries()...)
 		}
 
 		for _, f := range (*i).SelectionSet() {
@@ -146,9 +141,7 @@ func getAuthQueries(field schema.Field) []*gql.GraphQuery {
 	}
 
 	fieldQueries = fieldQueries[:j]
-
 	result = append(result, fieldQueries...)
-
 	return result
 }
 
@@ -219,11 +212,7 @@ func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.Graph
 				}
 
 				result = append(result, last)
-				for _, i := range authRules.Query.GetQueries() {
-					if i != nil {
-						result = append(result, i)
-					}
-				}
+				result = append(result, authRules.Query.GetQueries()...)
 			}
 		}
 

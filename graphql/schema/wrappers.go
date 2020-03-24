@@ -488,6 +488,14 @@ const (
 	GqlTyp
 )
 
+type AuthOp int
+
+const (
+	Filter AuthOp = iota
+	Predicate
+	Jwt
+)
+
 type RuleAst struct {
 	Name  string
 	Typ   AuthVariable
@@ -606,11 +614,16 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 		return result
 	}
 
+	if r.Not != nil {
+		// TODO reverse
+		return r.Not.GetFilter()
+	}
+
 	if r.isRBAC() {
 		return nil
 	}
 
-	if r.Rule.hasFilter() {
+	if r.Rule.IsFilter() {
 		result.Func = &gql.Function{
 			Name: "uid",
 			Args: []gql.Arg{{
@@ -631,6 +644,60 @@ type AuthContainer struct {
 	Delete *RuleNode
 }
 
+func (r *RuleAst) checkType(op AuthVariable) bool {
+	if r == nil {
+		return false
+	}
+
+	return r.Typ == op
+}
+
+func (r *RuleAst) IsGqlTyp() bool {
+	return r.checkType(GqlTyp)
+}
+
+func (r *RuleAst) IsConstant() bool {
+	return r.checkType(Constant)
+}
+
+func (r *RuleAst) IsJWT() bool {
+	return r.checkType(JwtVar)
+}
+
+func (r *RuleAst) IsOp() bool {
+	return r.checkType(Op)
+}
+
+func (r *RuleAst) GetOperation() *RuleAst {
+	if r == nil {
+		return nil
+	}
+
+	switch r.Typ {
+	case Constant:
+		// Constant should be a leaf
+		return nil
+	case Op:
+		// Already an operation
+		return r
+	case GqlTyp:
+	case JwtVar:
+		if r.Value != nil && r.Value.IsOp() {
+			return r.Value
+		}
+	}
+
+	return nil
+}
+
+func (r *RuleAst) GetOperand() *RuleAst {
+	if r == nil && !r.IsOp() {
+		return nil
+	}
+
+	return r.Value
+}
+
 func (r *RuleAst) getName() string {
 	if r.Typ == GqlTyp {
 		return r.dgraphPredicate
@@ -643,12 +710,14 @@ func (r *RuleAst) getName() string {
 	return r.Name
 }
 
+// Builds query used to get authorized nodes and their uids
 func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
-	if !r.hasFilter() {
+	operation := r.GetOperation()
+	if operation.getName() != "filter" {
 		return nil
 	}
 
-	deepVal := r.Value.Value
+	operand := operation.GetOperand()
 
 	dgQuery := &gql.GraphQuery{
 		Cascade: true,
@@ -661,67 +730,62 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 		Children: []*gql.GraphQuery{
 			{Attr: "uid"},
 			{
-				Attr: r.getName(),
-				Children: []*gql.GraphQuery{
-					{Attr: "uid"},
-				},
-				Filter: &gql.FilterTree{
-					Func: &gql.Function{
-						Name: deepVal.Value.getName(),
-						Args: []gql.Arg{
-							{Value: deepVal.getName()},
-							{Value: deepVal.Value.Value.getName()},
-						},
-					},
-				},
+				Attr:     r.getName(),
+				Children: []*gql.GraphQuery{{Attr: "uid"}},
+				Filter:   operand.getRuleQuery(),
 			},
 		},
 	}
 	return dgQuery
 }
 
-// Creates a filter() for values that doesn't have nested operations
-// It assumes the data is in format {isPublic: {eq: true}}
+// Creates a filter() for dgraph operations, like, eq
 func (r *RuleAst) getRuleQuery() *gql.FilterTree {
+	operation := r.GetOperation()
+	if operation.IsFilter() {
+		return nil
+	}
+
 	return &gql.FilterTree{
 		Func: &gql.Function{
-			Name: r.Value.getName(),
+			Name: operation.getName(),
 			Args: []gql.Arg{
 				{Value: r.getName()},
-				{Value: r.Value.Value.getName()},
+				{Value: operation.GetOperand().getName()},
 			},
 		},
 	}
 }
 
-func (r *RuleAst) hasFilter() bool {
-	for r != nil {
-		if r.Name == "filter" && r.Typ == Op {
-			return true
-		}
-		r = r.Value
+func (r *RuleAst) IsFilter() bool {
+	if r == nil {
+		return false
 	}
 
-	return false
+	operation := r.GetOperation()
+	return operation.getName() == "filter"
 }
 
 func (r *RuleNode) GetQueries() []*gql.GraphQuery {
 	var list []*gql.GraphQuery
 
 	for _, i := range r.Or {
-		list = append(list, i.Rule.buildQuery(i.RuleID))
+		list = append(list, i.GetQueries()...)
 	}
 
 	for _, i := range r.And {
-		list = append(list, i.Rule.buildQuery(i.RuleID))
+		list = append(list, i.GetQueries()...)
 	}
 
 	if r.Not != nil {
-		list = append(list, r.Not.Rule.buildQuery(r.Not.RuleID))
+		// TODO reverse sign
+		list = append(list, r.Not.GetQueries()...)
 	}
 
 	if r.Rule != nil {
-		list = append(list, r.Rule.buildQuery(r.RuleID))
+		if query := r.Rule.buildQuery(r.RuleID); query != nil {
+			list = append(list, query)
+		}
 	}
 
 	return list
