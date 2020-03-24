@@ -634,7 +634,7 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 		return result
 	}
 
-	return r.Rule.getRuleQuery()
+	return r.Rule.getRuleQuery(nil)
 }
 
 type AuthContainer struct {
@@ -703,15 +703,11 @@ func (r *RuleAst) getName() string {
 		return r.dgraphPredicate
 	}
 
-	if r.Typ == JwtVar {
-		return "user1"
-	}
-
 	return r.Name
 }
 
 // Builds query used to get authorized nodes and their uids
-func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
+func (r *RuleAst) buildQuery(ruleID int, authVariables map[string]string) *gql.GraphQuery {
 	operation := r.GetOperation()
 	if operation.getName() != "filter" {
 		return nil
@@ -732,7 +728,7 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 			{
 				Attr:     r.getName(),
 				Children: []*gql.GraphQuery{{Attr: "uid"}},
-				Filter:   operand.getRuleQuery(),
+				Filter:   operand.getRuleQuery(authVariables),
 			},
 		},
 	}
@@ -740,10 +736,17 @@ func (r *RuleAst) buildQuery(ruleID int) *gql.GraphQuery {
 }
 
 // Creates a filter() for dgraph operations, like, eq
-func (r *RuleAst) getRuleQuery() *gql.FilterTree {
+func (r *RuleAst) getRuleQuery(authVariables map[string]string) *gql.FilterTree {
 	operation := r.GetOperation()
 	if operation.IsFilter() {
 		return nil
+	}
+
+	var ruleValue string
+	if operation.GetOperand().IsJWT() && authVariables != nil {
+		ruleValue = authVariables[operation.GetOperand().getName()]
+	} else {
+		ruleValue = operation.GetOperand().getName()
 	}
 
 	return &gql.FilterTree{
@@ -751,7 +754,7 @@ func (r *RuleAst) getRuleQuery() *gql.FilterTree {
 			Name: operation.getName(),
 			Args: []gql.Arg{
 				{Value: r.getName()},
-				{Value: operation.GetOperand().getName()},
+				{Value: ruleValue},
 			},
 		},
 	}
@@ -766,24 +769,24 @@ func (r *RuleAst) IsFilter() bool {
 	return operation.getName() == "filter"
 }
 
-func (r *RuleNode) GetQueries() []*gql.GraphQuery {
+func (r *RuleNode) GetQueries(authVariables map[string]string) []*gql.GraphQuery {
 	var list []*gql.GraphQuery
 
 	for _, i := range r.Or {
-		list = append(list, i.GetQueries()...)
+		list = append(list, i.GetQueries(authVariables)...)
 	}
 
 	for _, i := range r.And {
-		list = append(list, i.GetQueries()...)
+		list = append(list, i.GetQueries(authVariables)...)
 	}
 
 	if r.Not != nil {
 		// TODO reverse sign
-		list = append(list, r.Not.GetQueries()...)
+		list = append(list, r.Not.GetQueries(authVariables)...)
 	}
 
 	if r.Rule != nil {
-		if query := r.Rule.buildQuery(r.RuleID); query != nil {
+		if query := r.Rule.buildQuery(r.RuleID, authVariables); query != nil {
 			list = append(list, query)
 		}
 	}

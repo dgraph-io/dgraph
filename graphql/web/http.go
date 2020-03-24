@@ -109,6 +109,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	ctx = x.AttachAuthorizationJwt(ctx, r)
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
