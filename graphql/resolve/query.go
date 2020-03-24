@@ -106,13 +106,17 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer stop()
 
 	res, err := qr.rewriteAndExecute(ctx, query)
-
-	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
-	var br []byte
+	var result interface{}
 	if err == nil {
-		br, err = json.Marshal(completed)
+		err = json.Unmarshal(res, &result)
 	}
-	return &Resolved{Data: br, Err: err}
+	completed, err := qr.resultCompleter.Complete(ctx, query, result, err)
+	// var br []byte
+	// if err.Error() == "" {
+	// 	br, err = json.Marshal(completed)
+	// }
+	// fmt.Println("br: ", string(br))
+	return &Resolved{Data: completed, Err: err}
 }
 
 func (qr *queryResolver) rewriteAndExecute(

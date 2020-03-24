@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -36,7 +35,7 @@ import (
 // Response represents a GraphQL response
 type Response struct {
 	Errors x.GqlErrorList
-	Data   bytes.Buffer
+	Data   map[string]interface{}
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -58,23 +57,35 @@ func (r *Response) WithError(err error) {
 // If r.Data is empty before the call, then r.Data becomes {p}
 // If r.Data contains data it always looks like {f,g,...}, and
 // adding to that results in {f,g,...,p}
-func (r *Response) AddData(p []byte) {
-	if r == nil || len(p) == 0 {
+func (r *Response) AddData(p interface{}) {
+	res, ok := p.(map[string]interface{})
+	if !ok {
+		// TODO - Log and return error
 		return
 	}
 
-	if r.Data.Len() > 0 {
-		// The end of the buffer is always the closing `}`
-		r.Data.Truncate(r.Data.Len() - 1)
-		x.Check2(r.Data.WriteRune(','))
+	if r.Data == nil {
+		r.Data = make(map[string]interface{})
 	}
-
-	if r.Data.Len() == 0 {
-		x.Check2(r.Data.WriteRune('{'))
+	for k, v := range res {
+		r.Data[k] = v
 	}
+	// if r == nil || len(p) == 0 {
+	// 	return
+	// }
 
-	x.Check2(r.Data.Write(p))
-	x.Check2(r.Data.WriteRune('}'))
+	// if r.Data.Len() > 0 {
+	// 	// The end of the buffer is always the closing `}`
+	// 	r.Data.Truncate(r.Data.Len() - 1)
+	// 	x.Check2(r.Data.WriteRune(','))
+	// }
+
+	// if r.Data.Len() == 0 {
+	// 	x.Check2(r.Data.WriteRune('{'))
+	// }
+
+	// x.Check2(r.Data.Write(p))
+	// x.Check2(r.Data.WriteRune('}'))
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
@@ -87,12 +98,15 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 		return int64(i), err
 	}
 
+	b, err := json.Marshal(r.Data)
+	// TODO - Handle the error
+
 	js, err := json.Marshal(struct {
 		Errors []*x.GqlError   `json:"errors,omitempty"`
 		Data   json.RawMessage `json:"data,omitempty"`
 	}{
 		Errors: r.Errors,
-		Data:   r.Data.Bytes(),
+		Data:   b,
 	})
 
 	if err != nil {

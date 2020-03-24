@@ -60,7 +60,7 @@ const (
 		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema that was generated from the 'schema' field.  
+		The GraphQL schema that was generated from the 'schema' field.
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
@@ -207,7 +207,7 @@ const (
 	input ConfigInput {
 
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		Estimated memory the LRU cache can take. Actual usage by the process would be
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
@@ -679,7 +679,7 @@ func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 	req := &schema.Request{
 		Query: `query { getGQLSchema { id schema } }`}
 	resp := r.Resolve(context.Background(), req)
-	if len(resp.Errors) > 0 || resp.Data.Len() == 0 {
+	if len(resp.Errors) > 0 || len(resp.Data) == 0 {
 		return nil, resp.Errors
 	}
 
@@ -687,8 +687,12 @@ func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 		GetGQLSchema *gqlSchema
 	}
 
-	err := json.Unmarshal(resp.Data.Bytes(), &result)
+	b, err := json.Marshal(resp.Data)
+	if err != nil {
+		return nil, err
+	}
 
+	err = json.Unmarshal(b, &result)
 	return result.GetGQLSchema, err
 }
 

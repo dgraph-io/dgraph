@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
@@ -121,7 +122,9 @@ func TestResolver(t *testing.T) {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
 
-			require.JSONEq(t, tcase.Expected, resp.Data.String(), tcase.Explanation)
+			b, err := json.Marshal(resp.Data)
+			require.NoError(t, err)
+			require.JSONEq(t, tcase.Expected, string(b), tcase.Explanation)
 		})
 	}
 }
@@ -180,7 +183,9 @@ func TestResponseOrder(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
 
 			require.Nil(t, resp.Errors)
-			require.Equal(t, test.Expected, resp.Data.String())
+			b, err := json.Marshal(resp.Data)
+			require.NoError(t, err)
+			require.Equal(t, test.Expected, string(b))
 		})
 	}
 }
@@ -257,7 +262,9 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 				})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
-			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
+			b, err := json.Marshal(resp.Data)
+			require.NoError(t, err)
+			require.JSONEq(t, tcase.expected, string(b), tcase.explanation)
 		})
 	}
 }
@@ -325,7 +332,9 @@ func TestUpdateMutationUsesErrorPropagation(t *testing.T) {
 				&executor{resp: tcase.queryResponse, assigned: tcase.mutResponse})
 
 			test.RequireJSONEq(t, tcase.errors, resp.Errors)
-			require.JSONEq(t, tcase.expected, resp.Data.String(), tcase.explanation)
+			b, err := json.Marshal(resp.Data)
+			require.NoError(t, err)
+			require.JSONEq(t, tcase.expected, string(b), tcase.explanation)
 		})
 	}
 }
@@ -430,7 +439,9 @@ func TestManyMutationsWithError(t *testing.T) {
 			if diff := cmp.Diff(tcase.errors, resp.Errors); diff != "" {
 				t.Errorf("errors mismatch (-want +got):\n%s", diff)
 			}
-			require.JSONEq(t, tcase.expected, resp.Data.String())
+			b, err := json.Marshal(resp.Data)
+			require.NoError(t, err)
+			require.JSONEq(t, tcase.expected, string(b))
 		})
 	}
 }

@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -125,7 +126,7 @@ type adminExecutor struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type Resolved struct {
-	Data []byte
+	Data interface{}
 	Err  error
 }
 
@@ -371,6 +372,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		// The GraphQL data response needs to be written in the same order as the
 		// queries in the request.
 		for _, res := range allResolved {
+			fmt.Printf("data: %+v\n", res.Data)
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			resp.WithError(res.Err)
@@ -439,11 +441,12 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(
 		func(ctx context.Context, field schema.Field, result interface{},
 			err error) (interface{}, error) {
-			// res, err := cf(ctx, field, result, err)
+			res, err := cf(ctx, field, result, err)
 			// if len(res) >= 2 {
 			// 	res = res[1 : len(res)-1]
 			// }
-			return result, err
+			fmt.Println("res: ", res)
+			return res, err
 		})
 }
 
@@ -661,7 +664,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
-
 	valToComplete, ok := dgResult.(map[string]interface{})
 	if !ok {
 		err := errors.New("failed to unmarshal Dgraph query result")
@@ -673,6 +675,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	switch val := valToComplete[field.ResponseName()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
+			fmt.Println("yo: ", field.ResponseName(), "val: ", val)
 			// Turn Dgraph list result to single object
 			// "q":[{ ... }] ---> "q":{ ... }
 
@@ -715,6 +718,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 		// { } ---> "q": null
 		// case
 	}
+	fmt.Println("to mate")
 
 	// Errors should report the "path" into the result where the error was found.
 	//
@@ -728,8 +732,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 
 	completed, gqlErrs := completeObject(
 		path, field.Type(), []schema.Field{field}, valToComplete)
+	fmt.Println("completed: ", completed)
 
-	if len(completed) < 2 {
+	if completed == nil {
 		// This could only occur completeObject crushed the whole query, but
 		// that should never happen because the result type shouldn't be '!'.
 		// We should wrap enough testing around the schema generation that this
@@ -836,6 +841,7 @@ func completeObject(
 
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
+		fmt.Println("comp: ", completed)
 		if completed == nil {
 			if !f.Type().Nullable() {
 				return nil, errs
@@ -849,7 +855,7 @@ func completeObject(
 	}
 	// x.Check2(buf.WriteRune('}'))
 
-	return res, errs
+	return m, errs
 }
 
 // completeValue applies the value completion algorithm to a single value, which
@@ -882,7 +888,7 @@ func completeValue(
 			}
 
 			if field.Type().Nullable() {
-				return []interface{}{nil}, nil
+				return nil, nil
 			}
 
 			gqlErr := x.GqlErrorf(
