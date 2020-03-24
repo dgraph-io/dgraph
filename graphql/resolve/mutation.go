@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -178,13 +179,19 @@ func (mr *mutationResolver) Resolve(
 
 	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
 
+	var br []byte
+	if err == nil {
+		br, err = json.Marshal(completed)
+		// TODO - wrap the error
+	}
+
 	selSets := mutation.SelectionSet()
 	for _, selSet := range selSets {
 		if selSet.Name() != schema.NumUid {
 			continue
 		}
 
-		s := string(completed)
+		s := string(br)
 		switch {
 		case strings.Contains(s, schema.NumUid):
 			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
@@ -203,7 +210,7 @@ func (mr *mutationResolver) Resolve(
 	}
 
 	return &Resolved{
-		Data: completed,
+		Data: br,
 		Err:  err,
 	}, success
 }
@@ -256,12 +263,13 @@ func (mr *mutationResolver) rewriteAndExecute(
 // the result of a deletion.
 func deleteCompletion() CompletionFunc {
 	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+		ctx context.Context, field schema.Field, result interface{},
+		err error) (interface{}, error) {
 
 		if field.Name() == "msg" {
-			return []byte(`{ "msg": "Deleted" }`), err
+			return map[string]interface{}{"msg": "Deleted"}, err
 		}
 
-		return []byte(fmt.Sprintf(`{ "%s": null }`, schema.NumUid)), err
+		return map[string]interface{}{schema.NumUid: nil}, err
 	})
 }

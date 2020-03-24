@@ -17,7 +17,6 @@
 package resolve
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -75,7 +74,8 @@ type ResolverFactory interface {
 // in resolving field and applies a completion step - for example, apply GraphQL
 // error propagation or massaging error paths.
 type ResultCompleter interface {
-	Complete(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+	Complete(ctx context.Context, field schema.Field, result interface{},
+		err error) (interface{}, error)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
@@ -132,14 +132,14 @@ type Resolved struct {
 // CompletionFunc is an adapter that allows us to compose completions and build a
 // ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
 type CompletionFunc func(
-	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+	ctx context.Context, field schema.Field, result interface{}, err error) (interface{}, error)
 
 // Complete calls cf(ctx, field, result, err)
 func (cf CompletionFunc) Complete(
 	ctx context.Context,
 	field schema.Field,
-	result []byte,
-	err error) ([]byte, error) {
+	result interface{},
+	err error) (interface{}, error) {
 
 	return cf(ctx, field, result, err)
 }
@@ -415,7 +415,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // noopCompletion just passes back it's result and err arguments
 func noopCompletion(
-	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+	ctx context.Context, field schema.Field, result interface{},
+	err error) (interface{}, error) {
 	return result, err
 }
 
@@ -436,12 +437,13 @@ func noopCompletion(
 // q1: {...}
 func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(
-		func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-			res, err := cf(ctx, field, result, err)
-			if len(res) >= 2 {
-				res = res[1 : len(res)-1]
-			}
-			return res, err
+		func(ctx context.Context, field schema.Field, result interface{},
+			err error) (interface{}, error) {
+			// res, err := cf(ctx, field, result, err)
+			// if len(res) >= 2 {
+			// 	res = res[1 : len(res)-1]
+			// }
+			return result, err
 		})
 }
 
@@ -454,21 +456,18 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 // So `addFoo: ...` is added.
 func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+		ctx context.Context, field schema.Field, result interface{}, err error) (interface{}, error) {
 
 		res, err := cf(ctx, field, result, err)
 
-		var b bytes.Buffer
-		x.Check2(b.WriteString("\""))
-		x.Check2(b.WriteString(name))
-		x.Check2(b.WriteString(`": `))
-		if len(res) > 0 {
-			x.Check2(b.Write(res))
+		m := make(map[string]interface{})
+		if res == nil {
+			m[name] = nil
 		} else {
-			x.Check2(b.WriteString("null"))
+			m[name] = result
 		}
 
-		return b.Bytes(), err
+		return m, err
 	})
 }
 
@@ -480,7 +479,8 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 // But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
 func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+		ctx context.Context, field schema.Field, result interface{},
+		err error) (interface{}, error) {
 
 		res, err := cf(ctx, field, result, err)
 
@@ -499,18 +499,19 @@ func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 // any aliases specified in the query before apply cf.
 func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
+		ctx context.Context, field schema.Field, val interface{},
+		err error) (interface{}, error) {
 
-		if len(result) == 0 {
+		if val == nil {
 			return nil, schema.AsGQLErrors(err)
 		}
 
-		var val interface{}
-		if marshErr := json.Unmarshal(result, &val); marshErr != nil {
-			return nil,
-				schema.AppendGQLErrs(marshErr,
-					schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
-		}
+		// var val interface{}
+		// if marshErr := json.Unmarshal(result, &val); marshErr != nil {
+		// 	return nil,
+		// 		schema.AppendGQLErrs(marshErr,
+		// 			schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
+		// }
 
 		var aliased interface{}
 		var resErr error
@@ -533,13 +534,13 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 // completeResult takes a result like {"res":{"a":...,"b":...}} and does the standard
 // object completion.  This is different to doing completion from Dgraph, because that requires
 // handling {"res":[{...}]} even if we expect a single value
-func completeResult(ctx context.Context, field schema.Field, result []byte, e error) (
-	[]byte, error) {
+func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
+	interface{}, error) {
 
-	var val interface{}
-	if err := json.Unmarshal(result, &val); err != nil {
-		return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
-	}
+	// var val interface{}
+	// if err := json.Unmarshal(result, &val); err != nil {
+	// 	return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
+	// }
 
 	path := make([]interface{}, 0, maxPathLength(field))
 
@@ -617,8 +618,8 @@ func completeResult(ctx context.Context, field schema.Field, result []byte, e er
 //
 // Returned errors are generally lists of errors resulting from the value completion
 // algorithm that may emit multiple errors
-func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte, e error) (
-	[]byte, error) {
+func completeDgraphResult(ctx context.Context, field schema.Field, dgResult interface{}, e error) (
+	interface{}, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "completeDgraphResult")
 	defer stop()
@@ -635,20 +636,20 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	//    { }  --->  { "q": null }
 
 	errs := schema.AsGQLErrors(e)
-	if len(dgResult) == 0 {
+	if dgResult == nil {
 		return nil, errs
 	}
 
-	nullResponse := func() []byte {
-		var buf bytes.Buffer
-		x.Check2(buf.WriteString(`{ "`))
-		x.Check2(buf.WriteString(field.ResponseName()))
-		x.Check2(buf.WriteString(`": null }`))
-		return buf.Bytes()
+	nullResponse := func() interface{} {
+		// var buf bytes.Buffer
+		// x.Check2(buf.WriteString(`{ "`))
+		// x.Check2(buf.WriteString(field.ResponseName()))
+		// x.Check2(buf.WriteString(`": null }`))
+		return map[string]interface{}{field.ResponseName(): nil}
 	}
 
-	dgraphError := func() ([]byte, error) {
-		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
+	dgraphError := func() (interface{}, error) {
+		glog.Errorf("Could not process Dgraph result : \n%+v", dgResult)
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
@@ -660,12 +661,11 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
-	var valToComplete map[string]interface{}
-	err := json.Unmarshal(dgResult, &valToComplete)
-	if err != nil {
-		glog.Errorf("%+v \n Dgraph result :\n%s\n",
-			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
-			string(dgResult))
+
+	valToComplete, ok := dgResult.(map[string]interface{})
+	if !ok {
+		err := errors.New("failed to unmarshal Dgraph query result")
+		glog.Errorf("%+v \n Dgraph result :\n%s\n", err, dgResult)
 		return nullResponse(),
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
 	}
@@ -783,13 +783,14 @@ func completeObject(
 	path []interface{},
 	typ schema.Type,
 	fields []schema.Field,
-	res map[string]interface{}) ([]byte, x.GqlErrorList) {
+	res map[string]interface{}) (map[string]interface{}, x.GqlErrorList) {
 
 	var errs x.GqlErrorList
-	var buf bytes.Buffer
-	comma := ""
+	m := make(map[string]interface{})
+	// var buf bytes.Buffer
+	// comma := ""
 
-	x.Check2(buf.WriteRune('{'))
+	// x.Check2(buf.WriteRune('{'))
 
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -811,10 +812,10 @@ func completeObject(
 			continue
 		}
 
-		x.Check2(buf.WriteString(comma))
-		x.Check2(buf.WriteRune('"'))
-		x.Check2(buf.WriteString(f.ResponseName()))
-		x.Check2(buf.WriteString(`": `))
+		// x.Check2(buf.WriteString(comma))
+		// x.Check2(buf.WriteRune('"'))
+		// x.Check2(buf.WriteString(f.ResponseName()))
+		// x.Check2(buf.WriteString(`": `))
 
 		val := res[f.ResponseName()]
 		if f.Name() == schema.Typename {
@@ -839,14 +840,16 @@ func completeObject(
 			if !f.Type().Nullable() {
 				return nil, errs
 			}
-			completed = []byte(`null`)
+			m[f.ResponseName()] = nil
+			// completed = []byte(`null`)
 		}
-		x.Check2(buf.Write(completed))
-		comma = ", "
+		m[f.ResponseName()] = completed
+		// x.Check2(buf.Write(completed))
+		// comma = ", "
 	}
-	x.Check2(buf.WriteRune('}'))
+	// x.Check2(buf.WriteRune('}'))
 
-	return buf.Bytes(), errs
+	return res, errs
 }
 
 // completeValue applies the value completion algorithm to a single value, which
@@ -854,7 +857,7 @@ func completeObject(
 func completeValue(
 	path []interface{},
 	field schema.Field,
-	val interface{}) ([]byte, x.GqlErrorList) {
+	val interface{}) (interface{}, x.GqlErrorList) {
 
 	switch val := val.(type) {
 	case map[string]interface{}:
@@ -875,11 +878,11 @@ func completeValue(
 				//
 				// Seems best if we pick [], rather than null, as the list value if
 				// there's nothing in the Dgraph result.
-				return []byte("[]"), nil
+				return []interface{}{}, nil
 			}
 
 			if field.Type().Nullable() {
-				return []byte("null"), nil
+				return []interface{}{nil}, nil
 			}
 
 			gqlErr := x.GqlErrorf(
@@ -895,23 +898,23 @@ func completeValue(
 
 		// Can this ever error?  We can't have an unsupported type or value because
 		// we just unmarshaled this val.
-		json, err := json.Marshal(val)
-		if err != nil {
-			gqlErr := x.GqlErrorf(
-				"Error marshalling value for field '%s' (type %s).  "+
-					"Resolved as null (which may trigger GraphQL error propagation) ",
-				field.Name(), field.Type()).
-				WithLocations(field.Location())
-			gqlErr.Path = copyPath(path)
+		// json, err := json.Marshal(val)
+		// if err != nil {
+		// 	gqlErr := x.GqlErrorf(
+		// 		"Error marshalling value for field '%s' (type %s).  "+
+		// 			"Resolved as null (which may trigger GraphQL error propagation) ",
+		// 		field.Name(), field.Type()).
+		// 		WithLocations(field.Location())
+		// 	gqlErr.Path = copyPath(path)
 
-			if field.Type().Nullable() {
-				return []byte("null"), x.GqlErrorList{gqlErr}
-			}
+		// 	if field.Type().Nullable() {
+		// 		return []byte("null"), x.GqlErrorList{gqlErr}
+		// 	}
 
-			return nil, x.GqlErrorList{gqlErr}
-		}
+		// 	return nil, x.GqlErrorList{gqlErr}
+		// }
 
-		return json, nil
+		return val, nil
 	}
 }
 
@@ -935,11 +938,12 @@ func completeValue(
 func completeList(
 	path []interface{},
 	field schema.Field,
-	values []interface{}) ([]byte, x.GqlErrorList) {
+	values []interface{}) ([]interface{}, x.GqlErrorList) {
 
-	var buf bytes.Buffer
+	res := make([]interface{}, 0, len(values))
+	// var buf bytes.Buffer
 	var errs x.GqlErrorList
-	comma := ""
+	// comma := ""
 
 	if field.Type().ListType() == nil {
 		// This means a bug on our part - in rewriting, schema generation,
@@ -950,11 +954,11 @@ func completeList(
 		return mismatched(path, field, values)
 	}
 
-	x.Check2(buf.WriteRune('['))
+	// x.Check2(buf.WriteRune('['))
 	for i, b := range values {
 		r, err := completeValue(append(path, i), field, b)
 		errs = append(errs, err...)
-		x.Check2(buf.WriteString(comma))
+		// x.Check2(buf.WriteString(comma))
 		if r == nil {
 			if !field.Type().ListType().Nullable() {
 				// Unlike the choice in completeValue() above, where we turn missing
@@ -973,21 +977,23 @@ func completeList(
 				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 				return nil, errs
 			}
-			x.Check2(buf.WriteString("null"))
+			res = append(res, nil)
+			// x.Check2(buf.WriteString("null"))
 		} else {
-			x.Check2(buf.Write(r))
+			res = append(res, r)
+			// x.Check2(buf.Write(r))
 		}
-		comma = ", "
+		// comma = ", "
 	}
-	x.Check2(buf.WriteRune(']'))
+	// x.Check2(buf.WriteRune(']'))
 
-	return buf.Bytes(), errs
+	return res, errs
 }
 
 func mismatched(
 	path []interface{},
 	field schema.Field,
-	values []interface{}) ([]byte, x.GqlErrorList) {
+	values []interface{}) ([]interface{}, x.GqlErrorList) {
 
 	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
 		"but its type is %s.\n"+
@@ -1005,7 +1011,7 @@ func mismatched(
 	}
 
 	val, errs := completeValue(path, field, nil)
-	return val, append(errs, gqlErr)
+	return []interface{}{val}, append(errs, gqlErr)
 }
 
 func copyPath(path []interface{}) []interface{} {

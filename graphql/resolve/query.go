@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -107,7 +108,11 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	res, err := qr.rewriteAndExecute(ctx, query)
 
 	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
-	return &Resolved{Data: completed, Err: err}
+	var br []byte
+	if err == nil {
+		br, err = json.Marshal(completed)
+	}
+	return &Resolved{Data: br, Err: err}
 }
 
 func (qr *queryResolver) rewriteAndExecute(
