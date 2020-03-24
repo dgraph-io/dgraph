@@ -111,11 +111,6 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 		err = json.Unmarshal(res, &result)
 	}
 	completed, err := qr.resultCompleter.Complete(ctx, query, result, err)
-	// var br []byte
-	// if err.Error() == "" {
-	// 	br, err = json.Marshal(completed)
-	// }
-	// fmt.Println("br: ", string(br))
 	return &Resolved{Data: completed, Err: err}
 }
 

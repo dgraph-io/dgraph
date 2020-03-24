@@ -70,22 +70,6 @@ func (r *Response) AddData(p interface{}) {
 	for k, v := range res {
 		r.Data[k] = v
 	}
-	// if r == nil || len(p) == 0 {
-	// 	return
-	// }
-
-	// if r.Data.Len() > 0 {
-	// 	// The end of the buffer is always the closing `}`
-	// 	r.Data.Truncate(r.Data.Len() - 1)
-	// 	x.Check2(r.Data.WriteRune(','))
-	// }
-
-	// if r.Data.Len() == 0 {
-	// 	x.Check2(r.Data.WriteRune('{'))
-	// }
-
-	// x.Check2(r.Data.Write(p))
-	// x.Check2(r.Data.WriteRune('}'))
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w

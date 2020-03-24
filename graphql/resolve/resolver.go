@@ -19,7 +19,6 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -441,10 +440,6 @@ func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
 		func(ctx context.Context, field schema.Field, result interface{},
 			err error) (interface{}, error) {
 			res, err := cf(ctx, field, result, err)
-			// if len(res) >= 2 {
-			// 	res = res[1 : len(res)-1]
-			// }
-			fmt.Println("res: ", res)
 			return res, err
 		})
 }
@@ -507,13 +502,6 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 			return nil, schema.AsGQLErrors(err)
 		}
 
-		// var val interface{}
-		// if marshErr := json.Unmarshal(result, &val); marshErr != nil {
-		// 	return nil,
-		// 		schema.AppendGQLErrs(marshErr,
-		// 			schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
-		// }
-
 		var aliased interface{}
 		var resErr error
 		switch val := val.(type) {
@@ -537,11 +525,6 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 // handling {"res":[{...}]} even if we expect a single value
 func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
 	interface{}, error) {
-
-	// var val interface{}
-	// if err := json.Unmarshal(result, &val); err != nil {
-	// 	return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
-	// }
 
 	path := make([]interface{}, 0, maxPathLength(field))
 
@@ -639,10 +622,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	errs := schema.AsGQLErrors(e)
 
 	nullResponse := func() interface{} {
-		// var buf bytes.Buffer
-		// x.Check2(buf.WriteString(`{ "`))
-		// x.Check2(buf.WriteString(field.ResponseName()))
-		// x.Check2(buf.WriteString(`": null }`))
 		return map[string]interface{}{field.ResponseName(): nil}
 	}
 	if dgResult == nil {
@@ -881,26 +860,6 @@ func completeValue(
 
 			return nil, x.GqlErrorList{gqlErr}
 		}
-
-		// val is a scalar
-
-		// Can this ever error?  We can't have an unsupported type or value because
-		// we just unmarshaled this val.
-		// json, err := json.Marshal(val)
-		// if err != nil {
-		// 	gqlErr := x.GqlErrorf(
-		// 		"Error marshalling value for field '%s' (type %s).  "+
-		// 			"Resolved as null (which may trigger GraphQL error propagation) ",
-		// 		field.Name(), field.Type()).
-		// 		WithLocations(field.Location())
-		// 	gqlErr.Path = copyPath(path)
-
-		// 	if field.Type().Nullable() {
-		// 		return []byte("null"), x.GqlErrorList{gqlErr}
-		// 	}
-
-		// 	return nil, x.GqlErrorList{gqlErr}
-		// }
 
 		return val, nil
 	}
