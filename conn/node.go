@@ -27,16 +27,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/raftwal"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
 	otrace "go.opencensus.io/trace"
+
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/raftwal"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 var (
@@ -47,6 +48,12 @@ var (
 // Node represents a node participating in the RAFT protocol.
 type Node struct {
 	x.SafeMutex
+
+	// Applied is used to keep track of the applied RAFT proposals.
+	// The stages are proposed -> committed (accepted by cluster) ->
+	// applied (to PL) -> synced (to BadgerDB).
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	Applied y.WaterMark
 
 	joinLock sync.Mutex
 
@@ -70,10 +77,6 @@ type Node struct {
 	Rand        *rand.Rand
 
 	Proposals proposals
-	// applied is used to keep track of the applied RAFT proposals.
-	// The stages are proposed -> committed (accepted by cluster) ->
-	// applied (to PL) -> synced (to BadgerDB).
-	Applied y.WaterMark
 
 	heartbeatsOut int64
 	heartbeatsIn  int64
