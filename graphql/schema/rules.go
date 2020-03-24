@@ -595,6 +595,13 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 	return nil
 }
 
+func authValidation(sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive) *gqlerror.Error {
+	return nil
+}
+
 func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,

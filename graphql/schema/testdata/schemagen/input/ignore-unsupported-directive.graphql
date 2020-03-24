@@ -3,13 +3,13 @@ enum Role {
   User
 }
 
-directive @auth(r: Role = User) on FIELD_DEFINITION
+directive @auth1(r: Role = User) on FIELD_DEFINITION
 directive @auth2(r: Role = User, b: Role = User) on FIELD_DEFINITION
 directive @auth3(r: Role = User, b: Role = User) on FIELD_DEFINITION
 
-type Product @auth {
+type Product @auth1 {
   id: ID!
-  price: Float! @search @auth(r: Admin) @auth2(r: User, b: Admin)
-  name: String! @auth(r: Admin) @search @auth2 @auth3 @dgraph(pred: "p")
-  name2: String! @auth(r: Admin) @search @auth2 @dgraph(pred: "p") @auth3
+  price: Float! @search @auth1(r: Admin) @auth2(r: User, b: Admin)
+  name: String! @auth1(r: Admin) @search @auth2 @auth3 @dgraph(pred: "p")
+  name2: String! @auth1(r: Admin) @search @auth2 @dgraph(pred: "p") @auth3
 }

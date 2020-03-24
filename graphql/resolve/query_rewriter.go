@@ -59,15 +59,167 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
 
-		return dgQuery, nil
+		return addAuth(dgQuery, gqlQuery), nil
 
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery), nil
+		dgQuery := rewriteAsQuery(gqlQuery)
+		return addAuth(dgQuery, gqlQuery), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
+}
+
+func addAuth(dgQuery *gql.GraphQuery, field schema.Query) *gql.GraphQuery {
+	queriedType := field.Type()
+	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
+
+	if authRules == nil || authRules.Query == nil {
+		return dgQuery
+	}
+
+	var query gql.GraphQuery
+	query.Children = append(query.Children, dgQuery)
+	authFilter := authRules.Query.GetFilter()
+	if dgQuery.Filter != nil {
+		dgQuery.Filter = &gql.FilterTree{
+			Op: "and",
+			Child: []*gql.FilterTree{
+				authFilter,
+				dgQuery.Filter,
+			},
+		}
+	} else {
+		dgQuery.Filter = authFilter
+	}
+
+	query.Children = append(query.Children, getAuthQueries(field)...)
+	return &query
+}
+
+func getAuthQueries(field schema.Field) []*gql.GraphQuery {
+	visited := make(map[string]bool)
+	queue := []*schema.Field{&field}
+	result := []*gql.GraphQuery{}
+
+	sch := field.Operation().Schema()
+
+	for ind := 0; ind < len(queue); ind++ {
+		i := queue[ind]
+		typeName := (*i).Type().Name()
+		visited[typeName] = true
+		authRules := sch.AuthTypeRules(typeName)
+
+		if authRules != nil && authRules.Query != nil {
+			result = append(result, authRules.Query.GetQueries()...)
+		}
+
+		for _, f := range (*i).SelectionSet() {
+			if f.Skip() || !f.Include() || f.Name() == schema.Typename {
+				continue
+			}
+
+			if len(f.SelectionSet()) > 0 && !visited[f.Type().Name()] {
+				queue = append(queue, &f)
+			}
+		}
+
+	}
+
+	fieldQueries := generateFieldQueries(field, []*schema.Field{&field})
+	seen := make(map[string]bool)
+
+	j := 0
+	for _, i := range fieldQueries {
+		if seen[i.Attr] {
+			continue
+		}
+		seen[i.Attr] = true
+		fieldQueries[j] = i
+		j++
+	}
+
+	fieldQueries = fieldQueries[:j]
+	result = append(result, fieldQueries...)
+	return result
+}
+
+func generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.GraphQuery {
+	sch := field.Operation().Schema()
+	var result []*gql.GraphQuery
+
+	for _, f := range field.SelectionSet() {
+		if f.Skip() || !f.Include() || f.Name() == schema.Typename {
+			continue
+		}
+
+		path = append(path, &f)
+
+		if len(f.SelectionSet()) > 0 {
+			result = append(result, generateFieldQueries(f, path)...)
+		} else {
+			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
+			filterPut := false
+			if authRules != nil && authRules.Query != nil {
+				var query *gql.GraphQuery
+				name := ""
+
+				for i := len(path) - 1; i >= 1; i-- {
+					name = (*path[i]).Name() + name
+					child := &gql.GraphQuery{}
+					f := *path[i]
+					if f.Alias() != "" {
+						child.Alias = f.Alias()
+					} else {
+						child.Alias = f.Name()
+					}
+
+					if f.Type().Name() == schema.IDType {
+						child.Attr = "uid"
+					} else {
+						child.Attr = f.DgraphPredicate()
+					}
+
+					if query != nil {
+						child.Children = []*gql.GraphQuery{{
+							Attr: "uid",
+						}, query}
+
+						if !filterPut {
+							child.Filter = authRules.Query.GetFilter()
+							filterPut = true
+						}
+					}
+
+					query = child
+				}
+
+				last := &gql.GraphQuery{
+					Attr: fmt.Sprintf("%s.%s", (*path[0]).ResponseName(), name),
+					Func: &gql.Function{
+						Name: "type",
+						Args: []gql.Arg{{Value: (*path[0]).Type().Name()}},
+					},
+					Children: []*gql.GraphQuery{{
+						Attr: "uid",
+					}, query},
+					Cascade: true,
+				}
+
+				if !filterPut {
+					last.Filter = authRules.Query.GetFilter()
+				}
+
+				result = append(result, last)
+				result = append(result, authRules.Query.GetQueries()...)
+			}
+		}
+
+		path = path[:len(path)-1]
+	}
+
+	return result
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
@@ -242,6 +394,7 @@ func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
+
 	return dgQuery
 }
 
@@ -287,6 +440,9 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			Attr: "dgraph.type",
 		})
 	}
+
+	sch := field.Operation().Schema()
+
 	for _, f := range field.SelectionSet() {
 		// We skip typename because we can generate the information from schema or
 		// dgraph.type depending upon if the type is interface or not. For interface type
@@ -315,6 +471,30 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		addPagination(child, f)
 
 		addSelectionSetFrom(child, f)
+
+		if len(child.Children) > 0 {
+			authRules := sch.AuthTypeRules(f.Type().Name())
+			if authRules != nil && authRules.Query != nil {
+				filters := authRules.Query.GetFilter()
+				if child.Filter != nil {
+					child.Filter = &gql.FilterTree{
+						Op: "and",
+						Child: []*gql.FilterTree{
+							filters,
+							child.Filter,
+						},
+					}
+				} else {
+					child.Filter = filters
+				}
+
+			}
+		} else {
+			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
+			if authRules != nil && authRules.Query != nil {
+				continue
+			}
+		}
 
 		q.Children = append(q.Children, child)
 	}
