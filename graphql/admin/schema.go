@@ -133,10 +133,13 @@ func (asr *updateSchemaResolver) Mutate(
 		asr.newSchema.ID = asr.admin.schema.ID
 	}
 
-	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
-	if err != nil {
-		return nil, nil, schema.GQLWrapf(err,
-			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
+	if asr.newDgraphSchema != "" {
+		// The schema could be empty if it only has custom types/queries/mutations.
+		_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
+		if err != nil {
+			return nil, nil, schema.GQLWrapf(err,
+				"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
+		}
 	}
 
 	asr.admin.resetSchema(asr.newGQLSchema)

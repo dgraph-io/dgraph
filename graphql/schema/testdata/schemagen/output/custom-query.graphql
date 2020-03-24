@@ -2,17 +2,9 @@
 # Input Schema
 #######################
 
-type Post {
+type User {
 	id: ID!
-	title: String!
-	text: String
-	postType: PostType!
-}
-
-enum PostType {
-	Statement
-	Question
-	Answer
+	name: String!
 }
 
 #######################
@@ -104,18 +96,18 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeletePostPayload {
+type DeleteUserPayload {
 	msg: String
 	numUids: Int
 }
 
-type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
@@ -123,49 +115,42 @@ type UpdatePostPayload {
 # Generated Enums
 #######################
 
-enum PostOrderable {
-	title
-	text
+enum UserOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddPostInput {
-	title: String!
-	text: String
-	postType: PostType!
+input AddUserInput {
+	name: String!
 }
 
-input PostFilter {
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
 	id: [ID!]
-	not: PostFilter
+	not: UserFilter
 }
 
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input PostPatch {
-	title: String
-	text: String
-	postType: PostType
+input UserPatch {
+	name: String
 }
 
-input PostRef {
+input UserRef {
 	id: ID
-	title: String
-	text: String
-	postType: PostType
-}
-
-input UpdatePostInput {
-	filter: PostFilter!
-	set: PostPatch
-	remove: PostPatch
+	name: String
 }
 
 #######################
@@ -173,8 +158,9 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(id: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -182,7 +168,7 @@ type Query {
 #######################
 
 type Mutation {
-	addPost(input: [AddPostInput!]!): AddPostPayload
-	updatePost(input: UpdatePostInput!): UpdatePostPayload
-	deletePost(filter: PostFilter!): DeletePostPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }

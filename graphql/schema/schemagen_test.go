@@ -38,7 +38,7 @@ type TestCase struct {
 }
 
 func TestDGSchemaGen(t *testing.T) {
-	fileName := "schemagen_test.yml"
+	fileName := "dgraph_schemagen_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 

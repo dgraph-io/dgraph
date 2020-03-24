@@ -20,8 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
@@ -212,6 +215,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
 			return NewQueryResolver(fns.Qrw, fns.Qe,
 				StdQueryCompletion())
+		})
+	}
+
+	for _, q := range s.Queries(schema.HTTPQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewHTTPResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, nil, nil, StdQueryCompletion())
 		})
 	}
 
@@ -1076,4 +1088,53 @@ func aliasObject(
 	}
 
 	return result, errs
+}
+
+// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
+type httpResolver struct {
+	*http.Client
+	httpRewriter    QueryRewriter
+	httpExecutor    QueryExecutor
+	resultCompleter ResultCompleter
+}
+
+// NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
+func NewHTTPResolver(hc *http.Client,
+	qr QueryRewriter,
+	qe QueryExecutor,
+	rc ResultCompleter) QueryResolver {
+	return &httpResolver{hc, qr, qe, rc}
+}
+
+func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	span := otrace.FromContext(ctx)
+	stop := x.SpanTimer(span, "resolveHTTPQuery")
+	defer stop()
+
+	res, err := hr.rewriteAndExecute(ctx, query)
+
+	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
+	return &Resolved{Data: completed, Err: err}
+}
+
+func (hr *httpResolver) rewriteAndExecute(
+	ctx context.Context, query schema.Query) ([]byte, error) {
+	hrc, err := query.HTTPResolver()
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header = hrc.ForwardHeaders
+
+	resp, err := hr.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	return b, err
 }

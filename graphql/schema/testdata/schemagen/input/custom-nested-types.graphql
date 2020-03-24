@@ -1,0 +1,21 @@
+type Car @not_dgraph {
+    id: ID!
+    name: String!
+}
+
+interface Person @not_dgraph {
+    age: Int!
+}
+
+type User implements Person @not_dgraph {
+    id: ID!
+    name: String!
+    cars: [Car]
+}
+
+type Query {
+    getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+        url: "http://my-api.com",
+        method: "GET"
+    })
+}
