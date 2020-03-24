@@ -106,6 +106,16 @@ const (
 		Time in Unix epoch time that the node was last contacted by another Zero or Alpha node.
 		"""
 		lastEcho: Int
+
+		"""
+		List of ongoing operations in the background.
+		"""
+		ongoing: [String]
+
+		"""
+		List of predicates for which indexes are built in the background.
+		"""
+		indexing: [String]
 	}
 
 	type MembershipState {

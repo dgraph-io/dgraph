@@ -178,6 +178,22 @@ func (s *state) DeleteMutSchema(pred string) {
 	delete(s.mutSchema, pred)
 }
 
+// GetIndexingPredicates returns the list of predicates for which we are building indexes.
+func GetIndexingPredicates() []string {
+	s := State()
+	s.Lock()
+	defer s.Unlock()
+	if len(s.mutSchema) == 0 {
+		return nil
+	}
+
+	ps := make([]string, 0, len(s.mutSchema))
+	for p := range s.mutSchema {
+		ps = append(ps, p)
+	}
+	return ps
+}
+
 // SetType sets the type for the given predicate in memory.
 // schema mutations must flow through the update function, which are synced to the db.
 func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
