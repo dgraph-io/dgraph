@@ -479,7 +479,7 @@ docker-machine --version
 You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) to create the instances using Docker Machine.
 
 Considering that you have AWS credentials setup, you can use the below commands to start 3 AWS
-`t2-micro` instances with Docker Engine installed on them.
+`t2-medium` instances with Docker Engine installed on them.
 
 ```sh
 docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws01
