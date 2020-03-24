@@ -577,6 +577,10 @@ if len(login.Account) == 0 {
 
 ## Load balancing queries with Nginx
 
+There might be times when you'll want to set up a load balancer to accomplish goals such as increasing the utilization of your database by sending queries from the app to multiple database server replicas. You can follow these steps to get started with that.
+
+### Download ZIP
+
 Download the contents of this gist's ZIP file and extract it to a directory called `graph-nginx`
 
 ```
@@ -587,11 +591,15 @@ unzip -j dgraph-nginx.zip
 ```
 Two files will be created: `docker-compose.yml` and `nginx.conf`.
 
+### Start Dgraph cluster
+
 Start a 6-node Dgraph cluster (3 Dgraph Zero, 3 Dgraph Alpha, replication setting 3) by starting the Docker Compose config:
 
 ```
 docker-compose up
 ```
+### Use the increment tool to start a gRPC LB
+
 In a different shell, run the `dgraph increment` [docs](https://docs.dgraph.io/howto/#using-the-increment-tool) tool against the Nginx gRPC load balancer (`nginx:9080`):
 
 ```
@@ -603,6 +611,8 @@ If you have `dgraph` installed on your host machine, then you can also run this 
 dgraph increment --alpha localhost:9080 --num=10
 ```
 The increment tool uses the Dgraph Go client to establish a gRPC connection against the `--alpha` flag and transactionally increments a counter predicate `--num` times.
+
+### Check logs
 
 In the Nginx access logs (in the docker-compose up shell window), you'll see access logs like the following:
 
