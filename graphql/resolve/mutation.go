@@ -176,11 +176,13 @@ func (mr *mutationResolver) Resolve(
 	}
 
 	res, success, err := mr.rewriteAndExecute(ctx, mutation)
-
-	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
-
-	var br []byte
+	var result interface{}
 	if err == nil {
+		err = json.Unmarshal(res, &result)
+	}
+	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), result, err)
+	var br []byte
+	if err.Error() == "" {
 		br, err = json.Marshal(completed)
 		// TODO - wrap the error
 	}

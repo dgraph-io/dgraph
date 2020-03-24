@@ -466,7 +466,7 @@ func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
 		if res == nil {
 			m[name] = nil
 		} else {
-			m[name] = result
+			m[name] = res
 		}
 
 		return m, err
@@ -485,7 +485,6 @@ func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
 		err error) (interface{}, error) {
 
 		res, err := cf(ctx, field, result, err)
-
 		resErrs := schema.AsGQLErrors(err)
 		for _, err := range resErrs {
 			if len(err.Path) > 0 {
@@ -807,11 +806,6 @@ func completeObject(
 			continue
 		}
 
-		// x.Check2(buf.WriteString(comma))
-		// x.Check2(buf.WriteRune('"'))
-		// x.Check2(buf.WriteString(f.ResponseName()))
-		// x.Check2(buf.WriteString(`": `))
-
 		val := res[f.ResponseName()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
@@ -836,13 +830,9 @@ func completeObject(
 				return nil, errs
 			}
 			m[f.ResponseName()] = nil
-			// completed = []byte(`null`)
 		}
 		m[f.ResponseName()] = completed
-		// x.Check2(buf.Write(completed))
-		// comma = ", "
 	}
-	// x.Check2(buf.WriteRune('}'))
 	if len(m) > 0 {
 		return m, errs
 	}

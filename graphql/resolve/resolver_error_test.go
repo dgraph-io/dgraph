@@ -253,6 +253,7 @@ func TestAddMutationUsesErrorPropagation(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 
 	for name, tcase := range tests {
+
 		t.Run(name, func(t *testing.T) {
 			resp := resolveWithClient(gqlSchema, mutation, nil,
 				&executor{
