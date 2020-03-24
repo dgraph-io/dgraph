@@ -17,15 +17,114 @@
 package schema
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"net/url"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/validator"
 )
+
+var graphqlScalarType = map[string]interface{}{
+	"Int":     0,
+	"Float":   0,
+	"String":  0,
+	"Boolean": 0,
+	"ID":      0,
+}
+
+const introspectionQuery = `
+  query {
+    __schema {
+      queryType { name }
+      mutationType { name }
+      subscriptionType { name }
+      types {
+        ...FullType
+      }
+      directives {
+        name
+        locations
+        args {
+          ...InputValue
+        }
+      }
+    }
+  }
+  fragment FullType on __Type {
+    kind
+    name
+    fields(includeDeprecated: true) {
+      name
+      args {
+        ...InputValue
+      }
+      type {
+        ...TypeRef
+      }
+      isDeprecated
+      deprecationReason
+    }
+    inputFields {
+      ...InputValue
+    }
+    interfaces {
+      ...TypeRef
+    }
+    enumValues(includeDeprecated: true) {
+      name
+      isDeprecated
+      deprecationReason
+    }
+    possibleTypes {
+      ...TypeRef
+    }
+  }
+  fragment InputValue on __InputValue {
+    name
+    type { ...TypeRef }
+    defaultValue
+  }
+  fragment TypeRef on __Type {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`
 
 func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
@@ -622,23 +721,30 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
+	fmt.Println(field.Type.Name())
+	arg := dir.Arguments.ForName("http")
+	isGraphql := false
+	if arg == nil || arg.Value.String() == "" {
+		arg = dir.Arguments.ForName("graphql")
+		isGraphql = true
+	}
 
-	httpArg := dir.Arguments.ForName("http")
-	if httpArg == nil || httpArg.Value.String() == "" {
+	if arg == nil || arg.Value.String() == "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: http argument for @custom directive should not be empty.",
 			typ.Name, field.Name,
 		)
 	}
-	if httpArg.Value.Kind != ast.ObjectValue {
+
+	if arg.Value.Kind != ast.ObjectValue {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s: http argument for @custom directive should of type Object.",
 			typ.Name, field.Name,
 		)
 	}
-	u := httpArg.Value.Children.ForName("url")
+	u := arg.Value.Children.ForName("url")
 	if u == nil {
 		return gqlerror.ErrorPosf(
 			dir.Position,
@@ -651,22 +757,360 @@ func customDirectiveValidation(sch *ast.Schema,
 			"Type %s; Field %s; url field inside @custom directive is invalid.", typ.Name,
 			field.Name)
 	}
-	method := httpArg.Value.Children.ForName("method")
+
+	method := arg.Value.Children.ForName("method")
 	if method == nil {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s; method field inside @custom directive is mandatory.", typ.Name,
 			field.Name)
 	}
-	if method.Raw != "GET" && method.Raw != "POST" {
+
+	if !isGraphql {
+		if method.Raw != "GET" && method.Raw != "POST" {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
+				typ.Name, field.Name)
+		}
+		return nil
+	}
+
+	// Validate for graphql
+	remoteMethod, err := parseGraphqlMethod(method.Raw)
+	if err != nil {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
-			typ.Name, field.Name)
+			"Type %s; Field %s; %s", typ.Name, field.Name, err.Error(),
+		)
+	}
 
+	// Check whether we have remote arugment value in our schema
+	for _, remoteArgValue := range remoteMethod.args {
+		localArg := field.Arguments.ForName(remoteArgValue[1:])
+		if localArg == nil {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s; %s argument is not defined in the local query",
+				typ.Name, field.Name, remoteArgValue,
+			)
+		}
+	}
+
+	// Now get the remote schema to check whether query exist or not.
+	remoteSchema, err := introspectRemoteSchema(u.Raw)
+	if err != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; unable to introspect remote schema(%s): %s",
+			typ.Name, field.Name, u.Raw, err.Error(),
+		)
+	}
+
+	validQuery := false
+	remoteInputTypeNames := []struct {
+		name     string
+		kind     string
+		typeName string
+	}{}
+
+	var remoteQuery Fields
+
+	for _, remoteType := range remoteSchema.Data.Schema.Types {
+		if remoteType.Name != "Query" && remoteType.Kind != "OBJECT" {
+			continue
+		}
+		for _, query := range remoteType.Fields {
+			if query.Name != remoteMethod.name {
+				continue
+			}
+
+			if len(query.Args) != len(remoteMethod.args) {
+				// Invalid number of arguments
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s; invalid number of argument for the remote query %s",
+					typ.Name, field.Name, remoteMethod.name,
+				)
+			}
+
+			for _, arg := range query.Args {
+				if _, ok := remoteMethod.args[arg.Name]; !ok {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; Argument value is not present for",
+						typ.Name, field.Name, arg.Name,
+					)
+				}
+				remoteInputTypeNames = append(remoteInputTypeNames, struct {
+					name     string
+					kind     string
+					typeName string
+				}{name: arg.Name, kind: arg.Type.Kind, typeName: arg.Type.Name})
+			}
+			validQuery = true
+			remoteQuery = query
+			break
+		}
+		break
+	}
+
+	if !validQuery {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; remote method %s is not present in the remote schema",
+			typ.Name, field.Name, remoteMethod.name,
+		)
+	}
+
+	customRemoteTypes := make(map[string]interface{})
+	// Let's get all the type for the input.
+	for _, inputArg := range remoteInputTypeNames {
+		if _, ok := graphqlScalarType[inputArg.typeName]; ok {
+			continue
+		}
+		// We need to check only custom type.
+		customRemoteTypes[inputArg.typeName] = 0
+	}
+
+	// Add return type as well.
+	if _, ok := graphqlScalarType[remoteQuery.Type.Name]; !ok {
+		customRemoteTypes[remoteQuery.Type.Name] = 0
+	}
+
+	// Input type may have embedded type in it. So, we have to expand the type into flat structure
+	// to avoid recursion check.
+	// Eg:
+	// type Continent {
+	//   code: String
+	//   name: String
+	//   countries: [Country]
+	// }
+	// Expanded as
+	// Continent, Country.
+	embededTypes := []string{}
+	remoteTypes := make(map[string]Types)
+
+	// THIS need recursion check embedded type may have embedded type.
+	for _, remoteType := range remoteSchema.Data.Schema.Types {
+		if _, ok := customRemoteTypes[remoteType.Name]; !ok {
+			remoteTypes[remoteType.Name] = remoteType
+			// Expand remote type if necessary.
+
+		}
+	}
+
+	// fmt.Println(string(body))
+
+	// // Local inrospection.
+	// doc, gqlErr := parser.ParseQuery(&ast.Source{Input: introspectionQuery})
+
+	// if gqlErr != nil {
+	// 	return gqlErr
+	// }
+	// op := doc.Operations.ForName("")
+	// oper := &operation{op: op,
+	// 	vars:     map[string]interface{}{},
+	// 	query:    introspectionQuery,
+	// 	doc:      doc,
+	// 	inSchema: &schema{schema: sch},
+	// }
+
+	// listErr := validator.Validate(sch, doc)
+	// if err != nil {
+	// 	panic(listErr)
+	// }
+	// queries := oper.Queries()
+	// localIntrospection, err := Introspect(queries[0])
+	// if err != nil {
+	// 	return gqlerror.Errorf(err.Error())
+	// }
+
+	// fmt.Println("local: ", string(localIntrospection))
+	return nil
+}
+
+func expandTypes(schema IntrospectedSchema,
+	typeNames map[string]interface{},
+	remoteTypes map[string]*Types) error {
+
+	for typeName := range typeNames {
+		if _, ok := remoteTypes[typeName]; ok {
+			// We already retrived this type So, keep moving.
+			continue
+		}
+		typeExist := false
+		for _, remoteType := range schema.Data.Schema.Types {
+			if remoteType.Name != typeName {
+				continue
+			}
+			typeExist = true
+			remoteTypes[remoteType.Name] = &remoteType
+			// Expand fileds.
+			for _, field := range remoteType.Fields {
+				if _, ok := graphqlScalarType[field.Type.Name]; !ok {
+					// scalar type so continue.
+					continue
+				}
+			}
+		}
 	}
 
 	return nil
+}
+
+type IntrospectedSchema struct {
+	Data Data `json:"data"`
+}
+type IntrospectionQueryType struct {
+	Name string `json:"name"`
+}
+type OfType struct {
+	Kind   string      `json:"kind"`
+	Name   string      `json:"name"`
+	OfType interface{} `json:"ofType"`
+}
+type GqlType struct {
+	Kind   string `json:"kind"`
+	Name   string `json:"name"`
+	OfType OfType `json:"ofType"`
+}
+type Fields struct {
+	Name              string      `json:"name"`
+	Args              []Args      `json:"args"`
+	Type              GqlType     `json:"type"`
+	IsDeprecated      bool        `json:"isDeprecated"`
+	DeprecationReason interface{} `json:"deprecationReason"`
+}
+type Types struct {
+	Kind          string        `json:"kind"`
+	Name          string        `json:"name"`
+	Fields        []Fields      `json:"fields"`
+	InputFields   []Fields      `json:"inputFields"`
+	Interfaces    []interface{} `json:"interfaces"`
+	EnumValues    interface{}   `json:"enumValues"`
+	PossibleTypes interface{}   `json:"possibleTypes"`
+}
+type Args struct {
+	Name         string      `json:"name"`
+	Type         GqlType     `json:"type"`
+	DefaultValue interface{} `json:"defaultValue"`
+}
+type Directives struct {
+	Name      string   `json:"name"`
+	Locations []string `json:"locations"`
+	Args      []Args   `json:"args"`
+}
+type IntrospectionSchema struct {
+	QueryType        IntrospectionQueryType `json:"queryType"`
+	MutationType     interface{}            `json:"mutationType"`
+	SubscriptionType interface{}            `json:"subscriptionType"`
+	Types            []Types                `json:"types"`
+	Directives       []Directives           `json:"directives"`
+}
+type Data struct {
+	Schema IntrospectionSchema `json:"__schema"`
+}
+
+func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
+	param := &Request{
+		Query: introspectionQuery,
+	}
+
+	body, err := json.Marshal(param)
+
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	result := &IntrospectedSchema{}
+	return result, json.Unmarshal(body, result)
+}
+
+type graphqlMethod struct {
+	name string
+	args map[string]string
+}
+
+func parseGraphqlMethod(method string) (*graphqlMethod, error) {
+	position := strings.Index(method, "(")
+	if position < 0 {
+		return nil, fmt.Errorf("method field inside @custom directive is invalid")
+	}
+	name := method[:position]
+
+	// Consume (
+	position++
+	isPositionValid := func() error {
+		if position > len(method) {
+			return fmt.Errorf("method field inside @custom directive is invalid")
+		}
+		return nil
+	}
+
+	if err := isPositionValid(); err != nil {
+		return nil, err
+	}
+	arg := make(map[string]string)
+
+	for {
+		colonIndex := strings.Index(method[position:], ":")
+		if colonIndex < 0 {
+			return nil, fmt.Errorf("method field inside @custom directive is invalid")
+		}
+		fieldName := strings.TrimSpace(method[position : position+colonIndex])
+
+		position += colonIndex
+		// Consume :
+		position++
+		if err := isPositionValid(); err != nil {
+			return nil, err
+		}
+
+		commaIndex := strings.Index(method[position:], ",")
+		if commaIndex < 0 {
+			// No more argument so check for closing brace.
+			braceIndex := strings.Index(method[position:], ")")
+			if braceIndex < 0 {
+				return nil, fmt.Errorf("method field inside @custom directive is invalid")
+			}
+			argVal := strings.TrimSpace(method[position : position+braceIndex])
+			if argVal == "" || len(argVal) == 1 || argVal[0] != '$' {
+				return nil, fmt.Errorf("method field inside @custom directive is invalid")
+			}
+			arg[fieldName] = argVal
+			break
+		}
+
+		argVal := strings.TrimSpace(method[position : position+commaIndex])
+		if argVal == "" || len(argVal) == 1 || argVal[0] != '$' {
+			return nil, fmt.Errorf("method field inside @custom directive is invalid")
+		}
+		arg[fieldName] = argVal
+
+		position += commaIndex
+		// Consume ,
+		position++
+		if err := isPositionValid(); err != nil {
+			return nil, err
+		}
+	}
+	return &graphqlMethod{name: name, args: arg}, nil
 }
 
 func idValidation(sch *ast.Schema,

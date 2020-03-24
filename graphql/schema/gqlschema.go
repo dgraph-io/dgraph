@@ -73,12 +73,17 @@ input CustomHTTP {
 	method: String!
 }
 
+input CustomGraphQL {
+	url: String!
+	method: String!
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP) on OBJECT | FIELD_DEFINITION
+directive @custom(http: CustomHTTP, graphql: CustomGraphQL) on OBJECT | FIELD_DEFINITION
 
 input IntFilter {
 	eq: Int
