@@ -567,9 +567,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
-	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
-	// could be replaced with WriteBatch in the code
 	// WriteBatch can not be used here because it doesn't have an API to allow multiple versions.
 	// We wish to store same keys with diff version/timestamp to identify when doing roll-up
 	tmpWriter := NewTxnWriter(tmpDB)
@@ -646,7 +643,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
-	//	writer := NewTxnWriter(pstore)
 	batchWriter := pstore.NewWriteBatchAt(r.startTs)
 	tmpStream := tmpDB.NewStreamAt(counter)
 	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
@@ -677,8 +673,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			if err := batchWriter.SetEntry((e).WithDiscard()); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
-			//			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
-			//			}
 		}
 
 		return nil
