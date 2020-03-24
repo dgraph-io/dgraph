@@ -126,7 +126,7 @@ identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
 
-### Backup to Google Cloud Storage via Minio Gateway
+#### Backup to Minio
 
 #### Run MinIO Gateway for GCS
 
@@ -160,7 +160,7 @@ MinIO Gateway comes with an embedded web-based object browser that outputs conte
 
 #### Test Using MinIO Client
 
-MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
 
 1. Configure the Gateway using MinIO Client
 
@@ -168,21 +168,6 @@ Use the following command to configure the gateway:
 
 ```
 mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
-```
-
-2. List Containers on GCS
-
-Use the following command to list the containers on GCS:
-
-```
-mc ls mygcs
-```
-A response similar to this one should be displayed:
-
-```
-[2017-02-22 01:50:43 PST]     0B ferenginar/
-[2017-02-26 21:43:51 PST]     0B my-container/
-[2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
 ### Restore from Backup
