@@ -2141,7 +2141,7 @@ Reverse edges are also computed if specified by a schema mutation.
 ### Indexes in Background
 
 Indexes may take long time to compute depdending upon the size of the data.
-Starting Dgraph version `20.3.0`, indexes can be computed in the background,
+Starting Dgraph version `20.03.0`, indexes can be computed in the background,
 and thus indexing may still be running after an Alter operation returns.
 This requires that you wait for indexing to complete before running queries
 that require newly created indices. Such queries will fail with an error
