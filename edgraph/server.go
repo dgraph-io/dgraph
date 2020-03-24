@@ -244,20 +244,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	// If a background task is already running, we should reject all the new alter requests.
-	const numTries = 3
-	for i := 0; i < numTries; i++ {
-		if !schema.State().IndexingInProgress() {
-			break
-		} else if i == numTries-1 {
-			return nil, errIndexingInProgress
-		}
-
-		// Let's wait a bit to see if some really simple indexing
-		// tasks can finish before we reject this request.
-		time.Sleep(time.Second)
-	}
-
 	for _, update := range result.Preds {
 		// Reserved predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
@@ -277,16 +263,21 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
+	if err != nil {
+		return empty, err
+	}
 
 	// wait for indexing to complete or context to be canceled.
 	for !op.RunInBackground {
-		if !schema.State().IndexingInProgress() || ctx.Err() != nil {
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
+		if !schema.State().IndexingInProgress() {
 			break
 		}
 		time.Sleep(time.Second * 2)
 	}
-
-	return empty, err
+	return empty, nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {

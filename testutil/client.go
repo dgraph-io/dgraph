@@ -332,10 +332,8 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 // the result against the expected output.
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-func VerifyCurlCmd(t *testing.T, args []string,
-	failureConfig *CurlFailureConfig) {
+func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
 	queryCmd := exec.Command("curl", args...)
-
 	output, err := queryCmd.Output()
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code
