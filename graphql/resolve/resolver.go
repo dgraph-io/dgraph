@@ -258,7 +258,7 @@ func NewResolverFactory(
 
 // StdQueryCompletion is the completion steps that get run for queries
 func StdQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(completeDgraphResult)
+	return completeDgraphResult
 }
 
 // AliasQueryCompletion is the completion steps that get run for admin queries
@@ -372,7 +372,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		// The GraphQL data response needs to be written in the same order as the
 		// queries in the request.
 		for _, res := range allResolved {
-			fmt.Printf("data: %+v\n", res.Data)
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			resp.WithError(res.Err)
@@ -639,9 +638,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	//    { }  --->  { "q": null }
 
 	errs := schema.AsGQLErrors(e)
-	if dgResult == nil {
-		return nil, errs
-	}
 
 	nullResponse := func() interface{} {
 		// var buf bytes.Buffer
@@ -649,6 +645,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 		// x.Check2(buf.WriteString(field.ResponseName()))
 		// x.Check2(buf.WriteString(`": null }`))
 		return map[string]interface{}{field.ResponseName(): nil}
+	}
+	if dgResult == nil {
+		return nullResponse(), errs
 	}
 
 	dgraphError := func() (interface{}, error) {
@@ -659,7 +658,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
 				WithLocations(field.Location())
 	}
-
 	// Dgraph should only return {} or a JSON object.  Also,
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
@@ -675,7 +673,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	switch val := valToComplete[field.ResponseName()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
-			fmt.Println("yo: ", field.ResponseName(), "val: ", val)
 			// Turn Dgraph list result to single object
 			// "q":[{ ... }] ---> "q":{ ... }
 
@@ -718,7 +715,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 		// { } ---> "q": null
 		// case
 	}
-	fmt.Println("to mate")
 
 	// Errors should report the "path" into the result where the error was found.
 	//
@@ -732,8 +728,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 
 	completed, gqlErrs := completeObject(
 		path, field.Type(), []schema.Field{field}, valToComplete)
-	fmt.Println("completed: ", completed)
-
 	if completed == nil {
 		// This could only occur completeObject crushed the whole query, but
 		// that should never happen because the result type shouldn't be '!'.
@@ -788,14 +782,10 @@ func completeObject(
 	path []interface{},
 	typ schema.Type,
 	fields []schema.Field,
-	res map[string]interface{}) (map[string]interface{}, x.GqlErrorList) {
+	res map[string]interface{}) (interface{}, x.GqlErrorList) {
 
 	var errs x.GqlErrorList
 	m := make(map[string]interface{})
-	// var buf bytes.Buffer
-	// comma := ""
-
-	// x.Check2(buf.WriteRune('{'))
 
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
@@ -841,7 +831,6 @@ func completeObject(
 
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
-		fmt.Println("comp: ", completed)
 		if completed == nil {
 			if !f.Type().Nullable() {
 				return nil, errs
@@ -854,8 +843,11 @@ func completeObject(
 		// comma = ", "
 	}
 	// x.Check2(buf.WriteRune('}'))
+	if len(m) > 0 {
+		return m, errs
+	}
 
-	return m, errs
+	return nil, errs
 }
 
 // completeValue applies the value completion algorithm to a single value, which
@@ -947,9 +939,7 @@ func completeList(
 	values []interface{}) ([]interface{}, x.GqlErrorList) {
 
 	res := make([]interface{}, 0, len(values))
-	// var buf bytes.Buffer
 	var errs x.GqlErrorList
-	// comma := ""
 
 	if field.Type().ListType() == nil {
 		// This means a bug on our part - in rewriting, schema generation,
@@ -960,11 +950,9 @@ func completeList(
 		return mismatched(path, field, values)
 	}
 
-	// x.Check2(buf.WriteRune('['))
 	for i, b := range values {
 		r, err := completeValue(append(path, i), field, b)
 		errs = append(errs, err...)
-		// x.Check2(buf.WriteString(comma))
 		if r == nil {
 			if !field.Type().ListType().Nullable() {
 				// Unlike the choice in completeValue() above, where we turn missing
@@ -984,14 +972,10 @@ func completeList(
 				return nil, errs
 			}
 			res = append(res, nil)
-			// x.Check2(buf.WriteString("null"))
 		} else {
 			res = append(res, r)
-			// x.Check2(buf.Write(r))
 		}
-		// comma = ", "
 	}
-	// x.Check2(buf.WriteRune(']'))
 
 	return res, errs
 }

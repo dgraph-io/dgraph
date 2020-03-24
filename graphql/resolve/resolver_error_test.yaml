@@ -12,7 +12,7 @@
     { "getAuthor": [ { "uid": "0x1", "name": "A.N. Author" } ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author" } }
-    
+
 -
   name: "Empty query result becomes null"
   gqlquery: |
@@ -43,10 +43,10 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { 
-      "message": "Non-nullable field 'name' (type String!) was not present in 
+    [ {
+      "message": "Non-nullable field 'name' (type String!) was not present in
                 result from Dgraph.  GraphQL error propagation triggered." ,
-      "path": [ "getAuthor", "name" ], 
+      "path": [ "getAuthor", "name" ],
       "locations": [ { "line": 3, "column": 5 } ] } ]
 
 -
@@ -94,7 +94,7 @@
         dob
       }
     }
-  explanation: "When a field that's nullable (like dob: DateTime) is missing 
+  explanation: "When a field that's nullable (like dob: DateTime) is missing
       in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
     { "getAuthor": [ { "uid": "0x1", "name": "A.N. Author" } ] }
@@ -125,7 +125,7 @@
         birthday : dob
       }
     }
-  explanation: "When a field that's nullable (like dob: DateTime) is missing 
+  explanation: "When a field that's nullable (like dob: DateTime) is missing
       in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
     { "getAuthor": [ { "uid": "0x1", "name": "A.N. Author" } ] }
@@ -144,18 +144,18 @@
         }
       }
     }
-  explanation: "When a field that's nullable (like text: String) is missing 
+  explanation: "When a field that's nullable (like text: String) is missing
       in the Dgraph result, it should be added as null to the GraphQL result."
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsRequired": [ { "uid": "0x2", "title": "A Title" } ] } 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsRequired": [ { "uid": "0x2", "title": "A Title" } ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsRequired": [ { "title": "A Title", "text": null } ] } 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsRequired": [ { "title": "A Title", "text": null } ] }
     }
 
 -
@@ -244,14 +244,14 @@
   explanation: "When a query result is of a non-list type, we really should only
     get one item in the Dgraph result."
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", "name": "A.N. Author" }, 
-      { "uid": "0x2", "name": "A.N. Other Author" } 
+    { "getAuthor": [
+      { "uid": "0x1", "name": "A.N. Author" },
+      { "uid": "0x2", "name": "A.N. Other Author" }
     ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author" } }
   errors:
-    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one 
+    [ { "message": "Dgraph returned a list, but getAuthor (type Author) was expecting just one
           item.  The first item in the list was used to produce the result.",
         "locations": [ { "column":3, "line":2 } ] } ]
 
@@ -269,9 +269,8 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { "message": "couldn't unmarshal Dgraph result 
-          because invalid character 's' looking for beginning of object key string" ,
-        "locations": [ { "column":3, "line":2 } ] } ]
+    [ { "message": "invalid character 's' looking for beginning of object key string" ,
+        "locations": null } ]
 
 -
   name: "Error gets propagated to nullable parent if missing non-nullable field"
@@ -289,10 +288,10 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { 
-      "message": "Non-nullable field 'name' (type String!) was not present in 
+    [ {
+      "message": "Non-nullable field 'name' (type String!) was not present in
                 result from Dgraph.  GraphQL error propagation triggered." ,
-      "path": [ "getAuthor", "name" ], 
+      "path": [ "getAuthor", "name" ],
       "locations": [ { "line": 3, "column": 5 } ] } ]
 
 -
@@ -308,23 +307,23 @@
       }
     }
   explanation: "If a list has non-nullable elements and an element becomes null,
-    here because title (String!) is missing, GraphQL error propagation 
+    here because title (String!) is missing, GraphQL error propagation
     says the list becomes null."
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsElmntRequired": [ 
-        { "uid": "0x2", "title": "A Title", "text": "Some Text" }, 
-        { "uid": "0x3", "text": "More Text" } 
-      ] } 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsElmntRequired": [
+        { "uid": "0x2", "title": "A Title", "text": "Some Text" },
+        { "uid": "0x3", "text": "More Text" }
+      ] }
     ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author", "postsElmntRequired": null } }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsElmntRequired", 1, "title" ], 
+      "path": [ "getAuthor", "postsElmntRequired", 1, "title" ],
       "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
@@ -340,23 +339,23 @@
       }
     }
   explanation: "If a list has non-nullable elements and an element becomes null,
-    here because title (String!) is missing, GraphQL error propagation 
+    here because title (String!) is missing, GraphQL error propagation
     says the list becomes null."
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsElmntRequired": [ 
-        { "uid": "0x2", "title": "A Title", "text": "Some Text" }, 
-        { "uid": "0x3" } 
-      ] } 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsElmntRequired": [
+        { "uid": "0x2", "title": "A Title", "text": "Some Text" },
+        { "uid": "0x3" }
+      ] }
     ] }
   expected: |
     { "getAuthor": { "name": "A.N. Author", "postsElmntRequired": null } }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsElmntRequired", 1, "title" ], 
+      "path": [ "getAuthor", "postsElmntRequired", 1, "title" ],
       "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
@@ -371,30 +370,30 @@
         }
       }
     }
-  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
-    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
+  explanation: "The schema asserts a Post's title as non nullable (title: String!),
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsNullable": [ 
-        { "uid": "0x2", "title": "A Title", "text": "Some Text" }, 
-        { "uid": "0x3", "text": "More Text" } 
-      ] } 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsNullable": [
+        { "uid": "0x2", "title": "A Title", "text": "Some Text" },
+        { "uid": "0x3", "text": "More Text" }
+      ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsNullable": [ 
-        { "title": "A Title", "text": "Some Text" }, 
-        null 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsNullable": [
+        { "title": "A Title", "text": "Some Text" },
+        null
       ] }
     }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullable", 1, "title" ], 
+      "path": [ "getAuthor", "postsNullable", 1, "title" ],
       "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
@@ -408,30 +407,30 @@
         }
       }
     }
-  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
-    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
+  explanation: "The schema asserts a Post's title as non nullable (title: String!),
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsNullable": [ 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsNullable": [
         { "uid": "0x2" },
         { "uid": "0x3", "title": "A Title" }
-      ] } 
+      ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsNullable": [ 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsNullable": [
         null,
         { "title": "A Title" }
       ] }
     }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullable", 0, "title" ], 
+      "path": [ "getAuthor", "postsNullable", 0, "title" ],
       "locations": [ { "line": 5, "column": 7 } ] } ]
 
 -
@@ -446,42 +445,42 @@
         }
       }
     }
-  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
-    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So any 
+  explanation: "The schema asserts a Post's title as non nullable (title: String!),
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So any
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsNullable": [ 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsNullable": [
         { "uid": "0x2", "text": "Some Text" },
-        { "uid": "0x3", "title": "A Title", "text": "Some Text" }, 
-        { "uid": "0x4" }, 
-        { "uid": "0x5", "text": "Some Text" } 
-      ] } 
+        { "uid": "0x3", "title": "A Title", "text": "Some Text" },
+        { "uid": "0x4" },
+        { "uid": "0x5", "text": "Some Text" }
+      ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsNullable": [ 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsNullable": [
         null,
-        { "title": "A Title", "text": "Some Text" }, 
+        { "title": "A Title", "text": "Some Text" },
         null,
         null
       ] }
     }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullable", 0, "title" ], 
+      "path": [ "getAuthor", "postsNullable", 0, "title" ],
       "locations": [ { "line": 6, "column": 7 } ] },
-      { "message": "Non-nullable field 'title' (type String!) was not present 
+      { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullable", 2, "title" ], 
+      "path": [ "getAuthor", "postsNullable", 2, "title" ],
       "locations": [ { "line": 6, "column": 7 } ] },
-      { "message": "Non-nullable field 'title' (type String!) was not present 
+      { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullable", 3, "title" ], 
+      "path": [ "getAuthor", "postsNullable", 3, "title" ],
       "locations": [ { "line": 6, "column": 7 } ] } ]
 
 -
@@ -495,25 +494,25 @@
         }
       }
     }
-  explanation: "The schema asserts a Post's text as nullable (text: String), 
+  explanation: "The schema asserts a Post's text as nullable (text: String),
     so if a query finds posts without any text, nulls should be inserted"
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsNullable": [ 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsNullable": [
         { "uid": "0x2" },
-        { "uid": "0x3", "text": "Some Text" }, 
-        { "uid": "0x4" }, 
-        { "uid": "0x5", "text": "Some Text" } 
-      ] } 
+        { "uid": "0x3", "text": "Some Text" },
+        { "uid": "0x4" },
+        { "uid": "0x5", "text": "Some Text" }
+      ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsNullable": [ 
-        { "text": null }, 
-        { "text": "Some Text" }, 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsNullable": [
+        { "text": null },
+        { "text": "Some Text" },
         { "text": null },
         { "text": "Some Text" }
       ] }
@@ -531,28 +530,28 @@
         }
       }
     }
-  explanation: "The schema asserts a Post's title as non nullable (title: String!), 
-    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a 
+  explanation: "The schema asserts a Post's title as non nullable (title: String!),
+    but allows nulls in an Author's postsNullable (postsNullable: [Post]). So a
     post in the result list that's missing a title gets squashed to null"
   response: |
-    { "getAuthor": [ 
-      { "uid": "0x1", 
-      "name": "A.N. Author", 
-      "postsNullableListRequired": [ 
+    { "getAuthor": [
+      { "uid": "0x1",
+      "name": "A.N. Author",
+      "postsNullableListRequired": [
         { "uid": "0x3", "text": "More Text" },
         { "uid": "0x2", "title": "A Title", "text": "Some Text" }
-      ] } 
+      ] }
     ] }
   expected: |
-    { "getAuthor": 
-      { "name": "A.N. Author", 
-      "postsNullableListRequired": [ 
+    { "getAuthor":
+      { "name": "A.N. Author",
+      "postsNullableListRequired": [
         null,
         { "title": "A Title", "text": "Some Text" }
-      ] } 
+      ] }
     }
   errors:
-    [ { "message": "Non-nullable field 'title' (type String!) was not present 
+    [ { "message": "Non-nullable field 'title' (type String!) was not present
                     in result from Dgraph.  GraphQL error propagation triggered.",
-      "path": [ "getAuthor", "postsNullableListRequired", 0, "title" ], 
+      "path": [ "getAuthor", "postsNullableListRequired", 0, "title" ],
       "locations": [ { "line": 5, "column": 7 } ] } ]
