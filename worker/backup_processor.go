@@ -135,6 +135,12 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 			return false
 		}
 
+		// Do not choose keys that contain parts of a multi-part list. These keys
+		// will be accessed from the main list.
+		if parsedKey.HasStartUid {
+			return false
+		}
+
 		// Backup type keys in every group.
 		if parsedKey.IsType() {
 			return true

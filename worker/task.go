@@ -2244,6 +2244,13 @@ loop:
 			return err
 		}
 
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
+		}
+
 		// The following optimization speeds up this iteration considerably, because it avoids
 		// the need to run ReadPostingList.
 		if item.UserMeta()&posting.BitEmptyPosting > 0 {
