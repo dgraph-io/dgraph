@@ -639,7 +639,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
-// TODO(Anurag): Are we using pkey? Remove if redundant.
+// TODO(Anurag): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)

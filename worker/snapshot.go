@@ -62,7 +62,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		if err := sw.Prepare(); err != nil {
 			return 0, err
 		}
-
 		writer = sw
 	} else {
 		writer = posting.NewTxnWriter(pstore)

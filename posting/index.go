@@ -553,7 +553,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
 
-	tmpDB, err := badger.OpenManaged(dbOpts) //Again in managed mode.
+	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
 	}
@@ -567,10 +567,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	// WriteBatch can not be used here because it doesn't have an API to allow multiple versions.
-	// We wish to store same keys with diff version/timestamp to identify when doing roll-up
+	// WriteBatch can not be used here because it doesn't have an API to allow writing multiple versions.
+	// We wish to store same keys with diff version/timestamp to ensure that we get all of them back
+	// when doing roll-up. WriteBatch can only be used when we want to write all txns at the same
+	// timestamp.
 	tmpWriter := NewTxnWriter(tmpDB)
-	stream := pstore.NewStreamAt(r.startTs) //pstore badge is opene in managed mode. Note the "AT"
+	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
 	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -647,14 +649,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	tmpStream := tmpDB.NewStreamAt(counter)
 	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		l, err := ReadPostingList(key, itr) //Reads all the versions for a key
+		l, err := ReadPostingList(key, itr)
 		if err != nil {
 			return nil, errors.Wrap(err, "error in reading posting list from pstore")
 		}
 		// No need to write a loop after ReadPostingList to skip unread entries
 		// for a given key because we only wrote BitDeltaPosting to temp badger.
 
-		kvs, err := l.Rollup() //Merges all the posting list into one posting list.
+		kvs, err := l.Rollup()
 		if err != nil {
 			return nil, err
 		}
@@ -670,7 +672,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
 			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
-			if err := batchWriter.SetEntry((e).WithDiscard()); err != nil {
+			if err := batchWriter.SetEntry(e); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
 		}
