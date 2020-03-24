@@ -170,6 +170,22 @@ func (n *node) stopAllTasks() {
 	glog.Infof("Stopped all ongoing registered tasks.")
 }
 
+// GetOngoingTasks returns the list of ongoing tasks.
+func GetOngoingTasks() []string {
+	n := groups().Node
+	if n == nil {
+		return []string{}
+	}
+
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+	var tasks []string
+	for id := range n.ops {
+		tasks = append(tasks, id.String())
+	}
+	return tasks
+}
+
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
 // sufficient. We don't need to wait for proposals to be applied.
 
