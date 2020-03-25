@@ -281,6 +281,7 @@ func (dg *panicClient) Mutate(
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
 // It mocks Dgraph like panicCatcher.
 func clientInfoLogin(t *testing.T) {
+	t.Skip()
 	loginQuery := &GraphQLParams{
 		Query: `mutation {
   						login(input: {userId: "groot", password: "password"}) {

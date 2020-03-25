@@ -3,10 +3,11 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func fragmentInMutation(t *testing.T) {
@@ -50,6 +51,7 @@ func fragmentInMutation(t *testing.T) {
 	err = json.Unmarshal(gqlResponse.Data, &result)
 	require.NoError(t, err)
 
+	require.Greater(t, len(result.AddStarship.Starship), 0)
 	requireUID(t, result.AddStarship.Starship[0].ID)
 
 	opt := cmpopts.IgnoreFields(starship{}, "ID")

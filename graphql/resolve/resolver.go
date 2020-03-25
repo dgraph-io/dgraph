@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -270,7 +271,7 @@ func AliasQueryCompletion() CompletionFunc {
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, completeDgraphResult))
+	return addRootFieldCompletion(name, completeResult)
 }
 
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
@@ -385,15 +386,21 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// - q { f { g } }
 			// a path to the 2nd item in the f list would look like:
 			// - [ "q", "f", 2, "g" ]
-			// path := make([]interface{}, 0, maxPathLength(field))
 			path := make([]interface{}, 0, maxPathLength(res.Field))
 			b, gqlErr := completeObject(path, res.Field.Type(), []schema.Field{res.Field},
 				res.Data.(map[string]interface{}))
 			if gqlErr != nil {
-				err := res.Err.(x.GqlErrorList)
-				res.Err = append(err, gqlErr...)
+				if res.Err != nil {
+					err, _ := res.Err.(x.GqlErrorList)
+					res.Err = append(err, gqlErr...)
+				} else {
+					res.Err = gqlErr
+				}
 			}
 			resp.WithError(res.Err)
+			if len(b) > 0 {
+				b = b[1 : len(b)-1]
+			}
 			resp.AddData(b)
 		}
 	case op.IsMutation():
@@ -423,8 +430,23 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
+
+			path := make([]interface{}, 0, maxPathLength(m))
+			b, gqlErr := completeObject(path, m.Type(), []schema.Field{m},
+				res.Data.(map[string]interface{}))
+			if gqlErr != nil {
+				if res.Err != nil {
+					err, _ := res.Err.(x.GqlErrorList)
+					res.Err = append(err, gqlErr...)
+				} else {
+					res.Err = gqlErr
+				}
+			}
 			resp.WithError(res.Err)
-			resp.AddData(res.Data.([]byte))
+			if len(b) > 0 {
+				b = b[1 : len(b)-1]
+			}
+			resp.AddData(b)
 		}
 	case op.IsSubscription():
 		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
@@ -543,19 +565,20 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 // completeResult takes a result like {"res":{"a":...,"b":...}} and does the standard
 // object completion.  This is different to doing completion from Dgraph, because that requires
 // handling {"res":[{...}]} even if we expect a single value
-// func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
-// 	interface{}, error) {
+func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
+	interface{}, error) {
+	return val, e
 
-// 	path := make([]interface{}, 0, maxPathLength(field))
+	// path := make([]interface{}, 0, maxPathLength(field))
 
-// 	switch val := val.(type) {
-// 	case []interface{}:
-// 		return completeList(path, field, val)
-// 	case map[string]interface{}:
-// 		return completeObject(path, field.Type(), []schema.Field{field}, val)
-// 	}
-// 	return completeValue(path, field, val)
-// }
+	// switch val := val.(type) {
+	// case []interface{}:
+	// 	return completeList(path, field, val)
+	// case map[string]interface{}:
+	// 	return completeObject(path, field.Type(), []schema.Field{field}, val)
+	// }
+	// return completeValue(path, field, val)
+}
 
 // Once a result has been returned from Dgraph, that result needs to be worked
 // through for two main reasons:
@@ -803,6 +826,7 @@ func completeObject(
 	comma := ""
 	x.Check2(buf.WriteRune('{'))
 
+	fmt.Println("res ", res)
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {

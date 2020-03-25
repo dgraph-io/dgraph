@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -181,38 +180,34 @@ func (mr *mutationResolver) Resolve(
 		err = json.Unmarshal(res, &result)
 	}
 	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), result, err)
-	var br []byte
-	if err.Error() == "" {
-		br, err = json.Marshal(completed)
-		// TODO - wrap the error
-	}
+	fmt.Println("completed: ", completed)
 
-	selSets := mutation.SelectionSet()
-	for _, selSet := range selSets {
-		if selSet.Name() != schema.NumUid {
-			continue
-		}
+	// selSets := mutation.SelectionSet()
+	// for _, selSet := range selSets {
+	// 	if selSet.Name() != schema.NumUid {
+	// 		continue
+	// 	}
 
-		s := string(br)
-		switch {
-		case strings.Contains(s, schema.NumUid):
-			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
-				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
-				mr.numUids)))
+	// 	s := string(br)
+	// 	switch {
+	// 	case strings.Contains(s, schema.NumUid):
+	// 		completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
+	// 			schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
+	// 			mr.numUids)))
 
-		case s[len(s)-1] == '}':
-			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
-				schema.NumUid, mr.numUids))
+	// 	case s[len(s)-1] == '}':
+	// 		completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
+	// 			schema.NumUid, mr.numUids))
 
-		default:
-			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
-				schema.NumUid, mr.numUids))
-		}
-		break
-	}
+	// 	default:
+	// 		completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
+	// 			schema.NumUid, mr.numUids))
+	// 	}
+	// 	break
+	// }
 
 	return &Resolved{
-		Data: br,
+		Data: completed,
 		Err:  err,
 	}, success
 }

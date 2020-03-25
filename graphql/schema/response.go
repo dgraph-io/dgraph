@@ -59,12 +59,8 @@ func (r *Response) WithError(err error) {
 // If r.Data contains data it always looks like {f,g,...}, and
 // adding to that results in {f,g,...,p}
 func (r *Response) AddData(p []byte) {
-	if r == nil || p == nil {
+	if r == nil || len(p) == 0 {
 		return
-	}
-
-	if len(p) > 0 {
-		p = p[1 : len(p)-1]
 	}
 
 	if r.Data.Len() > 0 {
@@ -91,15 +87,12 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 		return int64(i), err
 	}
 
-	b, err := json.Marshal(r.Data)
-	// TODO - Handle the error
-
 	js, err := json.Marshal(struct {
 		Errors []*x.GqlError   `json:"errors,omitempty"`
 		Data   json.RawMessage `json:"data,omitempty"`
 	}{
 		Errors: r.Errors,
-		Data:   b,
+		Data:   r.Data.Bytes(),
 	})
 
 	if err != nil {
