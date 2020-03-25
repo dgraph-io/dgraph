@@ -80,7 +80,7 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()
 
-	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie(nil))
+	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()
@@ -181,7 +181,7 @@ func TestAnnounceBlock(t *testing.T) {
 }
 
 func TestProcessBlockResponseMessage(t *testing.T) {
-	tt := trie.NewEmptyTrie(nil)
+	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()
@@ -255,7 +255,7 @@ func TestProcessBlockResponseMessage(t *testing.T) {
 }
 
 func TestProcessTransactionMessage(t *testing.T) {
-	tt := trie.NewEmptyTrie(nil)
+	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()
@@ -304,7 +304,7 @@ func TestNotAuthority(t *testing.T) {
 }
 
 func TestCheckForRuntimeChanges(t *testing.T) {
-	tt := trie.NewEmptyTrie(nil)
+	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
 
 	kp, err := sr25519.GenerateKeypair()

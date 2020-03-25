@@ -22,7 +22,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
-	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -59,6 +58,11 @@ func (s *Service) UseMemDB() {
 	s.isMemDB = true
 }
 
+// DB returns the Service's database
+func (s *Service) DB() database.Database {
+	return s.db
+}
+
 // Initialize initializes the genesis state of the DB using the given storage trie. The trie should be loaded with the genesis storage state.
 // The trie does not need a backing DB, since the DB will be created during Service.Start().
 // This only needs to be called during genesis initialization of the node; it doesn't need to be called during normal startup.
@@ -93,7 +97,7 @@ func (s *Service) Initialize(genesisHeader *types.Header, t *trie.Trie) error {
 
 	// load genesis hash into db
 	hash := genesisHeader.Hash()
-	err = db.Put(common.BestBlockHashKey, hash[:])
+	err = StoreBestBlockHash(db, hash)
 	if err != nil {
 		return err
 	}
@@ -154,7 +158,7 @@ func (s *Service) Start() error {
 	}
 
 	// retrieve latest header
-	bestHash, err := s.db.Get(common.BestBlockHashKey)
+	bestHash, err := LoadBestBlockHash(db)
 	if err != nil {
 		return fmt.Errorf("cannot get latest hash: %s", err)
 	}
@@ -162,7 +166,7 @@ func (s *Service) Start() error {
 	log.Trace("[state] start", "best block hash", fmt.Sprintf("0x%x", bestHash))
 
 	// create storage state
-	s.Storage, err = NewStorageState(db, trie.NewEmptyTrie(nil))
+	s.Storage, err = NewStorageState(db, trie.NewEmptyTrie())
 	if err != nil {
 		return fmt.Errorf("cannot make storage state: %s", err)
 	}
@@ -215,7 +219,12 @@ func (s *Service) Stop() error {
 	}
 
 	hash := s.Block.BestBlockHash()
-	err = s.db.Put(common.BestBlockHashKey, hash[:])
+	err = StoreBestBlockHash(s.db, hash)
+	if err != nil {
+		return err
+	}
+
+	err = s.storeHash()
 	if err != nil {
 		return err
 	}
@@ -223,4 +232,9 @@ func (s *Service) Stop() error {
 	log.Trace("[state] stop", "best block hash", hash)
 
 	return s.db.Close()
+}
+
+// StoreHash stores the current root hash in the database at LatestStorageHashKey
+func (s *Service) storeHash() error {
+	return StoreLatestStorageHash(s.db, s.Storage.trie)
 }

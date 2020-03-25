@@ -1105,7 +1105,7 @@ func TestExt_get_child_storage_into(t *testing.T) {
 	key := []byte("mykey")
 	value := []byte("myvalue")
 
-	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie(nil))
+	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	err = runtime.storage.SetStorageIntoChild(storageKey, key, value)
@@ -1147,7 +1147,7 @@ func TestExt_set_child_storage(t *testing.T) {
 	key := []byte("mykey")
 	value := []byte("myvalue")
 
-	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie(nil))
+	err := runtime.storage.SetStorageChild(storageKey, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	storageKeyData := 0

@@ -162,9 +162,8 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	}
 	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
-	// TODO: Configure node based on Roles #601
-
-	syncChan := make(chan *big.Int, 256)
+	// Syncer
+	syncChan := make(chan *big.Int, 128)
 
 	// Core Service
 

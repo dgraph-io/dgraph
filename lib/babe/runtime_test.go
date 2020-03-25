@@ -51,7 +51,7 @@ func TestConfigurationFromRuntime_noAuth(t *testing.T) {
 }
 
 func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
-	tt := trie.NewEmptyTrie(nil)
+	tt := trie.NewEmptyTrie()
 
 	key, err := common.HexToBytes("0xe3b47b6c84c0493481f97c5197d2554f")
 	if err != nil {

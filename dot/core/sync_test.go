@@ -23,7 +23,7 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()
 
-	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie(nil))
+	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie())
 	if err != nil {
 		t.Fatal(err)
 	}

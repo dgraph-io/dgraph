@@ -86,7 +86,7 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	if cfg.BlockState == nil || cfg.StorageState == nil {
 		dbSrv := state.NewService("")
 		dbSrv.UseMemDB()
-		err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie(nil))
+		err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie())
 		if err != nil {
 			t.Fatal(err)
 		}

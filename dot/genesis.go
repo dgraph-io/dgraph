@@ -32,7 +32,7 @@ import (
 
 // newTrieFromGenesis creates a new trie and loads it with the raw genesis data
 func newTrieFromGenesis(gen *genesis.Genesis) (*trie.Trie, error) {
-	t := trie.NewEmptyTrie(nil)
+	t := trie.NewEmptyTrie()
 
 	raw := gen.GenesisFields().Raw[0]
 
@@ -86,13 +86,8 @@ func initTrieDatabase(t *trie.Trie, datadir string, gen *genesis.Genesis) error 
 		return fmt.Errorf("failed to open database: %s", err)
 	}
 
-	// set trie database to initialized database
-	t.SetDb(&trie.Database{
-		DB: db,
-	})
-
 	// store genesis data in trie database
-	err = storeGenesisData(t, gen)
+	err = storeGenesisData(t, db, gen)
 	if err != nil {
 		log.Error("[dot] Failed to store genesis data in trie database", "error", err)
 		return err
@@ -109,21 +104,21 @@ func initTrieDatabase(t *trie.Trie, datadir string, gen *genesis.Genesis) error 
 
 // storeGenesisData stores the encoded trie, the genesis hash, and the genesis
 // data in the trie database
-func storeGenesisData(t *trie.Trie, gen *genesis.Genesis) error {
-	// encode trie and write to trie database
-	err := t.StoreInDB()
+func storeGenesisData(t *trie.Trie, db database.Database, gen *genesis.Genesis) error {
+	// encode trie and write to database
+	err := state.StoreTrie(db, t)
 	if err != nil {
 		return fmt.Errorf("failed to encode trie and write to database: %s", err)
 	}
 
-	// store genesis hash in trie database
-	err = t.StoreHash()
+	// store genesis hash in database
+	err = state.StoreLatestStorageHash(db, t)
 	if err != nil {
 		return fmt.Errorf("failed to store genesis hash in database: %s", err)
 	}
 
-	// store genesis data in trie database
-	err = t.Db().StoreGenesisData(gen.GenesisData())
+	// store genesis data in database
+	err = state.StoreGenesisData(db, gen.GenesisData())
 	if err != nil {
 		return fmt.Errorf("failed to store genesis data in database: %s", err)
 	}

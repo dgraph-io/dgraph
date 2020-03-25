@@ -25,7 +25,7 @@ import (
 func TestPutAndGetChild(t *testing.T) {
 	childKey := []byte("default")
 	childTrie := buildSmallTrie(t)
-	parentTrie := NewEmptyTrie(nil)
+	parentTrie := NewEmptyTrie()
 
 	err := parentTrie.PutChild(childKey, childTrie)
 	if err != nil {
@@ -45,7 +45,7 @@ func TestPutAndGetChild(t *testing.T) {
 func TestPutAndGetFromChild(t *testing.T) {
 	childKey := []byte("default")
 	childTrie := buildSmallTrie(t)
-	parentTrie := NewEmptyTrie(nil)
+	parentTrie := NewEmptyTrie()
 
 	err := parentTrie.PutChild(childKey, childTrie)
 	if err != nil {

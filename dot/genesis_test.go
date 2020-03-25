@@ -93,7 +93,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 		Number:         big.NewInt(0),
 		StateRoot:      trie.EmptyHash,
 		ExtrinsicsRoot: trie.EmptyHash,
-	}, trie.NewEmptyTrie(nil))
+	}, trie.NewEmptyTrie())
 	require.Nil(t, err)
 
 	err = stateSrvc.Start()
@@ -101,7 +101,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 
 	defer stateSrvc.Stop()
 
-	gendata, err := stateSrvc.Storage.LoadGenesisData()
+	gendata, err := state.LoadGenesisData(stateSrvc.DB())
 	require.Nil(t, err)
 
 	testGenesis := NewTestGenesis(t)

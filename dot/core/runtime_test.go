@@ -29,7 +29,7 @@ import (
 )
 
 func TestRetrieveAuthorityData(t *testing.T) {
-	tt := trie.NewEmptyTrie(nil)
+	tt := trie.NewEmptyTrie()
 
 	value, err := common.HexToBytes("0x08eea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d71410364b64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d717")
 	if err != nil {

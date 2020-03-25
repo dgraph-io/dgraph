@@ -96,7 +96,7 @@ type TestRuntimeStorage struct {
 // NewTestRuntimeStorage creates new instance of TestRuntimeStorage
 func NewTestRuntimeStorage(tr *trie.Trie) *TestRuntimeStorage {
 	if tr == nil {
-		tr = trie.NewEmptyTrie(nil)
+		tr = trie.NewEmptyTrie()
 	}
 	return &TestRuntimeStorage{
 		trie: tr,

@@ -22,7 +22,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/database"
-	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
@@ -70,13 +69,21 @@ func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) 
 		return nil, fmt.Errorf("cannot have nil trie")
 	}
 
-	triedb := trie.NewDatabase(db)
-	t.SetDb(triedb)
-
 	return &StorageState{
 		trie: t,
 		db:   NewStorageDB(db),
 	}, nil
+}
+
+// StoreInDB encodes the entire trie and writes it to the DB
+// The key to the DB entry is the root hash of the trie
+func (s *StorageState) StoreInDB() error {
+	return StoreTrie(s.db.db, s.trie)
+}
+
+// LoadFromDB loads an encoded trie from the DB where the key is `root`
+func (s *StorageState) LoadFromDB(root common.Hash) error {
+	return LoadTrie(s.db.db, s.trie, root)
 }
 
 // ExistsStorage check if the key exists in the storage trie
@@ -127,39 +134,11 @@ func (s *StorageState) ClearStorage(key []byte) error {
 	return s.trie.Delete(key)
 }
 
-// LoadHash returns the tire LoadHash and error
-func (s *StorageState) LoadHash() (common.Hash, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.trie.LoadHash()
-}
-
-// LoadFromDB loads the trie state with the given root from the database.
-func (s *StorageState) LoadFromDB(root common.Hash) error {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.trie.LoadFromDB(root)
-}
-
-// StoreInDB stores the current trie state in the database.
-func (s *StorageState) StoreInDB() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.trie.StoreInDB()
-}
-
 // Entries returns Entries from the trie
 func (s *StorageState) Entries() map[string][]byte {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	return s.trie.Entries()
-}
-
-// LoadGenesisData returns LoadGenesisData from the trie
-func (s *StorageState) LoadGenesisData() (*genesis.Data, error) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.trie.Db().LoadGenesisData()
 }
 
 // SetStorageChild return PutChild from the trie

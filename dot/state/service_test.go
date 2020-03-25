@@ -52,7 +52,7 @@ func TestService_Start(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tr := trie.NewEmptyTrie(nil)
+	tr := trie.NewEmptyTrie()
 
 	err = state.Initialize(genesisHeader, tr)
 	if err != nil {
@@ -75,7 +75,7 @@ func TestMemDB_Start(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tr := trie.NewEmptyTrie(nil)
+	tr := trie.NewEmptyTrie()
 
 	err = state.Initialize(genesisHeader, tr)
 	if err != nil {
@@ -158,7 +158,7 @@ func TestService_BlockTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	tr := trie.NewEmptyTrie(nil)
+	tr := trie.NewEmptyTrie()
 	err = state.Initialize(genesisHeader, tr)
 	if err != nil {
 		t.Fatal(err)

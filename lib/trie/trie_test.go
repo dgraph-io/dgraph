@@ -18,7 +18,6 @@ package trie
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"io/ioutil"
@@ -30,7 +29,6 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
 )
 
 type commonPrefixTest struct {
@@ -68,35 +66,24 @@ var (
 	GETLEAF = 3
 )
 
-func newEmpty() *Trie {
-	db := &Database{
-		DB: database.NewMemDatabase(),
-	}
-	t := NewEmptyTrie(db)
-	return t
-}
-
 func TestNewEmptyTrie(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 	if trie == nil {
 		t.Error("did not initialize trie")
 	}
 }
 
 func TestNewTrie(t *testing.T) {
-	db := &Database{
-		DB: database.NewMemDatabase(),
-	}
-	trie := NewTrie(db, &leaf{key: []byte{0}, value: []byte{17}})
+	trie := NewTrie(&leaf{key: []byte{0}, value: []byte{17}})
 	if trie == nil {
 		t.Error("did not initialize trie")
 	}
 }
 
 func TestEntries(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x01, 0x35}, value: []byte("pen")},
 		{key: []byte{0x01, 0x35, 0x79}, value: []byte("penguin")},
 		{key: []byte{0xf2}, value: []byte("feather")},
@@ -122,56 +109,12 @@ func TestEntries(t *testing.T) {
 	}
 }
 
-type trieTest struct {
-	key   []byte
-	value []byte
-	pk    []byte
-	op    int
-}
-
-func generateRandomTests(size int) []trieTest {
-	rt := make([]trieTest, size)
-	kv := make(map[string][]byte)
-
-	for i := range rt {
-		test := generateRandomTest(kv)
-		rt[i] = test
-		kv[string(test.key)] = rt[i].value
-	}
-
-	return rt
-}
-
-func generateRandomTest(kv map[string][]byte) trieTest {
-	r := *rand.New(rand.NewSource(rand.Int63()))
-	test := trieTest{}
-
-	for {
-		n := 2 // arbitrary positive number
-		size := r.Intn(510) + n
-		buf := make([]byte, size)
-		r.Read(buf)
-
-		key := binary.LittleEndian.Uint16(buf[:2])
-
-		if kv[string(buf)] == nil || key < 256 {
-			test.key = buf
-
-			buf = make([]byte, r.Intn(128)+n)
-			r.Read(buf)
-			test.value = buf
-
-			return test
-		}
-	}
-}
-
 func hexDecode(in string) []byte {
 	out, _ := hex.DecodeString(in)
 	return out
 }
 
-func writeToTestFile(tests []trieTest) error {
+func writeToTestFile(tests []Test) error {
 	testString := ""
 	for _, test := range tests {
 		testString = fmt.Sprintf("%s%s\n%s\n", testString, test.key, test.value)
@@ -191,9 +134,9 @@ func writeToTestFile(tests []trieTest) error {
 }
 
 func buildSmallTrie(t *testing.T) *Trie {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x01, 0x35}, value: []byte("pen")},
 		{key: []byte{0x01, 0x35, 0x79}, value: []byte("penguin")},
 		{key: []byte{0xf2}, value: []byte("feather")},
@@ -212,7 +155,7 @@ func buildSmallTrie(t *testing.T) *Trie {
 	return trie
 }
 
-func runTests(t *testing.T, trie *Trie, tests []trieTest) {
+func runTests(t *testing.T, trie *Trie, tests []Test) {
 	for i, test := range tests {
 		test := test
 		t.Run(strconv.Itoa(i), func(t *testing.T) {
@@ -290,9 +233,9 @@ func TestLoadTrie(t *testing.T) {
 }
 
 func TestPutAndGetBranch(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x01, 0x35}, value: []byte("spaghetti"), op: PUT},
 		{key: []byte{0x01, 0x35, 0x79}, value: []byte("gnocchi"), op: PUT},
 		{key: []byte{0x07}, value: []byte("ramen"), op: PUT},
@@ -309,9 +252,9 @@ func TestPutAndGetBranch(t *testing.T) {
 }
 
 func TestPutAndGetOddKeyLengths(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x43, 0xc1}, value: []byte("noot"), op: PUT},
 		{key: []byte{0x49, 0x29}, value: []byte("nootagain"), op: PUT},
 		{key: []byte{0x43, 0x0c}, value: []byte("odd"), op: PUT},
@@ -329,8 +272,8 @@ func TestPutAndGetOddKeyLengths(t *testing.T) {
 
 func TestPutAndGet(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		trie := newEmpty()
-		rt := generateRandomTests(10000)
+		trie := NewEmptyTrie()
+		rt := GenerateRandomTests(t, 10000)
 		for _, test := range rt {
 			err := trie.Put(test.key, test.value)
 			if err != nil {
@@ -373,13 +316,13 @@ func TestFailingTests(t *testing.T) {
 	}
 
 	slicedData := strings.Split(string(data), "\n")
-	tests := []trieTest{}
+	tests := []Test{}
 	for i := 0; i < len(slicedData)-2; i += 2 {
-		test := trieTest{key: []byte(slicedData[i]), value: []byte(slicedData[i+1])}
+		test := Test{key: []byte(slicedData[i]), value: []byte(slicedData[i+1])}
 		tests = append(tests, test)
 	}
 
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
 	hasFailed := false
 	passedFailingTest := false
@@ -429,9 +372,9 @@ func TestFailingTests(t *testing.T) {
 }
 
 func TestGetPartialKey(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x01, 0x35}, value: []byte("pen"), op: PUT},
 		{key: []byte{0x01, 0x35, 0x79}, value: []byte("penguin"), op: PUT},
 		{key: []byte{0x01, 0x35, 0x07}, value: []byte("odd"), op: PUT},
@@ -456,7 +399,7 @@ func TestGetPartialKey(t *testing.T) {
 func TestDeleteSmall(t *testing.T) {
 	trie := buildSmallTrie(t)
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{}, value: []byte("floof"), op: DEL},
 		{key: []byte{}, value: nil, op: GET},
 		{key: []byte{}, value: []byte("floof"), op: PUT},
@@ -500,7 +443,7 @@ func TestDeleteSmall(t *testing.T) {
 func TestDeleteCombineBranch(t *testing.T) {
 	trie := buildSmallTrie(t)
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x01, 0x35, 0x46}, value: []byte("raccoon"), op: PUT},
 		{key: []byte{0x01, 0x35, 0x46, 0x77}, value: []byte("rat"), op: PUT},
 		{key: []byte{0x09, 0xd3}, value: []byte("noot"), op: DEL},
@@ -511,9 +454,9 @@ func TestDeleteCombineBranch(t *testing.T) {
 }
 
 func TestDeleteFromBranch(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x06, 0x15, 0xfc}, value: []byte("noot"), op: PUT},
 		{key: []byte{0x06, 0x2b, 0xa9}, value: []byte("nootagain"), op: PUT},
 		{key: []byte{0x06, 0xaf, 0xb1}, value: []byte("odd"), op: PUT},
@@ -536,9 +479,9 @@ func TestDeleteFromBranch(t *testing.T) {
 }
 
 func TestDeleteOddKeyLengths(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	tests := []trieTest{
+	tests := []Test{
 		{key: []byte{0x43, 0xc1}, value: []byte("noot"), op: PUT},
 		{key: []byte{0x43, 0xc1}, value: []byte("noot"), op: GET},
 		{key: []byte{0x49, 0x29}, value: []byte("nootagain"), op: PUT},
@@ -559,9 +502,9 @@ func TestDeleteOddKeyLengths(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	trie := newEmpty()
+	trie := NewEmptyTrie()
 
-	rt := generateRandomTests(100)
+	rt := GenerateRandomTests(t, 100)
 	for _, test := range rt {
 		err := trie.Put(test.key, test.value)
 		if err != nil {

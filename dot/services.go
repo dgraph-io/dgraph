@@ -46,7 +46,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 	}
 
 	// load most recent state from database
-	latestState, err := stateSrvc.Storage.LoadHash()
+	latestState, err := state.LoadLatestStorageHash(stateSrvc.DB())
 	if err != nil {
 		return nil, fmt.Errorf("failed to load latest state root hash: %s", err)
 	}

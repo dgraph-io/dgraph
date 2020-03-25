@@ -12,7 +12,7 @@ import (
 func newTestStorageState(t *testing.T) *StorageState {
 	db := database.NewMemDatabase()
 
-	s, err := NewStorageState(db, trie.NewEmptyTrie(nil))
+	s, err := NewStorageState(db, trie.NewEmptyTrie())
 	if err != nil {
 		t.Fatal(err)
 	}
