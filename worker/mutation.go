@@ -147,11 +147,19 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
+	start := time.Now()
 	stopIndexing := func(closer *y.Closer) {
 		// runSchemaMutation can return. stopIndexing could be called by goroutines.
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
 				closer.Done()
+				// Time check is here so that we do not propose snapshot too frequently.
+				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
+					return
+				}
+				if err := gr.Node.proposeSnapshot(1); err != nil {
+					glog.Errorf("error in proposing snapshot: %v", err)
+				}
 			}
 		}
 	}
