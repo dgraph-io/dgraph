@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 	"sync"
 
@@ -826,7 +825,6 @@ func completeObject(
 	comma := ""
 	x.Check2(buf.WriteRune('{'))
 
-	fmt.Println("res ", res)
 	dgraphTypes, ok := res["dgraph.type"].([]interface{})
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {

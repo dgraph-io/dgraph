@@ -687,12 +687,7 @@ func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 		GetGQLSchema *gqlSchema
 	}
 
-	b, err := json.Marshal(resp.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	err = json.Unmarshal(b, &result)
+	err := json.Unmarshal(resp.Data.Bytes(), &result)
 	return result.GetGQLSchema, err
 }
 
