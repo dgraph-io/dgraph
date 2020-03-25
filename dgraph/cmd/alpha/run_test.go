@@ -107,20 +107,22 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	for {
-		_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
-		if err != nil && strings.Contains(err.Error(), "errIndexingInProgress") {
-			time.Sleep(time.Second)
-			continue
-		} else if err != nil {
-			return errors.Wrapf(err, "while running request with retries")
-		} else {
-			break
-		}
+	return alterSchemaHelper(s, false)
+}
+
+func alterSchemaInBackground(s string) error {
+	return alterSchemaHelper(s, true)
+}
+
+func alterSchemaHelper(s string, bg bool) error {
+	url := addr + "/alter"
+	if bg {
+		url += "?run_in_background=true"
 	}
 
-	if err := waitForAlter(s); err != nil {
-		return errors.Wrapf(err, "while waiting for alter to complete")
+	_, _, err := runWithRetries("PUT", "", url, s)
+	if err != nil {
+		return errors.Wrapf(err, "while running request with retries")
 	}
 
 	return nil
@@ -134,48 +136,6 @@ func alterSchemaWithRetry(s string) error {
 		}
 	}
 	return err
-}
-
-// waitForAlter waits for the alter operation to complete.
-func waitForAlter(s string) error {
-	ps, err := schema.Parse(s)
-	if err != nil {
-		return err
-	}
-
-	for {
-		resp, _, err := queryWithTs("schema{}", "application/graphql+-", "false", 0)
-		if err != nil {
-			return err
-		}
-
-		var result struct {
-			Data struct {
-				Schema []*pb.SchemaNode
-			}
-		}
-		if err := json.Unmarshal([]byte(resp), &result); err != nil {
-			return err
-		}
-
-		actual := make(map[string]*pb.SchemaNode)
-		for _, rs := range result.Data.Schema {
-			actual[rs.Predicate] = rs
-		}
-
-		done := true
-		for _, su := range ps.Preds {
-			if n, ok := actual[su.Predicate]; !ok || !testutil.SameIndexes(su, n) {
-				done = false
-				break
-			}
-		}
-		if done {
-			return nil
-		}
-
-		time.Sleep(time.Second)
-	}
 }
 
 func dropAll() error {

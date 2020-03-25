@@ -1885,7 +1885,6 @@ func TestAllowUIDAccess(t *testing.T) {
 		name	 : string @index(exact) .
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
-	require.NoError(t, testutil.WaitForAlter(ctx, dg, op.Schema))
 
 	resetUser(t)
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{

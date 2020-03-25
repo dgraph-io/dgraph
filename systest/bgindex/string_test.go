@@ -154,7 +154,7 @@ func TestStringIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: anyoftext(balance, "example")) {uid}}`, dg)
+	waitForSchemaUpdate(`{ q(func: anyoftext(balance, "example")) {uid}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")
