@@ -191,6 +191,7 @@ func getTypeVal(val *api.Value) (types.Val, error) {
 	}
 
 	p1.Value = p1.Value.([]byte)
+	p1.Tid = p.Tid
 	return p1, nil
 }
 
@@ -301,11 +302,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 			Tid:   types.TypeID(de.GetValueType()),
 			Value: de.GetValue(),
 		}
-		// If the value type is not already set according to the schema, set it to string and
-		// then convert it to the type as declared in the schema.
-		if storageVal.Tid != pred.ValueType {
-			storageVal.Tid = types.StringID
-		}
+
 		schemaVal, err := types.Convert(storageVal, types.TypeID(pred.ValueType))
 		if err != nil {
 			errs = append(errs, err.Error())
