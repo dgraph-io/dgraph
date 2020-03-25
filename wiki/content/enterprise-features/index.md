@@ -660,6 +660,27 @@ dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb
 If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
 each of the alphas.
 
+### Turn off Encryption
+
+Once a database has encryption enabled, the encryption key must be provided in order to open the database.
+
+If you wish to turn off encryption from an existing database, then you can export your data that you can then
+import into a new Dgraph instance without encryption enabled.
+
+### Rotate Encryption Key
+
+You can rotate the master encryption key by using the `badger rotate` command on both p and w directories for
+each Alpha. You'll need both the current key and the new key in two different files. Specify the directory you
+rotate ("p" or "w") for the `--dir` flag, the old key for the `--old-key-path` flag, and the new key with the
+`--new-key-path` flag.
+
+```
+badger rotate --dir p --old-key-path enc_key_file --new-key-path new_enc_key_file
+badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_file
+```
+
+Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
+
 ### Bulk loader with Encryption
 
 Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
