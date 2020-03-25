@@ -128,7 +128,7 @@ func (bt *BlockTree) decodeRecursive(r io.Reader, parent *node) error {
 			arrivalTime: arrivalTime,
 		}
 
-		bt.leaves.Replace(parent, parent.children[i])
+		bt.leaves.replace(parent, parent.children[i])
 
 		err = bt.decodeRecursive(r, parent.children[i])
 		if err != nil {

@@ -26,19 +26,21 @@ import (
 type leafMap map[common.Hash]*node
 
 // Replace deletes the old node from the map and inserts the new one
-func (ls leafMap) Replace(old, new *node) {
+func (ls leafMap) replace(old, new *node) {
 	delete(ls, old.hash)
 	ls[new.hash] = new
 }
 
 // DeepestLeaf searches the stored leaves to the find the one with the greatest depth.
-// TODO: Select left-most
+// If there are two leaves with the same depth, choose the one with the earliest arrival time.
 func (ls leafMap) deepestLeaf() *node {
 	max := big.NewInt(-1)
 	var dLeaf *node
 	for _, n := range ls {
 		if max.Cmp(n.depth) < 0 {
 			max = n.depth
+			dLeaf = n
+		} else if max.Cmp(n.depth) == 0 && n.arrivalTime > dLeaf.arrivalTime {
 			dLeaf = n
 		}
 	}

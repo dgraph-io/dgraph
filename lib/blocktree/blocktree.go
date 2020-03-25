@@ -70,7 +70,7 @@ func (bt *BlockTree) GenesisHash() Hash {
 
 // AddBlock inserts the block as child of its parent node
 // Note: Assumes block has no children
-func (bt *BlockTree) AddBlock(block *types.Block) error {
+func (bt *BlockTree) AddBlock(block *types.Block, arrivalTime uint64) error {
 	parent := bt.getNode(block.Header.ParentHash)
 	if parent == nil {
 		return fmt.Errorf("cannot find parent block in blocktree")
@@ -86,14 +86,15 @@ func (bt *BlockTree) AddBlock(block *types.Block) error {
 	depth.Add(parent.depth, big.NewInt(1))
 
 	n = &node{
-		hash:     block.Header.Hash(),
-		parent:   parent,
-		children: []*node{},
-		depth:    depth,
+		hash:        block.Header.Hash(),
+		parent:      parent,
+		children:    []*node{},
+		depth:       depth,
+		arrivalTime: arrivalTime,
 	}
 	parent.addChild(n)
 
-	bt.leaves.Replace(parent, n)
+	bt.leaves.replace(parent, n)
 
 	return nil
 }

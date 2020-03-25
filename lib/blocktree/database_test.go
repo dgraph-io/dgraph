@@ -35,7 +35,7 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 
 		hash := block.Header.Hash()
-		bt.AddBlock(block)
+		bt.AddBlock(block, 0)
 		previousHash = hash
 
 		isBranch := r.Intn(2)
@@ -47,19 +47,24 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 	}
 
-	// create tree branches3
+	num := 0
+
+	// create tree branches
 	for _, branch := range branches {
+		num++ // create blocks with different hashes
+		previousHash = branch.hash
+
 		for i := int(branch.depth.Uint64()); i <= depth; i++ {
 			block := &types.Block{
 				Header: &types.Header{
 					ParentHash: previousHash,
-					Number:     big.NewInt(int64(i)),
+					Number:     big.NewInt(int64(i + num)),
 				},
 				Body: &types.Body{},
 			}
 
 			hash := block.Header.Hash()
-			bt.AddBlock(block)
+			bt.AddBlock(block, 0)
 			previousHash = hash
 		}
 	}
@@ -80,7 +85,7 @@ func TestStoreBlockTree(t *testing.T) {
 		Number:     big.NewInt(0),
 	}
 
-	bt, _ := createTestBlockTree(header, 100, db)
+	bt, _ := createTestBlockTree(header, 10, db)
 
 	err = bt.Store()
 	if err != nil {

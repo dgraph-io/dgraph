@@ -323,7 +323,7 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 	}
 
 	// add block to blocktree
-	err = bs.bt.AddBlock(block)
+	err = bs.bt.AddBlock(block, arrivalTime)
 	if err != nil {
 		return err
 	}

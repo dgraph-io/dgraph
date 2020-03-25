@@ -19,6 +19,7 @@ package blocktree
 import (
 	"bytes"
 	"math/big"
+	"math/rand"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
@@ -52,7 +53,7 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 		hash := block.Header.Hash()
 		hashes = append(hashes, hash)
 
-		bt.AddBlock(block)
+		bt.AddBlock(block, 0)
 		previousHash = hash
 	}
 
@@ -86,7 +87,7 @@ func TestBlockTree_AddBlock(t *testing.T) {
 	}
 
 	hash := block.Header.Hash()
-	bt.AddBlock(block)
+	bt.AddBlock(block, 0)
 
 	n := bt.getNode(hash)
 
@@ -131,7 +132,7 @@ func TestBlockTree_LongestPath(t *testing.T) {
 	}
 
 	extraBlock.Header.Hash()
-	bt.AddBlock(extraBlock)
+	bt.AddBlock(extraBlock, 0)
 
 	longestPath := bt.longestPath()
 
@@ -156,7 +157,7 @@ func TestBlockTree_Subchain(t *testing.T) {
 	}
 
 	extraBlock.Header.Hash()
-	bt.AddBlock(extraBlock)
+	bt.AddBlock(extraBlock, 0)
 
 	subChain, err := bt.subChain(hashes[1], hashes[3])
 	if err != nil {
@@ -170,9 +171,46 @@ func TestBlockTree_Subchain(t *testing.T) {
 	}
 }
 
-// TODO: Need to define leftmost (see BlockTree.LongestPath)
-//func TestBlockTree_LongestPath_LeftMost(t *testing.T) {
-//}
+func TestBlockTree_DeepestLeaf(t *testing.T) {
+	header := &types.Header{
+		ParentHash: zeroHash,
+		Number:     big.NewInt(0),
+	}
+
+	arrivalTime := uint64(1)
+	var expected Hash
+
+	bt, _ := createTestBlockTree(header, 8, nil)
+
+	for leaf, node := range bt.leaves {
+		node.arrivalTime = arrivalTime
+		arrivalTime++
+		expected = leaf
+		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
+	}
+
+	deepestLeaf := bt.deepestLeaf()
+	if deepestLeaf.hash != expected {
+		t.Fatalf("Fail: got %s expected %s", deepestLeaf.hash, expected)
+	}
+
+	r := *rand.New(rand.NewSource(rand.Int63()))
+	greatestTime := uint64(0)
+
+	for leaf, node := range bt.leaves {
+		node.arrivalTime = uint64(r.Intn(256))
+		if node.arrivalTime > greatestTime {
+			greatestTime = node.arrivalTime
+			expected = node.hash
+		}
+		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
+	}
+
+	deepestLeaf = bt.deepestLeaf()
+	if deepestLeaf.hash != expected {
+		t.Fatalf("Fail: got %s expected %s", deepestLeaf.hash, expected)
+	}
+}
 
 func TestBlockTree_GetNode(t *testing.T) {
 	header := &types.Header{
@@ -187,11 +225,12 @@ func TestBlockTree_GetNode(t *testing.T) {
 			Header: &types.Header{
 				ParentHash: branch.hash,
 				Number:     branch.depth,
+				StateRoot:  Hash{0x1},
 			},
 			Body: &types.Body{},
 		}
 
-		err := bt.AddBlock(block)
+		err := bt.AddBlock(block, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
