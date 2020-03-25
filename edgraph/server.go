@@ -239,6 +239,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	// If a background task is already running, we should reject all the new alter requests.
+	if schema.State().IndexingInProgress() {
+		return nil, errIndexingInProgress
+	}
+
 	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
