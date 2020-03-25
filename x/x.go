@@ -247,6 +247,45 @@ func ExtractJwt(ctx context.Context) ([]string, error) {
 	return accessJwt, nil
 }
 
+func ExtractAuthVariables(ctx context.Context) (map[string]string, error) {
+	// Extract the jwt and unmarshal the jwt to get the auth variables.
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+
+	jwtToken := md.Get("authorizationJwt")
+	if len(jwtToken) == 0 {
+		return nil, nil
+	} else if len(jwtToken) > 1 {
+		return nil, errors.Errorf("Invalid jwt auth token.")
+	}
+
+	//TODO: Verify jwt tokens before parsing it.
+	tokens := strings.Split(jwtToken[0], ".")
+	if len(tokens) != 3 {
+		return nil, errors.Errorf("Invalid jwt auth token.")
+	}
+
+	data, err := jwt.DecodeSegment(tokens[1])
+	if err != nil {
+		return nil, errors.Errorf("Error while decoding jwt auth token: ", err)
+	}
+
+	jsonMap := make(map[string]interface{})
+	err = json.Unmarshal([]byte(data), &jsonMap)
+	if err != nil {
+		return nil, errors.Errorf("Error while parsing jwt auth token: ", err)
+	}
+
+	customClaims := jsonMap["https://dgraph.io/jwt/claims"].(map[string]interface{})
+	authVariables := make(map[string]string)
+	for key, value := range customClaims {
+		authVariables[key] = value.(string)
+	}
+	return authVariables, nil
+}
+
 // WithLocations adds a list of locations to a GqlError and returns the same
 // GqlError (fluent style).
 func (gqlErr *GqlError) WithLocations(locs ...Location) *GqlError {
@@ -361,44 +400,6 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx
-}
-
-func ExtractAuthJwt(ctx context.Context) ([]string, error) {
-	// extract the jwt and unmarshal the jwt to get the auth variables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, ErrNoJwt
-	}
-
-	accessJwt := md.Get("authorizationJwt")
-	if len(accessJwt) == 0 {
-		return nil, ErrNoJwt
-	}
-	return accessJwt, nil
-}
-
-func ExtractAuthVariables(jwtToken string, authVariables map[string]string) {
-	//TODO: Verify jwt tokens before parsing it.
-	tokens := strings.Split(jwtToken, ".")
-	AssertTrue(len(tokens) == 3)
-	data, err := jwt.DecodeSegment(tokens[1])
-	if err != nil {
-		fmt.Println("Error while decoding jwt auth token:", err)
-		return
-	}
-
-	jsonMap := make(map[string]interface{})
-	err = json.Unmarshal([]byte(data), &jsonMap)
-	if err != nil {
-		fmt.Println("Error while parsing jwt auth token:", err)
-		return
-	}
-
-	newAuthVariables := jsonMap["authVariables"].(map[string]interface{})
-	for key, value := range newAuthVariables {
-		AssertTrue(key[0] == '$')
-		authVariables[key[1:]] = value.(string)
-	}
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.

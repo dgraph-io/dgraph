@@ -41,11 +41,9 @@ func NewQueryRewriter() QueryRewriter {
 func (qr *queryRewriter) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	authVariables := make(map[string]string)
-	if authJwt, err := x.ExtractAuthJwt(ctx); err == nil {
-		for _, token := range authJwt {
-			x.ExtractAuthVariables(token, authVariables)
-		}
+	authVariables, err := x.ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	switch gqlQuery.QueryType() {
