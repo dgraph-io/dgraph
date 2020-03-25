@@ -264,13 +264,13 @@ func StdQueryCompletion() CompletionFunc {
 
 // AliasQueryCompletion is the completion steps that get run for admin queries
 // those don't have the alias built in like Dgraph queries.
-func AliasQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(injectAliasCompletion(completeDgraphResult))
-}
+// func AliasQueryCompletion() CompletionFunc {
+// 	return injectAliasCompletion
+// }
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) CompletionFunc {
-	return addRootFieldCompletion(name, completeResult)
+	return addRootFieldCompletion(name, completeDgraphResult)
 }
 
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
@@ -554,10 +554,10 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 			aliased, resErr = aliasValue(field, val)
 		}
 
-		res, marshErr := json.Marshal(aliased)
-		err = schema.AppendGQLErrs(err, marshErr)
+		// res, marshErr := json.Marshal(aliased)
+		// err = schema.AppendGQLErrs(err, marshErr)
 
-		return cf(ctx, field, res, schema.AppendGQLErrs(err, resErr))
+		return cf(ctx, field, aliased, schema.AppendGQLErrs(err, resErr))
 	})
 }
 
@@ -566,17 +566,15 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 // handling {"res":[{...}]} even if we expect a single value
 func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
 	interface{}, error) {
-	return val, e
+	path := make([]interface{}, 0, maxPathLength(field))
 
-	// path := make([]interface{}, 0, maxPathLength(field))
-
-	// switch val := val.(type) {
-	// case []interface{}:
-	// 	return completeList(path, field, val)
-	// case map[string]interface{}:
-	// 	return completeObject(path, field.Type(), []schema.Field{field}, val)
-	// }
-	// return completeValue(path, field, val)
+	switch val := val.(type) {
+	case []interface{}:
+		return completeList(path, field, val)
+	case map[string]interface{}:
+		return completeObject(path, field.Type(), []schema.Field{field}, val)
+	}
+	return completeValue(path, field, val)
 }
 
 // Once a result has been returned from Dgraph, that result needs to be worked
@@ -970,7 +968,6 @@ func completeList(
 	path []interface{},
 	field schema.Field,
 	values []interface{}) ([]byte, x.GqlErrorList) {
-
 	var buf bytes.Buffer
 	var errs x.GqlErrorList
 	comma := ""
