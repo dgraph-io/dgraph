@@ -371,9 +371,6 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}
-	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
-		log.Fatal(err)
-	}
 
 	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
@@ -425,9 +422,6 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	op = &api.Operation{}
 	op.Schema = `name: string @index(exact) .`
 	if err := s.dg.Alter(context.Background(), op); err != nil {
-		log.Fatal(err)
-	}
-	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
 		log.Fatal(err)
 	}
 
@@ -940,5 +934,4 @@ func TestTxnDiscardBeforeCommit(t *testing.T) {
 func alterSchema(dg *dgo.Dgraph, schema string) {
 	op := api.Operation{Schema: schema}
 	x.Check(dg.Alter(ctxb, &op))
-	x.Check(testutil.WaitForAlter(ctxb, dg, schema))
 }
