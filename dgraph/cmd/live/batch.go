@@ -191,6 +191,7 @@ func getTypeVal(val *api.Value) (types.Val, error) {
 	}
 
 	p1.Value = p1.Value.([]byte)
+	p1.Tid = p.Tid
 	return p1, nil
 }
 
