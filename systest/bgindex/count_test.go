@@ -163,7 +163,7 @@ func TestCountIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: eq(count(value), "3")) {uid}}`, dg)
+	waitForSchemaUpdate(`{ q(func: eq(count(value), "3")) {uid}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")
