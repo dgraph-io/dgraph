@@ -679,7 +679,7 @@ func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 	req := &schema.Request{
 		Query: `query { getGQLSchema { id schema } }`}
 	resp := r.Resolve(context.Background(), req)
-	if len(resp.Errors) > 0 || len(resp.Data) == 0 {
+	if len(resp.Errors) > 0 || resp.Data.Len() == 0 {
 		return nil, resp.Errors
 	}
 

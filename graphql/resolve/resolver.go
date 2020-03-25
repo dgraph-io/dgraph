@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"strings"
@@ -125,8 +126,9 @@ type adminExecutor struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type Resolved struct {
-	Data interface{}
-	Err  error
+	Data  interface{}
+	Field schema.Field
+	Err   error
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -263,7 +265,7 @@ func StdQueryCompletion() CompletionFunc {
 // AliasQueryCompletion is the completion steps that get run for admin queries
 // those don't have the alias built in like Dgraph queries.
 func AliasQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(injectAliasCompletion(completeResult))
+	return removeObjectCompletion(injectAliasCompletion(completeDgraphResult))
 }
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
@@ -364,6 +366,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 					})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
+				allResolved[storeAt].Field = q
 			}(q, i)
 		}
 		wg.Wait()
@@ -373,8 +376,25 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
+
+			// Errors should report the "path" into the result where the error was found.
+			//
+			// The definition of a path in a GraphQL error is here:
+			// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+			// For a query like (assuming field f is of a list type and g is a scalar type):
+			// - q { f { g } }
+			// a path to the 2nd item in the f list would look like:
+			// - [ "q", "f", 2, "g" ]
+			// path := make([]interface{}, 0, maxPathLength(field))
+			path := make([]interface{}, 0, maxPathLength(res.Field))
+			b, gqlErr := completeObject(path, res.Field.Type(), []schema.Field{res.Field},
+				res.Data.(map[string]interface{}))
+			if gqlErr != nil {
+				err := res.Err.(x.GqlErrorList)
+				res.Err = append(err, gqlErr...)
+			}
 			resp.WithError(res.Err)
-			resp.AddData(res.Data)
+			resp.AddData(b)
 		}
 	case op.IsMutation():
 		// A mutation operation can contain any number of mutation fields.  Those should be executed
@@ -404,7 +424,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			resp.WithError(res.Err)
-			resp.AddData(res.Data)
+			resp.AddData(res.Data.([]byte))
 		}
 	case op.IsSubscription():
 		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
@@ -523,19 +543,19 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 // completeResult takes a result like {"res":{"a":...,"b":...}} and does the standard
 // object completion.  This is different to doing completion from Dgraph, because that requires
 // handling {"res":[{...}]} even if we expect a single value
-func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
-	interface{}, error) {
+// func completeResult(ctx context.Context, field schema.Field, val interface{}, e error) (
+// 	interface{}, error) {
 
-	path := make([]interface{}, 0, maxPathLength(field))
+// 	path := make([]interface{}, 0, maxPathLength(field))
 
-	switch val := val.(type) {
-	case []interface{}:
-		return completeList(path, field, val)
-	case map[string]interface{}:
-		return completeObject(path, field.Type(), []schema.Field{field}, val)
-	}
-	return completeValue(path, field, val)
-}
+// 	switch val := val.(type) {
+// 	case []interface{}:
+// 		return completeList(path, field, val)
+// 	case map[string]interface{}:
+// 		return completeObject(path, field.Type(), []schema.Field{field}, val)
+// 	}
+// 	return completeValue(path, field, val)
+// }
 
 // Once a result has been returned from Dgraph, that result needs to be worked
 // through for two main reasons:
@@ -593,7 +613,7 @@ func completeResult(ctx context.Context, field schema.Field, val interface{}, e 
 //
 
 // completeDgraphResult starts the recursion with field as the top level GraphQL
-// query and dgResult as the matching full Dgraph result.  Always returns a valid
+// query and dgResult as the matching full Dgraph result. Always returns a valid
 // JSON []byte of the form
 //   { "query-name": null }
 // if there's no result, or
@@ -693,291 +713,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 		// { } ---> "q": null
 		// case
 	}
-
-	// Errors should report the "path" into the result where the error was found.
-	//
-	// The definition of a path in a GraphQL error is here:
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
-	// For a query like (assuming field f is of a list type and g is a scalar type):
-	// - q { f { g } }
-	// a path to the 2nd item in the f list would look like:
-	// - [ "q", "f", 2, "g" ]
-	path := make([]interface{}, 0, maxPathLength(field))
-
-	completed, gqlErrs := completeObject(
-		path, field.Type(), []schema.Field{field}, valToComplete)
-	if completed == nil {
-		// This could only occur completeObject crushed the whole query, but
-		// that should never happen because the result type shouldn't be '!'.
-		// We should wrap enough testing around the schema generation that this
-		// just can't happen.
-		//
-		// This isn't really an observable GraphQL error, so no need to add anything
-		// to the payload of errors for the result.
-		glog.Errorf("Top level completeObject didn't return a result.  " +
-			"That's only possible if the query result is non-nullable.  " +
-			"There's something wrong in the GraphQL schema.")
-		return nullResponse(), append(errs, gqlErrs...)
-	}
-
-	return completed, append(errs, gqlErrs...)
-}
-
-// completeObject builds a json GraphQL result object for the current query level.
-// It returns a bracketed json object like { f1:..., f2:..., ... }.
-//
-// fields are all the fields from this bracketed level in the GraphQL  query, e.g:
-// {
-//   name
-//   dob
-//   friends {...}
-// }
-// If it's the top level of a query then it'll be the top level query name.
-//
-// typ is the expected type matching those fields, e.g. above that'd be something
-// like the `Person` type that has fields name, dob and friends.
-//
-// res is the results map from Dgraph for this level of the query.  This map needn't
-// contain values for all the requested fields, e.g. if there's no corresponding
-// values in the store or if the query contained a filter that excluded a value.
-// So res might be the map : name->"A Name", friends -> []interface{}
-//
-// completeObject fills out this result putting in null for any missing values
-// (dob above) and applying GraphQL error propagation for any null fields that the
-// schema says can't be null.
-//
-// Example:
-//
-// if the map is name->"A Name", friends -> []interface{}
-//
-// and "dob" is nullable then the result should be json object
-// {"name": "A Name", "dob": null, "friends": ABC}
-// where ABC is the result of applying completeValue to res["friends"]
-//
-// if "dob" were non-nullable (maybe it's type is DateTime!), then the result is
-// nil and the error propagates to the enclosing level.
-func completeObject(
-	path []interface{},
-	typ schema.Type,
-	fields []schema.Field,
-	res map[string]interface{}) (interface{}, x.GqlErrorList) {
-
-	var errs x.GqlErrorList
-	m := make(map[string]interface{})
-
-	dgraphTypes, ok := res["dgraph.type"].([]interface{})
-	for _, f := range fields {
-		if f.Skip() || !f.Include() {
-			continue
-		}
-
-		includeField := true
-		// If typ is an interface, and dgraphTypes contains another type, then we ignore
-		// fields which don't start with that type. This would happen when multiple
-		// fragments (belonging to different types) are requested within a query for an interface.
-
-		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
-		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
-		if len(dgraphTypes) > 0 {
-			includeField = f.IncludeInterfaceField(dgraphTypes)
-		}
-		if !includeField {
-			continue
-		}
-
-		val := res[f.ResponseName()]
-		if f.Name() == schema.Typename {
-			// From GraphQL spec:
-			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
-			// "GraphQL supports type name introspection at any point within a query by the
-			// meta‐field  __typename: String! when querying against any Object, Interface,
-			// or Union. It returns the name of the object type currently being queried."
-
-			// If we have dgraph.type information, we will use that to figure out the type
-			// otherwise we will get it from the schema.
-			if ok {
-				val = f.TypeName(dgraphTypes)
-			} else {
-				val = f.GetObjectName()
-			}
-		}
-
-		completed, err := completeValue(append(path, f.ResponseName()), f, val)
-		errs = append(errs, err...)
-		if completed == nil {
-			if !f.Type().Nullable() {
-				return nil, errs
-			}
-			m[f.ResponseName()] = nil
-		}
-		m[f.ResponseName()] = completed
-	}
-	if len(m) > 0 {
-		return m, errs
-	}
-
-	return nil, errs
-}
-
-// completeValue applies the value completion algorithm to a single value, which
-// could turn out to be a list or object or scalar value.
-func completeValue(
-	path []interface{},
-	field schema.Field,
-	val interface{}) (interface{}, x.GqlErrorList) {
-
-	switch val := val.(type) {
-	case map[string]interface{}:
-		return completeObject(path, field.Type(), field.SelectionSet(), val)
-	case []interface{}:
-		return completeList(path, field, val)
-	default:
-		if val == nil {
-			if field.Type().ListType() != nil {
-				// We could choose to set this to null.  This is our decision, not
-				// anything required by the GraphQL spec.
-				//
-				// However, if we query, for example, for a persons's friends with
-				// some restrictions, and there aren't any, is that really a case to
-				// set this at null and error if the list is required?  What
-				// about if an person has just been added and doesn't have any friends?
-				// Doesn't seem right to add null and cause error propagation.
-				//
-				// Seems best if we pick [], rather than null, as the list value if
-				// there's nothing in the Dgraph result.
-				return []interface{}{}, nil
-			}
-
-			if field.Type().Nullable() {
-				return nil, nil
-			}
-
-			gqlErr := x.GqlErrorf(
-				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
-					"GraphQL error propagation triggered.", field.Name(), field.Type()).
-				WithLocations(field.Location())
-			gqlErr.Path = copyPath(path)
-
-			return nil, x.GqlErrorList{gqlErr}
-		}
-
-		return val, nil
-	}
-}
-
-// completeList applies the completion algorithm to a list field and result.
-//
-// field is one field from the query - which should have a list type in the
-// GraphQL schema.
-//
-// values is the list of values found by the query for this field.
-//
-// completeValue() is applied to every list element, but
-// the type of field can only be a scalar list like [String], or an object
-// list like [Person], so schematically the final result is either
-// [ completValue("..."), completValue("..."), ... ]
-// or
-// [ completeObject({...}), completeObject({...}), ... ]
-// depending on the type of list.
-//
-// If the list has non-nullable elements (a type like [T!]) and any of those
-// elements resolve to null, then the whole list is crushed to null.
-func completeList(
-	path []interface{},
-	field schema.Field,
-	values []interface{}) ([]interface{}, x.GqlErrorList) {
-
-	res := make([]interface{}, 0, len(values))
-	var errs x.GqlErrorList
-
-	if field.Type().ListType() == nil {
-		// This means a bug on our part - in rewriting, schema generation,
-		// or Dgraph returned something unexpected.
-		//
-		// Let's crush it to null so we still get something from the rest of the
-		// query and log the error.
-		return mismatched(path, field, values)
-	}
-
-	for i, b := range values {
-		r, err := completeValue(append(path, i), field, b)
-		errs = append(errs, err...)
-		if r == nil {
-			if !field.Type().ListType().Nullable() {
-				// Unlike the choice in completeValue() above, where we turn missing
-				// lists into [], the spec explicitly calls out:
-				//  "If a List type wraps a Non-Null type, and one of the
-				//  elements of that list resolves to null, then the entire list
-				//  must resolve to null."
-				//
-				// The list gets reduced to nil, but an error recording that must
-				// already be in errs.  See
-				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
-				// "If the field returns null because of an error which has already
-				// been added to the "errors" list in the response, the "errors"
-				// list must not be further affected."
-				// The behavior is also in the examples in here:
-				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
-				return nil, errs
-			}
-			res = append(res, nil)
-		} else {
-			res = append(res, r)
-		}
-	}
-
-	return res, errs
-}
-
-func mismatched(
-	path []interface{},
-	field schema.Field,
-	values []interface{}) ([]interface{}, x.GqlErrorList) {
-
-	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
-		"but its type is %s.\n"+
-		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
-		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
-
-	gqlErr := &x.GqlError{
-		Message: "Dgraph returned a list, but GraphQL was expecting just one item.  " +
-			"This indicates an internal error - " +
-			"probably a mismatch between GraphQL and Dgraph schemas.  " +
-			"The value was resolved as null (which may trigger GraphQL error propagation) " +
-			"and as much other data as possible returned.",
-		Locations: []x.Location{field.Location()},
-		Path:      copyPath(path),
-	}
-
-	val, errs := completeValue(path, field, nil)
-	return []interface{}{val}, append(errs, gqlErr)
-}
-
-func copyPath(path []interface{}) []interface{} {
-	result := make([]interface{}, len(path))
-	copy(result, path)
-	return result
-}
-
-// maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
-// Used to pre-allocate a path buffer of the correct size before running completeObject on
-// the top level query - means that we aren't reallocating slices multiple times
-// during the complete* functions.
-func maxPathLength(f schema.Field) int {
-	childMax := 0
-	for _, chld := range f.SelectionSet() {
-		d := maxPathLength(chld)
-		if d > childMax {
-			childMax = d
-		}
-	}
-	if f.Type().ListType() != nil {
-		// It's f: [...], so add a space for field name and
-		// a space for the index into the list
-		return 2 + childMax
-	}
-
-	return 1 + childMax
+	return valToComplete, errs
 }
 
 // TODO: Include this behavior into the standard algorithm above.
@@ -1021,4 +757,291 @@ func aliasObject(
 	}
 
 	return result, errs
+}
+
+// completeObject builds a json GraphQL result object for the current query level.
+// It returns a bracketed json object like { f1:..., f2:..., ... }.
+//
+// fields are all the fields from this bracketed level in the GraphQL  query, e.g:
+// {
+//   name
+//   dob
+//   friends {...}
+// }
+// If it's the top level of a query then it'll be the top level query name.
+//
+// typ is the expected type matching those fields, e.g. above that'd be something
+// like the `Person` type that has fields name, dob and friends.
+//
+// res is the results map from Dgraph for this level of the query.  This map needn't
+// contain values for all the requested fields, e.g. if there's no corresponding
+// values in the store or if the query contained a filter that excluded a value.
+// So res might be the map : name->"A Name", friends -> []interface{}
+//
+// completeObject fills out this result putting in null for any missing values
+// (dob above) and applying GraphQL error propagation for any null fields that the
+// schema says can't be null.
+//
+// Example:
+//
+// if the map is name->"A Name", friends -> []interface{}
+//
+// and "dob" is nullable then the result should be json object
+// {"name": "A Name", "dob": null, "friends": ABC}
+// where ABC is the result of applying completeValue to res["friends"]
+//
+// if "dob" were non-nullable (maybe it's type is DateTime!), then the result is
+// nil and the error propagates to the enclosing level.
+func completeObject(
+	path []interface{},
+	typ schema.Type,
+	fields []schema.Field,
+	res map[string]interface{}) ([]byte, x.GqlErrorList) {
+
+	var errs x.GqlErrorList
+	var buf bytes.Buffer
+	comma := ""
+	x.Check2(buf.WriteRune('{'))
+
+	dgraphTypes, ok := res["dgraph.type"].([]interface{})
+	for _, f := range fields {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+
+		includeField := true
+		// If typ is an interface, and dgraphTypes contains another type, then we ignore
+		// fields which don't start with that type. This would happen when multiple
+		// fragments (belonging to different types) are requested within a query for an interface.
+
+		// If the dgraphPredicate doesn't start with the typ.Name(), then this field belongs to
+		// a concrete type, lets check that it has inputType as the prefix, otherwise skip it.
+		if len(dgraphTypes) > 0 {
+			includeField = f.IncludeInterfaceField(dgraphTypes)
+		}
+		if !includeField {
+			continue
+		}
+
+		x.Check2(buf.WriteString(comma))
+		x.Check2(buf.WriteRune('"'))
+		x.Check2(buf.WriteString(f.ResponseName()))
+		x.Check2(buf.WriteString(`": `))
+
+		val := res[f.ResponseName()]
+		if f.Name() == schema.Typename {
+			// From GraphQL spec:
+			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
+			// "GraphQL supports type name introspection at any point within a query by the
+			// meta‐field  __typename: String! when querying against any Object, Interface,
+			// or Union. It returns the name of the object type currently being queried."
+
+			// If we have dgraph.type information, we will use that to figure out the type
+			// otherwise we will get it from the schema.
+			if ok {
+				val = f.TypeName(dgraphTypes)
+			} else {
+				val = f.GetObjectName()
+			}
+		}
+
+		completed, err := completeValue(append(path, f.ResponseName()), f, val)
+		errs = append(errs, err...)
+		if completed == nil {
+			if !f.Type().Nullable() {
+				return nil, errs
+			}
+			completed = []byte(`null`)
+		}
+		x.Check2(buf.Write(completed))
+		comma = ", "
+	}
+	x.Check2(buf.WriteRune('}'))
+
+	return buf.Bytes(), errs
+}
+
+// completeValue applies the value completion algorithm to a single value, which
+// could turn out to be a list or object or scalar value.
+func completeValue(
+	path []interface{},
+	field schema.Field,
+	val interface{}) ([]byte, x.GqlErrorList) {
+
+	switch val := val.(type) {
+	case map[string]interface{}:
+		return completeObject(path, field.Type(), field.SelectionSet(), val)
+	case []interface{}:
+		return completeList(path, field, val)
+	default:
+		if val == nil {
+			if field.Type().ListType() != nil {
+				// We could choose to set this to null.  This is our decision, not
+				// anything required by the GraphQL spec.
+				//
+				// However, if we query, for example, for a persons's friends with
+				// some restrictions, and there aren't any, is that really a case to
+				// set this at null and error if the list is required?  What
+				// about if an person has just been added and doesn't have any friends?
+				// Doesn't seem right to add null and cause error propagation.
+				//
+				// Seems best if we pick [], rather than null, as the list value if
+				// there's nothing in the Dgraph result.
+				return []byte("[]"), nil
+			}
+
+			if field.Type().Nullable() {
+				return []byte("null"), nil
+			}
+
+			gqlErr := x.GqlErrorf(
+				"Non-nullable field '%s' (type %s) was not present in result from Dgraph.  "+
+					"GraphQL error propagation triggered.", field.Name(), field.Type()).
+				WithLocations(field.Location())
+			gqlErr.Path = copyPath(path)
+
+			return nil, x.GqlErrorList{gqlErr}
+		}
+
+		// val is a scalar
+
+		// Can this ever error?  We can't have an unsupported type or value because
+		// we just unmarshaled this val.
+		json, err := json.Marshal(val)
+		if err != nil {
+			gqlErr := x.GqlErrorf(
+				"Error marshalling value for field '%s' (type %s).  "+
+					"Resolved as null (which may trigger GraphQL error propagation) ",
+				field.Name(), field.Type()).
+				WithLocations(field.Location())
+			gqlErr.Path = copyPath(path)
+
+			if field.Type().Nullable() {
+				return []byte("null"), x.GqlErrorList{gqlErr}
+			}
+
+			return nil, x.GqlErrorList{gqlErr}
+		}
+
+		return json, nil
+	}
+}
+
+// completeList applies the completion algorithm to a list field and result.
+//
+// field is one field from the query - which should have a list type in the
+// GraphQL schema.
+//
+// values is the list of values found by the query for this field.
+//
+// completeValue() is applied to every list element, but
+// the type of field can only be a scalar list like [String], or an object
+// list like [Person], so schematically the final result is either
+// [ completValue("..."), completValue("..."), ... ]
+// or
+// [ completeObject({...}), completeObject({...}), ... ]
+// depending on the type of list.
+//
+// If the list has non-nullable elements (a type like [T!]) and any of those
+// elements resolve to null, then the whole list is crushed to null.
+func completeList(
+	path []interface{},
+	field schema.Field,
+	values []interface{}) ([]byte, x.GqlErrorList) {
+
+	var buf bytes.Buffer
+	var errs x.GqlErrorList
+	comma := ""
+
+	if field.Type().ListType() == nil {
+		// This means a bug on our part - in rewriting, schema generation,
+		// or Dgraph returned something unexpected.
+		//
+		// Let's crush it to null so we still get something from the rest of the
+		// query and log the error.
+		return mismatched(path, field, values)
+	}
+
+	x.Check2(buf.WriteRune('['))
+	for i, b := range values {
+		r, err := completeValue(append(path, i), field, b)
+		errs = append(errs, err...)
+		x.Check2(buf.WriteString(comma))
+		if r == nil {
+			if !field.Type().ListType().Nullable() {
+				// Unlike the choice in completeValue() above, where we turn missing
+				// lists into [], the spec explicitly calls out:
+				//  "If a List type wraps a Non-Null type, and one of the
+				//  elements of that list resolves to null, then the entire list
+				//  must resolve to null."
+				//
+				// The list gets reduced to nil, but an error recording that must
+				// already be in errs.  See
+				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors-and-Non-Nullability
+				// "If the field returns null because of an error which has already
+				// been added to the "errors" list in the response, the "errors"
+				// list must not be further affected."
+				// The behavior is also in the examples in here:
+				// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+				return nil, errs
+			}
+			x.Check2(buf.WriteString("null"))
+		} else {
+			x.Check2(buf.Write(r))
+		}
+		comma = ", "
+	}
+	x.Check2(buf.WriteRune(']'))
+	return buf.Bytes(), errs
+}
+
+func mismatched(
+	path []interface{},
+	field schema.Field,
+	values []interface{}) ([]byte, x.GqlErrorList) {
+
+	glog.Errorf("completeList() called in resolving %s (Line: %v, Column: %v), "+
+		"but its type is %s.\n"+
+		"That could indicate the Dgraph schema doesn't match the GraphQL schema.",
+		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
+
+	gqlErr := &x.GqlError{
+		Message: "Dgraph returned a list, but GraphQL was expecting just one item.  " +
+			"This indicates an internal error - " +
+			"probably a mismatch between GraphQL and Dgraph schemas.  " +
+			"The value was resolved as null (which may trigger GraphQL error propagation) " +
+			"and as much other data as possible returned.",
+		Locations: []x.Location{field.Location()},
+		Path:      copyPath(path),
+	}
+
+	val, errs := completeValue(path, field, nil)
+	return val, append(errs, gqlErr)
+}
+
+func copyPath(path []interface{}) []interface{} {
+	result := make([]interface{}, len(path))
+	copy(result, path)
+	return result
+}
+
+// maxPathLength finds the max length (including list indexes) of any path in the 'query' f.
+// Used to pre-allocate a path buffer of the correct size before running completeObject on
+// the top level query - means that we aren't reallocating slices multiple times
+// during the complete* functions.
+func maxPathLength(f schema.Field) int {
+	childMax := 0
+	for _, chld := range f.SelectionSet() {
+		d := maxPathLength(chld)
+		if d > childMax {
+			childMax = d
+		}
+	}
+	if f.Type().ListType() != nil {
+		// It's f: [...], so add a space for field name and
+		// a space for the index into the list
+		return 2 + childMax
+	}
+
+	return 1 + childMax
 }

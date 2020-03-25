@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -35,7 +36,7 @@ import (
 // Response represents a GraphQL response
 type Response struct {
 	Errors x.GqlErrorList
-	Data   map[string]interface{}
+	Data   bytes.Buffer
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -57,19 +58,27 @@ func (r *Response) WithError(err error) {
 // If r.Data is empty before the call, then r.Data becomes {p}
 // If r.Data contains data it always looks like {f,g,...}, and
 // adding to that results in {f,g,...,p}
-func (r *Response) AddData(p interface{}) {
-	res, ok := p.(map[string]interface{})
-	if !ok {
-		// TODO - Log and return error
+func (r *Response) AddData(p []byte) {
+	if r == nil || p == nil {
 		return
 	}
 
-	if r.Data == nil {
-		r.Data = make(map[string]interface{})
+	if len(p) > 0 {
+		p = p[1 : len(p)-1]
 	}
-	for k, v := range res {
-		r.Data[k] = v
+
+	if r.Data.Len() > 0 {
+		// The end of the buffer is always the closing `}`
+		r.Data.Truncate(r.Data.Len() - 1)
+		x.Check2(r.Data.WriteRune(','))
 	}
+
+	if r.Data.Len() == 0 {
+		x.Check2(r.Data.WriteRune('{'))
+	}
+
+	x.Check2(r.Data.Write(p))
+	x.Check2(r.Data.WriteRune('}'))
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
