@@ -145,8 +145,8 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// block here and wait for indexing to be finished.
 	gr.Node.waitForTask(opIndexing)
 
-	// There is a race condition in stopTask and waitForTask.
-	// We wait here for stopTask to finish.
+	// There is a race condition in stopTask and waitForTask. waitForTask can finish and stopTask
+	// hasn't finished deleting the entry from node.ops map yet.We wait here for stopTask to finish.
 	time.Sleep(time.Millisecond)
 
 	// done is used to ensure that we only stop the indexing task once.
