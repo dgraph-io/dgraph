@@ -22,7 +22,7 @@ function restartCluster {
     make install
   fi
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
-  docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
+  GOPATH="${GOPATH:-$(go env GOPATH)}" docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1
