@@ -106,16 +106,13 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer stop()
 
 	res, err := qr.rewriteAndExecute(ctx, query)
-	var result interface{}
-	if err == nil {
-		err = json.Unmarshal(res, &result)
-	}
-	completed, err := qr.resultCompleter.Complete(ctx, query, result, err)
+
+	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
 	return &Resolved{Data: completed, Err: err}
 }
 
 func (qr *queryResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
+	ctx context.Context, query schema.Query) (interface{}, error) {
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
@@ -128,7 +125,18 @@ func (qr *queryResolver) rewriteAndExecute(
 		return nil, schema.GQLWrapf(err, "Dgraph query failed")
 	}
 
-	return resp, nil
+	// FIXME: just to get it running for now
+	if query.QueryType() == schema.SchemaQuery {
+		var result map[string]interface{}
+		var err2 error
+		if len(resp) > 0 {
+			err2 = json.Unmarshal(resp, &result)
+		}
+
+		return result, schema.AppendGQLErrs(err, err2)
+	}
+
+	return completeDgraphResult(ctx, query, resp, err)
 }
 
 func introspectionExecution(q schema.Query) QueryExecutionFunc {

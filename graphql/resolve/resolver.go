@@ -121,7 +121,9 @@ type dgraphExecutor struct {
 type adminExecutor struct {
 }
 
-// A Resolved is the result of resolving a single query or mutation.
+// FIXME: put this in the right spot
+// A Resolved is the result of resolving a single field - generally a query or mutation.
+
 // A schema.Request may contain any number of queries or mutations (never both).
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
@@ -195,7 +197,7 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		return &queryResolver{
 			queryRewriter:   NoOpQueryRewrite(),
 			queryExecutor:   introspectionExecution(q),
-			resultCompleter: removeObjectCompletion(noopCompletion),
+			resultCompleter: StdQueryCompletion(), // FIXME: removeObjectCompletion(noopCompletion),
 		}
 	}
 
@@ -234,7 +236,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
-				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+				fns.Drw, NoOpQueryExecution(), fns.Me, deleteCompletion()) // FIXME StdDeleteCompletion(m.ResponseName()))
 		})
 	}
 
@@ -259,7 +261,7 @@ func NewResolverFactory(
 
 // StdQueryCompletion is the completion steps that get run for queries
 func StdQueryCompletion() CompletionFunc {
-	return completeDgraphResult
+	return noopCompletion // FIXME: ??? anything??? completeDgraphResult
 }
 
 // AliasQueryCompletion is the completion steps that get run for admin queries
@@ -270,12 +272,12 @@ func StdQueryCompletion() CompletionFunc {
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) CompletionFunc {
-	return addRootFieldCompletion(name, completeDgraphResult)
+	return noopCompletion // FIXME: ??? anything???  addRootFieldCompletion(name, completeDgraphResult)
 }
 
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
 func StdDeleteCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
+	return deleteCompletion() // addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion())) // FIXME: to be done
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -377,30 +379,9 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 
-			// Errors should report the "path" into the result where the error was found.
-			//
-			// The definition of a path in a GraphQL error is here:
-			// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
-			// For a query like (assuming field f is of a list type and g is a scalar type):
-			// - q { f { g } }
-			// a path to the 2nd item in the f list would look like:
-			// - [ "q", "f", 2, "g" ]
-			path := make([]interface{}, 0, maxPathLength(res.Field))
-			b, gqlErr := completeObject(path, res.Field.Type(), []schema.Field{res.Field},
-				res.Data.(map[string]interface{}))
-			if gqlErr != nil {
-				if res.Err != nil {
-					err, _ := res.Err.(x.GqlErrorList)
-					res.Err = append(err, gqlErr...)
-				} else {
-					res.Err = gqlErr
-				}
-			}
-			resp.WithError(res.Err)
-			if len(b) > 0 {
-				b = b[1 : len(b)-1]
-			}
-			resp.AddData(b)
+			// FIXME: need to write into a buffer not []byte
+
+			addResult(resp, res)
 		}
 	case op.IsMutation():
 		// A mutation operation can contain any number of mutation fields.  Those should be executed
@@ -429,29 +410,43 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
+			res.Field = m // FIXME: move into resolution
 
-			path := make([]interface{}, 0, maxPathLength(m))
-			b, gqlErr := completeObject(path, m.Type(), []schema.Field{m},
-				res.Data.(map[string]interface{}))
-			if gqlErr != nil {
-				if res.Err != nil {
-					err, _ := res.Err.(x.GqlErrorList)
-					res.Err = append(err, gqlErr...)
-				} else {
-					res.Err = gqlErr
-				}
-			}
-			resp.WithError(res.Err)
-			if len(b) > 0 {
-				b = b[1 : len(b)-1]
-			}
-			resp.AddData(b)
+			addResult(resp, res)
 		}
 	case op.IsSubscription():
 		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
 	}
 
 	return resp
+}
+
+func addResult(resp *schema.Response, res *Resolved) {
+	// Errors should report the "path" into the result where the error was found.
+	//
+	// The definition of a path in a GraphQL error is here:
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+	// For a query like (assuming field f is of a list type and g is a scalar type):
+	// - q { f { g } }
+	// a path to the 2nd item in the f list would look like:
+	// - [ "q", "f", 2, "g" ]
+	path := make([]interface{}, 0, maxPathLength(res.Field))
+	var b []byte
+	var gqlErr x.GqlErrorList
+	if res.Data == nil {
+		res.Data = map[string]interface{}{res.Field.ResponseName(): nil}
+	}
+	b, gqlErr = completeObject(path, res.Field.Type(), []schema.Field{res.Field},
+		res.Data.(map[string]interface{}))
+
+	// FIXME: probably better if we move resolved to schema pkg and then we add a resolved
+	// into the response, and it just works out the right thing to do to write it?
+	// but then complete object would need to move somewhere ... it's could live
+	// outside of resolve??  Or maybe we keep it in resolve and just make response a buffer
+	// the we write into ... that's probably better - then complete object can write directly to
+	// that buffer.
+	resp.WithError(schema.AppendGQLErrs(res.Err, gqlErr))
+	resp.AddData(b)
 }
 
 // noopCompletion just passes back it's result and err arguments
@@ -554,9 +549,6 @@ func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
 			aliased, resErr = aliasValue(field, val)
 		}
 
-		// res, marshErr := json.Marshal(aliased)
-		// err = schema.AppendGQLErrs(err, marshErr)
-
 		return cf(ctx, field, aliased, schema.AppendGQLErrs(err, resErr))
 	})
 }
@@ -642,8 +634,8 @@ func completeResult(ctx context.Context, field schema.Field, val interface{}, e 
 //
 // Returned errors are generally lists of errors resulting from the value completion
 // algorithm that may emit multiple errors
-func completeDgraphResult(ctx context.Context, field schema.Field, dgResult interface{}, e error) (
-	interface{}, error) {
+func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte, e error) (
+	map[string]interface{}, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "completeDgraphResult")
 	defer stop()
@@ -660,30 +652,35 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult inte
 	//    { }  --->  { "q": null }
 
 	errs := schema.AsGQLErrors(e)
-
-	nullResponse := func() interface{} {
-		return map[string]interface{}{field.ResponseName(): nil}
-	}
-	if dgResult == nil {
-		return nullResponse(), errs
+	if len(dgResult) == 0 {
+		return nil, errs
 	}
 
-	dgraphError := func() (interface{}, error) {
-		glog.Errorf("Could not process Dgraph result : \n%+v", dgResult)
+	nullResponse := func() map[string]interface{} {
+		return map[string]interface{}{
+			field.ResponseName(): nil,
+		}
+	}
+
+	dgraphError := func() (map[string]interface{}, error) {
+		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
 		return nullResponse(),
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
 				WithLocations(field.Location())
 	}
+
 	// Dgraph should only return {} or a JSON object.  Also,
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
-	valToComplete, ok := dgResult.(map[string]interface{})
-	if !ok {
-		err := errors.New("failed to unmarshal Dgraph query result")
-		glog.Errorf("%+v \n Dgraph result :\n%s\n", err, dgResult)
+	var valToComplete map[string]interface{}
+	err := json.Unmarshal(dgResult, &valToComplete)
+	if err != nil {
+		glog.Errorf("%+v \n Dgraph result :\n%s\n",
+			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
+			string(dgResult))
 		return nullResponse(),
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
 	}

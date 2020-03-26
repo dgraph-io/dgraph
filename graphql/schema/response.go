@@ -63,6 +63,10 @@ func (r *Response) AddData(p []byte) {
 		return
 	}
 
+	if len(p) > 0 {
+		p = p[1 : len(p)-1]
+	}
+
 	if r.Data.Len() > 0 {
 		// The end of the buffer is always the closing `}`
 		r.Data.Truncate(r.Data.Len() - 1)

@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"context"
-	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -174,11 +173,8 @@ func (mr *mutationResolver) Resolve(
 	}
 
 	res, success, err := mr.rewriteAndExecute(ctx, mutation)
-	var result interface{}
-	if err == nil {
-		err = json.Unmarshal(res, &result)
-	}
-	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), result, err)
+
+	completed, err := mr.resultCompleter.Complete(ctx, mutation, res, err)
 
 	return &Resolved{
 		Data: completed,
@@ -186,6 +182,7 @@ func (mr *mutationResolver) Resolve(
 	}, success
 }
 
+// FIXME: wanna remove this
 func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
 	result map[string]interface{}) {
 	switch mr.mutationRewriter.(type) {
@@ -199,7 +196,7 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 }
 
 func (mr *mutationResolver) rewriteAndExecute(
-	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
+	ctx context.Context, mutation schema.Mutation) (interface{}, bool, error) {
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
 		return nil, resolverFailed,
@@ -226,21 +223,35 @@ func (mr *mutationResolver) rewriteAndExecute(
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	return resp, resolverSucceeded, errs
+	dgRes, e := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
+	var res map[string]interface{}
+
+	if len(dgRes) > 0 {
+		dgRes[schema.NumUid] = mr.numUids
+		dgRes[schema.Typename] = mutation.TypeName
+
+		res = map[string]interface{}{
+			mutation.ResponseName(): dgRes,
+		}
+	}
+
+	return res, resolverSucceeded, e
 }
 
+// FIXME:
 // deleteCompletion returns `{ "msg": "Deleted" }`
 // FIXME: after upsert mutations changes are done, it will return info about
 // the result of a deletion.
 func deleteCompletion() CompletionFunc {
+
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result interface{},
 		err error) (interface{}, error) {
 
-		if field.Name() == "msg" {
-			return map[string]interface{}{"msg": "Deleted"}, err
-		}
-
-		return map[string]interface{}{schema.NumUid: nil}, err
+		return map[string]interface{}{
+			field.ResponseName(): map[string]interface{}{
+				"msg":         "Deleted",
+				schema.NumUid: 0},
+		}, err
 	})
 }
