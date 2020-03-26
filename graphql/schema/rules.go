@@ -673,6 +673,20 @@ func customDirectiveValidation(sch *ast.Schema,
 
 	}
 
+	graphqlArg := dir.Arguments.ForName("graphql")
+	if graphqlArg != nil {
+		// This is remote graphql so validate remote graphql end point.
+		return validateRemoteGraphqlCall(&remoteGraphqlEndpoint{
+			graphqlArg: graphqlArg,
+			schema:     sch,
+			field:      field,
+			directive:  dir,
+			rootQuery:  typ,
+			url:        u.Raw,
+		})
+	}
+	return nil
+
 	return nil
 }
 
