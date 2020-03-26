@@ -291,8 +291,8 @@ A typical workflow is the following:
 {{% notice "note" %}}
 All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`
-as a demo, make sure to choose the correct IP and port for your environment:
+
+1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
 
 ```graphql
 mutation {
@@ -305,6 +305,7 @@ mutation {
 ```
 
 The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
+
 2. Create a regular user
 
 ```graphql
@@ -583,7 +584,8 @@ group's ACL rules, e.g.
 }
 ```
 
-5. Run ACL commands as another guardian (member of `guardians` group). 
+5. Run ACL commands as another guardian (member of `guardians` group).
+ 
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`.
 
