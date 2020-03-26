@@ -45,8 +45,19 @@ func Check(err error) {
 	}
 }
 
+func runError(a string) {
+	fmt.Println(a)
+	s := []string{"foo", "bar", "baz"}
+	count := 4
+	defer fmt.Println("Deferred print call")
+	for i := 0; i < count; i++ {
+		fmt.Println(s[i])
+	}
+}
+
 // Checkf is Check with extra info.
 func Checkf(err error, format string, args ...interface{}) {
+	//defer runError("Print in error.go")
 	if err != nil {
 		err = errors.Wrapf(err, format, args...)
 		CaptureSentryException(err)

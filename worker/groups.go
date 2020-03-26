@@ -86,6 +86,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		}
 	}
 
+	//defer panic("Panic at alpha in groups.go")
 	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
 	x.AssertTruef(x.WorkerConfig.ZeroAddr != x.WorkerConfig.MyAddr,
 		"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")

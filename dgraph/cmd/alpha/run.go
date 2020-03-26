@@ -595,7 +595,7 @@ func run() {
 
 	x.InitSentry(enc.EeBuild)
 	defer x.FlushSentry()
-	x.ConfigureSentryScope("alpha")
+	x.ConfigureSentryScope("alpha-check")
 	x.WrapPanics()
 
 	// Simulate a Sentry exception or panic event as shown below.

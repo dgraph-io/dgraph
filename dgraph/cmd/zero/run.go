@@ -160,12 +160,46 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 	}()
 }
 
+func runError(a string) {
+	fmt.Println(a)
+	s := []string{"foo", "bar", "baz"}
+	count := 4
+	defer fmt.Println("Deferred print call")
+	for i := 0; i < count; i++ {
+		fmt.Println(s[i])
+	}
+}
+
+func f() {
+	func() {
+		if r := recover(); r != nil {
+			fmt.Println("Recovered in f", r)
+		}
+	}()
+	fmt.Println("Calling g.")
+	g(0)
+	fmt.Println("Returned normally from g.")
+}
+
+func g(i int) {
+	if i > 2 {
+		fmt.Println("Panicking!")
+		panic(fmt.Sprintf("%v", i))
+	}
+	defer fmt.Println("Defer in g", i)
+	fmt.Println("Printing in g", i)
+	g(i + 1)
+}
+
 func run() {
+	//fmt.Println("Started run\n")
 	x.InitSentry(enc.EeBuild)
 	defer x.FlushSentry()
-	x.ConfigureSentryScope("zero")
+	x.ConfigureSentryScope("zero-check")
 	x.WrapPanics()
 
+	//runError("Checking runtime panic")
+	//f()
 	// Simulate a Sentry exception or panic event as shown below.
 	// x.CaptureSentryException(errors.New("zero exception"))
 	// x.Panic(errors.New("zero manual panic will send 2 events"))
