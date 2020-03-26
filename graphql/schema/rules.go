@@ -27,6 +27,7 @@ import (
 )
 
 func init() {
+	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
@@ -37,6 +38,126 @@ func init() {
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check for list type value", listTypeCheck)
 
+}
+
+func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	type pred struct {
+		name       string
+		parentName string
+		typ        string
+		position   *ast.Position
+		isId       bool
+		isSecret   bool
+	}
+
+	secretError := func(secretPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: has the @dgraph predicate, but that conflicts with type %s "+
+				"@secret directive on the same predicate. @secret predicates are stored encrypted"+
+				" and so the same predicate can't be used as a %s.", newPred.parentName,
+			newPred.name, secretPred.parentName, newPred.typ)
+	}
+
+	typeError := func(existingPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: has type %s, which is different to type %s; field %s, which has "+
+				"the same @dgraph directive but type %s. These fields must have either the same "+
+				"GraphQL types, or use different Dgraph predicates.", newPred.parentName,
+			newPred.name, newPred.typ, existingPred.parentName, existingPred.name,
+			existingPred.typ)
+	}
+
+	idError := func(idPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: doesn't have @id directive, which conflicts with type %s; field "+
+				"%s, which has the same @dgraph directive along with @id directive. Both these "+
+				"fields must either use @id directive, or use different Dgraph predicates.",
+			newPred.parentName, newPred.name, idPred.parentName, idPred.name)
+	}
+
+	preds := make(map[string]pred)
+
+	for _, key := range definitions {
+		def := gqlSch.Types[key]
+		switch def.Kind {
+		case ast.Object, ast.Interface:
+			typName := typeName(def)
+
+			for _, f := range def.Fields {
+				if f.Type.Name() == "ID" {
+					continue
+				}
+
+				fname := fieldName(f, typName)
+				// No validation needed if this field doesn't have @dgraph(pred : ...). Also,
+				// this field could have originally been defined in an interface that this type
+				// implements. If we get a parent interface, that means this field gets validated
+				// during the validation of that interface. So, no need to validate this field here.
+				if fname != typName+"."+f.Name && parentInterface(gqlSch, def, f.Name) == nil {
+
+					var prefix, suffix string
+					if f.Type.Elem != nil {
+						prefix = "["
+						suffix = "]"
+					}
+
+					thisPred := pred{
+						name:       f.Name,
+						parentName: def.Name,
+						typ:        fmt.Sprintf("%s%s%s", prefix, f.Type.Name(), suffix),
+						position:   f.Position,
+						isId:       f.Directives.ForName(idDirective) != nil,
+						isSecret:   false,
+					}
+
+					if pred, ok := preds[fname]; ok {
+						if pred.isSecret {
+							errs = append(errs, secretError(pred, thisPred))
+						} else if thisPred.typ != pred.typ {
+							errs = append(errs, typeError(pred, thisPred))
+						}
+						if pred.isId != thisPred.isId {
+							if pred.isId {
+								errs = append(errs, idError(pred, thisPred))
+							} else {
+								errs = append(errs, idError(thisPred, pred))
+							}
+						}
+					} else {
+						preds[fname] = thisPred
+					}
+				}
+			}
+
+			pwdField := getPasswordField(def)
+			if pwdField != nil {
+				fname := fieldName(pwdField, typName)
+				if fname != typName+"."+pwdField.Name && parentInterface(gqlSch, def,
+					pwdField.Name) == nil {
+					thisPred := pred{
+						name:       pwdField.Name,
+						parentName: def.Name,
+						typ:        pwdField.Type.Name(),
+						position:   pwdField.Position,
+						isId:       false,
+						isSecret:   true,
+					}
+
+					if pred, ok := preds[fname]; ok {
+						if thisPred.typ != pred.typ || !pred.isSecret {
+							errs = append(errs, secretError(thisPred, pred))
+						}
+					} else {
+						preds[fname] = thisPred
+					}
+				}
+			}
+		}
+	}
+
+	return errs
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -95,7 +216,7 @@ func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	dirs := make([]string, 0)
 
 	for _, dir := range typ.Directives {
-		if dir.Name != "secret" {
+		if dir.Name != secretDirective {
 			continue
 		}
 		val := dir.Arguments.ForName("field").Value.Raw

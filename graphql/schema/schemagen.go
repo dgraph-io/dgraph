@@ -133,10 +133,7 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	dgSchema, gqlErrList := genDgSchema(sch, defns)
-	if gqlErrList != nil {
-		return nil, gqlErrList
-	}
+	dgSchema := genDgSchema(sch, defns)
 
 	completeSchema(sch, defns)
 
@@ -187,20 +184,12 @@ func fieldName(def *ast.FieldDefinition, typName string) string {
 	return predArg.Value.Raw
 }
 
-func getDgraphTypeError(f *ast.FieldDefinition, defName, typStr string) *gqlerror.Error {
-	return gqlerror.ErrorPosf(f.Position,
-		"Type: %s; Field: %s has its dgraph Type: %s; which is different from a previous field"+
-			" with same dgraph predicate.", defName, f.Name, typStr)
-}
-
 // genDgSchema generates Dgraph schema from a valid graphql schema.
-func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.List) {
+func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
-	var errs []*gqlerror.Error
 
 	type dgPred struct {
 		typ     string
-		gqlType string
 		indexes map[string]bool
 		upsert  string
 		reverse string
@@ -245,15 +234,6 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 				}
 				fname := fieldName(f, typName)
 
-				if edge, ok := dgPreds[fname]; ok && edge.gqlType != f.Type.Name() && edge.
-					reverse == "" {
-					errs = append(errs, gqlerror.ErrorPosf(f.Position,
-						"Type: %s; Field: %s has its GraphQL Type: %s; which is different from a"+
-							" previous field with same dgraph predicate.", def.Name, f.Name,
-						f.Type.Name()))
-					continue
-				}
-
 				var prefix, suffix string
 				if f.Type.Elem != nil {
 					prefix = "["
@@ -273,15 +253,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 							forwardPred.reverse = "@reverse "
 							dgPreds[forwardEdge] = forwardPred
 						} else {
-							edge, ok := dgPreds[fname]
-							if ok && edge.typ != "" && edge.typ != typStr {
-								errs = append(errs, getDgraphTypeError(f, def.Name, typStr))
-								continue
-							} else {
-								edge.typ = typStr
-								edge.gqlType = f.Type.Name()
-								dgPreds[fname] = edge
-							}
+							edge := dgPreds[fname]
+							edge.typ = typStr
+							dgPreds[fname] = edge
 						}
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -291,19 +265,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 
-					indexes := make([]string, 0)
+					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
-						indexes = []string{"hash"}
+						indexes = append(indexes, "hash")
 					}
 
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes = append(getAllSearchIndexes(arg.Value), indexes...)
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
 						} else {
 							indexes = append(indexes, defaultSearches[f.Type.Name()])
 						}
@@ -311,18 +285,12 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 
 					if parentInt == nil {
 						edge, ok := dgPreds[fname]
-						if ok && edge.typ != typStr {
-							errs = append(errs, getDgraphTypeError(f, def.Name, typStr))
-							continue
-						} else if !ok {
+						if !ok {
 							edge = dgPred{
 								typ:     typStr,
-								gqlType: f.Type.Name(),
 								indexes: make(map[string]bool),
+								upsert:  upsertStr,
 							}
-						}
-						if edge.upsert == "" {
-							edge.upsert = upsertStr
 						}
 						for _, index := range indexes {
 							edge.indexes[index] = true
@@ -343,13 +311,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 					}
 					if parentInt == nil {
 						edge, ok := dgPreds[fname]
-						if ok && edge.typ != typStr {
-							errs = append(errs, getDgraphTypeError(f, def.Name, typStr))
-							continue
-						} else if !ok {
+						if !ok {
 							edge = dgPred{
 								typ:     typStr,
-								gqlType: f.Type.Name(),
 								indexes: make(map[string]bool),
 							}
 						}
@@ -367,19 +331,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 					typName = typeName(parentInt)
 				}
 				fname := fieldName(fd, typName)
-				typStr := "password"
 
 				if parentInt == nil {
-					if edge, ok := dgPreds[fname]; ok && edge.typ != typStr {
-						errs = append(errs, getDgraphTypeError(fd, def.Name, typStr))
-						continue
-					} else {
-						edge = dgPred{
-							typ:     typStr,
-							gqlType: fd.Type.Name(),
-						}
-						dgPreds[fname] = edge
-					}
+					dgPreds[fname] = dgPred{typ: "password"}
 				}
 
 				typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -420,5 +374,5 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) (string, gqlerror.Lis
 		)
 	}
 
-	return strings.Join(typeStrings, ""), errs
+	return strings.Join(typeStrings, "")
 }

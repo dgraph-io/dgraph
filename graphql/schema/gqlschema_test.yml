@@ -708,40 +708,35 @@ invalid_schemas:
     ]
 
   -
-    name: "Conflicting GraphQL types for predicate"
+    name: "@dgraph predicate type validation"
     input: |
-      type X {
+      interface W @secret(field: "f", pred: "pwd") {
         f1: String! @dgraph(pred: "name")
-        f2: Y @dgraph(pred: "link")
+        f2: [Float] @dgraph(pred: "val")
+      }
+      type X implements W {
+        f3: Y @dgraph(pred: "link")
+        f4: String! @dgraph(pred: "f4") @id
       }
       type Y {
         f1: Int @dgraph(pred: "name")
-        f2: X @dgraph(pred: "link")
+        f2: Float @dgraph(pred: "val")
+        f3: X @dgraph(pred: "link")
+        f4: String @dgraph(pred: "f4")
+        f5: String @dgraph(pred: "pwd")
       }
     errlist: [
-    {"message": "Type: Y; Field: f1 has its GraphQL Type: Int; which is different from a previous field with same dgraph predicate.",
-     "locations":[{"line":6, "column":3}]},
-    {"message": "Type: Y; Field: f2 has its GraphQL Type: X; which is different from a previous field with same dgraph predicate.",
-     "locations":[{"line":7, "column":3}]},
+    {"message": "Type Y; Field f1: has type Int, which is different to type W; field f1, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":10, "column":3}]},
+    {"message": "Type Y; Field f2: has type Float, which is different to type W; field f2, which has the same @dgraph directive but type [Float]. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":11, "column":3}]},
+    {"message": "Type Y; Field f3: has type X, which is different to type X; field f3, which has the same @dgraph directive but type Y. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":12, "column":3}]},
+    {"message": "Type Y; Field f4: doesn't have @id directive, which conflicts with type X; field f4, which has the same @dgraph directive along with @id directive. Both these fields must either use @id directive, or use different Dgraph predicates.",
+     "locations":[{"line":13, "column":3}]},
+    {"message": "Type Y; Field f5: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
+     "locations":[{"line":14, "column":3}]},
     ]
-
-  -
-    name: "Conflicting dgraph types for predicate"
-    input: |
-      type X @secret(field: "f", pred: "pwd"){
-        f1: String @dgraph(pred: "name")
-      }
-      type Y {
-        f1: [String] @dgraph(pred: "name")
-        f2: String @dgraph(pred: "pwd")
-      }
-    errlist: [
-    {"message": "Type: Y; Field: f1 has its dgraph Type: [string]; which is different from a previous field with same dgraph predicate.",
-     "locations":[{"line":5, "column":3}]},
-    {"message": "Type: Y; Field: f2 has its dgraph Type: string; which is different from a previous field with same dgraph predicate.",
-     "locations":[{"line":6, "column":3}]},
-    ]
-
 
 
 valid_schemas:
@@ -844,4 +839,20 @@ valid_schemas:
       }
       type Y {
         f1: [X] @dgraph(pred: "f1")
+      }
+
+  -
+    name: "@dgraph predicate type validation gives no errors with non-null variations"
+    input: |
+      type X {
+        f1: String @dgraph(pred: "f1")
+        f2: [String] @dgraph(pred: "f2")
+        f3: [String!] @dgraph(pred: "f3")
+        f4: [String]! @dgraph(pred: "f4")
+      }
+      type Y {
+        f1: String! @dgraph(pred: "f1")
+        f2: [String!] @dgraph(pred: "f2")
+        f3: [String]! @dgraph(pred: "f3")
+        f4: [String!]! @dgraph(pred: "f4")
       }
