@@ -292,8 +292,7 @@ A typical workflow is the following:
 All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
 
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
-
+1) Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
@@ -303,10 +302,9 @@ mutation {
   }
 }
 ```
-
 The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
 
-2. Create a regular user
+2) Create a regular user
 
 ```graphql
 mutation {
@@ -334,7 +332,7 @@ Now you should see the following output
 }
 ```
 
-3. Create a group
+3) Create a group
 
 ```graphql
 mutation {
@@ -366,7 +364,7 @@ Now you should see the following output
 }
 ```
 
-4. Assign the user to the group
+4) Assign the user to the group
 To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
 
 ```graphql
@@ -382,7 +380,7 @@ mutation {
 }
 ```
 
-5. Assign predicate permissions to the group
+5) Assign predicate permissions to the group
 
 ```graphql
 mutation {
@@ -430,7 +428,7 @@ The following examples show how to retrieve information about users and groups.
 
 #### Using a GraphQL tool
 
-1. Check information about a user
+1) Check information about a user
 
 ```graphql
 query {
@@ -460,7 +458,7 @@ and the output should show the groups that the user has been added to, e.g.
 }
 ```
 
-2. Check information about a group
+2) Check information about a group
 
 ```graphql
 {
@@ -505,7 +503,7 @@ group's ACL rules, e.g.
 }
 ```
 
-3. Query for users
+3) Query for users
 
 ```graphql
 query {
@@ -537,7 +535,7 @@ and the output should show the groups that the user has been added to, e.g.
 }
 ```
 
-4. Query for groups
+4) Query for groups
 
 ```graphql
 query {
@@ -584,8 +582,8 @@ group's ACL rules, e.g.
 }
 ```
 
-5. Run ACL commands as another guardian (member of `guardians` group).
- 
+5) Run ACL commands as another guardian (member of `guardians` group).
+
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`.
 
