@@ -915,24 +915,6 @@ $ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8
 ```
 {{% /notice %}}
 
-### Health Check and Alpha Info
-
-`/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
-The body of the response contains information about the running alpha and its version.
-
-```sh
-$ curl localhost:8080/health
-```
-
-```json
-{
-  "version": "v1.1.0",
-  "instance": "alpha",
-  "uptime": 1928423
-}
-```
-
-Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
 
 ### Run a query in JSON format
 
