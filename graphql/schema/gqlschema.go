@@ -74,8 +74,7 @@ input CustomHTTP {
 }
 
 input CustomGraphQL {
-	url: String!
-	method: String!
+	query: String!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION

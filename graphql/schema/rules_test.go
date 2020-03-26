@@ -17,9 +17,12 @@
 package schema
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 func TestParseGraphqlMethod(t *testing.T) {
@@ -60,4 +63,14 @@ func TestParseGraphqlMethod(t *testing.T) {
 
 	_, err = parseGraphqlMethod("hello(asd:$)")
 	require.Error(t, err)
+}
+
+func TestSumma(t *testing.T) {
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: `query { getUser(id: {hello: $yo}, da:"sdf") }`})
+	require.Nil(t, gqlErr)
+	field := doc.Operations[0].SelectionSet[0].(*ast.Field)
+	fmt.Println(field.Name)
+	for _, arg := range field.Arguments {
+		fmt.Println(arg.Value)
+	}
 }

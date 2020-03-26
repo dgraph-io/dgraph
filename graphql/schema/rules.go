@@ -17,114 +17,15 @@
 package schema
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"net/url"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/validator"
 )
-
-var graphqlScalarType = map[string]interface{}{
-	"Int":     0,
-	"Float":   0,
-	"String":  0,
-	"Boolean": 0,
-	"ID":      0,
-}
-
-const introspectionQuery = `
-  query {
-    __schema {
-      queryType { name }
-      mutationType { name }
-      subscriptionType { name }
-      types {
-        ...FullType
-      }
-      directives {
-        name
-        locations
-        args {
-          ...InputValue
-        }
-      }
-    }
-  }
-  fragment FullType on __Type {
-    kind
-    name
-    fields(includeDeprecated: true) {
-      name
-      args {
-        ...InputValue
-      }
-      type {
-        ...TypeRef
-      }
-      isDeprecated
-      deprecationReason
-    }
-    inputFields {
-      ...InputValue
-    }
-    interfaces {
-      ...TypeRef
-    }
-    enumValues(includeDeprecated: true) {
-      name
-      isDeprecated
-      deprecationReason
-    }
-    possibleTypes {
-      ...TypeRef
-    }
-  }
-  fragment InputValue on __InputValue {
-    name
-    type { ...TypeRef }
-    defaultValue
-  }
-  fragment TypeRef on __Type {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-                ofType {
-                  kind
-                  name
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-`
 
 func init() {
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
@@ -721,14 +622,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
-	fmt.Println(field.Type.Name())
 	arg := dir.Arguments.ForName("http")
-	isGraphql := false
-	if arg == nil || arg.Value.String() == "" {
-		arg = dir.Arguments.ForName("graphql")
-		isGraphql = true
-	}
-
 	if arg == nil || arg.Value.String() == "" {
 		return gqlerror.ErrorPosf(
 			dir.Position,
@@ -766,15 +660,26 @@ func customDirectiveValidation(sch *ast.Schema,
 			field.Name)
 	}
 
-	if !isGraphql {
-		if method.Raw != "GET" && method.Raw != "POST" {
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
-				typ.Name, field.Name)
-		}
-		return nil
+	if method.Raw != "GET" && method.Raw != "POST" {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
+			typ.Name, field.Name)
 	}
+
+	graphqlArg := dir.Arguments.ForName("graphql")
+	if graphqlArg != nil {
+		// This is remote graphql so validate remote graphql end point.
+		return validateRemoteGraphqlCall(&remoteGraphqlEndpoint{
+			graphqlArg: graphqlArg,
+			schema:     sch,
+			field:      field,
+			directive:  dir,
+			rootQuery:  typ,
+			url:        u.Raw,
+		})
+	}
+	return nil
 
 	// Validate for graphql
 	remoteMethod, err := parseGraphqlMethod(method.Raw)
@@ -814,7 +719,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		typeName string
 	}{}
 
-	var remoteQuery Fields
+	var remoteQuery GqlField
 
 	for _, remoteType := range remoteSchema.Data.Schema.Types {
 		if remoteType.Name != "Query" && remoteType.Kind != "OBJECT" {
@@ -838,7 +743,7 @@ func customDirectiveValidation(sch *ast.Schema,
 				if _, ok := remoteMethod.args[arg.Name]; !ok {
 					return gqlerror.ErrorPosf(
 						dir.Position,
-						"Type %s; Field %s; Argument value is not present for",
+						"Type %s; Field %s;%s Argument value is not present for",
 						typ.Name, field.Name, arg.Name,
 					)
 				}
@@ -888,7 +793,6 @@ func customDirectiveValidation(sch *ast.Schema,
 	// }
 	// Expanded as
 	// Continent, Country.
-	embededTypes := []string{}
 	remoteTypes := make(map[string]Types)
 
 	// THIS need recursion check embedded type may have embedded type.
@@ -939,12 +843,10 @@ func expandTypes(schema IntrospectedSchema,
 			// We already retrived this type So, keep moving.
 			continue
 		}
-		typeExist := false
 		for _, remoteType := range schema.Data.Schema.Types {
 			if remoteType.Name != typeName {
 				continue
 			}
-			typeExist = true
 			remoteTypes[remoteType.Name] = &remoteType
 			// Expand fileds.
 			for _, field := range remoteType.Fields {
@@ -957,89 +859,6 @@ func expandTypes(schema IntrospectedSchema,
 	}
 
 	return nil
-}
-
-type IntrospectedSchema struct {
-	Data Data `json:"data"`
-}
-type IntrospectionQueryType struct {
-	Name string `json:"name"`
-}
-type OfType struct {
-	Kind   string      `json:"kind"`
-	Name   string      `json:"name"`
-	OfType interface{} `json:"ofType"`
-}
-type GqlType struct {
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	OfType OfType `json:"ofType"`
-}
-type Fields struct {
-	Name              string      `json:"name"`
-	Args              []Args      `json:"args"`
-	Type              GqlType     `json:"type"`
-	IsDeprecated      bool        `json:"isDeprecated"`
-	DeprecationReason interface{} `json:"deprecationReason"`
-}
-type Types struct {
-	Kind          string        `json:"kind"`
-	Name          string        `json:"name"`
-	Fields        []Fields      `json:"fields"`
-	InputFields   []Fields      `json:"inputFields"`
-	Interfaces    []interface{} `json:"interfaces"`
-	EnumValues    interface{}   `json:"enumValues"`
-	PossibleTypes interface{}   `json:"possibleTypes"`
-}
-type Args struct {
-	Name         string      `json:"name"`
-	Type         GqlType     `json:"type"`
-	DefaultValue interface{} `json:"defaultValue"`
-}
-type Directives struct {
-	Name      string   `json:"name"`
-	Locations []string `json:"locations"`
-	Args      []Args   `json:"args"`
-}
-type IntrospectionSchema struct {
-	QueryType        IntrospectionQueryType `json:"queryType"`
-	MutationType     interface{}            `json:"mutationType"`
-	SubscriptionType interface{}            `json:"subscriptionType"`
-	Types            []Types                `json:"types"`
-	Directives       []Directives           `json:"directives"`
-}
-type Data struct {
-	Schema IntrospectionSchema `json:"__schema"`
-}
-
-func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
-	param := &Request{
-		Query: introspectionQuery,
-	}
-
-	body, err := json.Marshal(param)
-
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	result := &IntrospectedSchema{}
-	return result, json.Unmarshal(body, result)
 }
 
 type graphqlMethod struct {
