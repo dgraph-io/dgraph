@@ -192,8 +192,8 @@ func (s *Service) updateNetworkState() {
 func (s *Service) receiveCoreMessages() {
 	for {
 		// receive message from core service
-		msg := <-s.msgRec
-		if msg == nil {
+		msg, ok := <-s.msgRec
+		if !ok || msg == nil {
 			log.Warn("[network] Received nil message from core service")
 			return // exit
 		}
@@ -321,9 +321,22 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 		// check if status is disabled or peer status is confirmed
 		if s.noStatus || s.status.confirmed(peer) {
 
-			err := s.safeMsgSend(msg)
-			if err != nil {
-				log.Error("[network] Failed to send message", "error", err)
+			if resp, ok := msg.(*BlockResponseMessage); ok {
+				if s.syncer.hasRequestedBlockID(resp.ID) {
+					err := s.safeMsgSend(msg)
+					if err != nil {
+						log.Error("[network] Failed to send message", "ID", resp.ID, "error", err)
+					}
+
+					s.syncer.removeRequestedBlockID(resp.ID)
+				} else {
+					// ignore for now, but eventually we want to re-gossip once gossip is improved
+				}
+			} else {
+				err := s.safeMsgSend(msg)
+				if err != nil {
+					log.Error("[network] Failed to send message", "error", err)
+				}
 			}
 
 		}
@@ -375,14 +388,20 @@ func (s *Service) Peers() []common.PeerInfo {
 
 	for _, p := range s.host.peers() {
 		if s.status.confirmed(p) {
-			msg := s.status.peerMessage[p]
-			peers = append(peers, common.PeerInfo{
-				PeerID:          p.String(),
-				Roles:           msg.Roles,
-				ProtocolVersion: msg.ProtocolVersion,
-				BestHash:        msg.BestBlockHash,
-				BestNumber:      msg.BestBlockNumber,
-			})
+			if m, ok := s.status.peerMessage.Load(p); ok {
+				msg, ok := m.(*StatusMessage)
+				if !ok {
+					return peers
+				}
+
+				peers = append(peers, common.PeerInfo{
+					PeerID:          p.String(),
+					Roles:           msg.Roles,
+					ProtocolVersion: msg.ProtocolVersion,
+					BestHash:        msg.BestBlockHash,
+					BestNumber:      msg.BestBlockNumber,
+				})
+			}
 		}
 	}
 	return peers

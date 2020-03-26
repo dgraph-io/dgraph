@@ -69,17 +69,26 @@ func (n *node) getNode(h common.Hash) *node {
 }
 
 // subChain recursively searches for a chain with head n and end descendant
-func (n *node) subChain(descendant *node) []*node {
+func (n *node) subChain(descendant *node) ([]*node, error) {
 	if descendant == nil {
-		return nil
+		return nil, fmt.Errorf("descendant node is nil")
 	}
+
 	var path []*node
-	for curr := descendant; ; curr = curr.parent {
+
+	if n.hash == descendant.hash {
+		path = append(path, n)
+		return path, nil
+	}
+
+	for curr := descendant; curr != nil; curr = curr.parent {
 		path = append([]*node{curr}, path...)
-		if curr == n {
-			return path
+		if curr.hash == n.hash {
+			return path, nil
 		}
 	}
+
+	return nil, fmt.Errorf("could not find descendant node")
 }
 
 // TODO: This would improved by using parent in node struct and searching child -> parent

@@ -27,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/utils"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 var TestProtocolID = "/gossamer/test/0"
@@ -180,5 +181,81 @@ func TestBroadcastMessages(t *testing.T) {
 		}
 	case <-time.After(TestMessageTimeout):
 		t.Error("node B timeout waiting for message")
+	}
+}
+
+func TestHandleMessage_BlockResponse(t *testing.T) {
+	dataDir := utils.NewTestDataDir(t, "nodeA")
+
+	// removes all data directories created within test directory
+	defer utils.RemoveTestDir(t)
+
+	msgSend := make(chan Message, 4)
+
+	config := &Config{
+		DataDir:     dataDir,
+		Port:        7001,
+		RandSeed:    1,
+		NoBootstrap: true,
+		NoMDNS:      true,
+		NoStatus:    true,
+		MsgSend:     msgSend,
+	}
+
+	s := createTestService(t, config)
+
+	peerID := peer.ID("noot")
+	msgID := uint64(17)
+	msg := &BlockResponseMessage{
+		ID: msgID,
+	}
+
+	s.syncer.addRequestedBlockID(msgID)
+
+	s.handleMessage(peerID, msg)
+	if s.syncer.hasRequestedBlockID(msgID) {
+		t.Fatal("Fail: should have removed ID")
+	}
+
+	select {
+	case recv := <-msgSend:
+		if !reflect.DeepEqual(recv, msg) {
+			t.Error(
+				"node B received unexpected message",
+				"\nexpected:", msg,
+				"\nreceived:", recv,
+			)
+		}
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
+	}
+
+	msg = &BlockResponseMessage{
+		ID: 77,
+	}
+
+	s.handleMessage(peerID, msg)
+
+	select {
+	case <-msgSend:
+		t.Fatal("Fail: should not have sent msg")
+	case <-time.After(TestMessageTimeout):
+		// expected
+	}
+
+	reqMsg := &BlockRequestMessage{}
+	s.handleMessage(peerID, reqMsg)
+
+	select {
+	case recv := <-msgSend:
+		if !reflect.DeepEqual(recv, reqMsg) {
+			t.Error(
+				"node B received unexpected message",
+				"\nexpected:", reqMsg,
+				"\nreceived:", recv,
+			)
+		}
+	case <-time.After(TestMessageTimeout):
+		t.Error("timeout waiting for message")
 	}
 }

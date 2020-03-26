@@ -18,6 +18,7 @@ package network
 
 import (
 	"math/big"
+	"sync"
 
 	log "github.com/ChainSafe/log15"
 )
@@ -26,7 +27,7 @@ import (
 type syncer struct {
 	host              *host
 	blockState        BlockState
-	requestedBlockIDs map[uint64]bool // track requested block id messages
+	requestedBlockIDs *sync.Map // track requested block id messages
 
 	// Chain synchronization channel; send block numbers into this channel when a status message is received with
 	// a higher block number than ours
@@ -38,7 +39,7 @@ func newSyncer(host *host, blockState BlockState, syncChan chan<- *big.Int) *syn
 	return &syncer{
 		host:              host,
 		blockState:        blockState,
-		requestedBlockIDs: make(map[uint64]bool),
+		requestedBlockIDs: &sync.Map{},
 		syncChan:          syncChan,
 	}
 }
@@ -46,20 +47,23 @@ func newSyncer(host *host, blockState BlockState, syncChan chan<- *big.Int) *syn
 // addRequestedBlockID adds a requested block id to non-persistent state
 func (s *syncer) addRequestedBlockID(blockID uint64) {
 	log.Trace("[network] Adding block to network syncer...", "block", blockID)
-	s.requestedBlockIDs[blockID] = true
+	s.requestedBlockIDs.Store(blockID, true)
 }
 
 // hasRequestedBlockID returns true if the block id has been requested
 func (s *syncer) hasRequestedBlockID(blockID uint64) bool {
-	requested := s.requestedBlockIDs[blockID]
-	log.Trace("[network] Checking block in network syncer...", "block", blockID, "requested", requested)
-	return requested
+	if requested, ok := s.requestedBlockIDs.Load(blockID); ok {
+		log.Trace("[network] Checking block in network syncer...", "block", blockID, "requested", requested)
+		return requested.(bool)
+	}
+
+	return false
 }
 
 // removeRequestedBlockID removes a requested block id from non-persistent state
 func (s *syncer) removeRequestedBlockID(blockID uint64) {
 	log.Trace("[network] Removing block from network syncer...", "block", blockID)
-	delete(s.requestedBlockIDs, blockID)
+	s.requestedBlockIDs.Delete(blockID)
 }
 
 // handleStatusMesssage sends a block request message if peer best block

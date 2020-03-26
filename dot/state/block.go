@@ -336,7 +336,7 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 	hash := block.Header.Hash()
 
 	// set best block key if this is the highest block we've seen
-	// TODO: use leftmost path to set BestBlockHash
+	// TODO: update to use canonical path
 	if block.Header.Number.Cmp(bs.highestBlockHeader.Number) == 1 {
 		err = bs.setBestBlockHashKey(hash)
 		if err != nil {
@@ -344,6 +344,7 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 		}
 	}
 
+	// TODO: only set number->hash mapping for our canonical chain, otherwise, this messes up BlockResponses
 	// store number to hash
 	err = bs.db.Put(headerHashKey(block.Header.Number.Uint64()), hash.ToBytes())
 	if err != nil {
@@ -430,6 +431,10 @@ func (bs *BlockState) GetSlotForBlock(hash common.Hash) (uint64, error) {
 
 // SubChain returns the sub-blockchain between the starting hash and the ending hash using the block tree
 func (bs *BlockState) SubChain(start, end common.Hash) ([]common.Hash, error) {
+	if bs.bt == nil {
+		return nil, fmt.Errorf("blocktree is nil")
+	}
+
 	return bs.bt.SubBlockchain(start, end)
 }
 

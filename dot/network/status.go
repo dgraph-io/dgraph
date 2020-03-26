@@ -19,6 +19,7 @@ package network
 import (
 	"bytes"
 	"context"
+	"sync"
 	"time"
 
 	log "github.com/ChainSafe/log15"
@@ -36,22 +37,26 @@ const ExpireStatusInterval = SendStatusInterval + time.Minute
 type status struct {
 	host          *host
 	hostMessage   *StatusMessage
-	peerConfirmed map[peer.ID]time.Time
-	peerMessage   map[peer.ID]*StatusMessage
+	peerConfirmed *sync.Map //map of peer.ID to time.Time
+	peerMessage   *sync.Map //map of peer.ID to *StatusMessage
 }
 
 // newStatus creates a new status instance from host
 func newStatus(host *host) *status {
 	return &status{
 		host:          host,
-		peerConfirmed: make(map[peer.ID]time.Time),
-		peerMessage:   make(map[peer.ID]*StatusMessage),
+		peerConfirmed: &sync.Map{},
+		peerMessage:   &sync.Map{},
 	}
 }
 
 // confirmed returns true if peer is confirmed
 func (status *status) confirmed(peer peer.ID) bool {
-	return !status.peerConfirmed[peer].IsZero()
+	if t, ok := status.peerConfirmed.Load(peer); ok {
+		return !t.(time.Time).IsZero()
+	}
+
+	return false
 }
 
 // setHostMessage sets the host status message
@@ -98,10 +103,10 @@ func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 	if status.validMessage(msg) {
 
 		// update peer confirmed status message time
-		status.peerConfirmed[peer] = time.Now()
+		status.peerConfirmed.Store(peer, time.Now())
 
 		// update peer status message
-		status.peerMessage[peer] = msg
+		status.peerMessage.Store(peer, msg)
 
 		// wait then send next host status message
 		go status.sendNextMessage(ctx, peer)
@@ -178,8 +183,8 @@ func (status *status) sendNextMessage(ctx context.Context, peer peer.ID) {
 	} else {
 
 		// delete peer mappings
-		delete(status.peerConfirmed, peer)
-		delete(status.peerMessage, peer)
+		status.peerConfirmed.Delete(peer)
+		status.peerMessage.Delete(peer)
 
 		ctx.Done() // cancel running processes
 
@@ -193,10 +198,13 @@ func (status *status) expireStatus(ctx context.Context, peer peer.ID) {
 	time.Sleep(ExpireStatusInterval)
 
 	// get time of last confirmed status message
-	lastConfirmed := status.peerConfirmed[peer]
+	lastConfirmed, ok := status.peerConfirmed.Load(peer)
+	if !ok {
+		return
+	}
 
 	// check if status message has expired
-	if time.Since(lastConfirmed) > SendStatusInterval {
+	if time.Since(lastConfirmed.(time.Time)) > SendStatusInterval {
 
 		// update peer information and close connection
 		err := status.closePeer(ctx, peer)
@@ -213,8 +221,8 @@ func (status *status) closePeer(ctx context.Context, peer peer.ID) error {
 	ctx.Done()
 
 	// delete peer mappings
-	delete(status.peerConfirmed, peer)
-	delete(status.peerMessage, peer)
+	status.peerConfirmed.Delete(peer)
+	status.peerMessage.Delete(peer)
 
 	// close connection with peer
 	err := status.host.closePeer(peer)

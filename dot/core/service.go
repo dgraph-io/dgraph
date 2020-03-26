@@ -440,12 +440,32 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 
 	switch msgType {
 	case network.BlockAnnounceMsgType:
-		err = s.ProcessBlockAnnounceMessage(msg)
+		blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
+		if !ok {
+			return errors.New("could not cast network.Message to BlockAnnounceMessage")
+		}
+
+		err = s.ProcessBlockAnnounceMessage(blockAnnounceMessage)
 	case network.BlockRequestMsgType:
+		msg, ok := msg.(*network.BlockRequestMessage)
+		if !ok {
+			return errors.New("could not cast network.Message to BlockRequestMessage")
+		}
+
 		err = s.ProcessBlockRequestMessage(msg)
 	case network.BlockResponseMsgType:
+		msg, ok := msg.(*network.BlockResponseMessage)
+		if !ok {
+			return errors.New("could not cast network.Message to BlockResponseMessage")
+		}
+
 		err = s.ProcessBlockResponseMessage(msg)
 	case network.TransactionMsgType:
+		msg, ok := msg.(*network.TransactionMessage)
+		if !ok {
+			return errors.New("could not cast network.Message to TransactionMessage")
+		}
+
 		err = s.ProcessTransactionMessage(msg)
 	default:
 		err = fmt.Errorf("Received unsupported message type %d", msgType)
@@ -457,15 +477,10 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 // ProcessBlockAnnounceMessage creates a block request message from the block
 // announce messages (block announce messages include the header but the full
 // block is required to execute `core_execute_block`).
-func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
+func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage) error {
 	log.Debug("[core] got BlockAnnounceMessage")
 
-	blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
-	if !ok {
-		return errors.New("could not cast network.Message to BlockAnnounceMessage")
-	}
-
-	header, err := types.NewHeader(blockAnnounceMessage.ParentHash, blockAnnounceMessage.Number, blockAnnounceMessage.StateRoot, blockAnnounceMessage.ExtrinsicsRoot, blockAnnounceMessage.Digest)
+	header, err := types.NewHeader(msg.ParentHash, msg.Number, msg.StateRoot, msg.ExtrinsicsRoot, msg.Digest)
 	if err != nil {
 		return err
 	}
@@ -485,8 +500,8 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 	_, err = s.blockState.GetBlockBody(header.Hash())
 	if err != nil && err.Error() == "Key not found" {
 		// send block request message
-		log.Debug("[core] sending new block to syncer", "number", blockAnnounceMessage.Number)
-		s.blockNumOut <- blockAnnounceMessage.Number
+		log.Debug("[core] sending new block to syncer", "number", msg.Number)
+		s.blockNumOut <- msg.Number
 	} else if err != nil {
 		return err
 	}
@@ -495,10 +510,8 @@ func (s *Service) ProcessBlockAnnounceMessage(msg network.Message) error {
 }
 
 // ProcessBlockRequestMessage processes a block request message, returning a block response message
-func (s *Service) ProcessBlockRequestMessage(msg network.Message) error {
-	blockRequest := msg.(*network.BlockRequestMessage)
-
-	blockResponse, err := s.createBlockResponse(blockRequest)
+func (s *Service) ProcessBlockRequestMessage(msg *network.BlockRequestMessage) error {
+	blockResponse, err := s.createBlockResponse(msg)
 	if err != nil {
 		return err
 	}
@@ -512,6 +525,10 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 
 	switch c := blockRequest.StartingBlock.Value().(type) {
 	case uint64:
+		if c == 0 {
+			c = 1
+		}
+
 		block, err := s.blockState.GetBlockByNumber(big.NewInt(0).SetUint64(c))
 		if err != nil {
 			log.Error("[core] cannot get starting block", "number", c)
@@ -529,7 +546,7 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 		endHash = s.blockState.BestBlockHash()
 	}
 
-	log.Trace("[core] got BlockRequestMessage", "startHash", startHash, "endHash", endHash)
+	log.Debug("[core] got BlockRequestMessage", "startHash", startHash, "endHash", endHash)
 
 	// get sub-chain of block hashes
 	subchain, err := s.blockState.SubChain(startHash, endHash)
@@ -540,6 +557,8 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 	if len(subchain) > int(maxResponseSize) {
 		subchain = subchain[:maxResponseSize]
 	}
+
+	log.Trace("[core] subchain", "start", subchain[0], "end", subchain[len(subchain)-1])
 
 	responseData := []*types.BlockData{}
 
@@ -603,10 +622,9 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 // ProcessBlockResponseMessage attempts to validate and add the block to the
 // chain by calling `core_execute_block`. Valid blocks are stored in the block
 // database to become part of the canonical chain.
-func (s *Service) ProcessBlockResponseMessage(msg network.Message) error {
+func (s *Service) ProcessBlockResponseMessage(msg *network.BlockResponseMessage) error {
 	log.Debug("[core] received BlockResponseMessage")
-	s.respOut <- msg.(*network.BlockResponseMessage)
-
+	s.respOut <- msg
 	return s.checkForRuntimeChanges()
 }
 
@@ -644,10 +662,9 @@ func (s *Service) checkForRuntimeChanges() error {
 
 // ProcessTransactionMessage validates each transaction in the message and
 // adds valid transactions to the transaction queue of the BABE session
-func (s *Service) ProcessTransactionMessage(msg network.Message) error {
-
+func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) error {
 	// get transactions from message extrinsics
-	txs := msg.(*network.TransactionMessage).Extrinsics
+	txs := msg.Extrinsics
 
 	for _, tx := range txs {
 		tx := tx // pin

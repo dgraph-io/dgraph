@@ -157,7 +157,7 @@ func (bt *BlockTree) subChain(start Hash, end Hash) ([]*node, error) {
 	if en == nil {
 		return nil, fmt.Errorf("end node does not exist")
 	}
-	return sn.subChain(en), nil
+	return sn.subChain(en)
 }
 
 // SubBlockchain returns the path from the node with Hash start to the node with Hash end
