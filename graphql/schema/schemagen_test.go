@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/gqlerror"
+	_ "github.com/vektah/gqlparser/v2/validator/rules"
 	"gopkg.in/yaml.v2"
 )
 
