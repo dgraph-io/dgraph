@@ -592,7 +592,8 @@ type RuleNode struct {
 	And    []*RuleNode
 	Not    *RuleNode
 
-	Rule *RuleAst
+	Rule      *RuleAst
+	isInvalid bool
 }
 
 func (r *RuleNode) GetFilter() *gql.FilterTree {
@@ -618,7 +619,7 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 		return r.Not.GetFilter()
 	}
 
-	if r.isRBAC() {
+	if r.IsRBAC() {
 		return nil
 	}
 
@@ -626,7 +627,7 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 		result.Func = &gql.Function{
 			Name: "uid",
 			Args: []gql.Arg{{
-				Value: fmt.Sprintf("rule_%s_%d", r.Rule.getName(), r.RuleID),
+				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
 			}},
 		}
 
@@ -696,7 +697,7 @@ func (r *RuleAst) GetOperand() *RuleAst {
 	return r.Value
 }
 
-func (r *RuleAst) getName() string {
+func (r *RuleAst) GetName() string {
 	if r.Typ == GqlTyp {
 		return r.dgraphPredicate
 	}
@@ -707,7 +708,7 @@ func (r *RuleAst) getName() string {
 // Builds query used to get authorized nodes and their uids
 func (r *RuleAst) buildQuery(ruleID int, authVariables map[string]string) *gql.GraphQuery {
 	operation := r.GetOperation()
-	if operation.getName() != "filter" {
+	if operation.GetName() != "filter" {
 		return nil
 	}
 
@@ -715,8 +716,8 @@ func (r *RuleAst) buildQuery(ruleID int, authVariables map[string]string) *gql.G
 
 	dgQuery := &gql.GraphQuery{
 		Cascade: true,
-		Attr:    fmt.Sprintf("rule_%s_%d", r.getName(), ruleID),
-		Var:     fmt.Sprintf("rule_%s_%d", r.getName(), ruleID),
+		Attr:    fmt.Sprintf("rule_%s_%d", r.GetName(), ruleID),
+		Var:     fmt.Sprintf("rule_%s_%d", r.GetName(), ruleID),
 		Func: &gql.Function{
 			Name: "type",
 			Args: []gql.Arg{{Value: r.typInfo.Name}},
@@ -724,7 +725,7 @@ func (r *RuleAst) buildQuery(ruleID int, authVariables map[string]string) *gql.G
 		Children: []*gql.GraphQuery{
 			{Attr: "uid"},
 			{
-				Attr:     r.getName(),
+				Attr:     r.GetName(),
 				Children: []*gql.GraphQuery{{Attr: "uid"}},
 				Filter:   operand.getRuleQuery(authVariables),
 			},
@@ -742,16 +743,16 @@ func (r *RuleAst) getRuleQuery(authVariables map[string]string) *gql.FilterTree 
 
 	var ruleValue string
 	if operation.GetOperand().IsJWT() && authVariables != nil {
-		ruleValue = authVariables[operation.GetOperand().getName()]
+		ruleValue = authVariables[operation.GetOperand().GetName()]
 	} else {
-		ruleValue = operation.GetOperand().getName()
+		ruleValue = operation.GetOperand().GetName()
 	}
 
 	return &gql.FilterTree{
 		Func: &gql.Function{
-			Name: operation.getName(),
+			Name: operation.GetName(),
 			Args: []gql.Arg{
-				{Value: r.getName()},
+				{Value: r.GetName()},
 				{Value: ruleValue},
 			},
 		},
@@ -764,7 +765,7 @@ func (r *RuleAst) IsFilter() bool {
 	}
 
 	operation := r.GetOperation()
-	return operation.getName() == "filter"
+	return operation.GetName() == "filter"
 }
 
 func (r *RuleNode) GetQueries(authVariables map[string]string) []*gql.GraphQuery {
@@ -792,20 +793,20 @@ func (r *RuleNode) GetQueries(authVariables map[string]string) []*gql.GraphQuery
 	return list
 }
 
-func (r *RuleNode) isRBAC() bool {
+func (r *RuleNode) IsRBAC() bool {
 	for _, i := range r.Or {
-		if i.isRBAC() {
+		if i.IsRBAC() {
 			return true
 		}
 	}
 	for _, i := range r.And {
-		if !i.isRBAC() {
+		if !i.IsRBAC() {
 			return false
 		}
 		return true
 	}
 
-	if r.Not != nil && r.Not.isRBAC() {
+	if r.Not != nil && r.Not.IsRBAC() {
 		return true
 	}
 
@@ -821,16 +822,16 @@ func (r *RuleNode) isRBAC() bool {
 }
 
 func (c *AuthContainer) isRBAC() bool {
-	if c.Query != nil && c.Query.isRBAC() {
+	if c.Query != nil && c.Query.IsRBAC() {
 		return true
 	}
-	if c.Add != nil && c.Add.isRBAC() {
+	if c.Add != nil && c.Add.IsRBAC() {
 		return true
 	}
-	if c.Update != nil && c.Update.isRBAC() {
+	if c.Update != nil && c.Update.IsRBAC() {
 		return true
 	}
-	if c.Delete != nil && c.Delete.isRBAC() {
+	if c.Delete != nil && c.Delete.IsRBAC() {
 		return true
 	}
 

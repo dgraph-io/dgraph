@@ -247,6 +247,23 @@ func ExtractJwt(ctx context.Context) ([]string, error) {
 	return accessJwt, nil
 }
 
+// AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
+func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
+	authorizationJwt := r.Header.Get("X-Dgraph-AuthorizationToken")
+	if authorizationJwt == "" {
+		return ctx
+	}
+
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	md.Append("authorizationJwt", authorizationJwt)
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
+}
+
 func ExtractAuthVariables(ctx context.Context) (map[string]string, error) {
 	// Extract the jwt and unmarshal the jwt to get the auth variables.
 	md, ok := metadata.FromIncomingContext(ctx)
@@ -399,23 +416,6 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		md.Append("accessJwt", accessJwt)
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
-	return ctx
-}
-
-// AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
-func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
-	authorizationJwt := r.Header.Get("X-Dgraph-AuthorizationToken")
-	if authorizationJwt == "" {
-		return ctx
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
-
-	md.Append("authorizationJwt", authorizationJwt)
-	ctx = metadata.NewIncomingContext(ctx, md)
 	return ctx
 }
 

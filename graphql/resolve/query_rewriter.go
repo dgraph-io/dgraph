@@ -78,6 +78,36 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	}
 }
 
+func evaluateRBACRule(rule *schema.RuleAst, authVariables map[string]string) bool {
+	value := rule.GetOperand()
+	if value.GetName() == "eq" && value.GetOperand().GetName() == authVariables[rule.GetName()] {
+		return true
+	}
+	return false
+}
+
+func getRBACRules(node *schema.RuleNode, rbacRule map[int]bool, authVariables map[string]string) {
+	for _, rule := range node.Or {
+		if rule.IsRBAC() {
+			getRBACRules(rule, rbacRule, authVariables)
+		}
+	}
+
+	for _, rule := range node.And {
+		if rule.IsRBAC() {
+			getRBACRules(rule, rbacRule, authVariables)
+		}
+	}
+
+	if node.Not != nil && node.Not.IsRBAC() {
+		getRBACRules(node.Not, rbacRule, authVariables)
+	}
+
+	if node.Rule != nil && node.Rule.IsJWT() {
+		rbacRule[node.RuleID] = evaluateRBACRule(node.Rule, authVariables)
+	}
+}
+
 func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	authVariables map[string]string) *gql.GraphQuery {
 	queriedType := field.Type()
@@ -89,6 +119,8 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	if authRules == nil || authRules.Query == nil {
 		return &query
 	}
+	rbacRule := make(map[int]bool)
+	getRBACRules(authRules.Query, rbacRule, authVariables)
 
 	authFilter := authRules.Query.GetFilter()
 	if dgQuery.Filter != nil {
