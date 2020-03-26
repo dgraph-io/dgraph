@@ -64,7 +64,8 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 				custom := fld.Directives.ForName("custom")
 				if custom == nil {
 					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
-						"with @custom directive. Other fields are built automatically for you."
+						"with @custom directive. Other fields are built automatically for you. " +
+						"Found " + defn.Name + " " + fld.Name + " without @custom."
 					break
 				}
 			}
