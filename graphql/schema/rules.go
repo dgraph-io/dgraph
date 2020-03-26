@@ -686,8 +686,6 @@ func customDirectiveValidation(sch *ast.Schema,
 		})
 	}
 	return nil
-
-	return nil
 }
 
 func idValidation(sch *ast.Schema,
