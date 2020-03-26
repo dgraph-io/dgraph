@@ -1262,6 +1262,8 @@ query {
     lastEcho
     group
     uptime
+    ongoing
+    indexing
   }
 }
 ```
@@ -1288,7 +1290,9 @@ Here’s an example of JSON returned from the above query:
         "status": "healthy",
         "lastEcho": 1582827418,
         "group": "1",
-        "uptime": 1505
+        "uptime": 1505,
+        "ongoing": ["opIndexing"],
+        "indexing": ["name", "age"]
       }
     ]
   }
