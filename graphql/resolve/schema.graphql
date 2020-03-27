@@ -112,3 +112,18 @@ type ComputerOwner {
 type User @secret(field: "pwd") {
 	name: String! @id
 }
+
+# For testing duplicate XID in single mutation for interface
+interface People {
+        id: String! @id
+        name: String!
+}
+
+type Teacher implements People {
+        subject: String!
+        teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher]
+}

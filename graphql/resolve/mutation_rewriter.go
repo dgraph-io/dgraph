@@ -93,12 +93,18 @@ func NewVariableGenerator() *VariableGenerator {
 	}
 }
 
-// Next gets the Next variable name for the given type and xid value.
+// Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, xidVal string) string {
+func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string {
 	// return previously allocated variable name for repeating xidVal
-	key := typ.Name() + xidVal
+	var key string
+	if xidName == "" || xidVal == "" {
+		key = typ.Name()
+	} else {
+		key = typ.FieldOriginatedFrom(xidName) + xidVal
+	}
+
 	if varName, ok := v.xidVarNameMap[key]; ok {
 		return varName
 	}
@@ -108,7 +114,7 @@ func (v *VariableGenerator) Next(typ schema.Type, xidVal string) string {
 	varName := fmt.Sprintf("%s%v", typ.Name(), v.counter)
 
 	// save it, if it was created for xidVal
-	if xidVal != "" {
+	if xidName != "" && xidVal != "" {
 		v.xidVarNameMap[key] = varName
 	}
 
@@ -566,7 +572,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 				continue
 			}
 		}
-		varName := varGen.Next(fld.Type(), "")
+		varName := varGen.Next(fld.Type(), "", "")
 
 		qry.Children = append(qry.Children,
 			&gql.GraphQuery{
@@ -707,7 +713,7 @@ func rewriteObject(
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := varGen.Next(typ, "")
+	variable := varGen.Next(typ, "", "")
 
 	id := typ.IDField()
 	if id != nil {
@@ -734,7 +740,7 @@ func rewriteObject(
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
-			variable = varGen.Next(typ, xidString)
+			variable = varGen.Next(typ, xid.Name(), xidString)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
@@ -1082,7 +1088,7 @@ func addDelete(frag *mutationFragment,
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.Next(qryFld.Type(), "")
+	targetVar := varGen.Next(qryFld.Type(), "", "")
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
