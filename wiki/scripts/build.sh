@@ -10,7 +10,9 @@ set -e
 
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST=https://docs.dgraph.io
+HOST="${HOST:-https://docs.dgraph.io}"
+PUBLIC="${PUBLIC:-public}"
+LOOP="${LOOP:-true}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -69,7 +71,7 @@ rebuild() {
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
 		CURRENT_VERSION=${2} hugo \
-		--destination=public/"$dir"\
+		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
 
@@ -92,9 +94,9 @@ publicFolder()
 {
 	dir=''
 	if [[ $1 == "${VERSIONS_ARRAY[0]}" ]]; then
-		echo "public"
+		echo "${PUBLIC}"
 	else
-		echo "public/$1"
+		echo "${PUBLIC}/$1"
 	fi
 }
 
@@ -153,5 +155,8 @@ while true; do
 	popd > /dev/null
 
 	firstRun=0
+        if ! $LOOP; then
+            exit
+        fi
 	sleep 60
 done
