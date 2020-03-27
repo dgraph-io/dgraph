@@ -30,15 +30,15 @@ import (
 )
 
 const (
-	mutationQueryVar        = "x"
-	mutationQueryVarUID     = "uid(x)"
+	MutationQueryVar        = "x"
+	MutationQueryVarUID     = "uid(x)"
 	updateMutationCondition = `gt(len(x), 0)`
 )
 
-type addRewriter struct {
+type AddRewriter struct {
 	frags [][]*mutationFragment
 }
-type updateRewriter struct {
+type UpdateRewriter struct {
 	setFrags []*mutationFragment
 	delFrags []*mutationFragment
 }
@@ -70,23 +70,23 @@ type mutationBuilder func(frag *mutationFragment) ([]byte, error)
 // result indicates that the upsert didn't succeed.
 type resultChecker func(map[string]interface{}) error
 
-// A variableGenerator generates unique variable names.
-type variableGenerator int
+// A VariableGenerator generates unique variable names.
+type VariableGenerator int
 
-// next gets the next variable name for the given type.
-func (c *variableGenerator) next(typ schema.Type) string {
+// Next gets the Next variable name for the given type.
+func (c *VariableGenerator) Next(typ schema.Type) string {
 	*c++
 	return fmt.Sprintf("%s%v", typ.Name(), int(*c))
 }
 
 // NewAddRewriter returns new MutationRewriter for add & update mutations.
 func NewAddRewriter() MutationRewriter {
-	return &addRewriter{}
+	return &AddRewriter{}
 }
 
 // NewUpdateRewriter returns new MutationRewriter for add & update mutations.
 func NewUpdateRewriter() MutationRewriter {
-	return &updateRewriter{}
+	return &UpdateRewriter{}
 }
 
 // NewDeleteRewriter returns new MutationRewriter for delete mutations..
@@ -171,7 +171,7 @@ func NewDeleteRewriter() MutationRewriter {
 //   } ],
 //   "Author.friends":[ {"uid":"0x123"} ],
 // }
-func (mrw *addRewriter) Rewrite(
+func (mrw *AddRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
@@ -180,7 +180,7 @@ func (mrw *addRewriter) Rewrite(
 		return mrw.handleMultipleMutations(m)
 	}
 
-	varGen := variableGenerator(0)
+	varGen := VariableGenerator(0)
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	mrw.frags = [][]*mutationFragment{rewriteObject(mutatedType, nil, "", &varGen, true, val)}
 	mutations, err := mutationsFromFragments(
@@ -200,12 +200,12 @@ func (mrw *addRewriter) Rewrite(
 		schema.GQLWrapf(err, "failed to rewrite mutation payload")
 }
 
-func (mrw *addRewriter) handleMultipleMutations(
+func (mrw *AddRewriter) handleMultipleMutations(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
-	varGen := variableGenerator(0)
+	varGen := VariableGenerator(0)
 	var errs error
 	var mutationsAll []*dgoapi.Mutation
 	queries := &gql.GraphQuery{}
@@ -245,7 +245,7 @@ func (mrw *addRewriter) handleMultipleMutations(
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
-func (mrw *addRewriter) FromMutationResult(
+func (mrw *AddRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -306,8 +306,8 @@ func (mrw *addRewriter) FromMutationResult(
 // - Explicit values in remove mean delete this if it is the actual value
 // - Nulls in remove become like delete * for the corresponding predicate.
 //
-// See addRewriter for how the set and remove fragments get created.
-func (urw *updateRewriter) Rewrite(
+// See AddRewriter for how the set and remove fragments get created.
+func (urw *UpdateRewriter) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 
 	mutatedType := m.MutatedType()
@@ -320,12 +320,12 @@ func (urw *updateRewriter) Rewrite(
 		return nil, nil, nil
 	}
 
-	upsertQuery := rewriteUpsertQueryFromMutation(m)
-	srcUID := mutationQueryVarUID
+	upsertQuery := RewriteUpsertQueryFromMutation(m)
+	srcUID := MutationQueryVarUID
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := variableGenerator(0)
+	varGen := VariableGenerator(0)
 
 	if setArg != nil {
 		urw.setFrags =
@@ -376,7 +376,7 @@ func (urw *updateRewriter) Rewrite(
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
-func (urw *updateRewriter) FromMutationResult(
+func (urw *UpdateRewriter) FromMutationResult(
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -469,10 +469,10 @@ func extractFilter(m schema.Mutation) map[string]interface{} {
 	return filter
 }
 
-func rewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
+func RewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
-		Var:  mutationQueryVar,
+		Var:  MutationQueryVar,
 		Attr: m.ResponseName(),
 	}
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
@@ -500,8 +500,8 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 			m.MutationType())
 	}
 
-	varGen := variableGenerator(0)
-	qry := rewriteUpsertQueryFromMutation(m)
+	varGen := VariableGenerator(0)
+	qry := RewriteUpsertQueryFromMutation(m)
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 
 	// we need to delete this node with ^^ and then any reference we know about
@@ -516,7 +516,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 				continue
 			}
 		}
-		varName := varGen.next(fld.Type())
+		varName := varGen.Next(fld.Type())
 
 		qry.Children = append(qry.Children,
 			&gql.GraphQuery{
@@ -525,7 +525,7 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 			})
 
 		delFldName := fld.Type().DgraphPredicate(invField.Name())
-		del := map[string]interface{}{"uid": mutationQueryVarUID}
+		del := map[string]interface{}{"uid": MutationQueryVarUID}
 		if invField.Type().ListType() == nil {
 			deletes = append(deletes,
 				map[string]interface{}{
@@ -630,7 +630,7 @@ func queryFromFragments(frags []*mutationFragment) *gql.GraphQuery {
 	return qry
 }
 
-// rewriteObject rewrites obj to a list of mutation fragments.  See addRewriter.Rewrite
+// rewriteObject rewrites obj to a list of mutation fragments.  See AddRewriter.Rewrite
 // for a description of what those fragments look like.
 //
 // GraphQL validation has already ensured that the types of arguments (or variables)
@@ -649,14 +649,14 @@ func rewriteObject(
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
-	varGen *variableGenerator,
+	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	obj map[string]interface{}) []*mutationFragment {
 
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := varGen.next(typ)
+	variable := varGen.Next(typ)
 
 	id := typ.IDField()
 	if id != nil {
@@ -861,7 +861,7 @@ func asIDReference(
 	srcUID string,
 	variable string,
 	withAdditionalDeletes bool,
-	varGen *variableGenerator) *mutationFragment {
+	varGen *VariableGenerator) *mutationFragment {
 
 	result := make(map[string]interface{}, 2)
 	frag := newFragment(result)
@@ -923,7 +923,7 @@ func asXIDReference(
 	typ schema.Type,
 	xidFieldName, xidString, xidVariable string,
 	withAdditionalDeletes bool,
-	varGen *variableGenerator) *mutationFragment {
+	varGen *VariableGenerator) *mutationFragment {
 
 	result := make(map[string]interface{}, 2)
 	frag := newFragment(result)
@@ -963,7 +963,7 @@ func asXIDReference(
 // leave an edge.
 func addAdditionalDeletes(
 	frag *mutationFragment,
-	varGen *variableGenerator,
+	varGen *VariableGenerator,
 	srcField schema.FieldDefinition, srcUID, variable string) {
 
 	if srcField == nil {
@@ -980,7 +980,7 @@ func addAdditionalDeletes(
 }
 
 func addDelete(frag *mutationFragment,
-	varGen *variableGenerator,
+	varGen *VariableGenerator,
 	qryVar, excludeVar string,
 	qryFld, delFld schema.FieldDefinition) {
 
@@ -997,7 +997,7 @@ func addDelete(frag *mutationFragment,
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.next(qryFld.Type())
+	targetVar := varGen.Next(qryFld.Type())
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
@@ -1081,7 +1081,7 @@ func rewriteList(
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
-	varGen *variableGenerator,
+	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	objects []interface{}) []*mutationFragment {
 

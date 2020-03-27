@@ -126,7 +126,7 @@ func escapedString(str string) string {
 		// All valid stings should be able to be escaped to a JSON string so
 		// it's safe to panic here. Marshal has to return an error because it
 		// accepts an interface.
-		panic("Could not marshal string to JSON string")
+		x.Panic(errors.New("Could not marshal string to JSON string"))
 	}
 	return string(byt)
 }
@@ -333,7 +333,15 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
-	x.Check2(builder.WriteString(update.Predicate))
+	// While exporting type definitions, "<" and ">" brackets must be written around
+	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
+	if strings.HasPrefix(update.Predicate, "~") {
+		x.Check2(builder.WriteString("<"))
+		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(">"))
+	} else {
+		x.Check2(builder.WriteString(update.Predicate))
+	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
 }
@@ -427,6 +435,12 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			return false
+		}
+
+		// Do not pick keys storing parts of a multi-part list. They will be read
+		// from the main key.
+		if pk.HasStartUid {
 			return false
 		}
 

@@ -107,10 +107,24 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
+	return alterSchemaHelper(s, false)
+}
+
+func alterSchemaInBackground(s string) error {
+	return alterSchemaHelper(s, true)
+}
+
+func alterSchemaHelper(s string, bg bool) error {
+	url := addr + "/alter"
+	if bg {
+		url += "?run_in_background=true"
+	}
+
+	_, _, err := runWithRetries("PUT", "", url, s)
 	if err != nil {
 		return errors.Wrapf(err, "while running request with retries")
 	}
+
 	return nil
 }
 
@@ -405,7 +419,7 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchemaWithRetry(s2))
+	require.Error(t, alterSchema(s2))
 }
 
 // add index

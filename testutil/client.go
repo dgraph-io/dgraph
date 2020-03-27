@@ -106,7 +106,9 @@ func DgraphClientWithGroot(serviceAddr string) (*dgo.Dgraph, error) {
 	for {
 		// keep retrying until we succeed or receive a non-retriable error
 		err = dg.Login(ctx, x.GrootId, "password")
-		if err == nil || !strings.Contains(err.Error(), "Please retry") {
+		if err == nil || !(strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "user not found")) {
+
 			break
 		}
 		time.Sleep(time.Second)
@@ -166,6 +168,7 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
+
 		return resp, err
 	}
 }
@@ -327,10 +330,10 @@ func verifyOutput(t *testing.T, bytes []byte, failureConfig *CurlFailureConfig) 
 
 // VerifyCurlCmd executes the curl command with the given arguments and verifies
 // the result against the expected output.
-func VerifyCurlCmd(t *testing.T, args []string,
-	failureConfig *CurlFailureConfig) {
+// VerifyCurlCmd executes the curl command with the given arguments and verifies
+// the result against the expected output.
+func VerifyCurlCmd(t *testing.T, args []string, failureConfig *CurlFailureConfig) {
 	queryCmd := exec.Command("curl", args...)
-
 	output, err := queryCmd.Output()
 	if len(failureConfig.CurlErrMsg) > 0 {
 		// the curl command should have returned an non-zero code

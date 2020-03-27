@@ -98,7 +98,7 @@ func queryCounter(ctx context.Context, txn *dgo.Txn, pred string) (Counter, erro
 	case 1:
 		counter = m["q"][0]
 	default:
-		panic(fmt.Sprintf("Invalid response: %q", resp.Json))
+		x.Panic(errors.Errorf("Invalid response: %q", resp.Json))
 	}
 	span.Annotatef(nil, "Found counter: %+v", counter)
 	counter.startTs = resp.GetTxn().GetStartTs()

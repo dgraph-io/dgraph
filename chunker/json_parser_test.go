@@ -134,14 +134,14 @@ func TestNquadsFromJson1(t *testing.T) {
 name
 age
 married
-address 
+address
 }}`,
 		expected: `{"alice": [
 {"name": "Alice",
 "age": 26,
 "married": true,
 "address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
+]}
 `}
 	exp.verify()
 }

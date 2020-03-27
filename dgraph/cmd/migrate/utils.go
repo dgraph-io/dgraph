@@ -24,14 +24,15 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/go-sql-driver/mysql"
 	"github.com/pkg/errors"
 )
 
-func getPool(user string, db string, password string) (*sql.DB,
+func getPool(host, port, user, password, db string) (*sql.DB,
 	error) {
 	return sql.Open("mysql",
-		fmt.Sprintf("%s:%s@/%s?parseTime=true", user, password, db))
+		fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", user, password, host, port, db))
 }
 
 // showTables will return a slice of table names using one of the following logic
@@ -119,7 +120,7 @@ func getColumnValues(columns []string, dataTypes []dataType,
 		case datetimeType:
 			valuePtrs = append(valuePtrs, new(mysql.NullTime))
 		default:
-			panic(fmt.Sprintf("detected unsupported type %s on column %s",
+			x.Panic(errors.Errorf("detected unsupported type %s on column %s",
 				dataTypes[i], columns[i]))
 		}
 	}

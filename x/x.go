@@ -83,10 +83,10 @@ const (
 	Star = "_STAR_ALL"
 
 	// GrpcMaxSize is the maximum possible size for a gRPC message.
-	// Dgraph uses the maximum size for the most flexibility (4GB - equal
+	// Dgraph uses the maximum size for the most flexibility (2GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
-	GrpcMaxSize = 4 << 30
+	GrpcMaxSize = math.MaxInt32
 
 	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
@@ -123,7 +123,8 @@ const (
 	InitialTypes = `
 	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
-{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"}]`
+{"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
+{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -279,7 +280,7 @@ func SetStatus(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 
@@ -322,7 +323,7 @@ func SetStatusWithData(w http.ResponseWriter, code, msg string) {
 			glog.Errorf("Error while writing: %+v", err)
 		}
 	} else {
-		panic(fmt.Sprintf("Unable to marshal: %+v", qr))
+		Panic(errors.Errorf("Unable to marshal: %+v", qr))
 	}
 }
 
@@ -907,6 +908,25 @@ func RunVlogGC(store *badger.DB, closer *y.Closer) {
 			runGC()
 		case <-mandatoryVlogTicker.C:
 			runGC()
+		}
+	}
+}
+
+type DB interface {
+	Sync() error
+}
+
+func StoreSync(db DB, closer *y.Closer) {
+	defer closer.Done()
+	ticker := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-ticker.C:
+			if err := db.Sync(); err != nil {
+				glog.Errorf("Error while calling db sync: %+v", err)
+			}
+		case <-closer.HasBeenClosed():
+			return
 		}
 	}
 }

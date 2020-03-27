@@ -19,6 +19,7 @@ package common
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
@@ -42,8 +43,8 @@ import (
 )
 
 const (
-	panicMsg = "\n****\nThis test should trap this panic.\n" +
-		"It's working as expected if this message is logged with a stack trace.\n****\n"
+	panicMsg = "\n****\nthis test should trap this panic.\n" +
+		"It's working as expected if this message is logged with a stack trace\n****"
 )
 
 type ErrorCase struct {
@@ -265,14 +266,16 @@ func panicCatcher(t *testing.T) {
 type panicClient struct{}
 
 func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic(panicMsg)
+	x.Panic(errors.New(panicMsg))
+	return nil, nil
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic(panicMsg)
+	x.Panic(errors.New(panicMsg))
+	return nil, nil, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

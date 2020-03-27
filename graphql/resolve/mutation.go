@@ -185,16 +185,17 @@ func (mr *mutationResolver) Resolve(
 		}
 
 		s := string(completed)
-		if strings.Contains(s, schema.NumUid) {
+		switch {
+		case strings.Contains(s, schema.NumUid):
 			completed = []byte(strings.ReplaceAll(s, fmt.Sprintf(`"%s": null`,
 				schema.NumUid), fmt.Sprintf(`"%s": %d`, schema.NumUid,
 				mr.numUids)))
 
-		} else if s[len(s)-1] == '}' {
+		case s[len(s)-1] == '}':
 			completed = []byte(fmt.Sprintf(`%s, "%s": %d}`, s[:len(s)-1],
 				schema.NumUid, mr.numUids))
 
-		} else {
+		default:
 			completed = []byte(fmt.Sprintf(`%s, "%s": %d`, s,
 				schema.NumUid, mr.numUids))
 		}
@@ -210,7 +211,7 @@ func (mr *mutationResolver) Resolve(
 func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
 	result map[string]interface{}) {
 	switch mr.mutationRewriter.(type) {
-	case *addRewriter:
+	case *AddRewriter:
 		mr.numUids = len(assigned)
 
 	default:

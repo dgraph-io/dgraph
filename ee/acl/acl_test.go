@@ -137,6 +137,26 @@ func TestInvalidGetUser(t *testing.T) {
 			` parse jwt token: token contains an invalid number of segments"}]}`)
 }
 
+func TestPasswordReturn(t *testing.T) {
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	query := `query {
+		getCurrentUser {
+			name
+			password
+		}
+	}`
+
+	l := makeRequest(t, accessJwt, testutil.GraphQLParams{Query: query})
+	require.Equal(t, string(l), `{"errors":[{"message":"Cannot query field \"password\"`+
+		` on type \"User\".","locations":[{"line":4,"column":4}]}]}`)
+}
+
 func TestGetCurrentUser(t *testing.T) {
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
@@ -441,6 +461,104 @@ func createGroup(t *testing.T, accessToken, name string) []byte {
 	return b
 }
 
+func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *group {
+	queryParams := testutil.GraphQLParams{
+		Query: `mutation addGroup($name: String!, $rules: [RuleRef]){
+			addGroup(input: [
+				{
+					name: $name
+					rules: $rules
+				}
+			]) {
+				group {
+					name
+					rules {
+						predicate
+						permission
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name":  name,
+			"rules": rules,
+		},
+	}
+	b := makeRequest(t, accessJwt, queryParams)
+
+	var addGroupResp struct {
+		Data struct {
+			AddGroup struct {
+				Group []group
+			}
+		}
+		Errors []interface{}
+	}
+	err := json.Unmarshal(b, &addGroupResp)
+	require.NoError(t, err)
+	require.Len(t, addGroupResp.Errors, 0)
+	require.Len(t, addGroupResp.Data.AddGroup.Group, 1)
+
+	return &addGroupResp.Data.AddGroup.Group[0]
+}
+
+func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
+	removeRules []string) *group {
+	queryParams := testutil.GraphQLParams{
+		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch, 
+$remove: RemoveGroupPatch){
+			updateGroup(input: {
+				filter: {
+					name: {
+						eq: $name
+					}
+				}
+				set: $set
+				remove: $remove
+			}) {
+				group {
+					name
+					rules {
+						predicate
+						permission
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name":   name,
+			"set":    nil,
+			"remove": nil,
+		},
+	}
+	if len(setRules) != 0 {
+		queryParams.Variables["set"] = map[string]interface{}{
+			"rules": setRules,
+		}
+	}
+	if len(removeRules) != 0 {
+		queryParams.Variables["remove"] = map[string]interface{}{
+			"rules": removeRules,
+		}
+	}
+	b := makeRequest(t, accessJwt, queryParams)
+
+	var result struct {
+		Data struct {
+			UpdateGroup struct {
+				Group []group
+			}
+		}
+		Errors []interface{}
+	}
+	err := json.Unmarshal(b, &result)
+	require.NoError(t, err)
+	require.Len(t, result.Errors, 0)
+	require.Len(t, result.Data.UpdateGroup.Group, 1)
+
+	return &result.Data.UpdateGroup.Group[0]
+}
+
 func checkGroupCount(t *testing.T, resp []byte, expected int) {
 	type Response struct {
 		Data struct {
@@ -499,6 +617,11 @@ type rule struct {
 	Permission int32  `json:"permission"`
 }
 
+type group struct {
+	Name  string `json:"name"`
+	Rules []rule `json:"rules"`
+}
+
 func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams) []byte {
 	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
 
@@ -520,7 +643,7 @@ func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
-	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
+	addRuleToGroup := `mutation updateGroup($name: String!, $rules: [RuleRef!]!) {
 		updateGroup(input: {
 			filter: {
 				name: {
@@ -887,7 +1010,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(name)) {
+				me(func: has(name), orderasc: name) {
 					name
 					age
 				}
@@ -899,7 +1022,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(age)) {
+				me(func: has(age), orderasc: name) {
 					name
 					age
 				}
@@ -912,22 +1035,20 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`
 			{
 				me1(func: has(name), orderdesc: age) {
-					name
 					age
 				}
 				me2(func: has(name), orderasc: age) {
-					name
 					age
 				}
 			}
 			`,
-			`{"me1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"me2":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`{"me1":[],"me2":[]}`,
 			`me1, me2 will have same results, can't order by <age> since it is unauthorized`,
 		},
 		{
 			`
 			{
-				me(func: has(name)) @groupby(age) {
+				me(func: has(name), orderasc: name) @groupby(age) {
 					count(name)
 				}
 			}
@@ -938,7 +1059,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		{
 			`
 			{
-				me(func: has(name)) @filter(eq(nickname, "RG")) {
+				me(func: has(name), orderasc: name) @filter(eq(nickname, "RG")) {
 					name
 					age
 				}
@@ -1043,8 +1164,8 @@ func TestNewACLPredicates(t *testing.T) {
 	}
 }
 
-func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string) []byte {
-	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [RuleRef]) {
+func removeRuleFromGroup(t *testing.T, accessToken, group string, rulePredicate string) []byte {
+	removeRuleFromGroup := `mutation updateGroup($name: String!, $rules: [String!]!) {
 		updateGroup(input: {
 			filter: {
 				name: {
@@ -1069,7 +1190,7 @@ func removeRuleFromGroup(t *testing.T, accessToken, group string, ruleID string)
 		Query: removeRuleFromGroup,
 		Variables: map[string]interface{}{
 			"name":  group,
-			"rules": []map[string]interface{}{{"id": ruleID}},
+			"rules": []string{rulePredicate},
 		},
 	}
 	b := makeRequest(t, accessToken, params)
@@ -1081,7 +1202,7 @@ func TestDeleteRule(t *testing.T) {
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
-	assigned := addDataAndRules(ctx, t, dg)
+	_ = addDataAndRules(ctx, t, dg)
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1103,7 +1224,7 @@ func TestDeleteRule(t *testing.T) {
 		Passwd:   "password",
 	})
 	require.NoError(t, err, "login failed")
-	removeRuleFromGroup(t, accessJwt, devGroup, assigned["r1"])
+	removeRuleFromGroup(t, accessJwt, devGroup, "name")
 	time.Sleep(6 * time.Second)
 
 	resp, err = userClient.NewReadOnlyTxn().Query(ctx, queryName)
@@ -1695,4 +1816,116 @@ func TestHealthForAcl(t *testing.T) {
 		require.NotNil(t, v.UpTime)
 		require.NotNil(t, v.Group)
 	}
+}
+
+func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
+	groupName := "testGroup"
+	addedRules := []rule{
+		{
+			Predicate:  "test",
+			Permission: 1,
+		},
+		{
+			Predicate:  "test",
+			Permission: 2,
+		},
+		{
+			Predicate:  "test1",
+			Permission: 3,
+		},
+	}
+	grootJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+
+	addedGroup := createGroupWithRules(t, grootJwt, groupName, addedRules)
+
+	require.Equal(t, groupName, addedGroup.Name)
+	require.Len(t, addedGroup.Rules, 2)
+	require.ElementsMatch(t, addedRules[1:], addedGroup.Rules)
+
+	updatedRules := []rule{
+		{
+			Predicate:  "test",
+			Permission: 3,
+		},
+		{
+			Predicate:  "test2",
+			Permission: 1,
+		},
+		{
+			Predicate:  "test2",
+			Permission: 2,
+		},
+	}
+	updatedGroup := updateGroup(t, grootJwt, groupName, updatedRules, nil)
+
+	require.Equal(t, groupName, updatedGroup.Name)
+	require.Len(t, updatedGroup.Rules, 3)
+	require.ElementsMatch(t, []rule{updatedRules[0], addedRules[2], updatedRules[2]},
+		updatedGroup.Rules)
+
+	updatedGroup1 := updateGroup(t, grootJwt, groupName, nil,
+		[]string{"test1", "test1", "test3"})
+
+	require.Equal(t, groupName, updatedGroup1.Name)
+	require.Len(t, updatedGroup1.Rules, 2)
+	require.ElementsMatch(t, []rule{updatedRules[0], updatedRules[2]}, updatedGroup1.Rules)
+
+	// cleanup
+	deleteGroup(t, grootJwt, groupName)
+}
+
+func TestAllowUIDAccess(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	createGroup(t, accessJwt, devGroup)
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	require.NoError(t, testutil.AssignUids(101))
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			<100> <name> "100th User" .
+		`),
+		CommitNow: true,
+	}
+	_, err = dg.NewTxn().Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	// give read access of <name> to alice
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	uidQuery := `
+	{
+		me(func: uid(100)) {
+			uid
+			name
+		}
+	}
+	`
+
+	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
+	require.Nil(t, err)
+	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }

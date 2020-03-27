@@ -23,7 +23,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -129,26 +131,137 @@ func (fj *fastJsonNode) IsEmpty() bool {
 	return len(fj.attrs) == 0
 }
 
+var (
+	boolTrue    = []byte("true")
+	boolFalse   = []byte("false")
+	emptyString = []byte(`""`)
+
+	// Below variables are used in stringJsonMarshal function.
+	bufferPool = sync.Pool{
+		New: func() interface{} {
+			return new(bytes.Buffer)
+		},
+	}
+
+	hex        = "0123456789abcdef"
+	escapeHTML = true
+)
+
+// stringJsonMarshal is replacement for json.Marshal() function only for string type.
+// This function is encodeState.string(string, escapeHTML) in "encoding/json/encode.go".
+// It should be in sync with encodeState.string function.
+func stringJsonMarshal(s string) []byte {
+	e := bufferPool.Get().(*bytes.Buffer)
+	e.Reset()
+
+	e.WriteByte('"')
+	start := 0
+	for i := 0; i < len(s); {
+		if b := s[i]; b < utf8.RuneSelf {
+			if htmlSafeSet[b] || (!escapeHTML && safeSet[b]) {
+				i++
+				continue
+			}
+			if start < i {
+				e.WriteString(s[start:i])
+			}
+			e.WriteByte('\\')
+			switch b {
+			case '\\', '"':
+				e.WriteByte(b)
+			case '\n':
+				e.WriteByte('n')
+			case '\r':
+				e.WriteByte('r')
+			case '\t':
+				e.WriteByte('t')
+			default:
+				// This encodes bytes < 0x20 except for \t, \n and \r.
+				// If escapeHTML is set, it also escapes <, >, and &
+				// because they can lead to security holes when
+				// user-controlled strings are rendered into JSON
+				// and served to some browsers.
+				e.WriteString(`u00`)
+				e.WriteByte(hex[b>>4])
+				e.WriteByte(hex[b&0xF])
+			}
+			i++
+			start = i
+			continue
+		}
+		c, size := utf8.DecodeRuneInString(s[i:])
+		if c == utf8.RuneError && size == 1 {
+			if start < i {
+				e.WriteString(s[start:i])
+			}
+			e.WriteString(`\ufffd`)
+			i += size
+			start = i
+			continue
+		}
+		// U+2028 is LINE SEPARATOR.
+		// U+2029 is PARAGRAPH SEPARATOR.
+		// They are both technically valid characters in JSON strings,
+		// but don't work in JSONP, which has to be evaluated as JavaScript,
+		// and can lead to security holes there. It is valid JSON to
+		// escape them, so we do so unconditionally.
+		// See http://timelessrepo.com/json-isnt-a-javascript-subset for discussion.
+		if c == '\u2028' || c == '\u2029' {
+			if start < i {
+				e.WriteString(s[start:i])
+			}
+			e.WriteString(`\u202`)
+			e.WriteByte(hex[c&0xF])
+			i += size
+			start = i
+			continue
+		}
+		i += size
+	}
+	if start < len(s) {
+		e.WriteString(s[start:])
+	}
+	e.WriteByte('"')
+	buf := append([]byte(nil), e.Bytes()...)
+	bufferPool.Put(e)
+	return buf
+}
+
 func valToBytes(v types.Val) ([]byte, error) {
 	switch v.Tid {
 	case types.StringID, types.DefaultID:
-		return json.Marshal(v.Value)
+		switch str := v.Value.(type) {
+		case string:
+			return stringJsonMarshal(str), nil
+		default:
+			return json.Marshal(str)
+		}
 	case types.BinaryID:
 		return []byte(fmt.Sprintf("%q", v.Value)), nil
 	case types.IntID:
-		return []byte(fmt.Sprintf("%d", v.Value)), nil
+		// In types.Convert(), we always convert to int64 for IntID type. fmt.Sprintf is slow
+		// and hence we are using strconv.FormatInt() here. Since int64 and int are most common int
+		// types we are using FormatInt for those.
+		switch num := v.Value.(type) {
+		case int64:
+			return []byte(strconv.FormatInt(num, 10)), nil
+		case int:
+			return []byte(strconv.FormatInt(int64(num), 10)), nil
+		default:
+			return []byte(fmt.Sprintf("%d", v.Value)), nil
+		}
 	case types.FloatID:
 		return []byte(fmt.Sprintf("%f", v.Value)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
-			return []byte("true"), nil
+			return boolTrue, nil
 		}
-		return []byte("false"), nil
+		return boolFalse, nil
 	case types.DateTimeID:
 		// Return empty string instead of zero-time value string - issue#3166
 		t := v.Value.(time.Time)
 		if t.IsZero() {
-			return []byte(`""`), nil
+			return emptyString, nil
 		}
 		return t.MarshalJSON()
 	case types.GeoID:
@@ -839,7 +952,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			// add value for count(uid) nodes if any.
 			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
 		default:
-			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 {
+			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 && pc.Params.Langs[0] != "*" {
 				fieldName += "@"
 				fieldName += strings.Join(pc.Params.Langs, ":")
 			}
@@ -876,7 +989,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 					}
 					fieldNameWithTag := fieldName
 					lang := pc.LangTags[idx].Lang[i]
-					if lang != "" {
+					if lang != "" && lang != "*" {
 						fieldNameWithTag += "@" + lang
 					}
 					encodeAsList := pc.List && len(lang) == 0

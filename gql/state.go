@@ -63,6 +63,7 @@ const (
 	itemRightSquare
 	itemComma
 	itemMathOp
+	itemStar
 )
 
 // lexIdentifyBlock identifies whether it is an upsert block
@@ -252,6 +253,8 @@ func lexInsideSchema(l *lex.Lexer) lex.StateFn {
 			l.Emit(itemRightSquare)
 		case isSpace(r) || lex.IsEndOfLine(r):
 			l.Ignore()
+		case r == lsThan:
+			return lexIRIRef
 		case isNameBegin(r):
 			return lexArgName
 		case r == '#':
@@ -445,6 +448,8 @@ func lexQuery(l *lex.Lexer) lex.StateFn {
 			return lexDirectiveOrLangList
 		case r == lsThan:
 			return lexIRIRef
+		case r == star:
+			l.Emit(itemStar)
 		default:
 			return l.Errorf("Unrecognized character in lexText: %#U", r)
 		}

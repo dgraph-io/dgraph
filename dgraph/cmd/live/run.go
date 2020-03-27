@@ -332,8 +332,10 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(opt.clientDir).
 			WithTableLoadingMode(bopt.MemoryMap).
-			// TODO(Ibrahim): Remove compression level once badger is updated.
-			WithSyncWrites(false).WithZSTDCompressionLevel(1))
+			WithCompression(bopt.ZSTD).
+			WithSyncWrites(false).
+			WithLoadBloomsOnOpen(false).
+			WithZSTDCompressionLevel(3))
 		x.Checkf(err, "Error while creating badger KV posting store")
 
 	}

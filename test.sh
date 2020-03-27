@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # usage: test.sh [pkg_regex]
 
@@ -162,7 +162,7 @@ function RunCustomClusterTests {
 #
 
 ARGS=$(getopt -n$ME -o"hucCfFvn" \
-              -l"help,unit,cluster,cluster-only,full,systest-only,oss,verbose,no-cache,short" -- "$@") \
+              -l"help,unit,cluster,cluster-only,full,systest-only,oss,verbose,no-cache,short,timeout:" -- "$@") \
     || exit 1
 eval set -- "$ARGS"
 while true; do
@@ -177,6 +177,7 @@ while true; do
         -n|--no-cache)     GO_TEST_OPTS+=( "-count=1" )    ;;
            --oss)          GO_TEST_OPTS+=( "-tags=oss" )   ;;
            --short)        GO_TEST_OPTS+=( "-short=true" ) ;;
+        -t|--timeout)      GO_TEST_OPTS+=( "-timeout=$2" ) ;;
         --)                shift; break                    ;;
     esac
     shift
@@ -251,11 +252,17 @@ if [[ :${TEST_SET}: == *:systest:* ]]; then
     Info "Running custom test scripts"
     RunCmd ./dgraph/cmd/bulk/systest/test-bulk-schema.sh || TestFailed
 
-    Info "Running large load test"
+    Info "Running large bulk load test"
     RunCmd ./systest/21million/test-21million.sh || TestFailed
+
+    # Info "Running large live load test"
+    # RunCmd ./systest/21million/test-21million.sh --loader live || TestFailed
 
     Info "Running rebuilding index test"
     RunCmd ./systest/1million/test-reindex.sh || TestFailed
+
+    Info "Running background index test"
+    RunCmd ./systest/bgindex/test-bgindex.sh || TestFailed
 fi
 
 Info "Stopping cluster"
