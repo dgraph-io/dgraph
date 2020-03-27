@@ -54,7 +54,13 @@ function eraseCookie(name) {
  *                    empty string denotes the latest version
  */
 function getCurrentVersion(pathname) {
-  const candidate = pathname.split("/")[1];
+  let candidate;
+
+  if (location.pathname.startsWith("/docs")) {
+    candidate = pathname.split("/")[2];
+  } else {
+    candidate = pathname.split("/")[1];
+  }
 
   if (candidate === "master") {
     return candidate;
@@ -67,9 +73,26 @@ function getCurrentVersion(pathname) {
   return "";
 }
 
-// getPathWithoutVersionName gets the current URL path without the version prefix
-function getPathWithoutVersionName(location, versionName) {
+// getPathBeforeVersionName gets the current URL path before the version prefix
+function getPathBeforeVersionName(location, versionName) {
+  if (location.pathname.startsWith("/docs")) {
+    return "/docs/";
+  }
+  return "/";
+}
+
+// getPathAfterVersionName gets the current URL path after the version prefix
+function getPathAfterVersionName(location, versionName) {
   let path;
+  if (location.pathname.startsWith("/docs")) {
+    if (versionName === "") {
+      path = location.pathname.split("/").slice(2).join("/");
+    } else {
+      path = location.pathname.split("/").slice(3).join("/");
+    }
+    return path + location.hash;
+  }
+
   if (versionName === "") {
     path = location.pathname.split("/").slice(1).join("/");
   } else {
@@ -321,14 +344,15 @@ function getPathWithoutVersionName(location, versionName) {
       var targetVersion = e.target.value;
 
       if (currentVersion !== targetVersion) {
+        var basePath = getPathBeforeVersionName(location, currentVersion);
         // Getting everything after targetVersion and concatenating it with the hash part.
-        var currentPath = getPathWithoutVersionName(location, currentVersion);
+        var currentPath = getPathAfterVersionName(location, currentVersion);
 
         var targetPath;
         if (targetVersion === "") {
-          targetPath = "/" + currentPath;
+          targetPath = basePath + currentPath;
         } else {
-          targetPath = "/" + targetVersion + "/" + currentPath;
+          targetPath = basePath + targetVersion + "/" + currentPath;
         }
         location.assign(targetPath);
       }
