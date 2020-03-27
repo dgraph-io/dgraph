@@ -1275,6 +1275,38 @@ func isName(s string) bool {
 	return true
 }
 
+// buildGraphqlRequestFields will build graphql request body from ast.
+// for eg:
+// Hello{
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+// will return
+// {
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+func buildGraphqlRequestFields(writer *bytes.Buffer, filed *ast.Field) {
+	// Add begining curly braces
+	writer.WriteString("{\n")
+	for i := 0; i < len(filed.SelectionSet); i++ {
+		castedField := filed.SelectionSet[i].(*ast.Field)
+		writer.WriteString(castedField.Name)
+
+		if len(castedField.SelectionSet) > 0 {
+			// recursively add fields.
+			buildGraphqlRequestFields(writer, castedField)
+		}
+		writer.WriteString("\n")
+	}
+	// Add ending curly braces
+	writer.WriteString("}")
+}
+
 // Given a template for a body with variables defined, this function parses the body, substitutes
 // the variables and returns the final JSON.
 // for e.g.

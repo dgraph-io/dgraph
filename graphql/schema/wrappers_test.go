@@ -17,12 +17,14 @@
 package schema
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -391,4 +393,21 @@ func TestParseCustomBody(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildGraphqlRequestFields(t *testing.T) {
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: string(
+		`query{
+			hello(id: "up"){
+				name
+				ra {
+					yo
+				}
+			}
+		}`,
+	)})
+	require.Nil(t, gqlErr)
+	result := &bytes.Buffer{}
+	buildGraphqlRequestFields(result, doc.Operations[0].SelectionSet[0].(*ast.Field))
+	require.Equal(t, string(result.Bytes()), "{\nname\nra{\nyo\n}\n}")
 }
