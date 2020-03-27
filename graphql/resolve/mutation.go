@@ -198,14 +198,23 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) (interface{}, bool, error) {
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
+
+	emptyResult := map[string]interface{}{
+		mutation.ResponseName(): map[string]interface{}{
+			schema.NumUid:                        0,
+			schema.Typename:                      mutation.TypeName,
+			mutation.QueryField().ResponseName(): []interface{}{},
+		},
+	}
+
 	if err != nil {
-		return nil, resolverFailed,
+		return emptyResult, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
 	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
-		return nil, resolverFailed,
+		return emptyResult, resolverFailed,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
@@ -216,7 +225,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
 	if dgQuery == nil && err != nil {
-		return nil, resolverFailed, errs
+		return emptyResult, resolverFailed, errs
 	}
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)

@@ -383,7 +383,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
-				"add2" : { "post": []}
+				"add2" : { "post": [] }
 			}`,
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `mutation addPost failed because ` +
@@ -402,7 +402,7 @@ func TestManyMutationsWithError(t *testing.T) {
 			queryResponse: `{ "post" : [{ "title": "A Post" } ] }`,
 			expected: `{
 				"add1": { "post": [{ "title": "A Post" }] },
-				"add2" : { "post": []}
+				"add2" : { "post": [] }
 			}`,
 			errors: x.GqlErrorList{
 				&x.GqlError{Message: `couldn't rewrite mutation addPost because ` +
