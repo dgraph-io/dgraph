@@ -78,117 +78,23 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	}
 }
 
-type Authorizer struct {
-	authVariables map[string]string
-	rbacRule      map[int]bool
-}
-
-func (a *Authorizer) evaluateRBACRule(rule *schema.RuleAst) bool {
-	value := rule.GetOperand()
-	if value.GetName() == "eq" && value.GetOperand().GetName() == a.authVariables[rule.GetName()] {
-		return true
-	}
-	return false
-}
-
-func (a *Authorizer) adjustQuery(query *gql.GraphQuery, field schema.Field) {
-	sch := field.Operation().Schema()
-
-	find := func(f schema.Field) (*gql.GraphQuery, int) {
-		for index, i := range query.Children {
-			if (f.Alias() != "" && f.Alias() == i.Alias) || f.Name() == i.Alias {
-				return i, index
-			}
-		}
-		return nil, 0
-	}
-
-	for _, f := range field.SelectionSet() {
-		child, ind := find(f)
-		if child == nil {
-			continue
-		}
-
-		if len(f.SelectionSet()) > 0 {
-			a.adjustQuery(child, f)
-			authRules := sch.AuthTypeRules(f.Type().Name())
-			if authRules != nil && authRules.Query != nil {
-				filters := authRules.Query.GetFilter(a.rbacRule)
-				if child.Filter != nil {
-					child.Filter = &gql.FilterTree{
-						Op: "and",
-						Child: []*gql.FilterTree{
-							filters,
-							child.Filter,
-						},
-					}
-				} else {
-					child.Filter = filters
-				}
-			}
-
-		} else {
-			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
-			if authRules != nil && authRules.Query != nil {
-				copy(query.Children[ind:], query.Children[ind+1:])
-				query.Children[len(query.Children)-1] = nil
-				query.Children = query.Children[:len(query.Children)-1]
-			}
-		}
-	}
-}
-
-func (a *Authorizer) getRBACRules(node *schema.RuleNode) {
-	a.rbacRule[node.RuleID] = true
-	valid := true
-	for _, rule := range node.Or {
-		if rule.IsRBAC() {
-			a.getRBACRules(rule)
-			if a.rbacRule[rule.RuleID] {
-				valid = false
-			}
-		}
-		a.rbacRule[node.RuleID] = valid
-	}
-
-	for _, rule := range node.And {
-		if rule.IsRBAC() {
-			a.getRBACRules(rule)
-			if !a.rbacRule[rule.RuleID] {
-				valid = false
-			}
-		}
-		a.rbacRule[node.RuleID] = valid
-	}
-
-	if node.Not != nil && node.Not.IsRBAC() {
-		a.getRBACRules(node.Not)
-		a.rbacRule[node.Not.RuleID] = !a.rbacRule[node.Not.RuleID]
-		a.rbacRule[node.RuleID] = a.rbacRule[node.Not.RuleID]
-	}
-
-	if node.Rule != nil && node.Rule.IsJWT() {
-		a.rbacRule[node.RuleID] = a.evaluateRBACRule(node.Rule)
-	}
-}
-
 func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	authVariables map[string]string) *gql.GraphQuery {
 	queriedType := field.Type()
 	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
 	rbacRule := make(map[int]bool)
 	var query gql.GraphQuery
-	a := Authorizer{authVariables: authVariables, rbacRule: rbacRule}
+	a := schema.Authorizer{AuthVariables: authVariables, RbacRule: rbacRule}
 	query.Children = append(query.Children, dgQuery)
-	query.Children = append(query.Children, a.getAuthQueries(field)...)
-	a.adjustQuery(dgQuery, field)
+	query.Children = append(query.Children, a.GetAuthQueries(field)...)
+	a.AdjustQuery(dgQuery, field)
 
 	if authRules == nil || authRules.Query == nil {
 		return &query
 	}
 
-	a.getRBACRules(authRules.Query)
-	authFilter := authRules.Query.GetFilter(rbacRule)
+	a.GetRBACRules(authRules.Query)
+	authFilter := authRules.Query.GetFilter(&a)
 	if dgQuery.Filter != nil && authFilter != nil {
 		dgQuery.Filter = &gql.FilterTree{
 			Op: "and",
@@ -202,137 +108,6 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	}
 
 	return &query
-}
-
-func (a *Authorizer) getAuthQueries(field schema.Field) []*gql.GraphQuery {
-	visited := make(map[string]bool)
-	queue := []*schema.Field{&field}
-	result := []*gql.GraphQuery{}
-
-	sch := field.Operation().Schema()
-
-	for ind := 0; ind < len(queue); ind++ {
-		i := queue[ind]
-		typeName := (*i).Type().Name()
-		visited[typeName] = true
-		authRules := sch.AuthTypeRules(typeName)
-
-		if authRules != nil && authRules.Query != nil {
-			a.getRBACRules(authRules.Query)
-			if val, ok := a.rbacRule[authRules.Query.RuleID]; !ok || val {
-				result = append(result, authRules.Query.GetQueries(a.authVariables)...)
-			}
-		}
-
-		for _, f := range (*i).SelectionSet() {
-			if f.Skip() || !f.Include() || f.Name() == schema.Typename {
-				continue
-			}
-
-			if len(f.SelectionSet()) > 0 && !visited[f.Type().Name()] {
-				queue = append(queue, &f)
-			}
-		}
-
-	}
-
-	fieldQueries := a.generateFieldQueries(field, []*schema.Field{&field})
-	seen := make(map[string]bool)
-
-	j := 0
-	for _, i := range fieldQueries {
-		if seen[i.Attr] {
-			continue
-		}
-		seen[i.Attr] = true
-		fieldQueries[j] = i
-		j++
-	}
-
-	fieldQueries = fieldQueries[:j]
-	result = append(result, fieldQueries...)
-	return result
-}
-
-func (a *Authorizer) generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.GraphQuery {
-	sch := field.Operation().Schema()
-	var result []*gql.GraphQuery
-
-	for _, f := range field.SelectionSet() {
-		if f.Skip() || !f.Include() || f.Name() == schema.Typename {
-			continue
-		}
-
-		path = append(path, &f)
-
-		if len(f.SelectionSet()) > 0 {
-			result = append(result, a.generateFieldQueries(f, path)...)
-		} else {
-			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
-			filterPut := false
-			if authRules != nil && authRules.Query != nil {
-				a.getRBACRules(authRules.Query)
-				if val, ok := a.rbacRule[authRules.Query.RuleID]; ok && !val {
-					continue
-				}
-				var query *gql.GraphQuery
-				name := ""
-
-				for i := len(path) - 1; i >= 1; i-- {
-					name = (*path[i]).Name() + name
-					child := &gql.GraphQuery{}
-					f := *path[i]
-					if f.Alias() != "" {
-						child.Alias = f.Alias()
-					} else {
-						child.Alias = f.Name()
-					}
-
-					if f.Type().Name() == schema.IDType {
-						child.Attr = "uid"
-					} else {
-						child.Attr = f.DgraphPredicate()
-					}
-
-					if query != nil {
-						child.Children = []*gql.GraphQuery{{
-							Attr: "uid",
-						}, query}
-
-						if !filterPut {
-							child.Filter = authRules.Query.GetFilter(a.rbacRule)
-							filterPut = true
-						}
-					}
-
-					query = child
-				}
-
-				last := &gql.GraphQuery{
-					Attr: fmt.Sprintf("%s.%s", (*path[0]).ResponseName(), name),
-					Func: &gql.Function{
-						Name: "type",
-						Args: []gql.Arg{{Value: (*path[0]).Type().Name()}},
-					},
-					Children: []*gql.GraphQuery{{
-						Attr: "uid",
-					}, query},
-					Cascade: true,
-				}
-
-				if !filterPut {
-					last.Filter = authRules.Query.GetFilter(a.rbacRule)
-				}
-
-				result = append(result, last)
-				result = append(result, authRules.Query.GetQueries(a.authVariables)...)
-			}
-		}
-
-		path = path[:len(path)-1]
-	}
-
-	return result
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {
