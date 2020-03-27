@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -43,13 +44,38 @@ type todo struct {
 }
 
 const (
-	graphqlURL    = "http://localhost:8180/graphql"
-	authorization = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdXRoVmFyaWFibGVzIjp7IiRYLU15QXBwLVVzZXIiOiJ1c2VyMSIsIiRYLU15QXBwLVJvbGUiOiJhZG1pbiJ9fQ.iuPtwcdkMgAm7-BJAj1Q7IQbIdnivef99fgvafwnmlA"
+	graphqlURL = "http://localhost:8180/graphql"
 )
+
+func getJWT(t *testing.T, user, role string) string {
+	type MyCustomClaims struct {
+		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
+		jwt.StandardClaims
+	}
+
+	// Create the Claims
+	claims := MyCustomClaims{
+		map[string]interface{}{},
+		jwt.StandardClaims{
+			ExpiresAt: 15000,
+			Issuer:    "test",
+		},
+	}
+
+	claims.Foo["X-MyApp-User"] = user
+	claims.Foo["X-MyApp-Role"] = role
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString([]byte("Secret"))
+	require.NoError(t, err)
+
+	return ss
+
+}
 
 func TestQueryAllTodos(t *testing.T) {
 	getUserParams := &common.GraphQLParams{
-		Authorization: authorization,
+		Authorization: getJWT(t, "user1", "user"),
 		Query: `
 		query {
                   queryTodo(order:{
@@ -175,7 +201,7 @@ func TestQueryAllTodos(t *testing.T) {
 
 func TestQueryAllUsers(t *testing.T) {
 	getUserParams := &common.GraphQLParams{
-		Authorization: authorization,
+		Authorization: getJWT(t, "user1", "user"),
 		Query: `
 		query {
                 queryUser(order:{

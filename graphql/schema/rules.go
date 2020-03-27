@@ -45,43 +45,35 @@ func validateAuthAst(node *RuleAst) gqlerror.List {
 		return nil
 	}
 
-	fmt.Printf("%+v\n", node)
-	fmt.Printf("%+v\n", node.GetOperation())
-
 	if node.Typ == SpecialOp {
-		//TODO node.Value == nil
-		fmt.Println("Here1")
+		if node.Value != nil {
+			errs = append(errs, gqlerror.Errorf("Special Operation %s has a child", node.Name))
+		}
 		return errs
 	}
 
 	operation := node.GetOperation()
 	if operation == nil {
-		// TODO
-		fmt.Println("Here2")
+		errs = append(errs, gqlerror.Errorf("%s has no operation attached", node.Name))
 		return errs
 	}
 
 	operand := operation.GetOperand()
 	if operand == nil {
-		// TODO
-		fmt.Println("Here3")
+		errs = append(errs, gqlerror.Errorf("%s operation no value attached", operation.Name))
 		return errs
 	}
 
 	if !operation.IsFilter() {
-		if operand.Value == nil {
-
-			// TODO
-			fmt.Println("Here4")
+		if operand.Value != nil {
+			errs = append(errs, gqlerror.Errorf("%s node has a child", operand.Name))
 			return errs
 		}
 		return errs
 	} else {
 		errs = append(errs, validateAuthAst(operand)...)
 		if operand.GetOperation().IsFilter() {
-
-			// TODO
-			fmt.Println("Here5")
+			errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
 			return errs
 		}
 	}
@@ -114,7 +106,8 @@ func validateAuthNode(node *RuleNode) gqlerror.List {
 	}
 
 	if len(has) > 1 {
-
+		result = append(result, gqlerror.Errorf("Rule ID: %d has multiple fields true",
+			node.RuleID))
 	}
 
 	return result
@@ -725,7 +718,11 @@ func authValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
-	return nil
+	rules := validateAuthRules(sch)
+	if len(rules) == 0 {
+		return nil
+	}
+	return rules[0]
 }
 
 func passwordValidation(sch *ast.Schema,

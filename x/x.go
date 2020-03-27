@@ -24,7 +24,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"io"
 	"math"
 	"math/rand"
@@ -37,6 +36,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
@@ -295,8 +296,11 @@ func ExtractAuthVariables(ctx context.Context) (map[string]string, error) {
 		return nil, errors.Errorf("Error while parsing jwt auth token: ", err)
 	}
 
-	customClaims := jsonMap["https://dgraph.io/jwt/claims"].(map[string]interface{})
 	authVariables := make(map[string]string)
+	customClaims, ok := jsonMap["https://dgraph.io/jwt/claims"].(map[string]interface{})
+	if !ok {
+		return authVariables, nil
+	}
 	for key, value := range customClaims {
 		authVariables[key] = value.(string)
 	}

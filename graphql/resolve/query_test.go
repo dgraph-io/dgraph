@@ -18,14 +18,17 @@ package resolve
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
 )
 
@@ -36,13 +39,15 @@ type QueryRewritingCase struct {
 	GQLQuery  string
 	Variables map[string]interface{}
 	DGQuery   string
+	User      string
+	Role      string
 }
 
 func TestQueryRewriting(t *testing.T) {
 	b, err := ioutil.ReadFile("query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
-	var tests []QueryRewritingCase
+	var tests map[string][]QueryRewritingCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
@@ -50,7 +55,7 @@ func TestQueryRewriting(t *testing.T) {
 
 	testRewriter := NewQueryRewriter()
 
-	for _, tcase := range tests {
+	for _, tcase := range tests["QUERY_TESTS"] {
 		t.Run(tcase.Name, func(t *testing.T) {
 
 			op, err := gqlSchema.Operation(
@@ -63,6 +68,64 @@ func TestQueryRewriting(t *testing.T) {
 
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
 			require.Nil(t, err)
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+		})
+	}
+}
+
+func TestAuthQueryRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("query_test.yaml")
+
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests map[string][]QueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "auth-schema.graphql")
+
+	testRewriter := NewQueryRewriter()
+
+	type MyCustomClaims struct {
+		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
+		jwt.StandardClaims
+	}
+
+	// Create the Claims
+	claims := MyCustomClaims{
+		map[string]interface{}{},
+		jwt.StandardClaims{
+			ExpiresAt: 15000,
+			Issuer:    "test",
+		},
+	}
+
+	for _, tcase := range tests["AUTH_TESTS"] {
+		t.Run(tcase.Name, func(t *testing.T) {
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query:     tcase.GQLQuery,
+					Variables: tcase.Variables,
+				})
+			require.NoError(t, err)
+			gqlQuery := test.GetQuery(t, op)
+
+			claims.Foo["X-MyApp-User"] = tcase.User
+			claims.Foo["X-MyApp-Role"] = tcase.Role
+
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			ss, err := token.SignedString([]byte("Secret"))
+			require.NoError(t, err)
+
+			ctx := context.Background()
+			md := metadata.New(nil)
+			md.Append("authorizationJwt", ss)
+			ctx = metadata.NewIncomingContext(ctx, md)
+
+			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
+			require.Nil(t, err)
+			fmt.Println(dgraph.AsString(dgQuery))
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}

@@ -592,11 +592,14 @@ type RuleNode struct {
 	And    []*RuleNode
 	Not    *RuleNode
 
-	Rule      *RuleAst
-	isInvalid bool
+	Rule *RuleAst
 }
 
-func (r *RuleNode) GetFilter() *gql.FilterTree {
+func (r *RuleNode) GetFilter(authRules map[int]bool) *gql.FilterTree {
+	if val, ok := authRules[r.RuleID]; ok && !val {
+		return nil
+	}
+
 	result := &gql.FilterTree{}
 	if len(r.Or) > 0 || len(r.And) > 0 {
 		result.Op = "or"
@@ -604,7 +607,7 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 			result.Op = "and"
 		}
 		for _, i := range r.Or {
-			t := i.GetFilter()
+			t := i.GetFilter(authRules)
 			if t == nil {
 				continue
 			}
@@ -616,7 +619,7 @@ func (r *RuleNode) GetFilter() *gql.FilterTree {
 
 	if r.Not != nil {
 		// TODO reverse
-		return r.Not.GetFilter()
+		return r.Not.GetFilter(authRules)
 	}
 
 	if r.IsRBAC() {
