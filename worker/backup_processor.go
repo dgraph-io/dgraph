@@ -77,6 +77,8 @@ type Manifest struct {
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
 	Path string `json:"-"`
+	// Encrypted indicates whether this backup was encrypted or not.
+	Encrypted bool `json:"encrypted"`
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -215,7 +217,7 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, manifest *Manifes
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v}`, m.Since, m.Groups)
+	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`, m.Since, m.Groups, m.Encrypted)
 }
 
 func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {

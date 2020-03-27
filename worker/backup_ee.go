@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -111,9 +112,24 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
+
 	req.SinceTs = latestManifest.Since
 	if forceFull {
 		req.SinceTs = 0
+	} else {
+		if Config.BadgerKeyFile != "" {
+			// If encryption turned on, latest backup should be encrypted.
+			if latestManifest.Type != "" && !latestManifest.Encrypted {
+				err = errors.Errorf("Latest Manifest indicates the last backup was not encrypted but this instance has encryption turned on. Try forcing.")
+				return err
+			}
+		} else {
+			// If encryption turned off, latest backup should be unencrypted.
+			if latestManifest.Type != "" && latestManifest.Encrypted {
+				err = errors.Errorf("Latest Manifest indicates the last backup was encrypted but this instance has encryption turned off. Try forcing.")
+				return err
+			}
+		}
 	}
 
 	// Update the membership state to get the latest mapping of groups to predicates.
@@ -164,6 +180,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		m.Type = "incremental"
 		m.BackupId = latestManifest.BackupId
 		m.BackupNum = latestManifest.BackupNum + 1
+	}
+	if enc.ReadEncryptionKeyFile(Config.BadgerKeyFile) != nil {
+		m.Encrypted = true
 	}
 
 	bp := &BackupProcessor{Request: req}
