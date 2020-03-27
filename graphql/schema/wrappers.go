@@ -747,6 +747,9 @@ func (r *RuleAst) getRuleQuery(authVariables map[string]string) *gql.FilterTree 
 	var ruleValue string
 	if operation.GetOperand().IsJWT() && authVariables != nil {
 		ruleValue = authVariables[operation.GetOperand().GetName()]
+		if ruleValue == "" {
+			ruleValue = `""`
+		}
 	} else {
 		ruleValue = operation.GetOperand().GetName()
 	}

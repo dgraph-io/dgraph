@@ -1284,7 +1284,7 @@ AUTH_TESTS:
       }
 
   -
-    name: "Todo filters with fields"
+    name: "Todo filters with somethingPrivate"
     gqlquery: |
       query {
         getTodo(id: "0x1") {
@@ -1325,7 +1325,7 @@ AUTH_TESTS:
       }
 
   -
-    name: "Test for admin"
+    name: "Test for admin and somethingPrivate"
     gqlquery: |
       query {
         getTodo(id: "0x1") {

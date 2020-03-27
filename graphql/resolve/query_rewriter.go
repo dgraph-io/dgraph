@@ -78,45 +78,97 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	}
 }
 
-func evaluateRBACRule(rule *schema.RuleAst, authVariables map[string]string) bool {
+type Authorizer struct {
+	authVariables map[string]string
+	rbacRule      map[int]bool
+}
+
+func (a *Authorizer) evaluateRBACRule(rule *schema.RuleAst) bool {
 	value := rule.GetOperand()
-	if value.GetName() == "eq" && value.GetOperand().GetName() == authVariables[rule.GetName()] {
+	if value.GetName() == "eq" && value.GetOperand().GetName() == a.authVariables[rule.GetName()] {
 		return true
 	}
 	return false
 }
 
-func getRBACRules(node *schema.RuleNode, rbacRule map[int]bool, authVariables map[string]string) {
-	rbacRule[node.RuleID] = true
+func (a *Authorizer) adjustQuery(query *gql.GraphQuery, field schema.Field) {
+	sch := field.Operation().Schema()
+
+	find := func(f schema.Field) (*gql.GraphQuery, int) {
+		for index, i := range query.Children {
+			if (f.Alias() != "" && f.Alias() == i.Alias) || f.Name() == i.Alias {
+				return i, index
+			}
+		}
+		return nil, 0
+	}
+
+	for _, f := range field.SelectionSet() {
+		child, ind := find(f)
+		if child == nil {
+			continue
+		}
+
+		if len(f.SelectionSet()) > 0 {
+			a.adjustQuery(child, f)
+			authRules := sch.AuthTypeRules(f.Type().Name())
+			if authRules != nil && authRules.Query != nil {
+				filters := authRules.Query.GetFilter(a.rbacRule)
+				if child.Filter != nil {
+					child.Filter = &gql.FilterTree{
+						Op: "and",
+						Child: []*gql.FilterTree{
+							filters,
+							child.Filter,
+						},
+					}
+				} else {
+					child.Filter = filters
+				}
+			}
+
+		} else {
+			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
+			if authRules != nil && authRules.Query != nil {
+				copy(query.Children[ind:], query.Children[ind+1:])
+				query.Children[len(query.Children)-1] = nil
+				query.Children = query.Children[:len(query.Children)-1]
+			}
+		}
+	}
+}
+
+func (a *Authorizer) getRBACRules(node *schema.RuleNode) {
+	a.rbacRule[node.RuleID] = true
 	valid := true
 	for _, rule := range node.Or {
 		if rule.IsRBAC() {
-			getRBACRules(rule, rbacRule, authVariables)
-			if rbacRule[rule.RuleID] {
+			a.getRBACRules(rule)
+			if a.rbacRule[rule.RuleID] {
 				valid = false
 			}
 		}
-		rbacRule[node.RuleID] = valid
+		a.rbacRule[node.RuleID] = valid
 	}
 
 	for _, rule := range node.And {
 		if rule.IsRBAC() {
-			getRBACRules(rule, rbacRule, authVariables)
-			if !rbacRule[rule.RuleID] {
+			a.getRBACRules(rule)
+			if !a.rbacRule[rule.RuleID] {
 				valid = false
 			}
 		}
-		rbacRule[node.RuleID] = valid
+		a.rbacRule[node.RuleID] = valid
 	}
 
 	if node.Not != nil && node.Not.IsRBAC() {
-		getRBACRules(node.Not, rbacRule, authVariables)
-		rbacRule[node.Not.RuleID] = !rbacRule[node.Not.RuleID]
-		rbacRule[node.RuleID] = rbacRule[node.Not.RuleID]
+		a.getRBACRules(node.Not)
+		a.rbacRule[node.Not.RuleID] = !a.rbacRule[node.Not.RuleID]
+		a.rbacRule[node.RuleID] = a.rbacRule[node.Not.RuleID]
 	}
 
 	if node.Rule != nil && node.Rule.IsJWT() {
-		rbacRule[node.RuleID] = evaluateRBACRule(node.Rule, authVariables)
+		a.rbacRule[node.RuleID] = a.evaluateRBACRule(node.Rule)
 	}
 }
 
@@ -126,15 +178,16 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
 	rbacRule := make(map[int]bool)
 	var query gql.GraphQuery
-
+	a := Authorizer{authVariables: authVariables, rbacRule: rbacRule}
 	query.Children = append(query.Children, dgQuery)
-	query.Children = append(query.Children, getAuthQueries(field, authVariables, rbacRule)...)
+	query.Children = append(query.Children, a.getAuthQueries(field)...)
+	a.adjustQuery(dgQuery, field)
 
 	if authRules == nil || authRules.Query == nil {
 		return &query
 	}
-	getRBACRules(authRules.Query, rbacRule, authVariables)
 
+	a.getRBACRules(authRules.Query)
 	authFilter := authRules.Query.GetFilter(rbacRule)
 	if dgQuery.Filter != nil && authFilter != nil {
 		dgQuery.Filter = &gql.FilterTree{
@@ -151,7 +204,7 @@ func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
 	return &query
 }
 
-func getAuthQueries(field schema.Field, authVariables map[string]string, rbacRule map[int]bool) []*gql.GraphQuery {
+func (a *Authorizer) getAuthQueries(field schema.Field) []*gql.GraphQuery {
 	visited := make(map[string]bool)
 	queue := []*schema.Field{&field}
 	result := []*gql.GraphQuery{}
@@ -165,9 +218,9 @@ func getAuthQueries(field schema.Field, authVariables map[string]string, rbacRul
 		authRules := sch.AuthTypeRules(typeName)
 
 		if authRules != nil && authRules.Query != nil {
-			getRBACRules(authRules.Query, rbacRule, authVariables)
-			if val, ok := rbacRule[authRules.Query.RuleID]; !ok || val {
-				result = append(result, authRules.Query.GetQueries(authVariables)...)
+			a.getRBACRules(authRules.Query)
+			if val, ok := a.rbacRule[authRules.Query.RuleID]; !ok || val {
+				result = append(result, authRules.Query.GetQueries(a.authVariables)...)
 			}
 		}
 
@@ -183,7 +236,7 @@ func getAuthQueries(field schema.Field, authVariables map[string]string, rbacRul
 
 	}
 
-	fieldQueries := generateFieldQueries(field, []*schema.Field{&field}, authVariables, rbacRule)
+	fieldQueries := a.generateFieldQueries(field, []*schema.Field{&field})
 	seen := make(map[string]bool)
 
 	j := 0
@@ -201,7 +254,7 @@ func getAuthQueries(field schema.Field, authVariables map[string]string, rbacRul
 	return result
 }
 
-func generateFieldQueries(field schema.Field, path []*schema.Field, authVariables map[string]string, rbacRule map[int]bool) []*gql.GraphQuery {
+func (a *Authorizer) generateFieldQueries(field schema.Field, path []*schema.Field) []*gql.GraphQuery {
 	sch := field.Operation().Schema()
 	var result []*gql.GraphQuery
 
@@ -213,13 +266,13 @@ func generateFieldQueries(field schema.Field, path []*schema.Field, authVariable
 		path = append(path, &f)
 
 		if len(f.SelectionSet()) > 0 {
-			result = append(result, generateFieldQueries(f, path, authVariables, rbacRule)...)
+			result = append(result, a.generateFieldQueries(f, path)...)
 		} else {
 			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
 			filterPut := false
 			if authRules != nil && authRules.Query != nil {
-				getRBACRules(authRules.Query, rbacRule, authVariables)
-				if val, ok := rbacRule[authRules.Query.RuleID]; ok && !val {
+				a.getRBACRules(authRules.Query)
+				if val, ok := a.rbacRule[authRules.Query.RuleID]; ok && !val {
 					continue
 				}
 				var query *gql.GraphQuery
@@ -247,7 +300,7 @@ func generateFieldQueries(field schema.Field, path []*schema.Field, authVariable
 						}, query}
 
 						if !filterPut {
-							child.Filter = authRules.Query.GetFilter(rbacRule)
+							child.Filter = authRules.Query.GetFilter(a.rbacRule)
 							filterPut = true
 						}
 					}
@@ -268,11 +321,11 @@ func generateFieldQueries(field schema.Field, path []*schema.Field, authVariable
 				}
 
 				if !filterPut {
-					last.Filter = authRules.Query.GetFilter(rbacRule)
+					last.Filter = authRules.Query.GetFilter(a.rbacRule)
 				}
 
 				result = append(result, last)
-				result = append(result, authRules.Query.GetQueries(authVariables)...)
+				result = append(result, authRules.Query.GetQueries(a.authVariables)...)
 			}
 		}
 
@@ -501,8 +554,6 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		})
 	}
 
-	sch := field.Operation().Schema()
-
 	for _, f := range field.SelectionSet() {
 		// We skip typename because we can generate the information from schema or
 		// dgraph.type depending upon if the type is interface or not. For interface type
@@ -531,30 +582,6 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		addPagination(child, f)
 
 		addSelectionSetFrom(child, f)
-
-		if len(child.Children) > 0 {
-			authRules := sch.AuthTypeRules(f.Type().Name())
-			if authRules != nil && authRules.Query != nil {
-				filters := authRules.Query.GetFilter(nil)
-				if child.Filter != nil {
-					child.Filter = &gql.FilterTree{
-						Op: "and",
-						Child: []*gql.FilterTree{
-							filters,
-							child.Filter,
-						},
-					}
-				} else {
-					child.Filter = filters
-				}
-
-			}
-		} else {
-			authRules := sch.AuthFieldRules(f.GetObjectName(), f.Name())
-			if authRules != nil && authRules.Query != nil {
-				continue
-			}
-		}
 
 		q.Children = append(q.Children, child)
 	}
