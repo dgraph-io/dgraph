@@ -1,7 +1,8 @@
 #!/bin/bash
-# This script runs in a loop, checks for updates to the Hugo docs theme or
-# to the docs on certain branches and rebuilds the public folder for them.
-# It has be made more generalized, so that we don't have to hardcode versions.
+# This script runs in a loop (configurable with LOOP), checks for updates to the
+# Hugo docs theme or to the docs on certain branches and rebuilds the public
+# folder for them. It has be made more generalized, so that we don't have to
+# hardcode versions.
 
 # Warning - Changes should not be made on the server on which this script is running
 # becauses this script does git checkout and merge.
@@ -11,8 +12,12 @@ set -e
 GREEN='\033[32;1m'
 RESET='\033[0m'
 HOST="${HOST:-https://docs.dgraph.io}"
+# Name of output public directory
 PUBLIC="${PUBLIC:-public}"
+# LOOP true makes this script run in a loop to check for updates
 LOOP="${LOOP:-true}"
+# Binary of hugo command to run.
+HUGO="${HUGO:-hugo}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -70,7 +75,7 @@ rebuild() {
 	HUGO_TITLE="Dgraph Doc ${2}"\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
-		CURRENT_VERSION=${2} hugo \
+		CURRENT_VERSION=${2} ${HUGO} \
 		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
