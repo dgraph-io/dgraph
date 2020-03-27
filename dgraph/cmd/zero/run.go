@@ -162,7 +162,7 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	glog.Infof("Dev version ? %v", x.DevVersion() )
+	glog.Infof("Dev version ? %v", x.DevVersion())
 	x.InitSentry(enc.EeBuild)
 	defer x.FlushSentry()
 	x.ConfigureSentryScope("zero")
