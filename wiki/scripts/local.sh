@@ -43,7 +43,7 @@ run() {
 
   if [[ $1 == "-p" || $1 == "--preview" ]]; then
     echo -e "$(date) $GREEN  Generating documentation static pages in the public folder. $RESET"
-    hugo --destination=public 1> /dev/null
+    hugo --destination=public --baseURL="$2" 1> /dev/null
     echo -e "$(date) $GREEN  Done building. $RESET"
   else
     CURRENT_VERSION=${CURRENT_VERSION} hugo server -w --baseURL=http://localhost:1313
@@ -51,5 +51,5 @@ run() {
   popd > /dev/null
 }
 
-run $1
+run $1 $2
 
