@@ -269,8 +269,9 @@
   expected: |
     { "getAuthor": null }
   errors:
-    [ { "message": "invalid character 's' looking for beginning of object key string" ,
-        "locations": null } ]
+    [ { "message": "couldn't unmarshal Dgraph result 
+          because invalid character 's' looking for beginning of object key string" ,
+        "locations": [ { "column":3, "line":2 } ] } ]
 
 -
   name: "Error gets propagated to nullable parent if missing non-nullable field"
