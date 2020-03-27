@@ -42,11 +42,17 @@ func main() {
 	deleteOld := flag.Bool("d", false, "Delete the older ACL predicates")
 	flag.Parse()
 
-	// TODO: add TLS configuration.
-	conn, err := grpc.Dial(*alpha, grpc.WithInsecure())
+	if err := upgradeACLRules(*alpha, *userName, *password, *deleteOld); err != nil {
+		fmt.Println("Error occurred!")
+		fmt.Println(err)
+	}
+}
+
+func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
+	// TODO(Aman): add TLS configuration.
+	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
 	if err != nil {
-		fmt.Printf("unable to connect to Dgraph cluster: %v\n", err)
-		return
+		return fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
 	}
 	defer conn.Close()
 
@@ -55,29 +61,25 @@ func main() {
 	defer cancel()
 
 	// login to cluster
-	if err := dg.Login(ctx, *userName, *password); err != nil {
-		fmt.Printf("unable to login to Dgraph cluster: %v\n", err)
-		return
+	if err := dg.Login(ctx, userName, password); err != nil {
+		return fmt.Errorf("unable to login to Dgraph cluster: %w", err)
 	}
 
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, oldACLQuery)
 	if err != nil {
-		fmt.Printf("unable to query old ACL rules: %v\n", err)
-		return
+		return fmt.Errorf("unable to query old ACL rules: %w", err)
 	}
 
 	data := make(map[string][]group)
 	if err := json.Unmarshal(resp.GetJson(), &data); err != nil {
-		fmt.Printf("unable to unmarshal old ACLs: %v\n", err)
-		return
+		return fmt.Errorf("unable to unmarshal old ACLs: %w", err)
 	}
 
 	groups, ok := data["rules"]
 	if !ok {
-		fmt.Printf("Unable to parse ACLs: %v\n", string(resp.GetJson()))
-		return
+		return fmt.Errorf("Unable to parse ACLs: %v", string(resp.GetJson()))
 	}
 
 	counter := 1
@@ -89,8 +91,7 @@ func main() {
 
 		var rs rules
 		if err := json.Unmarshal(group.ACL, &rs); err != nil {
-			fmt.Printf("Unable to unmarshal ACL: %v\n", string(group.ACL))
-			return
+			return fmt.Errorf("Unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
 		}
 
 		for _, r := range rs {
@@ -124,24 +125,24 @@ func main() {
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := mutateACL(ctx, dg, nquads); err != nil {
-		fmt.Printf("error upgrading ACL rules: %v\n", err)
-		return
+		return fmt.Errorf("error upgrading ACL rules: %w", err)
 	}
 	fmt.Println("Successfully upgraded ACL rules.")
 
 	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if *deleteOld {
+	if deleteOld {
 		err = dg.Alter(ctx, &api.Operation{
 			DropOp:    api.Operation_ATTR,
 			DropValue: "dgraph.group.acl",
 		})
 		if err != nil {
-			fmt.Printf("error deleting old acl predicates: %v\n", err)
-			return
+			return fmt.Errorf("error deleting old acl predicates: %w", err)
 		}
 		fmt.Println("Successfully deleted old rules.")
 	}
+
+	return nil
 }
 
 func mutateACL(ctx context.Context, dg *dgo.Dgraph, nquads []*api.NQuad) error {

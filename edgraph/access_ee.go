@@ -581,7 +581,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 				var aclsToChange []acl.Acl
 				err := json.Unmarshal(aclBytes.BytesVal, &aclsToChange)
 				if err != nil {
-					glog.Errorf(fmt.Sprintf("Unable to unmalshal bytes under the dgraph.group.acl "+
+					glog.Errorf(fmt.Sprintf("Unable to unmarshal bytes under the dgraph.group.acl "+
 						"predicate:	%v", err))
 					continue
 				}
