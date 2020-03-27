@@ -224,34 +224,28 @@ func (mr *mutationResolver) rewriteAndExecute(
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
 	dgRes, e := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
-	var res map[string]interface{}
 
-	if len(dgRes) > 0 {
-		dgRes[schema.NumUid] = mr.numUids
-		dgRes[schema.Typename] = mutation.TypeName
-
-		res = map[string]interface{}{
-			mutation.ResponseName(): dgRes,
-		}
+	if len(dgRes) == 0 {
+		dgRes = make(map[string]interface{})
 	}
+	dgRes[schema.NumUid] = mr.numUids
+	dgRes[schema.Typename] = mutation.TypeName
 
-	return res, resolverSucceeded, e
+	return map[string]interface{}{mutation.ResponseName(): dgRes}, resolverSucceeded, e
 }
 
-// FIXME:
-// deleteCompletion returns `{ "msg": "Deleted" }`
-// FIXME: after upsert mutations changes are done, it will return info about
-// the result of a deletion.
 func deleteCompletion() CompletionFunc {
 
 	return CompletionFunc(func(
 		ctx context.Context, field schema.Field, result interface{},
 		err error) (interface{}, error) {
 
-		return map[string]interface{}{
-			field.ResponseName(): map[string]interface{}{
-				"msg":         "Deleted",
-				schema.NumUid: 0},
-		}, err
+		if fld, ok := result.(map[string]interface{}); ok {
+			if rsp, ok := fld[field.ResponseName()].(map[string]interface{}); ok {
+				rsp["msg"] = "Deleted"
+			}
+		}
+
+		return result, err
 	})
 }
