@@ -2998,14 +2998,3 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 
 	return filter
 }
-
-func getDuplicateXIDErrors(mutationName string, xidVals []string) x.GqlErrorList {
-	var errs x.GqlErrorList
-	for _, xidVal := range xidVals {
-		errs = append(errs, &x.GqlError{
-			Message: fmt.Sprintf("couldn't rewrite mutation %s because failed to rewrite mutation"+
-				" payload because duplicate XID found: %s", mutationName, xidVal),
-		})
-	}
-	return errs
-}
