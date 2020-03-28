@@ -31,12 +31,12 @@ var env string
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
 	if DevVersion() {
-		env = "dev"
+		env = "dev-"
 	}
 	if ee {
-		env += "-enterprise"
+		env += "enterprise"
 	} else {
-		env += "-oss"
+		env += "oss"
 	}
 	initSentry()
 }
