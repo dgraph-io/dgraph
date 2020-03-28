@@ -105,13 +105,12 @@ func Version() string {
 }
 
 // DevVersion returns true if the version string contains a git commit hash.
-// e.g. 
+// e.g.
 //  1. v2.0.0-rc1-127-gd20a768b3 => Dev version
 //  2. v2.0.0 => prod version
 func DevVersion() (matched bool) {
 	pattern := `-g[[:xdigit:]]{7,}` // -g followed by a commit-hash of min. 7 hex digits.
-	matched, _ = regexp.MatchString(pattern, dgraphVersion)
-	return
+	return (regexp.MustCompile(pattern).MatchString(dgraphVersion)
 }
 
 // ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.
