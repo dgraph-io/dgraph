@@ -110,7 +110,7 @@ func Version() string {
 //  2. v2.0.0 => prod version
 func DevVersion() (matched bool) {
 	pattern := `-g[[:xdigit:]]{7,}` // -g followed by a commit-hash of min. 7 hex digits.
-	return (regexp.MustCompile(pattern).MatchString(dgraphVersion)
+	return (regexp.MustCompile(pattern).MatchString(dgraphVersion))
 }
 
 // ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.
