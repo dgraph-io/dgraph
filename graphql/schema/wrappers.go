@@ -52,6 +52,14 @@ type HTTPResolverConfig struct {
 	ForwardHeaders http.Header
 }
 
+type FieldHTTPConfig struct {
+	URL            string
+	Method         string
+	Template       map[string]interface{}
+	Operation      string
+	ForwardHeaders http.Header
+}
+
 // Query/Mutation types and arg names
 const (
 	GetQuery             QueryType    = "get"
@@ -111,6 +119,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -556,7 +565,14 @@ func (f *field) Include() bool {
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	custom := typeDef.Fields.ForName(f.Name()).Directives.ForName("custom")
+	if typeDef == nil {
+		return false, nil
+	}
+	tf := typeDef.Fields.ForName(f.Name())
+	if tf == nil {
+		return false, nil
+	}
+	custom := tf.Directives.ForName("custom")
 	if custom == nil {
 		return false, nil
 	}
@@ -664,6 +680,43 @@ func (f *field) InterfaceType() bool {
 
 func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
+}
+
+func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
+	tf := typeDef.Fields.ForName(f.Name())
+	custom := tf.Directives.ForName("custom")
+	httpArg := custom.Arguments.ForName("http")
+	fconf := FieldHTTPConfig{
+		URL:    httpArg.Value.Children.ForName("url").Raw,
+		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	vars := f.field.ArgumentMap(f.op.vars)
+	var err error
+	fconf.URL, err = substituteVarsInURL(fconf.URL, vars)
+	if err != nil {
+		return fconf, errors.Wrapf(err, "while substituting vars in URL")
+	}
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		bt, _, err := parseBodyTemplate(bodyTemplate)
+		if err != nil {
+			return fconf, err
+		}
+		fconf.Template = bt
+	}
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+		}
+		fconf.ForwardHeaders = headers
+	}
+	return fconf, nil
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -801,6 +854,10 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
+func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return (*field)(q).CustomHTTPConfig()
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.field.Directives.ForName("custom"))
 }
@@ -876,12 +933,8 @@ func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	return u.String(), nil
 }
 
-func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
-	// We have to fetch the original definition of the query from the name of the query to be
-	// able to get the value stored in custom directive.
-	// TODO - This should be cached later.
-	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
-	custom := query.Directives.ForName("custom")
+func configFromCustomDirective(custom *ast.Directive,
+	vars map[string]interface{}, header http.Header) (HTTPResolverConfig, error) {
 	httpArg := custom.Arguments.ForName("http")
 	rc := HTTPResolverConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
@@ -889,8 +942,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	}
 
 	var err error
-	argMap := q.field.ArgumentMap(q.op.vars)
-	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
+	rc.URL, err = substituteVarsInURL(rc.URL, vars)
 	if err != nil {
 		return rc, errors.Wrapf(err, "while substituting vars in URL")
 	}
@@ -902,7 +954,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 		if err != nil {
 			return rc, err
 		}
-		err = substituteVarsInBody(bt, argMap)
+		err = substituteVarsInBody(bt, vars)
 		if err != nil {
 			return rc, err
 		}
@@ -916,12 +968,21 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	if forwardHeaders != nil {
 		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
+			headers.Add(h.Value.Raw, header.Get(h.Value.Raw))
 		}
 		rc.ForwardHeaders = headers
 	}
-
 	return rc, nil
+}
+
+func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
+	// We have to fetch the original definition of the query from the name of the query to be
+	// able to get the value stored in custom directive.
+	// TODO - This should be cached later.
+	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
+	custom := query.Directives.ForName("custom")
+	rc, err := configFromCustomDirective(custom, q.field.ArgumentMap(q.op.vars), q.op.header)
+	return rc, err
 }
 
 func (m *mutation) Name() string {
@@ -1006,6 +1067,10 @@ func (m *mutation) MutatedType() Type {
 
 func (m *mutation) GetObjectName() string {
 	return m.field.ObjectDefinition.Name
+}
+
+func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return (*field)(m).CustomHTTPConfig()
 }
 
 func (m *mutation) MutationType() MutationType {

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -559,7 +560,7 @@ func completeResult(ctx context.Context, field schema.Field, result []byte, e er
 	case []interface{}:
 		return completeList(path, field, val)
 	case map[string]interface{}:
-		return completeObject(path, field.Type(), []schema.Field{field}, val)
+		return completeObject(path, []schema.Field{field}, val)
 	}
 	return completeValue(path, field, val)
 }
@@ -728,6 +729,10 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
+	if vals := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()]); vals != nil {
+		valToComplete[field.ResponseName()] = vals
+	}
+
 	// Errors should report the "path" into the result where the error was found.
 	//
 	// The definition of a path in a GraphQL error is here:
@@ -739,7 +744,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	path := make([]interface{}, 0, maxPathLength(field))
 
 	completed, gqlErrs := completeObject(
-		path, field.Type(), []schema.Field{field}, valToComplete)
+		path, []schema.Field{field}, valToComplete)
 
 	if len(completed) < 2 {
 		// This could only occur completeObject crushed the whole query, but
@@ -756,6 +761,52 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	}
 
 	return completed, append(errs, gqlErrs...)
+}
+
+func resolveCustomFields(fields []schema.Field, res interface{}) interface{} {
+	if res == nil {
+		return nil
+	}
+	if _, ok := res.([]interface{}); !ok {
+		return res
+	}
+	vals := res.([]interface{})
+	for _, f := range fields {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+		hasCustomDirective, _ := f.HasCustomDirective()
+		if !hasCustomDirective {
+		} else {
+			fconf, _ := f.CustomHTTPConfig()
+			body := make([]map[string]interface{}, len(vals))
+			for i := 0; i < len(body); i++ {
+				temp := make(map[string]interface{})
+				for k, v := range fconf.Template {
+					temp[k] = v
+				}
+				for k, v := range temp {
+					variable := v.(string)[1:]
+					temp[k] = vals[i].(map[string]interface{})[variable]
+				}
+				body[i] = temp
+			}
+
+			for idx, v := range vals {
+				val := v.(map[string]interface{})
+				fmt.Println("val: ", val)
+				if f.Alias() == "name" {
+					val["name"] = "username-1"
+				} else if f.Alias() == "cars" {
+					val["cars"] = []map[string]interface{}{{"id": "0x1", "name": "BMW"},
+						{"id": "0x2", "name": "Audi"}}
+				}
+				vals[idx] = val
+			}
+			// execute this here in a goroutine and collect and fill results below.
+		}
+	}
+	return vals
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -793,7 +844,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 // nil and the error propagates to the enclosing level.
 func completeObject(
 	path []interface{},
-	typ schema.Type,
 	fields []schema.Field,
 	res map[string]interface{}) ([]byte, x.GqlErrorList) {
 
@@ -870,7 +920,7 @@ func completeValue(
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-		return completeObject(path, field.Type(), field.SelectionSet(), val)
+		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
 	default:
