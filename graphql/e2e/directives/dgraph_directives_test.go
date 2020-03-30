@@ -107,6 +107,12 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "dgraph.graphql.schema",
 		"type": "string"
 	}, {
+		"predicate": "dgraph.graphql.xid",
+		"type": "string",
+		"index": true,
+		"tokenizer": ["exact"],
+		"upsert": true
+	}, {
 		"predicate": "dgraph.topic",
 		"type": "string",
 		"index": true,
@@ -262,6 +268,8 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 	}, {
 		"fields": [{
 			"name": "dgraph.graphql.schema"
+		}, {
+			"predicate": "dgraph.graphql.xid"
 		}],
 		"name": "dgraph.graphql"
 	}, {
