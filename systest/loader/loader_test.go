@@ -40,7 +40,7 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
@@ -52,7 +52,7 @@ func TestLoaderXidmap(t *testing.T) {
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,

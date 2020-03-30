@@ -134,7 +134,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 			s.t.Fatalf("Couldn't start zero in Dgraph cluster: %v\n", err)
 		}
 
-		bulkCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "bulk",
+		bulkCmd := exec.Command(testutil.DgraphBinaryPath(), "bulk",
 			"-f", rdfFile,
 			"-s", schemaFile,
 			"--http", "localhost:"+strconv.Itoa(freePort(0)),
@@ -156,7 +156,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 	}
 
 	if !s.opts.skipLiveLoader {
-		liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
 			"--files", rdfFile,
 			"--schema", schemaFile,
 			"--alpha", testutil.SockAddr,
