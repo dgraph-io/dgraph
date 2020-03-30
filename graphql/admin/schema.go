@@ -86,17 +86,22 @@ func (asr *updateSchemaResolver) Rewrite(
 
 	asr.newDgraphSchema = schHandler.DGSchema()
 
-	if asr.admin.schema.ID == "" {
-		// There's never been a GraphQL schema in this Dgraph before so rewrite this into
-		// an add
-		m.SetArgTo(schema.InputArgName, map[string]interface{}{"schema": asr.newSchema.Schema})
-		return asr.baseAddRewriter.Rewrite(m)
+	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
+	// update that node. Most of the time we can do it using the ID of that node.
+	// The only point where ID won't be available is when admin resolvers have been connected,
+	// but adminServer.initServer() is either waiting for Dgraph cluster to boot up or errored
+	// out due to schema being empty. The upsert using xid filter will take care of that.
+	// Eventually, the ID will be available through worker.SubscribeForUpdates(), when someone
+	// inserts GraphQL schema for the first time.
+	var filter map[string]interface{}
+	if asr.admin.schema.ID != "" {
+		filter = map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}}
+	} else {
+		filter = map[string]interface{}{"xid": map[string]interface{}{"eq": gqlSchemaXidVal}}
 	}
-
-	// there's already a value, just continue with the GraphQL update
 	m.SetArgTo(schema.InputArgName,
 		map[string]interface{}{
-			"filter": map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}},
+			"filter": filter,
 			"set":    map[string]interface{}{"schema": asr.newSchema.Schema},
 		})
 	return asr.baseMutationRewriter.Rewrite(m)
@@ -124,14 +129,8 @@ func (asr *updateSchemaResolver) Mutate(
 		return nil, nil, err
 	}
 
-	if asr.admin.schema.ID == "" {
-		// should only be 1 assigned, but we don't know the name
-		for _, v := range assigned {
-			asr.newSchema.ID = v
-		}
-	} else {
-		asr.newSchema.ID = asr.admin.schema.ID
-	}
+	asr.newSchema.ID = asr.admin.schema.ID
+	asr.newSchema.Xid = gqlSchemaXidVal
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
@@ -183,6 +182,8 @@ func doQuery(gql gqlSchema, field schema.Field) ([]byte, error) {
 		switch sel.Name() {
 		case "id":
 			val, err = json.Marshal(gql.ID)
+		case "xid":
+			val, err = json.Marshal(gql.Xid)
 		case "schema":
 			val, err = json.Marshal(gql.Schema)
 		case "generatedSchema":

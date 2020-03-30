@@ -21,6 +21,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"sync"
 	"time"
 
@@ -46,6 +49,8 @@ const (
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
+	gqlSchemaXidVal = "dgraph.graphql.schema"
+
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
 	"""
@@ -53,6 +58,7 @@ const (
 	"""
 	type GQLSchema @dgraph(type: "dgraph.graphql") {
 		id: ID!
+		xid: String! @id
 
 		"""
 		Input schema (GraphQL types) that was used in the latest schema update.
@@ -264,6 +270,7 @@ const (
 
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
+	Xid             string `json:"xid,omitempty"`
 	Schema          string `json:"schema,omitempty"`
 	GeneratedSchema string
 }
@@ -365,6 +372,7 @@ func newAdminResolver(
 
 		newSchema := gqlSchema{
 			ID:     fmt.Sprintf("%#x", pk.Uid),
+			Xid:    gqlSchemaXidVal,
 			Schema: string(pl.Postings[0].Value),
 		}
 
@@ -496,6 +504,60 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf
 }
 
+func upsertEmptyGQLSchema() (uid string) {
+	varName := "GQLSchema"
+	gqlType := "dgraph.graphql"
+	xidKey := "dgraph.graphql.xid"
+
+	qry := &gql.GraphQuery{
+		Var:  varName,
+		Attr: varName,
+		Func: &gql.Function{
+			Name: "eq",
+			Args: []gql.Arg{
+				{Value: xidKey},
+				{Value: fmt.Sprintf("%q", gqlSchemaXidVal)},
+			},
+		},
+		Filter: &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "type",
+				Args: []gql.Arg{{Value: gqlType}},
+			},
+		},
+		Children: []*gql.GraphQuery{{Attr: "uid"}},
+	}
+
+	mutations := []*dgoapi.Mutation{
+		{
+			SetJson: []byte(fmt.Sprintf(`
+			{
+				"uid": "_:%s",
+				"dgraph.type": ["%s"],
+				"%s": "%s",
+				"dgraph.graphql.schema": ""
+			}`, varName, gqlType, xidKey, gqlSchemaXidVal)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),0))`, varName),
+		},
+	}
+
+	assigned, result, err := dgraph.Mutate(context.Background(), qry, mutations)
+	if err != nil {
+		x.Panic(err)
+	}
+
+	// the Alpha which created the gql schema node will get the uid here
+	uid, ok := assigned[varName]
+	if ok {
+		return
+	}
+
+	// we may reach here in the rare case when more than one Alpha were able to call this function,
+	// then the Alphas which didn't create the gql schema node, will get the uid here.
+	uid = result[varName].([]interface{})[0].(map[string]string)["uid"]
+	return
+}
+
 func (as *adminServer) initServer() {
 	// It takes a few seconds for the Dgraph cluster to be up and running.
 	// Before that, trying to read the GraphQL schema will result in error:
@@ -520,6 +582,8 @@ func (as *adminServer) initServer() {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
 		} else if sch == nil {
+			as.schema.ID = upsertEmptyGQLSchema()
+			as.schema.Xid = gqlSchemaXidVal
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
 			break
 		}
@@ -677,7 +741,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
 	req := &schema.Request{
-		Query: `query { getGQLSchema { id schema } }`}
+		Query: `query { getGQLSchema { id xid schema } }`}
 	resp := r.Resolve(context.Background(), req)
 	if len(resp.Errors) > 0 || resp.Data.Len() == 0 {
 		return nil, resp.Errors
