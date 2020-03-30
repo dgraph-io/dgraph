@@ -15,24 +15,36 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="https://tour.dgraph.io" target="_blank">
-              Tour of Dgraph
+            <a href="{{< relref "get-started/index.md">}}">
+              Quickstart Guide
             </a>
           </div>
           <p class="section-desc">
-            Take an interactive tour of Dgraph to learn the concepts.
+            A single page quickstart guide to get started with Dgraph
           </p>
         </div>
       </div>
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "get-started/index.md">}}">
-              Get Started
+            <a href="https://tour.dgraph.io" target="_blank">
+              Tour of Dgraph
             </a>
           </div>
           <p class="section-desc">
-            Get Started with Dgraph alongside a series of tutorials.
+            Take an interactive tour of Dgraph to learn the concepts
+          </p>
+        </div>
+      </div>
+      <div class="col-12 col-sm-6">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorials/index.md">}}">
+              Tutorials - Get Started with Dgraph
+            </a>
+          </div>
+          <p class="section-desc">
+            Get Started with Dgraph alongside a series of tutorials
           </p>
         </div>
       </div>
