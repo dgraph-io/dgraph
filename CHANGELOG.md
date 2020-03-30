@@ -46,7 +46,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Basic Sentry Integration - Capture manual panics with Sentry exception and runtime panics with a wrapper on panic. ([#4756][])
 - Ludicrous Mode. ([#4872][])
 - Enterprise features
-  - ACL: Allow users to query data for their groups ([#4774][])
+  - ACL: Allow users to query data for their groups, username, and permissions. ([#4774][])
   - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
   - ACL: Add tool to upgrade ACLs. ([#5016][])
 
