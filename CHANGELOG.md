@@ -31,7 +31,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Split posting lists recursively. ([#4867][])
 - Enterprise features
   - **Breaking changes**
-    - [BREAKING] Underlying schema for ACL has changed. ([#4725][])
+    - [BREAKING] Underlying schema for ACL has changed. Use the upgrade tool to migrate to the new data format. ([#4725][])
 
 ### Added
 
@@ -48,6 +48,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Enterprise features
   - ACL: Allow users to query data for their groups ([#4774][])
   - ACL: Support ACL operations using the admin GraphQL API. ([#4760][]) 
+  - ACL: Add tool to upgrade ACLs. ([#5016][])
 
 ### Fixed
  
@@ -64,9 +65,13 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Various optimizations for facets filter queries. ([#4923][])
 - Throw errors returned by retrieveValuesAndFacets. Fixes [#4958][]. ([#4970][])
 - Add "runInBackground" option to Alter to run indexing in background. When set to `true`, then the Alter call returns immediately. When set to `false`, the call blocks until indexing is complete. This is set to `false` by default. ([#4981][])
+- Set correct posting list type while creating it in the live loader. Fixes [#4889][]. ([#5012][])
 - **Breaking changes**
   - [BREAKING] Language sorting on Indexed data. Fixes [#4005][]. ([#4316][]) 
 
+[#5016]: https://github.com/dgraph-io/dgraph/issues/5016
+[#5012]: https://github.com/dgraph-io/dgraph/issues/5012
+[#4889]: https://github.com/dgraph-io/dgraph/issues/4889
 [#4958]: https://github.com/dgraph-io/dgraph/issues/4958
 [#4905]: https://github.com/dgraph-io/dgraph/issues/4905
 [#4659]: https://github.com/dgraph-io/dgraph/issues/4659
