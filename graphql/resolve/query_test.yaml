@@ -1252,6 +1252,7 @@ AUTH_TESTS:
           username : User.username
           todos : User.todos @filter((uid(rule_Todo.owner_2) OR uid(rule_Todo.sharedWith_3) OR eq(Todo.isPublic, true))) {
             title : Todo.title
+            somethingPrivate : val(getUser.todossomethingPrivate)
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -1270,9 +1271,9 @@ AUTH_TESTS:
         }
         getUser.todossomethingPrivate(func: type(User)) @cascade {
           uid
-          todos : User.todos @filter(uid(rule_Todo.owner_11)) {
+          User.todos @filter(uid(rule_Todo.owner_11)) {
             uid
-            somethingPrivate : Todo.somethingPrivate
+            getUser.todossomethingPrivate as Todo.somethingPrivate
           }
         }
         rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
@@ -1298,6 +1299,7 @@ AUTH_TESTS:
       query {
         getTodo(func: uid(0x1)) @filter(((uid(rule_Todo.owner_2) OR uid(rule_Todo.sharedWith_3) OR eq(Todo.isPublic, true)) AND type(Todo))) {
           title : Todo.title
+          somethingPrivate : val(getTodo.somethingPrivate)
           dgraph.uid : uid
         }
         rule_Todo.owner_2 as rule_Todo.owner_2(func: type(Todo)) @cascade {
@@ -1314,7 +1316,7 @@ AUTH_TESTS:
         }
         getTodo.somethingPrivate(func: type(Todo)) @cascade @filter(uid(rule_Todo.owner_11)) {
           uid
-          somethingPrivate : Todo.somethingPrivate
+          getTodo.somethingPrivate as Todo.somethingPrivate
         }
         rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
           uid
@@ -1339,11 +1341,12 @@ AUTH_TESTS:
       query {
         getTodo(func: uid(0x1)) @filter(type(Todo)) {
           title : Todo.title
+          somethingPrivate : val(getTodo.somethingPrivate)
           dgraph.uid : uid
         }
         getTodo.somethingPrivate(func: type(Todo)) @cascade @filter(uid(rule_Todo.owner_11)) {
           uid
-          somethingPrivate : Todo.somethingPrivate
+          getTodo.somethingPrivate as Todo.somethingPrivate
         }
         rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
           uid
@@ -1379,6 +1382,24 @@ AUTH_TESTS:
           Todo.sharedWith @filter(eq(User.username, user1)) {
             uid
           }
+        }
+      }
+
+  -
+    name: "Test for rbac rule on root"
+    gqlquery: |
+      query {
+        getServerMsgs(id: "0x1") {
+          msg
+        }
+      }
+    user: "user1"
+    role: "ADMIN"
+    dgquery: |-
+      query {
+        getServerMsgs(func: uid(0x1)) @filter(type(ServerMsgs)) {
+          msg : ServerMsgs.msg
+          dgraph.uid : uid
         }
       }
 

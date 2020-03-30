@@ -33,3 +33,14 @@ type User @auth(
   username: String! @id
   todos: [Todo]
 }
+
+type ServerMsgs @auth(
+  query: {
+    and: [
+      { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+    ]
+  }
+) {
+  id: ID!
+  msg: String
+}
