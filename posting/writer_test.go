@@ -56,9 +56,10 @@ func createKVList() []kv {
 
 func BenchmarkTxnWriter(b *testing.B) {
 	KVList := createKVList()
-	w := NewTxnWriter(db)
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		w := NewTxnWriter(db)
 		for _, typ := range KVList {
 			k := typ.key
 			v := typ.value
@@ -73,9 +74,9 @@ func BenchmarkTxnWriter(b *testing.B) {
 
 func BenchmarkWriteBatch(b *testing.B) {
 	KVList := createKVList()
-	batch := db.NewWriteBatchAt(1)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		batch := db.NewWriteBatchAt(1)
 		for _, typ := range KVList {
 			k := typ.key
 			v := typ.value
