@@ -12,8 +12,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-## [20.03.0-beta.20200320] - 2020-03-20
-[20.03.0-beta.20200320]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0-beta.20200320
+## [20.03.0] - 2020-03-30
+[20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
 
 ### Changed
