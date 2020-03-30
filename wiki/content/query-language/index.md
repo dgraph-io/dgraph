@@ -2140,7 +2140,8 @@ Reverse edges are also computed if specified by a schema mutation.
 
 ### Indexes in Background
 
-Starting Dgraph version `20.3.0`, indexes are computed in the background,
+Indexes may take long time to compute depdending upon the size of the data.
+Starting Dgraph version `20.03.0`, indexes can be computed in the background,
 and thus indexing may still be running after an Alter operation returns.
 This requires that you wait for indexing to complete before running queries
 that require newly created indices. Such queries will fail with an error
@@ -2176,13 +2177,37 @@ Background indexing task may fail if an unexpected error occurs while computing
 the indexes. You should retry the Alter operation in order to update the schema,
 or sync the schema across all the alphas.
 
-You can find examples here in order to wait for indexing to complete:
-
-- [dgraph4j](https://github.com/dgraph-io/dgraph4j/pull/135)
-- [dgo](https://github.com/dgraph-io/dgo/pull/117)
-- [pydgraph](https://github.com/dgraph-io/pydgraph/pull/120)
-
 We also plan to add a simpler API soon to check the status of background indexing.
+See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
+
+#### HTTP API
+
+You can specify the flag `runInBackground` to `true` to run
+index computation in the background.
+
+```sh
+curl localhost:8080/alter?runInBackground=true -XPOST -d $'
+    name: string @index(fulltext, term) .
+    age: int @index(int) @upsert .
+    friend: [uid] @count @reverse .
+' | python -m json.tool | less
+```
+
+#### Grpc API
+
+You can set `RunInBackground` field to `true` of the `api.Operation
+struct before passing it to the `Alter` function.
+
+```go
+op := &api.Operation{}
+op.Schema = `
+  name: string @index(fulltext, term) .
+  age: int @index(int) @upsert .
+  friend: [uid] @count @reverse .
+`
+op.RunInBackground = true
+err = dg.Alter(context.Background(), op)
+```
 
 
 ### Predicate name rules
@@ -2697,7 +2722,6 @@ curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
     rated: [uid] @reverse @count .
 ' | python -m json.tool | less
-
 ```
 
 ```sh
