@@ -17,7 +17,13 @@ function restartCluster {
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    docker run -it --rm -v dgraph_gopath:/go -v dgraph_gocache:/root/.cache/go-build -v `pwd`/..:/app -w /app/dgraph golang:1.14 go build && mv -f dgraph $(go env GOPATH)/bin/dgraph
+    if !(AVAILABLE_RAM=$(cat ~/Library/Group\ Containers/group.com.docker/settings.json | grep memoryMiB | grep -oe "[0-9]\+") && test $AVAILABLE_RAM -ge 6144); then
+      echo -e "\e[33mWarning: You may not have allocated enough memory for Docker on Mac. Please increase the allocated RAM to at least 6GB with a 4GB swap. See https://docs.docker.com/docker-for-mac/#resources \e[0m"
+    fi
+
+    # TODO: read the go version from a constant
+    # TODO: linux can also compile dgraph using this command without a major performance penalty (since gocache is in a volume).
+    docker run -it --rm -v dgraph_gopath:/go -v dgraph_gocache:/root/.cache/go-build -v `pwd`/..:/app -w /app/dgraph golang:1.13 go build && mv -f dgraph $(go env GOPATH)/bin/dgraph
   else
     make install
   fi
