@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"fmt"
 	"io/ioutil"
 	"math"
 	"testing"
@@ -31,8 +32,6 @@ type kv struct {
 	value []byte
 }
 
-var KVList = []kv{}
-
 var tmpIndexDir, err = ioutil.TempDir("", "dgraph_index_")
 
 var dbOpts = badger.DefaultOptions(tmpIndexDir).
@@ -46,14 +45,18 @@ var dbOpts = badger.DefaultOptions(tmpIndexDir).
 
 var db, err2 = badger.OpenManaged(dbOpts)
 
-func BenchmarkTxnWriter(b *testing.B) {
+func createKVList() []kv {
+	var KVList = []kv{}
 	for i := 0; i < 50000; i++ {
 		n := kv{key: []byte(string(i)), value: []byte("Check Value")}
 		KVList = append(KVList, n)
 	}
+	return KVList
+}
 
+func BenchmarkTxnWriter(b *testing.B) {
+	KVList := createKVList()
 	w := NewTxnWriter(db)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, typ := range KVList {
@@ -61,24 +64,25 @@ func BenchmarkTxnWriter(b *testing.B) {
 			v := typ.value
 			x.Check(w.SetAt(k, v, BitSchemaPosting, 1))
 		}
+		if err := w.Flush(); err != nil {
+			fmt.Printf("Got error while flushing txnwriter: %v\n", err)
+		}
 	}
 
 }
 
 func BenchmarkWriteBatch(b *testing.B) {
-	for i := 0; i < 50000; i++ {
-		n := kv{key: []byte(string(i)), value: []byte("Check Value")}
-		KVList = append(KVList, n)
-	}
-
+	KVList := createKVList()
 	batch := db.NewWriteBatchAt(1)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		for _, typ := range KVList {
 			k := typ.key
 			v := typ.value
 			x.Check(batch.Set(k, v))
+		}
+		if err := batch.Flush(); err != nil {
+			fmt.Printf("Got error while flushing batch: %v\n", err)
 		}
 	}
 
