@@ -441,15 +441,12 @@ fmt.Println(string(resp.Json))
 
 ## C\#
 
-The official C# client [can be found here](https://github.com/dgraph-io/Dgraph-dotnet).
-Follow the instructions in the [README](https://github.com/dgraph-io/Dgraph-dotnet#readme) to get
+The official C# client [can be found here](https://github.com/dgraph-io/dgraph.net).
+Follow the instructions in the [README](https://github.com/dgraph-io/dgraph.net#readme) to get
 it up and running.
 
 More details on the supported versions can be found at
 [this link](https://github.com/dgraph-io/Dgraph-dotnet#supported-versions).
-
-We also have a [example](https://github.com/dgraph-io/Dgraph-dotnet/tree/master/source/Dgraph-dotnet.examples)
-page, which contains working examples of how to use the C# client.
 
 ## Java
 
