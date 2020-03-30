@@ -17,7 +17,7 @@ function restartCluster {
   pushd $basedir/dgraph >/dev/null
   echo "Rebuilding dgraph ..."
   if [[ "$OSTYPE" == "darwin"* ]]; then
-    (env GOOS=linux GOARCH=amd64 go build) && mv -f dgraph $(go env GOPATH)/bin/dgraph
+    docker run -it --rm -v dgraph_gopath:/go -v dgraph_gocache:/root/.cache/go-build -v `pwd`/..:/app -w /app/dgraph golang:1.14 go build && mv -f dgraph $(go env GOPATH)/bin/dgraph
   else
     make install
   fi
