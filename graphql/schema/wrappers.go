@@ -961,8 +961,8 @@ func (r *RuleAst) buildQuery(ruleID int, AuthVariables map[string]string) *gql.G
 
 	dgQuery := &gql.GraphQuery{
 		Cascade: true,
-		Attr:    fmt.Sprintf("rule_%s_%d", r.GetName(), ruleID),
 		Var:     fmt.Sprintf("rule_%s_%d", r.GetName(), ruleID),
+		Attr:    "var",
 		Func: &gql.Function{
 			Name: "type",
 			Args: []gql.Arg{{Value: r.typInfo.Name}},

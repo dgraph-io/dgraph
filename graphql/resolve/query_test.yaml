@@ -1219,13 +1219,13 @@ AUTH_TESTS:
           }
           dgraph.uid : uid
         }
-        rule_Todo.owner_2 as rule_Todo.owner_2(func: type(Todo)) @cascade {
+        rule_Todo.owner_2 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
           }
         }
-        rule_Todo.sharedWith_3 as rule_Todo.sharedWith_3(func: type(Todo)) @cascade {
+        rule_Todo.sharedWith_3 as var(func: type(Todo)) @cascade {
           uid
           Todo.sharedWith @filter(eq(User.username, user1)) {
             uid
@@ -1257,13 +1257,13 @@ AUTH_TESTS:
           }
           dgraph.uid : uid
         }
-        rule_Todo.owner_2 as rule_Todo.owner_2(func: type(Todo)) @cascade {
+        rule_Todo.owner_2 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
           }
         }
-        rule_Todo.sharedWith_3 as rule_Todo.sharedWith_3(func: type(Todo)) @cascade {
+        rule_Todo.sharedWith_3 as var(func: type(Todo)) @cascade {
           uid
           Todo.sharedWith @filter(eq(User.username, user1)) {
             uid
@@ -1276,7 +1276,7 @@ AUTH_TESTS:
             getUser.todossomethingPrivate as Todo.somethingPrivate
           }
         }
-        rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
+        rule_Todo.owner_11 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
@@ -1302,13 +1302,13 @@ AUTH_TESTS:
           somethingPrivate : val(getTodo.somethingPrivate)
           dgraph.uid : uid
         }
-        rule_Todo.owner_2 as rule_Todo.owner_2(func: type(Todo)) @cascade {
+        rule_Todo.owner_2 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
           }
         }
-        rule_Todo.sharedWith_3 as rule_Todo.sharedWith_3(func: type(Todo)) @cascade {
+        rule_Todo.sharedWith_3 as var(func: type(Todo)) @cascade {
           uid
           Todo.sharedWith @filter(eq(User.username, user1)) {
             uid
@@ -1318,7 +1318,7 @@ AUTH_TESTS:
           uid
           getTodo.somethingPrivate as Todo.somethingPrivate
         }
-        rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
+        rule_Todo.owner_11 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
@@ -1348,7 +1348,7 @@ AUTH_TESTS:
           uid
           getTodo.somethingPrivate as Todo.somethingPrivate
         }
-        rule_Todo.owner_11 as rule_Todo.owner_11(func: type(Todo)) @cascade {
+        rule_Todo.owner_11 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
@@ -1371,13 +1371,13 @@ AUTH_TESTS:
           title : Todo.title
           dgraph.uid : uid
         }
-        rule_Todo.owner_2 as rule_Todo.owner_2(func: type(Todo)) @cascade {
+        rule_Todo.owner_2 as var(func: type(Todo)) @cascade {
           uid
           Todo.owner @filter(eq(User.username, user1)) {
             uid
           }
         }
-        rule_Todo.sharedWith_3 as rule_Todo.sharedWith_3(func: type(Todo)) @cascade {
+        rule_Todo.sharedWith_3 as var(func: type(Todo)) @cascade {
           uid
           Todo.sharedWith @filter(eq(User.username, user1)) {
             uid
