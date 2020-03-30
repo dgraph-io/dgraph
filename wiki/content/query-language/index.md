@@ -2182,11 +2182,11 @@ See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
 
 #### HTTP API
 
-You can specify the flag `run_in_background` to `true` to run
+You can specify the flag `runInBackground` to `true` to run
 index computation in the background.
 
 ```sh
-curl localhost:8080/alter?run_in_background=true -XPOST -d $'
+curl localhost:8080/alter?runInBackground=true -XPOST -d $'
     name: string @index(fulltext, term) .
     age: int @index(int) @upsert .
     friend: [uid] @count @reverse .
