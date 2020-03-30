@@ -781,6 +781,52 @@ func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, e
 		}
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
+			if len(f.SelectionSet()) == 0 {
+				continue
+			}
+			var input []interface{}
+			idsSeen := make(map[string]interface{})
+			for _, v := range vals {
+				val := v.(map[string]interface{})
+				fieldVals, ok := val[f.Name()].([]interface{})
+				if !ok {
+					continue
+				}
+				for _, fieldVal := range fieldVals {
+					fv, ok := fieldVal.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					id, ok := fv["id"].(string)
+					if !ok {
+						continue
+					}
+					if _, ok := idsSeen[id]; !ok {
+						input = append(input, fieldVal)
+						idsSeen[id] = fieldVal
+					}
+				}
+			}
+			resolveCustomFields(f.SelectionSet(), input)
+			for _, v := range vals {
+				val := v.(map[string]interface{})
+				fieldVals, ok := val[f.Name()].([]interface{})
+				if !ok {
+					continue
+				}
+				for idx, fieldVal := range fieldVals {
+					fv, ok := fieldVal.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					id, ok := fv["id"].(string)
+					if !ok {
+						continue
+					}
+					mval := idsSeen[id]
+					fieldVals[idx] = mval
+				}
+			}
 		} else {
 			fconf, _ := f.CustomHTTPConfig()
 			body := make([]map[string]interface{}, len(vals))
@@ -801,7 +847,6 @@ func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, e
 				fmt.Println("err while JSON marshal: ", err)
 			}
 
-			fmt.Println("request: ", string(b))
 			req, err := http.NewRequest(fconf.Method, fconf.URL, bytes.NewBuffer(b))
 			if err != nil {
 				return nil, err
@@ -818,7 +863,6 @@ func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, e
 			if err != nil {
 				return nil, err
 			}
-			fmt.Println("response: ", string(b))
 
 			var result []interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
