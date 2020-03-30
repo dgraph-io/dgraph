@@ -1680,7 +1680,7 @@ If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`
 in addition to the `--cacert` option, also use the `--cert` and `--key` options.
 For instance (for an export request):
 
-``` 
+```
 curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
 ```
 
@@ -2252,12 +2252,26 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
-Blue-green deployment is a common approach to minimize downtime during the upgrade process. 
-This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can 
+Blue-green deployment is a common approach to minimize downtime during the upgrade process.
+This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can
 do a rolling restart of all your Alpha using the option `--mutations disallow` when you restart the Alphas. This will ensure the cluster is in read-only mode.
 
 At this point your application can still read from the old cluster and you can perform the steps 4. and 5. described above.
 When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
+
+#### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
+
+1. Use [binary]({{< relref "#binary-backups">}}) backup to export data from old cluster
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
+4. Upgrade `dgraph` binary to `v20.03.0`
+5. [Restore]({{< relref "#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+6. Start a new Dgraph cluster using the restored data directories
+7. Upgrade ACL data using the following command:
+
+```
+dgraph upgrade --acl -a localhost:9080 -u groot -p password
+```
 
 {{% notice "note" %}}
 If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).

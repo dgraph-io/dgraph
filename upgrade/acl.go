@@ -1,9 +1,24 @@
-package main
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package upgrade
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"time"
 
@@ -35,20 +50,12 @@ type rule struct {
 
 type rules []rule
 
-func main() {
-	alpha := flag.String("a", "localhost:9180", "Alpha endpoint")
-	userName := flag.String("u", "", "Username to login to Dgraph cluster")
-	password := flag.String("p", "", "Password to login to Dgraph cluster")
-	deleteOld := flag.Bool("d", false, "Delete the older ACL predicates")
-	flag.Parse()
+func upgradeACLRules() error {
+	alpha := Upgrade.Conf.GetString("alpha")
+	userName := Upgrade.Conf.GetString("user")
+	password := Upgrade.Conf.GetString("password")
+	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 
-	if err := upgradeACLRules(*alpha, *userName, *password, *deleteOld); err != nil {
-		fmt.Println("Error occurred!")
-		fmt.Println(err)
-	}
-}
-
-func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 	// TODO(Aman): add TLS configuration.
 	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
 	if err != nil {
