@@ -550,7 +550,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
-	runInBackground, err := parseBool(r, "run_in_background")
+	runInBackground, err := parseBool(r, "runInBackground")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
