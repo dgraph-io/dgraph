@@ -60,7 +60,7 @@ Use the `has` function among the value variables to search on non-indexed predic
 
 Dgraph [sorting]({{< relref "query-language/index.md#sorting" >}}) is based on a single
 level of the subgraph. To sort a level by the values of a deeper level, use
-[query variables]({{ relref "query-language/index.md#query-variables" }}) to bring
+[query variables]({{< relref "query-language/index.md#query-variables" >}}) to bring
 nested values up to the level of the edge to be sorted.
 
 Example: Get all actors from a Steven Spielberg movie sorted alphabetically.

@@ -1240,7 +1240,7 @@ On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
 {{% /notice %}}
 
-* `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
+* `/health?all` returns information about the health of all the servers in the cluster.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
 * `/admin/export` initiates a data [export]({{< relref "#export">}}).
 
@@ -1248,7 +1248,7 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 {{% notice "tip" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 
-### More about /health endpoint
+### Querying Health
 
 You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
@@ -1262,7 +1262,8 @@ query {
     lastEcho
     group
     uptime
-    
+    ongoing
+    indexing
   }
 }
 ```
@@ -1289,7 +1290,9 @@ Here’s an example of JSON returned from the above query:
         "status": "healthy",
         "lastEcho": 1582827418,
         "group": "1",
-        "uptime": 1505
+        "uptime": 1505,
+        "ongoing": ["opIndexing"],
+        "indexing": ["name", "age"]
       }
     ]
   }
@@ -1299,6 +1302,8 @@ Here’s an example of JSON returned from the above query:
 - `version`: Version of Dgraph running the Alpha server.
 - `instance`: Name of the instance. Always set to `alpha`.
 - `uptime`: Time in nanoseconds since the Alpha server is up and running.
+
+The same information is available from the `/health` and `/health?all` endpoints.
 
 ## More about Dgraph Zero
 

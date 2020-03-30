@@ -49,6 +49,10 @@ import (
 )
 
 type node struct {
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	pendingSize int64
+
+	// embedded struct
 	*conn.Node
 
 	// Fields which are never changed after init.
@@ -66,7 +70,7 @@ type node struct {
 	canCampaign bool
 	elog        trace.EventLog
 
-	pendingSize int64
+	ex *executor
 }
 
 type op int
@@ -168,6 +172,22 @@ func (n *node) stopAllTasks() {
 	glog.Infof("Stopped all ongoing registered tasks.")
 }
 
+// GetOngoingTasks returns the list of ongoing tasks.
+func GetOngoingTasks() []string {
+	n := groups().Node
+	if n == nil {
+		return []string{}
+	}
+
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+	var tasks []string
+	for id := range n.ops {
+		tasks = append(tasks, id.String())
+	}
+	return tasks
+}
+
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
 // sufficient. We don't need to wait for proposals to be applied.
 
@@ -192,6 +212,9 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
 		closer:  y.NewCloser(4), // Matches CLOSER:1
 		ops:     make(map[op]*y.Closer),
+	}
+	if x.WorkerConfig.LudicrousMode {
+		n.ex = newExecutor()
 	}
 	return n
 }
@@ -379,14 +402,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	if txn.ShouldAbort() {
-		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return zero.ErrConflict
-	}
-
-	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
@@ -401,6 +416,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
+
+	if x.WorkerConfig.LudicrousMode {
+		n.ex.addEdges(ctx, m.StartTs, m.Edges)
+		return nil
+	}
+
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	if txn.ShouldAbort() {
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
+		return zero.ErrConflict
+	}
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
