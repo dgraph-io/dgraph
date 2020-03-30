@@ -572,11 +572,6 @@ type Person {
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
 
-We build indexes in the background so that mutations and queries are not blocked.
-In such a case, the new schema may not be reflected right away. You could poll the
-schema to check whether indexing has been completed. New alter requests will be
-rejected until the background indexing task is finished.
-
 Other operations can be performed via the `/alter` endpoint as well. A specific
 predicate or the entire database can be dropped.
 
@@ -920,24 +915,6 @@ $ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8
 ```
 {{% /notice %}}
 
-### Health Check and Alpha Info
-
-`/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
-The body of the response contains information about the running alpha and its version.
-
-```sh
-$ curl localhost:8080/health
-```
-
-```json
-{
-  "version": "v1.1.0",
-  "instance": "alpha",
-  "uptime": 1928423
-}
-```
-
-Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
 
 ### Run a query in JSON format
 
