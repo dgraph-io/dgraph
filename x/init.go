@@ -105,7 +105,8 @@ func Version() string {
 }
 
 // pattern for  dev version = min. 7 hex digits of commit-hash.
-var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`) 
+var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
+
 // DevVersion returns true if the version string contains the above pattern
 // e.g.
 //  1. v2.0.0-rc1-127-gd20a768b3 => dev version
