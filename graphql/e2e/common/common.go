@@ -616,7 +616,7 @@ func checkGraphQLStarted(url string) error {
 func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	schemaQry := &GraphQLParams{
-		Query: `query { getGQLSchema { id } }`,
+		Query: `query { getGQLSchema { id schema } }`,
 	}
 	req, err := schemaQry.createGQLPost(url)
 	if err != nil {
@@ -640,7 +640,8 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	var sch struct {
 		GetGQLSchema struct {
-			ID string
+			ID     string
+			Schema string
 		}
 	}
 
@@ -649,7 +650,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
 	}
 
-	if sch.GetGQLSchema.ID == "" {
+	if sch.GetGQLSchema.ID == "" || sch.GetGQLSchema.Schema == "" {
 		return false, nil
 	}
 

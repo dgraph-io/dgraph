@@ -63,7 +63,7 @@ const (
 		"""
 		Input schema (GraphQL types) that was used in the latest schema update.
 		"""
-		schema: String!  @dgraph(type: "dgraph.graphql.schema")
+		schema: String!  @dgraph(pred: "dgraph.graphql.schema")
 
 		"""
 		The GraphQL schema that was generated from the 'schema' field.  
