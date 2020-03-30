@@ -34,7 +34,6 @@ func init() {
 		Use:   "upgrade",
 		Short: "Run the Dgraph upgrade tool",
 		Run: func(cmd *cobra.Command, args []string) {
-			cmd.Flags().GetBool("acl")
 			run()
 		},
 	}
