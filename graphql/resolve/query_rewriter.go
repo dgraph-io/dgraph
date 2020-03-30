@@ -161,6 +161,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 		addUID(c)
 	}
 
+	// If uid was already requested by the user then we don't need to add it again.
 	if hasUid {
 		return
 	}
@@ -306,6 +307,8 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			for k := range rf {
 				requiredFields[k] = true
 			}
+			// This field is resolved through a custom directive so its selection set doesn't need
+			// to be part of query rewriting.
 			continue
 		}
 		// We skip typename because we can generate the information from schema or
@@ -336,15 +339,20 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		addSelectionSetFrom(child, f)
 
-		addedFields[f.Alias()] = true
+		addedFields[f.Name()] = true
 		q.Children = append(q.Children, child)
 	}
 
+	// Sort the required fields before adding them to q.Children so that the query produced after
+	// rewriting has a predictable order.
 	rfset := make([]string, 0, len(requiredFields))
 	for fname := range requiredFields {
 		rfset = append(rfset, fname)
 	}
 	sort.Strings(rfset)
+
+	// Add fields required by other custom fields which haven't already been added as a
+	// child to be fetched from Dgraph.
 	for _, fname := range rfset {
 		if _, ok := addedFields[fname]; !ok {
 			f := field.Type().Field(fname)
@@ -356,8 +364,6 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			} else {
 				child.Attr = field.Type().DgraphPredicate(fname)
 			}
-			// This field is required by other custom fields and hasn't already been added as a
-			// child to be fetched from Dgraph, so let's add it here.
 			q.Children = append(q.Children, child)
 		}
 	}
