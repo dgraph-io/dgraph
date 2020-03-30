@@ -21,6 +21,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"go/build"
 
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -114,4 +115,14 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
 	}
 
 	return err
+}
+
+func DgraphBinaryPath() string {
+	gopath := os.Getenv("GOPATH")
+
+	if(gopath == "") {
+		gopath = build.Default.GOPATH
+	}
+
+	return os.ExpandEnv(gopath + "/bin/dgraph")
 }

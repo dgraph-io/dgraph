@@ -67,7 +67,7 @@ func NewDgraphCluster(dir string) *DgraphCluster {
 }
 
 func (d *DgraphCluster) StartZeroOnly() error {
-	d.zero = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+	d.zero = exec.Command(testutil.DgraphBinaryPath(),
 		"zero",
 		"-w=wz",
 		"-o", strconv.Itoa(d.zeroPortOffset),
@@ -87,7 +87,7 @@ func (d *DgraphCluster) StartZeroOnly() error {
 }
 
 func (d *DgraphCluster) StartAlphaOnly() error {
-	d.dgraph = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+	d.dgraph = exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
 		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
@@ -130,7 +130,7 @@ type Node struct {
 
 func (d *DgraphCluster) AddNode(dir string) (Node, error) {
 	o := strconv.Itoa(freePort(x.PortInternal))
-	dgraph := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"),
+	dgraph := exec.Command(testutil.DgraphBinaryPath(),
 		"alpha",
 		"--lru_mb=4096",
 		"--zero", ":"+d.zeroPort,
