@@ -318,7 +318,7 @@ func TestSchema_Normal(t *testing.T) {
 			"fields": [{
 				"name": "dgraph.graphql.schema"
 			}, {
-				"predicate": "dgraph.graphql.xid"
+				"name": "dgraph.graphql.xid"
 			}],
 			"name": "dgraph.graphql"
 		}]
