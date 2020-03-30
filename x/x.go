@@ -122,7 +122,7 @@ const (
 
 	InitialTypes = `
 "types": [
-{"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],"name": "dgraph.graphql"},
+{"fields":[{"name":"dgraph.graphql.schema"},{"name":"dgraph.graphql.xid"}],"name":"dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
 {"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
 {"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}
@@ -137,7 +137,7 @@ const (
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
 {"predicate":"dgraph.graphql.schema", "type": "string"},
-{"predicate":"dgraph.graphql.xid", "type": "string","index":true,"tokenizer":["exact"],"upsert":true}
+{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
 )
 
