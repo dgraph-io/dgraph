@@ -25,7 +25,7 @@ const (
 
 type group struct {
 	UID string `json:"uid"`
-	ACL []byte `json:"dgraph.group.acl,omitempty"`
+	ACL string `json:"dgraph.group.acl,omitempty"`
 }
 
 type rule struct {
@@ -65,7 +65,7 @@ func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 		return fmt.Errorf("unable to login to Dgraph cluster: %w", err)
 	}
 
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	resp, err := dg.NewReadOnlyTxn().Query(ctx, oldACLQuery)
 	if err != nil {
@@ -73,13 +73,13 @@ func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 	}
 
 	data := make(map[string][]group)
-	if err := json.Unmarshal(resp.GetJson(), &data); err != nil {
+	if err := json.Unmarshal(resp.Json, &data); err != nil {
 		return fmt.Errorf("unable to unmarshal old ACLs: %w", err)
 	}
 
 	groups, ok := data["rules"]
 	if !ok {
-		return fmt.Errorf("Unable to parse ACLs: %v", string(resp.GetJson()))
+		return fmt.Errorf("Unable to parse ACLs: %v", string(resp.Json))
 	}
 
 	counter := 1
@@ -90,7 +90,7 @@ func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 		}
 
 		var rs rules
-		if err := json.Unmarshal(group.ACL, &rs); err != nil {
+		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
 			return fmt.Errorf("Unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
 		}
 
@@ -122,14 +122,17 @@ func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 		}
 	}
 
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	if err := mutateACL(ctx, dg, nquads); err != nil {
+	// Nothing to do.
+	if len(nquads) == 0 {
+		return fmt.Errorf("no old rules found in the cluster")
+	}
+
+	if err := mutateACL(dg, nquads); err != nil {
 		return fmt.Errorf("error upgrading ACL rules: %w", err)
 	}
 	fmt.Println("Successfully upgraded ACL rules.")
 
-	ctx, cancel = context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if deleteOld {
 		err = dg.Alter(ctx, &api.Operation{
@@ -145,14 +148,16 @@ func upgradeACLRules(alpha, userName, password string, deleteOld bool) error {
 	return nil
 }
 
-func mutateACL(ctx context.Context, dg *dgo.Dgraph, nquads []*api.NQuad) error {
+func mutateACL(dg *dgo.Dgraph, nquads []*api.NQuad) error {
 	var err error
 	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
 		_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
 			Set:       nquads,
 			CommitNow: true,
 		})
-
 		if err != nil {
 			fmt.Printf("error in running mutation, retrying: %v\n", err)
 			continue
