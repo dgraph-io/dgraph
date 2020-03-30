@@ -707,7 +707,39 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
+  -
+    name: "Invalid comparison operator for authorization RBAC rule."
+    input: |
+      type User @auth(
+          add: { rule: "$X-MyApp-Role: { ne: ADD-BOT }" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "X-MyApp-Role has no operation attached",},
+    ]
 
+  - name: "Adding authorization rule for non-existent predicate in rbac."
+    input: |
+      type User @auth(
+          add: { rule: "isPublic {eq: true}" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "isPublic has no operation attached",},
+    ]
+
+  - name: "Adding authorization rule for non-existent predicate in query."
+    input: |
+      type User @auth(
+          add: { rule: "xyz (filter: { username: { eq: $X-MyApp-User } })" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "xyz has no operation attached",},
+    ]
 
 valid_schemas:
   -

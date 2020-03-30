@@ -1,0 +1,266 @@
+#######################
+# Input Schema
+#######################
+
+type Todo @auth(query: {or:[{rule:"owner (filter: { username: { eq: $X-MyApp-User }})"},{rule:"sharedWith (filter: { username: { eq: $X-MyApp-User }})"},{rule:"isPublic {eq: true}"},{rule:"$X-MyApp-Role: {eq: ADMIN}"}]}, add: {rule:"owner (filter: { username: { eq: $X-MyApp-User }})"}, update: {rule:"owner (filter: { username: { eq: $X-MyApp-User }})"}, delete: {rule:"$X-MyApp-Role: {eq: ADMIN}"}) {
+	id: ID!
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String @auth(add: {rule:"DENY"}, update: {rule:"filter: { dateCompleted: { eq: null } })"})
+	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	owner(filter: UserFilter): User @hasInverse(field: "todos")
+	somethingPrivate: String @auth(query: {rule:"owner (filter: { username: { eq: $X-MyApp-User } })"})
+}
+
+type User @auth(add: {rule:"$X-MyApp-Role: { eq: ADD-BOT }"}, update: {rule:"filter: { username: { eq: $X-MyApp-User } }"}) {
+	username: String! @id
+	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+
+directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+type DeleteTodoPayload {
+	msg: String
+	numUids: Int
+}
+
+type DeleteUserPayload {
+	msg: String
+	numUids: Int
+}
+
+type UpdateTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	numUids: Int
+}
+
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum TodoOrderable {
+	title
+	text
+	dateCompleted
+	somethingPrivate
+}
+
+enum UserOrderable {
+	username
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddTodoInput {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+}
+
+input AddUserInput {
+	username: String!
+	todos: [TodoRef]
+}
+
+input TodoFilter {
+	id: [ID!]
+	not: TodoFilter
+}
+
+input TodoOrder {
+	asc: TodoOrderable
+	desc: TodoOrderable
+	then: TodoOrder
+}
+
+input TodoPatch {
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+}
+
+input TodoRef {
+	id: ID
+	title: String
+	text: String
+	isPublic: Boolean
+	dateCompleted: String
+	sharedWith: [UserRef]
+	owner: UserRef
+	somethingPrivate: String
+}
+
+input UpdateTodoInput {
+	filter: TodoFilter!
+	set: TodoPatch
+	remove: TodoPatch
+}
+
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
+	username: StringHashFilter
+	and: UserFilter
+	or: UserFilter
+	not: UserFilter
+}
+
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
+}
+
+input UserPatch {
+	todos: [TodoRef]
+}
+
+input UserRef {
+	username: String
+	todos: [TodoRef]
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getTodo(id: ID!): Todo
+	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	getUser(username: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addTodo(input: [AddTodoInput!]!): AddTodoPayload
+	updateTodo(input: UpdateTodoInput!): UpdateTodoPayload
+	deleteTodo(filter: TodoFilter!): DeleteTodoPayload
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
+}
