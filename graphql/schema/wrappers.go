@@ -954,7 +954,7 @@ func configFromCustomDirective(custom *ast.Directive,
 		if err != nil {
 			return rc, err
 		}
-		err = substituteVarsInBody(bt, vars)
+		err = SubstituteVarsInBody(bt, vars)
 		if err != nil {
 			return rc, err
 		}
@@ -1481,7 +1481,7 @@ func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, er
 // for e.g.
 // { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
 // should return { "author" : "0x3", "post": { "id": "0x9" }}
-func substituteVarsInBody(jsonTemplate map[string]interface{},
+func SubstituteVarsInBody(jsonTemplate map[string]interface{},
 	variables map[string]interface{}) error {
 	for k, v := range jsonTemplate {
 		switch val := v.(type) {
@@ -1502,7 +1502,7 @@ func substituteVarsInBody(jsonTemplate map[string]interface{},
 				jsonTemplate[k] = v
 			}
 		case map[string]interface{}:
-			if err := substituteVarsInBody(val, variables); err != nil {
+			if err := SubstituteVarsInBody(val, variables); err != nil {
 				return err
 			}
 		case []interface{}:
@@ -1511,7 +1511,7 @@ func substituteVarsInBody(jsonTemplate map[string]interface{},
 				if !ok {
 					// return error
 				}
-				if err := substituteVarsInBody(mapVal, variables); err != nil {
+				if err := SubstituteVarsInBody(mapVal, variables); err != nil {
 					return err
 				}
 			}

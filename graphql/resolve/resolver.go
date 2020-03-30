@@ -729,7 +729,11 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
-	if vals := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()]); vals != nil {
+	vals, err := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	if err != nil {
+		fmt.Println("resolveCustomFields: ", err)
+	}
+	if vals != nil {
 		valToComplete[field.ResponseName()] = vals
 	}
 
@@ -763,12 +767,12 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func resolveCustomFields(fields []schema.Field, res interface{}) interface{} {
+func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, error) {
 	if res == nil {
-		return nil
+		return nil, nil
 	}
 	if _, ok := res.([]interface{}); !ok {
-		return res
+		return res, nil
 	}
 	vals := res.([]interface{})
 	for _, f := range fields {
@@ -783,30 +787,53 @@ func resolveCustomFields(fields []schema.Field, res interface{}) interface{} {
 			for i := 0; i < len(body); i++ {
 				temp := make(map[string]interface{})
 				for k, v := range fconf.Template {
+					// TODO - This map has to be copied recursively.
 					temp[k] = v
 				}
-				for k, v := range temp {
-					variable := v.(string)[1:]
-					temp[k] = vals[i].(map[string]interface{})[variable]
+				if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+					fmt.Println("err: ", err)
 				}
 				body[i] = temp
 			}
 
+			b, err := json.Marshal(body)
+			if err != nil {
+				fmt.Println("err while JSON marshal: ", err)
+			}
+
+			fmt.Println("request: ", string(b))
+			req, err := http.NewRequest(fconf.Method, fconf.URL, bytes.NewBuffer(b))
+			if err != nil {
+				return nil, err
+			}
+			req.Header = fconf.ForwardHeaders
+
+			resp, err := (&http.Client{}).Do(req)
+			if err != nil {
+				return nil, err
+			}
+			defer resp.Body.Close()
+
+			b, err = ioutil.ReadAll(resp.Body)
+			if err != nil {
+				return nil, err
+			}
+			fmt.Println("response: ", string(b))
+
+			var result []interface{}
+			if err := json.Unmarshal(b, &result); err != nil {
+				return nil, err
+			}
+
 			for idx, v := range vals {
 				val := v.(map[string]interface{})
-				fmt.Println("val: ", val)
-				if f.Alias() == "name" {
-					val["name"] = "username-1"
-				} else if f.Alias() == "cars" {
-					val["cars"] = []map[string]interface{}{{"id": "0x1", "name": "BMW"},
-						{"id": "0x2", "name": "Audi"}}
-				}
+				val[f.Alias()] = result[idx]
 				vals[idx] = val
 			}
 			// execute this here in a goroutine and collect and fill results below.
 		}
 	}
-	return vals
+	return vals, nil
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
