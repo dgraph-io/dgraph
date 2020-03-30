@@ -104,8 +104,9 @@ func Version() string {
 	return dgraphVersion
 }
 
-var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`) // -g followed by a commit-hash of min. 7 hex digits.
-// DevVersion returns true if the version string contains a git commit hash.
+// pattern for  dev version = min. 7 hex digits of commit-hash.
+var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`) 
+// DevVersion returns true if the version string contains the above pattern
 // e.g.
 //  1. v2.0.0-rc1-127-gd20a768b3 => dev version
 //  2. v2.0.0 => prod version
