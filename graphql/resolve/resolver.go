@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -729,12 +728,14 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
-	vals, err := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	result, err := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
 	if err != nil {
-		fmt.Println("resolveCustomFields: ", err)
+		// TODO
+		// 1. Any errors received from downstream remote servers should be propogated to the
+		// client.
 	}
-	if vals != nil {
-		valToComplete[field.ResponseName()] = vals
+	if result != nil {
+		valToComplete[field.ResponseName()] = result
 	}
 
 	// Errors should report the "path" into the result where the error was found.
@@ -767,26 +768,73 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, error) {
-	if res == nil {
+// resolveCustomFields resolves fields with custom directive. Here is the rough algorithm that it
+// follows.
+// queryUser {
+//	name @custom
+//	age
+//	school {
+//		name
+//		children
+//		class { @custom
+//			name
+//			numChildren
+//		}
+//	}
+//	cars { @custom
+//		name
+//	}
+// }
+// For fields with @custom directive
+// 1. There would be one query sent to the remote endpoint.
+// 2. In the above example, to fetch class all the school ids would be aggregated across different
+// users deduplicated and then one query sent. The results would then be filled back appropriately.
+//
+// For fields without custom directive we recursively call resolveCustomFields and let it do the
+// work.
+// TODO - We can be smarter about this and know before processing the query if we should be making
+// this recursive call upfront.
+// TODO - Resolve all fields of a selection set concurrently.
+func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, error) {
+	if data == nil {
 		return nil, nil
 	}
-	if _, ok := res.([]interface{}); !ok {
-		return res, nil
+
+	var vals []interface{}
+	switch v := data.(type) {
+	case []interface{}:
+		vals = v
+	case interface{}:
+		// TODO - See how does this work for a getQuery that only returns an object.
+		return data, nil
 	}
-	vals := res.([]interface{})
+
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
+
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
+			// If this field doesn't have custom directive and also doesn't have any children,
+			// then there is nothing to do and we can just continue.
 			if len(f.SelectionSet()) == 0 {
 				continue
 			}
+
+			// Here below we do the de-duplication by walking through the result set.
+			// TODO - We can avoid all this work if we can determine that this field doesn't have
+			// @custom directive anywhere in its sub-tree..
 			var input []interface{}
-			idsSeen := make(map[string]interface{})
+			// node stores the pointer for a node. It is a map from id to the map for it.
+			nodes := make(map[string]interface{})
+
+			// Here we walk through the array and collect all unique values for this field. In the
+			// example at the start of the function, we could be collecting all unique schools
+			// across all users. This is where the batching happens so that we make one call per
+			// field and not a separate call per user.
 			for _, v := range vals {
+				// TODO - Check if this type assertion is safe to do.
 				val := v.(map[string]interface{})
 				fieldVals, ok := val[f.Name()].([]interface{})
 				if !ok {
@@ -797,71 +845,63 @@ func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, e
 					if !ok {
 						continue
 					}
+					// TODO - Remove this hardcoding, instead fetch the id/xid field dynmaically
+					// and use that.
 					id, ok := fv["id"].(string)
 					if !ok {
 						continue
 					}
-					if _, ok := idsSeen[id]; !ok {
+					if _, ok := nodes[id]; !ok {
 						input = append(input, fieldVal)
-						idsSeen[id] = fieldVal
+						nodes[id] = fieldVal
 					}
 				}
 			}
-			resolveCustomFields(f.SelectionSet(), input)
+
+			// TODO - Check why isn't the response required here.
+			if _, err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+				return data, err
+			}
+
 			for _, v := range vals {
 				val := v.(map[string]interface{})
-				fieldVals, ok := val[f.Name()].([]interface{})
-				if !ok {
-					continue
-				}
+				fieldVals := val[f.Name()].([]interface{})
 				for idx, fieldVal := range fieldVals {
-					fv, ok := fieldVal.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					id, ok := fv["id"].(string)
-					if !ok {
-						continue
-					}
-					mval := idsSeen[id]
+					fv := fieldVal.(map[string]interface{})
+					// TODO - Remove this hardcoding same as above.
+					id := fv["id"].(string)
+					// Get the pointer of the map corresponding to this id and put it at the
+					// correct place.
+					mval := nodes[id]
 					fieldVals[idx] = mval
 				}
 			}
 		} else {
 			fconf, _ := f.CustomHTTPConfig()
+			// TODO - We assume the mode is batching by default. Also support single mode.
+
+			// Here we build the array of objects which is sent as the body for the request.
 			body := make([]map[string]interface{}, len(vals))
 			for i := 0; i < len(body); i++ {
 				temp := make(map[string]interface{})
 				for k, v := range fconf.Template {
-					// TODO - This map has to be copied recursively.
+					// TODO - This map has to be copied recursively?
 					temp[k] = v
 				}
 				if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
-					fmt.Println("err: ", err)
+					return data, err
 				}
 				body[i] = temp
 			}
 
 			b, err := json.Marshal(body)
 			if err != nil {
-				fmt.Println("err while JSON marshal: ", err)
+				return data, err
 			}
 
-			req, err := http.NewRequest(fconf.Method, fconf.URL, bytes.NewBuffer(b))
+			b, err = makeRequest(fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
-				return nil, err
-			}
-			req.Header = fconf.ForwardHeaders
-
-			resp, err := (&http.Client{}).Do(req)
-			if err != nil {
-				return nil, err
-			}
-			defer resp.Body.Close()
-
-			b, err = ioutil.ReadAll(resp.Body)
-			if err != nil {
-				return nil, err
+				return data, err
 			}
 
 			var result []interface{}
@@ -869,12 +909,14 @@ func resolveCustomFields(fields []schema.Field, res interface{}) (interface{}, e
 				return nil, err
 			}
 
+			// TODO - Verify that length of result should be same as len(vals).
+			// Here we walk through all the objects in the array and substitute the value
+			// that we got from the remote endpoint with the right key in the object.
 			for idx, v := range vals {
 				val := v.(map[string]interface{})
 				val[f.Alias()] = result[idx]
 				vals[idx] = val
 			}
-			// execute this here in a goroutine and collect and fill results below.
 		}
 	}
 	return vals, nil
@@ -1238,19 +1280,15 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 	return &Resolved{Data: completed, Err: err}
 }
 
-func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc, err := query.HTTPResolver()
+func makeRequest(method, url, body string, header http.Header) ([]byte, error) {
+	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header = hrc.ForwardHeaders
+	req.Header = header
 
-	resp, err := hr.Do(req)
+	// TODO - Needs to be fixed, we shouldn't be initiating a new HTTP client everytime.
+	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1258,4 +1296,13 @@ func (hr *httpResolver) rewriteAndExecute(
 
 	b, err := ioutil.ReadAll(resp.Body)
 	return b, err
+}
+
+func (hr *httpResolver) rewriteAndExecute(
+	ctx context.Context, query schema.Query) ([]byte, error) {
+	hrc, err := query.HTTPResolver()
+	if err != nil {
+		return nil, err
+	}
+	return makeRequest(hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
 }
