@@ -128,6 +128,182 @@ func TestSchemas(t *testing.T) {
 	})
 }
 
+func TestSchemaForCustomLogic(t *testing.T) {
+	// Test whether query exist in remote schema.
+	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
+		return &IntrospectedSchema{}, nil
+	}
+	_, errlist := NewHandler(`
+	type Author {
+        id: ID!
+      }
+
+      type Query {
+		getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"},
+		 graphql: {query: "contry(id:$id)"})
+      }
+	`)
+	require.Equal(t, errlist.Error(), "input:7: Type Query; Field getAuthor; contry is not present"+
+		" in remote schema\n")
+
+	// Test Arguments
+	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
+		return &IntrospectedSchema{
+			Data: Data{
+				Schema: IntrospectionSchema{
+					Types: []Types{Types{
+						Name: "Query",
+						Fields: []GqlField{
+							GqlField{
+								Name: "contry",
+							},
+						},
+					}},
+				},
+			},
+		}, nil
+	}
+
+	_, errlist = NewHandler(`
+	type Author {
+        id: ID!
+      }
+
+      type Query {
+		getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, 
+		graphql: {query: "contry(id:$id)"})
+      }
+	`)
+	require.Equal(t, errlist.Error(), "input:7: Type Query; Field getAuthor;id arg not present "+
+		"in the remote query contry\n")
+
+	// Test Argument types.
+	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
+		return &IntrospectedSchema{
+			Data: Data{
+				Schema: IntrospectionSchema{
+					Types: []Types{Types{
+						Name: "Query",
+						Fields: []GqlField{
+							GqlField{
+								Name: "contry",
+								Args: []Args{
+									Args{
+										Name: "id",
+										Type: GqlType{
+											Name: "Hello",
+										},
+									},
+								},
+							},
+						},
+					}},
+				},
+			},
+		}, nil
+	}
+
+	_, errlist = NewHandler(`
+	type Author {
+        id: ID!
+      }
+
+      type Query {
+		getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, 
+		graphql: {query: "contry(id:$id)"})
+      }
+	`)
+	require.Equal(t, errlist.Error(), "input:7: Type Query; Field getAuthor; id is not scalar."+
+		" only scalar argument is supported in the remote graphql call.\n")
+
+	// Test Required Argument
+	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
+		return &IntrospectedSchema{
+			Data: Data{
+				Schema: IntrospectionSchema{
+					Types: []Types{Types{
+						Name: "Query",
+						Fields: []GqlField{
+							GqlField{
+								Name: "contry",
+								Args: []Args{
+									Args{
+										Name: "id",
+										Type: GqlType{
+											Name: "String",
+										},
+									},
+									Args{
+										Name: "name",
+										Type: GqlType{
+											Name: "String",
+											Kind: "NOT_NULL",
+										},
+									},
+								},
+							},
+						},
+					}},
+				},
+			},
+		}, nil
+	}
+
+	_, errlist = NewHandler(`
+	type Author {
+        id: ID!
+      }
+
+      type Query {
+		getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, 
+		graphql: {query: "contry(id:$id)"})
+      }
+	`)
+	require.Equal(t, errlist.Error(), "input:7: Type Query; Field getAuthor;name is a required"+
+		" argument in the remote query contry. But, the name is not present in the custom logic"+
+		" call for contry. Please provide the required arg in the remote query contry\n")
+
+	// Test input variable type with remote query argument type.
+
+	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
+		return &IntrospectedSchema{
+			Data: Data{
+				Schema: IntrospectionSchema{
+					Types: []Types{Types{
+						Name: "Query",
+						Fields: []GqlField{
+							GqlField{
+								Name: "contry",
+								Args: []Args{
+									Args{
+										Name: "id",
+										Type: GqlType{
+											Name: "String",
+										},
+									},
+								},
+							},
+						},
+					}},
+				},
+			},
+		}, nil
+	}
+
+	_, errlist = NewHandler(`
+	type Author {
+        id: ID!
+      }
+
+      type Query {
+		getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, 
+		graphql: {query: "contry(id:$id)"})
+      }
+	`)
+	require.Equal(t, errlist.Error(), "input:7: Type Query; Field getAuthor; expected type for "+
+		"variable  $id is String. But got id\n")
+}
+
 // The other tests verify that @search works where it is expected to work,
 // and show what the error messages look like.  This test shows all the cases
 // that shouldn't work - i.e. we'll never accept a search where we don't

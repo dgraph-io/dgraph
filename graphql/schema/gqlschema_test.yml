@@ -751,6 +751,48 @@ invalid_schemas:
       {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST.",
       "locations":[{"line":6, "column":31}]},
     ]
+  -
+    name: "@custom directive with invalid remote schema"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, graphql: {query: "contry(id:$id)"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; unable to introspect remote schema for the url http://google.com/",
+      "locations":[{"line":6, "column":31}]},
+    ]
+  -
+    name: "@custom directive with multiple graphql query"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, graphql: {query: "contry(id:$id) hello(id: $id)"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; only one query is possible inside query argument. For eg: valid input: @custom(..., graphql:{ query: \"getUser(id: $id)\"})invalid input:@custom(..., graphql:{query: \"getUser(id: $id) getAuthor(id: $id)\"})",
+      "locations":[{"line":6, "column":31}]},
+    ]
+  -
+    name: "@custom directive with selection in custom graphql call"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET"}, graphql: {query: "contry(id:$id){name}"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor;Remote query contry should not contain any selection statement. eg: Remote query should be like this contry(...) and not like contry(..){...}",
+      "locations":[{"line":6, "column":31}]},
+    ]
 
 
 valid_schemas:
