@@ -30,10 +30,14 @@ var env string
 
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
+	env = "prod-"
+	if DevVersion() {
+		env = "dev-"
+	}
 	if ee {
-		env = "enterprise"
+		env += "enterprise"
 	} else {
-		env = "oss"
+		env += "oss"
 	}
 	initSentry()
 }
@@ -62,14 +66,6 @@ func ConfigureSentryScope(subcmd string) {
 		scope.SetTag("dgraph", subcmd)
 		scope.SetLevel(sentry.LevelFatal)
 	})
-}
-
-// Panic sends the error report to Sentry and then panics.
-func Panic(err error) {
-	if err != nil {
-		CaptureSentryException(err)
-		panic(err)
-	}
 }
 
 // CaptureSentryException sends the error report to Sentry.
