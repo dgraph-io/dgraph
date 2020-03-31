@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os/exec"
 	"testing"
 	"time"
 
@@ -38,18 +37,9 @@ var (
 	dgraphEndpoint = testutil.SockAddr
 )
 
-func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
-	out, err := cmd.CombinedOutput()
-	if (!shouldFail && err != nil) || (shouldFail && err == nil) {
-		t.Errorf("Error output from command:%v", string(out))
-		t.Fatal(err)
-	}
-
-	return string(out)
-}
-
 func createUser(t *testing.T, accessToken, username, password string) []byte {
-	addUser := `mutation addUser($name: String!, $pass: String!) {
+	addUser := `
+	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
 			user {
 				name
@@ -69,7 +59,8 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 }
 
 func getCurrentUser(t *testing.T, accessToken string) []byte {
-	query := `query {
+	query := `
+	query {
 		getCurrentUser {
 			name
 		}
@@ -97,7 +88,8 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 
 func deleteUser(t *testing.T, accessToken, username string) {
 	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
-	delUser := `mutation deleteUser($name: String!) {
+	delUser := `
+	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
 			msg
 		}
@@ -115,7 +107,8 @@ func deleteUser(t *testing.T, accessToken, username string) {
 
 func deleteGroup(t *testing.T, accessToken, name string) {
 	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
-	delGroup := `mutation deleteUser($name: String!) {
+	delGroup := `
+	mutation deleteUser($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
 			msg
 		}
@@ -145,7 +138,8 @@ func TestPasswordReturn(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	query := `query {
+	query := `
+	query {
 		getCurrentUser {
 			name
 			password
@@ -234,22 +228,11 @@ func resetUser(t *testing.T) {
 func TestReservedPredicates(t *testing.T) {
 	// This test uses the groot account to ensure that reserved predicates
 	// cannot be altered even if the permissions allow it.
-	ctx := context.Background()
-
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 	alterReservedPredicates(t, dg1)
-
-	dg2, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
-		t.Fatalf("unable to login using the groot account:%v", err)
-	}
-	alterReservedPredicates(t, dg2)
 }
 
 func TestAuthorization(t *testing.T) {
@@ -443,7 +426,8 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func createGroup(t *testing.T, accessToken, name string) []byte {
-	addGroup := `mutation addGroup($name: String!) {
+	addGroup := `
+	mutation addGroup($name: String!) {
 		addGroup(input: [{name: $name}]) {
 			group {
 				name
@@ -463,7 +447,8 @@ func createGroup(t *testing.T, accessToken, name string) []byte {
 
 func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *group {
 	queryParams := testutil.GraphQLParams{
-		Query: `mutation addGroup($name: String!, $rules: [RuleRef]){
+		Query: `
+		mutation addGroup($name: String!, $rules: [RuleRef]){
 			addGroup(input: [
 				{
 					name: $name
@@ -505,8 +490,8 @@ func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *g
 func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
 	removeRules []string) *group {
 	queryParams := testutil.GraphQLParams{
-		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch, 
-$remove: RemoveGroupPatch){
+		Query: `
+		mutation updateGroup($name: String!, $set: SetGroupPatch, $remove: RemoveGroupPatch){
 			updateGroup(input: {
 				filter: {
 					name: {
@@ -1715,7 +1700,7 @@ func TestWrongPermission(t *testing.T) {
 		CommitNow: true,
 	})
 
-	require.Error(t, err, "Setting permission to 9 shouldn't have returned error")
+	require.Error(t, err, "Setting permission to 9 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 
 	ruleMutation = `
@@ -1731,7 +1716,7 @@ func TestWrongPermission(t *testing.T) {
 		CommitNow: true,
 	})
 
-	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
+	require.Error(t, err, "Setting permission to -1 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
