@@ -19,6 +19,7 @@ package test
 import (
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -108,4 +109,19 @@ func RequireJSONEqStr(t *testing.T, expected string, got interface{}) {
 	require.NoError(t, err)
 
 	require.JSONEq(t, expected, string(jsonGot))
+}
+
+// RoundTripFunc .
+type RoundTripFunc func(req *http.Request) *http.Response
+
+// RoundTrip .
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req), nil
+}
+
+// NewTestClient returns *http.Client with Transport replaced to avoid making real calls
+func NewTestClient(fn RoundTripFunc) *http.Client {
+	return &http.Client{
+		Transport: RoundTripFunc(fn),
+	}
 }
