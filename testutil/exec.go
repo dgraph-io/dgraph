@@ -18,6 +18,7 @@ package testutil
 
 import (
 	"fmt"
+	"go/build"
 	"io"
 	"os"
 	"os/exec"
@@ -114,4 +115,14 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) error {
 	}
 
 	return err
+}
+
+func DgraphBinaryPath() string {
+	gopath := os.Getenv("GOPATH")
+
+	if gopath == "" {
+		gopath = build.Default.GOPATH
+	}
+
+	return os.ExpandEnv(gopath + "/bin/dgraph")
 }
