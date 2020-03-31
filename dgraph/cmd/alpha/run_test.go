@@ -117,7 +117,7 @@ func alterSchemaInBackground(s string) error {
 func alterSchemaHelper(s string, bg bool) error {
 	url := addr + "/alter"
 	if bg {
-		url += "?run_in_background=true"
+		url += "?runInBackground=true"
 	}
 
 	_, _, err := runWithRetries("PUT", "", url, s)

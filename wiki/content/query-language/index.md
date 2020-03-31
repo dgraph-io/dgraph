@@ -2140,7 +2140,7 @@ Reverse edges are also computed if specified by a schema mutation.
 
 ### Indexes in Background
 
-Indexes may take long time to compute depdending upon the size of the data.
+Indexes may take long time to compute depending upon the size of the data.
 Starting Dgraph version `20.03.0`, indexes can be computed in the background,
 and thus indexing may still be running after an Alter operation returns.
 This requires that you wait for indexing to complete before running queries
@@ -2182,11 +2182,11 @@ See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
 
 #### HTTP API
 
-You can specify the flag `run_in_background` to `true` to run
+You can specify the flag `runInBackground` to `true` to run
 index computation in the background.
 
 ```sh
-curl localhost:8080/alter?run_in_background=true -XPOST -d $'
+curl localhost:8080/alter?runInBackground=true -XPOST -d $'
     name: string @index(fulltext, term) .
     age: int @index(int) @upsert .
     friend: [uid] @count @reverse .
@@ -2195,7 +2195,7 @@ curl localhost:8080/alter?run_in_background=true -XPOST -d $'
 
 #### Grpc API
 
-You can set `RunInBackground` field to `true` of the `api.Operation
+You can set `RunInBackground` field to `true` of the `api.Operation`
 struct before passing it to the `Alter` function.
 
 ```go

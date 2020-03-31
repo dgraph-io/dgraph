@@ -1240,7 +1240,7 @@ On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
 These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
 {{% /notice %}}
 
-* `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
+* `/health?all` returns information about the health of all the servers in the cluster.
 * `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
 * `/admin/export` initiates a data [export]({{< relref "#export">}}).
 
@@ -1248,7 +1248,7 @@ By default the Alpha listens on `localhost` for admin actions (the loopback addr
 
 {{% notice "tip" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 
-### More about /health endpoint
+### Querying Health
 
 You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
@@ -1262,7 +1262,8 @@ query {
     lastEcho
     group
     uptime
-    
+    ongoing
+    indexing
   }
 }
 ```
@@ -1289,7 +1290,9 @@ Here’s an example of JSON returned from the above query:
         "status": "healthy",
         "lastEcho": 1582827418,
         "group": "1",
-        "uptime": 1505
+        "uptime": 1505,
+        "ongoing": ["opIndexing"],
+        "indexing": ["name", "age"]
       }
     ]
   }
@@ -1299,6 +1302,8 @@ Here’s an example of JSON returned from the above query:
 - `version`: Version of Dgraph running the Alpha server.
 - `instance`: Name of the instance. Always set to `alpha`.
 - `uptime`: Time in nanoseconds since the Alpha server is up and running.
+
+The same information is available from the `/health` and `/health?all` endpoints.
 
 ## More about Dgraph Zero
 
@@ -1675,7 +1680,7 @@ If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`
 in addition to the `--cacert` option, also use the `--cert` and `--key` options.
 For instance (for an export request):
 
-``` 
+```
 curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
 ```
 
@@ -2247,12 +2252,26 @@ Doing periodic exports is always a good idea. This is particularly useful if you
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
 
-Blue-green deployment is a common approach to minimize downtime during the upgrade process. 
-This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can 
+Blue-green deployment is a common approach to minimize downtime during the upgrade process.
+This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can
 do a rolling restart of all your Alpha using the option `--mutations disallow` when you restart the Alphas. This will ensure the cluster is in read-only mode.
 
 At this point your application can still read from the old cluster and you can perform the steps 4. and 5. described above.
 When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
+
+#### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
+
+1. Use [binary]({{< relref "#binary-backups">}}) backup to export data from old cluster
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
+4. Upgrade `dgraph` binary to `v20.03.0`
+5. [Restore]({{< relref "#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+6. Start a new Dgraph cluster using the restored data directories
+7. Upgrade ACL data using the following command:
+
+```
+dgraph upgrade --acl -a localhost:9080 -u groot -p password
+```
 
 {{% notice "note" %}}
 If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
