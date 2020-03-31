@@ -29,49 +29,36 @@ import (
 	"github.com/vektah/gqlparser/v2/parser"
 )
 
-// graphqlScalarType holds all the scalar types supported by the graphql spec.
-var graphqlScalarType = map[string]int{
-	"Int":     0,
-	"Float":   0,
-	"String":  0,
-	"Boolean": 0,
-	"ID":      0,
-}
-
-// introspectRemoteSchema introspectes
-var introspectRemoteSchema func(url string) (*IntrospectedSchema, error)
-
-func init() {
-	introspectRemoteSchema = func(url string) (*IntrospectedSchema, error) {
-		param := &Request{
-			Query: introspectionQuery,
-		}
-
-		body, err := json.Marshal(param)
-
-		if err != nil {
-			return nil, err
-		}
-
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
-		if err != nil {
-			return nil, err
-		}
-		req.Header.Set("Content-Type", "application/json")
-		client := &http.Client{Timeout: 5 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		body, err = ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		result := &IntrospectedSchema{}
-
-		return result, json.Unmarshal(body, result)
+// introspectRemoteSchema introspectes remote schema
+func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
+	param := &Request{
+		Query: introspectionQuery,
 	}
+
+	body, err := json.Marshal(param)
+
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	result := &IntrospectedSchema{}
+
+	return result, json.Unmarshal(body, result)
 }
 
 const introspectionQuery = `
@@ -271,8 +258,6 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				endpoint.field.Name,
 				remoteArg)
 		}
-		// ASK: do we only support variables or hardcode values?
-		// Now assuming we support only variables.
 		argValToType[remoteArgVal] = argType
 	}
 

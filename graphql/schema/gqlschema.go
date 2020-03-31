@@ -244,6 +244,15 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
+// graphqlScalarType holds all the scalar types supported by the graphql spec.
+var graphqlScalarType = map[string]bool{
+	"Int":     true,
+	"Float":   true,
+	"String":  true,
+	"Boolean": true,
+	"ID":      true,
+}
+
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective:   hasInverseValidation,
 	searchDirective:    searchValidation,
