@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -321,5 +322,201 @@ func TestCheckNonNulls(t *testing.T) {
 				require.EqualError(t, err, test.err.Error())
 			}
 		})
+	}
+}
+
+func TestAuth(t *testing.T) {
+	gqlSchema, err := FromString(`
+		input AuthRule {
+			and: [AuthRule]
+			or: [AuthRule]
+			not: AuthRule
+			rule: String
+		}
+		directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
+		directive @id on FIELD_DEFINITION
+		type Todo @auth(
+			query: {
+				or: [
+				  { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+				  { rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})" },
+				  { rule: "isPublic {eq: true}" },
+				  { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+				]
+			},
+			add: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+			update: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+			delete: { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+		) {
+			id: ID!
+			title: String
+			text: String
+			isPublic: Boolean
+			dateCompleted: String @auth(
+				add: { rule: "DENY" },
+				update: { rule: "filter: { dateCompleted: { eq: null } })" }
+			)
+			sharedWith: [User]
+			owner: User
+			somethingPrivate: String @auth(
+				query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
+			)
+		}
+		type User @auth(
+		  add: { rule: "$MyApp.Role: { eq: ADD-BOT }" },
+		  update: { rule: "filter: { username: { eq: $X-MyApp-User } }" }
+		){
+		  username: String! @id
+		  todos: [Todo]
+		}
+	`)
+	require.NoError(t, err)
+
+	ownerRule := &RuleAst{
+		Name: "owner",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "filter",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "username",
+				Typ:  GqlTyp,
+				Value: &RuleAst{
+					Name: "eq",
+					Typ:  Op,
+					Value: &RuleAst{
+						Name: "X-MyApp-User",
+						Typ:  JwtVar,
+					},
+				},
+			},
+		},
+	}
+
+	sharedWithRule := &RuleAst{
+		Name: "sharedWith",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "filter",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "username",
+				Typ:  GqlTyp,
+				Value: &RuleAst{
+					Name: "eq",
+					Typ:  Op,
+					Value: &RuleAst{
+						Name: "X-MyApp-User",
+						Typ:  JwtVar,
+					},
+				},
+			},
+		},
+	}
+
+	isPublicRule := &RuleAst{
+		Name: "isPublic",
+		Typ:  GqlTyp,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "true",
+				Typ:  Constant,
+			},
+		},
+	}
+
+	isAdmin := &RuleAst{
+		Name: "X-MyApp-Role",
+		Typ:  JwtVar,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "ADMIN",
+				Typ:  Constant,
+			},
+		},
+	}
+
+	isAddBot := &RuleAst{
+		Name: "MyApp.Role",
+		Typ:  JwtVar,
+		Value: &RuleAst{
+			Name: "eq",
+			Typ:  Op,
+			Value: &RuleAst{
+				Name: "ADD-BOT",
+				Typ:  Constant,
+			},
+		},
+	}
+
+	TodoAuth := &AuthContainer{
+		Query: &RuleNode{
+			Or: []*RuleNode{
+				{Rule: ownerRule},
+				{Rule: sharedWithRule},
+				{Rule: isPublicRule},
+				{Rule: isAdmin},
+			},
+		},
+		Add:    &RuleNode{Rule: ownerRule},
+		Update: &RuleNode{Rule: ownerRule},
+		Delete: &RuleNode{Rule: isAdmin},
+	}
+
+	DateCompleted := &AuthContainer{
+		Add: &RuleNode{
+			Rule: &RuleAst{
+				Name: "DENY",
+				Typ:  SpecialOp,
+			},
+		},
+		Update: &RuleNode{
+			Rule: &RuleAst{
+				Name: "filter",
+				Typ:  Op,
+				Value: &RuleAst{
+					Name: "dateCompleted",
+					Typ:  GqlTyp,
+					Value: &RuleAst{
+						Name: "eq",
+						Typ:  Op,
+						Value: &RuleAst{
+							Name: "null",
+							Typ:  Constant,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	unexp := cmpopts.IgnoreUnexported(AuthContainer{}, RuleNode{}, RuleAst{})
+	ruleID := cmpopts.IgnoreFields(RuleNode{}, "RuleID")
+
+	if diff := cmp.Diff(gqlSchema.AuthTypeRules("Todo"), TodoAuth, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	UserAuth := &AuthContainer{
+		Add:    &RuleNode{Rule: isAddBot},
+		Update: &RuleNode{Rule: ownerRule.Value},
+	}
+
+	if diff := cmp.Diff(gqlSchema.AuthTypeRules("User"), UserAuth, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(gqlSchema.AuthFieldRules("Todo", "somethingPrivate"),
+		&AuthContainer{Query: &RuleNode{Rule: ownerRule}}, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+
+	if diff := cmp.Diff(gqlSchema.AuthFieldRules("Todo", "dateCompleted"),
+		DateCompleted, unexp, ruleID); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
 }

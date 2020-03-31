@@ -1,0 +1,35 @@
+type Todo @auth(
+    query: {
+        or: [
+            { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+            { rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})" },
+            { rule: "isPublic {eq: true}" },
+            { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+        ]
+    },
+    add: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+    update: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
+    delete: { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+) {
+    id: ID!
+    title: String
+    text: String
+    isPublic: Boolean
+    dateCompleted: String @auth(
+        add: { rule: "DENY" },
+        update: { rule: "filter: { dateCompleted: { eq: null } })" }
+    )
+    sharedWith: [User]
+    owner: User @hasInverse(field: "todos")
+    somethingPrivate: String @auth(
+        query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
+    )
+}
+
+type User @auth(
+    add: { rule: "$X-MyApp-Role: { eq: ADD-BOT }" },
+    update: { rule: "filter: { username: { eq: $X-MyApp-User } }" }
+){
+    username: String! @id
+    todos: [Todo]
+}
