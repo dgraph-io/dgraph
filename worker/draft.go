@@ -1198,12 +1198,12 @@ func (n *node) calculateTabletSizes() {
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
 		if err != nil {
-			glog.V(2).Infof("Unable to parse key: %v", err)
+			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
 		right, err := x.Parse(tinfo.Right)
 		if err != nil {
-			glog.V(2).Infof("Unable to parse key: %v", err)
+			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
 		if left.Attr != right.Attr {
@@ -1225,6 +1225,7 @@ func (n *node) calculateTabletSizes() {
 		total += int64(tinfo.EstimatedSz)
 	}
 	if len(tablets) == 0 {
+		glog.V(2).Infof("No tablets found.")
 		return
 	}
 	// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
