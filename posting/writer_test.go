@@ -49,7 +49,6 @@ func BenchmarkWriter(b *testing.B) {
 		WithCompression(options.None)
 
 	KVList := createKVList()
-	validate := false
 
 	b.Run("TxnWriter", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
@@ -68,10 +67,7 @@ func BenchmarkWriter(b *testing.B) {
 			for _, typ := range KVList {
 				k := typ.key
 				v := typ.value
-				err = w.SetAt(k, v, BitSchemaPosting, 1)
-				if validate {
-					require.NoError(b, err)
-				}
+				w.SetAt(k, v, BitSchemaPosting, 1)
 			}
 			require.NoError(b, w.Flush())
 
@@ -95,10 +91,7 @@ func BenchmarkWriter(b *testing.B) {
 			for _, typ := range KVList {
 				k := typ.key
 				v := typ.value
-				err = batch.Set(k, v)
-				if validate {
-					require.NoError(b, err)
-				}
+				batch.Set(k, v)
 			}
 			require.NoError(b, batch.Flush())
 		}
