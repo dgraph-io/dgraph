@@ -554,7 +554,8 @@ func (p *Parser) isEmpty() bool {
 	return p.index == len(*p.str)
 }
 
-func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[string]string) *RuleAst {
+func (ap *AuthParser) buildRuleAST(rule string,
+	dgraphPredicate map[string]map[string]string) *RuleAst {
 	var ast *RuleAst
 	var p Parser
 
@@ -1048,10 +1049,7 @@ func (r *RuleNode) IsRBAC() bool {
 		}
 	}
 	for _, i := range r.And {
-		if !i.IsRBAC() {
-			return false
-		}
-		return true
+		return i.IsRBAC()
 	}
 
 	if r.Not != nil && r.Not.IsRBAC() {

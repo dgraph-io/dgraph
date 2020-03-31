@@ -70,12 +70,11 @@ func validateAuthAst(node *RuleAst) gqlerror.List {
 			return errs
 		}
 		return errs
-	} else {
-		errs = append(errs, validateAuthAst(operand)...)
-		if operand.GetOperation().IsFilter() {
-			errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
-			return errs
-		}
+	}
+	errs = append(errs, validateAuthAst(operand)...)
+	if operand.GetOperation().IsFilter() {
+		errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
+		return errs
 	}
 
 	return errs
