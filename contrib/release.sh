@@ -118,44 +118,42 @@ popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-  env GOOS=windows GOARCH=amd64 go get -v -d .
-  env GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-windows-amd64.exe -ldflags \
+  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
-  mv dgraph-windows-amd64.exe $TMP/windows/dgraph.exe
+  mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
 pushd $basedir/badger/badger
-  env GOOS=windows GOARCH=amd64 go get -v -d .
-  env GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o badger-windows-amd64.exe .
-  mv badger-windows-amd64.exe $TMP/windows/badger.exe
+  #env GOOS=windows GOARCH=amd64 go get -v -d .
+  #env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o badger-windows-amd64.exe .
+  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 .
+  mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
-  env GOOS=windows GOARCH=amd64 go get -v -d .
-  env GOOS=windows GOARCH=amd64 go build -v -o ratel-windows-amd64.exe -ldflags "-X $ratel_release=$release_version" .
-  mv ratel-windows-amd64.exe $TMP/windows/dgraph-ratel.exe
+  #env GOOS=windows GOARCH=amd64 go get -v -d .
+  #env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -v -o ratel-windows-amd64.exe -ldflags "-X $ratel_release=$release_version" .
+  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+  mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
-  env GOOS=darwin GOARCH=amd64 go get -v -d .
-  env GOOS=darwin GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-darwin-amd64 -ldflags \
-      "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
+  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags \
+  "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
-  mv dgraph-darwin-amd64 $TMP/darwin/dgraph
+  mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
 popd
 
 pushd $basedir/badger/badger
-  env GOOS=darwin GOARCH=amd64 go get -v -d .
-  env GOOS=darwin GOARCH=amd64 GO111MODULE=on go build -v -o badger-darwin-amd64 .
-  mv badger-darwin-amd64 $TMP/darwin/badger
+  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 .
+  mv badger-darwin-10.9-amd64 $TMP/darwin/badger
 popd
 
 pushd $basedir/ratel
-  env GOOS=darwin GOARCH=amd64 go get -v -d .
-  env GOOS=darwin GOARCH=amd64 go build -v -o ratel-darwin-amd64 -v -ldflags "-X $ratel_release=$release_version" .
-  mv ratel-darwin-amd64 $TMP/darwin/dgraph-ratel
+  env CGO_ENABLED=1 xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
+  mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
 popd
 
 # Build Linux.
