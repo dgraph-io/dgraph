@@ -38,14 +38,11 @@ type updateSchemaResolver struct {
 
 	mutation schema.Mutation
 
-	// schema that is generated from the mutation input
-	newGQLSchema    schema.Schema
+	// dgraph schema that is generated from the mutation input
 	newDgraphSchema string
-	newSchema       gqlSchema
 
 	// The underlying executor and rewriter that persist the schema into Dgraph as
 	// GraphQL metadata
-	baseAddRewriter      resolve.MutationRewriter
 	baseMutationRewriter resolve.MutationRewriter
 	baseMutationExecutor resolve.MutationExecutor
 }
@@ -53,9 +50,7 @@ type updateSchemaResolver struct {
 type getSchemaResolver struct {
 	admin *adminServer
 
-	gqlQuery     schema.Query
-	baseRewriter resolve.QueryRewriter
-	baseExecutor resolve.QueryExecutor
+	gqlQuery schema.Query
 }
 
 type updateGQLSchemaInput struct {
@@ -72,37 +67,19 @@ func (asr *updateSchemaResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	asr.newSchema.Schema = input.Set.Schema
-	schHandler, err := schema.NewHandler(asr.newSchema.Schema)
+	schHandler, err := schema.NewHandler(input.Set.Schema)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	asr.newSchema.GeneratedSchema = schHandler.GQLSchema()
-	asr.newGQLSchema, err = schema.FromString(asr.newSchema.GeneratedSchema)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
-	// update that node. Most of the time we can do it using the ID of that node.
-	// The only point where ID won't be available is when admin resolvers have been connected,
-	// but adminServer.initServer() is either waiting for Dgraph cluster to boot up or errored
-	// out due to schema being empty. The upsert using xid filter will take care of that.
-	// Eventually, the ID will be available through worker.SubscribeForUpdates(), when someone
-	// inserts GraphQL schema for the first time.
-	var filter map[string]interface{}
-	if asr.admin.schema.ID != "" {
-		filter = map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}}
-	} else {
-		filter = map[string]interface{}{"xid": map[string]interface{}{"eq": gqlSchemaXidVal}}
-	}
+	// update that node. We will always have its ID present in adminServer, so just need to write a
+	// filter for that ID.
 	m.SetArgTo(schema.InputArgName,
 		map[string]interface{}{
-			"filter": filter,
-			"set":    map[string]interface{}{"schema": asr.newSchema.Schema},
+			"filter": map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}},
+			"set":    map[string]interface{}{"schema": input.Set.Schema},
 		})
 	return asr.baseMutationRewriter.Rewrite(m)
 }
@@ -120,28 +97,16 @@ func (asr *updateSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	asr.admin.mux.Lock()
-	defer asr.admin.mux.Unlock()
-
 	assigned, result, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, nil, err
 	}
-
-	asr.newSchema.ID = asr.admin.schema.ID
-	asr.newSchema.Xid = gqlSchemaXidVal
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
 		return nil, nil, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
-
-	asr.admin.resetSchema(asr.newGQLSchema)
-	asr.admin.schema = asr.newSchema
-
-	glog.Infof("Successfully loaded new GraphQL schema.  Serving New GraphQL API.")
 
 	return assigned, result, nil
 }
@@ -153,15 +118,10 @@ func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuer
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
-	gqlQuery.Rename("queryGQLSchema")
-	return gsr.baseRewriter.Rewrite(ctx, gqlQuery)
+	return nil, nil
 }
 
 func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	if gsr.admin.schema.ID == "" {
-		return gsr.baseExecutor.Query(ctx, query)
-	}
-
 	return doQuery(gsr.admin.schema, gsr.gqlQuery)
 }
 
@@ -170,20 +130,14 @@ func doQuery(gql gqlSchema, field schema.Field) ([]byte, error) {
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
 	x.Check2(buf.WriteString(field.ResponseName()))
-	if gql.ID == "" {
-		x.Check2(buf.WriteString(`": null }`))
-		return buf.Bytes(), nil
-	}
-
 	x.Check2(buf.WriteString(`": [{`))
+
 	for i, sel := range field.SelectionSet() {
 		var val []byte
 		var err error
 		switch sel.Name() {
 		case "id":
 			val, err = json.Marshal(gql.ID)
-		case "xid":
-			val, err = json.Marshal(gql.Xid)
 		case "schema":
 			val, err = json.Marshal(gql.Schema)
 		case "generatedSchema":

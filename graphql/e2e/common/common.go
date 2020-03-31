@@ -650,7 +650,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
 	}
 
-	if sch.GetGQLSchema.ID == "" || sch.GetGQLSchema.Schema == "" {
+	if sch.GetGQLSchema.Schema == "" {
 		return false, nil
 	}
 
