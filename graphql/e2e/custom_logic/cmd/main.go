@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"reflect"
+	"sort"
 	"strings"
 )
 
@@ -63,10 +65,39 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
+func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
+	headers := r.Header
+	expectedKeys := []string{"Accept-Encoding", "User-Agent", "X-App-Token", "X-User-Id"}
+
+	actualKeys := make([]string, 0, len(headers))
+	for k := range headers {
+		actualKeys = append(actualKeys, k)
+	}
+	sort.Strings(expectedKeys)
+	sort.Strings(actualKeys)
+	if !reflect.DeepEqual(expectedKeys, actualKeys) {
+		fmt.Fprint(w, `{"errors": [ { "message": "Expected headers not same as actual." } ]}`)
+		return
+	}
+
+	appToken := r.Header.Get("X-App-Token")
+	if appToken != "app-token" {
+		fmt.Fprintf(w, `{"errors": [ { "message": "Unexpected value for X-App-Token header: %s." } ]}`, appToken)
+		return
+	}
+	userId := r.Header.Get("X-User-Id")
+	if userId != "123" {
+		fmt.Fprintf(w, `{"errors": [ { "message": "Unexpected value for X-User-Id header: %s." } ]}`, userId)
+		return
+	}
+	fmt.Fprintf(w, `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)
+}
+
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
+	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))

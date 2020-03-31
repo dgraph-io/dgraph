@@ -40,14 +40,7 @@ const (
 `
 )
 
-func TestCustomGetQuery(t *testing.T) {
-	schema := customTypes + `
-	type Query {
-        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-                url: "http://mock:8888/favMovies/$id?name=$name&num=$num",
-                method: "GET"
-        })
-	}`
+func updateSchema(t *testing.T, sch string) {
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -56,10 +49,21 @@ func TestCustomGetQuery(t *testing.T) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"sch": schema},
+		Variables: map[string]interface{}{"sch": sch},
 	}
 	addResult := add.ExecuteAsPost(t, alphaAdminURL)
 	require.Nil(t, addResult.Errors)
+}
+
+func TestCustomGetQuery(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+                url: "http://mock:8888/favMovies/$id?name=$name&num=$num",
+                method: "GET"
+        })
+	}`
+	updateSchema(t, schema)
 
 	query := `
 	query {
@@ -91,18 +95,7 @@ func TestCustomPostQuery(t *testing.T) {
                 method: "POST"
         })
 	}`
-	add := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": schema},
-	}
-	addResult := add.ExecuteAsPost(t, alphaAdminURL)
-	require.Nil(t, addResult.Errors)
+	updateSchema(t, schema)
 
 	query := `
 	query {
@@ -124,4 +117,37 @@ func TestCustomPostQuery(t *testing.T) {
 
 	expected := `{"myFavoriteMoviesPost":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
+}
+
+func TestCustomQueryShouldForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+        verifyHeaders(id: ID!): [Movie] @custom(http: {
+                url: "http://mock:8888/verifyHeaders",
+				method: "GET",
+				forwardHeaders: ["X-App-Token", "X-User-Id"]
+        })
+	}`
+	updateSchema(t, schema)
+
+	query := `
+	query {
+		verifyHeaders(id: "0x123") {
+			id
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+		Headers: map[string][]string{
+			"X-App-Token":   []string{"app-token"},
+			"X-User-Id":     []string{"123"},
+			"Random-header": []string{"random"},
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
+	require.Equal(t, expected, string(result.Data))
 }
