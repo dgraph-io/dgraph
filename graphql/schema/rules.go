@@ -39,7 +39,7 @@ func init() {
 
 }
 
-func validateAuthAst(node *RuleAst) gqlerror.List {
+func validateAuthAst(node *RuleAst, pos *ast.Position) gqlerror.List {
 	var errs gqlerror.List
 	if node == nil {
 		return nil
@@ -47,88 +47,107 @@ func validateAuthAst(node *RuleAst) gqlerror.List {
 
 	if node.Typ == SpecialOp {
 		if node.Value != nil {
-			errs = append(errs, gqlerror.Errorf("Special Operation %s has a child", node.Name))
+			errs = append(errs, gqlerror.ErrorPosf(pos,
+				"Special Operation %s has a child", node.Name))
 		}
 		return errs
 	}
 
 	operation := node.GetOperation()
 	if operation == nil {
-		errs = append(errs, gqlerror.Errorf("%s has no operation attached", node.Name))
+		errs = append(errs, gqlerror.ErrorPosf(pos,
+			"%s has no operation attached", node.Name))
 		return errs
 	}
 
 	operand := operation.GetOperand()
 	if operand == nil {
-		errs = append(errs, gqlerror.Errorf("%s operation no value attached", operation.Name))
+		errs = append(errs, gqlerror.ErrorPosf(pos,
+			"%s operation no value attached", operation.Name))
 		return errs
 	}
 
 	if !operation.IsFilter() {
 		if operand.Value != nil {
-			errs = append(errs, gqlerror.Errorf("%s node has a child", operand.Name))
+			errs = append(errs, gqlerror.ErrorPosf(pos,
+				"%s node has a child", operand.Name))
 			return errs
 		}
 		return errs
 	}
-	errs = append(errs, validateAuthAst(operand)...)
+	errs = append(errs, validateAuthAst(operand, pos)...)
 	if operand.GetOperation().IsFilter() {
-		errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
+		errs = append(errs, gqlerror.ErrorPosf(pos,
+			"%s cannot have filter as a child", operand.Name))
 		return errs
 	}
 
 	return errs
 }
 
-func validateAuthNode(node *RuleNode) gqlerror.List {
+func validateAuthNode(node *RuleNode, arg *ast.Value) gqlerror.List {
 	var result gqlerror.List
+	if arg == nil {
+		result = append(result, gqlerror.Errorf("arg found nil"))
+		return result
+	}
 	has := make(map[string]bool)
 
-	for _, childNode := range node.Or {
-		result = append(result, validateAuthNode(childNode)...)
+	child := arg.Children[0].Value
+
+	for i, childNode := range node.Or {
+		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
 		has["or"] = true
 	}
 
-	for _, childNode := range node.And {
-		result = append(result, validateAuthNode(childNode)...)
+	for i, childNode := range node.And {
+		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
 		has["and"] = true
 	}
 
 	if childNode := node.Not; childNode != nil {
-		result = append(result, validateAuthNode(childNode)...)
+		result = append(result, validateAuthNode(childNode, child.Children[0].Value)...)
 		has["not"] = true
 	}
 
 	if ast := node.Rule; ast != nil {
 		has["rule"] = true
-		result = append(result, validateAuthAst(ast)...)
+		result = append(result, validateAuthAst(ast, arg.Position)...)
 	}
 
 	if len(has) > 1 {
-		result = append(result, gqlerror.Errorf("Rule ID: %d has multiple fields true",
-			node.RuleID))
+		result = append(result, gqlerror.ErrorPosf(arg.Position,
+			"Rule has multiple fields true"))
 	}
 
 	return result
 }
 
-func validateAuthRule(rule *AuthContainer) gqlerror.List {
+func validateAuthRule(rule *AuthContainer, dir *ast.Directive) gqlerror.List {
 	var result gqlerror.List
+	if dir == nil {
+		result = append(result, gqlerror.Errorf("directive found nil"))
+		return result
+	}
 
 	if rule.Query != nil {
-		result = append(result, validateAuthNode(rule.Query)...)
+		arg := dir.Arguments.ForName("query")
+		result = append(result, validateAuthNode(rule.Query, arg.Value)...)
 	}
 
 	if rule.Add != nil {
-		result = append(result, validateAuthNode(rule.Add)...)
+		arg := dir.Arguments.ForName("add")
+		result = append(result, validateAuthNode(rule.Add, arg.Value)...)
 	}
 
 	if rule.Update != nil {
-		result = append(result, validateAuthNode(rule.Update)...)
+		arg := dir.Arguments.ForName("update")
+		result = append(result, validateAuthNode(rule.Update, arg.Value)...)
 	}
 
 	if rule.Delete != nil {
-		result = append(result, validateAuthNode(rule.Delete)...)
+		arg := dir.Arguments.ForName("delete")
+		result = append(result, validateAuthNode(rule.Delete, arg.Value)...)
 	}
 
 	return result
@@ -136,16 +155,30 @@ func validateAuthRule(rule *AuthContainer) gqlerror.List {
 
 func validateAuthRules(schema *ast.Schema) gqlerror.List {
 	rules := authRules(schema)
+	typeMapping := typeMappings(schema)
 	var result gqlerror.List
 
-	for _, rule := range rules {
+	wrapRule := func(errs gqlerror.List, path string) gqlerror.List {
+		for _, err := range errs {
+			err.Message = fmt.Sprintf("%s %s", path, err.Message)
+		}
+		return errs
+	}
+
+	for typName, rule := range rules {
+		typ := typeMapping[typName][0]
 		if rule.rules != nil {
-			result = append(result, validateAuthRule(rule.rules)...)
+			auth := typ.Directives.ForName("auth")
+			result = append(result, wrapRule(validateAuthRule(rule.rules, auth),
+				fmt.Sprintf("Type %s;", typName))...)
 		}
 
-		for _, fieldRule := range rule.fields {
+		for fieldName, fieldRule := range rule.fields {
+			field := typ.Fields.ForName(fieldName)
+			auth := field.Directives.ForName("auth")
 			if fieldRule != nil {
-				result = append(result, validateAuthRule(fieldRule)...)
+				result = append(result, wrapRule(validateAuthRule(fieldRule, auth),
+					fmt.Sprintf("Type %s; Field %s:", typName, fieldName))...)
 			}
 		}
 	}

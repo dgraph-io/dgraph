@@ -715,7 +715,8 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "X-MyApp-Role has no operation attached",},
+    {"message": "Type User; X-MyApp-Role has no operation attached",
+      "locations":[{"line":2, "column":10}]},
     ]
 
   - name: "Adding authorization rule for non-existent predicate in rbac."
@@ -726,7 +727,8 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "isPublic has no operation attached",},
+    {"message": "Type User; isPublic has no operation attached",
+      "locations":[{"line":2, "column":10}]},
     ]
 
   - name: "Adding authorization rule for non-existent predicate in query."
@@ -737,7 +739,23 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "xyz has no operation attached",},
+    {"message": "Type User; xyz has no operation attached",
+      "locations":[{"line":2, "column":10}]},
+    ]
+
+  -
+    name: "auth multiple rules in one node"
+    input: |
+      type User @auth(query:{or: [{
+        rule: "DENY"
+      },{
+        rule: "DENY"
+      }], rule: "DENY"}) {
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; Rule has multiple fields true",
+      "locations":[{"line":1, "column":23}]},
     ]
 
 valid_schemas:
@@ -841,3 +859,5 @@ valid_schemas:
       type Y {
         f1: [X] @dgraph(pred: "f1")
       }
+
+
