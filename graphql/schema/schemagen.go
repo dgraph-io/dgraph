@@ -320,7 +320,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				}
 			}
 			if pwdField != nil {
-				parentInt := parentInterface(gqlSch, def, pwdField.Name)
+				parentInt := parentInterfaceForPwdField(gqlSch, def, pwdField.Name)
 				if parentInt != nil {
 					typName = typeName(parentInt)
 				}

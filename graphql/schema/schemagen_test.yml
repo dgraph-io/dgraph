@@ -438,23 +438,33 @@ schemas:
   -
     name: "fields with same @dgraph(pred: ...) occur only once in schema"
     input: |
-      type A {
-        p: String @dgraph(pred: "name")
+      interface A {
+        p: String @dgraph(pred: "key")
       }
-      type B {
+      type B implements A {
         q: String @dgraph(pred: "name")
+      }
+      type C {
+        r: String @dgraph(pred: "name")
+        s: String @dgraph(pred: "key")
         name: String
       }
     output: |
       type A {
+        key
+      }
+      key: string .
+      type B {
+        key
         name
       }
       name: string .
-      type B {
+      type C {
         name
-        B.name
+        key
+        C.name
       }
-      B.name: string .
+      C.name: string .
 
   -
     name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
