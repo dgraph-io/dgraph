@@ -17,7 +17,6 @@
 package posting
 
 import (
-	"flag"
 	"fmt"
 	"io/ioutil"
 	"math"
@@ -34,30 +33,25 @@ type kv struct {
 }
 
 var tmpIndexDir, err = ioutil.TempDir("", "dgraph_index_")
+
 var dbOpts = badger.DefaultOptions(tmpIndexDir).
 	WithSyncWrites(false).
 	WithNumVersionsToKeep(math.MaxInt64).
-	//WithLogger(&x.ToGlog{}).
-	WithCompression(options.None).
-	WithEventLogging(false).
-	WithLogRotatesToFlush(10).
-	WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
+	WithCompression(options.None)
 
 var db, err2 = badger.OpenManaged(dbOpts)
 
 func createKVList() []kv {
 	var KVList = []kv{}
 	for i := 0; i < 50000; i++ {
-		n := kv{key: []byte(string(i)), value: []byte("Check Value")}
+		n := kv{key: []byte(string(i)), value: []byte(string(i))}
 		KVList = append(KVList, n)
 	}
 	return KVList
 }
 
 func BenchmarkTxnWriter(b *testing.B) {
-	flag.Parse()
 	KVList := createKVList()
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		w := NewTxnWriter(db)
@@ -74,7 +68,6 @@ func BenchmarkTxnWriter(b *testing.B) {
 }
 
 func BenchmarkWriteBatch(b *testing.B) {
-	flag.Parse()
 	KVList := createKVList()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
