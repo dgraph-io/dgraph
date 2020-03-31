@@ -705,6 +705,8 @@ invalid_schemas:
     errlist: [
       {"message": "Type X; has a secret directive and field of the same name f1",
       "locations":[{"line":1, "column":6}]},
+      {"message": "Type X; Field f1: has the @dgraph predicate, but that conflicts with type X @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
+       "locations":[{"line":2, "column":3}]},
     ]
 
   -
@@ -717,6 +719,7 @@ invalid_schemas:
       type X implements W {
         f3: Y @dgraph(pred: "link")
         f4: String! @dgraph(pred: "f4") @id
+        f6: String
       }
       type Y {
         f1: Int @dgraph(pred: "name")
@@ -724,18 +727,21 @@ invalid_schemas:
         f3: X @dgraph(pred: "link")
         f4: String @dgraph(pred: "f4")
         f5: String @dgraph(pred: "pwd")
+        f6: Int @dgraph(pred: "X.f6")
       }
     errlist: [
     {"message": "Type Y; Field f1: has type Int, which is different to type W; field f1, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
-     "locations":[{"line":10, "column":3}]},
-    {"message": "Type Y; Field f2: has type Float, which is different to type W; field f2, which has the same @dgraph directive but type [Float]. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
      "locations":[{"line":11, "column":3}]},
-    {"message": "Type Y; Field f3: has type X, which is different to type X; field f3, which has the same @dgraph directive but type Y. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+    {"message": "Type Y; Field f2: has type Float, which is different to type W; field f2, which has the same @dgraph directive but type [Float]. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
      "locations":[{"line":12, "column":3}]},
-    {"message": "Type Y; Field f4: doesn't have @id directive, which conflicts with type X; field f4, which has the same @dgraph directive along with @id directive. Both these fields must either use @id directive, or use different Dgraph predicates.",
+    {"message": "Type Y; Field f3: has type X, which is different to type X; field f3, which has the same @dgraph directive but type Y. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
      "locations":[{"line":13, "column":3}]},
-    {"message": "Type Y; Field f5: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
+    {"message": "Type Y; Field f4: doesn't have @id directive, which conflicts with type X; field f4, which has the same @dgraph directive along with @id directive. Both these fields must either use @id directive, or use different Dgraph predicates.",
      "locations":[{"line":14, "column":3}]},
+    {"message": "Type Y; Field f5: has the @dgraph predicate, but that conflicts with type W @secret directive on the same predicate. @secret predicates are stored encrypted and so the same predicate can't be used as a String.",
+     "locations":[{"line":15, "column":3}]},
+    {"message": "Type Y; Field f6: has type Int, which is different to type X; field f6, which has the same @dgraph directive but type String. These fields must have either the same GraphQL types, or use different Dgraph predicates.",
+     "locations":[{"line":16, "column":3}]},
     ]
 
 

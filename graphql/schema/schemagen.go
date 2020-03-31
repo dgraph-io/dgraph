@@ -210,6 +210,21 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
 
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+		pred, ok := dgPreds[fname]
+		if !ok {
+			pred = dgPred{
+				typ:     typStr,
+				indexes: make(map[string]bool),
+				upsert:  upsertStr,
+			}
+		}
+		for _, index := range indexes {
+			pred.indexes[index] = true
+		}
+		return pred
+	}
+
 	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
@@ -217,7 +232,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			typName := typeName(def)
 
 			typ := dgType{name: typName}
-			fd := getPasswordField(def)
+			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
@@ -253,9 +268,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							forwardPred.reverse = "@reverse "
 							dgPreds[forwardEdge] = forwardPred
 						} else {
-							edge := dgPreds[fname]
-							edge.typ = typStr
-							dgPreds[fname] = edge
+							pred := dgPreds[fname]
+							pred.typ = typStr
+							dgPreds[fname] = pred
 						}
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -284,18 +299,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 					}
 
 					if parentInt == nil {
-						edge, ok := dgPreds[fname]
-						if !ok {
-							edge = dgPred{
-								typ:     typStr,
-								indexes: make(map[string]bool),
-								upsert:  upsertStr,
-							}
-						}
-						for _, index := range indexes {
-							edge.indexes[index] = true
-						}
-						dgPreds[fname] = edge
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
@@ -310,27 +314,17 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						}
 					}
 					if parentInt == nil {
-						edge, ok := dgPreds[fname]
-						if !ok {
-							edge = dgPred{
-								typ:     typStr,
-								indexes: make(map[string]bool),
-							}
-						}
-						for _, index := range indexes {
-							edge.indexes[index] = true
-						}
-						dgPreds[fname] = edge
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
 			}
-			if fd != nil {
-				parentInt := parentInterface(gqlSch, def, fd.Name)
+			if pwdField != nil {
+				parentInt := parentInterface(gqlSch, def, pwdField.Name)
 				if parentInt != nil {
 					typName = typeName(parentInt)
 				}
-				fname := fieldName(fd, typName)
+				fname := fieldName(pwdField, typName)
 
 				if parentInt == nil {
 					dgPreds[fname] = dgPred{typ: "password"}

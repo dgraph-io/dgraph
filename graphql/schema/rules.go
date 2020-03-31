@@ -91,11 +91,10 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 				}
 
 				fname := fieldName(f, typName)
-				// No validation needed if this field doesn't have @dgraph(pred : ...). Also,
 				// this field could have originally been defined in an interface that this type
 				// implements. If we get a parent interface, that means this field gets validated
 				// during the validation of that interface. So, no need to validate this field here.
-				if fname != typName+"."+f.Name && parentInterface(gqlSch, def, f.Name) == nil {
+				if parentInterface(gqlSch, def, f.Name) == nil {
 
 					var prefix, suffix string
 					if f.Type.Elem != nil {
@@ -134,7 +133,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 			pwdField := getPasswordField(def)
 			if pwdField != nil {
 				fname := fieldName(pwdField, typName)
-				if fname != typName+"."+pwdField.Name && parentInterface(gqlSch, def,
+				if parentInterface(gqlSch, def,
 					pwdField.Name) == nil {
 					thisPred := pred{
 						name:       pwdField.Name,

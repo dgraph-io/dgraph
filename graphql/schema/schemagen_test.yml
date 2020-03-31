@@ -466,11 +466,17 @@ schemas:
       type B {
         q: String @dgraph(pred: "name") @search(by: [trigram])
       }
+      type C {
+        q: String @dgraph(pred: "name") @search(by: [exact, term])
+      }
     output: |
       type A {
         name
       }
       name: string @index(exact, term, trigram) .
       type B {
+        name
+      }
+      type C {
         name
       }
