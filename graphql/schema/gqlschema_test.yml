@@ -719,6 +719,19 @@ invalid_schemas:
       "locations":[{"line":2, "column":10}]},
     ]
 
+  - name: "No operator provided after predicate inside not"
+    input: |
+      type User @auth(
+          add: { not : { rule: "username" }},
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; username has no operation attached",
+      "locations":[{"line":2, "column":18}]},
+    ]
+
+
   - name: "Invalid operator provided after predicate"
     input: |
       type User @auth(
@@ -977,4 +990,81 @@ valid_schemas:
         f1: [X] @dgraph(pred: "f1")
       }
 
+  -
+    name: "auth special operation"
+    input: |
+      type X @auth(add: {rule: "DENY"}) {
+        username: String! @id
+      }
+
+  -
+    name: "auth jwt equals constant"
+    input: |
+      type X @auth(add: {rule: "$X-MyApp-Role: {eq: ADMIN}"}) {
+        username: String! @id
+      }
+
+  -
+    name: "auth gql type equals constant"
+    input: |
+      type X @auth(add: {rule: "userRole: {eq: ADMIN}"}) {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth gql type and filter"
+    input: |
+      type Todo @auth(add: {rule: "owner (filter: { username: { eq: ADMIN }})"}){
+        msg: String!
+        owner: User
+      }
+      type User {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth gql type and filter with jwt"
+    input: |
+      type Todo @auth(add: {rule: "owner (filter: { username: { eq: $MY-APP }})"}){
+        msg: String!
+        owner: User
+      }
+      type User {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth rule inside not"
+    input: |
+      type X @auth(add: {not: {rule: "userRole: {eq: ADMIN}"} }) {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth rule inside or"
+    input: |
+      type X @auth(add: {or: {rule: "userRole: {eq: ADMIN}"} }) {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth rule inside and"
+    input: |
+      type X @auth(add: {or: {rule: "userRole: {eq: ADMIN}"} }) {
+        username: String! @id
+        userRole: String
+      }
+
+  -
+    name: "auth rule inside nested or, and and not"
+    input: |
+      type X @auth(add: {or: {and: {not : { rule: "userRole: {eq: ADMIN}"} } } }) {
+        username: String! @id
+        userRole: String
+      }
 

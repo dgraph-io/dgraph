@@ -127,7 +127,7 @@ func validateAuthNode(node *RuleNode, arg *ast.Value) gqlerror.List {
 	}
 
 	if childNode := node.Not; childNode != nil {
-		result = append(result, validateAuthNode(childNode, child.Children[0].Value)...)
+		result = append(result, validateAuthNode(childNode, child)...)
 		has["not"] = true
 	}
 
@@ -202,10 +202,6 @@ func validateAuthRules(schema *ast.Schema) gqlerror.List {
 					fmt.Sprintf("Type %s; Field %s:", typName, fieldName))...)
 			}
 		}
-	}
-
-	if len(result) == 0 {
-		return nil
 	}
 
 	return result
