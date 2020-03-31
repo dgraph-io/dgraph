@@ -707,6 +707,123 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
+  - name: "No operator provided after predicate"
+    input: |
+      type User @auth(
+          add: { rule: "username" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; username has no operation attached",
+      "locations":[{"line":2, "column":10}]},
+    ]
+
+  - name: "Invalid operator provided after predicate"
+    input: |
+      type User @auth(
+          add: { rule: "username: { op : ADD-BOT }" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; username has no operation attached, found op instead",
+      "locations":[{"line":2, "column":10}]},
+    ]
+
+  - name: "Nested eq operator"
+    input: |
+      type User @auth(
+          add: { rule: "username: { eq : ADD-BOT : { eq : A } }" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; ADD-BOT node can't have a nested operator",
+      "locations":[{"line":2, "column":10}]},
+    ]
+
+  - name: "Invalid comparison operator for authorization RBAC rule."
+    input: |
+      type User @auth(
+          add: { rule: "$X-MyApp-Role: { op: ADD-BOT }" },
+      ){
+          username: String! @id
+      }
+    errlist: [
+    {"message": "Type User; X-MyApp-Role has no operation attached, found op instead",
+      "locations":[{"line":2, "column":10}]},
+    ]
+
+  - name: "No operand provided after filter operator"
+    input: |
+      type Todo @auth(
+         add: { rule: "owner (filter)" },
+      ){
+         owner: User
+      }
+
+      type User {
+          name: String! @id
+      }
+
+    errlist: [
+    {"message": "Type Todo; filter operation has no value attached",
+      "locations":[{"line":2, "column":9}]},
+    ]
+
+  - name: "Invalid operand provided after filter operator"
+    input: |
+      type Todo @auth(
+         add: { rule: "owner (filter: { eq : { eq : ADD-BOT }})" },
+      ){
+         owner: User
+      }
+
+      type User {
+          name: String! @id
+      }
+
+    errlist: [
+    {"message": "Type Todo; filter expects graphql field as input, found eq",
+      "locations":[{"line":2, "column":9}]},
+    ]
+
+  - name: "Invalid operation provided inside filter operator"
+    input: |
+      type Todo @auth(
+         add: { rule: "owner (filter: { name : ADD-BOT })" },
+      ){
+         owner: User
+      }
+
+      type User {
+          name: String! @id
+      }
+
+    errlist: [
+    {"message": "Type Todo; name has no operation attached, found ADD-BOT instead",
+      "locations":[{"line":2, "column":9}]},
+    ]
+
+  - name: "Nested filters in auth"
+    input: |
+      type Todo @auth(
+         add: { rule: "owner (filter: { name (filter: {name : ADD-BOT })})" },
+      ){
+         owner: User
+      }
+
+      type User {
+          name: String! @id
+      }
+
+    errlist: [
+    {"message": "Type Todo; name cannot have nested filter as a child",
+      "locations":[{"line":2, "column":9}]},
+    ]
+
+
   - name: "Invalid comparison operator for authorization RBAC rule."
     input: |
       type User @auth(
@@ -715,7 +832,7 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; X-MyApp-Role has no operation attached",
+    {"message": "Type User; X-MyApp-Role has no operation attached, found ne instead",
       "locations":[{"line":2, "column":10}]},
     ]
 
@@ -727,7 +844,7 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; isPublic has no operation attached",
+    {"message": "Type User; Constant node isPublic should be a leaf node, found child eq",
       "locations":[{"line":2, "column":10}]},
     ]
 
@@ -739,7 +856,7 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; xyz has no operation attached",
+    {"message": "Type User; Constant node xyz should be a leaf node, found child filter",
       "locations":[{"line":2, "column":10}]},
     ]
 

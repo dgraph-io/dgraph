@@ -53,34 +53,55 @@ func validateAuthAst(node *RuleAst, pos *ast.Position) gqlerror.List {
 		return errs
 	}
 
+	if node.Typ == Constant {
+		if node.Value != nil {
+			errs = append(errs, gqlerror.ErrorPosf(pos,
+				"Constant node %s should be a leaf node, found child %s",
+				node.Name, node.Value.Name))
+		} else {
+			errs = append(errs, gqlerror.ErrorPosf(pos, "Invalid rule %s", node.Name))
+		}
+		return errs
+	}
+
 	operation := node.GetOperation()
 	if operation == nil {
-		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"%s has no operation attached", node.Name))
+		errMsg := fmt.Sprintf("%s has no operation attached", node.Name)
+		if node.Value != nil {
+			errMsg = fmt.Sprintf("%s, found %s instead", errMsg, node.Value.Name)
+		}
+		errs = append(errs, gqlerror.ErrorPosf(pos, errMsg))
 		return errs
 	}
 
 	operand := operation.GetOperand()
 	if operand == nil {
 		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"%s operation no value attached", operation.Name))
+			"%s operation has no value attached", operation.Name))
 		return errs
 	}
 
 	if !operation.IsFilter() {
 		if operand.Value != nil {
 			errs = append(errs, gqlerror.ErrorPosf(pos,
-				"%s node has a child", operand.Name))
+				"%s node can't have a nested operator", operand.Name))
 			return errs
 		}
 		return errs
 	}
-	errs = append(errs, validateAuthAst(operand, pos)...)
-	if operand.GetOperation().IsFilter() {
+
+	if !operand.IsGqlTyp() {
 		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"%s cannot have filter as a child", operand.Name))
+			"filter expects graphql field as input, found %s", operand.Name))
 		return errs
 	}
+
+	if operand.GetOperation().IsFilter() {
+		errs = append(errs, gqlerror.ErrorPosf(pos,
+			"%s cannot have nested filter as a child", operand.Name))
+		return errs
+	}
+	errs = append(errs, validateAuthAst(operand, pos)...)
 
 	return errs
 }
