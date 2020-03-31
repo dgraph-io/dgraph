@@ -97,17 +97,9 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 	}
 
 	checkExistingInterfaceFieldError := func(def *ast.Definition, existingPred, newPred pred) {
-		if def.Kind == ast.Interface {
-			for _, defName := range def.Types {
-				if existingPred.parentName == defName {
-					errs = append(errs, existingInterfaceFieldError(newPred, existingPred))
-				}
-			}
-		} else {
-			for _, defName := range def.Interfaces {
-				if existingPred.parentName == defName {
-					errs = append(errs, existingInterfaceFieldError(existingPred, newPred))
-				}
+		for _, defName := range def.Interfaces {
+			if existingPred.parentName == defName {
+				errs = append(errs, existingInterfaceFieldError(existingPred, newPred))
 			}
 		}
 	}
@@ -121,7 +113,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 			interfacePreds1 := interfacePreds[intr1]
 			for j := i + 1; j < len(interfaces); j++ {
 				intr2 := interfaces[j]
-				for fname, _ := range interfacePreds[intr2] {
+				for fname := range interfacePreds[intr2] {
 					if interfacePreds1[fname] {
 						if len(fieldsToReport[fname]) == 0 {
 							fieldsToReport[fname] = append(fieldsToReport[fname], intr1)
@@ -204,7 +196,9 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 								errs = append(errs, idError(thisPred, pred))
 							}
 						}
-						checkExistingInterfaceFieldError(def, pred, thisPred)
+						if def.Kind == ast.Object {
+							checkExistingInterfaceFieldError(def, pred, thisPred)
+						}
 					} else {
 						preds[fname] = thisPred
 					}
@@ -228,7 +222,9 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 						if thisPred.typ != pred.typ || !pred.isSecret {
 							errs = append(errs, secretError(thisPred, pred))
 						}
-						checkExistingInterfaceFieldError(def, pred, thisPred)
+						if def.Kind == ast.Object {
+							checkExistingInterfaceFieldError(def, pred, thisPred)
+						}
 					} else {
 						preds[fname] = thisPred
 					}
