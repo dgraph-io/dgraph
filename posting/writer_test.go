@@ -73,13 +73,11 @@ func BenchmarkWriter(b *testing.B) {
 					require.NoError(b, err)
 				}
 			}
-			err := w.Flush()
-			if validate {
-				require.NoError(b, err)
-			}
+			require.NoError(b, w.Flush())
+
 		}
 	})
-	b.Run("Write batch", func(b *testing.B) {
+	b.Run("WriteBatch", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -102,10 +100,7 @@ func BenchmarkWriter(b *testing.B) {
 					require.NoError(b, err)
 				}
 			}
-			err := batch.Flush()
-			if validate {
-				require.NoError(b, err)
-			}
+			require.NoError(b, batch.Flush())
 		}
 	})
 }
