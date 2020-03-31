@@ -336,19 +336,20 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 	hash := block.Header.Hash()
 
 	// set best block key if this is the highest block we've seen
-	// TODO: update to use canonical path
-	if block.Header.Number.Cmp(bs.highestBlockHeader.Number) == 1 {
+	if hash == bs.BestBlockHash() {
 		err = bs.setBestBlockHashKey(hash)
 		if err != nil {
 			return err
 		}
 	}
 
-	// TODO: only set number->hash mapping for our canonical chain, otherwise, this messes up BlockResponses
-	// store number to hash
-	err = bs.db.Put(headerHashKey(block.Header.Number.Uint64()), hash.ToBytes())
-	if err != nil {
-		return err
+	// only set number->hash mapping for our current chain
+	var onChain bool
+	if onChain, err = bs.isBlockOnCurrentChain(block.Header); onChain && err == nil {
+		err = bs.db.Put(headerHashKey(block.Header.Number.Uint64()), hash.ToBytes())
+		if err != nil {
+			return err
+		}
 	}
 
 	err = bs.SetBlockBody(block.Header.Hash(), types.NewBody(block.Body.AsOptional().Value))
@@ -356,6 +357,27 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 		return err
 	}
 	return err
+}
+
+func (bs *BlockState) isBlockOnCurrentChain(header *types.Header) (bool, error) {
+	bestBlock, err := bs.BestBlockHeader()
+	if err != nil {
+		return false, err
+	}
+
+	// if the new block is ahead of our best block, then it is on our current chain.
+	if header.Number.Cmp(bestBlock.Number) == 1 {
+		return true, nil
+	}
+
+	_, err = bs.SubChain(header.Hash(), bestBlock.Hash())
+	if err != nil {
+		// subchain function will error if the new block is not a precessor of our best block,
+		// thus it is not on our current chain
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // HighestBlockHash returns the hash of the block with the highest number we have received

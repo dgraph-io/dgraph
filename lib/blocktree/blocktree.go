@@ -93,7 +93,6 @@ func (bt *BlockTree) AddBlock(block *types.Block, arrivalTime uint64) error {
 		arrivalTime: arrivalTime,
 	}
 	parent.addChild(n)
-
 	bt.leaves.replace(parent, n)
 
 	return nil
@@ -179,7 +178,8 @@ func (bt *BlockTree) deepestLeaf() *node {
 	return bt.leaves.deepestLeaf()
 }
 
-// DeepestBlockHash returns the hash of the leftmost deepest block in the blocktree
+// DeepestBlockHash returns the hash of the deepest block in the blocktree
+// If there is multiple deepest blocks, it returns the one with the earliest arrival time.
 func (bt *BlockTree) DeepestBlockHash() Hash {
 	return bt.leaves.deepestLeaf().hash
 }

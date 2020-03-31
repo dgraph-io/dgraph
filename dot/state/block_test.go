@@ -48,7 +48,6 @@ func newTestBlockState(header *types.Header) *BlockState {
 
 func TestSetAndGetHeader(t *testing.T) {
 	bs := newTestBlockState(nil)
-	defer bs.db.db.Close()
 
 	header := &types.Header{
 		Number:    big.NewInt(0),
@@ -106,11 +105,9 @@ func TestAddBlock(t *testing.T) {
 	}
 
 	bs := newTestBlockState(genesisHeader)
-	defer bs.db.db.Close()
 
 	// Create header
 	header0 := &types.Header{
-
 		Number:     big.NewInt(0),
 		Digest:     [][]byte{},
 		ParentHash: genesisHeader.Hash(),
@@ -182,7 +179,6 @@ func TestGetSlotForBlock(t *testing.T) {
 	}
 
 	bs := newTestBlockState(genesisHeader)
-	defer bs.db.db.Close()
 
 	preDigest, err := common.HexToBytes("0x014241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")
 	if err != nil {
@@ -212,5 +208,96 @@ func TestGetSlotForBlock(t *testing.T) {
 
 	if !reflect.DeepEqual(res, expectedSlot) {
 		t.Fatalf("Fail: got %x expected %x", res, expectedSlot)
+	}
+}
+
+func TestIsBlockOnCurrentChain(t *testing.T) {
+	genesisHeader := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
+	bs := newTestBlockState(genesisHeader)
+	currChain, branchChains := addBlocksToState(bs, 8)
+
+	for _, header := range currChain {
+		onChain, err := bs.isBlockOnCurrentChain(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !onChain {
+			t.Fatalf("Fail: expected block %s to be on current chain", header.Hash())
+		}
+	}
+
+	for _, header := range branchChains {
+		onChain, err := bs.isBlockOnCurrentChain(header)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if onChain {
+			t.Fatalf("Fail: expected block %s not to be on current chain", header.Hash())
+		}
+	}
+}
+
+func TestAddBlock_BlockNumberToHash(t *testing.T) {
+	genesisHeader := &types.Header{
+		Number:    big.NewInt(0),
+		StateRoot: trie.EmptyHash,
+	}
+
+	bs := newTestBlockState(genesisHeader)
+	currChain, branchChains := addBlocksToState(bs, 8)
+
+	bestHash := bs.BestBlockHash()
+	bestHeader, err := bs.BestBlockHeader()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var resBlock *types.Block
+	for _, header := range currChain {
+		resBlock, err = bs.GetBlockByNumber(header.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if resBlock.Header.Hash() != header.Hash() {
+			t.Fatalf("Fail: got %s expected %s for block %d", resBlock.Header.Hash(), header.Hash(), header.Number)
+		}
+	}
+
+	for _, header := range branchChains {
+		resBlock, err = bs.GetBlockByNumber(header.Number)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if resBlock.Header.Hash() == header.Hash() {
+			t.Fatalf("Fail: should not have gotten block %s for branch block num=%d", header.Hash(), header.Number)
+		}
+	}
+
+	newBlock := &types.Block{
+		Header: &types.Header{
+			ParentHash: bestHash,
+			Number:     big.NewInt(0).Add(bestHeader.Number, big.NewInt(1)),
+		},
+		Body: &types.Body{},
+	}
+
+	err = bs.AddBlock(newBlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resBlock, err = bs.GetBlockByNumber(newBlock.Header.Number)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if resBlock.Header.Hash() != newBlock.Header.Hash() {
+		t.Fatalf("Fail: got %s expected %s for block %d", resBlock.Header.Hash(), newBlock.Header.Hash(), newBlock.Header.Number)
 	}
 }

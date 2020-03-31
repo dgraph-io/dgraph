@@ -90,17 +90,21 @@ func TestMemDB_Start(t *testing.T) {
 	state.Stop()
 }
 
-func addBlocksToState(blockState *BlockState, depth int) {
-	previousHash := blockState.BestBlockHash()
+// branch tree randomly
+type testBranch struct {
+	hash  common.Hash
+	depth int
+}
 
-	// branch tree randomly
-	type testBranch struct {
-		hash  common.Hash
-		depth int
-	}
+func addBlocksToState(blockState *BlockState, depth int) ([]*types.Header, []*types.Header) {
+	previousHash := blockState.BestBlockHash()
 
 	branches := []testBranch{}
 	r := *rand.New(rand.NewSource(rand.Int63()))
+
+	arrivalTime := uint64(1)
+	currentChain := []*types.Header{}
+	branchChains := []*types.Header{}
 
 	// create base tree
 	for i := 1; i <= depth; i++ {
@@ -113,8 +117,10 @@ func addBlocksToState(blockState *BlockState, depth int) {
 			Body: &types.Body{},
 		}
 
+		currentChain = append(currentChain, block.Header)
+
 		hash := block.Header.Hash()
-		blockState.AddBlock(block)
+		blockState.AddBlockWithArrivalTime(block, arrivalTime)
 		previousHash = hash
 
 		isBranch := r.Intn(2)
@@ -124,25 +130,36 @@ func addBlocksToState(blockState *BlockState, depth int) {
 				depth: i,
 			})
 		}
+
+		arrivalTime++
 	}
 
 	// create tree branches
 	for _, branch := range branches {
-		for i := branch.depth; i <= depth; i++ {
+		previousHash = branch.hash
+
+		for i := branch.depth; i < depth; i++ {
 			block := &types.Block{
 				Header: &types.Header{
 					ParentHash: previousHash,
-					Number:     big.NewInt(int64(i)),
+					Number:     big.NewInt(int64(i) + 1),
 					StateRoot:  trie.EmptyHash,
+					Digest:     [][]byte{{byte(i)}},
 				},
 				Body: &types.Body{},
 			}
 
+			branchChains = append(branchChains, block.Header)
+
 			hash := block.Header.Hash()
-			blockState.AddBlock(block)
+			blockState.AddBlockWithArrivalTime(block, arrivalTime)
 			previousHash = hash
+
+			arrivalTime++
 		}
 	}
+
+	return currentChain, branchChains
 }
 
 func TestService_BlockTree(t *testing.T) {
