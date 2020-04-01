@@ -27,7 +27,7 @@ HUGO="${HUGO:-hugo}"
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
-        'v20.03.0'
+	'v20.03.0'
 	'master'
 	'v1.2.2'
 	'v1.2.1'
