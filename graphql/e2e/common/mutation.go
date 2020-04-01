@@ -2374,33 +2374,7 @@ func deleteState(
 	filter map[string]interface{},
 	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-
-	deleteStateParams := &GraphQLParams{
-		Query: `mutation deleteState($filter: StateFilter!) {
-			deleteState(filter: $filter) { msg numUids }
-		}`,
-		Variables: map[string]interface{}{"filter": filter},
-	}
-
-	gqlResponse := deleteStateParams.ExecuteAsPost(t, graphqlURL)
-	if len(expectedErrors) == 0 {
-		requireNoGQLErrors(t, gqlResponse)
-
-		var result struct {
-			DeleteState struct {
-				Msg     string
-				NumUids int
-			}
-		}
-		err := json.Unmarshal(gqlResponse.Data, &result)
-		require.NoError(t, err)
-		require.Equal(t, "Deleted", result.DeleteState.Msg)
-		require.Equal(t, expectedNumUids, result.DeleteState.NumUids)
-	} else {
-		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-			t.Errorf("errors mismatch (-want +got):\n%s", diff)
-		}
-	}
+	deleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteGqlType(
