@@ -987,6 +987,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
 	}
+	var total uint64
+	for _, num := range resp.Metrics.NumUids {
+		total += num
+	}
+	resp.Metrics.NumUids["_total"] = total
 
 	return resp, err
 }
