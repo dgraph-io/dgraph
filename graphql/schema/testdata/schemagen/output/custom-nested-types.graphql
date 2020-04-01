@@ -2,16 +2,16 @@
 # Input Schema
 #######################
 
-type Car @not_dgraph {
+type Car @remote {
 	id: ID!
 	name: String!
 }
 
-interface Person @not_dgraph {
+interface Person @remote {
 	age: Int!
 }
 
-type User implements Person @not_dgraph {
+type User implements Person @remote {
 	age: Int!
 	id: ID!
 	name: String!
@@ -58,7 +58,7 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
-directive @not_dgraph on OBJECT | INTERFACE
+directive @remote on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
