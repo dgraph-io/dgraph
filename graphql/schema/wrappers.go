@@ -52,6 +52,7 @@ type HTTPResolverConfig struct {
 	ForwardHeaders http.Header
 	httpArg        *ast.Argument
 	graphqlArg     *ast.Argument
+	argMap         map[string]interface{}
 }
 
 // Query/Mutation types and arg names
@@ -816,6 +817,7 @@ func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 		Method:     httpArg.Value.Children.ForName("method").Raw,
 		httpArg:    httpArg,
 		graphqlArg: graphql,
+		argMap:     q.field.ArgumentMap(q.op.vars),
 	}
 
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
@@ -832,12 +834,11 @@ func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 
 	rc, query := q.buildHTTPConfig()
-	argMap := q.field.ArgumentMap(q.op.vars)
 	vars := make(map[string]interface{})
 	// Let's collect the value of query args in vars map and use that for constructing the body
 	// from the template below.
 	for _, arg := range query.Arguments {
-		val := argMap[arg.Name]
+		val := rc.argMap[arg.Name]
 		vars[arg.Name] = val
 		if val == nil {
 			// Instead of replacing value to nil for optional arguments, we replace it with an
@@ -863,7 +864,15 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 func (q *query) GraphqlResolver() {
 	rc, query := q.buildHTTPConfig()
 
-	rc.
+	for _, arg := range query.Arguments {
+		val := rc.argMap[arg.Name]
+		if val == nil {
+			// Instead of replacing value to nil for optional arguments, we replace it with an
+			// empty string.
+			val = ""
+		}
+		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
+	}
 
 }
 
