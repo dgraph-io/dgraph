@@ -169,19 +169,23 @@ func typeName(def *ast.Definition) string {
 }
 
 // fieldName returns the dgraph predicate corresponding to a field.
-// If the field had a dgraph directive, then it returns the value of the name field otherwise
+// If the field had a dgraph directive, then it returns the value of the pred arg otherwise
 // it returns typeName + "." + fieldName.
 func fieldName(def *ast.FieldDefinition, typName string) string {
-	name := typName + "." + def.Name
-	dir := def.Directives.ForName(dgraphDirective)
-	if dir == nil {
-		return name
-	}
-	predArg := dir.Arguments.ForName(dgraphPredArg)
+	predArg := getDgraphDirPredArg(def)
 	if predArg == nil {
-		return name
+		return typName + "." + def.Name
 	}
 	return predArg.Value.Raw
+}
+
+func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
+	dir := def.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return nil
+	}
+	predArg := dir.Arguments.ForName(dgraphPredArg)
+	return predArg
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.

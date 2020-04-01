@@ -208,7 +208,8 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 			pwdField := getPasswordField(def)
 			if pwdField != nil {
 				fname := fieldName(pwdField, typName)
-				if parentInterfaceForPwdField(gqlSch, def, pwdField.Name) == nil {
+				if getDgraphDirPredArg(pwdField) != nil && parentInterfaceForPwdField(gqlSch, def,
+					pwdField.Name) == nil {
 					thisPred := pred{
 						name:       pwdField.Name,
 						parentName: def.Name,
