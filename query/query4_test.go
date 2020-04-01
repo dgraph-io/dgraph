@@ -1545,4 +1545,5 @@ func TestNumUids(t *testing.T) {
 	metrics := processQueryForMetrics(t, query)
 	require.Equal(t, metrics.NumUids["friend"], uint64(10))
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
+	require.Equal(t, metrics.NumUids["_total"], uint64(26))
 }
