@@ -15,6 +15,8 @@ package worker
 import (
 	"bufio"
 	"compress/gzip"
+	"crypto/aes"
+	"crypto/cipher"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -28,13 +30,14 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) LoadResult {
+func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
 		return LoadResult{0, 0, err}
@@ -59,10 +62,26 @@ func RunRestore(pdir, location, backupId string) LoadResult {
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-			gzReader, err := gzip.NewReader(r)
-			if err != nil {
-				return 0, nil
+
+			var gzReader *gzip.Reader
+			var iv []byte = make([]byte, aes.BlockSize) // TODO: Dont use all 0s IV. Read from ciphertext.
+			if keyfile != "" {
+				c, err := aes.NewCipher(enc.ReadEncryptionKeyFile(keyfile))
+				if err != nil {
+					return 0, err
+				}
+				cipherReader := cipher.StreamReader{S: cipher.NewOFB(c, iv), R: r}
+				gzReader, err = gzip.NewReader(cipherReader)
+				if err != nil {
+					return 0, err
+				}
+			} else {
+				gzReader, err = gzip.NewReader(r)
+				if err != nil {
+					return 0, err
+				}
 			}
+
 			maxUid, err := loadFromBackup(db, gzReader, preds)
 			if err != nil {
 				return 0, err
