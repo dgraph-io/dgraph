@@ -19,7 +19,6 @@ package admin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -494,20 +493,38 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf
 }
 
-func upsertEmptyGQLSchema() string {
+func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	varName := "GQLSchema"
-	qry := getGQLSchemaQuery(varName)
-	qry.Var = varName
+	gqlType := "dgraph.graphql"
+
+	qry := &gql.GraphQuery{
+		Attr: varName,
+		Var:  varName,
+		Func: &gql.Function{
+			Name: "eq",
+			Args: []gql.Arg{
+				{Value: gqlSchemaXidKey},
+				{Value: fmt.Sprintf("%q", gqlSchemaXidVal)},
+			},
+		},
+		Filter: &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "type",
+				Args: []gql.Arg{{Value: gqlType}},
+			},
+		},
+		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.graphql.schema"}},
+	}
 
 	mutations := []*dgoapi.Mutation{
 		{
 			SetJson: []byte(fmt.Sprintf(`
 			{
 				"uid": "_:%s",
-				"dgraph.type": ["dgraph.graphql"],
+				"dgraph.type": ["%s"],
 				"%s": "%s",
 				"dgraph.graphql.schema": ""
-			}`, varName, gqlSchemaXidKey, gqlSchemaXidVal)),
+			}`, varName, gqlType, gqlSchemaXidKey, gqlSchemaXidVal)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),0))`, varName),
 		},
 	}
@@ -515,19 +532,21 @@ func upsertEmptyGQLSchema() string {
 	assigned, result, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
 		mutations)
 	if err != nil {
-		x.Panic(err)
+		return nil, err
 	}
 
 	// the Alpha which created the gql schema node will get the uid here
 	uid, ok := assigned[varName]
 	if ok {
-		return uid
+		return &gqlSchema{ID: uid}, nil
 	}
 
-	// we may reach here in the rare case when more than one Alpha were able to call this function,
-	// then the Alphas which didn't create the gql schema node, will get the uid here.
-	uid = result[varName].([]interface{})[0].(map[string]interface{})["uid"].(string)
-	return uid
+	// the Alphas which didn't create the gql schema node, will get the uid here.
+	gqlSchemaNode := result[varName].([]interface{})[0].(map[string]interface{})
+	return &gqlSchema{
+		ID:     gqlSchemaNode["uid"].(string),
+		Schema: gqlSchemaNode["dgraph.graphql.schema"].(string),
+	}, nil
 }
 
 func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
@@ -565,7 +584,7 @@ func (as *adminServer) initServer() {
 	for {
 		<-time.After(waitFor)
 
-		sch, err := getExistingGraphQLSchema()
+		sch, err := upsertEmptyGQLSchema()
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			if retries > maxRetries {
@@ -576,18 +595,14 @@ func (as *adminServer) initServer() {
 			continue
 		}
 
-		if sch == nil {
-			as.schema.ID = upsertEmptyGQLSchema()
-			// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server
-			// has ID
-			as.addConnectedAdminResolvers()
-			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
-			break
-		}
-
 		as.schema.ID = sch.ID
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has ID
 		as.addConnectedAdminResolvers()
+
+		if sch.Schema == "" {
+			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
+			break
+		}
 
 		generatedSchema, err := generateGQLSchema(sch)
 		if err != nil {
@@ -727,53 +742,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdDeleteCompletion(m.Name()))
 			})
-}
-
-func getGQLSchemaQuery(attrName string) *gql.GraphQuery {
-	return &gql.GraphQuery{
-		Attr: attrName,
-		Func: &gql.Function{
-			Name: "eq",
-			Args: []gql.Arg{
-				{Value: gqlSchemaXidKey},
-				{Value: fmt.Sprintf("%q", gqlSchemaXidVal)},
-			},
-		},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: "dgraph.graphql"}},
-			},
-		},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.graphql.schema"}},
-	}
-}
-
-func getExistingGraphQLSchema() (*gqlSchema, error) {
-	res, err := resolve.AdminQueryExecutor().Query(context.Background(),
-		getGQLSchemaQuery("GQLSchema"))
-	if err != nil || len(res) == 0 {
-		return nil, err
-	}
-
-	var result struct {
-		GQLSchema []struct {
-			Uid    string
-			Schema string `json:"dgraph.graphql.schema"`
-		}
-	}
-
-	err = json.Unmarshal(res, &result)
-	if err != nil || len(result.GQLSchema) == 0 {
-		return nil, err
-	}
-
-	gqlSchema := &gqlSchema{
-		ID:     result.GQLSchema[0].Uid,
-		Schema: result.GQLSchema[0].Schema,
-	}
-
-	return gqlSchema, err
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
