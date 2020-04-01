@@ -406,6 +406,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	  {
         "predicate": "dgraph.graphql.schema"
 	  },
+	  {
+        "predicate": "dgraph.graphql.xid"
+	  },
       {
         "predicate": "dgraph.user.group"
       },

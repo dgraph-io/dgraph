@@ -153,6 +153,10 @@ func AdminQueryExecutor() QueryExecutor {
 	return &adminExecutor{}
 }
 
+func AdminMutationExecutor() MutationExecutor {
+	return &adminExecutor{}
+}
+
 // DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
@@ -161,6 +165,16 @@ func DgraphAsMutationExecutor() MutationExecutor {
 func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
+}
+
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
+func (de *adminExecutor) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

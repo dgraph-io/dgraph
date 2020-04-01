@@ -23,7 +23,6 @@ import (
 	"fmt"
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"sync"
 	"time"
 
@@ -513,7 +512,8 @@ func upsertEmptyGQLSchema() string {
 		},
 	}
 
-	assigned, result, err := dgraph.Mutate(context.Background(), qry, mutations)
+	assigned, result, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
+		mutations)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -565,7 +565,7 @@ func (as *adminServer) initServer() {
 	for {
 		<-time.After(waitFor)
 
-		sch, err := getExistingGraphQLSchema(as.resolver)
+		sch, err := getExistingGraphQLSchema()
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			if retries > maxRetries {
@@ -749,8 +749,9 @@ func getGQLSchemaQuery(attrName string) *gql.GraphQuery {
 	}
 }
 
-func getExistingGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
-	res, err := dgraph.Query(context.Background(), getGQLSchemaQuery("GQLSchema"))
+func getExistingGraphQLSchema() (*gqlSchema, error) {
+	res, err := resolve.AdminQueryExecutor().Query(context.Background(),
+		getGQLSchemaQuery("GQLSchema"))
 	if err != nil || len(res) == 0 {
 		return nil, err
 	}
