@@ -45,8 +45,8 @@ func TestEncodeMemory(t *testing.T) {
 		n := makeFastJsonNode()
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
-			n.AddValue(fmt.Sprintf("very long attr name %06d", i), types.ValueForType(types.StringID))
-			n.AddListChild(fmt.Sprintf("another long child %06d", i), &fastJsonNode{})
+			n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)), types.ValueForType(types.StringID))
+			n.AddListChild(enc.idForAttr(fmt.Sprintf("another long child %06d", i)), &fastJsonNode{})
 		}
 		wg.Add(1)
 		go func() {
@@ -69,27 +69,27 @@ func TestNormalizeJSONLimit(t *testing.T) {
 		t.Skip("Skipping TestNormalizeJSONLimit")
 	}
 
-	n := (&fastJsonNode{}).New("root")
+	n := (&fastJsonNode{}).New(enc.idForAttr("root"))
 	require.NotNil(t, n)
 	for i := 0; i < 1000; i++ {
-		n.AddValue(fmt.Sprintf("very long attr name %06d", i),
+		n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 			types.ValueForType(types.StringID))
-		child1 := n.New("child1")
-		n.AddListChild("child1", child1)
+		child1 := n.New(enc.idForAttr("child1"))
+		n.AddListChild(enc.idForAttr("child1"), child1)
 		for j := 0; j < 100; j++ {
-			child1.AddValue(fmt.Sprintf("long child1 attr %06d", j),
+			child1.AddValue(enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
-		child2 := n.New("child2")
-		n.AddListChild("child2", child2)
+		child2 := n.New(enc.idForAttr("child2"))
+		n.AddListChild(enc.idForAttr("child2"), child2)
 		for j := 0; j < 100; j++ {
-			child2.AddValue(fmt.Sprintf("long child2 attr %06d", j),
+			child2.AddValue(enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
-		child3 := n.New("child3")
-		n.AddListChild("child3", child3)
+		child3 := n.New(enc.idForAttr("child3"))
+		n.AddListChild(enc.idForAttr("child3"), child3)
 		for j := 0; j < 100; j++ {
-			child3.AddValue(fmt.Sprintf("long child3 attr %06d", j),
+			child3.AddValue(enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
 	}
