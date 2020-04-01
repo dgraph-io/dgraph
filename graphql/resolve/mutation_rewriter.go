@@ -745,9 +745,16 @@ func rewriteObject(
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
 				// 1. We are at top level, as no duplicates are allowed for top level
-				// 2. OR, we are in a deep mutation and this obj is different from its first
-				// encounter
-				if atTopLevel || !reflect.DeepEqual(xidObj, obj) {
+				// 2. OR, we are in a deep mutation and:
+				//		a. this obj is different from its first encounter
+				//		b. OR, this object has a field which is inverse of srcField and that
+				//		invField is not of List type
+				var invField schema.FieldDefinition
+				if srcField != nil {
+					invField = srcField.Inverse()
+				}
+				if atTopLevel || !reflect.DeepEqual(xidObj, obj) || (invField != nil && invField.
+					Type().ListType() == nil) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s",
 						xidString)

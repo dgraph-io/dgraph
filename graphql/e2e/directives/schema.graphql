@@ -123,3 +123,18 @@ type MovieDirector {
         name: String!
         directed: [Movie] @dgraph(pred: "directed.movies")
 }
+
+interface People {
+        id: ID!
+        xid: String! @id
+        name: String!
+}
+
+type Teacher implements People {
+        subject: String
+        teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher]
+}

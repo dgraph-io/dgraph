@@ -305,6 +305,8 @@ func ignoreOpts() []cmp.Option {
 		cmpopts.IgnoreFields(post{}, "PostID"),
 		cmpopts.IgnoreFields(state{}, "ID"),
 		cmpopts.IgnoreFields(category{}, "ID"),
+		cmpopts.IgnoreFields(teacher{}, "ID"),
+		cmpopts.IgnoreFields(student{}, "ID"),
 	}
 }
 
@@ -2401,6 +2403,39 @@ func deleteState(
 	}
 }
 
+func deleteGqlType(
+	t *testing.T,
+	typeName string,
+	filter map[string]interface{},
+	expectedNumUids int,
+	expectedErrors x.GqlErrorList) {
+
+	deleteTypeParams := &GraphQLParams{
+		Query: fmt.Sprintf(`mutation delete%s($filter: %sFilter!) {
+			delete%s(filter: $filter) { msg numUids }
+		}`, typeName, typeName, typeName),
+		Variables: map[string]interface{}{"filter": filter},
+	}
+
+	gqlResponse := deleteTypeParams.ExecuteAsPost(t, graphqlURL)
+	if len(expectedErrors) == 0 {
+		requireNoGQLErrors(t, gqlResponse)
+
+		var result map[string]interface{}
+		err := json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		deleteField := fmt.Sprintf(`delete%s`, typeName)
+		deleteType := result[deleteField].(map[string]interface{})
+		require.Equal(t, "Deleted", deleteType["msg"])
+		require.Equal(t, expectedNumUids, int(deleteType["numUids"].(float64)))
+	} else {
+		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+			t.Errorf("errors mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+
 func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	newState := addState(t, "California", executeRequest)
 	requireState(t, newState.ID, newState, executeRequest)
@@ -2895,73 +2930,84 @@ func passwordTest(t *testing.T) {
 }
 
 func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
-	newCountries := []*country{
+	newStudents := []*student{
 		{
-			Name: "Country0",
-			States: []*state{
-				{Code: "S1", Name: "State1", Capital: "Cap1"},
+			Xid:  "S0",
+			Name: "Stud0",
+			TaughtBy: []*teacher{
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
 			},
 		},
 		{
-			Name: "Country1",
-			States: []*state{
-				{Code: "S1", Name: "State1", Capital: "Cap1"},
-			},
-		},
-		{
-			Name: "Country2",
-			States: []*state{
-				{Code: "S2", Name: "State2", Capital: "Cap2"},
-				{Code: "S2", Name: "State2", Capital: "Cap2"},
+			Xid:  "S1",
+			Name: "Stud1",
+			TaughtBy: []*teacher{
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
 			},
 		},
 	}
 
-	addCountryParams := &GraphQLParams{
-		Query: `mutation addCountry($input: [AddCountryInput!]!) {
-			addCountry(input: $input) {
-				country {
-					id
+	addStudentParams := &GraphQLParams{
+		Query: `mutation addStudent($input: [AddStudentInput!]!) {
+			addStudent(input: $input) {
+				student {
+					xid
 					name
-					states {
-						xcode
+					taughtBy {
+						id
+						xid
 						name
-						capital
+						subject
 					}
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"input": newCountries},
+		Variables: map[string]interface{}{"input": newStudents},
 	}
 
-	gqlResponse := postExecutor(t, graphqlURL, addCountryParams)
+	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
 	requireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
-		AddCountry struct {
-			Country []*country
+		AddStudent struct {
+			Student []*student
 		}
 	}
 	err := json.Unmarshal(gqlResponse.Data, &actualResult)
 	require.NoError(t, err)
 
 	ignoreOpts := append(ignoreOpts(), sliceSorter())
-	if diff := cmp.Diff(actualResult.AddCountry.Country, []*country{
-		newCountries[0],
-		newCountries[1],
+	if diff := cmp.Diff(actualResult.AddStudent.Student, []*student{
+		newStudents[0],
 		{
-			Name:   newCountries[2].Name,
-			States: newCountries[2].States[:1],
+			Xid:      newStudents[1].Xid,
+			Name:     newStudents[1].Name,
+			TaughtBy: []*teacher{newStudents[1].TaughtBy[0]},
 		},
 	}, ignoreOpts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].ID,
+		actualResult.AddStudent.Student[1].TaughtBy[0].ID)
 
 	// cleanup
-	filter := getXidFilter("xcode", []string{newCountries[0].States[0].Code,
-		newCountries[2].States[0].Code})
-	cleanUp(t, actualResult.AddCountry.Country, nil, nil)
-	deleteState(t, filter, 2, nil)
+	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
+	deleteGqlType(t, "Student", filter, 2, nil)
+	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
+	deleteGqlType(t, "Teacher", filter, 1, nil)
 }
 
 func sliceSorter() cmp.Option {
@@ -2973,6 +3019,12 @@ func sliceSorter() cmp.Option {
 		case *state:
 			t2 := v2.(*state)
 			return t1.Name < t2.Name
+		case *teacher:
+			t2 := v2.(*teacher)
+			return t1.Xid < t2.Xid
+		case *student:
+			t2 := v2.(*student)
+			return t1.Xid < t2.Xid
 		}
 		return v1.(string) < v2.(string)
 	})

@@ -155,6 +155,21 @@ type director struct {
 	Name string `json:"name,omitempty"`
 }
 
+type teacher struct {
+	ID      string     `json:"id,omitempty"`
+	Xid     string     `json:"xid,omitempty"`
+	Name    string     `json:"name,omitempty"`
+	Subject string     `json:"subject,omitempty"`
+	Teaches []*student `json:"teaches,omitempty"`
+}
+
+type student struct {
+	ID       string     `json:"id,omitempty"`
+	Xid      string     `json:"xid,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	TaughtBy []*teacher `json:"taughtBy,omitempty"`
+}
+
 func BootstrapServer(schema, data []byte) {
 	err := checkGraphQLStarted(graphqlAdminURL)
 	if err != nil {
