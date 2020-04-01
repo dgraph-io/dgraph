@@ -287,6 +287,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return nil
 }
 
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
+		}
+	}
+	return nil
+}
+
 func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
 	if dir.Name != "secret" {
 		return nil
