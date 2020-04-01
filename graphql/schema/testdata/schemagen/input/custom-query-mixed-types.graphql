@@ -1,4 +1,4 @@
-type User @not_dgraph {
+type User @remote {
     id: ID!
     name: String!
 }
