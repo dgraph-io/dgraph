@@ -69,6 +69,8 @@ type mutationFragment struct {
 type xidMetadata struct {
 	// variableObjMap stores the mapping of xidVariable -> the input object which contains that xid
 	variableObjMap map[string]interface{}
+	// seenAtTopLevel tells whether the xidVariable has been previously seen at top level or not
+	seenAtTopLevel map[string]bool
 	// queryExists tells whether the query part in upsert has already been created for xidVariable
 	queryExists map[string]bool
 }
@@ -140,6 +142,7 @@ func NewDeleteRewriter() MutationRewriter {
 func newXidMetadata() *xidMetadata {
 	return &xidMetadata{
 		variableObjMap: make(map[string]interface{}),
+		seenAtTopLevel: make(map[string]bool),
 		queryExists:    make(map[string]bool),
 	}
 }
@@ -744,7 +747,8 @@ func rewriteObject(
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
-				// 1. We are at top level, as no duplicates are allowed for top level
+				// 1. We are at top level and this object has already been seen at top level, as no
+				//    duplicates are allowed for top level
 				// 2. OR, we are in a deep mutation and:
 				//		a. this obj is different from its first encounter
 				//		b. OR, this object has a field which is inverse of srcField and that
@@ -753,17 +757,20 @@ func rewriteObject(
 				if srcField != nil {
 					invField = srcField.Inverse()
 				}
-				if atTopLevel || !reflect.DeepEqual(xidObj, obj) || (invField != nil && invField.
-					Type().ListType() == nil) {
+				if (atTopLevel && xidMetadata.seenAtTopLevel[variable]) || !reflect.DeepEqual(
+					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
 					errFrag := newFragment(nil)
-					errFrag.err = errors.Errorf("duplicate XID found: %s",
-						xidString)
+					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
 					return []*mutationFragment{errFrag}
 				}
 			} else {
 				// if not encountered till now, add it to the map
 				xidMetadata.variableObjMap[variable] = obj
 				xidEncounteredFirstTime = true
+			}
+			// save if this variable was seen at top level
+			if !xidMetadata.seenAtTopLevel[variable] {
+				xidMetadata.seenAtTopLevel[variable] = atTopLevel
 			}
 		}
 	}
