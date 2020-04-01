@@ -864,6 +864,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 func (q *query) GraphqlResolver() {
 	rc, query := q.buildHTTPConfig()
 
+	remoteQuery := rc.graphqlArg.Value.Children.ForName("query").Raw
 	for _, arg := range query.Arguments {
 		val := rc.argMap[arg.Name]
 		if val == nil {
@@ -871,7 +872,11 @@ func (q *query) GraphqlResolver() {
 			// empty string.
 			val = ""
 		}
-		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
+		value := fmt.Sprintf("%v", val)
+		if arg.Type.Name() == "String" {
+			value = `"` + value + `"`
+		}
+		remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
 	}
 
 }
