@@ -26,13 +26,13 @@ import (
 const (
 	alphaURL      = "http://localhost:8180/graphql"
 	alphaAdminURL = "http://localhost:8180/admin"
-	customTypes   = `type MovieDirector @not_dgraph {
+	customTypes   = `type MovieDirector @remote {
 		id: ID!
 		name: String!
 		directed: [Movie]
 	}
 
-	type Movie @not_dgraph {
+	type Movie @remote {
 		id: ID!
 		name: String!
 		director: [MovieDirector]
