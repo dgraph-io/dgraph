@@ -64,7 +64,8 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 				custom := fld.Directives.ForName("custom")
 				if custom == nil {
 					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
-						"with @custom directive. Other fields are built automatically for you."
+						"with @custom directive. Other fields are built automatically for you. " +
+						"Found " + defn.Name + " " + fld.Name + " without @custom."
 					break
 				}
 			}
@@ -618,7 +619,7 @@ func passwordValidation(sch *ast.Schema,
 	return passwordDirectiveValidation(typ)
 }
 
-func notDgraphDirectiveValidation(sch *ast.Schema,
+func remoteDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
@@ -658,6 +659,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			"Type %s; Field %s; url field inside @custom directive is invalid.", typ.Name,
 			field.Name)
 	}
+
 	method := httpArg.Value.Children.ForName("method")
 	if method == nil {
 		return gqlerror.ErrorPosf(
@@ -670,7 +672,6 @@ func customDirectiveValidation(sch *ast.Schema,
 			dir.Position,
 			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
 			typ.Name, field.Name)
-
 	}
 
 	return nil
