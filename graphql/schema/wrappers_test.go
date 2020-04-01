@@ -423,6 +423,13 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			"http://myapi.com/favMovies/0x9?num=10",
 			nil,
 		},
+		{
+			"Substitute multiple path params properly",
+			map[string]interface{}{"id": "0x9", "num": 10},
+			"http://myapi.com/favMovies/$id/$num",
+			"http://myapi.com/favMovies/0x9/10",
+			nil,
+		},
 	}
 
 	for _, test := range tcases {
