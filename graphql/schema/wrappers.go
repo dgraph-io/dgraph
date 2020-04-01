@@ -831,6 +831,7 @@ func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 
 	return rc, query
 }
+
 func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 
 	rc, query := q.buildHTTPConfig()
@@ -861,7 +862,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 	return rc, nil
 }
 
-func (q *query) GraphqlResolver() {
+func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 	rc, query := q.buildHTTPConfig()
 
 	remoteQuery := rc.graphqlArg.Value.Children.ForName("query").Raw
@@ -879,6 +880,54 @@ func (q *query) GraphqlResolver() {
 		remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
 	}
 
+	buf := &bytes.Buffer{}
+	buildGraphqlRequestFields(buf, q.field)
+	remoteQuery += string(buf.Bytes())
+	// contact method and request object
+	remoteQuery = `query{` + remoteQuery + `}`
+	param := Request{
+		Query: remoteQuery,
+	}
+	remoteQueryBuf, err := json.Marshal(param)
+	if err != nil {
+		return rc, err
+	}
+	rc.Body = string(remoteQueryBuf)
+	rc.Method = "POST"
+
+	return rc, nil
+}
+
+// buildGraphqlRequestFields will build graphql request body from ast.
+// for eg:
+// Hello{
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+// will return
+// {
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+func buildGraphqlRequestFields(writer *bytes.Buffer, filed *ast.Field) {
+	// Add begining curly braces
+	writer.WriteString("{\n")
+	for i := 0; i < len(filed.SelectionSet); i++ {
+		castedField := filed.SelectionSet[i].(*ast.Field)
+		writer.WriteString(castedField.Name)
+
+		if len(castedField.SelectionSet) > 0 {
+			// recursively add fields.
+			buildGraphqlRequestFields(writer, castedField)
+		}
+		writer.WriteString("\n")
+	}
+	// Add ending curly braces
+	writer.WriteString("}")
 }
 
 func (m *mutation) Name() string {
