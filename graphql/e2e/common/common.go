@@ -616,7 +616,7 @@ func checkGraphQLStarted(url string) error {
 func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	schemaQry := &GraphQLParams{
-		Query: `query { getGQLSchema { id schema } }`,
+		Query: `query { getGQLSchema { schema } }`,
 	}
 	req, err := schemaQry.createGQLPost(url)
 	if err != nil {
@@ -640,7 +640,6 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	var sch struct {
 		GetGQLSchema struct {
-			ID     string
 			Schema string
 		}
 	}
