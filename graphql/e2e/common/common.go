@@ -86,6 +86,7 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 	acceptGzip    bool
 	gzipEncoding  bool
+	Headers       http.Header
 }
 
 type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
@@ -422,6 +423,9 @@ func getQueryEmptyVariable(t *testing.T) {
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+	for h := range params.Headers {
+		req.Header.Set(h, params.Headers.Get(h))
+	}
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
