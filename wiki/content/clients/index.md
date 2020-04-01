@@ -446,7 +446,7 @@ Follow the instructions in the [README](https://github.com/dgraph-io/dgraph.net#
 it up and running.
 
 More details on the supported versions can be found at
-[this link](https://github.com/dgraph-io/Dgraph-dotnet#supported-versions).
+[this link](https://github.com/dgraph-io/dgraph.net#supported-versions).
 
 ## Java
 
