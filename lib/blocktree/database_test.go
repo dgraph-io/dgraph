@@ -98,7 +98,13 @@ func TestStoreBlockTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if !reflect.DeepEqual(bt, resBt) {
+	if !reflect.DeepEqual(bt.head, resBt.head) {
 		t.Fatalf("Fail: got %v expected %v", resBt, bt)
+	}
+
+	btLeafMap := bt.leaves.toMap()
+	resLeafMap := bt.leaves.toMap()
+	if !reflect.DeepEqual(btLeafMap, resLeafMap) {
+		t.Fatalf("Fail: got %v expected %v", btLeafMap, resLeafMap)
 	}
 }
