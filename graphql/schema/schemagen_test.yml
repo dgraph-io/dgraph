@@ -358,7 +358,7 @@ schemas:
       type A {
         A.id
       }
-      A.id: string @index(trigram, hash) @upsert .
+      A.id: string @index(hash, trigram) @upsert .
       type B {
         A.id
         B.correct
@@ -434,3 +434,59 @@ schemas:
       }
       A.p: string .
       A.q: string .
+
+  -
+    name: "fields with same @dgraph(pred: ...) occur only once in schema"
+    input: |
+      interface A {
+        p: String @dgraph(pred: "key")
+      }
+      type B implements A {
+        q: String @dgraph(pred: "name")
+      }
+      type C {
+        r: String @dgraph(pred: "name")
+        s: String @dgraph(pred: "key")
+        name: String
+      }
+    output: |
+      type A {
+        key
+      }
+      key: string .
+      type B {
+        key
+        name
+      }
+      name: string .
+      type C {
+        name
+        key
+        C.name
+      }
+      C.name: string .
+
+  -
+    name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
+    combined"
+    input: |
+      type A {
+        p: String @dgraph(pred: "name") @search(by: [exact, term])
+      }
+      type B {
+        q: String @dgraph(pred: "name") @search(by: [trigram])
+      }
+      type C {
+        q: String @dgraph(pred: "name") @search(by: [exact, term])
+      }
+    output: |
+      type A {
+        name
+      }
+      name: string @index(exact, term, trigram) .
+      type B {
+        name
+      }
+      type C {
+        name
+      }
