@@ -705,23 +705,6 @@ func (r *RuleNode) IsRBAC() bool {
 	return true
 }
 
-func (c *AuthContainer) isRBAC() bool {
-	if c.Query != nil && c.Query.IsRBAC() {
-		return true
-	}
-	if c.Add != nil && c.Add.IsRBAC() {
-		return true
-	}
-	if c.Update != nil && c.Update.IsRBAC() {
-		return true
-	}
-	if c.Delete != nil && c.Delete.IsRBAC() {
-		return true
-	}
-
-	return false
-}
-
 type AuthParser struct {
 	s *ast.Schema
 
