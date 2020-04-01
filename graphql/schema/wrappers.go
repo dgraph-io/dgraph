@@ -933,8 +933,12 @@ func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	return u.String(), nil
 }
 
-func configFromCustomDirective(custom *ast.Directive,
-	vars map[string]interface{}, header http.Header) (HTTPResolverConfig, error) {
+func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
+	// We have to fetch the original definition of the query from the name of the query to be
+	// able to get the value stored in custom directive.
+	// TODO - This should be cached later.
+	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
+	custom := query.Directives.ForName("custom")
 	httpArg := custom.Arguments.ForName("http")
 	rc := HTTPResolverConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
@@ -942,7 +946,8 @@ func configFromCustomDirective(custom *ast.Directive,
 	}
 
 	var err error
-	rc.URL, err = substituteVarsInURL(rc.URL, vars)
+	argMap := q.field.ArgumentMap(q.op.vars)
+	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
 	if err != nil {
 		return rc, errors.Wrapf(err, "while substituting vars in URL")
 	}
@@ -954,35 +959,27 @@ func configFromCustomDirective(custom *ast.Directive,
 		if err != nil {
 			return rc, err
 		}
-		err = SubstituteVarsInBody(bt, vars)
+
+		err = SubstituteVarsInBody(bt, argMap)
 		if err != nil {
 			return rc, err
 		}
-		b, err := json.Marshal(bt)
+		body, err := json.Marshal(bt)
 		if err != nil {
 			return rc, err
 		}
-		rc.Body = string(b)
+		rc.Body = string(body)
 	}
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, header.Get(h.Value.Raw))
+			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
 		}
 		rc.ForwardHeaders = headers
 	}
-	return rc, nil
-}
 
-func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
-	// We have to fetch the original definition of the query from the name of the query to be
-	// able to get the value stored in custom directive.
-	// TODO - This should be cached later.
-	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
-	custom := query.Directives.ForName("custom")
-	rc, err := configFromCustomDirective(custom, q.field.ArgumentMap(q.op.vars), q.op.header)
-	return rc, err
+	return rc, nil
 }
 
 func (m *mutation) Name() string {
@@ -1065,12 +1062,12 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) GetObjectName() string {
-	return m.field.ObjectDefinition.Name
-}
-
 func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return (*field)(m).CustomHTTPConfig()
+}
+
+func (m *mutation) GetObjectName() string {
+	return m.field.ObjectDefinition.Name
 }
 
 func (m *mutation) MutationType() MutationType {
