@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v200"
 )
 
 func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
