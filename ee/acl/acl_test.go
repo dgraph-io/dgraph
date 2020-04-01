@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"testing"
 	"time"
 
@@ -1913,4 +1914,142 @@ func TestAllowUIDAccess(t *testing.T) {
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
 	require.Nil(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
+}
+
+func TestAddNewPreidcate(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	resetUser(t)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Alice doesn't have access to create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	addToGroup(t, accessJwt, userid, "guardians")
+
+	// wait for acl cache to be refresh.
+	time.Sleep(6 * time.Second)
+
+	// Alice is a guardian now, it can create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err, "User is a guardian. Alter should have succeeded.")
+}
+
+func TestCrossGroupPermission(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+
+	// TODO(@Animesh): I am Running all the operations with the same accessJwt
+	// but access token will expire after 3s. Find an idomatic way to run these.
+
+	// create groups
+	createGroup(t, accessJwt, "reader")
+	createGroup(t, accessJwt, "writer")
+	createGroup(t, accessJwt, "alterer")
+
+	// add rules to groups
+	addRulesToGroup(t, accessJwt, "reader", []rule{{Predicate: "newpred", Permission: 4}})
+	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
+	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
+
+	// create 8 users.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		createUser(t, accessJwt, "user"+userIdx, "password"+userIdx)
+	}
+
+	// add users to groups. we create all possible combination
+	// of groups and assign a user for that combination.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		if i&1 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "alterer")
+		}
+		if i&2 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "writer")
+		}
+		if i&4 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "reader")
+		}
+	}
+
+	// operations
+	dgQuery := func(client *dgo.Dgraph, shouldFail bool) {
+		_, err := client.NewTxn().Query(ctx, `
+		{
+			me(func: has(newpred)) {
+				newpred
+			}
+		}
+		`)
+		require.True(t, (err != nil) == shouldFail)
+	}
+	dgMutation := func(client *dgo.Dgraph, shouldFail bool) {
+		_, err := client.NewTxn().Mutate(ctx, &api.Mutation{
+			Set: []*api.NQuad{
+				{
+					Subject:     "_:a",
+					Predicate:   "newpred",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "testval"}},
+				},
+			},
+		})
+		require.True(t, (err != nil) == shouldFail)
+	}
+	dgAlter := func(client *dgo.Dgraph, shouldFail bool) {
+		err := client.Alter(ctx, &api.Operation{Schema: `newpred: string @index(exact) .`})
+		require.True(t, (err != nil) == shouldFail)
+
+		// set back the schema to initial value
+		err = client.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
+		require.True(t, (err != nil) == shouldFail)
+	}
+
+	// test user access.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		userClient, err := testutil.DgraphClient(testutil.SockAddr)
+		require.NoError(t, err, "Client creation error")
+
+		err = userClient.Login(ctx, "user"+userIdx, "password"+userIdx)
+		require.NoError(t, err, "Login error")
+
+		dgQuery(userClient, i&4 > 0)
+		dgMutation(userClient, i&2 > 0)
+		dgAlter(userClient, i&1 > 0)
+	}
 }
