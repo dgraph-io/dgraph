@@ -562,7 +562,7 @@ func checkGroupCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.Data.AddGroup.Group))
 }
 
-func addToGroup(t *testing.T, accessToken, userId, group string) {
+func addToGroup(t *testing.T, accessToken, userName, group string) {
 	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
 		updateUser(input: {
 			filter: {
@@ -588,14 +588,48 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 	params := testutil.GraphQLParams{
 		Query: addUserToGroup,
 		Variables: map[string]interface{}{
-			"name":  userId,
+			"name":  userName,
 			"group": group,
 		},
 	}
+
+	var result struct {
+		Data struct {
+			UpdateUser struct {
+				User []struct {
+					Name   string
+					Groups []struct {
+						Name string
+					}
+				}
+				Name string
+			}
+		}
+		Errors []interface{}
+	}
+
 	b := makeRequest(t, accessToken, params)
-	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
-		userId, group)
-	require.JSONEq(t, expectedOutput, string(b))
+
+	err := json.Unmarshal(b, &result)
+	require.NoError(t, err)
+
+	// There shouldn't be any error.
+	require.Len(t, result.Errors, 0)
+	// There should be a user in response.
+	require.Len(t, result.Data.UpdateUser.User, 1)
+	// User's name must be <userName>
+	require.Equal(t, userName, result.Data.UpdateUser.User[0].Name)
+
+	var foundGroup bool
+	for _, usr := range result.Data.UpdateUser.User {
+		for _, grp := range usr.Groups {
+			if grp.Name == group {
+				foundGroup = true
+				break
+			}
+		}
+	}
+	require.True(t, foundGroup)
 }
 
 type rule struct {
@@ -2008,7 +2042,7 @@ func TestCrossGroupPermission(t *testing.T) {
 	}
 
 	// operations
-	dgQuery := func(client *dgo.Dgraph, shouldFail bool) {
+	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
 		_, err := client.NewTxn().Query(ctx, `
 		{
 			me(func: has(newpred)) {
@@ -2016,9 +2050,10 @@ func TestCrossGroupPermission(t *testing.T) {
 			}
 		}
 		`)
-		require.True(t, (err != nil) == shouldFail)
+		require.True(t, (err != nil) == shouldFail,
+			"Query test Failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 	}
-	dgMutation := func(client *dgo.Dgraph, shouldFail bool) {
+	dgMutation := func(client *dgo.Dgraph, shouldFail bool, user string) {
 		_, err := client.NewTxn().Mutate(ctx, &api.Mutation{
 			Set: []*api.NQuad{
 				{
@@ -2027,16 +2062,21 @@ func TestCrossGroupPermission(t *testing.T) {
 					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "testval"}},
 				},
 			},
+			CommitNow: true,
 		})
-		require.True(t, (err != nil) == shouldFail)
+		require.True(t, (err != nil) == shouldFail,
+			"Mutation test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 	}
-	dgAlter := func(client *dgo.Dgraph, shouldFail bool) {
+	dgAlter := func(client *dgo.Dgraph, shouldFail bool, user string) {
 		err := client.Alter(ctx, &api.Operation{Schema: `newpred: string @index(exact) .`})
-		require.True(t, (err != nil) == shouldFail)
+
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 
 		// set back the schema to initial value
 		err = client.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
-		require.True(t, (err != nil) == shouldFail)
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 	}
 
 	// test user access.
@@ -2048,8 +2088,8 @@ func TestCrossGroupPermission(t *testing.T) {
 		err = userClient.Login(ctx, "user"+userIdx, "password"+userIdx)
 		require.NoError(t, err, "Login error")
 
-		dgQuery(userClient, i&4 > 0)
-		dgMutation(userClient, i&2 > 0)
-		dgAlter(userClient, i&1 > 0)
+		dgQuery(userClient, false, "user"+userIdx) // Query won't fail, will return empty result instead.
+		dgMutation(userClient, i&2 == 0, "user"+userIdx)
+		dgAlter(userClient, i&1 == 0, "user"+userIdx)
 	}
 }
