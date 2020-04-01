@@ -34,13 +34,13 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective    = "dgraph"
-	dgraphTypeArg      = "type"
-	dgraphPredArg      = "pred"
-	idDirective        = "id"
-	secretDirective    = "secret"
-	customDirective    = "custom"
-	notDgraphDirective = "not_dgraph" // types with this directive are not stored in Dgraph.
+	dgraphDirective = "dgraph"
+	dgraphTypeArg   = "type"
+	dgraphPredArg   = "pred"
+	idDirective     = "id"
+	secretDirective = "secret"
+	customDirective = "custom"
+	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
@@ -69,9 +69,16 @@ enum DgraphIndex {
 	hour
 }
 
+enum HTTPMethod {
+	Get
+	Post
+}
+
 input CustomHTTP {
 	url: String!
-	method: String!
+	method: HTTPMethod!
+	body: String!
+	forwardHeaders: [String!]
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -80,7 +87,7 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
-directive @not_dgraph on OBJECT
+directive @remote on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int
@@ -241,13 +248,13 @@ var scalarToDgraph = map[string]string{
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:   hasInverseValidation,
-	searchDirective:    searchValidation,
-	dgraphDirective:    dgraphDirectiveValidation,
-	idDirective:        idValidation,
-	secretDirective:    passwordValidation,
-	customDirective:    customDirectiveValidation,
-	notDgraphDirective: notDgraphDirectiveValidation,
+	inverseDirective: hasInverseValidation,
+	searchDirective:  searchValidation,
+	dgraphDirective:  dgraphDirectiveValidation,
+	idDirective:      idValidation,
+	secretDirective:  passwordValidation,
+	customDirective:  customDirectiveValidation,
+	remoteDirective:  remoteDirectiveValidation,
 	deprecatedDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,

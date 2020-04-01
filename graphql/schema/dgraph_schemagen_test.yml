@@ -498,7 +498,7 @@ schemas:
         c: String
       }
 
-      type A implements C @not_dgraph {
+      type A implements C @remote {
         id: ID!
         p: String
         q: String

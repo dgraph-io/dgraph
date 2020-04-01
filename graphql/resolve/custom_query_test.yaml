@@ -2,7 +2,7 @@
   name: "custom GET query returning users"
   gqlquery: |
     query {
-      myFavoriteMovies(id: "0x1", name: "Michael") {
+      myFavoriteMovies(id: "0x1", name: "Michael", num: null) {
         id
         name
         director {

@@ -37,9 +37,16 @@ enum DgraphIndex {
 	hour
 }
 
+enum HTTPMethod {
+	Get
+	Post
+}
+
 input CustomHTTP {
 	url: String!
-	method: String!
+	method: HTTPMethod!
+	body: String!
+	forwardHeaders: [String!]
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -48,7 +55,7 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
-directive @not_dgraph on OBJECT
+directive @remote on OBJECT | INTERFACE
 
 input IntFilter {
 	eq: Int

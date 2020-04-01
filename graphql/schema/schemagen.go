@@ -121,7 +121,7 @@ func NewHandler(input string) (Handler, error) {
 		}
 		defns = append(defns, defn.Name)
 		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
-			notInDgraph := defn.Directives.ForName(notDgraphDirective)
+			notInDgraph := defn.Directives.ForName(remoteDirective)
 			if notInDgraph != nil {
 				continue
 			}
