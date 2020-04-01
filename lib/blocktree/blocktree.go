@@ -74,13 +74,13 @@ func (bt *BlockTree) GenesisHash() Hash {
 func (bt *BlockTree) AddBlock(block *types.Block, arrivalTime uint64) error {
 	parent := bt.getNode(block.Header.ParentHash)
 	if parent == nil {
-		return fmt.Errorf("cannot find parent block in blocktree")
+		return ErrParentNotFound
 	}
 
 	// Check if it already exists
 	n := bt.getNode(block.Header.Hash())
 	if n != nil {
-		return fmt.Errorf("cannot add block to blocktree that already exists: hash=%s", n.hash)
+		return ErrBlockExists
 	}
 
 	depth := big.NewInt(0)
@@ -152,11 +152,11 @@ func (bt *BlockTree) longestPath() []*node {
 func (bt *BlockTree) subChain(start Hash, end Hash) ([]*node, error) {
 	sn := bt.getNode(start)
 	if sn == nil {
-		return nil, fmt.Errorf("start node does not exist")
+		return nil, ErrStartNodeNotFound
 	}
 	en := bt.getNode(end)
 	if en == nil {
-		return nil, fmt.Errorf("end node does not exist")
+		return nil, ErrEndNodeNotFound
 	}
 	return sn.subChain(en)
 }

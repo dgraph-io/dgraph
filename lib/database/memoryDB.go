@@ -17,7 +17,6 @@
 package database
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 )
@@ -61,7 +60,7 @@ func (db *MemDatabase) Get(k []byte) ([]byte, error) {
 	if v, ok := db.db[string(k)]; ok {
 		return v, nil
 	}
-	return nil, errors.New("Key not found")
+	return nil, ErrKeyNotFound
 }
 
 // Keys returns [][]byte of mapping keys

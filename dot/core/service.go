@@ -18,8 +18,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -29,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -96,7 +95,7 @@ type Config struct {
 // session, and network service.
 func NewService(cfg *Config) (*Service, error) {
 	if cfg.Keystore == nil {
-		return nil, fmt.Errorf("no keystore provided")
+		return nil, ErrNilKeystore
 	}
 
 	keys := cfg.Keystore.Sr25519Keypairs()
@@ -106,11 +105,11 @@ func NewService(cfg *Config) (*Service, error) {
 	}
 
 	if cfg.BlockState == nil {
-		return nil, fmt.Errorf("block state is nil")
+		return nil, ErrNilBlockState
 	}
 
 	if cfg.StorageState == nil {
-		return nil, fmt.Errorf("storage state is nil")
+		return nil, ErrNilStorageState
 	}
 
 	codeHash, err := cfg.StorageState.LoadCodeHash()
@@ -140,7 +139,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 	if cfg.IsBabeAuthority {
 		if cfg.Keystore.NumSr25519Keys() == 0 {
-			return nil, fmt.Errorf("no keys provided for authority node")
+			return nil, ErrNoKeysProvided
 		}
 
 		epochDone := make(chan struct{})
@@ -169,7 +168,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 		authData, err := srv.retrieveAuthorityData()
 		if err != nil {
-			return nil, fmt.Errorf("could not retrieve authority data: %s", err)
+			return nil, err
 		}
 
 		// BABE session configuration
@@ -271,7 +270,7 @@ func (s *Service) Stop() error {
 // StorageRoot returns the hash of the runtime storage root
 func (s *Service) StorageRoot() (common.Hash, error) {
 	if s.storageState == nil {
-		return common.Hash{}, fmt.Errorf("storage state is nil")
+		return common.Hash{}, ErrNilStorageState
 	}
 	return s.storageState.StorageRoot()
 }
@@ -290,7 +289,7 @@ func (s *Service) safeMsgSend(msg network.Message) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.closed {
-		return errors.New("service has been stopped")
+		return ErrServiceStopped
 	}
 	s.msgSend <- msg
 	return nil
@@ -300,7 +299,7 @@ func (s *Service) safeBabeKill() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.closed {
-		return errors.New("service has been stopped")
+		return ErrServiceStopped
 	}
 	close(s.babeKill)
 	return nil
@@ -399,7 +398,7 @@ func (s *Service) receiveMessages() {
 // handleReceivedBlock handles blocks from the BABE session
 func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 	if s.blockState == nil {
-		return fmt.Errorf("blockState is nil")
+		return ErrNilBlockState
 	}
 
 	err = s.blockState.AddBlock(block)
@@ -442,33 +441,33 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 	case network.BlockAnnounceMsgType:
 		blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
 		if !ok {
-			return errors.New("could not cast network.Message to BlockAnnounceMessage")
+			return ErrMessageCast("BlockAnnounceMessage")
 		}
 
 		err = s.ProcessBlockAnnounceMessage(blockAnnounceMessage)
 	case network.BlockRequestMsgType:
 		msg, ok := msg.(*network.BlockRequestMessage)
 		if !ok {
-			return errors.New("could not cast network.Message to BlockRequestMessage")
+			return ErrMessageCast("BlockRequestMessage")
 		}
 
 		err = s.ProcessBlockRequestMessage(msg)
 	case network.BlockResponseMsgType:
 		msg, ok := msg.(*network.BlockResponseMessage)
 		if !ok {
-			return errors.New("could not cast network.Message to BlockResponseMessage")
+			return ErrMessageCast("BlockResponseMessage")
 		}
 
 		err = s.ProcessBlockResponseMessage(msg)
 	case network.TransactionMsgType:
 		msg, ok := msg.(*network.TransactionMessage)
 		if !ok {
-			return errors.New("could not cast network.Message to TransactionMessage")
+			return ErrMessageCast("TransactionMessage")
 		}
 
 		err = s.ProcessTransactionMessage(msg)
 	default:
-		err = fmt.Errorf("Received unsupported message type %d", msgType)
+		err = ErrUnsupportedMsgType(msgType)
 	}
 
 	return err
@@ -486,19 +485,19 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 	}
 
 	_, err = s.blockState.GetHeader(header.Hash())
-	if err != nil && err.Error() == "Key not found" {
+	if err != nil && err == database.ErrKeyNotFound {
 		err = s.blockState.SetHeader(header)
 		if err != nil {
 			return err
 		}
 
 		log.Info("[core] saved block", "number", header.Number, "hash", header.Hash())
-	} else {
+	} else if err != nil {
 		return err
 	}
 
 	_, err = s.blockState.GetBlockBody(header.Hash())
-	if err != nil && err.Error() == "Key not found" {
+	if err != nil && err == database.ErrKeyNotFound {
 		// send block request message
 		log.Debug("[core] sending new block to syncer", "number", msg.Number)
 		s.blockNumOut <- msg.Number
