@@ -18,8 +18,10 @@ package query
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 
@@ -93,4 +95,52 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	}
 	_, err := n.normalize()
 	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
+}
+
+func BenchmarkJsonMarshal(b *testing.B) {
+	inputStrings := [][]string{
+		[]string{"largestring", strings.Repeat("a", 1024)},
+		[]string{"smallstring", "abcdef"},
+		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
+	}
+
+	var result []byte
+
+	for _, input := range inputStrings {
+		b.Run(fmt.Sprintf("STDJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result, _ = json.Marshal(input[1])
+			}
+		})
+
+		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result = stringJsonMarshal(input[1])
+			}
+		})
+	}
+
+	_ = result
+}
+
+func TestStringJsonMarshal(t *testing.T) {
+	inputs := []string{
+		"",
+		"0",
+		"true",
+		"1.909045927350",
+		"nil",
+		"null",
+		"<&>",
+		`quoted"str"ing`,
+	}
+
+	for _, input := range inputs {
+		gm, err := json.Marshal(input)
+		require.NoError(t, err)
+
+		sm := stringJsonMarshal(input)
+
+		require.Equal(t, gm, sm)
+	}
 }

@@ -291,8 +291,8 @@ A typical workflow is the following:
 {{% notice "note" %}}
 All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`
-as a demo, make sure to choose the correct IP and port for your environment:
+
+1) Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
@@ -303,7 +303,9 @@ mutation {
 }
 ```
 The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
-2. Create a regular user
+
+2) Create a regular user
+
 ```graphql
 mutation {
   addUser(input: [{name: "alice", password: "newpassword"}]) {
@@ -313,7 +315,9 @@ mutation {
   }
 }
 ```
+
 Now you should see the following output
+
 ```json
 {
   "data": {
@@ -327,7 +331,9 @@ Now you should see the following output
   }
 }
 ```
-3. Create a group
+
+3) Create a group
+
 ```graphql
 mutation {
   addGroup(input: [{name: "dev"}]) {
@@ -340,7 +346,9 @@ mutation {
   }
 }
 ```
+
 Now you should see the following output
+
 ```json
 {
   "data": {
@@ -355,8 +363,10 @@ Now you should see the following output
   }
 }
 ```
-4. Assign the user to the group
+
+4) Assign the user to the group
 To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
+
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}, {name: "sre"}]}}) {
@@ -369,7 +379,9 @@ mutation {
   }
 }
 ```
-5. Assign predicate permissions to the group
+
+5) Assign predicate permissions to the group
+
 ```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "friend", permission: 7}]}}) {
@@ -383,6 +395,7 @@ mutation {
   }
 }
 ```
+
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
 permission convention. That is, 4 (binary 100) represents `READ`, 2 (binary 010)
@@ -392,6 +405,7 @@ multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRI
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for
 a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
+
 ```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "name", permission: 7}]}}) {
@@ -414,7 +428,8 @@ The following examples show how to retrieve information about users and groups.
 
 #### Using a GraphQL tool
 
-1. Check information about a user
+1) Check information about a user
+
 ```graphql
 query {
   getUser(name: "alice") {
@@ -425,7 +440,9 @@ query {
   }
 }
 ```
+
 and the output should show the groups that the user has been added to, e.g.
+
 ```json
 {
   "data": {
@@ -440,7 +457,9 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
-2. Check information about a group
+
+2) Check information about a group
+
 ```graphql
 {
   getGroup(name: "dev") {
@@ -455,8 +474,10 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
+
 and the output should include the users in the group, as well as the permissions, the
 group's ACL rules, e.g.
+
 ```json
 {
   "data": {
@@ -481,7 +502,9 @@ group's ACL rules, e.g.
   }
 }
 ```
-3. Query for users 
+
+3) Query for users
+
 ```graphql
 query {
   queryUser(filter: {name: {eq: "alice"}}) {
@@ -492,7 +515,9 @@ query {
   }
 }
 ```
+
 and the output should show the groups that the user has been added to, e.g.
+
 ```json
 {
   "data": {
@@ -509,7 +534,9 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
-4. Query for groups
+
+4) Query for groups
+
 ```graphql
 query {
   queryGroup(filter: {name: {eq: "dev"}}) {
@@ -524,8 +551,10 @@ query {
   }
 }
 ```
+
 and the output should include the users in the group, as well as the permissions the
 group's ACL rules, e.g.
+
 ```json
 {
   "data": {
@@ -552,7 +581,9 @@ group's ACL rules, e.g.
   }
 }
 ```
-5. Run ACL commands as another guardian (member of `guardians` group). 
+
+5) Run ACL commands as another guardian (member of `guardians` group).
+
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`.
 
@@ -584,7 +615,8 @@ mutation {
 ```
 
 Response:
-```
+
+```json
 {
   "data": {
     "accessJWT": "<accessJWT>",
@@ -592,6 +624,7 @@ Response:
   }
 }
 ```
+
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
 You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in the login response in the GraphQL tool which you're using to make the request. For example:

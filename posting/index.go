@@ -35,6 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -534,6 +535,11 @@ type rebuilder struct {
 }
 
 func (r *rebuilder) Run(ctx context.Context) error {
+	if r.startTs == 0 {
+		glog.Infof("maxassigned is 0, no indexing work for predicate %s", r.attr)
+		return nil
+	}
+
 	// We write the index in a temporary badger first and then,
 	// merge entries before writing them to p directory.
 	// TODO(Aman): If users are not happy, we could add a flag to choose this dir.
@@ -546,13 +552,12 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 	dbOpts := badger.DefaultOptions(tmpIndexDir).
 		WithSyncWrites(false).
-		WithNumVersionsToKeep(math.MaxInt64).
+		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
-		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
-
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")

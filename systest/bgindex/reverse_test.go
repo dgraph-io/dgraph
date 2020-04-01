@@ -76,7 +76,8 @@ func TestReverseIndex(t *testing.T) {
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "balance: [uid] @reverse .",
+		Schema:          "balance: [uid] @reverse .",
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
@@ -153,7 +154,7 @@ func TestReverseIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: uid(0x01)) { ~balance { uid }}}`, dg)
+	waitForSchemaUpdate(`{ q(func: uid(0x01)) { ~balance { uid }}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")

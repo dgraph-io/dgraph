@@ -58,13 +58,12 @@ test:
 	@echo Running ./test.sh
 	./test.sh
 
-image: dgraph
+image:
+	@GOOS=linux $(MAKE) dgraph
 	@mkdir linux
 	@mv ./dgraph/dgraph ./linux/dgraph
-	@cp ./contrib/Dockerfile .
-	@docker build -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
+	@docker build -f contrib/Dockerfile -t dgraph/dgraph:$(subst /,-,${BUILD_BRANCH}) .
 	@rm -r linux
-	@rm Dockerfile
 
 help:
 	@echo

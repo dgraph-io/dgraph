@@ -1,7 +1,8 @@
 #!/bin/bash
-# This script runs in a loop, checks for updates to the Hugo docs theme or
-# to the docs on certain branches and rebuilds the public folder for them.
-# It has be made more generalized, so that we don't have to hardcode versions.
+# This script runs in a loop (configurable with LOOP), checks for updates to the
+# Hugo docs theme or to the docs on certain branches and rebuilds the public
+# folder for them. It has be made more generalized, so that we don't have to
+# hardcode versions.
 
 # Warning - Changes should not be made on the server on which this script is running
 # becauses this script does git checkout and merge.
@@ -10,7 +11,13 @@ set -e
 
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST=https://docs.dgraph.io
+HOST="${HOST:-https://docs.dgraph.io}"
+# Name of output public directory
+PUBLIC="${PUBLIC:-public}"
+# LOOP true makes this script run in a loop to check for updates
+LOOP="${LOOP:-true}"
+# Binary of hugo command to run.
+HUGO="${HUGO:-hugo}"
 
 # TODO - Maybe get list of released versions from Github API and filter
 # those which have docs.
@@ -20,8 +27,9 @@ HOST=https://docs.dgraph.io
 # and then the older versions in descending order, such that the
 # build script can place the artifact in an appropriate location.
 VERSIONS_ARRAY=(
-	'v1.2.1'
+	'v1.2.2'
 	'master'
+	'v1.2.1'
 	'v1.2.0'
 	'v1.1.1'
 	'v1.1.0'
@@ -67,8 +75,8 @@ rebuild() {
 	HUGO_TITLE="Dgraph Doc ${2}"\
 		VERSIONS=${VERSION_STRING}\
 		CURRENT_BRANCH=${1}\
-		CURRENT_VERSION=${2} hugo \
-		--destination=public/"$dir"\
+		CURRENT_VERSION=${2} ${HUGO} \
+		--destination="${PUBLIC}"/"$dir"\
 		--baseURL="$HOST"/"$dir" 1> /dev/null
 }
 
@@ -91,9 +99,9 @@ publicFolder()
 {
 	dir=''
 	if [[ $1 == "${VERSIONS_ARRAY[0]}" ]]; then
-		echo "public"
+		echo "${PUBLIC}"
 	else
-		echo "public/$1"
+		echo "${PUBLIC}/$1"
 	fi
 }
 
@@ -152,5 +160,8 @@ while true; do
 	popd > /dev/null
 
 	firstRun=0
+        if ! $LOOP; then
+            exit
+        fi
 	sleep 60
 done

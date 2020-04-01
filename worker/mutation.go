@@ -29,6 +29,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
@@ -144,26 +145,39 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// block here and wait for indexing to be finished.
 	gr.Node.waitForTask(opIndexing)
 
+	// There is a race condition in stopTask and waitForTask.
+	// We wait here for stopTask to finish.
+	time.Sleep(time.Millisecond)
+
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
-	stopIndexing := func(op *operation) {
+	start := time.Now()
+	stopIndexing := func(closer *y.Closer) {
+		// runSchemaMutation can return. stopIndexing could be called by goroutines.
 		if !schema.State().IndexingInProgress() {
 			if atomic.CompareAndSwapUint32(&done, 0, 1) {
-				gr.Node.stopTask(op)
+				closer.Done()
+				// Time check is here so that we do not propose snapshot too frequently.
+				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
+					return
+				}
+				if err := gr.Node.proposeSnapshot(1); err != nil {
+					glog.Errorf("error in proposing snapshot: %v", err)
+				}
 			}
 		}
 	}
 
 	// Ensure that rollup is not running.
-	op, err := gr.Node.startTask(opIndexing)
+	closer, err := gr.Node.startTask(opIndexing)
 	if err != nil {
 		return err
 	}
-	defer stopIndexing(op)
+	defer stopIndexing(closer)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
 		// in case background indexing is running, we should call it here again.
-		defer stopIndexing(op)
+		defer stopIndexing(closer)
 
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {

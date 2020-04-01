@@ -87,7 +87,6 @@ func (exp *Experiment) verify() {
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
-	require.NoError(exp.t, testutil.WaitForAlter(ctx, dg, exp.schema))
 
 	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})

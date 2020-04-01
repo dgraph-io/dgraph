@@ -86,7 +86,8 @@ func TestCountIndex(t *testing.T) {
 
 	fmt.Println("building indexes in background")
 	if err := dg.Alter(context.Background(), &api.Operation{
-		Schema: "value: [string] @count .",
+		Schema:          "value: [string] @count .",
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
@@ -162,7 +163,7 @@ func TestCountIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: eq(count(value), "3")) {uid}}`, dg)
+	waitForSchemaUpdate(`{ q(func: eq(count(value), "3")) {uid}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")

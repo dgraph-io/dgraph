@@ -88,7 +88,7 @@ var (
 )
 
 var (
-	errIndexingInProgress = errors.New("schema is already being modified. Please retry")
+	errIndexingInProgress = errors.New("errIndexingInProgress. Please retry")
 )
 
 // Server implements protos.DgraphServer
@@ -239,14 +239,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
-	result, err := schema.Parse(op.Schema)
-	if err != nil {
-		return empty, err
-	}
-
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
+	}
+
+	result, err := schema.Parse(op.Schema)
+	if err != nil {
+		return empty, err
 	}
 
 	for _, update := range result.Preds {
@@ -268,7 +268,21 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
-	return empty, err
+	if err != nil {
+		return empty, err
+	}
+
+	// wait for indexing to complete or context to be canceled.
+	for !op.RunInBackground {
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
+		if !schema.State().IndexingInProgress() {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+	return empty, nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -703,6 +717,8 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		Version:  x.Version(),
 		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho: time.Now().Unix(),
+		Ongoing:  worker.GetOngoingTasks(),
+		Indexing: schema.GetIndexingPredicates(),
 	})
 
 	var err error

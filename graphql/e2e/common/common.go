@@ -285,6 +285,12 @@ func RunAll(t *testing.T) {
 	t.Run("panic catcher", panicCatcher)
 	t.Run("deep mutation errors", deepMutationErrors)
 
+	// fragment tests
+	t.Run("fragment in mutation", fragmentInMutation)
+	t.Run("fragment in query", fragmentInQuery)
+	t.Run("fragment in query on Interface", fragmentInQueryOnInterface)
+	t.Run("fragment in query on Object", fragmentInQueryOnObject)
+
 }
 
 func gunzipData(data []byte) ([]byte, error) {

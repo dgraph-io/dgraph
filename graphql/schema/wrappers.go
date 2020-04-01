@@ -287,6 +287,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return nil
 }
 
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
+		}
+	}
+	return nil
+}
+
 func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
 	if dir.Name != "secret" {
 		return nil
@@ -615,19 +631,6 @@ func (f *field) SelectionSet() (flds []Field) {
 				field: fld,
 				op:    f.op,
 			})
-		}
-		if fragment, ok := s.(*ast.InlineFragment); ok {
-			// This is the case where an inline fragment is defined within a query
-			// block. Usually this is for requesting some fields for a concrete type
-			// within a query for an interface.
-			for _, s := range fragment.SelectionSet {
-				if fld, ok := s.(*ast.Field); ok {
-					flds = append(flds, &field{
-						field: fld,
-						op:    f.op,
-					})
-				}
-			}
 		}
 	}
 

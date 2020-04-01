@@ -401,7 +401,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
-			case err == posting.ErrNoValue || len(vals) == 0:
+			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
+				// This branch is taken when the value does not exist in the pl or
+				// the number of values retreived is zero (there could still be facets).
+				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+				// LangMatrix so that all these data structure have predicatble layouts.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
@@ -2238,6 +2242,13 @@ loop:
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return err
+		}
+
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
 		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids
