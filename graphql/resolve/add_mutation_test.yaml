@@ -1055,11 +1055,11 @@
     {
       "input": [
         {
-          "name": "City0",
+          "name": "Bengaluru",
           "district": {"code": "D1", "name": "Dist1"}
         },
         {
-          "name": "City1",
+          "name": "NY",
           "district": {"code": "D1", "name": "Dist1"}
         }
       ]
@@ -1075,7 +1075,7 @@
   dgmutations:
     - setjson: |
         {
-          "City.name":"City0",
+          "City.name":"Bengaluru",
           "City.district":{
               "District.code":"D1",
               "District.cities":[{"uid":"_:City1"}],
@@ -1089,7 +1089,7 @@
       cond: "@if(eq(len(District3), 0))"
     - setjson: |
         {
-          "City.name":"City0",
+          "City.name":"Bengaluru",
           "City.district":{
               "District.cities":[{"uid":"_:City1"}],
               "uid":"uid(District3)"
@@ -1100,7 +1100,7 @@
       cond: "@if(eq(len(District3), 1))"
     - setjson: |
         {
-          "City.name":"City1",
+          "City.name":"NY",
           "City.district":{
               "District.cities":[{"uid":"_:City4"}],
               "dgraph.type":["District"],
@@ -1112,7 +1112,7 @@
       cond: "@if(eq(len(District3), 0))"
     - setjson: |
         {
-          "City.name":"City1",
+          "City.name":"NY",
           "City.district":{
               "District.cities":[{"uid":"_:City4"}],
               "uid":"uid(District3)"
