@@ -50,6 +50,8 @@ type HTTPResolverConfig struct {
 	Method         string
 	Body           string
 	ForwardHeaders http.Header
+	httpArg        *ast.Argument
+	graphqlArg     *ast.Argument
 }
 
 // Query/Mutation types and arg names
@@ -798,18 +800,38 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
-func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
+// buildHTTPConfig returns http resolver config and current query. This part is shared between
+// custom http resolver and custom graphql resolver.
+func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 	// We have to fetch the original definition of the query from the name of the query to be
 	// able to get the value stored in custom directive.
 	// TODO - This should be cached later.
 	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
 	custom := query.Directives.ForName("custom")
 	httpArg := custom.Arguments.ForName("http")
+	graphql := custom.Arguments.ForName("graphql")
+
 	rc := HTTPResolverConfig{
-		URL:    httpArg.Value.Children.ForName("url").Raw,
-		Method: httpArg.Value.Children.ForName("method").Raw,
+		URL:        httpArg.Value.Children.ForName("url").Raw,
+		Method:     httpArg.Value.Children.ForName("method").Raw,
+		httpArg:    httpArg,
+		graphqlArg: graphql,
 	}
 
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
+		}
+		rc.ForwardHeaders = headers
+	}
+
+	return rc, query
+}
+func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
+
+	rc, query := q.buildHTTPConfig()
 	argMap := q.field.ArgumentMap(q.op.vars)
 	vars := make(map[string]interface{})
 	// Let's collect the value of query args in vars map and use that for constructing the body
@@ -825,7 +847,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
 	}
 
-	bodyArg := httpArg.Value.Children.ForName("body")
+	bodyArg := rc.httpArg.Value.Children.ForName("body")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
 		body, err := substitueVarsInBody(bodyTemplate, vars)
@@ -834,16 +856,15 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 		}
 		rc.Body = string(body)
 	}
-	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
-	if forwardHeaders != nil {
-		headers := http.Header{}
-		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
-		}
-		rc.ForwardHeaders = headers
-	}
 
 	return rc, nil
+}
+
+func (q *query) GraphqlResolver() {
+	rc, query := q.buildHTTPConfig()
+
+	rc.
+
 }
 
 func (m *mutation) Name() string {
