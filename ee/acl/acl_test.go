@@ -149,7 +149,7 @@ func TestPasswordReturn(t *testing.T) {
 
 	l := makeRequest(t, accessJwt, testutil.GraphQLParams{Query: query})
 	require.Equal(t, string(l), `{"errors":[{"message":"Cannot query field \"password\"`+
-		` on type \"User\".","locations":[{"line":4,"column":4}]}]}`)
+		` on type \"User\".","locations":[{"line":5,"column":4}]}]}`)
 }
 
 func TestGetCurrentUser(t *testing.T) {
@@ -2019,6 +2019,14 @@ func TestCrossGroupPermission(t *testing.T) {
 	addRulesToGroup(t, accessJwt, "reader", []rule{{Predicate: "newpred", Permission: 4}})
 	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
 	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
+	// Wait for acl cache to be refreshed
+	time.Sleep(6 * time.Second)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
 
 	// create 8 users.
 	for i := 0; i < 8; i++ {
