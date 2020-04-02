@@ -1219,6 +1219,39 @@
       failed to rewrite mutation payload because duplicate XID found: T1
       failed to rewrite mutation payload because duplicate XID found: T1
 
+- name: "Circular Duplicate XIDs in single mutation"
+  gqlmutation: |
+    mutation addStudent($input: [AddStudentInput!]!) {
+      addStudent(input: $input) {
+        student {
+          xid
+          name
+          taughtBy {
+            xid
+            name
+            subject
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "xid": "S1",
+          "name": "Stud1",
+          "taughtBy": [
+            {"xid": "T1", "name": "Teacher1", "teaches": [{"xid": "S1", "name": "Stud1"}]}
+          ]
+        }
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input circularly in a single mutation, it
+  should return error."
+  error:
+    message: |-
+      failed to rewrite mutation payload because duplicate XID found: S1
+
 -
   name: "Duplicate XIDs in single mutation for Interface"
   gqlmutation: |
@@ -1240,7 +1273,11 @@
       "input": [
         {
           "xid": "S1",
-          "name": "Stud1",
+          "name": "Stud1"
+        },
+        {
+          "xid": "S2",
+          "name": "Stud2",
           "taughtBy": [
             {"xid": "S1", "name": "Teacher1", "subject": "Sub1"}
           ]
