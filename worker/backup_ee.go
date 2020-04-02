@@ -119,14 +119,14 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		if Config.BadgerKeyFile != "" {
 			// If encryption turned on, latest backup should be encrypted.
 			if latestManifest.Type != "" && !latestManifest.Encrypted {
-				err = errors.Errorf("Latest Manifest indicates the last backup was not encrypted " +
+				err = errors.Errorf("latest manifest indicates the last backup was not encrypted " +
 					"but this instance has encryption turned on. Try \"forceFull\" flag.")
 				return err
 			}
 		} else {
 			// If encryption turned off, latest backup should be unencrypted.
 			if latestManifest.Type != "" && latestManifest.Encrypted {
-				err = errors.Errorf("Latest Manifest indicates the last backup was encrypted " +
+				err = errors.Errorf("latest manifest indicates the last backup was encrypted " +
 					"but this instance has encryption turned off. Try \"forceFull\" flag.")
 				return err
 			}

@@ -61,7 +61,7 @@ func GetWriter(filepath string, w io.Writer) (io.Writer, error) {
 			return nil, err
 		}
 	}
-	return cipher.StreamWriter{S: cipher.NewOFB(c, iv), W: w}, nil
+	return cipher.StreamWriter{S: cipher.NewCTR(c, iv), W: w}, nil
 }
 
 // GetReader returns a crypto StreamReader on the input Reader given a key file.
@@ -79,8 +79,8 @@ func GetReader(filepath string, r io.Reader) (io.Reader, error) {
 	var iv []byte = make([]byte, 16)
 	cnt, err := r.Read(iv)
 	if cnt != 16 || err != nil {
-		err = errors.Errorf("Unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
+		err = errors.Errorf("unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
 		return nil, err
 	}
-	return cipher.StreamReader{S: cipher.NewOFB(c, iv), R: r}, nil
+	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
 }
