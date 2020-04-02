@@ -584,7 +584,7 @@ func populateCluster() {
 		<23> <shadow_deep> "4" .
 		<24> <shadow_deep> "14" .
 
-		<1> <dgraph.type> "User" .
+		<1> <dgraph.type> "dgraph.type.User" .
 		<2> <dgraph.type> "Person" .
 		<3> <dgraph.type> "Person" .
 		<4> <dgraph.type> "Person" .

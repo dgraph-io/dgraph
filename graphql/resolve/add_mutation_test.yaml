@@ -97,14 +97,14 @@
   dgmutations:
     - setjson: |
         { "uid":"_:User1",
-          "dgraph.type":["User"],
+          "dgraph.type":["dgraph.type.User"],
           "User.name":"A.N. Author",
           "User.pwd":"Password"
         }
       cond: "@if(eq(len(User1), 0))"
   dgquery: |-
     query {
-      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
+      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(dgrpah.type.User)) {
         uid
       }
     }
@@ -113,7 +113,7 @@
   name: "Add Multiple Mutations with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []}, 
+      addAuthor(input: [{ name: "A.N. Author", posts: []},
                         { name: "Different Author", posts: []}]) {
         author {
           name

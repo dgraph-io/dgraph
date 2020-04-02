@@ -541,7 +541,7 @@ func InitialTypes() []*pb.TypeUpdate {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
-			TypeName: "User",
+			TypeName: "dgraph.type.User",
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.xid",
@@ -558,7 +558,7 @@ func InitialTypes() []*pb.TypeUpdate {
 			},
 		},
 			&pb.TypeUpdate{
-				TypeName: "Group",
+				TypeName: "dgraph.type.Group",
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.xid",
