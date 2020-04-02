@@ -27,7 +27,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	//	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -132,7 +132,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	var maxVersion uint64
 	var gzWriter *gzip.Writer
-	var iv []byte = make([]byte, aes.BlockSize) // TODO: Dont use all 0s IV. Randomize and embed in ciphertext.
+	var iv []byte = nil
 	if Config.BadgerKeyFile != "" {
 		glog.Infof("backup will be gzipped and encrypted.")
 		// Chain gzip and aes writers.
@@ -140,14 +140,19 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 		if err != nil {
 			return &emptyRes, err
 		}
-		// iv, err := y.GenerateIV()
-		// if err != nil {
-		// 	return &emptyRes, err
-		// }
+		iv, err = y.GenerateIV()
+		if err != nil {
+			return &emptyRes, err
+		}
 
 		// Chain = Handler <- Crypto <- GZip <- Data (plaintext)
 		cryptoWriter := cipher.StreamWriter{S: cipher.NewOFB(c, iv), W: handler}
 		gzWriter = gzip.NewWriter(cryptoWriter)
+
+		if iv != nil {
+			handler.Write(iv)
+			glog.Infof("Wrote iv %v", iv)
+		}
 	} else {
 		// Chain = Handler <- Gzip <- Data (plaintext)
 		gzWriter = gzip.NewWriter(handler)
@@ -201,6 +206,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 		glog.Errorf("While closing gzipped writer: %v", err)
 		return &emptyRes, err
 	}
+
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &emptyRes, err

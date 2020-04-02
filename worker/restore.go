@@ -64,12 +64,19 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			}
 
 			var gzReader *gzip.Reader
-			var iv []byte = make([]byte, aes.BlockSize) // TODO: Dont use all 0s IV. Read from ciphertext.
+
 			if keyfile != "" {
 				c, err := aes.NewCipher(enc.ReadEncryptionKeyFile(keyfile))
 				if err != nil {
 					return 0, err
 				}
+				var iv []byte = make([]byte, 16)
+				cnt, err := r.Read(iv)
+				if cnt != 16 || err != nil {
+					err = errors.Errorf("Unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
+					return 0, err
+				}
+				fmt.Printf("Got iv %v", iv)
 				cipherReader := cipher.StreamReader{S: cipher.NewOFB(c, iv), R: r}
 				gzReader, err = gzip.NewReader(cipherReader)
 				if err != nil {
