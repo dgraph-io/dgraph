@@ -875,7 +875,10 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 						continue
 					}
 					// TODO - Remove this hardcoding same as above.
-					id := fv["id"].(string)
+					id, ok := fv["id"].(string)
+					if !ok {
+						continue
+					}
 					// Get the pointer of the map corresponding to this id and put it at the
 					// correct place.
 					mval := nodes[id]
