@@ -756,7 +756,6 @@ invalid_schemas:
       "locations":[{"line":6, "column":31}]},
     ]
 
-
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
