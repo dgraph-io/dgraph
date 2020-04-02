@@ -1,5 +1,6 @@
 languageCode = "en-us"
 theme = "hugo-docs"
+canonifyURLs = true
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
