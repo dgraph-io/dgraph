@@ -131,11 +131,11 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	}
 
 	var maxVersion uint64
-	var gzWriter *gzip.Writer
+	gzWriter := gzip.NewWriter(handler)
 
 	var iv []byte
 	if Config.BadgerKeyFile != "" {
-		glog.Infof("backup will be gzipped and encrypted.")
+		glog.Infof("Backup will be gzipped and encrypted.")
 		// Chain gzip and aes writers.
 		c, err := aes.NewCipher(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
 		if err != nil {
@@ -145,10 +145,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 		if err != nil {
 			return &emptyRes, err
 		}
-
-		// Chain = Handler <- Crypto <- GZip <- Data (plaintext)
 		cryptoWriter := cipher.StreamWriter{S: cipher.NewOFB(c, iv), W: handler}
-		gzWriter = gzip.NewWriter(cryptoWriter)
+		gzWriter.Reset(cryptoWriter)
 
 		if iv != nil {
 			if _, err = handler.Write(iv); err != nil {
@@ -156,9 +154,6 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 			}
 			glog.Infof("Wrote iv %v\n", iv)
 		}
-	} else {
-		// Chain = Handler <- Gzip <- Data (plaintext)
-		gzWriter = gzip.NewWriter(handler)
 	}
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
