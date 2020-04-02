@@ -111,8 +111,13 @@ func TestSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input)
+				schHandler, errlist := NewHandler(sch.Input)
 				require.NoError(t, errlist, sch.Name)
+
+				newSchemaStr := schHandler.GQLSchema()
+
+				_, err = FromString(newSchemaStr)
+				require.NoError(t, err)
 			})
 		}
 	})

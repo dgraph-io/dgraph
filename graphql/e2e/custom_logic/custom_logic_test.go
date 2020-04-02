@@ -151,3 +151,94 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
+
+func TestCustomFieldsShouldBeResolved(t *testing.T) {
+	schema := `
+	type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $id}"
+					})
+		age: Int!
+		cars: [Car] @custom(http: {
+						url: "http://mock:888/cars",
+						method: "GET",
+						body: "{uid: $id}"
+					})
+		schools: [School]
+	}
+
+	type School {
+		id: ID!
+		established: String!
+		name: String! @custom(http: {
+						url: "http://mock:8888/schoolNames",
+						method: "POST",
+						body: "{sid: $id}"
+					  })
+		classes: [Class] @custom(http: {
+							url: "http://mock:8888/classes",
+							method: "POST",
+							body: "{sid: $id}"
+						 })
+		teachers: [Teacher]
+	}
+
+	type Class @remote {
+		id: ID!
+		name: String!
+		numStudents: Int!
+	}
+
+	type Teacher {
+		tid: ID!
+		age: Int!
+		name: String @custom(http: {
+						url: "http://mock:8888/teacherNames",
+						method: "POST",
+						body: "{tid: $tid}"
+					  })
+	}`
+
+	updateSchema(t, schema)
+	query := `
+	query {
+		queryUser {
+			id
+			name
+			age
+			cars {
+				id
+				name
+			}
+			schools {
+				id
+				name
+				established
+				classes {
+					id
+					name
+					numStudents
+				}
+				teachers {
+					tid
+					age
+					name
+				}
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+}

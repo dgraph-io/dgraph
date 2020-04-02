@@ -563,6 +563,13 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
+		custom := fld.Directives.ForName("custom")
+		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// endpoint.
+		if custom != nil {
+			continue
+		}
+
 		// Filtering makes sense both for lists (= return only items that match
 		// this filter) and for singletons (= only have this value in the result
 		// if it satisfies this filter)
@@ -1143,6 +1150,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		custom := fld.Directives.ForName("custom")
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
+			continue
+		}
+
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -1175,6 +1188,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			continue
+		}
+
+		custom := fld.Directives.ForName("custom")
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
 			continue
 		}
 
