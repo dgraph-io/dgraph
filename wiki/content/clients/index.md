@@ -62,7 +62,7 @@ The client can be obtained in the usual way via `go get`:
 ```sh
 # Requires at least Go 1.11
 export GO111MODULE=on
-go get -u -v github.com/dgraph-io/dgo/v2
+go get -u -v github.com/dgraph-io/dgo/v200
 ```
 
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgo) contains

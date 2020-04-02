@@ -34,7 +34,7 @@ import (
 	otrace "go.opencensus.io/trace"
 
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
