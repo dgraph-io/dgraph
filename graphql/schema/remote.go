@@ -62,90 +62,90 @@ func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
 }
 
 const introspectionQuery = `
-   query {
-	 __schema {
-	   queryType { name }
-	   mutationType { name }
-	   subscriptionType { name }
-	   types {
-		 ...FullType
-	   }
-	   directives {
-		 name
-		 locations
-		 args {
-		   ...InputValue
-		 }
-	   }
-	 }
-   }
-   fragment FullType on __Type {
-	 kind
-	 name
-	 fields(includeDeprecated: true) {
-	   name
-	   args {
-		 ...InputValue
-	   }
-	   type {
-		 ...TypeRef
-	   }
-	   isDeprecated
-	   deprecationReason
-	 }
-	 inputFields {
-	   ...InputValue
-	 }
-	 interfaces {
-	   ...TypeRef
-	 }
-	 enumValues(includeDeprecated: true) {
-	   name
-	   isDeprecated
-	   deprecationReason
-	 }
-	 possibleTypes {
-	   ...TypeRef
-	 }
-   }
-   fragment InputValue on __InputValue {
-	 name
-	 type { ...TypeRef }
-	 defaultValue
-   }
-   fragment TypeRef on __Type {
-	 kind
-	 name
-	 ofType {
-	   kind
-	   name
-	   ofType {
-		 kind
-		 name
-		 ofType {
-		   kind
-		   name
-		   ofType {
-			 kind
-			 name
-			 ofType {
-			   kind
-			   name
-			   ofType {
-				 kind
-				 name
-				 ofType {
-				   kind
-				   name
-				 }
-			   }
-			 }
-		   }
-		 }
-	   }
-	 }
-   }
- `
+	query {
+	  __schema {
+		queryType { name }
+		mutationType { name }
+		subscriptionType { name }
+		types {
+		  ...FullType
+		}
+		directives {
+		  name
+		  locations
+		  args {
+			...InputValue
+		  }
+		}
+	  }
+	}
+	fragment FullType on __Type {
+	  kind
+	  name
+	  fields(includeDeprecated: true) {
+		name
+		args {
+		  ...InputValue
+		}
+		type {
+		  ...TypeRef
+		}
+		isDeprecated
+		deprecationReason
+	  }
+	  inputFields {
+		...InputValue
+	  }
+	  interfaces {
+		...TypeRef
+	  }
+	  enumValues(includeDeprecated: true) {
+		name
+		isDeprecated
+		deprecationReason
+	  }
+	  possibleTypes {
+		...TypeRef
+	  }
+	}
+	fragment InputValue on __InputValue {
+	  name
+	  type { ...TypeRef }
+	  defaultValue
+	}
+	fragment TypeRef on __Type {
+	  kind
+	  name
+	  ofType {
+		kind
+		name
+		ofType {
+		  kind
+		  name
+		  ofType {
+			kind
+			name
+			ofType {
+			  kind
+			  name
+			  ofType {
+				kind
+				name
+				ofType {
+				  kind
+				  name
+				  ofType {
+					kind
+					name
+				  }
+				}
+			  }
+			}
+		  }
+		}
+	  }
+	}
+  `
 
 type remoteGraphqlEndpoint struct {
 	graphqlArg *ast.Argument
@@ -251,6 +251,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 
 		if _, ok = graphqlScalarType[argType]; !ok {
+			fmt.Println(argType)
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
 					" argument is supported in the remote graphql call.",
@@ -285,7 +286,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		if localRemoteCallArg == nil {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in 
-				 %s`,
+				  %s`,
 				endpoint.rootQuery.Name,
 				endpoint.field.Name,
 				variable,
@@ -300,7 +301,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				endpoint.field.Name,
 				variable,
 				typeName,
-				localRemoteCallArg.Name)
+				localRemoteCallArg.Type)
 		}
 	}
 	return nil
@@ -327,7 +328,7 @@ func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string
 			notNullArgs[introspectedArg.Name] = 0
 		}
 
-		arguments[introspectedArg.Name] = introspectedArg.Type.Name
+		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
 	}
 	return arguments, notNullArgs
 }
