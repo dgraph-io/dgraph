@@ -108,7 +108,6 @@ func (e *encoder) attrForID(id uint16) string {
 
 type fastJsonNode struct {
 	attr      uint16
-	order     int // relative ordering (for sorted results)
 	isChild   bool
 	scalarVal []byte
 	attrs     []*fastJsonNode
@@ -324,9 +323,6 @@ func (n nodeSlice) Len() int {
 
 func (n nodeSlice) Less(i, j int) bool {
 	cmp := strings.Compare(enc.attrForID(n[i].attr), enc.attrForID(n[j].attr))
-	if cmp == 0 {
-		return n[i].order < n[j].order
-	}
 	return cmp < 0
 }
 
@@ -373,11 +369,6 @@ func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
 }
 
 func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
-	// set relative ordering
-	for i, a := range fj.attrs {
-		a.order = i
-	}
-
 	i := 0
 	if i < len(fj.attrs) {
 		if _, err := out.WriteRune('{'); err != nil {
