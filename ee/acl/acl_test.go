@@ -2027,6 +2027,7 @@ func TestCrossGroupPermission(t *testing.T) {
 		UserID:   "groot",
 		Passwd:   "password",
 	})
+	require.NoError(t, err)
 
 	// create 8 users.
 	for i := 0; i < 8; i++ {
