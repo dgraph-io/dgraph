@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -205,7 +206,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	if lc == nil {
-		return getNew(key, pstore, lc.startTs)
+		return getNew(key, pstore, math.MaxUint64)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
