@@ -2001,11 +2001,11 @@ Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics
 
 
 
-### Cloudwatch
+### CloudWatch
 
-Route53's healthchecks can be leveraged to create standard Cloudwatch alarms to notify on change in the status of the Alpha's `/health` endpoint.
+Route53's health checks can be leveraged to create standard CloudWatch alarms to notify on change in the status of the `/health` endpoints of Alpha and Zero.
 
-Considering that the Alpha endpoint to monitor is publicly accessible and you have the AWS credentials and [awscli](https://aws.amazon.com/cli/) setup, we’ll go through an example of setting up a simple Cloudwatch alarm configured to alert via email for the Alpha endpoint `alpha.acme.org:8080/health`
+Considering that the endpoints to monitor are publicly accessible and you have the AWS credentials and [awscli](https://aws.amazon.com/cli/) setup, we’ll go through an example of setting up a simple CloudWatch alarm configured to alert via email for the Alpha endpoint `alpha.acme.org:8080/health`. Dgraph Zero's `/health` endpoint can also be monitored in a similar way.
 
 #### Create the Route53 Health Check
 ```sh
@@ -2025,15 +2025,15 @@ The file `/tmp/create-healthcheck.json` would need to have the values for the pa
   "FailureThreshold": 3
 }
 ```
-The reference for the values one can specify while creating or updating health check can be found on AWS' [documentation](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html)
+The reference for the values one can specify while creating or updating a health check can be found on AWS [documentation](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html).
 
 The response to the above command would be the ID of the created health check.
 ```sh
 "29bdeaaa-f5b5-417e-a5ce-7dba1k5f131b"
 ```
-Make a note of the health check ID. This will be used to integrate Cloudwatch alarms with the healthcheck.
+Make a note of the health check ID. This will be used to integrate CloudWatch alarms with the health check.
 
-#### [Optional] Creating an SNS topic
+#### [Optional] Creating an SNS Topic
 SNS topics are used to create message delivery channels. If you do not have any SNS topics configured, one can be created by running the following command:
 
 ```sh
@@ -2044,7 +2044,7 @@ The response to the above command would be as follows:
 ```sh
 "arn:aws:sns:ap-south-1:313054824302:ops"
 ```
-Be sure to make a note of the topic ARN. This would be used to configure the Cloudwatch alarm's action parameter.
+Be sure to make a note of the topic ARN. This would be used to configure the CloudWatch alarm's action parameter.
 
 Run the following command to subscribe your email to the SNS topic:
 ```sh
@@ -2053,12 +2053,12 @@ aws sns subscribe \
     --protocol email \
     --notification-endpoint ops@acme.org
 ```
-Once the subscription is confirmed, Cloudwatch can be configured to use the SNS topic to trigger the alarm notification.
+Once the subscription is confirmed, CloudWatch can be configured to use the SNS topic to trigger the alarm notification.
 
 
 
-#### Creating a Cloudwatch alarm
-The following command creates a Cloudwatch alarm with `--alarm-actions` set to the ARN of the SNS topic and the `--dimensions` of the alarm set to the health check ID.
+#### Creating a CloudWatch Alarm
+The following command creates a CloudWatch alarm with `--alarm-actions` set to the ARN of the SNS topic and the `--dimensions` of the alarm set to the health check ID.
 ```sh
 aws cloudwatch put-metric-alarm \
     --alarm-name dgraph-alpha \
@@ -2078,8 +2078,8 @@ aws cloudwatch put-metric-alarm \
 One can verify the alarm status from the CloudWatch or Route53 consoles.
 
 ##### Internal Endpoints
-If the Alpha endpoint is internal to the VPC network - one would need to create a Lambda function that would periodically(triggered using Cloudwatch Event Rules) request the `/health` path and create Cloudwatch metrics which could then be used to create the required Cloudwatch alarms.
-The architecture and the Cloudformation template to achieve the same can be found [here](https://aws.amazon.com/blogs/networking-and-content-delivery/performing-route-53-health-checks-on-private-resources-in-a-vpc-with-aws-lambda-and-amazon-cloudwatch/).
+If the Alpha endpoint is internal to the VPC network - one would need to create a Lambda function that would periodically( triggered using CloudWatch Event Rules ) request the `/health` path and create CloudWatch metrics which could then be used to create the required CloudWatch alarms.
+The architecture and the CloudFormation template to achieve the same can be found [here](https://aws.amazon.com/blogs/networking-and-content-delivery/performing-route-53-health-checks-on-private-resources-in-a-vpc-with-aws-lambda-and-amazon-cloudwatch/).
 
 
 ## Metrics
