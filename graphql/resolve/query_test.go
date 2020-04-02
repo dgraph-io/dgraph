@@ -83,8 +83,23 @@ type HTTPRewritingCase struct {
 	Headers          map[string][]string
 }
 
+// RoundTripFunc .
+type RoundTripFunc func(req *http.Request) *http.Response
+
+// RoundTrip .
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req), nil
+}
+
+// NewTestClient returns *http.Client with Transport replaced to avoid making real calls
+func NewTestClient(fn RoundTripFunc) *http.Client {
+	return &http.Client{
+		Transport: RoundTripFunc(fn),
+	}
+}
+
 func newClient(t *testing.T, hrc HTTPRewritingCase) *http.Client {
-	return test.NewTestClient(func(req *http.Request) *http.Response {
+	return NewTestClient(func(req *http.Request) *http.Response {
 		require.Equal(t, hrc.Method, req.Method)
 		require.Equal(t, hrc.URL, req.URL.String())
 		if hrc.Body != "" {

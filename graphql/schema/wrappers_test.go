@@ -392,3 +392,55 @@ func TestParseCustomBody(t *testing.T) {
 		})
 	}
 }
+
+func TestSubstituteVarsInURL(t *testing.T) {
+	tcases := []struct {
+		name        string
+		variables   map[string]interface{}
+		url         string
+		expected    string
+		expectedErr error
+	}{
+		{
+			"Substitute query params with space properly",
+			map[string]interface{}{"id": "0x9", "name": "Michael Compton",
+				"num": 10},
+			"http://myapi.com/favMovies/$id?name=$name&num=$num",
+			"http://myapi.com/favMovies/0x9?name=Michael+Compton&num=10",
+			nil,
+		},
+		{
+			"Substitute query params for a variable value that is null as empty",
+			map[string]interface{}{"id": "0x9", "name": nil, "num": 10},
+			"http://myapi.com/favMovies/$id?name=$name&num=$num",
+			"http://myapi.com/favMovies/0x9?name=&num=10",
+			nil,
+		},
+		{
+			"Remove query params corresponding to variables that are empty.",
+			map[string]interface{}{"id": "0x9", "num": 10},
+			"http://myapi.com/favMovies/$id?name=$name&num=$num",
+			"http://myapi.com/favMovies/0x9?num=10",
+			nil,
+		},
+		{
+			"Substitute multiple path params properly",
+			map[string]interface{}{"id": "0x9", "num": 10},
+			"http://myapi.com/favMovies/$id/$num",
+			"http://myapi.com/favMovies/0x9/10",
+			nil,
+		},
+	}
+
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			b, err := substituteVarsInURL(test.url, test.variables)
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+				require.Equal(t, test.expected, string(b))
+			} else {
+				require.EqualError(t, err, test.expectedErr.Error())
+			}
+		})
+	}
+}

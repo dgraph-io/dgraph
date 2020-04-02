@@ -807,6 +807,40 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
+func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
+	error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+	// Parse variables from the path and query params.
+	elems := strings.Split(u.Path, "/")
+	for idx, elem := range elems {
+		if strings.HasPrefix(elem, "$") {
+			elems[idx] = url.QueryEscape(fmt.Sprintf("%v", vars[elem[1:]]))
+		}
+	}
+	u.Path = strings.Join(elems, "/")
+
+	q := u.Query()
+	for k := range q {
+		val := q.Get(k)
+		if strings.HasPrefix(val, "$") {
+			qv, ok := vars[val[1:]]
+			if !ok {
+				q.Del(k)
+				continue
+			}
+			if qv == nil {
+				qv = ""
+			}
+			q.Set(k, fmt.Sprintf("%v", qv))
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 // buildHTTPConfig returns http resolver config and current query. This part is shared between
 // custom http resolver and custom graphql resolver.
 func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
@@ -830,8 +864,6 @@ func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 	if forwardHeaders != nil {
 		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
-			fmt.Println(h.Value.Raw)
-			fmt.Println(q.op.header.Get(h.Value.Raw))
 			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
 		}
 		rc.ForwardHeaders = headers
@@ -855,18 +887,23 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 			val = ""
 		}
 		rc.URL = strings.ReplaceAll(rc.URL, "$"+arg.Name, url.QueryEscape(fmt.Sprintf("%v", val)))
-	}
-
-	bodyArg := rc.httpArg.Value.Children.ForName("body")
-	if bodyArg != nil {
-		bodyTemplate := bodyArg.Raw
-		body, err := substitueVarsInBody(bodyTemplate, vars)
+		var err error
+		argMap := q.field.ArgumentMap(q.op.vars)
+		rc.URL, err = substituteVarsInURL(rc.URL, argMap)
 		if err != nil {
-			return rc, err
+			return rc, errors.Wrapf(err, "while substituting vars in URL")
 		}
-		rc.Body = string(body)
-	}
 
+		bodyArg := rc.httpArg.Value.Children.ForName("body")
+		if bodyArg != nil {
+			bodyTemplate := bodyArg.Raw
+			body, err := substitueVarsInBody(bodyTemplate, argMap)
+			if err != nil {
+				return rc, err
+			}
+			rc.Body = string(body)
+		}
+	}
 	return rc, nil
 }
 

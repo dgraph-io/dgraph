@@ -1,13 +1,13 @@
-type Car @not_dgraph {
+type Car @remote {
     id: ID!
     name: String!
 }
 
-interface Person @not_dgraph {
+interface Person @remote {
     age: Int!
 }
 
-type User implements Person @not_dgraph {
+type User implements Person @remote {
     id: ID!
     name: String!
     cars: [Car]

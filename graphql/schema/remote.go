@@ -62,90 +62,90 @@ func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
 }
 
 const introspectionQuery = `
-   query {
-	 __schema {
-	   queryType { name }
-	   mutationType { name }
-	   subscriptionType { name }
-	   types {
-		 ...FullType
-	   }
-	   directives {
-		 name
-		 locations
-		 args {
-		   ...InputValue
-		 }
-	   }
-	 }
-   }
-   fragment FullType on __Type {
-	 kind
-	 name
-	 fields(includeDeprecated: true) {
-	   name
-	   args {
-		 ...InputValue
-	   }
-	   type {
-		 ...TypeRef
-	   }
-	   isDeprecated
-	   deprecationReason
-	 }
-	 inputFields {
-	   ...InputValue
-	 }
-	 interfaces {
-	   ...TypeRef
-	 }
-	 enumValues(includeDeprecated: true) {
-	   name
-	   isDeprecated
-	   deprecationReason
-	 }
-	 possibleTypes {
-	   ...TypeRef
-	 }
-   }
-   fragment InputValue on __InputValue {
-	 name
-	 type { ...TypeRef }
-	 defaultValue
-   }
-   fragment TypeRef on __Type {
-	 kind
-	 name
-	 ofType {
-	   kind
-	   name
-	   ofType {
-		 kind
-		 name
-		 ofType {
-		   kind
-		   name
-		   ofType {
-			 kind
-			 name
-			 ofType {
-			   kind
-			   name
-			   ofType {
-				 kind
-				 name
-				 ofType {
-				   kind
-				   name
-				 }
-			   }
-			 }
-		   }
-		 }
-	   }
-	 }
-   }
- `
+	query {
+	  __schema {
+		queryType { name }
+		mutationType { name }
+		subscriptionType { name }
+		types {
+		  ...FullType
+		}
+		directives {
+		  name
+		  locations
+		  args {
+			...InputValue
+		  }
+		}
+	  }
+	}
+	fragment FullType on __Type {
+	  kind
+	  name
+	  fields(includeDeprecated: true) {
+		name
+		args {
+		  ...InputValue
+		}
+		type {
+		  ...TypeRef
+		}
+		isDeprecated
+		deprecationReason
+	  }
+	  inputFields {
+		...InputValue
+	  }
+	  interfaces {
+		...TypeRef
+	  }
+	  enumValues(includeDeprecated: true) {
+		name
+		isDeprecated
+		deprecationReason
+	  }
+	  possibleTypes {
+		...TypeRef
+	  }
+	}
+	fragment InputValue on __InputValue {
+	  name
+	  type { ...TypeRef }
+	  defaultValue
+	}
+	fragment TypeRef on __Type {
+	  kind
+	  name
+	  ofType {
+		kind
+		name
+		ofType {
+		  kind
+		  name
+		  ofType {
+			kind
+			name
+			ofType {
+			  kind
+			  name
+			  ofType {
+				kind
+				name
+				ofType {
+				  kind
+				  name
+				  ofType {
+					kind
+					name
+				  }
+				}
+			  }
+			}
+		  }
+		}
+	  }
+	}
+  `
 
 type remoteGraphqlEndpoint struct {
 	graphqlArg *ast.Argument
@@ -286,7 +286,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		if localRemoteCallArg == nil {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in 
-				 %s`,
+				  %s`,
 				endpoint.rootQuery.Name,
 				endpoint.field.Name,
 				variable,
