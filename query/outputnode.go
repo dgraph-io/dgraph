@@ -57,12 +57,14 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 }
 
 func makeScalarNode(attr uint16, isChild bool, val []byte, list bool) *fastJsonNode {
-	return &fastJsonNode{
-		attr:      attr,
-		isChild:   isChild,
-		scalarVal: val,
-		list:      list,
-	}
+	fj := &fastJsonNode{}
+
+	fj.attr = attr
+	fj.isChild = isChild
+	fj.scalarVal = val
+	fj.list = list
+
+	return fj
 }
 
 type encoder struct {
