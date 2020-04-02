@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -91,7 +92,7 @@ func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	require.NoError(t, err)
 }
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.GetNoStore(key)
+	l, err := posting.GetNoStore(key, math.MaxUint64)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
