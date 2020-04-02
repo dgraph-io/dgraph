@@ -97,14 +97,14 @@
   dgmutations:
     - setjson: |
         { "uid":"_:User1",
-          "dgraph.type":["dgraph.type.User"],
+          "dgraph.type":["User"],
           "User.name":"A.N. Author",
           "User.pwd":"Password"
         }
       cond: "@if(eq(len(User1), 0))"
   dgquery: |-
     query {
-      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(dgrpah.type.User)) {
+      User1 as User1(func: eq(User.name, "A.N. Author")) @filter(type(User)) {
         uid
       }
     }

@@ -73,7 +73,7 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User @secret(field: "password", pred: "dgraph.password") {
+	type User @dgraph(type: "dgraph.type.User") @secret(field: "password", pred: "dgraph.password") {
 
 		"""
 		Username for the user.  Dgraph ensures that usernames are unique.
@@ -83,7 +83,7 @@ const adminTypes = `
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
-	type Group {
+	type Group @dgraph(type: "dgraph.type.Group") {
 
 		"""
 		Name of the group.  Dgraph ensures uniqueness of group names.
@@ -93,7 +93,7 @@ const adminTypes = `
 		rules: [Rule] @dgraph(pred: "dgraph.acl.rule")
 	}
 
-	type Rule {
+	type Rule @dgraph(type: "dgraph.type.Rule") {
 
 		"""
 		Predicate to which the rule applies.
