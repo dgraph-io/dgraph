@@ -59,10 +59,10 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 func makeScalarNode(attr uint16, isChild bool, val []byte, list bool) *fastJsonNode {
 	fj := &fastJsonNode{}
 
-	fj.attr = attr
-	fj.isChild = isChild
-	fj.scalarVal = val
-	fj.list = list
+	fj.setAttr(attr)
+	fj.setIsChild(isChild)
+	fj.setScalarVal(val)
+	fj.setList(list)
 
 	return fj
 }
@@ -71,6 +71,7 @@ type encoder struct {
 	attrMap map[string]uint16
 	idMap   map[uint16]string
 	seqNo   uint16
+	arena   *arena
 }
 
 func newEncoder() *encoder {
@@ -78,6 +79,7 @@ func newEncoder() *encoder {
 		attrMap: make(map[string]uint16),
 		idMap:   make(map[uint16]string),
 		seqNo:   uint16(0),
+		arena:   newArena(1 * 1024 /*1 KB*/),
 	}
 }
 
@@ -107,11 +109,61 @@ func (e *encoder) attrForID(id uint16) string {
 }
 
 type fastJsonNode struct {
-	attr      uint16
-	isChild   bool
-	scalarVal []byte
-	attrs     []*fastJsonNode
-	list      bool
+	attrs []*fastJsonNode
+
+	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
+	// Bytes 5-8 contains offset(uint32) for Arena.
+	// Bytes 3-4 contains attr.
+	// Bit MSB and (MSB-1) contains isChild and list fields values.
+	meta uint64
+}
+
+func (fj *fastJsonNode) setAttr(attr uint16) {
+	fj.meta |= (uint64(attr) << 32)
+}
+
+func (fj *fastJsonNode) setScalarVal(sv []byte) {
+	offset := uint32(enc.arena.put(sv)) // TODO: fix this type casting.
+
+	fj.meta |= uint64(offset)
+}
+
+func (fj *fastJsonNode) setIsChild(isChild bool) {
+	if isChild {
+		fj.meta |= (uint64(1) << 63)
+	}
+}
+
+func (fj *fastJsonNode) setList(list bool) {
+	if list {
+		fj.meta |= (uint64(1) << 62)
+	}
+}
+
+func (fj *fastJsonNode) getAttr() uint16 {
+	return uint16((fj.meta & (uint64(0xFFFF) << 32)) >> 32)
+}
+
+func (fj *fastJsonNode) getScalarVal() []byte {
+	offset := int(fj.meta & uint64(0xFFFFFFFF))
+
+	return enc.arena.get(offset)
+}
+
+func (fj *fastJsonNode) getIsChild() bool {
+	if (fj.meta & (uint64(1) << 63)) > 0 {
+		return true
+	}
+
+	return false
+}
+
+func (fj *fastJsonNode) getList() bool {
+	if (fj.meta & (uint64(1) << 62)) > 0 {
+		return true
+	}
+
+	return false
 }
 
 func (fj *fastJsonNode) AddValue(attr uint16, v types.Val) {
@@ -127,38 +179,41 @@ func (fj *fastJsonNode) AddListValue(attr uint16, v types.Val, list bool) {
 func (fj *fastJsonNode) AddMapChild(attr uint16, val *fastJsonNode, isRoot bool) {
 	var childNode *fastJsonNode
 	for _, c := range fj.attrs {
-		if c.attr == attr {
+		if c.getAttr() == attr {
 			childNode = c
 			break
 		}
 	}
 
 	if childNode != nil {
-		val.isChild = true
-		val.attr = attr
+		val.setIsChild(true)
+		val.setAttr(attr)
 		childNode.attrs = append(childNode.attrs, val.attrs...)
 	} else {
-		val.isChild = false
-		val.attr = attr
+		val.setIsChild(false)
+		val.setAttr(attr)
 		fj.attrs = append(fj.attrs, val)
 	}
 }
 
 func (fj *fastJsonNode) AddListChild(attr uint16, child *fastJsonNode) {
-	child.attr = attr
-	child.isChild = true
+	child.setAttr(attr)
+	child.setIsChild(true)
 	fj.attrs = append(fj.attrs, child)
 }
 
 func (fj *fastJsonNode) New(attr uint16) *fastJsonNode {
-	return &fastJsonNode{attr: attr, isChild: false}
+	nn := &fastJsonNode{}
+	nn.setAttr(attr)
+	nn.setIsChild(false)
+	return nn
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr uint16) {
 	// if we're in debug mode, uid may be added second time, skip this
 	if attr == enc.idForAttr("uid") {
 		for _, a := range fj.attrs {
-			if a.attr == attr {
+			if a.getAttr() == attr {
 				return
 			}
 		}
@@ -322,7 +377,7 @@ func (n nodeSlice) Len() int {
 }
 
 func (n nodeSlice) Less(i, j int) bool {
-	cmp := strings.Compare(enc.attrForID(n[i].attr), enc.attrForID(n[j].attr))
+	cmp := strings.Compare(enc.attrForID(n[i].getAttr()), enc.attrForID(n[j].getAttr()))
 	return cmp < 0
 }
 
@@ -334,7 +389,7 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
 	if _, err := out.WriteRune('"'); err != nil {
 		return err
 	}
-	if _, err := out.WriteString(enc.attrForID(fj.attr)); err != nil {
+	if _, err := out.WriteString(enc.attrForID(fj.getAttr())); err != nil {
 		return err
 	}
 	if _, err := out.WriteRune('"'); err != nil {
@@ -359,7 +414,8 @@ func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
 		if !isList {
 			fj.AddValue(enc.idForAttr(fName), fVal)
 		} else {
-			facetNode := &fastJsonNode{attr: enc.idForAttr(fName)}
+			facetNode := &fastJsonNode{}
+			facetNode.setAttr(enc.idForAttr(fName))
 			facetNode.AddValue(enc.idForAttr(strconv.Itoa(facetIdx)), fVal)
 			fj.AddMapChild(enc.idForAttr(fName), facetNode, false)
 		}
@@ -389,7 +445,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 			}
 
 			if !last {
-				if cur.attr == next.attr {
+				if cur.getAttr() == next.getAttr() {
 					if cnt == 1 {
 						if err := cur.writeKey(out); err != nil {
 							return err
@@ -408,7 +464,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 						if err := cur.writeKey(out); err != nil {
 							return err
 						}
-						if cur.isChild || cur.list {
+						if cur.getIsChild() || cur.getList() {
 							if _, err := out.WriteRune('['); err != nil {
 								return err
 							}
@@ -418,7 +474,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					if err := cur.encode(out); err != nil {
 						return err
 					}
-					if cnt != 1 || (cur.isChild || cur.list) {
+					if cnt != 1 || (cur.getIsChild() || cur.getList()) {
 						if _, err := out.WriteRune(']'); err != nil {
 							return err
 						}
@@ -437,7 +493,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 						return err
 					}
 				}
-				if (cur.isChild || cur.list) && !inArray {
+				if (cur.getIsChild() || cur.getList()) && !inArray {
 					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
@@ -445,7 +501,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 				if err := cur.encode(out); err != nil {
 					return err
 				}
-				if cnt != 1 || (cur.isChild || cur.list) {
+				if cnt != 1 || (cur.getIsChild() || cur.getList()) {
 					if _, err := out.WriteRune(']'); err != nil {
 						return err
 					}
@@ -457,7 +513,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 			return err
 		}
 	} else {
-		if _, err := out.Write(fj.scalarVal); err != nil {
+		if _, err := out.Write(fj.getScalarVal()); err != nil {
 			return err
 		}
 	}
@@ -532,7 +588,7 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 			continue
 		}
 		childSlice := make([][]*fastJsonNode, 0, 5)
-		for ci < len(fj.attrs) && childNode.attr == fj.attrs[ci].attr {
+		for ci < len(fj.attrs) && childNode.getAttr() == fj.attrs[ci].getAttr() {
 			childSlice = append(childSlice, fj.attrs[ci].attrs)
 			ci++
 		}
@@ -549,7 +605,7 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		first := -1
 		last := 0
 		for i := range slice {
-			if slice[i].attr == enc.idForAttr("uid") {
+			if slice[i].getAttr() == enc.idForAttr("uid") {
 				if first == -1 {
 					first = i
 				}
