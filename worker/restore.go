@@ -15,8 +15,6 @@ package worker
 import (
 	"bufio"
 	"compress/gzip"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -62,38 +60,18 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-
-			var gzReader *gzip.Reader
-
-			if keyfile != "" {
-				c, err := aes.NewCipher(enc.ReadEncryptionKeyFile(keyfile))
-				if err != nil {
-					return 0, err
-				}
-				var iv []byte = make([]byte, 16)
-				cnt, err := r.Read(iv)
-				if cnt != 16 || err != nil {
-					err = errors.Errorf("Unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
-					return 0, err
-				}
-				fmt.Printf("Got iv %v\n", iv)
-				cipherReader := cipher.StreamReader{S: cipher.NewOFB(c, iv), R: r}
-				gzReader, err = gzip.NewReader(cipherReader)
-				if err != nil {
-					return 0, err
-				}
-			} else {
-				gzReader, err = gzip.NewReader(r)
-				if err != nil {
-					return 0, err
-				}
+			r, err = enc.GetReader(keyfile, r)
+			if err != nil {
+				return 0, err
 			}
-
+			gzReader, err := gzip.NewReader(r)
+			if err != nil {
+				return 0, err
+			}
 			maxUid, err := loadFromBackup(db, gzReader, preds)
 			if err != nil {
 				return 0, err
 			}
-
 			return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
 }

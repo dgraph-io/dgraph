@@ -15,8 +15,6 @@ package worker
 import (
 	"compress/gzip"
 	"context"
-	"crypto/aes"
-	"crypto/cipher"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -27,7 +25,6 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
@@ -131,30 +128,12 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	}
 
 	var maxVersion uint64
-	gzWriter := gzip.NewWriter(handler)
 
-	var iv []byte
-	if Config.BadgerKeyFile != "" {
-		glog.Infof("Backup will be gzipped and encrypted.")
-		// Chain gzip and aes writers.
-		c, err := aes.NewCipher(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
-		if err != nil {
-			return &emptyRes, err
-		}
-		iv, err = y.GenerateIV()
-		if err != nil {
-			return &emptyRes, err
-		}
-		cryptoWriter := cipher.StreamWriter{S: cipher.NewOFB(c, iv), W: handler}
-		gzWriter.Reset(cryptoWriter)
-
-		if iv != nil {
-			if _, err = handler.Write(iv); err != nil {
-				return &emptyRes, err
-			}
-			glog.Infof("Wrote iv %v\n", iv)
-		}
+	newhandler, err := enc.GetWriter(Config.BadgerKeyFile, handler)
+	if err != nil {
+		return &emptyRes, err
 	}
+	gzWriter := gzip.NewWriter(newhandler)
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
