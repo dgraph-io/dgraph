@@ -865,9 +865,15 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 
 			for _, v := range vals {
 				val := v.(map[string]interface{})
-				fieldVals := val[f.Name()].([]interface{})
+				fieldVals, ok := val[f.Name()].([]interface{})
+				if !ok {
+					continue
+				}
 				for idx, fieldVal := range fieldVals {
-					fv := fieldVal.(map[string]interface{})
+					fv, ok := fieldVal.(map[string]interface{})
+					if !ok {
+						continue
+					}
 					// TODO - Remove this hardcoding same as above.
 					id := fv["id"].(string)
 					// Get the pointer of the map corresponding to this id and put it at the
@@ -899,7 +905,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 				return data, err
 			}
 
-			b, err = makeRequest(fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				return data, err
 			}
@@ -1275,12 +1281,12 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 	defer stop()
 
 	res, err := hr.rewriteAndExecute(ctx, query)
-
 	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
 	return &Resolved{Data: completed, Err: err}
 }
 
-func makeRequest(method, url, body string, header http.Header) ([]byte, error) {
+func makeRequest(client *http.Client, method, url, body string,
+	header http.Header) ([]byte, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
@@ -1288,7 +1294,12 @@ func makeRequest(method, url, body string, header http.Header) ([]byte, error) {
 	req.Header = header
 
 	// TODO - Needs to be fixed, we shouldn't be initiating a new HTTP client everytime.
-	resp, err := (&http.Client{}).Do(req)
+	if client == nil {
+		client = &http.Client{
+			Timeout: time.Minute,
+		}
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1304,5 +1315,5 @@ func (hr *httpResolver) rewriteAndExecute(
 	if err != nil {
 		return nil, err
 	}
-	return makeRequest(hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
+	return makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
 }
