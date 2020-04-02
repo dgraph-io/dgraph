@@ -2006,6 +2006,7 @@ func TestCrossGroupPermission(t *testing.T) {
 		UserID:   "groot",
 		Passwd:   "password",
 	})
+	require.NoError(t, err)
 
 	// TODO(@Animesh): I am Running all the operations with the same accessJwt
 	// but access token will expire after 3s. Find an idomatic way to run these.
