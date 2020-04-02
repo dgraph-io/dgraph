@@ -76,7 +76,7 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 					err = errors.Errorf("Unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
 					return 0, err
 				}
-				fmt.Printf("Got iv %v", iv)
+				fmt.Printf("Got iv %v\n", iv)
 				cipherReader := cipher.StreamReader{S: cipher.NewOFB(c, iv), R: r}
 				gzReader, err = gzip.NewReader(cipherReader)
 				if err != nil {
