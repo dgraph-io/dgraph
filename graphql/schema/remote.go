@@ -251,6 +251,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 
 		if _, ok = graphqlScalarType[argType]; !ok {
+			fmt.Println(argType)
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
 					" argument is supported in the remote graphql call.",
@@ -300,7 +301,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				endpoint.field.Name,
 				variable,
 				typeName,
-				localRemoteCallArg.Name)
+				localRemoteCallArg.Type)
 		}
 	}
 	return nil
@@ -327,7 +328,7 @@ func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string
 			notNullArgs[introspectedArg.Name] = 0
 		}
 
-		arguments[introspectedArg.Name] = introspectedArg.Type.Name
+		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
 	}
 	return arguments, notNullArgs
 }

@@ -46,13 +46,14 @@ type QueryType string
 type MutationType string
 
 type HTTPResolverConfig struct {
-	URL            string
-	Method         string
-	Body           string
-	ForwardHeaders http.Header
-	httpArg        *ast.Argument
-	graphqlArg     *ast.Argument
-	argMap         map[string]interface{}
+	URL             string
+	Method          string
+	Body            string
+	ForwardHeaders  http.Header
+	httpArg         *ast.Argument
+	graphqlArg      *ast.Argument
+	argMap          map[string]interface{}
+	RemoteQueryName string
 }
 
 // Query/Mutation types and arg names
@@ -62,6 +63,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
+	GraphqlQuery         QueryType    = "graphql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -129,6 +131,7 @@ type Query interface {
 	QueryType() QueryType
 	Rename(newName string)
 	HTTPResolver() (HTTPResolverConfig, error)
+	GraphqlResolver() (HTTPResolverConfig, error)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -767,6 +770,9 @@ func (q *query) QueryType() QueryType {
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
+		if custom.Arguments.ForName("graphql") != nil {
+			return GraphqlQuery
+		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -824,6 +830,8 @@ func (q *query) buildHTTPConfig() (HTTPResolverConfig, *ast.FieldDefinition) {
 	if forwardHeaders != nil {
 		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
+			fmt.Println(h.Value.Raw)
+			fmt.Println(q.op.header.Get(h.Value.Raw))
 			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
 		}
 		rc.ForwardHeaders = headers
@@ -866,6 +874,9 @@ func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 	rc, query := q.buildHTTPConfig()
 
 	remoteQuery := rc.graphqlArg.Value.Children.ForName("query").Raw
+	queryEndIndex := strings.Index(remoteQuery, "(")
+	rc.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
+
 	for _, arg := range query.Arguments {
 		val := rc.argMap[arg.Name]
 		if val == nil {
@@ -874,7 +885,7 @@ func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 			val = ""
 		}
 		value := fmt.Sprintf("%v", val)
-		if arg.Type.Name() == "String" {
+		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" {
 			value = `"` + value + `"`
 		}
 		remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)

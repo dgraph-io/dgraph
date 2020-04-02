@@ -223,7 +223,16 @@ func (rf *resolverFactory) WithConventionResolvers(
 			return NewHTTPResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, nil, nil, StdQueryCompletion())
+			}, nil, nil, StdQueryCompletion(), false)
+		})
+	}
+
+	for _, q := range s.Queries(schema.GraphqlQuery) {
+		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
+			return NewHTTPResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, nil, nil, StdQueryCompletion(), true)
 		})
 	}
 
@@ -1096,14 +1105,16 @@ type httpResolver struct {
 	httpRewriter    QueryRewriter
 	httpExecutor    QueryExecutor
 	resultCompleter ResultCompleter
+	graphql         bool
 }
 
 // NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
 func NewHTTPResolver(hc *http.Client,
 	qr QueryRewriter,
 	qe QueryExecutor,
-	rc ResultCompleter) QueryResolver {
-	return &httpResolver{hc, qr, qe, rc}
+	rc ResultCompleter,
+	graphql bool) QueryResolver {
+	return &httpResolver{hc, qr, qe, rc, graphql}
 }
 
 func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -1119,7 +1130,14 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 
 func (hr *httpResolver) rewriteAndExecute(
 	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc, err := query.HTTPResolver()
+	var hrc schema.HTTPResolverConfig
+	var err error
+
+	if hr.graphql {
+		hrc, err = query.GraphqlResolver()
+	} else {
+		hrc, err = query.HTTPResolver()
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -1136,5 +1154,22 @@ func (hr *httpResolver) rewriteAndExecute(
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
+
+	if hr.graphql {
+		graphqlResp := make(map[string]interface{})
+		err := json.Unmarshal(b, &graphqlResp)
+		if err != nil {
+			return b, err
+		}
+		graphqlResp, ok := graphqlResp["data"].(map[string]interface{})
+		if ok {
+			data, ok := graphqlResp[hrc.RemoteQueryName].(map[string]interface{})
+			if ok {
+				castedData := make(map[string]interface{})
+				castedData[query.Name()] = []interface{}{data}
+				return json.Marshal(castedData)
+			}
+		}
+	}
 	return b, err
 }

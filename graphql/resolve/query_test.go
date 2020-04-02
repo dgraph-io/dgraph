@@ -134,7 +134,7 @@ func TestCustomHTTPQuery(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPResolver(client, nil, nil, StdQueryCompletion())
+			resolver := NewHTTPResolver(client, nil, nil, StdQueryCompletion(), false)
 			resolved := resolver.Resolve(context.Background(), gqlQuery)
 			res := `{` + string(resolved.Data) + `}`
 			testutil.CompareJSON(t, tcase.ResolvedResponse, res)
