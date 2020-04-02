@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"reflect"
@@ -93,11 +95,86 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)
 }
 
+type input struct {
+	ID string `json:"uid"`
+}
+
+func getInput(r *http.Request) ([]input, error) {
+	inputBody := make([]input, 0, 10)
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("while reading body: ", err)
+		return nil, err
+	}
+	if err := json.Unmarshal(b, &inputBody); err != nil {
+		fmt.Println("while doing JSON unmarshal: ", err)
+		return nil, err
+	}
+	return inputBody, nil
+}
+
+func userNamesHandler(w http.ResponseWriter, r *http.Request) {
+	inputBody, err := getInput(r)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	// append uname to the id and return it.
+	res := make([]interface{}, 0, len(inputBody))
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, "uname-"+inputBody[i].ID)
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func carsHandler(w http.ResponseWriter, r *http.Request) {
+	inputBody, err := getInput(r)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	fmt.Println(inputBody)
+	if len(inputBody) != 3 {
+		fmt.Printf("Expected input to have length 3. Got: %+v", len(inputBody))
+		return
+	}
+
+	res := []interface{}{
+		[]map[string]interface{}{{
+			"name": "BMW",
+		}},
+		[]map[string]interface{}{{
+			"name": "Merc",
+		}},
+		[]map[string]interface{}{{
+			"name": "Honda",
+		}},
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Println(string(b))
+	fmt.Fprintf(w, string(b))
+}
+
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/userNames", userNamesHandler)
+	http.HandleFunc("/cars", carsHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))

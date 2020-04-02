@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -918,11 +919,13 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 				return nil, err
 			}
 
+			fmt.Println("result: ", result)
 			// TODO - Verify that length of result should be same as len(vals).
 			// Here we walk through all the objects in the array and substitute the value
 			// that we got from the remote endpoint with the right key in the object.
 			for idx, v := range vals {
 				val := v.(map[string]interface{})
+				fmt.Printf("val: %+v\n", val)
 				val[f.Alias()] = result[idx]
 				vals[idx] = val
 			}
