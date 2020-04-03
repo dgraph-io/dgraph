@@ -28,13 +28,14 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 )
 
 // RunRestore calls badger.Load and tries to load data into a new DB.
-func RunRestore(pdir, location, backupId string) LoadResult {
+func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 	// Create the pdir if it doesn't exist.
 	if err := os.MkdirAll(pdir, 0700); err != nil {
 		return LoadResult{0, 0, err}
@@ -59,15 +60,18 @@ func RunRestore(pdir, location, backupId string) LoadResult {
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
+			r, err = enc.GetReader(keyfile, r)
+			if err != nil {
+				return 0, err
+			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
-				return 0, nil
+				return 0, err
 			}
 			maxUid, err := loadFromBackup(db, gzReader, preds)
 			if err != nil {
 				return 0, err
 			}
-
 			return maxUid, x.WriteGroupIdFile(dir, uint32(groupId))
 		})
 }
