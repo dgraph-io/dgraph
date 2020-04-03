@@ -79,7 +79,8 @@ func GetReader(filepath string, r io.Reader) (io.Reader, error) {
 	var iv []byte = make([]byte, 16)
 	cnt, err := r.Read(iv)
 	if cnt != 16 || err != nil {
-		err = errors.Errorf("unable to get IV from encrypted backup. Read %v bytes, err %v ", cnt, err)
+		err = errors.Errorf("unable to get IV from encrypted backup. Read %v bytes, err %v ",
+			cnt, err)
 		return nil, err
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
