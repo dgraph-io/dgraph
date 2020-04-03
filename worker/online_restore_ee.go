@@ -33,7 +33,9 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("restore request cannot be nil")
 	}
 
-	UpdateMembershipState(ctx)
+	if err := UpdateMembershipState(ctx); err != nil {
+		return errors.Wrapf(err, "cannot update membership state before restore")
+	}
 	memState := GetMembershipState()
 
 	currentGroups := make([]uint32, 0)
@@ -140,10 +142,17 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 	uri, err := url.Parse(req.Location)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "cannot parse backup location")
 	}
 	handler, err := NewUriHandler(uri, creds)
+	if err != nil {
+		return errors.Wrapf(err, "cannot create backup handler")
+	}
+
 	manifests, err := handler.GetManifests(uri, req.BackupId)
+	if err != nil {
+		return errors.Wrapf(err, "cannot get backup manifests")
+	}
 	if len(manifests) == 0 {
 		return errors.Errorf("no backup manifests found at location %s", req.Location)
 	}
@@ -157,7 +166,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		if tablet, err := groups().Tablet(pred); err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		} else if tablet.GetGroupId() != req.GroupId {
-			return errors.Errorf("cannot assign tablet for pred %s to group %s", pred, req.GroupId)
+			return errors.Errorf("cannot assign tablet for pred %s to group %d", pred, req.GroupId)
 		}
 	}
 
