@@ -1140,3 +1140,130 @@
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
+
+- name: "Update XID inside XID Test"
+  gqlmutation: |
+    mutation updateStudent($input: UpdateStudentInput!) {
+      updateStudent(input: $input) {
+        student {
+          xid
+          name
+          taughtBy {
+            xid
+            name
+            subject
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": {
+        "filter": {
+          "xid": {"eq": "S1"}
+        },
+        "set": {
+          "taughtBy": [
+            {
+              "xid": "T1",
+              "name": "Seinfeld",
+              "subject": "Sub1",
+              "teaches": [
+                {"xid": "S2", "name": "Kramer"}
+              ]
+            }
+          ]
+        }
+      }
+    }
+  explanation: "When an update contains an XID object inside another XID object, it should
+  generate all cases."
+  dgquery: |-
+    query {
+      x as updateStudent(func: type(Student)) @filter(eq(People.xid, "S1")) {
+        uid
+      }
+      Student5 as Student5(func: eq(People.xid, "S2")) @filter(type(Student)) {
+        uid
+      }
+      Teacher3 as Teacher3(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "People.xid": "T1",
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "People.xid": "S2",
+                  "dgraph.type": [ "Student", "People" ],
+                  "uid": "_:Student5"
+                }
+              ],
+              "dgraph.type": [ "Teacher", "People" ],
+              "uid": "_:Teacher3"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(AND eq(len(Teacher3), 0) AND eq(len(Student5), 0) AND gt(len(x), 0))"
+    - setjson: |
+        {
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "People.xid": "T1",
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "uid": "uid(Student5)"
+                }
+              ],
+              "dgraph.type": [ "Teacher", "People" ],
+              "uid": "_:Teacher3"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(AND eq(len(Teacher3), 0) AND eq(len(Student5), 1) AND gt(len(x), 0))"
+    - setjson: |
+        {
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "People.xid": "S2",
+                  "dgraph.type": [ "Student", "People" ],
+                  "uid": "_:Student5"
+                }
+              ],
+              "uid": "uid(Teacher3)"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(AND eq(len(Teacher3), 1) AND eq(len(Student5), 0) AND gt(len(x), 0))"
+    - setjson: |
+        {
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "uid": "uid(Student5)"
+                }
+              ],
+              "uid": "uid(Teacher3)"
+            }
+          ],
+          "uid": "uid(x)"
+        }
+      cond: "@if(AND eq(len(Teacher3), 1) AND eq(len(Student5), 1) AND gt(len(x), 0))"

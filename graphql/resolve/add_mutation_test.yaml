@@ -1289,3 +1289,140 @@
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
+
+- name: "Duplicate XIDs in single mutation at Deep and then at Top level Test"
+  gqlmutation: |
+    mutation addStudent($input: [AddStudentInput!]!) {
+      addStudent(input: $input) {
+        student {
+          xid
+          name
+          taughtBy {
+            xid
+            name
+            subject
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "input": [
+        {
+          "xid": "S1",
+          "name": "George",
+          "taughtBy": [
+            {"xid": "T1", "name": "Seinfeld", "teaches": [{"xid": "S2", "name": "Kramer"}]}
+          ]
+        },
+        {
+          "xid": "S2",
+          "name": "Kramer"
+        }
+      ]
+    }
+  explanation: "When duplicate XIDs are given as input across levels but the object structure
+  is same, it should not return error."
+  dgquery: |-
+    query {
+      Student2 as Student2(func: eq(People.xid, "S1")) @filter(type(Student)) {
+        uid
+      }
+      Student6 as Student6(func: eq(People.xid, "S2")) @filter(type(Student)) {
+        uid
+      }
+      Teacher4 as Teacher4(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "People.name": "George",
+          "People.xid": "S1",
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "People.xid": "T1",
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "People.xid": "S2",
+                  "dgraph.type": [ "Student", "People" ],
+                  "uid": "_:Student6"
+                }
+              ],
+              "dgraph.type": [ "Teacher", "People" ],
+              "uid": "_:Teacher4"
+            }
+          ],
+          "dgraph.type": [ "Student", "People" ],
+          "uid": "_:Student2"
+        }
+      cond: "@if(eq(len(Student2), 0) AND eq(len(Teacher4), 0) AND eq(len(Student6), 0))"
+    - setjson: |
+        {
+          "People.name": "George",
+          "People.xid": "S1",
+          "Student.taughtBy": [
+            {
+              "People.name": "Seinfeld",
+              "People.xid": "T1",
+              "Teacher.teaches": [
+                {
+                  "uid": "uid(Student6)"
+                }
+              ],
+              "dgraph.type": [ "Teacher", "People" ],
+              "uid": "_:Teacher4"
+            }
+          ],
+          "dgraph.type": [ "Student", "People" ],
+          "uid": "_:Student2"
+        }
+      cond: "@if(eq(len(Student2), 0) AND eq(len(Teacher4), 0) AND eq(len(Student6), 1))"
+    - setjson: |
+        {
+          "People.name": "George",
+          "People.xid": "S1",
+          "Student.taughtBy": [
+            {
+              "Teacher.teaches": [
+                {
+                  "People.name": "Kramer",
+                  "People.xid": "S2",
+                  "dgraph.type": [ "Student", "People" ],
+                  "uid": "_:Student6"
+                }
+              ],
+              "uid": "uid(Teacher4)"
+            }
+          ],
+          "dgraph.type": [ "Student", "People" ],
+          "uid": "_:Student2"
+        }
+      cond: "@if(eq(len(Student2), 0) AND eq(len(Teacher4), 1) AND eq(len(Student6), 0))"
+    - setjson: |
+        {
+          "People.name": "George",
+          "People.xid": "S1",
+          "Student.taughtBy": [
+            {
+              "Teacher.teaches": [
+                {
+                  "uid": "uid(Student6)"
+                }
+              ],
+              "uid": "uid(Teacher4)"
+            }
+          ],
+          "dgraph.type": [ "Student", "People" ],
+          "uid": "_:Student2"
+        }
+      cond: "@if(eq(len(Student2), 0) AND eq(len(Teacher4), 1) AND eq(len(Student6), 1))"
+    - setjson: |
+        {
+          "dgraph.type": [ "Student", "People" ],
+          "uid": "_:Student2"
+        }
+      cond: "@if(eq(len(Student6), 0)"
