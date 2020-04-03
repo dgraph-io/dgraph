@@ -271,7 +271,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore", "-k", "../../../ee/enc/enc-key"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -307,7 +307,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "")
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "../../../ee/enc/enc-key")
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
