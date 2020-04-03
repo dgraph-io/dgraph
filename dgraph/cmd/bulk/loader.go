@@ -61,6 +61,7 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	ClientDir        string
 
 	MapShards    int
 	ReduceShards int
@@ -159,9 +160,19 @@ func readSchema(filename string) *schema.ParsedSchema {
 	return result
 }
 
-func (ld *loader) mapStage() {
+func (ld *loader) mapStage(opt *options) {
 	ld.prog.setPhase(mapPhase)
-	ld.xids = xidmap.New(ld.zero, nil)
+	if len(opt.ClientDir) > 0 {
+		var db *badger.DB
+		x.Check(os.MkdirAll(opt.ClientDir, 0700))
+
+		var err error
+		db, err = badger.Open(badger.DefaultOptions(opt.ClientDir))
+		x.Checkf(err, "Error while creating badger KV posting store")
+		ld.xids = xidmap.New(ld.zero, db)
+	} else {
+		ld.xids = xidmap.New(ld.zero, nil)
+	}
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
