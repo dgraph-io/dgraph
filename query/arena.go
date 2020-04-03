@@ -28,9 +28,10 @@ type arena struct {
 }
 
 func newArena(size int) *arena {
+	x.AssertTrue(size > 0)
 	return &arena{
-		n:   0,
-		buf: make([]byte, size),
+		n:   1,
+		buf: make([]byte, 0, size),
 	}
 }
 
@@ -48,24 +49,27 @@ func (a *arena) put(b []byte) int {
 }
 
 func (a *arena) get(offset int) []byte {
-	x.AssertTrue(offset+3 < len(a.buf))
+	if offset == 0 {
+		return nil
+	}
+	eoffset := offset - 1
+	x.AssertTrue(eoffset+3 < len(a.buf))
 
 	// First read length, then read actual buffer.
-	l := int(binary.BigEndian.Uint32(a.buf[offset : offset+4]))
-	offset += 4
+	l := int(binary.BigEndian.Uint32(a.buf[eoffset : eoffset+4]))
+	eoffset += 4
 	var b []byte
 	// TODO: Can we avoid allocating a new slice.
-	b = append(b, a.buf[offset:offset+l]...)
+	b = append(b, a.buf[eoffset:eoffset+l]...)
 
 	return b
 }
 
 func (a *arena) size() int {
-	return a.n
+	return a.n - 1
 }
 
 func (a *arena) reset() {
-	a.n = 0
+	a.n = 1
 	a.buf = a.buf[:0]
 }
-

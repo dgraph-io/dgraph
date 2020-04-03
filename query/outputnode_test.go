@@ -144,3 +144,32 @@ func TestStringJsonMarshal(t *testing.T) {
 		require.Equal(t, gm, sm)
 	}
 }
+
+func TestFastJsonNode(t *testing.T) {
+	attrId := uint16(20)
+	scalarVal := bytes.Repeat([]byte("a"), 160)
+	isChild := true
+	list := true
+
+	fj := &fastJsonNode{}
+	fj.setAttr(attrId)
+	fj.setScalarVal(scalarVal)
+	fj.setIsChild(isChild)
+	fj.setList(list)
+
+	require.Equal(t, attrId, fj.getAttr())
+	require.Equal(t, scalarVal, fj.getScalarVal())
+	require.Equal(t, isChild, fj.getIsChild())
+	require.Equal(t, list, fj.getList())
+
+	fj2 := &fastJsonNode{}
+	fj2.setAttr(attrId)
+	fj2.setScalarVal(scalarVal)
+	fj2.setIsChild(isChild)
+	fj2.setList(list)
+
+	require.Equal(t, attrId, fj2.getAttr())
+	require.Equal(t, scalarVal, fj2.getScalarVal())
+	require.Equal(t, isChild, fj2.getIsChild())
+	require.Equal(t, list, fj2.getList())
+}
