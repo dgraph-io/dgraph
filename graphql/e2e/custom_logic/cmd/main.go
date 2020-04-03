@@ -93,12 +93,34 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)
 }
 
+func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": []
+			}]
+		  }
+	   }
+	}
+	`)
+}
+
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
-
+	http.HandleFunc("/noquery", emptyQuerySchema)
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
 }

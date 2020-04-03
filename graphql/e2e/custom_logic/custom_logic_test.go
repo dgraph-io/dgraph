@@ -17,6 +17,7 @@
 package custom_logic
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -37,10 +38,42 @@ const (
 		name: String!
 		director: [MovieDirector]
 	}
+	type Continent @remote {
+		code: String
+		name: String
+		countries: [Country]
+	  }
+	  
+	  type Country @remote {
+		code: String
+		name: String
+		native: String
+		phone: String
+		continent: Continent
+		currency: String
+		languages: [Language]
+		emoji: String
+		emojiU: String
+		states: [State]
+	  }
+	  
+	  type Language @remote {
+		code: String
+		name: String
+		native: String
+		rtl: Int
+	  }
+	  
+	  
+	  type State @remote {
+		code: String
+		name: String
+		country: Country
+	  }
 `
 )
 
-func updateSchema(t *testing.T, sch string) {
+func updateSchema(t *testing.T, sch string) *common.GraphQLResponse {
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -51,8 +84,7 @@ func updateSchema(t *testing.T, sch string) {
 		}`,
 		Variables: map[string]interface{}{"sch": sch},
 	}
-	addResult := add.ExecuteAsPost(t, alphaAdminURL)
-	require.Nil(t, addResult.Errors)
+	return add.ExecuteAsPost(t, alphaAdminURL)
 }
 
 func TestCustomGetQuery(t *testing.T) {
@@ -63,8 +95,7 @@ func TestCustomGetQuery(t *testing.T) {
                 method: "GET"
         })
 	}`
-	updateSchema(t, schema)
-
+	require.Nil(t, updateSchema(t, schema).Errors)
 	query := `
 	query {
 		myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
@@ -95,7 +126,7 @@ func TestCustomPostQuery(t *testing.T) {
                 method: "POST"
         })
 	}`
-	updateSchema(t, schema)
+	require.Nil(t, updateSchema(t, schema).Errors)
 
 	query := `
 	query {
@@ -128,7 +159,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				forwardHeaders: ["X-App-Token", "X-User-Id"]
         })
 	}`
-	updateSchema(t, schema)
+	require.Nil(t, updateSchema(t, schema).Errors)
 
 	query := `
 	query {
@@ -150,4 +181,14 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Nil(t, result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
+}
+
+func TestForInvalidCustomQuery(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	fmt.Printf("%+v", res.Errors[0].Error())
 }
