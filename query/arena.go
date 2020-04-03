@@ -58,11 +58,7 @@ func (a *arena) get(offset int) []byte {
 	// First read length, then read actual buffer.
 	l := int(binary.BigEndian.Uint32(a.buf[eoffset : eoffset+4]))
 	eoffset += 4
-	var b []byte
-	// TODO: Can we avoid allocating a new slice.
-	b = append(b, a.buf[eoffset:eoffset+l]...)
-
-	return b
+	return a.buf[eoffset : eoffset+l]
 }
 
 func (a *arena) size() int {
