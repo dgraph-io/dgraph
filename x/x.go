@@ -39,8 +39,8 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -83,10 +83,10 @@ const (
 	Star = "_STAR_ALL"
 
 	// GrpcMaxSize is the maximum possible size for a gRPC message.
-	// Dgraph uses the maximum size for the most flexibility (4GB - equal
+	// Dgraph uses the maximum size for the most flexibility (2GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
-	GrpcMaxSize = 4 << 30
+	GrpcMaxSize = math.MaxInt32
 
 	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080

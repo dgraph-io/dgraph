@@ -75,6 +75,13 @@ func Check2(_ interface{}, err error) {
 	Check(err)
 }
 
+// Panic on error.
+func Panic(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Ignore function is used to ignore errors deliberately, while keeping the
 // linter happy.
 func Ignore(_ error) {

@@ -11,6 +11,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
+        capital: String
 }
 
 type Author {
@@ -103,11 +104,40 @@ type Computer {
 }
 
 type ComputerOwner {
-	name: String! @id
-	nickName: String
-	computers: Computer! @hasInverse(field: owners)
+        name: String! @id
+        nickName: String
+        computers: Computer! @hasInverse(field: owners)
 }
 
 type User @secret(field: "pwd") {
-	name: String! @id
+        name: String! @id
+}
+
+# For testing duplicate XID in single mutation
+type District {
+        code: String! @id
+        name: String!
+        cities: [City] @hasInverse(field: district)
+}
+
+type City {
+        id: ID!
+        name: String!
+        district: District
+}
+
+# For testing duplicate XID in single mutation for interface
+interface People {
+        id: ID!
+        xid: String! @id
+        name: String!
+}
+
+type Teacher implements People {
+        subject: String
+        teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher]
 }

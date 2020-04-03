@@ -130,6 +130,7 @@ type Type interface {
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
+	FieldOriginatedFrom(fieldName string) string
 	fmt.Stringer
 }
 
@@ -282,6 +283,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 			if fieldName == interfaceField.Name {
 				return interfaceDef
 			}
+		}
+	}
+	return nil
+}
+
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
 		}
 	}
 	return nil
@@ -1191,4 +1208,21 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 		}
 	}
 	return nil
+}
+
+// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type, this type's name is returned.
+// Otherwise, empty string is returned.
+func (t *astType) FieldOriginatedFrom(fieldName string) string {
+	for _, implements := range t.inSchema.Implements[t.Name()] {
+		if implements.Fields.ForName(fieldName) != nil {
+			return implements.Name
+		}
+	}
+
+	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+		return t.Name()
+	}
+
+	return ""
 }

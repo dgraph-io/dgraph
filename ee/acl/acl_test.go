@@ -24,8 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -1885,7 +1885,6 @@ func TestAllowUIDAccess(t *testing.T) {
 		name	 : string @index(exact) .
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
-	require.NoError(t, testutil.WaitForAlter(ctx, dg, op.Schema))
 
 	resetUser(t)
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
