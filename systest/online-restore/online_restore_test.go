@@ -74,13 +74,14 @@ func runQueries(t *testing.T, dg *dgo.Dgraph) {
 		reader, cleanup := chunker.FileReader(filename)
 		bytes, err := ioutil.ReadAll(reader)
 		require.NoError(t, err)
-		contents := string(bytes[:])
+		contents := string(bytes)
 		cleanup()
 
 		// The test query and expected result are separated by a delimiter.
 		bodies := strings.SplitN(contents, "\n---\n", 2)
 
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
+		require.NoError(t, err)
 		require.True(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
 	}
 }
