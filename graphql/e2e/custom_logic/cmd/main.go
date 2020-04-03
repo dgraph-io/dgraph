@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"reflect"
@@ -115,12 +116,173 @@ func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
 	`)
 }
 
+func invalidArgument(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "no_code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "ID",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+}
+
+func invalidType(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "Int",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+}
+
+func validCountryResponse(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "ID",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+		return
+	}
+
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "country": {
+			"name": "Burundi",
+			"code": "BI"
+		  }
+		}
+	  }`)
+}
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 	http.HandleFunc("/noquery", emptyQuerySchema)
+	http.HandleFunc("/invalidargument", invalidArgument)
+	http.HandleFunc("/invalidtype", invalidType)
+	http.HandleFunc("/validcountry", validCountryResponse)
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
 }

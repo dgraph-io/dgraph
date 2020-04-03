@@ -17,7 +17,6 @@
 package custom_logic
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -190,5 +189,51 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	}	
 	`
 	res := updateSchema(t, schema)
-	fmt.Printf("%+v", res.Errors[0].Error())
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
+}
+
+func TestForInvalidArguement(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry;code arg not present in the remote query country\n")
+}
+
+func TestForInvalidType(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
+}
+
+func TestCustomLogicGraphql(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Nil(t, res.Errors)
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountry":{"code":"BI","name":"Burundi"}}
+	`)
 }
