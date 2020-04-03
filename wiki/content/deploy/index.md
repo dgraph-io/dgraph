@@ -2025,7 +2025,7 @@ The file `/tmp/create-healthcheck.json` would need to have the values for the pa
   "FailureThreshold": 3
 }
 ```
-The reference for the values one can specify while creating or updating a health check can be found on AWS [documentation](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html).
+The reference for the values one can specify while creating or updating a health check can be found on the AWS [documentation](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html).
 
 The response to the above command would be the ID of the created health check.
 ```sh
@@ -2078,7 +2078,7 @@ aws cloudwatch put-metric-alarm \
 One can verify the alarm status from the CloudWatch or Route53 consoles.
 
 ##### Internal Endpoints
-If the Alpha endpoint is internal to the VPC network - one would need to create a Lambda function that would periodically( triggered using CloudWatch Event Rules ) request the `/health` path and create CloudWatch metrics which could then be used to create the required CloudWatch alarms.
+If the Alpha endpoint is internal to the VPC network - one would need to create a Lambda function that would periodically (triggered using CloudWatch Event Rules) request the `/health` path and create CloudWatch metrics which could then be used to create the required CloudWatch alarms.
 The architecture and the CloudFormation template to achieve the same can be found [here](https://aws.amazon.com/blogs/networking-and-content-delivery/performing-route-53-health-checks-on-private-resources-in-a-vpc-with-aws-lambda-and-amazon-cloudwatch/).
 
 
