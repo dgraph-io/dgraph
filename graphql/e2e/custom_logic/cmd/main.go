@@ -146,7 +146,7 @@ func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// append uname to the id and return it.
+	// append tname to the id and return it.
 	res := make([]interface{}, 0, len(inputBody))
 	for i := 0; i < len(inputBody); i++ {
 		res = append(res, "tname-"+inputBody[i].ID)
@@ -172,7 +172,7 @@ func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// append uname to the id and return it.
+	// append sname to the id and return it.
 	res := make([]interface{}, 0, len(inputBody))
 	for i := 0; i < len(inputBody); i++ {
 		res = append(res, "sname-"+inputBody[i].ID)
