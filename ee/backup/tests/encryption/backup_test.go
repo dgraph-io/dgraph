@@ -17,7 +17,7 @@ package main
 
 import (
 	"context"
-//	"fmt"
+	//	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -34,8 +34,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/ee/backup"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -106,7 +106,6 @@ func TestBackupMinio(t *testing.T) {
 
 	// Setup test directories.
 	dirSetup(t)
-
 
 	// Send backup request.
 	_ = runBackup(t, 3, 1)
@@ -231,7 +230,7 @@ func runBackupInternal(t *testing.T, forceFull bool, numExpectedFiles,
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "Backup completed.")
-	
+
 	// Verify that the right amount of files and directories were created.
 	copyToLocalFs(t)
 

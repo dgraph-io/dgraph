@@ -82,7 +82,8 @@ type Manifest struct {
 	Encrypted bool `json:"encrypted"`
 }
 
-// BadgerKeyFile - This is copy of worker.Config.BadgerKeyFile. Need to copy because it results in import cycle. 
+// BadgerKeyFile - This is a copy of worker.Config.BadgerKeyFile. Need to copy because
+// otherwise it results in an import cycle.
 var BadgerKeyFile string
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
