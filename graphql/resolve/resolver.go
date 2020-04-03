@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -830,6 +829,10 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 			// node stores the pointer for a node. It is a map from id to the map for it.
 			nodes := make(map[string]interface{})
 
+			idField := f.Type().IDField()
+			if idField == nil {
+				continue
+			}
 			// Here we walk through the array and collect all unique values for this field. In the
 			// example at the start of the function, we could be collecting all unique schools
 			// across all users. This is where the batching happens so that we make one call per
@@ -848,7 +851,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 					}
 					// TODO - Remove this hardcoding, instead fetch the id/xid field dynmaically
 					// and use that.
-					id, ok := fv["id"].(string)
+					id, ok := fv[idField.Name()].(string)
 					if !ok {
 						continue
 					}
@@ -876,7 +879,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 						continue
 					}
 					// TODO - Remove this hardcoding same as above.
-					id, ok := fv["id"].(string)
+					id, ok := fv[idField.Name()].(string)
 					if !ok {
 						continue
 					}
@@ -906,7 +909,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 
 			b, err := json.Marshal(body)
 			if err != nil {
-				return data, err
+				return data, errors.Wrapf(err, "while json marshaling body: %s", b)
 			}
 
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
@@ -916,16 +919,14 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 
 			var result []interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
-				return nil, err
+				return nil, errors.Wrapf(err, "while json unmarshaling result: %s", b)
 			}
 
-			fmt.Println("result: ", result)
 			// TODO - Verify that length of result should be same as len(vals).
 			// Here we walk through all the objects in the array and substitute the value
 			// that we got from the remote endpoint with the right key in the object.
 			for idx, v := range vals {
 				val := v.(map[string]interface{})
-				fmt.Printf("val: %+v\n", val)
 				val[f.Alias()] = result[idx]
 				vals[idx] = val
 			}

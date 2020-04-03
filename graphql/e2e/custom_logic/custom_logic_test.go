@@ -19,7 +19,6 @@ package custom_logic
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"testing"
 
@@ -161,15 +160,17 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 }
 
 type teacher struct {
-	ID string `json:"tid,omitempty"`
+	ID  string `json:"tid,omitempty"`
+	Age int
 }
 
 func addTeachers(t *testing.T) []*teacher {
 	addTeacherParams := &common.GraphQLParams{
 		Query: `mutation addTeacher {
-			addTeacher(input: [{ age: 28 }, { age: 26 }, { age: 27 }]) {
+			addTeacher(input: [{ age: 28 }, { age: 27 }, { age: 26 }]) {
 				teacher {
 					tid
+					age
 				}
 			}
 		}`,
@@ -188,24 +189,27 @@ func addTeachers(t *testing.T) []*teacher {
 
 	require.Equal(t, len(res.AddTeacher.Teacher), 3)
 
+	// sort in descending order
+	sort.Slice(res.AddTeacher.Teacher, func(i, j int) bool {
+		return res.AddTeacher.Teacher[i].Age > res.AddTeacher.Teacher[j].Age
+	})
 	return res.AddTeacher.Teacher
 }
 
 type school struct {
-	ID string `json:"id,omitempty"`
+	ID          string `json:"id,omitempty"`
+	Established int
 }
 
 func addSchools(t *testing.T, teachers []*teacher) []*school {
 
 	params := &common.GraphQLParams{
 		Query: `mutation addSchool($t1: [TeacherRef], $t2: [TeacherRef], $t3: [TeacherRef]) {
-			addSchool(input: [{ established: "1980", teachers: $t1 },
-				{ established: "1981", teachers: $t2 }, { established: "1982", teachers: $t3 }]) {
+			addSchool(input: [{ established: 1980, teachers: $t1 },
+				{ established: 1981, teachers: $t2 }, { established: 1982, teachers: $t3 }]) {
 				school {
 					id
-					teachers {
-						tid
-					}
+					established
 				}
 			}
 		}`,
@@ -229,12 +233,16 @@ func addSchools(t *testing.T, teachers []*teacher) []*school {
 	require.NoError(t, err)
 
 	require.Equal(t, len(res.AddSchool.School), 3)
-
+	// The order of mutation result is not the same as the input order, so we sort and return here.
+	sort.Slice(res.AddSchool.School, func(i, j int) bool {
+		return res.AddSchool.School[i].Established < res.AddSchool.School[j].Established
+	})
 	return res.AddSchool.School
 }
 
 type user struct {
-	ID string `json:"id,omitempty"`
+	ID  string `json:"id,omitempty"`
+	Age int    `json:"age,omitempty"`
 }
 
 func addUsers(t *testing.T, schools []*school) []*user {
@@ -245,10 +253,6 @@ func addUsers(t *testing.T, schools []*school) []*user {
 				user {
 					id
 					age
-					schools {
-						id
-						established
-					}
 				}
 			}
 		}`,
@@ -272,9 +276,10 @@ func addUsers(t *testing.T, schools []*school) []*user {
 	require.NoError(t, err)
 
 	require.Equal(t, len(res.AddUser.User), 3)
-	for _, u := range res.AddUser.User {
-		fmt.Printf("u: %+v\n", u.ID)
-	}
+	// The order of mutation result is not the same as the input order, so we sort and return users here.
+	sort.Slice(res.AddUser.User, func(i, j int) bool {
+		return res.AddUser.User[i].Age < res.AddUser.User[j].Age
+	})
 	return res.AddUser.User
 }
 
@@ -309,7 +314,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	type School {
 		id: ID!
-		established: String!
+		established: Int! @search
 		name: String @custom(http: {
 						url: "http://mock:8888/schoolNames",
 						method: "POST",
@@ -359,6 +364,18 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			cars {
 				name
 			}
+			schools(order: {asc: established}) {
+				name
+				established
+				teachers(order: {desc: age}) {
+					name
+					age
+				}
+				classes {
+					name
+					numStudents
+				}
+			}
 		}
 	}`
 	params := &common.GraphQLParams{
@@ -367,7 +384,6 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.Nil(t, result.Errors)
-	fmt.Println(string(result.Data))
 
 	expected := `{
 		"queryUser": [
@@ -376,21 +392,147 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			"age": 10,
 			"cars": [{
 				"name": "BMW"
-			}]
+			}],
+			"schools": [
+				{
+					"name": "sname-` + schools[0].ID + `",
+					"established": 1980,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[0].ID + `",
+							"age": 28
+						},
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						}
+					],
+					"classes": [
+						{
+							"name": "6th",
+							"numStudents": 20
+						}
+					]
+				},
+				{
+					"name": "sname-` + schools[1].ID + `",
+					"established": 1981,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						},
+						{
+							"name": "tname-` + teachers[2].ID + `",
+							"age": 26
+						}
+					],
+					"classes": [
+						{
+							"name": "7th",
+							"numStudents": 25
+						}
+					]
+				}
+			]
 		  },
 		  {
 			"name": "uname-` + users[1].ID + `",
 			"age": 11,
 			"cars": [{
 				"name": "Merc"
-			}]
+			}],
+			"schools": [
+				{
+					"name": "sname-` + schools[1].ID + `",
+					"established": 1981,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						},
+						{
+							"name": "tname-` + teachers[2].ID + `",
+							"age": 26
+						}
+					],
+					"classes": [
+						{
+							"name": "7th",
+							"numStudents": 25
+						}
+					]
+				},
+				{
+					"name": "sname-` + schools[2].ID + `",
+					"established": 1982,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[0].ID + `",
+							"age": 28
+						},
+						{
+							"name": "tname-` + teachers[2].ID + `",
+							"age": 26
+						}
+					],
+					"classes": [
+						{
+							"name": "8th",
+							"numStudents": 30
+						}
+					]
+				}
+			]
 		  },
 		  {
 			"name": "uname-` + users[2].ID + `",
 			"age": 12,
 			"cars": [{
 				"name": "Honda"
-			}]
+			}],
+			"schools": [
+				{
+					"name": "sname-` + schools[0].ID + `",
+					"established": 1980,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[0].ID + `",
+							"age": 28
+						},
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						}
+					],
+					"classes": [
+						{
+							"name": "6th",
+							"numStudents": 20
+						}
+					]
+				},
+				{
+					"name": "sname-` + schools[2].ID + `",
+					"established": 1982,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[0].ID + `",
+							"age": 28
+						},
+						{
+							"name": "tname-` + teachers[2].ID + `",
+							"age": 26
+						}
+					],
+					"classes": [
+						{
+							"name": "8th",
+							"numStudents": 30
+						}
+					]
+				}
+			]
 		  }
 		]
 	  }`
