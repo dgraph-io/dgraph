@@ -56,6 +56,38 @@ const adminTypes = `
 		response: Response
 	}
 
+	input RestoreInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+	}
+
+	type RestorePayload {
+		response: Response
+	}
+
 	type LoginResponse {
 
 		"""
@@ -250,6 +282,11 @@ const adminMutations = `
 	Start a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
 	"""
 	backup(input: BackupInput!) : BackupPayload
+
+	"""
+	Start restoring a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
+	"""
+	restore(input: RestoreInput!) : RestorePayload
 
 	"""
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
