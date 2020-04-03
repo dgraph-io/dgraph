@@ -223,13 +223,12 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
-	registry := prometheus.NewRegistry()
-	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	registry.MustRegister(prometheus.NewGoCollector())
-	registry.MustRegister(NewBadgerCollector())
+	prometheus.MustRegister(NewBadgerCollector())
 
 	pe, err := oc_prom.NewExporter(oc_prom.Options{
-		Registry:  registry,
+		// DefaultRegisterer includes a ProcessCollector for process_* metrics, a GoCollector for
+		// go_* metrics, and the badger_* metrics.
+		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
@@ -239,6 +238,7 @@ func init() {
 	http.Handle("/debug/prometheus_metrics", pe)
 }
 
+// NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
 func NewBadgerCollector() prometheus.Collector {
 	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
 		"badger_disk_reads_total": prometheus.NewDesc(
