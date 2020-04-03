@@ -223,8 +223,13 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
+	registry := prometheus.NewRegistry()
+	registry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	registry.MustRegister(prometheus.NewGoCollector())
+	registry.MustRegister(NewBadgerCollector())
+
 	pe, err := oc_prom.NewExporter(oc_prom.Options{
-		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
+		Registry:  registry,
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
 	})
@@ -232,6 +237,66 @@ func init() {
 	view.RegisterExporter(pe)
 
 	http.Handle("/debug/prometheus_metrics", pe)
+}
+
+func NewBadgerCollector() prometheus.Collector {
+	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
+		"badger_disk_reads_total": prometheus.NewDesc(
+			"badger_disk_reads_total",
+			"badger_disk_reads_total",
+			nil, nil,
+		),
+		"badger_disk_writes_total": prometheus.NewDesc(
+			"badger_disk_writes_total",
+			"badger_disk_writes_total",
+			nil, nil,
+		),
+		"badger_read_bytes": prometheus.NewDesc(
+			"badger_read_bytes",
+			"badger_read_bytes",
+			nil, nil,
+		),
+		"badger_written_bytes": prometheus.NewDesc(
+			"badger_written_bytes",
+			"badger_written_bytes",
+			nil, nil,
+		),
+		"badger_lsm_level_gets_total": prometheus.NewDesc(
+			"badger_lsm_level_gets_total",
+			"badger_lsm_level_gets_total",
+			[]string{"level"}, nil,
+		),
+		"badger_lsm_bloom_hits_total": prometheus.NewDesc(
+			"badger_lsm_bloom_hits_total",
+			"badger_lsm_bloom_hits_total",
+			[]string{"level"}, nil,
+		),
+		"badger_gets_total": prometheus.NewDesc(
+			"badger_gets_total",
+			"badger_gets_total",
+			nil, nil,
+		),
+		"badger_puts_total": prometheus.NewDesc(
+			"badger_puts_total",
+			"badger_puts_total",
+			nil, nil,
+		),
+		"badger_memtable_gets_total": prometheus.NewDesc(
+			"badger_memtable_gets_total",
+			"badger_memtable_gets_total",
+			nil, nil,
+		),
+		"badger_lsm_size": prometheus.NewDesc(
+			"badger_lsm_size",
+			"badger_lsm_size",
+			[]string{"dir"}, nil,
+		),
+		"badger_vlog_size": prometheus.NewDesc(
+			"badger_vlog_size",
+			"badger_vlog_size",
+			[]string{"dir"}, nil,
+		),
+	})
 }
 
 // MetricsContext returns a context with tags that are useful for
