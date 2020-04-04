@@ -226,7 +226,6 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}
@@ -703,3 +702,47 @@ Here's an example to run bulk loader with a key used to write encrypted data:
 ```bash
 dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
+
+## Encrypted Backups
+
+Encrypted backups are a Enterprise feature that allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all the full and incremental backups must be all encrypted or not. This flag helps with checking this restriction.
+
+NOTE: If a mismatch is found (e.g. latest backup is encrypted but current alpha is not configured with encryption or vice-versa), an error is thrown. The user must then force a full backup using the `forcefull` flag in the backup API to force a backup.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+### Initialization Vector
+
+The AES Cipher should use a random Initialization Vector (IV). This is a random sequence of 16 bytes. It must be unique but not a secret to obtain desirable security properties (See https://en.wikipedia.org/wiki/Initialization_vector ) . As a convention, the IV is inserted alongside the cipher text.
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+During **restore**: the first 16 bytes is read as the IV before decrypting the rest of the data.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption-key-file”. 
+
+{{% notice "note" %}}
+encryption-key-file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+For encryption during backup, we chain writers as follows:
+
+`Plaintext Data → Gzip → AES Encryption → Handler to FileSystem/Minio/AWS → encrypted backup`
+
+### Restore  and New flag “keyfile” on the restore tool
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
+
+For decryption during restore, we chain readers as follows:
+
+`encrypted-backup → handler to FileSystem/Minio/AWS  → AES Decryption → GUnzip → Plaintext Data
