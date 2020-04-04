@@ -379,6 +379,8 @@ Let's learn about the fuzzy search in our next tutorial.
 Sounds interesting?
 Then see you all soon in the next tutorial. Till then, happy Graphing!
 
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-7/index.md" >}}).
+
 ## Need Help
 
 * Please use [discuss.dgraph.io](https://discuss.dgraph.io) for questions, feature requests and discussions.
