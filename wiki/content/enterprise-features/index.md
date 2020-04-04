@@ -745,4 +745,4 @@ The restore utility is a standalone tool today. Hence, a new flag “keyfile” 
 
 For decryption during restore, we chain readers as follows:
 
-`encrypted-backup → handler to FileSystem/Minio/AWS  → AES Decryption → GUnzip → Plaintext Data
+`encrypted-backup → handler to FileSystem/Minio/AWS  → AES Decryption → GUnzip → Plaintext Data`
