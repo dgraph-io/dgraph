@@ -226,7 +226,6 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}
@@ -291,8 +290,8 @@ A typical workflow is the following:
 {{% notice "note" %}}
 All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`
-as a demo, make sure to choose the correct IP and port for your environment:
+
+1) Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
@@ -303,7 +302,9 @@ mutation {
 }
 ```
 The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
-2. Create a regular user
+
+2) Create a regular user
+
 ```graphql
 mutation {
   addUser(input: [{name: "alice", password: "newpassword"}]) {
@@ -313,7 +314,9 @@ mutation {
   }
 }
 ```
+
 Now you should see the following output
+
 ```json
 {
   "data": {
@@ -327,7 +330,9 @@ Now you should see the following output
   }
 }
 ```
-3. Create a group
+
+3) Create a group
+
 ```graphql
 mutation {
   addGroup(input: [{name: "dev"}]) {
@@ -340,7 +345,9 @@ mutation {
   }
 }
 ```
+
 Now you should see the following output
+
 ```json
 {
   "data": {
@@ -355,8 +362,10 @@ Now you should see the following output
   }
 }
 ```
-4. Assign the user to the group
+
+4) Assign the user to the group
 To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
+
 ```graphql
 mutation {
   updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}, {name: "sre"}]}}) {
@@ -369,7 +378,9 @@ mutation {
   }
 }
 ```
-5. Assign predicate permissions to the group
+
+5) Assign predicate permissions to the group
+
 ```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "friend", permission: 7}]}}) {
@@ -383,6 +394,7 @@ mutation {
   }
 }
 ```
+
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
 permission convention. That is, 4 (binary 100) represents `READ`, 2 (binary 010)
@@ -392,6 +404,7 @@ multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRI
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for
 a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
+
 ```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "name", permission: 7}]}}) {
@@ -414,7 +427,8 @@ The following examples show how to retrieve information about users and groups.
 
 #### Using a GraphQL tool
 
-1. Check information about a user
+1) Check information about a user
+
 ```graphql
 query {
   getUser(name: "alice") {
@@ -425,7 +439,9 @@ query {
   }
 }
 ```
+
 and the output should show the groups that the user has been added to, e.g.
+
 ```json
 {
   "data": {
@@ -440,7 +456,9 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
-2. Check information about a group
+
+2) Check information about a group
+
 ```graphql
 {
   getGroup(name: "dev") {
@@ -455,8 +473,10 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
+
 and the output should include the users in the group, as well as the permissions, the
 group's ACL rules, e.g.
+
 ```json
 {
   "data": {
@@ -481,7 +501,9 @@ group's ACL rules, e.g.
   }
 }
 ```
-3. Query for users 
+
+3) Query for users
+
 ```graphql
 query {
   queryUser(filter: {name: {eq: "alice"}}) {
@@ -492,7 +514,9 @@ query {
   }
 }
 ```
+
 and the output should show the groups that the user has been added to, e.g.
+
 ```json
 {
   "data": {
@@ -509,7 +533,9 @@ and the output should show the groups that the user has been added to, e.g.
   }
 }
 ```
-4. Query for groups
+
+4) Query for groups
+
 ```graphql
 query {
   queryGroup(filter: {name: {eq: "dev"}}) {
@@ -524,8 +550,10 @@ query {
   }
 }
 ```
+
 and the output should include the users in the group, as well as the permissions the
 group's ACL rules, e.g.
+
 ```json
 {
   "data": {
@@ -552,7 +580,9 @@ group's ACL rules, e.g.
   }
 }
 ```
-5. Run ACL commands as another guardian (member of `guardians` group). 
+
+5) Run ACL commands as another guardian (member of `guardians` group).
+
 You can also run ACL commands with other users. Say we have a user `alice` which is member
 of `guardians` group and its password is `simple_alice`.
 
@@ -584,7 +614,8 @@ mutation {
 ```
 
 Response:
-```
+
+```json
 {
   "data": {
     "accessJWT": "<accessJWT>",
@@ -592,6 +623,7 @@ Response:
   }
 }
 ```
+
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
 You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in the login response in the GraphQL tool which you're using to make the request. For example:
@@ -670,3 +702,48 @@ Here's an example to run bulk loader with a key used to write encrypted data:
 ```bash
 dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
+
+## Encrypted Backups
+
+Encrypted backups are a Enterprise feature that allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all the full and incremental backups must be all encrypted or not. This flag helps with checking this restriction.
+
+NOTE: If a mismatch is found (e.g. latest backup is encrypted but current alpha is not configured with encryption or vice-versa), an error is thrown. The user must then force a full backup using the `forcefull` flag in the backup API to force a backup.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+### Initialization Vector
+
+The AES Cipher should use a random Initialization Vector (IV). This is a random sequence of 16 bytes. It must be unique but not a secret to obtain desirable security properties (See https://en.wikipedia.org/wiki/Initialization_vector ) . As a convention, the IV is inserted alongside the cipher text.
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+During **restore**: the first 16 bytes is read as the IV before decrypting the rest of the data.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption-key-file”. 
+
+{{% notice "note" %}}
+encryption-key-file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+For encryption during backup, we chain writers as follows:
+
+`Plaintext Data → Gzip → AES Encryption → Handler to FileSystem/Minio/AWS → encrypted backup`
+
+### Restore  and New flag “keyfile” on the restore tool
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
+
+For decryption during restore, we chain readers as follows:
+
+`encrypted-backup → handler to FileSystem/Minio/AWS  → AES Decryption → GUnzip → Plaintext Data `
+
