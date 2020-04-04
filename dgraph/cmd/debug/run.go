@@ -87,7 +87,8 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
-	flag.StringVarP(&opt.badgerKeyFile, "encryption_key_file", "k", "", "File where the encryption key is stored.")
+	flag.StringVarP(&opt.badgerKeyFile, "encryption_key_file", "k", "",
+		"File where the encryption key is stored.")
 
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
