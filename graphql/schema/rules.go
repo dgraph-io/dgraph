@@ -39,109 +39,9 @@ func init() {
 
 }
 
-func validateAuthAst(node *RuleAst, pos *ast.Position) gqlerror.List {
-	var errs gqlerror.List
-	if node == nil {
-		return nil
-	}
-
-	if node.Typ == SpecialOp {
-		if node.Value != nil {
-			errs = append(errs, gqlerror.ErrorPosf(pos,
-				"Special Operation %s has a child", node.Name))
-		}
-		return errs
-	}
-
-	if node.Typ == Constant {
-		if node.Value != nil {
-			errs = append(errs, gqlerror.ErrorPosf(pos,
-				"Constant node %s should be a leaf node, found child %s",
-				node.Name, node.Value.Name))
-		} else {
-			errs = append(errs, gqlerror.ErrorPosf(pos, "Invalid rule %s", node.Name))
-		}
-		return errs
-	}
-
-	operation := node.GetOperation()
-	if operation == nil {
-		errMsg := fmt.Sprintf("%s has no operation attached", node.Name)
-		if node.Value != nil {
-			errMsg = fmt.Sprintf("%s, found %s instead", errMsg, node.Value.Name)
-		}
-		errs = append(errs, gqlerror.ErrorPosf(pos, errMsg))
-		return errs
-	}
-
-	operand := operation.GetOperand()
-	if operand == nil {
-		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"%s operation has no value attached", operation.Name))
-		return errs
-	}
-
-	if !operation.IsFilter() {
-		if operand.Value != nil {
-			errs = append(errs, gqlerror.ErrorPosf(pos,
-				"%s node can't have a nested operator", operand.Name))
-			return errs
-		}
-		return errs
-	}
-
-	if !operand.IsGqlTyp() {
-		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"filter expects graphql field as input, found %s", operand.Name))
-		return errs
-	}
-
-	if operand.GetOperation().IsFilter() {
-		errs = append(errs, gqlerror.ErrorPosf(pos,
-			"%s cannot have nested filter as a child", operand.Name))
-		return errs
-	}
-	errs = append(errs, validateAuthAst(operand, pos)...)
-
-	return errs
-}
-
 func validateAuthNode(node *RuleNode, arg *ast.Value) gqlerror.List {
-	var result gqlerror.List
-	if arg == nil {
-		result = append(result, gqlerror.Errorf("arg found nil"))
-		return result
-	}
-	has := make(map[string]bool)
-
-	child := arg.Children[0].Value
-
-	for i, childNode := range node.Or {
-		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
-		has["or"] = true
-	}
-
-	for i, childNode := range node.And {
-		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
-		has["and"] = true
-	}
-
-	if childNode := node.Not; childNode != nil {
-		result = append(result, validateAuthNode(childNode, child)...)
-		has["not"] = true
-	}
-
-	if ast := node.Rule; ast != nil {
-		has["rule"] = true
-		result = append(result, validateAuthAst(ast, arg.Position)...)
-	}
-
-	if len(has) > 1 {
-		result = append(result, gqlerror.ErrorPosf(arg.Position,
-			"Rule has multiple fields true"))
-	}
-
-	return result
+	//TODO: Perform validation
+	return nil
 }
 
 func validateAuthRule(rule *AuthContainer, dir *ast.Directive) gqlerror.List {
@@ -175,10 +75,14 @@ func validateAuthRule(rule *AuthContainer, dir *ast.Directive) gqlerror.List {
 }
 
 func validateAuthRules(schema *ast.Schema) gqlerror.List {
-	rules := authRules(schema)
-	typeMapping := typeMappings(schema)
 	var result gqlerror.List
-
+	rules, err := authRules(schema)
+	if err != nil {
+		var gqlErr gqlerror.Error
+		gqlErr.Message = err.Error()
+		return append(result, &gqlErr)
+	}
+	typeMapping := typeMappings(schema)
 	wrapRule := func(errs gqlerror.List, path string) gqlerror.List {
 		for _, err := range errs {
 			err.Message = fmt.Sprintf("%s %s", path, err.Message)

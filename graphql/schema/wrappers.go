@@ -18,6 +18,8 @@ package schema
 
 import (
 	"fmt"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 	"strconv"
 	"strings"
 
@@ -478,129 +480,15 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
-type AuthVariable int
-
-const (
-	Constant AuthVariable = iota
-	Op
-	JwtVar
-	GqlTyp
-	SpecialOp
-)
-
-type RuleResult int
-
-const (
-	Uncertain RuleResult = iota
-	Positive
-	Negative
-)
-
-type RuleAst struct {
-	Name  string
-	Typ   AuthVariable
-	Value *RuleAst
-
-	dgraphPredicate string
-	typInfo         *ast.Definition
-}
-
-var operations = map[string]bool{
-	"filter": true,
-	"eq":     true,
-}
-
-var specialOps = map[string]bool{
-	"DENY": true,
-}
-
-var punctuations = map[byte]bool{
-	'{': true,
-	'}': true,
-	':': true,
-	'(': true,
-	')': true,
-	' ': true,
-}
-
-type Parser struct {
-	index int
-	str   *string
-}
-
-func (p *Parser) init(str *string) {
-	p.str = str
-	p.index = 0
-}
-
-func (p *Parser) skipPunc() {
-	for ; p.index != len(*p.str) && punctuations[(*p.str)[p.index]]; p.index++ {
-	}
-}
-
-func (p *Parser) getNextWord() string {
-	start := p.index
-	for ; p.index != len(*p.str) && !punctuations[(*p.str)[p.index]]; p.index++ {
-	}
-
-	word := (*p.str)[start:p.index]
-	p.skipPunc()
-
-	return word
-}
-
-func (p *Parser) isEmpty() bool {
-	return p.index == len(*p.str)
-}
-
-func (ap *AuthParser) buildRuleAST(rule string,
-	dgraphPredicate map[string]map[string]string) *RuleAst {
-	var ast *RuleAst
-	var p Parser
-
-	builder := &ast
-	typ := ap.currentTyp
-
-	p.init(&rule)
-	p.skipPunc()
-
-	for !p.isEmpty() {
-		rule := &RuleAst{}
-		word := p.getNextWord()
-
-		rule.Name = word
-		rule.typInfo = typ
-
-		if word[0] == '$' {
-			rule.Typ = JwtVar
-			rule.Name = word[1:]
-		} else if operations[word] {
-			rule.Typ = Op
-		} else if field := typ.Fields.ForName(word); field != nil {
-			name := field.Type.Name()
-			rule.Typ = GqlTyp
-			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
-			typ = ap.s.Types[name]
-		} else if specialOps[word] {
-			rule.Typ = SpecialOp
-		} else {
-			rule.Typ = Constant
-		}
-
-		*builder = rule
-		builder = &rule.Value
-	}
-
-	return ast
-}
-
 type RuleNode struct {
 	RuleID int
 	Or     []*RuleNode
 	And    []*RuleNode
 	Not    *RuleNode
 
-	Rule *RuleAst
+	query   string
+	varName string
+	doc     *ast.QueryDocument
 }
 
 type AuthContainer struct {
@@ -608,101 +496,6 @@ type AuthContainer struct {
 	Add    *RuleNode
 	Update *RuleNode
 	Delete *RuleNode
-}
-
-func (r *RuleAst) checkType(op AuthVariable) bool {
-	if r == nil {
-		return false
-	}
-
-	return r.Typ == op
-}
-
-func (r *RuleAst) IsGqlTyp() bool {
-	return r.checkType(GqlTyp)
-}
-
-func (r *RuleAst) IsConstant() bool {
-	return r.checkType(Constant)
-}
-
-func (r *RuleAst) IsJWT() bool {
-	return r.checkType(JwtVar)
-}
-
-func (r *RuleAst) IsOp() bool {
-	return r.checkType(Op)
-}
-
-func (r *RuleAst) GetOperation() *RuleAst {
-	if r == nil {
-		return nil
-	}
-
-	switch r.Typ {
-	case Constant:
-		// Constant should be a leaf
-		return nil
-	case Op:
-		// Already an operation
-		return r
-	case GqlTyp, JwtVar:
-		if r.Value != nil && r.Value.IsOp() {
-			return r.Value
-		}
-	}
-
-	return nil
-}
-
-func (r *RuleAst) GetOperand() *RuleAst {
-	if r == nil && !r.IsOp() {
-		return nil
-	}
-
-	return r.Value
-}
-
-func (r *RuleAst) GetName() string {
-	if r.Typ == GqlTyp {
-		return r.dgraphPredicate
-	}
-
-	return r.Name
-}
-
-func (r *RuleAst) IsFilter() bool {
-	if r == nil || r.GetOperation() == nil {
-		return false
-	}
-
-	operation := r.GetOperation()
-	return operation.GetName() == "filter"
-}
-
-func (r *RuleNode) IsRBAC() bool {
-	for _, i := range r.Or {
-		if i.IsRBAC() {
-			return true
-		}
-	}
-	for _, i := range r.And {
-		return i.IsRBAC()
-	}
-
-	if r.Not != nil && r.Not.IsRBAC() {
-		return true
-	}
-
-	rule := r.Rule
-	for rule != nil {
-		if rule.Typ == GqlTyp {
-			return false
-		}
-		rule = rule.Value
-	}
-
-	return true
 }
 
 type AuthParser struct {
@@ -713,7 +506,7 @@ type AuthParser struct {
 	dgraphPredicate *map[string]map[string]string
 }
 
-func (ap *AuthParser) parseRules(rule map[string]interface{}) *RuleNode {
+func (ap *AuthParser) parseRules(rule map[string]interface{}) (*RuleNode, error) {
 	var ruleNode RuleNode
 	ruleNode.RuleID = ap.ruleId
 	ap.ruleId++
@@ -721,56 +514,185 @@ func (ap *AuthParser) parseRules(rule map[string]interface{}) *RuleNode {
 	or, ok := rule["or"].([]interface{})
 	if ok {
 		for _, node := range or {
-			ruleNode.Or = append(ruleNode.Or,
-				ap.parseRules(node.(map[string]interface{})))
+			orRule, err := ap.parseRules(node.(map[string]interface{}))
+			if err != nil {
+				return nil, err
+			}
+			ruleNode.Or = append(ruleNode.Or, orRule)
 		}
 	}
 
 	and, ok := rule["and"].([]interface{})
 	if ok {
 		for _, node := range and {
-			ruleNode.And = append(ruleNode.And,
-				ap.parseRules(node.(map[string]interface{})))
+			andRule, err := ap.parseRules(node.(map[string]interface{}))
+			if err != nil {
+				return nil, err
+			}
+			ruleNode.And = append(ruleNode.And, andRule)
 		}
 	}
 
 	not, ok := rule["not"].(map[string]interface{})
 	if ok {
-		ruleNode.Not = ap.parseRules(not)
+		if notRule, err := ap.parseRules(not); err != nil {
+			return nil, err
+		} else {
+			ruleNode.Not = notRule
+		}
 	}
 
 	ruleString, ok := rule["rule"].(string)
-	if ok {
-		ruleNode.Rule = ap.buildRuleAST(ruleString, *ap.dgraphPredicate)
+	if !ok {
+		return &ruleNode, nil
 	}
 
-	return &ruleNode
+	// Parse the variable name and add it to query args.
+	queryArgs := "query"
+	varIdxStart := strings.Index(ruleString, "$X_")
+	if varIdxStart != -1 {
+		varIdxEnd := strings.Index(ruleString[varIdxStart:], " ")
+		ruleNode.varName = string(ruleString[varIdxStart : varIdxStart+varIdxEnd])
+		queryArgs = queryArgs + "(" + ruleNode.varName + ": String)"
+	}
+
+	var authQuery string
+	var filterQuery string
+	isDirectFilter := strings.HasPrefix(ruleString, "(")
+	if isDirectFilter {
+		filterQuery = " { query" + ap.currentTyp.Name + ruleString + " { __typename } }"
+		authQuery = queryArgs + filterQuery
+	} else {
+		filterQuery = " { query" + ap.currentTyp.Name + " { " + ruleString + " { __typename } } }"
+		authQuery = queryArgs + filterQuery
+	}
+	ruleNode.query = authQuery
+
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: authQuery})
+	ruleNode.doc = doc
+	if gqlErr != nil {
+		return nil, gqlErr
+	}
+
+	if varIdxStart != -1 {
+		varType := ap.getFieldType(doc, isDirectFilter)
+		if varType == "" {
+			return nil, fmt.Errorf("Error while getting variable type for rule %s", ruleString)
+		}
+		queryArgs = "query(" + ruleNode.varName + ": " + varType + ")"
+		authQuery = queryArgs + filterQuery
+		doc, gqlErr := parser.ParseQuery(&ast.Source{Input: authQuery})
+		ruleNode.doc = doc
+		if gqlErr != nil {
+			return nil, gqlErr
+		}
+	}
+
+	listErr := validator.Validate(ap.s, ruleNode.doc)
+	if len(listErr) != 0 {
+		return nil, listErr[0]
+	}
+
+	return &ruleNode, nil
 }
 
-func (ap *AuthParser) parseAuthDirective(directive map[string]interface{}) *AuthContainer {
+func (ap *AuthParser) parseAuthDirective(directive map[string]interface{}) (*AuthContainer, error) {
 	var container AuthContainer
 
+	var err error
 	query, ok := directive["query"].(map[string]interface{})
 	if ok {
-		container.Query = ap.parseRules(query)
+		container.Query, err = ap.parseRules(query)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	add, ok := directive["add"].(map[string]interface{})
 	if ok {
-		container.Add = ap.parseRules(add)
+		container.Add, err = ap.parseRules(add)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	update, ok := directive["update"].(map[string]interface{})
 	if ok {
-		container.Update = ap.parseRules(update)
+		container.Update, err = ap.parseRules(update)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	delete, ok := directive["delete"].(map[string]interface{})
 	if ok {
-		container.Delete = ap.parseRules(delete)
+		container.Delete, err = ap.parseRules(delete)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &container
+	return &container, nil
+}
+
+func (ap *AuthParser) getFieldType(doc *ast.QueryDocument, isDirectFilter bool) string {
+	op := doc.Operations.ForName("")
+	if op == nil {
+		return ""
+	}
+	var field *ast.Field
+	for _, selection := range op.SelectionSet {
+		astField, ok := selection.(*ast.Field)
+		if !ok {
+			return ""
+		}
+		if astField.Name == "query"+ap.currentTyp.Name {
+			field = astField
+			break
+		}
+	}
+	if field == nil {
+		return ""
+	}
+
+	if len(field.SelectionSet) == 0 {
+		return ""
+	}
+
+	var astField *ast.Field
+	var ok bool
+	if isDirectFilter {
+		astField = field
+	} else {
+		astField, ok = field.SelectionSet[0].(*ast.Field)
+		if !ok {
+			return ""
+		}
+	}
+
+	// Get the field on which filter is applied.
+	argument := astField.Arguments.ForName("filter")
+	if argument == nil {
+		return ""
+	}
+	if len(argument.Value.Children) == 0 {
+		return ""
+	}
+	filterField := argument.Value.Children[0].Name
+
+	var varType string
+	for _, schemaType := range ap.s.Types {
+		if !strings.HasSuffix(schemaType.Name, "Filter") {
+			continue
+		}
+		for _, field := range schemaType.Fields {
+			if field.Name == filterField {
+				varType = field.Type.Name()
+				break
+			}
+		}
+	}
+	return varType
 }
 
 type TypeAuth struct {
@@ -778,7 +700,7 @@ type TypeAuth struct {
 	fields map[string]*AuthContainer
 }
 
-func authRules(s *ast.Schema) map[string]*TypeAuth {
+func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 	authRules := make(map[string]*TypeAuth)
 	var emptyMap map[string]interface{}
 	var p AuthParser
@@ -787,6 +709,7 @@ func authRules(s *ast.Schema) map[string]*TypeAuth {
 	p.s = s
 	p.dgraphPredicate = &dgraphPreds
 
+	var err error
 	for _, typ := range s.Types {
 		name := typeName(typ)
 		auth := typ.Directives.ForName("auth")
@@ -795,31 +718,42 @@ func authRules(s *ast.Schema) map[string]*TypeAuth {
 		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
 
 		if auth != nil {
-			authRules[name].rules = p.parseAuthDirective(auth.ArgumentMap(emptyMap))
-
+			authRules[name].rules, err = p.parseAuthDirective(auth.ArgumentMap(emptyMap))
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		for _, field := range typ.Fields {
 			auth := field.Directives.ForName("auth")
 			if auth != nil {
-				authRules[name].fields[field.Name] =
+				authRules[name].fields[field.Name], err =
 					p.parseAuthDirective(auth.ArgumentMap(emptyMap))
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
-	return authRules
+	return authRules, nil
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
+func AsSchema(s *ast.Schema) (Schema, error) {
 	dgraphPredicate := dgraphMapping(s)
-	return &schema{
+	schema := &schema{
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
-		authRules:       authRules(s),
+	}
+
+	if authRules, err := authRules(s); err == nil {
+		schema.authRules = authRules
+		return schema, nil
+	} else {
+		return nil, err
 	}
 }
 
