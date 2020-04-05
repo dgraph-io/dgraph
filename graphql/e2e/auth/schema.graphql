@@ -11,8 +11,7 @@ type Todo @auth(
     update: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
     delete: { rule: "$X-MyApp-Role: {eq: ADMIN}" }
 ) {
-    id: ID!
-    title: String
+    title: String! @id
     text: String
     isPublic: Boolean
     dateCompleted: String @auth(

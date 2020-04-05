@@ -22,11 +22,11 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/auth"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
 
@@ -45,6 +45,21 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	rbacRule := make(map[int]schema.RuleResult)
+	a := schema.AuthState{AuthVariables: authVariables, RbacRule: rbacRule}
+	sch := gqlQuery.Operation().Schema()
+
+	authResolver := auth.AuthResolver{}
+	authResolver.Init(&sch, &a)
+
+	tnqp := auth.TypeNodeQueryProcedure{BaseProcedure: &auth.BaseProcedure{}}
+	tnqp.SetRuleExtractor(auth.QueryRuleExtractor)
+
+	fqp := auth.FieldQueryProcedure{BaseProcedure: &auth.BaseProcedure{}}
+	fqp.SetRuleExtractor(auth.QueryRuleExtractor)
+
+	authResolver.AddQueryProcedure(&tnqp)
+	authResolver.AddQueryProcedure(&fqp)
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
@@ -65,53 +80,20 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
 		addTypeFilter(dgQuery, gqlQuery.Type())
-
-		return addAuth(dgQuery, gqlQuery, authVariables)
+		queries := authResolver.OnQuery(dgQuery)
+		dgQuery = &gql.GraphQuery{Children: queries}
+		return dgQuery, nil
 
 	case schema.FilterQuery:
 		dgQuery := rewriteAsQuery(gqlQuery)
-		return addAuth(dgQuery, gqlQuery, authVariables)
+		queries := authResolver.OnQuery(dgQuery)
+		dgQuery = &gql.GraphQuery{Children: queries}
+		return dgQuery, nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
 		return nil, errors.Errorf("unimplemented query type %s", gqlQuery.QueryType())
 	}
-}
-
-func addAuth(dgQuery *gql.GraphQuery, field schema.Query,
-	authVariables map[string]string) (*gql.GraphQuery, error) {
-	queriedType := field.Type()
-	authRules := field.Operation().Schema().AuthTypeRules(queriedType.Name())
-	rbacRule := make(map[int]schema.RuleResult)
-	var query gql.GraphQuery
-	a := schema.Authorizer{AuthVariables: authVariables, RbacRule: rbacRule}
-	query.Children = append(query.Children, dgQuery)
-	query.Children = append(query.Children, a.GetAuthQueries(field)...)
-	a.AdjustQuery(dgQuery, field, field.ResponseName()+".")
-
-	if authRules == nil || authRules.Query == nil {
-		return &query, nil
-	}
-
-	a.GetRBACRules(authRules.Query)
-	authFilter := authRules.Query.GetFilter(&a)
-	if dgQuery.Filter != nil && authFilter != nil {
-		dgQuery.Filter = &gql.FilterTree{
-			Op: "and",
-			Child: []*gql.FilterTree{
-				authFilter,
-				dgQuery.Filter,
-			},
-		}
-	} else if authFilter != nil {
-		dgQuery.Filter = authFilter
-	}
-
-	if val, ok := a.RbacRule[authRules.Query.RuleID]; ok && val == schema.Negative {
-		return nil, errors.Errorf("You are not authorized to make this query")
-	}
-
-	return &query, nil
 }
 
 func passwordQuery(m schema.Query) (*gql.GraphQuery, error) {

@@ -39,48 +39,6 @@ func init() {
 
 }
 
-func validateAuthAst(node *RuleAst) gqlerror.List {
-	var errs gqlerror.List
-	if node == nil {
-		return nil
-	}
-
-	if node.Typ == SpecialOp {
-		if node.Value != nil {
-			errs = append(errs, gqlerror.Errorf("Special Operation %s has a child", node.Name))
-		}
-		return errs
-	}
-
-	operation := node.GetOperation()
-	if operation == nil {
-		errs = append(errs, gqlerror.Errorf("%s has no operation attached", node.Name))
-		return errs
-	}
-
-	operand := operation.GetOperand()
-	if operand == nil {
-		errs = append(errs, gqlerror.Errorf("%s operation no value attached", operation.Name))
-		return errs
-	}
-
-	if !operation.IsFilter() {
-		if operand.Value != nil {
-			errs = append(errs, gqlerror.Errorf("%s node has a child", operand.Name))
-			return errs
-		}
-		return errs
-	} else {
-		errs = append(errs, validateAuthAst(operand)...)
-		if operand.GetOperation().IsFilter() {
-			errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
-			return errs
-		}
-	}
-
-	return errs
-}
-
 func validateAuthNode(node *RuleNode) gqlerror.List {
 	var result gqlerror.List
 	has := make(map[string]bool)
@@ -102,7 +60,7 @@ func validateAuthNode(node *RuleNode) gqlerror.List {
 
 	if ast := node.Rule; ast != nil {
 		has["rule"] = true
-		result = append(result, validateAuthAst(ast)...)
+		result = append(result, ast.Validate()...)
 	}
 
 	if len(has) > 1 {

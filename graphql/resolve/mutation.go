@@ -220,6 +220,10 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 	}
 }
 
+func performAuth(mutations []*dgoapi.Mutation) {
+
+}
+
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
@@ -227,6 +231,8 @@ func (mr *mutationResolver) rewriteAndExecute(
 		return nil, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
+
+	fmt.Println(mutations)
 
 	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
