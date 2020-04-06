@@ -1895,7 +1895,7 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1950,8 +1950,8 @@ func TestAllowUIDAccess(t *testing.T) {
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
 }
 
-func TestAddNewPreidcate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+func TestAddNewPredicate(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1978,9 +1978,6 @@ func TestAddNewPreidcate(t *testing.T) {
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
 
-	// wait for acl cache to be refresh.
-	time.Sleep(6 * time.Second)
-
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
 		Schema: `newpred: string .`,
@@ -1989,7 +1986,7 @@ func TestAddNewPreidcate(t *testing.T) {
 }
 
 func TestCrossGroupPermission(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
