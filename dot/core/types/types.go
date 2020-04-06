@@ -34,6 +34,16 @@ func NewExtrinsic(e []byte) Extrinsic {
 	return Extrinsic(e)
 }
 
+// Hash returns the blake2b hash of the extrinsic
+func (e Extrinsic) Hash() common.Hash {
+	hash, err := common.Blake2bHash(e)
+	if err != nil {
+		panic(err)
+	}
+
+	return hash
+}
+
 // Block defines a state block
 type Block struct {
 	Header *Header
@@ -215,6 +225,10 @@ func NewBodyFromExtrinsics(exts []Extrinsic) (*Body, error) {
 // AsExtrinsics decodes the body into an array of extrinsics
 func (b *Body) AsExtrinsics() ([]Extrinsic, error) {
 	exts := [][]byte{}
+
+	if len(*b) == 0 {
+		return []Extrinsic{}, nil
+	}
 
 	dec, err := scale.Decode(*b, exts)
 	if err != nil {

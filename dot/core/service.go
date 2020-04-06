@@ -123,12 +123,13 @@ func NewService(cfg *Config) (*Service, error) {
 	chanLock := &sync.Mutex{}
 
 	syncerCfg := &SyncerConfig{
-		BlockState: cfg.BlockState,
-		BlockNumIn: cfg.SyncChan,
-		RespIn:     respChan,
-		MsgOut:     cfg.MsgSend,
-		Lock:       syncerLock,
-		ChanLock:   chanLock,
+		BlockState:       cfg.BlockState,
+		BlockNumIn:       cfg.SyncChan,
+		RespIn:           respChan,
+		MsgOut:           cfg.MsgSend,
+		Lock:             syncerLock,
+		ChanLock:         chanLock,
+		TransactionQueue: cfg.TransactionQueue,
 	}
 
 	syncer, err := NewSyncer(syncerCfg)
@@ -682,7 +683,12 @@ func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) err
 
 		if s.isBabeAuthority {
 			// push to the transaction queue of BABE session
-			s.transactionQueue.Push(vtx)
+			hash, err := s.transactionQueue.Push(vtx)
+			if err != nil {
+				log.Trace("[core] Failed to push transaction to queue", "error", err)
+			} else {
+				log.Trace("[core] Added transaction to queue", "hash", hash)
+			}
 		}
 	}
 

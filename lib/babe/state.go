@@ -51,7 +51,7 @@ type StorageState interface {
 
 // TransactionQueue is the interface for transaction queue methods
 type TransactionQueue interface {
-	Push(vt *transaction.ValidTransaction)
+	Push(vt *transaction.ValidTransaction) (common.Hash, error)
 	Pop() *transaction.ValidTransaction
 	Peek() *transaction.ValidTransaction
 }

@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
@@ -47,6 +49,10 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 
 	if cfg.MsgOut == nil {
 		cfg.MsgOut = make(chan network.Message)
+	}
+
+	if cfg.TransactionQueue == nil {
+		cfg.TransactionQueue = stateSrvc.TransactionQueue
 	}
 
 	syncer, err := NewSyncer(cfg)
@@ -369,5 +375,42 @@ func TestWatchForResponses_MissingBlocks(t *testing.T) {
 	if req2.StartingBlock.Value().(uint64) != uint64(startNum-int(maxResponseSize)) {
 		t.Fatalf("Fail: got %d expected %d", req2.StartingBlock.Value(), startNum-int(maxResponseSize))
 	}
+}
 
+func TestRemoveIncludedExtrinsics(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
+	syncer.Start()
+
+	ext := []byte("nootwashere")
+	tx := &transaction.ValidTransaction{
+		Extrinsic: ext,
+		Validity:  nil,
+	}
+
+	syncer.transactionQueue.Push(tx)
+
+	exts := []types.Extrinsic{ext}
+	body, err := types.NewBodyFromExtrinsics(exts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bd := &types.BlockData{
+		Body: body.AsOptional(),
+	}
+
+	msg := &network.BlockResponseMessage{
+		BlockData: []*types.BlockData{bd},
+	}
+
+	_, err = syncer.processBlockResponseData(msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	inQueue := syncer.transactionQueue.Pop()
+	if inQueue != nil {
+		t.Log(inQueue)
+		t.Fatal("Fail: queue should be empty")
+	}
 }

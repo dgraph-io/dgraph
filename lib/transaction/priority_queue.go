@@ -16,18 +16,29 @@
 
 package transaction
 
-import "sync"
+import (
+	"errors"
+	"sync"
+
+	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/lib/common"
+)
+
+// ErrTransactionExists is returned when trying to add a transaction to the pool that already exists
+var ErrTransactionExists = errors.New("transaction is already in pool")
 
 // PriorityQueue implements a priority queue using a double linked list
 type PriorityQueue struct {
 	head  *node
 	mutex sync.Mutex
+	pool  Pool
 }
 
 type node struct {
 	data   *ValidTransaction
 	parent *node
 	child  *node
+	hash   common.Hash
 }
 
 // NewPriorityQueue creates new instance of PriorityQueue
@@ -35,9 +46,40 @@ func NewPriorityQueue() *PriorityQueue {
 	pq := PriorityQueue{
 		head:  nil,
 		mutex: sync.Mutex{},
+		pool:  make(map[common.Hash]*ValidTransaction),
 	}
 
 	return &pq
+}
+
+// RemoveExtrinsic removes an extrinsic from the queue
+func (q *PriorityQueue) RemoveExtrinsic(ext types.Extrinsic) {
+	hash := ext.Hash()
+
+	q.mutex.Lock()
+	defer q.mutex.Unlock()
+
+	if q.pool[hash] == nil {
+		return
+	}
+
+	curr := q.head
+	for ; curr != nil; curr = curr.child {
+		if curr.data.Extrinsic.Hash() == hash {
+			if curr.parent != nil {
+				curr.parent.child = curr.child
+			} else {
+				// head of queue
+				q.head = curr.child
+			}
+
+			if curr.child != nil {
+				curr.child.parent = curr.parent
+			}
+		}
+	}
+
+	delete(q.pool, hash)
 }
 
 // Pop removes the head of the queue and returns it
@@ -49,6 +91,9 @@ func (q *PriorityQueue) Pop() *ValidTransaction {
 	}
 	head := q.head
 	q.head = head.child
+
+	delete(q.pool, head.hash)
+
 	return head.data
 }
 
@@ -83,13 +128,20 @@ func (q *PriorityQueue) Pending() []*ValidTransaction {
 // Push traverses the list and places a valid transaction with priority p directly before the
 // first node with priority p-1. If there are other nodes with priority p, the new node is placed
 // behind them.
-func (q *PriorityQueue) Push(vt *ValidTransaction) {
+func (q *PriorityQueue) Push(vt *ValidTransaction) (common.Hash, error) {
 	q.mutex.Lock()
 	defer q.mutex.Unlock()
 	curr := q.head
+
+	hash := vt.Extrinsic.Hash()
+	if q.pool[hash] != nil {
+		return hash, ErrTransactionExists
+	}
+
 	if curr == nil {
-		q.head = &node{data: vt}
-		return
+		q.head = &node{data: vt, hash: hash}
+		q.pool[hash] = vt
+		return hash, nil
 	}
 
 	for ; curr != nil; curr = curr.child {
@@ -99,6 +151,7 @@ func (q *PriorityQueue) Push(vt *ValidTransaction) {
 				data:   vt,
 				parent: curr.parent,
 				child:  curr,
+				hash:   hash,
 			}
 
 			if curr.parent == nil {
@@ -108,14 +161,20 @@ func (q *PriorityQueue) Push(vt *ValidTransaction) {
 			}
 			curr.parent = newNode
 
-			return
+			q.pool[hash] = vt
+			return hash, nil
 		} else if curr.child == nil {
 			newNode := &node{
 				data:   vt,
 				parent: curr,
+				hash:   hash,
 			}
 			curr.child = newNode
-			return
+
+			q.pool[hash] = vt
+			return hash, nil
 		}
 	}
+
+	return common.Hash{}, nil
 }

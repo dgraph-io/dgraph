@@ -145,8 +145,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 		Validity:  nil,
 	}
 
-	cm.txQueueAPI.Push(vtx)
-	hash, err := common.Blake2bHash(extBytes)
+	hash, err := cm.txQueueAPI.Push(vtx)
 	if err != nil {
 		return err
 	}

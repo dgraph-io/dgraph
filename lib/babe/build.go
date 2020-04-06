@@ -224,7 +224,12 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 
 func (b *Session) addToQueue(txs []*transaction.ValidTransaction) {
 	for _, t := range txs {
-		b.transactionQueue.Push(t)
+		hash, err := b.transactionQueue.Push(t)
+		if err != nil {
+			log.Trace("[babe] Failed to add transaction to queue", "error", err)
+		} else {
+			log.Trace("[babe] Added transaction to queue", "hash", hash)
+		}
 	}
 }
 

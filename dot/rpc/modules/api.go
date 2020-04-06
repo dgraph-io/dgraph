@@ -28,7 +28,7 @@ type NetworkAPI interface {
 
 // TransactionQueueAPI ...
 type TransactionQueueAPI interface {
-	Push(*transaction.ValidTransaction)
+	Push(*transaction.ValidTransaction) (common.Hash, error)
 	Pop() *transaction.ValidTransaction
 	Peek() *transaction.ValidTransaction
 	Pending() []*transaction.ValidTransaction
