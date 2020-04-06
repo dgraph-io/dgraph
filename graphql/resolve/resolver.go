@@ -802,14 +802,16 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		return
 	}
 
-	// TODO - This can also be an interface{}, handle that case as well.
 	var result []interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
 		errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
 		return
 	}
 
-	// TODO - Verify that length of result should be same as len(vals).
+	if len(result) != len(vals) {
+		errCh <- nil
+		return
+	}
 	// Here we walk through all the objects in the array and substitute the value
 	// that we got from the remote endpoint with the right key in the object.
 	mu.Lock()
@@ -847,9 +849,11 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 	// field and not a separate call per user.
 	mu.RLock()
 	for _, v := range vals {
-		// TODO - Check if this type assertion is safe to do.
-		val := v
-		fieldVals, ok := val.(map[string]interface{})[f.Name()].([]interface{})
+		val, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fieldVals, ok := val[f.Name()].([]interface{})
 		if !ok {
 			continue
 		}
@@ -878,8 +882,11 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 
 	mu.Lock()
 	for _, v := range vals {
-		val := v
-		fieldVals, ok := val.(map[string]interface{})[f.Name()].([]interface{})
+		val, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fieldVals, ok := val[f.Name()].([]interface{})
 		if !ok {
 			continue
 		}

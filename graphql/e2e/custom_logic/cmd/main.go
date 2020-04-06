@@ -206,6 +206,8 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 		}},
 	}
 
+	res = res[:len(inputBody)]
+
 	b, err := json.Marshal(res)
 	if err != nil {
 		fmt.Println("while marshaling result: ", err)
@@ -236,6 +238,7 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 			"numStudents": 30,
 		}},
 	}
+	res = res[:len(inputBody)]
 
 	b, err := json.Marshal(res)
 	if err != nil {
