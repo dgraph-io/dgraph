@@ -535,11 +535,11 @@ func (ap *AuthParser) parseRules(rule map[string]interface{}) (*RuleNode, error)
 
 	not, ok := rule["not"].(map[string]interface{})
 	if ok {
-		if notRule, err := ap.parseRules(not); err != nil {
+		notRule, err := ap.parseRules(not)
+		if err != nil {
 			return nil, err
-		} else {
-			ruleNode.Not = notRule
 		}
+		ruleNode.Not = notRule
 	}
 
 	ruleString, ok := rule["rule"].(string)
@@ -745,12 +745,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 		typeNameAst:     typeMappings(s),
 	}
 
-	if authRules, err := authRules(s); err == nil {
-		schema.authRules = authRules
-		return schema, nil
-	} else {
+	authRules, err := authRules(s)
+	if err != nil {
 		return nil, err
 	}
+	schema.authRules = authRules
+	return schema, nil
 }
 
 func responseName(f *ast.Field) string {
