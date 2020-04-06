@@ -915,22 +915,23 @@ func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 	rc.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
 
 	for _, arg := range query.Arguments {
-		val := rc.argMap[arg.Name]
-		if val == nil {
-			// Instead of replacing value to nil for optional arguments, we replace it with an
-			// empty string.
-			val = ""
+		val, ok := rc.argMap[arg.Name]
+		if !ok {
+			continue
 		}
-		value := fmt.Sprintf("%v", val)
-		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" {
-			value = `"` + value + `"`
+		value := ""
+		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
+			if val == nil {
+				val = "null"
+			}
+			value = `"` + fmt.Sprintf("%+v", val) + `"`
 		}
 		remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
 	}
 
 	buf := &bytes.Buffer{}
 	buildGraphqlRequestFields(buf, q.field)
-	remoteQuery += string(buf.Bytes())
+	remoteQuery += buf.String()
 	// contact method and request object
 	remoteQuery = `query{` + remoteQuery + `}`
 	param := Request{
