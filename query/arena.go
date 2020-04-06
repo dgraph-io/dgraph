@@ -18,54 +18,51 @@ package query
 
 import (
 	"encoding/binary"
-
-	"github.com/dgraph-io/dgraph/x"
 )
 
 type arena struct {
-	n   int
 	buf []byte
 }
 
 func newArena(size int) *arena {
-	x.AssertTrue(size > 0)
-	return &arena{
-		n:   1,
-		buf: make([]byte, 0, size),
-	}
+	a := new(arena)
+
+	// Append dummy byte to avoid reading bytes when offset is
+	// storing default value 0 in fastJsonNode.
+	a.buf = make([]byte, 0, size)
+	a.buf = append(a.buf, []byte("a")...)
+
+	return a
 }
 
-func (a *arena) put(b []byte) int {
-	// First put length of buffer, then put actual buffer.
-	var l [4]byte
-	binary.BigEndian.PutUint32(l[:], uint32(len(b)))
-	a.buf = append(a.buf, l[:]...)
-	a.buf = append(a.buf, b...)
+func (a *arena) put(b []byte) uint32 {
+	offset := uint32(len(a.buf)) // TODO: careful here.
 
-	offset := a.n
-	a.n += 4 + len(b)
+	// First put length of buffer, then put actual buffer. Also put length using varint encoding.
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	w := binary.PutVarint(sizeBuf, int64(len(b)))
+	a.buf = append(a.buf, sizeBuf[:w]...)
+	a.buf = append(a.buf, b...)
 
 	return offset
 }
 
-func (a *arena) get(offset int) []byte {
+func (a *arena) get(offset uint32) []byte {
 	if offset == 0 {
 		return nil
 	}
-	eoffset := offset - 1
-	x.AssertTrue(eoffset+3 < len(a.buf))
 
 	// First read length, then read actual buffer.
-	l := int(binary.BigEndian.Uint32(a.buf[eoffset : eoffset+4]))
-	eoffset += 4
-	return a.buf[eoffset : eoffset+l]
+	size, r := binary.Varint(a.buf[int(offset):])
+	offset += uint32(r)
+	// TODO: typecasting int64 to uint32 might not be safe.
+	return a.buf[offset : offset+uint32(size)]
 }
 
 func (a *arena) size() int {
-	return a.n - 1
+	return len(a.buf) - 1 // -1 for dummy byte.
 }
 
 func (a *arena) reset() {
-	a.n = 1
-	a.buf = a.buf[:0]
+	a.buf = a.buf[:1]
 }

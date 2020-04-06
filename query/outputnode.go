@@ -108,14 +108,21 @@ func (e *encoder) attrForID(id uint16) string {
 	panic("id not found in map")
 }
 
-type fastJsonNode struct {
-	attrs []*fastJsonNode
+const (
+	msbBit       = (uint64(1) << 63)
+	secondMsbBit = (uint64(1) << 62)
+	setByte56    = (uint64(0xFFFF) << 32)
+	setBytes1234 = uint64(0xFFFFFFFF)
+)
 
+type fastJsonNode struct {
 	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
 	// Bytes 5-8 contains offset(uint32) for Arena.
 	// Bytes 3-4 contains attr.
 	// Bit MSB and (MSB-1) contains isChild and list fields values.
 	meta uint64
+
+	attrs []*fastJsonNode
 }
 
 func (fj *fastJsonNode) setAttr(attr uint16) {
@@ -123,47 +130,37 @@ func (fj *fastJsonNode) setAttr(attr uint16) {
 }
 
 func (fj *fastJsonNode) setScalarVal(sv []byte) {
-	offset := uint32(enc.arena.put(sv)) // TODO: fix this type casting.
-
-	fj.meta |= uint64(offset)
+	fj.meta |= uint64(enc.arena.put(sv))
 }
 
 func (fj *fastJsonNode) setIsChild(isChild bool) {
 	if isChild {
-		fj.meta |= (uint64(1) << 63)
+		fj.meta |= msbBit
 	}
 }
 
 func (fj *fastJsonNode) setList(list bool) {
 	if list {
-		fj.meta |= (uint64(1) << 62)
+		fj.meta |= secondMsbBit
 	}
 }
 
 func (fj *fastJsonNode) getAttr() uint16 {
-	return uint16((fj.meta & (uint64(0xFFFF) << 32)) >> 32)
+	return uint16((fj.meta & setByte56) >> 32)
 }
 
 func (fj *fastJsonNode) getScalarVal() []byte {
-	offset := int(fj.meta & uint64(0xFFFFFFFF))
+	offset := uint32(fj.meta & setBytes1234)
 
 	return enc.arena.get(offset)
 }
 
 func (fj *fastJsonNode) getIsChild() bool {
-	if (fj.meta & (uint64(1) << 63)) > 0 {
-		return true
-	}
-
-	return false
+	return ((fj.meta & msbBit) > 0)
 }
 
 func (fj *fastJsonNode) getList() bool {
-	if (fj.meta & (uint64(1) << 62)) > 0 {
-		return true
-	}
-
-	return false
+	return ((fj.meta & secondMsbBit) > 0)
 }
 
 func (fj *fastJsonNode) AddValue(attr uint16, v types.Val) {
