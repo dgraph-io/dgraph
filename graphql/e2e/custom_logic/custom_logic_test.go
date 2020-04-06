@@ -304,7 +304,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						body: "{uid: $id}"
 					})
 		age: Int! @search
-		cars: [Car] @custom(http: {
+		cars: Car @custom(http: {
 						url: "http://mock:8888/cars",
 						method: "GET",
 						body: "{uid: $id}"
@@ -390,9 +390,9 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		  {
 			"name": "uname-` + users[0].ID + `",
 			"age": 10,
-			"cars": [{
+			"cars": {
 				"name": "BMW"
-			}],
+			},
 			"schools": [
 				{
 					"name": "sname-` + schools[0].ID + `",
@@ -439,9 +439,9 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		  {
 			"name": "uname-` + users[1].ID + `",
 			"age": 11,
-			"cars": [{
+			"cars": {
 				"name": "Merc"
-			}],
+			},
 			"schools": [
 				{
 					"name": "sname-` + schools[1].ID + `",
@@ -488,9 +488,9 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		  {
 			"name": "uname-` + users[2].ID + `",
 			"age": 12,
-			"cars": [{
+			"cars": {
 				"name": "Honda"
-			}],
+			},
 			"schools": [
 				{
 					"name": "sname-` + schools[0].ID + `",
@@ -572,9 +572,9 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		"getUser": {
 			"name": "uname-` + users[0].ID + `",
 			"age": 10,
-			"cars": [{
+			"cars": {
 				"name": "BMW"
-			}],
+			},
 			"schools": [
 				{
 					"name": "sname-` + schools[0].ID + `",

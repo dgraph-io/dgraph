@@ -195,15 +195,15 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := []interface{}{
-		[]map[string]interface{}{{
+		map[string]interface{}{
 			"name": "BMW",
-		}},
-		[]map[string]interface{}{{
+		},
+		map[string]interface{}{
 			"name": "Merc",
-		}},
-		[]map[string]interface{}{{
+		},
+		map[string]interface{}{
 			"name": "Honda",
-		}},
+		},
 	}
 
 	res = res[:len(inputBody)]
