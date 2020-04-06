@@ -162,17 +162,15 @@ func readSchema(filename string) *schema.ParsedSchema {
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
+	var db *badger.DB
 	if len(ld.opt.ClientDir) > 0 {
-		var db *badger.DB
 		x.Check(os.MkdirAll(ld.opt.ClientDir, 0700))
 
 		var err error
 		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
 		x.Checkf(err, "Error while creating badger KV posting store")
-		ld.xids = xidmap.New(ld.zero, db)
-	} else {
-		ld.xids = xidmap.New(ld.zero, nil)
 	}
+	ld.xids = xidmap.New(ld.zero, db)
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
