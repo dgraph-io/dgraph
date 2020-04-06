@@ -309,6 +309,20 @@ func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) erro
 
 func runTypeMutation(ctx context.Context, update *pb.TypeUpdate) error {
 	current := *update
+	old, exists := schema.State().GetType(update.TypeName)
+	if exists {
+		curBytes, err := current.Marshal()
+		if err != nil {
+			return err
+		}
+		oldBytes, err := old.Marshal()
+		if err != nil {
+			return err
+		}
+		if bytes.Equal(curBytes, oldBytes) {
+			return nil
+		}
+	}
 	schema.State().SetType(update.TypeName, current)
 	return updateType(update.TypeName, *update)
 }
