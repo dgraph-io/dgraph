@@ -18,6 +18,7 @@ package core
 
 import (
 	"bytes"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -26,13 +27,11 @@ import (
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/services"
-	"github.com/ChainSafe/gossamer/lib/transaction"
 
 	log "github.com/ChainSafe/log15"
 )
@@ -57,6 +56,8 @@ type Service struct {
 	// Current BABE session
 	bs              *babe.Session
 	isBabeAuthority bool
+	epochNumber     uint64   // epoch number of current epoch
+	firstBlock      *big.Int // block number of first block in current epoch
 
 	// Keystore
 	keys *keystore.Keystore
@@ -159,6 +160,8 @@ func NewService(cfg *Config) (*Service, error) {
 			transactionQueue: cfg.TransactionQueue,
 			epochDone:        epochDone,
 			babeKill:         babeKill,
+			epochNumber:      uint64(0),
+			firstBlock:       nil,
 			isBabeAuthority:  true,
 			lock:             chanLock,
 			closed:           false,
@@ -168,7 +171,7 @@ func NewService(cfg *Config) (*Service, error) {
 			respOut:          respChan,
 		}
 
-		authData, err := srv.retrieveAuthorityData()
+		authData, err := srv.grandpaAuthorities()
 		if err != nil {
 			return nil, err
 		}
@@ -269,7 +272,7 @@ func (s *Service) Stop() error {
 	return nil
 }
 
-// StorageRoot returns the hash of the runtime storage root
+// StorageRoot returns the hash of the storage root
 func (s *Service) StorageRoot() (common.Hash, error) {
 	if s.storageState == nil {
 		return common.Hash{}, ErrNilStorageState
@@ -277,14 +280,38 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	return s.storageState.StorageRoot()
 }
 
-func (s *Service) retrieveAuthorityData() ([]*babe.AuthorityData, error) {
-	// TODO: when we update to a new runtime, will need to pass in the latest block number
-	return s.grandpaAuthorities()
+// getBlockEpoch gets the epoch number using the provided block hash
+func (s *Service) getBlockEpoch(hash common.Hash) (epoch uint64, err error) {
+
+	// get slot number to determine epoch number
+	slot, err := s.blockState.GetSlotForBlock(hash)
+	if err != nil {
+		return epoch, fmt.Errorf("failed to get slot from block hash: %s", err)
+	}
+
+	if slot != 0 {
+		// epoch number = (slot - genesis slot) / epoch length
+		epoch = (slot - 1) / 6 // TODO: use epoch length from babe or core config
+	}
+
+	return epoch, nil
 }
 
-// getLatestSlot returns the slot for the block at the head of the chain
-func (s *Service) getLatestSlot() (uint64, error) {
-	return s.blockState.GetSlotForBlock(s.blockState.HighestBlockHash())
+// blockFromCurrentEpoch verifies the provided block hash is from current epoch
+func (s *Service) blockFromCurrentEpoch(hash common.Hash) (bool, error) {
+
+	// get epoch number of block header
+	epoch, err := s.getBlockEpoch(hash)
+	if err != nil {
+		return false, fmt.Errorf("[core] failed to get epoch from block header: %s", err)
+	}
+
+	// check if block epoch number matches current epoch number
+	if epoch != s.epochNumber {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 func (s *Service) safeMsgSend(msg network.Message) error {
@@ -309,60 +336,50 @@ func (s *Service) safeBabeKill() error {
 
 func (s *Service) handleBabeSession() {
 	for {
+		// wait for BABE epoch to complete
 		<-s.epochDone
-		log.Debug("[core] BABE epoch complete, initializing new session")
 
-		// commit the storage trie to the DB
-		err := s.storageState.StoreInDB()
+		// finalize BABE session
+		err := s.finalizeBabeSession()
 		if err != nil {
-			log.Error("[core]", "error", err)
+			log.Error("[core] failed to finalize BABE session", "error", err)
+
+			err = s.safeBabeKill()
+			if err != nil {
+				log.Error("[core] failed to kill former BABE session", "error", err)
+			}
+
+			return // exit
 		}
 
-		newBlocks := make(chan types.Block)
-		s.blkRec = newBlocks
-
-		epochDone := make(chan struct{})
-		s.epochDone = epochDone
-
-		babeKill := make(chan struct{})
-		s.babeKill = babeKill
-
-		keys := s.keys.Sr25519Keypairs()
-
-		latestSlot, err := s.getLatestSlot()
+		// create new BABE session
+		bs, err := s.initializeBabeSession()
 		if err != nil {
-			log.Error("[core]", "error", err)
+			log.Error("[core] failed to initialize BABE session", "error", err)
+
+			err = s.safeBabeKill()
+			if err != nil {
+				log.Error("[core] failed to kill former BABE session", "error", err)
+			}
+
+			return // exit
 		}
 
-		// BABE session configuration
-		bsConfig := &babe.SessionConfig{
-			Keypair:          keys[0].(*sr25519.Keypair),
-			Runtime:          s.rt,
-			NewBlocks:        newBlocks, // becomes block send channel in BABE session
-			BlockState:       s.blockState,
-			StorageState:     s.storageState,
-			TransactionQueue: s.transactionQueue,
-			AuthData:         s.bs.AuthorityData(), // AuthorityData will be updated when the NextEpochDescriptor arrives.
-			Done:             epochDone,
-			Kill:             babeKill,
-			StartSlot:        latestSlot + 1,
-			SyncLock:         s.syncLock,
-		}
-
-		// create a new BABE session
-		bs, err := babe.NewSession(bsConfig)
-		if err != nil {
-			log.Error("[core] could not initialize BABE", "error", err)
-			return
-		}
-
+		// start new BABE session
 		err = bs.Start()
 		if err != nil {
-			log.Error("[core] could not start BABE", "error", err)
+			log.Error("[core] failed to start BABE session", "error", err)
+
+			err = s.safeBabeKill()
+			if err != nil {
+				log.Error("[core] failed to kill BABE session", "error", err)
+			}
+
+			return // exit
 		}
 
+		// append successfully started BABE session to core service
 		s.bs = bs
-		log.Trace("[core] BABE session initialized and started")
 	}
 }
 
@@ -423,12 +440,6 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		return err
 	}
 
-	// TODO: check if host status message needs to be updated based on new block
-	// information, if so, generate host status message and send to network service
-
-	// TODO: send updated host status message to network service
-	// s.msgSend <- msg
-
 	err = s.checkForRuntimeChanges()
 	if err != nil {
 		return err
@@ -442,28 +453,28 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 	msgType := msg.GetType()
 
 	switch msgType {
-	case network.BlockAnnounceMsgType:
-		blockAnnounceMessage, ok := msg.(*network.BlockAnnounceMessage)
-		if !ok {
-			return ErrMessageCast("BlockAnnounceMessage")
-		}
-
-		err = s.ProcessBlockAnnounceMessage(blockAnnounceMessage)
-	case network.BlockRequestMsgType:
+	case network.BlockRequestMsgType: // 1
 		msg, ok := msg.(*network.BlockRequestMessage)
 		if !ok {
 			return ErrMessageCast("BlockRequestMessage")
 		}
 
 		err = s.ProcessBlockRequestMessage(msg)
-	case network.BlockResponseMsgType:
+	case network.BlockResponseMsgType: // 2
 		msg, ok := msg.(*network.BlockResponseMessage)
 		if !ok {
 			return ErrMessageCast("BlockResponseMessage")
 		}
 
 		err = s.ProcessBlockResponseMessage(msg)
-	case network.TransactionMsgType:
+	case network.BlockAnnounceMsgType: // 3
+		msg, ok := msg.(*network.BlockAnnounceMessage)
+		if !ok {
+			return ErrMessageCast("BlockAnnounceMessage")
+		}
+
+		err = s.ProcessBlockAnnounceMessage(msg)
+	case network.TransactionMsgType: // 4
 		msg, ok := msg.(*network.TransactionMessage)
 		if !ok {
 			return ErrMessageCast("TransactionMessage")
@@ -475,159 +486,6 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 	}
 
 	return err
-}
-
-// ProcessBlockAnnounceMessage creates a block request message from the block
-// announce messages (block announce messages include the header but the full
-// block is required to execute `core_execute_block`).
-func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage) error {
-	log.Debug("[core] got BlockAnnounceMessage")
-
-	header, err := types.NewHeader(msg.ParentHash, msg.Number, msg.StateRoot, msg.ExtrinsicsRoot, msg.Digest)
-	if err != nil {
-		return err
-	}
-
-	_, err = s.blockState.GetHeader(header.Hash())
-	if err != nil && err == database.ErrKeyNotFound {
-		err = s.blockState.SetHeader(header)
-		if err != nil {
-			return err
-		}
-
-		log.Info("[core] saved block", "number", header.Number, "hash", header.Hash())
-	} else if err != nil {
-		return err
-	}
-
-	_, err = s.blockState.GetBlockBody(header.Hash())
-	if err != nil && err == database.ErrKeyNotFound {
-		// send block request message
-		log.Debug("[core] sending new block to syncer", "number", msg.Number)
-		s.blockNumOut <- msg.Number
-	} else if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ProcessBlockRequestMessage processes a block request message, returning a block response message
-func (s *Service) ProcessBlockRequestMessage(msg *network.BlockRequestMessage) error {
-	blockResponse, err := s.createBlockResponse(msg)
-	if err != nil {
-		return err
-	}
-
-	return s.safeMsgSend(blockResponse)
-}
-
-func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {
-	var startHash common.Hash
-	var endHash common.Hash
-
-	switch c := blockRequest.StartingBlock.Value().(type) {
-	case uint64:
-		if c == 0 {
-			c = 1
-		}
-
-		block, err := s.blockState.GetBlockByNumber(big.NewInt(0).SetUint64(c))
-		if err != nil {
-			return nil, err
-		}
-
-		startHash = block.Header.Hash()
-	case common.Hash:
-		startHash = c
-	}
-
-	if blockRequest.EndBlockHash.Exists() {
-		endHash = blockRequest.EndBlockHash.Value()
-	} else {
-		endHash = s.blockState.BestBlockHash()
-	}
-
-	log.Debug("[core] got BlockRequestMessage", "startHash", startHash, "endHash", endHash)
-
-	// get sub-chain of block hashes
-	subchain, err := s.blockState.SubChain(startHash, endHash)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(subchain) > int(maxResponseSize) {
-		subchain = subchain[:maxResponseSize]
-	}
-
-	log.Trace("[core] subchain", "start", subchain[0], "end", subchain[len(subchain)-1])
-
-	responseData := []*types.BlockData{}
-
-	for _, hash := range subchain {
-
-		blockData := new(types.BlockData)
-		blockData.Hash = hash
-
-		// set defaults
-		blockData.Header = optional.NewHeader(false, nil)
-		blockData.Body = optional.NewBody(false, nil)
-		blockData.Receipt = optional.NewBytes(false, nil)
-		blockData.MessageQueue = optional.NewBytes(false, nil)
-		blockData.Justification = optional.NewBytes(false, nil)
-
-		// header
-		if (blockRequest.RequestedData & 1) == 1 {
-			retData, err := s.blockState.GetHeader(hash)
-			if err == nil && retData != nil {
-				blockData.Header = retData.AsOptional()
-			}
-		}
-		// body
-		if (blockRequest.RequestedData&2)>>1 == 1 {
-			retData, err := s.blockState.GetBlockBody(hash)
-			if err == nil && retData != nil {
-				blockData.Body = retData.AsOptional()
-			}
-		}
-		// receipt
-		if (blockRequest.RequestedData&4)>>2 == 1 {
-			retData, err := s.blockState.GetReceipt(hash)
-			if err == nil && retData != nil {
-				blockData.Receipt = optional.NewBytes(true, retData)
-			}
-		}
-		// message queue
-		if (blockRequest.RequestedData&8)>>3 == 1 {
-			retData, err := s.blockState.GetMessageQueue(hash)
-			if err == nil && retData != nil {
-				blockData.MessageQueue = optional.NewBytes(true, retData)
-			}
-		}
-		// justification
-		if (blockRequest.RequestedData&16)>>4 == 1 {
-			retData, err := s.blockState.GetJustification(hash)
-			if err == nil && retData != nil {
-				blockData.Justification = optional.NewBytes(true, retData)
-			}
-		}
-
-		responseData = append(responseData, blockData)
-	}
-
-	return &network.BlockResponseMessage{
-		ID:        blockRequest.ID,
-		BlockData: responseData,
-	}, nil
-}
-
-// ProcessBlockResponseMessage attempts to validate and add the block to the
-// chain by calling `core_execute_block`. Valid blocks are stored in the block
-// database to become part of the canonical chain.
-func (s *Service) ProcessBlockResponseMessage(msg *network.BlockResponseMessage) error {
-	log.Debug("[core] received BlockResponseMessage")
-	s.respOut <- msg
-	return s.checkForRuntimeChanges()
 }
 
 // checkForRuntimeChanges checks if changes to the runtime code have occurred; if so, load the new runtime
@@ -656,78 +514,6 @@ func (s *Service) checkForRuntimeChanges() error {
 			if err != nil {
 				return err
 			}
-		}
-	}
-
-	return nil
-}
-
-// ProcessTransactionMessage validates each transaction in the message and
-// adds valid transactions to the transaction queue of the BABE session
-func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) error {
-	// get transactions from message extrinsics
-	txs := msg.Extrinsics
-
-	for _, tx := range txs {
-		tx := tx // pin
-
-		// validate each transaction
-		val, err := s.ValidateTransaction(tx)
-		if err != nil {
-			log.Error("[core] failed to validate transaction", "err", err)
-			return err // exit
-		}
-
-		// create new valid transaction
-		vtx := transaction.NewValidTransaction(tx, val)
-
-		if s.isBabeAuthority {
-			// push to the transaction queue of BABE session
-			hash, err := s.transactionQueue.Push(vtx)
-			if err != nil {
-				log.Trace("[core] Failed to push transaction to queue", "error", err)
-			} else {
-				log.Trace("[core] Added transaction to queue", "hash", hash)
-			}
-		}
-	}
-
-	return nil
-}
-
-// handle authority and randomness changes over transitions from one epoch to the next
-//nolint
-func (s *Service) handleConsensusDigest(header *types.Header) (err error) {
-	var item types.DigestItem
-	for _, digest := range header.Digest {
-		item, err = types.DecodeDigestItem(digest)
-		if err != nil {
-			return err
-		}
-
-		if item.Type() == types.ConsensusDigestType {
-			break
-		}
-	}
-
-	// TODO: if this block is the first in the epoch and it doesn't have a consensus digest, this is an error
-	if item == nil {
-		return nil
-	}
-
-	consensusDigest := item.(*types.ConsensusDigest)
-
-	epochData := new(babe.NextEpochDescriptor)
-	err = epochData.Decode(consensusDigest.Data)
-	if err != nil {
-		return err
-	}
-
-	if s.isBabeAuthority {
-		// TODO: if this block isn't the first in the epoch, and it has a consensus digest, this is an error
-		err = s.bs.SetEpochData(epochData)
-		if err != nil {
-			return err
 		}
 	}
 

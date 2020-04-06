@@ -31,7 +31,6 @@ import (
 // helper method to create and start test state service
 func newTestService(t *testing.T) (state *Service) {
 	testDir := utils.NewTestDir(t)
-	defer utils.RemoveTestDir(t)
 
 	state = NewService(testDir)
 
@@ -46,6 +45,7 @@ func newTestMemDBService() *Service {
 
 func TestService_Start(t *testing.T) {
 	state := newTestService(t)
+	defer utils.RemoveTestDir(t)
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 	if err != nil {
