@@ -300,7 +300,7 @@ func TestImportKey(t *testing.T) {
 	dataDir := utils.NewTestDataDir(t, "keystore")
 	defer utils.RemoveTestDir(t)
 
-	keypath := dataDir + "keystore"
+	keypath := dataDir
 
 	importkeyfile, err := GenerateKeypair("sr25519", keypath, testPassword)
 	if err != nil {

@@ -38,10 +38,10 @@ var (
 		Name:      "export",
 		Usage:     "Export configuration values to TOML configuration file",
 		ArgsUsage: "",
-		Flags:     AllFlags(),
+		Flags:     CLIFlags,
 		Category:  "CONFIGURATION",
 		Description: "The export command exports configuration values from the command flags to a TOML configuration file.\n" +
-			"\tUsage: gossamer export --config node/custom/config.toml --datadir ~/.gossamer/custom --genesis ~/node/custom/genesis.json --protocol /gossamer/custom/0",
+			"\tUsage: gossamer export --config node/custom/config.toml --datadir ~/.gossamer/custom --protocol /gossamer/custom/0",
 	}
 	// initCommand defines the "init" subcommand (ie, `gossamer init`)
 	initCommand = cli.Command{
@@ -49,7 +49,7 @@ var (
 		Name:      "init",
 		Usage:     "Initialize node databases and load genesis data to state",
 		ArgsUsage: "",
-		Flags:     AllFlags(),
+		Flags:     InitFlags,
 		Category:  "INITIALIZATION",
 		Description: "The init command initializes the node databases and loads the genesis data from the genesis configuration file to state.\n" +
 			"\tUsage: gossamer init --genesis genesis.json",
@@ -59,7 +59,7 @@ var (
 		Action:   FixFlagOrder(accountAction),
 		Name:     "account",
 		Usage:    "manage gossamer keystore",
-		Flags:    AllFlags(),
+		Flags:    AccountFlags,
 		Category: "KEYSTORE",
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
@@ -83,11 +83,7 @@ func init() {
 		initCommand,
 		accountCommand,
 	}
-	app.Flags = append(app.Flags, CLIFlags...)
-	app.Flags = append(app.Flags, GlobalFlags...)
-	app.Flags = append(app.Flags, AccountFlags...)
-	app.Flags = append(app.Flags, NetworkFlags...)
-	app.Flags = append(app.Flags, RPCFlags...)
+	app.Flags = CLIFlags
 }
 
 // main runs the cli application
@@ -137,7 +133,6 @@ func gossamerAction(ctx *cli.Context) error {
 			log.Error("[cmd] Failed to initialize node", "error", err)
 			return err
 		}
-
 	}
 
 	ks, err := keystore.LoadKeystore(cfg.Account.Key)
@@ -175,7 +170,7 @@ func initAction(ctx *cli.Context) error {
 		return err
 	}
 
-	cfg, err := createDotConfig(ctx)
+	cfg, err := createInitConfig(ctx)
 	if err != nil {
 		log.Error("[cmd] Failed to create node configuration", "error", err)
 		return err

@@ -98,10 +98,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			dot.GlobalConfig{
 				Name:    testCfg.Global.Name,
 				ID:      testCfg.Global.ID,
-				Config:  string(""), // the value defined in the file
-				Genesis: testCfg.Global.Genesis,
 				DataDir: testCfg.Global.DataDir,
-				Roles:   testCfg.Global.Roles,
 			},
 		},
 		{
@@ -111,10 +108,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			dot.GlobalConfig{
 				Name:    testCfg.Global.Name,
 				ID:      testCfg.Global.ID,
-				Config:  testCfg.Global.Config,
-				Genesis: "test_genesis",
 				DataDir: testCfg.Global.DataDir,
-				Roles:   testCfg.Global.Roles,
 			},
 		},
 		{
@@ -124,10 +118,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			dot.GlobalConfig{
 				Name:    testCfg.Global.Name,
 				ID:      testCfg.Global.ID,
-				Config:  testCfg.Global.Config,
-				Genesis: testCfg.Global.Genesis,
 				DataDir: "test_datadir",
-				Roles:   testCfg.Global.Roles,
 			},
 		},
 		{
@@ -137,10 +128,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			dot.GlobalConfig{
 				Name:    testCfg.Global.Name,
 				ID:      testCfg.Global.ID,
-				Config:  testCfg.Global.Config,
-				Genesis: testCfg.Global.Genesis,
 				DataDir: testCfg.Global.DataDir,
-				Roles:   byte(1),
 			},
 		},
 	}
@@ -152,8 +140,6 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			require.Nil(t, err)
 			cfg, err := createDotConfig(ctx)
 			require.Nil(t, err)
-
-			cfg.Global.Config = testCfg.Global.Config
 
 			require.Equal(t, c.expected, cfg.Global)
 		})
@@ -232,6 +218,7 @@ func TestCoreConfigFromFlags(t *testing.T) {
 			[]interface{}{testCfgFile.Name(), "4"},
 			dot.CoreConfig{
 				Authority: true,
+				Roles:     4,
 			},
 		},
 		{
@@ -240,6 +227,7 @@ func TestCoreConfigFromFlags(t *testing.T) {
 			[]interface{}{testCfgFile.Name(), "0"},
 			dot.CoreConfig{
 				Authority: false,
+				Roles:     0,
 			},
 		},
 	}

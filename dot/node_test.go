@@ -35,7 +35,7 @@ func TestInitNode(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -55,7 +55,7 @@ func TestNewNode(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -80,7 +80,7 @@ func TestStartNode(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)

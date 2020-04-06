@@ -81,7 +81,7 @@ func TestStoreGenesisInfo(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genPath
+	cfg.Init.Genesis = genPath
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -144,7 +144,7 @@ func TestGenesisStateLoading(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	cfg.Core.Authority = false // TODO: improve dot genesis tests
-	cfg.Global.Genesis = genPath
+	cfg.Init.Genesis = genPath
 
 	gen, err := genesis.LoadGenesisFromJSON(genPath)
 	if err != nil {

@@ -81,6 +81,7 @@ func DataDir(name string) string {
 func KeystoreDir(datadir string) (keystorepath string, err error) {
 	// datadir specified, set keystore filepath to absolute path of [datadir]/keystore
 	if datadir != "" {
+		datadir = ExpandDir(datadir)
 		keystorepath, err = filepath.Abs(datadir + "/keystore")
 		if err != nil {
 			return "", fmt.Errorf("failed to create absolute filepath: %s", err)
@@ -88,8 +89,8 @@ func KeystoreDir(datadir string) (keystorepath string, err error) {
 	}
 
 	// if datadir does not exist, create it
-	if _, err = os.Stat(datadir); os.IsNotExist(err) {
-		err = os.Mkdir(datadir, os.ModePerm)
+	if _, err = os.Stat(keystorepath); os.IsNotExist(err) {
+		err = os.Mkdir(keystorepath, os.ModePerm)
 		if err != nil {
 			return "", fmt.Errorf("failed to create data directory: %s", err)
 		}

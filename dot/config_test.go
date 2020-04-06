@@ -33,7 +33,7 @@ func TestLoadConfig(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -55,7 +55,7 @@ func TestExportConfig(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -74,7 +74,7 @@ func TestLoadConfigGssmr(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	cfg.Global.DataDir = utils.NewTestDir(t)
-	cfg.Global.Genesis = "../node/gssmr/genesis.json"
+	cfg.Init.Genesis = "../node/gssmr/genesis.json"
 
 	defer utils.RemoveTestDir(t)
 
@@ -93,19 +93,17 @@ func TestExportConfigGssmr(t *testing.T) {
 	cfg := GssmrConfig()
 	require.NotNil(t, cfg)
 
-	gssmrConfig := cfg.Global.Config
-	gssmrGenesis := cfg.Global.Genesis
+	gssmrGenesis := cfg.Init.Genesis
 	gssmrDataDir := cfg.Global.DataDir
 	cfg.Global.DataDir = utils.NewTestDir(t)
-	cfg.Global.Genesis = "../node/gssmr/genesis.json"
+	cfg.Init.Genesis = "../node/gssmr/genesis.json"
 
 	defer utils.RemoveTestDir(t)
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	cfg.Global.Config = gssmrConfig
-	cfg.Global.Genesis = gssmrGenesis
+	cfg.Init.Genesis = gssmrGenesis
 	cfg.Global.DataDir = gssmrDataDir
 
 	file := ExportConfig(cfg, "../node/gssmr/config.toml")
@@ -122,7 +120,7 @@ func TestLoadConfigKsmcc(t *testing.T) {
 	require.NotNil(t, cfg)
 
 	cfg.Global.DataDir = utils.NewTestDir(t)
-	cfg.Global.Genesis = "../node/ksmcc/genesis.json"
+	cfg.Init.Genesis = "../node/ksmcc/genesis.json"
 
 	defer utils.RemoveTestDir(t)
 
@@ -140,19 +138,17 @@ func TestExportConfigKsmcc(t *testing.T) {
 	cfg := KsmccConfig()
 	require.NotNil(t, cfg)
 
-	ksmccConfig := cfg.Global.Config
-	ksmccGenesis := cfg.Global.Genesis
+	ksmccGenesis := cfg.Init.Genesis
 	ksmccDataDir := cfg.Global.DataDir
 	cfg.Global.DataDir = utils.NewTestDir(t)
-	cfg.Global.Genesis = "../node/ksmcc/genesis.json"
+	cfg.Init.Genesis = "../node/ksmcc/genesis.json"
 
 	defer utils.RemoveTestDir(t)
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
 
-	cfg.Global.Config = ksmccConfig
-	cfg.Global.Genesis = ksmccGenesis
+	cfg.Init.Genesis = ksmccGenesis
 	cfg.Global.DataDir = ksmccDataDir
 
 	file := ExportConfig(cfg, "../node/ksmcc/config.toml")

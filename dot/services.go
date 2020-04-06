@@ -109,7 +109,7 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*network.Service, error) {
 	log.Info(
 		"[dot] Creating network service...",
-		"roles", cfg.Global.Roles,
+		"roles", cfg.Core.Roles,
 		"port", cfg.Network.Port,
 		"bootnodes", cfg.Network.Bootnodes,
 		"protocol", cfg.Network.ProtocolID,
@@ -122,7 +122,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 		BlockState:   stateSrvc.Block,
 		NetworkState: stateSrvc.Network,
 		DataDir:      cfg.Global.DataDir,
-		Roles:        cfg.Global.Roles,
+		Roles:        cfg.Core.Roles,
 		Port:         cfg.Network.Port,
 		Bootnodes:    cfg.Network.Bootnodes,
 		ProtocolID:   cfg.Network.ProtocolID,

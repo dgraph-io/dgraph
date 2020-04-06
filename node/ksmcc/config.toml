@@ -1,10 +1,7 @@
 [global]
 name = "ksmcc"
 id = "ksmcc"
-config = "./node/ksmcc/config.toml"
-genesis = "./node/ksmcc/genesis.json"
 datadir = "~/.gossamer/ksmcc"
-roles = 1
 
 [account]
 key = ""
@@ -12,6 +9,7 @@ unlock = ""
 
 [core]
 authority = false
+roles = 1
 
 [network]
 port = 7001
@@ -25,3 +23,6 @@ enabled = false
 port = 8545
 host = "localhost"
 modules = ["system"]
+
+[init]
+genesis = "./node/ksmcc/genesis.json"

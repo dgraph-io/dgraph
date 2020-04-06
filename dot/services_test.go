@@ -39,7 +39,7 @@ func TestCreateStateService(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -64,7 +64,7 @@ func TestCreateCoreService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	cfg.Core.Authority = false // TODO: improve dot service tests
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -98,7 +98,7 @@ func TestCreateNetworkService(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)
@@ -130,7 +130,7 @@ func TestCreateRPCService(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	cfg.Core.Authority = false // TODO: improve dot service tests
-	cfg.Global.Genesis = genFile.Name()
+	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
 	require.Nil(t, err)

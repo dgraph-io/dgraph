@@ -27,16 +27,17 @@ import (
 	"github.com/urfave/cli"
 )
 
-// createDotConfig creates a new dot configuration from the provided flag values
-func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
+// loadConfigFile loads a default config file if --node is specified, a specific config if --config is specified,
+// or the default gossamer config otherwise.
+func loadConfigFile(ctx *cli.Context) (cfg *dot.Config, err error) {
 	// check --node flag and load node configuration from defaults.go
 	if name := ctx.GlobalString(NodeFlag.Name); name != "" {
 		switch name {
 		case "gssmr":
-			log.Info("[cmd] Loading node implementation...", "name", name)
+			log.Debug("[cmd] Loading node implementation...", "name", name)
 			cfg = dot.GssmrConfig() // "gssmr" = dot.GssmrConfig()
 		case "ksmcc":
-			log.Info("[cmd] Loading node implementation...", "name", name)
+			log.Debug("[cmd] Loading node implementation...", "name", name)
 			cfg = dot.KsmccConfig() // "ksmcc" = dot.KsmccConfig()
 		default:
 			return nil, fmt.Errorf("unknown node implementation: %s", name)
@@ -57,7 +58,6 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 		}
 		err = dot.LoadConfig(cfg, config) // load toml configuration values into dot configuration
 		if err != nil {
-			log.Error("[cmd] Failed to load toml configuration", "error", err)
 			return nil, err
 		}
 	}
@@ -66,6 +66,17 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	if cfg == nil {
 		log.Info("[cmd] Loading node implementation...", "name", "gssmr")
 		cfg = dot.GssmrConfig()
+	}
+
+	return cfg, nil
+}
+
+// createDotConfig creates a new dot configuration from the provided flag values
+func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
+	cfg, err = loadConfigFile(ctx)
+	if err != nil {
+		log.Error("[cmd] Failed to load toml configuration", "error", err)
+		return nil, err
 	}
 
 	// set dot configuration values
@@ -79,44 +90,38 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	return cfg, nil
 }
 
-// setDotGlobalConfig sets dot.GlobalConfig using flag values from the cli context
-func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
-	// check --config flag and update node configuration
-	if config := ctx.GlobalString(ConfigFlag.Name); config != "" {
-		cfg.Config = config
+func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
+	cfg, err = loadConfigFile(ctx)
+	if err != nil {
+		log.Error("[cmd] Failed to load toml configuration", "error", err)
+		return nil, err
 	}
 
+	setDotInitConfig(ctx, &cfg.Init)
+	setDotGlobalConfig(ctx, &cfg.Global)
+
+	return cfg, nil
+}
+
+func setDotInitConfig(ctx *cli.Context, cfg *dot.InitConfig) {
 	// check --genesis flag and update node configuration
-	if genesis := ctx.GlobalString(GenesisFlag.Name); genesis != "" {
+	if genesis := ctx.String(GenesisFlag.Name); genesis != "" {
 		cfg.Genesis = genesis
 	}
+}
 
+// setDotGlobalConfig sets dot.GlobalConfig using flag values from the cli context
+func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 	// check --datadir flag and update node configuration
 	if datadir := ctx.GlobalString(DataDirFlag.Name); datadir != "" {
 		cfg.DataDir = datadir
-	}
-
-	// check --roles flag and update node configuration
-	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
-		b, err := strconv.Atoi(roles)
-		if err != nil {
-			log.Error("[cmd] Failed to convert Roles to byte", "error", err)
-		} else if byte(b) > 4 {
-			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
-			log.Error("[cmd] Invalid roles option provided", "roles", byte(b))
-		} else {
-			cfg.Roles = byte(b)
-		}
 	}
 
 	log.Debug(
 		"[cmd] Global configuration",
 		"name", cfg.Name,
 		"id", cfg.ID,
-		"config", cfg.Config,
-		"genesis", cfg.Genesis,
 		"datadir", cfg.DataDir,
-		"roles", cfg.Roles,
 	)
 }
 
@@ -162,9 +167,23 @@ func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
 		}
 	}
 
+	// check --roles flag and update node configuration
+	if roles := ctx.GlobalString(RolesFlag.Name); roles != "" {
+		b, err := strconv.Atoi(roles)
+		if err != nil {
+			log.Error("[cmd] Failed to convert Roles to byte", "error", err)
+		} else if byte(b) > 4 {
+			// if roles byte is greater than 4, invalid roles byte (see Table D.2)
+			log.Error("[cmd] Invalid roles option provided", "roles", byte(b))
+		} else {
+			cfg.Roles = byte(b)
+		}
+	}
+
 	log.Debug(
 		"[cmd] Core configuration",
 		"authority", cfg.Authority,
+		"roles", cfg.Roles,
 	)
 }
 

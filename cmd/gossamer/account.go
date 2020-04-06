@@ -74,11 +74,14 @@ func accountAction(ctx *cli.Context) error {
 			password = getPassword("Enter password to encrypt keystore file:")
 		}
 
-		_, err = keystore.GenerateKeypair(keytype, datadir, password)
+		var file string
+		file, err = keystore.GenerateKeypair(keytype, datadir, password)
 		if err != nil {
 			log.Error("[cmd] Failed to generate keypair", "error", err)
 			return err
 		}
+
+		log.Info("[cmd] Generated key", "file", file)
 	}
 
 	// check if --import is set
