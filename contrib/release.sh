@@ -118,25 +118,25 @@ popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 -ldflags \
+  xgo -go=$GOVERSION --targets=windows/amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
 pushd $basedir/badger/badger
-  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 .
+  xgo -go=$GOVERSION --targets=windows/amd64 .
   mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
-  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
   mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
-  env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags \
+  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags \
   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
