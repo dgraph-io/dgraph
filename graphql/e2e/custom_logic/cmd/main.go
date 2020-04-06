@@ -194,11 +194,6 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(inputBody) != 3 {
-		fmt.Printf("Expected input to have length 3. Got: %+v", len(inputBody))
-		return
-	}
-
 	res := []interface{}{
 		[]map[string]interface{}{{
 			"name": "BMW",
@@ -224,11 +219,6 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 	err := getInput(r, &inputBody)
 	if err != nil {
 		fmt.Println("while reading input: ", err)
-		return
-	}
-
-	if len(inputBody) != 3 {
-		fmt.Printf("Expected input to have length 3. Got: %+v", len(inputBody))
 		return
 	}
 

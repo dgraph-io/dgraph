@@ -802,6 +802,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		return
 	}
 
+	// TODO - This can also be an interface{}, handle that case as well.
 	var result []interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
 		errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
@@ -928,32 +929,28 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-// TODO - Resolve all fields of a selection set concurrently.
 func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, error) {
 	if data == nil {
 		return nil, nil
 	}
+
+	array := true
 
 	var vals []interface{}
 	switch v := data.(type) {
 	case []interface{}:
 		vals = v
 	case interface{}:
-		// TODO - See how does this work for a getQuery that only returns an object.
+		array = false
+		vals = []interface{}{v}
+	}
+
+	if len(vals) == 0 {
 		return data, nil
 	}
 
-	// mvals := make([]map[string]interface{}, 0, len(vals))
-	// for _, v := range vals {
-	// 	mv, ok := v.(map[string]interface{})
-	// 	if ok {
-	// 		mvals = append(mvals, mv)
-	// 	}
-	// }
-
 	mu := &sync.RWMutex{}
 	errCh := make(chan error, len(fields))
-	// ferrCh := make(chan error, 10)
 	numRoutines := 0
 
 	for _, f := range fields {
@@ -975,6 +972,10 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 		if err := <-errCh; err != nil {
 			finalErr = err
 		}
+	}
+
+	if !array {
+		return vals[0], finalErr
 	}
 	return vals, finalErr
 }

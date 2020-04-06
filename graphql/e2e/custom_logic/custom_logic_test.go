@@ -538,4 +538,87 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	  }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+
+	singleUserQuery := `
+	query {
+		getUser(id: "` + users[0].ID + `") {
+			name
+			age
+			cars {
+				name
+			}
+			schools(order: {asc: established}) {
+				name
+				established
+				teachers(order: {desc: age}) {
+					name
+					age
+				}
+				classes {
+					name
+					numStudents
+				}
+			}
+		}
+	}`
+	params = &common.GraphQLParams{
+		Query: singleUserQuery,
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected = `{
+		"getUser": {
+			"name": "uname-` + users[0].ID + `",
+			"age": 10,
+			"cars": [{
+				"name": "BMW"
+			}],
+			"schools": [
+				{
+					"name": "sname-` + schools[0].ID + `",
+					"established": 1980,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[0].ID + `",
+							"age": 28
+						},
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						}
+					],
+					"classes": [
+						{
+							"name": "6th",
+							"numStudents": 20
+						}
+					]
+				},
+				{
+					"name": "sname-` + schools[1].ID + `",
+					"established": 1981,
+					"teachers": [
+						{
+							"name": "tname-` + teachers[1].ID + `",
+							"age": 27
+						},
+						{
+							"name": "tname-` + teachers[2].ID + `",
+							"age": 26
+						}
+					],
+					"classes": [
+						{
+							"name": "7th",
+							"numStudents": 25
+						}
+					]
+				}
+			]
+		}
+	}`
+
+	testutil.CompareJSON(t, expected, string(result.Data))
 }
