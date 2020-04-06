@@ -379,6 +379,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
 	}
+	fmt.Println("Current Schema: ", currentSchema)
 	// TODO: Remove after fixing sync marks.
 	require.NoError(t, rebuildReverseEdges(context.Background(), &rb))
 
@@ -395,8 +396,12 @@ func TestRebuildReverseEdges(t *testing.T) {
 	var revVals []*List
 	var prevKey []byte
 	it.Seek(prefix)
-	fmt.Println("Check", prefix)
+	fmt.Println("Prefix: ", prefix)
+	count := 1
 	for it.ValidForPrefix(prefix) {
+
+		fmt.Println("Count: ", count)
+		count = count + 1
 		item := it.Item()
 		key := item.Key()
 		if bytes.Equal(key, prevKey) {
