@@ -716,6 +716,7 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 		}
 		fconf.ForwardHeaders = headers
 	}
+	fconf.Operation = httpArg.Value.Children.ForName("operation").Raw
 	return fconf, nil
 }
 

@@ -283,69 +283,7 @@ func addUsers(t *testing.T, schools []*school) []*user {
 	return res.AddUser.User
 }
 
-func TestCustomFieldsShouldBeResolved(t *testing.T) {
-	d, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-	require.NoError(t, err)
-
-	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
-	client.Alter(context.Background(), &api.Operation{DropAll: true})
-
-	schema := `
-	type Car @remote {
-		id: ID!
-		name: String!
-	}
-
-	type User {
-		id: ID!
-		name: String @custom(http: {
-						url: "http://mock:8888/userNames",
-						method: "GET",
-						body: "{uid: $id}"
-					})
-		age: Int! @search
-		cars: Car @custom(http: {
-						url: "http://mock:8888/cars",
-						method: "GET",
-						body: "{uid: $id}"
-					})
-		schools: [School]
-	}
-
-	type School {
-		id: ID!
-		established: Int! @search
-		name: String @custom(http: {
-						url: "http://mock:8888/schoolNames",
-						method: "POST",
-						body: "{sid: $id}"
-					  })
-		classes: [Class] @custom(http: {
-							url: "http://mock:8888/classes",
-							method: "POST",
-							body: "{sid: $id}"
-						 })
-		teachers: [Teacher]
-	}
-
-	type Class @remote {
-		id: ID!
-		name: String!
-		numStudents: Int!
-	}
-
-	type Teacher {
-		tid: ID!
-		age: Int!
-		name: String @custom(http: {
-						url: "http://mock:8888/teacherNames",
-						method: "POST",
-						body: "{tid: $tid}"
-					  })
-	}`
-
-	updateSchema(t, schema)
-
+func addAndVerifyData(t *testing.T) {
 	teachers := addTeachers(t)
 	sort.Slice(teachers, func(i, j int) bool {
 		return teachers[i].ID < teachers[i].ID
@@ -373,7 +311,6 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 				}
 				classes {
 					name
-					numStudents
 				}
 			}
 		}
@@ -391,7 +328,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			"name": "uname-` + users[0].ID + `",
 			"age": 10,
 			"cars": {
-				"name": "BMW"
+				"name": "car-` + users[0].ID + `"
 			},
 			"schools": [
 				{
@@ -409,8 +346,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "6th",
-							"numStudents": 20
+							"name": "class-` + schools[0].ID + `"
 						}
 					]
 				},
@@ -429,8 +365,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "7th",
-							"numStudents": 25
+							"name": "class-` + schools[1].ID + `"
 						}
 					]
 				}
@@ -440,7 +375,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			"name": "uname-` + users[1].ID + `",
 			"age": 11,
 			"cars": {
-				"name": "Merc"
+				"name": "car-` + users[1].ID + `"
 			},
 			"schools": [
 				{
@@ -458,8 +393,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "7th",
-							"numStudents": 25
+							"name": "class-` + schools[1].ID + `"
 						}
 					]
 				},
@@ -478,8 +412,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "8th",
-							"numStudents": 30
+							"name": "class-` + schools[2].ID + `"
 						}
 					]
 				}
@@ -489,7 +422,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			"name": "uname-` + users[2].ID + `",
 			"age": 12,
 			"cars": {
-				"name": "Honda"
+				"name": "car-` + users[2].ID + `"
 			},
 			"schools": [
 				{
@@ -507,8 +440,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "6th",
-							"numStudents": 20
+							"name": "class-` + schools[0].ID + `"
 						}
 					]
 				},
@@ -527,8 +459,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "8th",
-							"numStudents": 30
+							"name": "class-` + schools[2].ID + `"
 						}
 					]
 				}
@@ -556,7 +487,6 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 				}
 				classes {
 					name
-					numStudents
 				}
 			}
 		}
@@ -573,7 +503,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 			"name": "uname-` + users[0].ID + `",
 			"age": 10,
 			"cars": {
-				"name": "BMW"
+				"name": "car-` + users[0].ID + `"
 			},
 			"schools": [
 				{
@@ -591,8 +521,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "6th",
-							"numStudents": 20
+							"name": "class-` + schools[0].ID + `"
 						}
 					]
 				},
@@ -611,8 +540,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					],
 					"classes": [
 						{
-							"name": "7th",
-							"numStudents": 25
+							"name": "class-` + schools[1].ID + `"
 						}
 					]
 				}
@@ -621,4 +549,141 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	}`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+}
+
+func TestCustomFieldsBatchModeShouldBeResolved(t *testing.T) {
+	d, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+	require.NoError(t, err)
+
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	client.Alter(context.Background(), &api.Operation{DropAll: true})
+
+	schema := `type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/cars",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		schools: [School]
+	}
+
+	type School {
+		id: ID!
+		established: Int! @search
+		name: String @custom(http: {
+						url: "http://mock:8888/schoolNames",
+						method: "POST",
+						body: "{sid: $id}",
+						operation: "batch"
+					  })
+		classes: [Class] @custom(http: {
+							url: "http://mock:8888/classes",
+							method: "POST",
+							body: "{sid: $id}",
+							operation: "batch"
+						})
+		teachers: [Teacher]
+	}
+
+	type Class @remote {
+		id: ID!
+		name: String!
+	}
+
+	type Teacher {
+		tid: ID!
+		age: Int!
+		name: String @custom(http: {
+						url: "http://mock:8888/teacherNames",
+						method: "POST",
+						body: "{tid: $tid}",
+						operation: "batch"
+					})
+	}`
+
+	updateSchema(t, schema)
+	addAndVerifyData(t)
+}
+
+func TestCustomFieldsSingleModeShouldBeResolved(t *testing.T) {
+	d, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
+	require.NoError(t, err)
+
+	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	client.Alter(context.Background(), &api.Operation{DropAll: true})
+
+	schema := `
+	type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userName",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "single"
+					})
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/car",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "single"
+					})
+		schools: [School]
+	}
+
+	type School {
+		id: ID!
+		established: Int! @search
+		name: String @custom(http: {
+						url: "http://mock:8888/schoolName",
+						method: "POST",
+						body: "{sid: $id}",
+						operation: "single"
+					  })
+		classes: [Class] @custom(http: {
+							url: "http://mock:8888/class",
+							method: "POST",
+							body: "{sid: $id}",
+							operation: "single"
+						})
+		teachers: [Teacher]
+	}
+
+	type Class @remote {
+		id: ID!
+		name: String!
+	}
+
+	type Teacher {
+		tid: ID!
+		age: Int!
+		name: String @custom(http: {
+						url: "http://mock:8888/teacherName",
+						method: "POST",
+						body: "{tid: $tid}",
+						operation: "single"
+					  })
+	}`
+
+	updateSchema(t, schema)
+	addAndVerifyData(t)
 }

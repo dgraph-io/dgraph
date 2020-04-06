@@ -770,7 +770,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig()
-	// TODO - We assume the mode is batching by default. Also support single mode.
 
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]map[string]interface{}, len(vals))
@@ -790,37 +789,75 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		body[i] = temp
 	}
 
-	b, err := json.Marshal(body)
-	if err != nil {
-		errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
-		return
-	}
+	if fconf.Operation == "batch" {
+		b, err := json.Marshal(body)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
+			return
+		}
 
-	b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
-	if err != nil {
-		errCh <- err
-		return
-	}
+		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+		if err != nil {
+			errCh <- err
+			return
+		}
 
-	var result []interface{}
-	if err := json.Unmarshal(b, &result); err != nil {
-		errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
-		return
-	}
+		var result []interface{}
+		if err := json.Unmarshal(b, &result); err != nil {
+			errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
+			return
+		}
 
-	if len(result) != len(vals) {
+		if len(result) != len(vals) {
+			errCh <- nil
+			return
+		}
+		// Here we walk through all the objects in the array and substitute the value
+		// that we got from the remote endpoint with the right key in the object.
+		mu.Lock()
+		for idx, val := range vals {
+			val.(map[string]interface{})[f.Alias()] = result[idx]
+			vals[idx] = val
+		}
+		mu.Unlock()
 		errCh <- nil
-		return
+	} else {
+		// This is single mode, make calls concurrently for each input and fill in the results.
+		var wg sync.WaitGroup
+		for i := 0; i < len(body); i++ {
+			wg.Add(1)
+			go func(idx int, input map[string]interface{}) {
+				defer wg.Done()
+				b, err := json.Marshal(input)
+				if err != nil {
+					// TODO - Propogate this error
+					return
+				}
+
+				// TODO - URL can also be different here. Fix that.
+				b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+				if err != nil {
+					// TODO - Propogate this error.
+					return
+				}
+
+				var result interface{}
+				if err := json.Unmarshal(b, &result); err != nil {
+					// TODO - Propogate this error.
+					return
+				}
+
+				mu.Lock()
+				val, ok := vals[idx].(map[string]interface{})
+				if ok {
+					val[f.Alias()] = result
+				}
+				mu.Unlock()
+			}(i, body[i])
+		}
+		wg.Wait()
+		errCh <- nil
 	}
-	// Here we walk through all the objects in the array and substitute the value
-	// that we got from the remote endpoint with the right key in the object.
-	mu.Lock()
-	for idx, val := range vals {
-		val.(map[string]interface{})[f.Alias()] = result[idx]
-		vals[idx] = val
-	}
-	mu.Unlock()
-	errCh <- nil
 }
 
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {

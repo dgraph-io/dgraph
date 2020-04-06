@@ -194,19 +194,67 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := []interface{}{
-		map[string]interface{}{
-			"name": "BMW",
-		},
-		map[string]interface{}{
-			"name": "Merc",
-		},
-		map[string]interface{}{
-			"name": "Honda",
-		},
+	res := []interface{}{}
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, map[string]interface{}{
+			"name": "car-" + inputBody[i].ID,
+		})
 	}
 
-	res = res[:len(inputBody)]
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func classesHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []sinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := []interface{}{}
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, []map[string]interface{}{{
+			"name": "class-" + inputBody[i].ID,
+		}})
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func userNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody input
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	n := fmt.Sprintf(`"uname-%s"`, inputBody.ID)
+	fmt.Fprintf(w, n)
+}
+
+func carHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody input
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := map[string]interface{}{
+		"name": "car-" + inputBody.ID,
+	}
 
 	b, err := json.Marshal(res)
 	if err != nil {
@@ -217,30 +265,17 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func classHandler(w http.ResponseWriter, r *http.Request) {
-	var inputBody []sinput
+	var inputBody sinput
 	err := getInput(r, &inputBody)
 	if err != nil {
 		fmt.Println("while reading input: ", err)
 		return
 	}
 
-	res := []interface{}{
-		[]map[string]interface{}{{
-			"name":        "6th",
-			"numStudents": 20,
-		}},
-		[]map[string]interface{}{{
-			"name":        "7th",
-			"numStudents": 25,
-		}},
-		[]map[string]interface{}{{
-			"name":        "8th",
-			"numStudents": 30,
-		}},
-	}
-	res = res[:len(inputBody)]
+	res := make(map[string]interface{})
+	res["name"] = "class-" + inputBody.ID
 
-	b, err := json.Marshal(res)
+	b, err := json.Marshal([]interface{}{res})
 	if err != nil {
 		fmt.Println("while marshaling result: ", err)
 		return
@@ -248,16 +283,47 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(b))
 }
 
+func teacherNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody tinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	n := fmt.Sprintf(`"tname-%s"`, inputBody.ID)
+	fmt.Fprintf(w, n)
+}
+
+func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody sinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	n := fmt.Sprintf(`"sname-%s"`, inputBody.ID)
+	fmt.Fprintf(w, n)
+}
+
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+
 	http.HandleFunc("/userNames", userNamesHandler)
 	http.HandleFunc("/cars", carsHandler)
-	http.HandleFunc("/classes", classHandler)
+	http.HandleFunc("/classes", classesHandler)
 	http.HandleFunc("/teacherNames", teacherNamesHandler)
 	http.HandleFunc("/schoolNames", schoolNamesHandler)
+
+	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/car", carHandler)
+	http.HandleFunc("/class", classHandler)
+	http.HandleFunc("/teacherName", teacherNameHandler)
+	http.HandleFunc("/schoolName", schoolNameHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
