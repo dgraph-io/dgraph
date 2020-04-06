@@ -125,15 +125,11 @@ pushd $basedir/dgraph/dgraph
 popd
 
 pushd $basedir/badger/badger
-  #env GOOS=windows GOARCH=amd64 go get -v -d .
-  #env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 GO111MODULE=on go build -v -o badger-windows-amd64.exe .
   env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 .
   mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
-  #env GOOS=windows GOARCH=amd64 go get -v -d .
-  #env CGO_ENABLED=1 GOOS=windows GOARCH=amd64 go build -v -o ratel-windows-amd64.exe -ldflags "-X $ratel_release=$release_version" .
   env CGO_ENABLED=1 GO111MODULE=on xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
   mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
@@ -158,8 +154,7 @@ popd
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
-  env GOOS=linux GOARCH=amd64 go get -v -d .
-  env GOOS=linux GOARCH=amd64 GO111MODULE=on go build -v -o dgraph-linux-amd64 -ldflags \
+  xgo -go=$GOVERSION --targets=linux/amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
@@ -167,15 +162,13 @@ pushd $basedir/dgraph/dgraph
 popd
 
 pushd $basedir/badger/badger
-  env GOOS=linux GOARCH=amd64 go get -v -d .
-  env GOOS=linux GOARCH=amd64 GO111MODULE=on go build -v -o badger-linux-amd64 .
+  xgo -go=$GOVERSION --targets=linux/amd64 .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
 
 pushd $basedir/ratel
-  env GOOS=linux GOARCH=amd64 go get -v -d .
-  env GOOS=linux GOARCH=amd64 go build -v -o ratel-linux-amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -go=$GOVERSION --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
   strip -x ratel-linux-amd64
   mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
 popd
