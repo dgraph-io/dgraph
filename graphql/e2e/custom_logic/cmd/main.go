@@ -313,12 +313,14 @@ func main() {
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
 
+	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
 	http.HandleFunc("/cars", carsHandler)
 	http.HandleFunc("/classes", classesHandler)
 	http.HandleFunc("/teacherNames", teacherNamesHandler)
 	http.HandleFunc("/schoolNames", schoolNamesHandler)
 
+	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
