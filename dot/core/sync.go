@@ -44,6 +44,8 @@ type SyncerConfig struct {
 	ChanLock   *sync.Mutex
 }
 
+var responseTimeout = 3 * time.Second
+
 // NewSyncer returns a new Syncer
 func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 	if cfg.BlockState == nil {
@@ -118,56 +120,70 @@ func (s *Syncer) watchForResponses() {
 			return
 		}
 
-		msg, ok := <-s.respIn
-		if !ok || msg == nil {
-			log.Warn("[sync] Failed to receive from respIn channel")
-			return
-		}
+		var msg *network.BlockResponseMessage
+		var ok bool
 
-		// highestInResp will be the highest block in the response
-		// it's set to 0 if err != nil
-		highestInResp, err := s.handleBlockResponse(msg)
-		if err != nil {
-
-			// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
-			// blocks from farther back in the chain
-			if err == blocktree.ErrParentNotFound {
-				// set request start
-				s.requestStart = s.requestStart - maxResponseSize
-				if s.requestStart <= 0 {
-					s.requestStart = 1
-				}
-				log.Debug("[sync] Retrying block request", "start", s.requestStart)
-				go s.sendBlockRequest()
-			} else {
-				log.Error("[sync]", "error", err)
+		select {
+		case msg, ok = <-s.respIn:
+			// handle response
+			if !ok || msg == nil {
+				log.Warn("[sync] Failed to receive from respIn channel")
+				return
 			}
 
+			s.processBlockResponse(msg)
+		case <-time.After(responseTimeout):
+			log.Debug("[sync] timeout waiting for BlockResponse")
+			if !s.synced {
+				s.lock.Unlock()
+				s.synced = true
+			}
+		}
+	}
+}
+
+func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
+	// highestInResp will be the highest block in the response
+	// it's set to 0 if err != nil
+	highestInResp, err := s.processBlockResponseData(msg)
+	if err != nil {
+
+		// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
+		// blocks from farther back in the chain
+		if err == blocktree.ErrParentNotFound {
+			// set request start
+			s.requestStart = s.requestStart - maxResponseSize
+			if s.requestStart <= 0 {
+				s.requestStart = 1
+			}
+			log.Debug("[sync] Retrying block request", "start", s.requestStart)
+			go s.sendBlockRequest()
 		} else {
-			// TODO: max retries before unlocking, in case no response is received
-
-			bestNum, err := s.blockState.BestBlockNumber()
-			if err != nil {
-				log.Crit("[sync] Failed to get best block number", "error", err)
-			} else {
-
-				// check if we are synced or not
-				if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
-					log.Debug("[sync] All synced up!", "number", bestNum)
-
-					if !s.synced {
-						s.lock.Unlock()
-						s.synced = true
-					}
-				} else {
-					// not yet synced, send another block request for the following blocks
-					s.requestStart = highestInResp + 1
-					go s.sendBlockRequest()
-				}
-
-			}
+			log.Error("[sync]", "error", err)
 		}
 
+	} else {
+		// TODO: max retries before unlocking, in case no response is received
+
+		bestNum, err := s.blockState.BestBlockNumber()
+		if err != nil {
+			log.Crit("[sync] Failed to get best block number", "error", err)
+		} else {
+
+			// check if we are synced or not
+			if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
+				log.Debug("[sync] All synced up!", "number", bestNum)
+
+				if !s.synced {
+					s.lock.Unlock()
+					s.synced = true
+				}
+			} else {
+				// not yet synced, send another block request for the following blocks
+				s.requestStart = highestInResp + 1
+				go s.sendBlockRequest()
+			}
+		}
 	}
 }
 
@@ -211,7 +227,7 @@ func (s *Syncer) sendBlockRequest() {
 	}
 }
 
-func (s *Syncer) handleBlockResponse(msg *network.BlockResponseMessage) (int64, error) {
+func (s *Syncer) processBlockResponseData(msg *network.BlockResponseMessage) (int64, error) {
 	blockData := msg.BlockData
 	highestInResp := int64(0)
 

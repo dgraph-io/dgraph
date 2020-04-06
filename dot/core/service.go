@@ -24,6 +24,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/babe"
+	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
@@ -389,7 +390,9 @@ func (s *Service) receiveMessages() {
 		}
 
 		err := s.handleReceivedMessage(msg)
-		if err != nil {
+		if err == blocktree.ErrDescendantNotFound || err == blocktree.ErrStartNodeNotFound || err == database.ErrKeyNotFound {
+			log.Trace("[core] failed to handle message from network service", "err", err)
+		} else if err != nil {
 			log.Error("[core] failed to handle message from network service", "err", err)
 		}
 	}
@@ -530,7 +533,6 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 
 		block, err := s.blockState.GetBlockByNumber(big.NewInt(0).SetUint64(c))
 		if err != nil {
-			log.Error("[core] cannot get starting block", "number", c)
 			return nil, err
 		}
 
