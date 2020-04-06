@@ -768,6 +768,140 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
+func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	fconf, _ := f.CustomHTTPConfig()
+	// TODO - We assume the mode is batching by default. Also support single mode.
+
+	// Here we build the array of objects which is sent as the body for the request.
+	body := make([]map[string]interface{}, len(vals))
+	for i := 0; i < len(body); i++ {
+		temp := make(map[string]interface{})
+		for k, v := range fconf.Template {
+			// TODO - This map has to be copied recursively?
+			temp[k] = v
+		}
+		mu.RLock()
+		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+			errCh <- err
+			mu.RUnlock()
+			return
+		}
+		mu.RUnlock()
+		body[i] = temp
+	}
+
+	b, err := json.Marshal(body)
+	if err != nil {
+		errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
+		return
+	}
+
+	b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+	if err != nil {
+		errCh <- err
+		return
+	}
+
+	var result []interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
+		return
+	}
+
+	// TODO - Verify that length of result should be same as len(vals).
+	// Here we walk through all the objects in the array and substitute the value
+	// that we got from the remote endpoint with the right key in the object.
+	mu.Lock()
+	for idx, val := range vals {
+		val.(map[string]interface{})[f.Alias()] = result[idx]
+		vals[idx] = val
+	}
+	mu.Unlock()
+	errCh <- nil
+}
+
+func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	// If this field doesn't have custom directive and also doesn't have any children,
+	// then there is nothing to do and we can just continue.
+	if len(f.SelectionSet()) == 0 {
+		errCh <- nil
+		return
+	}
+
+	// Here below we do the de-duplication by walking through the result set.
+	// TODO - We can avoid all this work if we can determine that this field doesn't have
+	// @custom directive anywhere in its sub-tree..
+	var input []interface{}
+	// node stores the pointer for a node. It is a map from id to the map for it.
+	nodes := make(map[string]interface{})
+
+	idField := f.Type().IDField()
+	if idField == nil {
+		errCh <- nil
+		return
+	}
+	// Here we walk through the array and collect all unique values for this field. In the
+	// example at the start of the function, we could be collecting all unique schools
+	// across all users. This is where the batching happens so that we make one call per
+	// field and not a separate call per user.
+	mu.RLock()
+	for _, v := range vals {
+		// TODO - Check if this type assertion is safe to do.
+		val := v
+		fieldVals, ok := val.(map[string]interface{})[f.Name()].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, fieldVal := range fieldVals {
+			fv, ok := fieldVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			id, ok := fv[idField.Name()].(string)
+			if !ok {
+				continue
+			}
+			if _, ok := nodes[id]; !ok {
+				input = append(input, fieldVal)
+				nodes[id] = fieldVal
+			}
+		}
+	}
+	mu.RUnlock()
+
+	// TODO - Check why isn't the response required here.
+	if _, err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+		errCh <- nil
+		return
+	}
+
+	mu.Lock()
+	for _, v := range vals {
+		val := v
+		fieldVals, ok := val.(map[string]interface{})[f.Name()].([]interface{})
+		if !ok {
+			continue
+		}
+		for idx, fieldVal := range fieldVals {
+			fv, ok := fieldVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			// TODO - Support xids here.
+			id, ok := fv[idField.Name()].(string)
+			if !ok {
+				continue
+			}
+			// Get the pointer of the map corresponding to this id and put it at the
+			// correct place.
+			mval := nodes[id]
+			fieldVals[idx] = mval
+		}
+	}
+	mu.Unlock()
+	errCh <- nil
+}
+
 // resolveCustomFields resolves fields with custom directive. Here is the rough algorithm that it
 // follows.
 // queryUser {
@@ -809,130 +943,40 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 		return data, nil
 	}
 
+	// mvals := make([]map[string]interface{}, 0, len(vals))
+	// for _, v := range vals {
+	// 	mv, ok := v.(map[string]interface{})
+	// 	if ok {
+	// 		mvals = append(mvals, mv)
+	// 	}
+	// }
+
+	mu := &sync.RWMutex{}
+	errCh := make(chan error, len(fields))
+	// ferrCh := make(chan error, 10)
+	numRoutines := 0
+
 	for _, f := range fields {
 		if f.Skip() || !f.Include() {
 			continue
 		}
 
+		numRoutines++
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
-			// If this field doesn't have custom directive and also doesn't have any children,
-			// then there is nothing to do and we can just continue.
-			if len(f.SelectionSet()) == 0 {
-				continue
-			}
-
-			// Here below we do the de-duplication by walking through the result set.
-			// TODO - We can avoid all this work if we can determine that this field doesn't have
-			// @custom directive anywhere in its sub-tree..
-			var input []interface{}
-			// node stores the pointer for a node. It is a map from id to the map for it.
-			nodes := make(map[string]interface{})
-
-			idField := f.Type().IDField()
-			if idField == nil {
-				continue
-			}
-			// Here we walk through the array and collect all unique values for this field. In the
-			// example at the start of the function, we could be collecting all unique schools
-			// across all users. This is where the batching happens so that we make one call per
-			// field and not a separate call per user.
-			for _, v := range vals {
-				// TODO - Check if this type assertion is safe to do.
-				val := v.(map[string]interface{})
-				fieldVals, ok := val[f.Name()].([]interface{})
-				if !ok {
-					continue
-				}
-				for _, fieldVal := range fieldVals {
-					fv, ok := fieldVal.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					// TODO - Remove this hardcoding, instead fetch the id/xid field dynmaically
-					// and use that.
-					id, ok := fv[idField.Name()].(string)
-					if !ok {
-						continue
-					}
-					if _, ok := nodes[id]; !ok {
-						input = append(input, fieldVal)
-						nodes[id] = fieldVal
-					}
-				}
-			}
-
-			// TODO - Check why isn't the response required here.
-			if _, err := resolveCustomFields(f.SelectionSet(), input); err != nil {
-				return data, err
-			}
-
-			for _, v := range vals {
-				val := v.(map[string]interface{})
-				fieldVals, ok := val[f.Name()].([]interface{})
-				if !ok {
-					continue
-				}
-				for idx, fieldVal := range fieldVals {
-					fv, ok := fieldVal.(map[string]interface{})
-					if !ok {
-						continue
-					}
-					// TODO - Remove this hardcoding same as above.
-					id, ok := fv[idField.Name()].(string)
-					if !ok {
-						continue
-					}
-					// Get the pointer of the map corresponding to this id and put it at the
-					// correct place.
-					mval := nodes[id]
-					fieldVals[idx] = mval
-				}
-			}
+			go resolveNestedFields(f, vals, mu, errCh)
 		} else {
-			fconf, _ := f.CustomHTTPConfig()
-			// TODO - We assume the mode is batching by default. Also support single mode.
-
-			// Here we build the array of objects which is sent as the body for the request.
-			body := make([]map[string]interface{}, len(vals))
-			for i := 0; i < len(body); i++ {
-				temp := make(map[string]interface{})
-				for k, v := range fconf.Template {
-					// TODO - This map has to be copied recursively?
-					temp[k] = v
-				}
-				if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
-					return data, err
-				}
-				body[i] = temp
-			}
-
-			b, err := json.Marshal(body)
-			if err != nil {
-				return data, errors.Wrapf(err, "while json marshaling body: %s", b)
-			}
-
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
-			if err != nil {
-				return data, err
-			}
-
-			var result []interface{}
-			if err := json.Unmarshal(b, &result); err != nil {
-				return nil, errors.Wrapf(err, "while json unmarshaling result: %s", b)
-			}
-
-			// TODO - Verify that length of result should be same as len(vals).
-			// Here we walk through all the objects in the array and substitute the value
-			// that we got from the remote endpoint with the right key in the object.
-			for idx, v := range vals {
-				val := v.(map[string]interface{})
-				val[f.Alias()] = result[idx]
-				vals[idx] = val
-			}
+			go resolveCustomField(f, vals, mu, errCh)
 		}
 	}
-	return vals, nil
+
+	var finalErr error
+	for i := 0; i < numRoutines; i++ {
+		if err := <-errCh; err != nil {
+			finalErr = err
+		}
+	}
+	return vals, finalErr
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
