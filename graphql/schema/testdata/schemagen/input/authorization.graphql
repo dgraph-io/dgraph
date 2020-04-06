@@ -13,7 +13,7 @@ type Todo @auth(
     title: String
     text: String
     isPublic: Boolean @search
-    dateCompleted: String @auth(
+    dateCompleted: String @search @auth(
         update: { rule: "(filter: { dateCompleted: null })" }
     )
     sharedWith: [User]
@@ -24,7 +24,7 @@ type Todo @auth(
 }
 
 type User @auth(
-    update: { rule: "(filter: { dateCompleted: $X_MyApp_User })" }
+    update: { rule: "(filter: { username: { eq: $X_MyApp_User }})" }
 ){
     username: String! @id
     todos: [Todo]

@@ -998,16 +998,9 @@ valid_schemas:
       }
 
   -
-    name: "auth jwt equals constant"
-    input: |
-      type X @auth(add: {rule: "$X-MyApp-Role: {eq: ADMIN}"}) {
-        username: String! @id
-      }
-
-  -
     name: "auth gql type equals constant"
     input: |
-      type X @auth(add: {rule: "userRole: {eq: ADMIN}"}) {
+      type X @auth(add: {rule: "(filter: { userRole: ADMIN })"}) {
         username: String! @id
         userRole: String
       }
@@ -1027,7 +1020,7 @@ valid_schemas:
   -
     name: "auth gql type and filter with jwt"
     input: |
-      type Todo @auth(add: {rule: "owner (filter: { username: { eq: $MY-APP }})"}){
+      type Todo @auth(add: {rule: "owner (filter: { username: { eq: $X_MyApp_User }})"}){
         msg: String!
         owner: User
       }
@@ -1039,7 +1032,7 @@ valid_schemas:
   -
     name: "auth rule inside not"
     input: |
-      type X @auth(add: {not: {rule: "userRole: {eq: ADMIN}"} }) {
+      type X @auth(add: {not: {rule: "(filter: { userRole: ADMIN })"} }) {
         username: String! @id
         userRole: String
       }

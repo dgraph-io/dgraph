@@ -352,14 +352,33 @@ func TestAuth(t *testing.T) {
 	}
 	
 	type User @auth(
-		update: { rule: "(filter: { username: $X_MyApp_User })" }
+		update: { rule: "(filter: { username: { eq: $X_MyApp_User }})" }
 	){
 		username: String! @id
 		todos: [Todo]
 	}
 	`
+
 	schHandler, errs := NewHandler(schemaStr)
 	require.NoError(t, errs)
-	_, err := FromString(schHandler.GQLSchema())
+	gqlSchema, err := FromString(schHandler.GQLSchema())
 	require.NoError(t, err)
+
+	todoRules := gqlSchema.AuthTypeRules("Todo")
+	userRules := gqlSchema.AuthTypeRules("User")
+	somethingPrivateRules := gqlSchema.AuthFieldRules("Todo", "somethingPrivate")
+	dateCompletedRules := gqlSchema.AuthFieldRules("Todo", "dateCompleted")
+
+	require.NotNil(t, todoRules.Query.Or)
+	require.True(t, len(todoRules.Query.Or) == 3)
+	for i := 0; i < len(todoRules.Query.Or); i++ {
+		require.NotNil(t, todoRules.Query.Or[i].doc)
+	}
+	require.NotNil(t, todoRules.Add.doc)
+	require.NotNil(t, todoRules.Update.doc)
+
+	require.NotNil(t, userRules.Update.doc)
+
+	require.NotNil(t, somethingPrivateRules.Query.doc)
+	require.NotNil(t, dateCompletedRules.Update.doc)
 }

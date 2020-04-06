@@ -6,14 +6,14 @@ type Todo @auth(query: {or:[{rule:"owner (filter: { username: { eq: $X_MyApp_Use
 	id: ID!
 	title: String
 	text: String
-	isPublic: Boolean
-	dateCompleted: String @auth(add: {rule:"DENY"}, update: {rule:"(filter: { dateCompleted: null })"})
+	isPublic: Boolean @search
+	dateCompleted: String @search @auth(update: {rule:"(filter: { dateCompleted: null })"})
 	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	owner(filter: UserFilter): User @hasInverse(field: "todos")
 	somethingPrivate: String @auth(query: {rule:"owner (filter: { username: { eq: $X_MyApp_User }})"})
 }
 
-type User @auth(update: {rule:"(filter: { dateCompleted: $X_MyApp_User })"}) {
+type User @auth(update: {rule:"(filter: { username: { eq: $X_MyApp_User }})"}) {
 	username: String! @id
 	todos(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo] @hasInverse(field: owner)
 }
@@ -174,6 +174,10 @@ input AddUserInput {
 
 input TodoFilter {
 	id: [ID!]
+	isPublic: Boolean
+	dateCompleted: StringTermFilter
+	and: TodoFilter
+	or: TodoFilter
 	not: TodoFilter
 }
 

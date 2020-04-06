@@ -65,34 +65,6 @@ func TestDGSchemaGen(t *testing.T) {
 	}
 }
 
-func TestSingleSchemaString(t *testing.T) {
-	inputDir := "testdata/schemagen/input/"
-	outputDir := "testdata/schemagen/output/"
-	fileName := "authorization.graphql"
-
-	inputFileName := inputDir + fileName
-	str1, err := ioutil.ReadFile(inputFileName)
-	require.NoError(t, err)
-
-	schHandler, errs := NewHandler(string(str1))
-	require.NoError(t, errs)
-
-	newSchemaStr := schHandler.GQLSchema()
-
-	_, err = FromString(newSchemaStr)
-	require.NoError(t, err)
-
-	outputFileName := outputDir + fileName
-	str2, err := ioutil.ReadFile(outputFileName)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
-		// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
-		t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
-	}
-
-}
-
 func TestSchemaString(t *testing.T) {
 	inputDir := "testdata/schemagen/input/"
 	outputDir := "testdata/schemagen/output/"
@@ -119,7 +91,6 @@ func TestSchemaString(t *testing.T) {
 			require.NoError(t, err)
 
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
-				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
 				t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
 			}
 		})

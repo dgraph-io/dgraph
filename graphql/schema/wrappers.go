@@ -680,19 +680,15 @@ func (ap *AuthParser) getFieldType(doc *ast.QueryDocument, isDirectFilter bool) 
 	}
 	filterField := argument.Value.Children[0].Name
 
-	var varType string
 	for _, schemaType := range ap.s.Types {
-		if !strings.HasSuffix(schemaType.Name, "Filter") {
-			continue
-		}
 		for _, field := range schemaType.Fields {
-			if field.Name == filterField {
-				varType = field.Type.Name()
-				break
+			if field.Name != filterField || strings.HasSuffix(schemaType.Name, "Filter") {
+				continue
 			}
+			return field.Type.Name()
 		}
 	}
-	return varType
+	return ""
 }
 
 type TypeAuth struct {
