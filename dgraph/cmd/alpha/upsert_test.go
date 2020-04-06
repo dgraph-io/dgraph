@@ -322,13 +322,13 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 
 	// Ensure that another run works too
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 }
 
