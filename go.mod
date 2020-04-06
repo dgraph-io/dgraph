@@ -15,6 +15,8 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/golangci/golangci-lint v1.23.1 // indirect
 	github.com/google/go-cmp v0.3.1 // indirect
+	github.com/gorilla/mux v1.7.4
+	github.com/gorilla/rpc v1.2.0
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/ipfs/go-datastore v0.3.1
 	github.com/kylelemons/godebug v1.1.0 // indirect
