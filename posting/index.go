@@ -572,6 +572,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// ensure that we get all of them back when doing roll-up. WriteBatch can only be
 	// used when we want to write all txns at the same timestamp.
 	tmpWriter := NewTxnWriter(tmpDB)
+	tmpBatchWriter := pstore.NewWriteBatchAt(r.startTs)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
@@ -620,7 +621,20 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		if err := tmpWriter.Write(kvList); err != nil {
+		//if err := tmpWriter.Write(kvList); err != nil {
+		//	return errors.Wrap(err, "error setting entries in temp badger")
+		//}
+		// for _, kv := range kvList.Kv {
+		// 	var meta byte
+		// 	if len(kv.UserMeta) > 0 {
+		// 		meta = kv.UserMeta[0]
+		// 	}
+		// 	e := &Entry{Key: kv.Key, Value: kv.Value, UserMeta: meta, Version: kv.Version}
+		// 	if err := tmpBatchWriter.SetEntry(e); err != nil {
+		// 		return err
+		// 	}
+		// }
+		if err := tmpBatchWriter.Write(kvList); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
