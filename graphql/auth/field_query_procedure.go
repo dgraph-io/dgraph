@@ -24,6 +24,12 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
+func NewFieldQueryProcedure(re RuleExtractor) *FieldQueryProcedure {
+	fqp := FieldQueryProcedure{BaseProcedure: &BaseProcedure{}}
+	fqp.SetRuleExtractor(re)
+	return &fqp
+}
+
 type FieldQueryProcedure struct {
 	*BaseProcedure
 

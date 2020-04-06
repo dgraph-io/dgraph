@@ -44,7 +44,7 @@ type QueryProcedure interface {
 type MutationProcedure interface {
 	OnJson()
 	OnMutationCond()
-	CollectionMutations()
+	CollectMutations()
 
 	ProcedureBase
 }

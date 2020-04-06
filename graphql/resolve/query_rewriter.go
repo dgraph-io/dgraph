@@ -51,15 +51,8 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 
 	authResolver := auth.AuthResolver{}
 	authResolver.Init(&sch, &a)
-
-	tnqp := auth.TypeNodeQueryProcedure{BaseProcedure: &auth.BaseProcedure{}}
-	tnqp.SetRuleExtractor(auth.QueryRuleExtractor)
-
-	fqp := auth.FieldQueryProcedure{BaseProcedure: &auth.BaseProcedure{}}
-	fqp.SetRuleExtractor(auth.QueryRuleExtractor)
-
-	authResolver.AddQueryProcedure(&tnqp)
-	authResolver.AddQueryProcedure(&fqp)
+	authResolver.AddQueryProcedure(auth.NewTypeNodeQueryProcedure(auth.QueryRuleExtractor))
+	authResolver.AddQueryProcedure(auth.NewFieldQueryProcedure(auth.QueryRuleExtractor))
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:

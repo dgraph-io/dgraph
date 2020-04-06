@@ -27,6 +27,12 @@ type TypeNodeQueryProcedure struct {
 	currentTyp schema.Type
 }
 
+func NewTypeNodeQueryProcedure(re RuleExtractor) *TypeNodeQueryProcedure {
+	tnqp := TypeNodeQueryProcedure{BaseProcedure: &BaseProcedure{}}
+	tnqp.SetRuleExtractor(re)
+	return &tnqp
+}
+
 func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *schema.RuleNode) {
 	rules.GetRBACRules(tnqp.authState)
 	if val, ok := tnqp.authState.RbacRule[rules.RuleID]; ok && val != schema.Uncertain {
