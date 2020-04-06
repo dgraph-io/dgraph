@@ -227,7 +227,7 @@ func run() {
 
 	loader := newLoader(&opt)
 	if !opt.SkipMapPhase {
-		loader.mapStage(&opt)
+		loader.mapStage()
 		mergeMapShardsIntoReduceShards(&opt)
 	}
 	loader.reduceStage()
