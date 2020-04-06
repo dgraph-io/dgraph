@@ -24,6 +24,8 @@ PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
 GOVERSION="1.14.1"
+# Build new image if upgrading Go version.
+XGO_IMAGE="danielmai/xgo-1.14.1"
 
 # Turn off go modules by default. Only enable go modules when needed.
 export GO111MODULE=off
@@ -118,43 +120,43 @@ popd
 
 # Build Windows.
 pushd $basedir/dgraph/dgraph
-  xgo -go=$GOVERSION --targets=windows/amd64 -ldflags \
+  xgo -image="$XGO_IMAGE" --targets=windows/amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/windows
   mv dgraph-windows-4.0-amd64.exe $TMP/windows/dgraph.exe
 popd
 
 pushd $basedir/badger/badger
-  xgo -go=$GOVERSION --targets=windows/amd64 .
+  xgo -image="$XGO_IMAGE" --targets=windows/amd64 .
   mv badger-windows-4.0-amd64.exe $TMP/windows/badger.exe
 popd
 
 pushd $basedir/ratel
-  xgo -go=$GOVERSION --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -image="$XGO_IMAGE" --targets=windows/amd64 -ldflags "-X $ratel_release=$release_version" .
   mv ratel-windows-4.0-amd64.exe $TMP/windows/dgraph-ratel.exe
 popd
 
 # Build Darwin.
 pushd $basedir/dgraph/dgraph
-  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags \
+  xgo -image="$XGO_IMAGE" --targets=darwin-10.9/amd64 -ldflags \
   "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   mkdir $TMP/darwin
   mv dgraph-darwin-10.9-amd64 $TMP/darwin/dgraph
 popd
 
 pushd $basedir/badger/badger
-  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 .
+  xgo -image="$XGO_IMAGE" --targets=darwin-10.9/amd64 .
   mv badger-darwin-10.9-amd64 $TMP/darwin/badger
 popd
 
 pushd $basedir/ratel
-  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -image="$XGO_IMAGE" --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
   mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
 popd
 
 # Build Linux.
 pushd $basedir/dgraph/dgraph
-  xgo -go=$GOVERSION --targets=linux/amd64 -ldflags \
+  xgo -image="$XGO_IMAGE" --targets=linux/amd64 -ldflags \
       "-X $release=$release_version -X $branch=$gitBranch -X $commitSHA1=$lastCommitSHA1 -X '$commitTime=$lastCommitTime'" .
   strip -x dgraph-linux-amd64
   mkdir $TMP/linux
@@ -162,13 +164,13 @@ pushd $basedir/dgraph/dgraph
 popd
 
 pushd $basedir/badger/badger
-  xgo -go=$GOVERSION --targets=linux/amd64 .
+  xgo -image="$XGO_IMAGE" --targets=linux/amd64 .
   strip -x badger-linux-amd64
   mv badger-linux-amd64 $TMP/linux/badger
 popd
 
 pushd $basedir/ratel
-  xgo -go=$GOVERSION --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -image="$XGO_IMAGE" --targets=linux/amd64 -ldflags "-X $ratel_release=$release_version" .
   strip -x ratel-linux-amd64
   mv ratel-linux-amd64 $TMP/linux/dgraph-ratel
 popd
