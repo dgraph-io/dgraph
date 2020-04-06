@@ -19,6 +19,7 @@ package posting
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -394,6 +395,7 @@ func TestRebuildReverseEdges(t *testing.T) {
 	var revVals []*List
 	var prevKey []byte
 	it.Seek(prefix)
+	fmt.Println("Check", prefix)
 	for it.ValidForPrefix(prefix) {
 		item := it.Item()
 		key := item.Key()
