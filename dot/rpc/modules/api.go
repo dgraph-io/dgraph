@@ -1,6 +1,9 @@
 package modules
 
 import (
+	"math/big"
+
+	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 )
@@ -9,7 +12,12 @@ import (
 type StorageAPI interface{}
 
 // BlockAPI is the interface for the block state
-type BlockAPI interface{}
+type BlockAPI interface {
+	GetHeader(hash common.Hash) (*types.Header, error)
+	HighestBlockHash() common.Hash
+	GetBlockByHash(hash common.Hash) (*types.Block, error)
+	GetBlockHash(blockNumber *big.Int) (*common.Hash, error)
+}
 
 // NetworkAPI interface for network state methods
 type NetworkAPI interface {

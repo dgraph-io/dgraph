@@ -23,7 +23,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json"
+	"github.com/gorilla/rpc/v2/json2"
 )
 
 // DotUpCodec for overridding default jsonCodec
@@ -37,7 +37,7 @@ func NewDotUpCodec() *DotUpCodec {
 // NewRequest is overridden to inject our codec handler
 func (c *DotUpCodec) NewRequest(r *http.Request) rpc.CodecRequest {
 	outerCR := &DotUpCodecRequest{} // Our custom CR
-	jsonC := json.NewCodec()        // json Codec to create json CR
+	jsonC := json2.NewCodec()       // json Codec to create json CR
 	innerCR := jsonC.NewRequest(r)  // create the json CR, sort of.
 
 	// NOTE - innerCR is of the interface type rpc.CodecRequest.
@@ -45,7 +45,7 @@ func (c *DotUpCodec) NewRequest(r *http.Request) rpc.CodecRequest {
 	// type assertion in order to assign it to our struct field's type.
 	// We defined the source of the interface implementation here, so
 	// we can be confident that innerCR will be of the correct underlying type
-	outerCR.CodecRequest = innerCR.(*json.CodecRequest)
+	outerCR.CodecRequest = innerCR.(*json2.CodecRequest)
 	return outerCR
 }
 
@@ -56,7 +56,7 @@ func (c *DotUpCodec) NewRequest(r *http.Request) rpc.CodecRequest {
 // while maintaining all the other remaining CodecRequest methods from
 // gorilla's rpc/json implementation
 type DotUpCodecRequest struct {
-	*json.CodecRequest
+	*json2.CodecRequest
 }
 
 // Method returns the decoded method as a string of the form "Service.Method"

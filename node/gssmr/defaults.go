@@ -64,5 +64,5 @@ var (
 	// DefaultRPCHTTPPort rpc port
 	DefaultRPCHTTPPort = uint32(8545)
 	// DefaultRPCModules rpc modules
-	DefaultRPCModules = []string{"system", "author"}
+	DefaultRPCModules = []string{"system", "author", "chain"}
 )

@@ -24,4 +24,4 @@ nomdns = false
 enabled = false
 port = 8545
 host = "localhost"
-modules = ["system", "author"]
+modules = ["system", "author", "chain"]

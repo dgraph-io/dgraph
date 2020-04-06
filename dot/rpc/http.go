@@ -69,6 +69,8 @@ func (h *HTTPServer) RegisterModules(mods []string) {
 			srvc = modules.NewSystemModule(h.serverConfig.NetworkAPI)
 		case "author":
 			srvc = modules.NewAuthorModule(h.serverConfig.CoreAPI, h.serverConfig.TransactionQueueAPI)
+		case "chain":
+			srvc = modules.NewChainModule(h.serverConfig.BlockAPI)
 		default:
 			log.Warn("[rpc] Unrecognized module", "module", mod)
 			continue

@@ -61,7 +61,7 @@ func TestNewHTTPServer(t *testing.T) {
 	require.Nil(t, err)
 	defer res.Body.Close()
 
-	require.Equal(t, "400 Bad Request", res.Status)
+	require.Equal(t, "200 OK", res.Status)
 
 	// GET
 	req, err = http.NewRequest("GET", "http://localhost:8545/", nil)
