@@ -148,7 +148,7 @@ pushd $basedir/badger/badger
 popd
 
 pushd $basedir/ratel
-  env CGO_ENABLED=1 xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
+  xgo -go=$GOVERSION --targets=darwin-10.9/amd64 -ldflags "-X $ratel_release=$release_version" .
   mv ratel-darwin-10.9-amd64 $TMP/darwin/dgraph-ratel
 popd
 
