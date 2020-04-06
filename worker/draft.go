@@ -851,14 +851,6 @@ func (n *node) updateRaftProgress() error {
 	return nil
 }
 
-func UpdateRaftProgress() error {
-	gr := groups()
-	if gr == nil || gr.Node == nil {
-		return nil
-	}
-	return gr.Node.updateRaftProgress()
-}
-
 func (n *node) checkpointAndClose(done chan struct{}) {
 	slowTicker := time.NewTicker(time.Minute)
 	defer slowTicker.Stop()

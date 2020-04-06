@@ -504,13 +504,6 @@ func setupServer(closer *y.Closer) {
 		if err := httpListener.Close(); err != nil {
 			glog.Warningf("Error while closing HTTP listener: %s", err)
 		}
-
-		// Update checkpoint so that proposals are not replayed after the server restarts.
-		if err := worker.UpdateRaftProgress(); err != nil {
-			glog.Warningf("Error while updating RAFT progress before shutdown: %s", err)
-		} else {
-			glog.Infof("Successfully updated RAFT state before shutting down")
-		}
 	}()
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
