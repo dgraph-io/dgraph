@@ -321,6 +321,10 @@ func runJepsenTest(test *jepsenTest) error {
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 
+	// Sleep a little in between tests to give jepsen enough time to free all the resources
+	// from this test. Otherwise the next test could fail due to "address already in use" errors.
+	defer time.Sleep(5 * time.Second)
+
 	if err := cmd.Run(); err != nil {
 		// TODO The exit code could probably be checked instead of checking the output.
 		// Check jepsen source to be sure.
