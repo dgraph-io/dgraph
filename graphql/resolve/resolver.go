@@ -1170,6 +1170,24 @@ func (hr *httpResolver) rewriteAndExecute(
 				return json.Marshal(castedData)
 			}
 		}
+
+		// Check whether we have any error.
+		var errResp struct {
+			Errors []*x.GqlError `json:"errors,omitempty"`
+		}
+		err = json.Unmarshal(b, &errResp)
+		if err != nil {
+			return b, err
+		}
+
+		// Build error string
+		errStr := ""
+		for _, err := range errResp.Errors {
+			errStr += err.Error() + ";"
+		}
+		if errStr != "" {
+			return b, errors.New(errStr)
+		}
 	}
 	return b, err
 }
