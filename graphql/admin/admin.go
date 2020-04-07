@@ -578,8 +578,6 @@ func (as *adminServer) initServer() {
 	// 5 seconds is a pretty reliable wait for a fresh instance to read the
 	// schema on a first try.
 	waitFor := 5 * time.Second
-	maxRetries := 6 // means max 30 seconds wait. It should be enough for cluster to boot up.
-	retries := 1
 
 	for {
 		<-time.After(waitFor)
@@ -587,11 +585,6 @@ func (as *adminServer) initServer() {
 		sch, err := upsertEmptyGQLSchema()
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
-			if retries > maxRetries {
-				x.Panic(errors.New("Exceeded maximum number of retries for getting GQLSchema from" +
-					" dgraph"))
-			}
-			retries++
 			continue
 		}
 
