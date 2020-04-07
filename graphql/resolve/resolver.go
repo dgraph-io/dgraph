@@ -728,14 +728,11 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
-	result, err := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
 	if err != nil {
 		// TODO
 		// 1. Any errors received from downstream remote servers should be propogated to the
 		// client.
-	}
-	if result != nil {
-		valToComplete[field.ResponseName()] = result
 	}
 
 	// Errors should report the "path" into the result where the error was found.
@@ -869,8 +866,6 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 	}
 
 	// Here below we do the de-duplication by walking through the result set.
-	// TODO - We can avoid all this work if we can determine that this field doesn't have
-	// @custom directive anywhere in its sub-tree..
 	var input []interface{}
 	// node stores the pointer for a node. It is a map from id to the map for it.
 	nodes := make(map[string]interface{})
@@ -911,8 +906,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 	}
 	mu.RUnlock()
 
-	// TODO - Check why isn't the response required here.
-	if _, err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
 		errCh <- nil
 		return
 	}
@@ -973,24 +967,21 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, error) {
+func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	if data == nil {
-		return nil, nil
+		return nil
 	}
-
-	array := true
 
 	var vals []interface{}
 	switch v := data.(type) {
 	case []interface{}:
 		vals = v
 	case interface{}:
-		array = false
 		vals = []interface{}{v}
 	}
 
 	if len(vals) == 0 {
-		return data, nil
+		return nil
 	}
 
 	mu := &sync.RWMutex{}
@@ -1018,10 +1009,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) (interface{}, 
 		}
 	}
 
-	if !array {
-		return vals[0], finalErr
-	}
-	return vals, finalErr
+	return finalErr
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
