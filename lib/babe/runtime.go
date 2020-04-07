@@ -34,14 +34,13 @@ func (b *Session) configurationFromRuntime() error {
 	bc := new(Configuration)
 	_, err = scale.Decode(data, bc)
 	if err != nil {
-		log.Error("babe configurationFromRuntime", "error", err)
 		return err
 	}
 
 	// Directly set the babe session's config
 	b.config = bc
 
-	return err
+	return nil
 }
 
 // calls runtime API function Core_initialize_block

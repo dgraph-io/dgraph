@@ -47,7 +47,7 @@ var testGenesisHeader = &types.Header{
 // newTestService creates a new test core service
 func newTestService(t *testing.T, cfg *Config) *Service {
 	if cfg == nil {
-		rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+		rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 		cfg = &Config{
 			Runtime:         rt,
 			IsBabeAuthority: false,
@@ -100,7 +100,7 @@ func newTestService(t *testing.T, cfg *Config) *Service {
 // newTestServiceWithFirstBlock creates a new test service with a test block
 func newTestServiceWithFirstBlock(t *testing.T) *Service {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
 
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)

@@ -30,7 +30,7 @@ require (
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/urfave/cli v1.20.0
-	github.com/wasmerio/go-ext-wasm v0.0.0-20191206132826-225d01fcd22c
+	github.com/wasmerio/go-ext-wasm v0.3.2-0.20200326095750-0a32be6068ec
 	golang.org/x/crypto v0.0.0-20191227163750-53104e6ec876
 	golang.org/x/exp v0.0.0-20190121172915-509febef88a4
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e // indirect

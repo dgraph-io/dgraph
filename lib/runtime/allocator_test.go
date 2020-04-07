@@ -22,8 +22,6 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/tests"
-
 	"github.com/stretchr/testify/require"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -274,15 +272,15 @@ var allTests = []testHolder{
 // utility function to create a wasm.Memory instance for testing
 //   it checks if simple.wasm has been downloaded from git repo, if not if fetchs it for building the test wasm blob
 func NewWasmMemory(t *testing.T) *wasm.Memory {
-	testRuntimeFilePath, testRuntimeURL := tests.GetAbsolutePath(tests.SIMPLE_WASM_FP), tests.SIMPLE_RUNTIME_URL
+	testRuntimeFilePath, testRuntimeURL := GetAbsolutePath(SIMPLE_WASM_FP), SIMPLE_RUNTIME_URL
 
-	_, err := tests.GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
+	_, err := GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
 	require.Nil(t, err, "Fail: could not get simple wasm runtime")
 
 	// Reads the WebAssembly simple.wasm mock wasm blob.
 	//  note the wasm blob can be any valid wasm blob that will create a new wasm instance in this case we're using
 	//  test blob from https://github.com/wasmerio/go-ext-wasm/tree/master/wasmer/test/testdata/examples/simple.wasm
-	bytes, err := wasm.ReadBytes(tests.SIMPLE_WASM_FP)
+	bytes, err := wasm.ReadBytes(SIMPLE_WASM_FP)
 	require.Nil(t, err, "Fail: could ReadBytes for simple wasm runtime")
 
 	instance, err := wasm.NewInstance(bytes)

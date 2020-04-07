@@ -247,7 +247,7 @@ func TestService_ProcessBlockRequestMessage(t *testing.T) {
 // tests the ProcessBlockResponseMessage method
 func TestService_ProcessBlockResponseMessage(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
 
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
@@ -377,7 +377,7 @@ func TestService_ProcessBlockAnnounceMessage(t *testing.T) {
 // tests the ProcessTransactionMessage method
 func TestService_ProcessTransactionMessage(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, tests.POLKADOT_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
 
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)

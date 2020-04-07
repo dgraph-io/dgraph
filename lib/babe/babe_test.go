@@ -28,7 +28,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/ChainSafe/gossamer/tests"
 )
 
 var genesisHeader = &types.Header{
@@ -37,7 +36,7 @@ var genesisHeader = &types.Header{
 }
 
 func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
-	rt := runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+	rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 
 	if cfg == nil {
 		cfg = &SessionConfig{

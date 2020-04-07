@@ -28,7 +28,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/runtime"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
-	"github.com/ChainSafe/gossamer/tests"
 	"github.com/stretchr/testify/require"
 
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -76,7 +75,7 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, tests.POLKADOT_RUNTIME)
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 	}
 	if cfg.TransactionQueue == nil {
 		cfg.TransactionQueue = stateSrvc.TransactionQueue

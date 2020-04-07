@@ -749,7 +749,8 @@ func ext_local_storage_set(context unsafe.Pointer, kind, key, keyLen, value, val
 	log.Warn("[ext_local_storage_set] Not yet implemented.")
 }
 
-func registerImports() (*wasm.Imports, error) {
+// RegisterImports registers the wasm imports for the old version of the substrate test runtime.
+func RegisterImports() (*wasm.Imports, error) {
 	imports, err := wasm.NewImports().Append("ext_malloc", ext_malloc, C.ext_malloc)
 	if err != nil {
 		return nil, err
