@@ -906,6 +906,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			close(done)
+			n.ex.closer.SignalAndWait()
 			return
 		}
 	}
