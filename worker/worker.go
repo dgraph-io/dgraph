@@ -109,14 +109,14 @@ func StoreStats() string {
 
 // BlockingStop stops all the nodes, server between other workers and syncs all marks.
 func BlockingStop() {
+	glog.Infof("Stopping group...")
+	groups().closer.SignalAndWait()
+
 	// Update checkpoint so that proposals are not replayed after the server restarts.
 	glog.Infof("Updating RAFT state before shutting down...")
 	if err := groups().Node.updateRaftProgress(); err != nil {
 		glog.Warningf("Error while updating RAFT progress before shutdown: %v", err)
 	}
-
-	glog.Infof("Stopping group...")
-	groups().closer.SignalAndWait()
 
 	glog.Infof("Stopping node...")
 	groups().Node.closer.SignalAndWait()
