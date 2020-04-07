@@ -692,13 +692,6 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 
-	vars := f.field.ArgumentMap(f.op.vars)
-	var err error
-	fconf.URL, err = substituteVarsInURL(fconf.URL, vars)
-	if err != nil {
-		return fconf, errors.Wrapf(err, "while substituting vars in URL")
-	}
-
 	bodyArg := httpArg.Value.Children.ForName("body")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
@@ -900,7 +893,7 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
-func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
+func SubstituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -948,7 +941,7 @@ func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
 
 	var err error
 	argMap := q.field.ArgumentMap(q.op.vars)
-	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
+	rc.URL, err = SubstituteVarsInURL(rc.URL, argMap)
 	if err != nil {
 		return rc, errors.Wrapf(err, "while substituting vars in URL")
 	}

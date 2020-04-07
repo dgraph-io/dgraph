@@ -730,8 +730,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
 	if err != nil {
+		errs = append(errs, x.GqlErrorf(err.Error()))
 		// TODO
-		// 1. Any errors received from downstream remote servers should be propogated to the
+		// 1. All errors received from downstream remote servers should be propogated to the
 		// client.
 	}
 
@@ -765,16 +766,29 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
+func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
+	}
+	return result, nil
+}
+
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]map[string]interface{}, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp := make(map[string]interface{})
-		for k, v := range fconf.Template {
-			// TODO - This map has to be copied recursively?
-			temp[k] = v
+		temp, err := copyMap(fconf.Template)
+		if err != nil {
+			errCh <- err
+			return
 		}
 		mu.RLock()
 		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
@@ -795,7 +809,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
-			errCh <- err
+			errCh <- errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
 			return
 		}
 
@@ -809,6 +823,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			errCh <- nil
 			return
 		}
+
 		// Here we walk through all the objects in the array and substitute the value
 		// that we got from the remote endpoint with the right key in the object.
 		mu.Lock()
@@ -818,43 +833,51 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 		mu.Unlock()
 		errCh <- nil
-	} else {
-		// This is single mode, make calls concurrently for each input and fill in the results.
-		var wg sync.WaitGroup
-		for i := 0; i < len(body); i++ {
-			wg.Add(1)
-			go func(idx int, input map[string]interface{}) {
-				defer wg.Done()
-				b, err := json.Marshal(input)
-				if err != nil {
-					// TODO - Propogate this error
-					return
-				}
-
-				// TODO - URL can also be different here. Fix that.
-				b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
-				if err != nil {
-					// TODO - Propogate this error.
-					return
-				}
-
-				var result interface{}
-				if err := json.Unmarshal(b, &result); err != nil {
-					// TODO - Propogate this error.
-					return
-				}
-
-				mu.Lock()
-				val, ok := vals[idx].(map[string]interface{})
-				if ok {
-					val[f.Alias()] = result
-				}
-				mu.Unlock()
-			}(i, body[i])
-		}
-		wg.Wait()
-		errCh <- nil
+		return
 	}
+
+	// This is single mode, make calls concurrently for each input and fill in the results.
+	var wg sync.WaitGroup
+	for i := 0; i < len(body); i++ {
+		wg.Add(1)
+		go func(idx int, input map[string]interface{}) {
+			defer wg.Done()
+			b, err := json.Marshal(input)
+			if err != nil {
+				// TODO - Propogate this error
+				return
+			}
+
+			mu.RLock()
+			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+			if err != nil {
+				mu.RUnlock()
+				return
+			}
+			mu.RUnlock()
+
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			if err != nil {
+				// TODO - Propogate this error.
+				return
+			}
+
+			var result interface{}
+			if err := json.Unmarshal(b, &result); err != nil {
+				// TODO - Propogate this error.
+				return
+			}
+
+			mu.Lock()
+			val, ok := vals[idx].(map[string]interface{})
+			if ok {
+				val[f.Alias()] = result
+			}
+			mu.Unlock()
+		}(i, body[i])
+	}
+	wg.Wait()
+	errCh <- nil
 }
 
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
@@ -984,6 +1007,8 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		return nil
 	}
 
+	// This mutex protects access to vals as it is concurrently read and written to by multiple
+	// goroutines.
 	mu := &sync.RWMutex{}
 	errCh := make(chan error, len(fields))
 	numRoutines := 0
