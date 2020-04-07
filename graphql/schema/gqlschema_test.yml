@@ -740,8 +740,8 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; username has no operation attached, found op instead",
-      "locations":[{"line":2, "column":10}]},
+    {"message": "Expected Name, found {",
+      "locations":[{"line":1, "column":31}]},
     ]
 
   - name: "Nested eq operator"
@@ -752,20 +752,8 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; ADD-BOT node can't have a nested operator",
-      "locations":[{"line":2, "column":10}]},
-    ]
-
-  - name: "Invalid comparison operator for authorization RBAC rule."
-    input: |
-      type User @auth(
-          add: { rule: "$X-MyApp-Role: { op: ADD-BOT }" },
-      ){
-          username: String! @id
-      }
-    errlist: [
-    {"message": "Type User; X-MyApp-Role has no operation attached, found op instead",
-      "locations":[{"line":2, "column":10}]},
+    {"message": "Expected Name, found {",
+      "locations":[{"line":1, "column":31}]},
     ]
 
   - name: "No operand provided after filter operator"
@@ -781,8 +769,8 @@ invalid_schemas:
       }
 
     errlist: [
-    {"message": "Type Todo; filter operation has no value attached",
-      "locations":[{"line":2, "column":9}]},
+    {"message": "Expected :, found )",
+      "locations":[{"line":1, "column":34}]},
     ]
 
   - name: "Invalid operand provided after filter operator"
@@ -798,8 +786,8 @@ invalid_schemas:
       }
 
     errlist: [
-    {"message": "Type Todo; filter expects graphql field as input, found eq",
-      "locations":[{"line":2, "column":9}]},
+    {"message": "Expected Name, found <Invalid>",
+      "locations":[{"line":1, "column":54}]},
     ]
 
   - name: "Invalid operation provided inside filter operator"
@@ -815,8 +803,8 @@ invalid_schemas:
       }
 
     errlist: [
-    {"message": "Type Todo; name has no operation attached, found ADD-BOT instead",
-      "locations":[{"line":2, "column":9}]},
+    {"message": "Expected Name, found <Invalid>",
+      "locations":[{"line":1, "column":49}]},
     ]
 
   - name: "Nested filters in auth"
@@ -832,46 +820,19 @@ invalid_schemas:
       }
 
     errlist: [
-    {"message": "Type Todo; name cannot have nested filter as a child",
-      "locations":[{"line":2, "column":9}]},
-    ]
-
-
-  - name: "Invalid comparison operator for authorization RBAC rule."
-    input: |
-      type User @auth(
-          add: { rule: "$X-MyApp-Role: { ne: ADD-BOT }" },
-      ){
-          username: String! @id
-      }
-    errlist: [
-    {"message": "Type User; X-MyApp-Role has no operation attached, found ne instead",
-      "locations":[{"line":2, "column":10}]},
-    ]
-
-  - name: "Adding authorization rule for non-existent predicate in rbac."
-    input: |
-      type User @auth(
-          add: { rule: "isPublic {eq: true}" },
-      ){
-          username: String! @id
-      }
-    errlist: [
-    {"message": "Type User; Constant node isPublic should be a leaf node, found child eq",
-      "locations":[{"line":2, "column":10}]},
+    {"message": "Expected :, found (",
+      "locations":[{"line":1, "column":43}]},
     ]
 
   - name: "Adding authorization rule for non-existent predicate in query."
     input: |
       type User @auth(
-          add: { rule: "xyz (filter: { username: { eq: $X-MyApp-User } })" },
+          add: { rule: "xyz (filter: { username: { eq: $X_MyApp_User } })" },
       ){
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; Constant node xyz should be a leaf node, found child filter",
-      "locations":[{"line":2, "column":10}]},
-    ]
+    {"message": 'Cannot query field "xyz" on type "User".', "locations":[{"line":1, "column":44}]}]
 
   -
     name: "auth multiple rules in one node"

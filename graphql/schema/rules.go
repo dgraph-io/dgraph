@@ -40,8 +40,38 @@ func init() {
 }
 
 func validateAuthNode(node *RuleNode, arg *ast.Value) gqlerror.List {
-	//TODO: Perform validation
-	return nil
+	var result gqlerror.List
+	if arg == nil {
+		result = append(result, gqlerror.Errorf("arg found nil"))
+		return result
+	}
+
+	has := make(map[string]bool)
+	var child *ast.Value
+	if len(node.Or) > 0 || len(node.Or) > 0 || node.Not != nil {
+		child = arg.Children[0].Value
+	}
+
+	for i, childNode := range node.Or {
+		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
+		has["or"] = true
+	}
+
+	for i, childNode := range node.And {
+		result = append(result, validateAuthNode(childNode, child.Children[i].Value)...)
+		has["and"] = true
+	}
+
+	if childNode := node.Not; childNode != nil {
+		result = append(result, validateAuthNode(childNode, child.Children[0].Value)...)
+		has["not"] = true
+	}
+
+	if len(has) > 1 {
+		result = append(result, gqlerror.ErrorPosf(arg.Position,
+			"Rule has multiple fields true"))
+	}
+	return result
 }
 
 func validateAuthRule(rule *AuthContainer, dir *ast.Directive) gqlerror.List {
@@ -78,9 +108,7 @@ func validateAuthRules(schema *ast.Schema) gqlerror.List {
 	var result gqlerror.List
 	rules, err := authRules(schema)
 	if err != nil {
-		var gqlErr gqlerror.Error
-		gqlErr.Message = err.Error()
-		return append(result, &gqlErr)
+		return append(result, err.(*gqlerror.Error))
 	}
 	typeMapping := typeMappings(schema)
 	wrapRule := func(errs gqlerror.List, path string) gqlerror.List {
