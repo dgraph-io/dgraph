@@ -220,10 +220,10 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPResolver(&http.Client{
+			return NewHTTPQueryResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, nil, nil, StdQueryCompletion())
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -245,6 +245,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
 				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+		})
+	}
+
+	for _, m := range s.Mutations(schema.HTTPMutation) {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewHTTPMutationResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -718,6 +727,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 			valToComplete[field.ResponseName()] = internalVal
 		}
+	case interface{}:
+		// no need to error in this case, this is returned for custom HTTP query/mutation
 	default:
 		if val != nil {
 			return dgraphError()
@@ -1090,36 +1101,39 @@ func aliasObject(
 	return result, errs
 }
 
-// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
+// a httpResolver can resolve a single GraphQL field from an HTTP endpoint
 type httpResolver struct {
 	*http.Client
-	httpRewriter    QueryRewriter
-	httpExecutor    QueryExecutor
 	resultCompleter ResultCompleter
 }
 
-// NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
-func NewHTTPResolver(hc *http.Client,
-	qr QueryRewriter,
-	qe QueryExecutor,
-	rc ResultCompleter) QueryResolver {
-	return &httpResolver{hc, qr, qe, rc}
+type httpQueryResolver httpResolver
+type httpMutationResolver httpResolver
+
+// NewHTTPQueryResolver creates a resolver that can resolve GraphQL query from an HTTP endpoint
+func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
+	return &httpQueryResolver{hc, rc}
 }
 
-func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+// NewHTTPMutationResolver creates a resolver that resolves GraphQL mutation from an HTTP endpoint
+func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter) MutationResolver {
+	return &httpMutationResolver{hc, rc}
+}
+
+func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolved {
 	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveHTTPQuery")
+	stop := x.SpanTimer(span, "resolveHTTP")
 	defer stop()
 
-	res, err := hr.rewriteAndExecute(ctx, query)
+	res, err := hr.rewriteAndExecute(ctx, field)
 
-	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
+	completed, err := hr.resultCompleter.Complete(ctx, field, res, err)
 	return &Resolved{Data: completed, Err: err}
 }
 
-func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc, err := query.HTTPResolver()
+func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) ([]byte,
+	error) {
+	hrc, err := field.HTTPResolver()
 	if err != nil {
 		return nil, err
 	}
@@ -1137,4 +1151,14 @@ func (hr *httpResolver) rewriteAndExecute(
 
 	b, err := ioutil.ReadAll(resp.Body)
 	return b, err
+}
+
+func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	return (*httpResolver)(h).Resolve(ctx, query)
+}
+
+func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved,
+	bool) {
+	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
+	return resolved, resolved.Err.Error() == ""
 }

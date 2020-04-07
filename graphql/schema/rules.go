@@ -41,13 +41,14 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface {
+	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface || defn.
+		Kind == ast.InputObject {
 		return nil
 	}
 	return gqlerror.ErrorPosf(
 		defn.Position,
 		"You can't add %s definitions. "+
-			"Only type, interface and enums are allowed in initial schema.",
+			"Only type, interface, input and enums are allowed in initial schema.",
 		strings.ToLower(string(defn.Kind)),
 	)
 }
@@ -667,10 +668,12 @@ func customDirectiveValidation(sch *ast.Schema,
 			"Type %s; Field %s; method field inside @custom directive is mandatory.", typ.Name,
 			field.Name)
 	}
-	if method.Raw != "GET" && method.Raw != "POST" {
+	if !(method.Raw == "GET" || method.Raw == "POST" || method.Raw == "PUT" || method.
+		Raw == "PATCH" || method.Raw == "DELETE") {
 		return gqlerror.ErrorPosf(
 			dir.Position,
-			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
+			"Type %s; Field %s; method field inside @custom directive can only be GET/POST/PUT"+
+				"/PATCH/DELETE.",
 			typ.Name, field.Name)
 	}
 

@@ -410,13 +410,12 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 }
 
 // completeSchema generates all the required types and fields for
-// query/mutation/update for all the types mentioned the the schema.
+// query/mutation/update for all the types mentioned in the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
 		sch.Query = query
-		delete(sch.Types, "Query")
 	} else {
 		sch.Query = &ast.Definition{
 			Kind:   ast.Object,
@@ -425,14 +424,20 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 	}
 
-	sch.Mutation = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Mutation",
-		Fields: make([]*ast.FieldDefinition, 0),
+	mutation := sch.Types["Mutation"]
+	if mutation != nil {
+		mutation.Kind = ast.Object
+		sch.Mutation = mutation
+	} else {
+		sch.Mutation = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Mutation",
+			Fields: make([]*ast.FieldDefinition, 0),
+		}
 	}
 
 	for _, key := range definitions {
-		if key == "Query" {
+		if key == "Query" || key == "Mutation" {
 			continue
 		}
 		defn := sch.Types[key]
@@ -1398,11 +1403,11 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// original defs can only be types and enums, print those in the same order
 	// as the original schema.
 	for _, typName := range originalTypes {
-		typ := schema.Types[typName]
-		if typName == "Query" {
-			// This would be printed later in schema.Query
+		if typName == "Query" || typName == "Mutation" {
+			// These would be printed later in schema.Query and schema.Mutation
 			continue
 		}
+		typ := schema.Types[typName]
 		switch typ.Kind {
 		case ast.Interface:
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
@@ -1410,6 +1415,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
+		case ast.InputObject:
+			x.Check2(original.WriteString(generateInputString(typ) + "\n"))
 		}
 		printed[typName] = true
 	}
@@ -1431,6 +1438,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// left to be printed.
 	typeNames := make([]string, 0, len(schema.Types)-len(printed))
 	for typName, typDef := range schema.Types {
+		if typName == "Query" || typName == "Mutation" {
+			// These would be printed later in schema.Query and schema.Mutation
+			continue
+		}
 		if typDef.BuiltIn {
 			// These are the types that are coming from ast.Prelude
 			continue
@@ -1462,17 +1473,17 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
-	if len(object.String()) > 0 {
+	if object.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Types\n#######################\n\n"))
 		x.Check2(sch.WriteString(object.String()))
 	}
-	if len(enum.String()) > 0 {
+	if enum.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Enums\n#######################\n\n"))
 		x.Check2(sch.WriteString(enum.String()))
 	}
-	if len(input.String()) > 0 {
+	if input.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Inputs\n#######################\n\n"))
 		x.Check2(sch.WriteString(input.String()))

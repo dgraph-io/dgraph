@@ -125,3 +125,33 @@ type Query {
                 forwardHeaders: ["X-App-Token", "Auth0-token"]
         })
 }
+
+input MovieDirectorInput {
+        id: ID
+        name: String
+        directed: [MovieInput]
+}
+
+input MovieInput {
+        id: ID
+        name: String
+        director: [MovieDirectorInput]
+}
+
+type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+                url: "http://myapi.com/favMovies",
+                method: "POST",
+                body: "{ movies: $input}",
+                forwardHeaders: ["X-App-Token", "Auth0-token"]
+        })
+        updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "PATCH",
+                body: "{ movie: $input}"
+        })
+        deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "DELETE"
+        })
+}

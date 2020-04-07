@@ -119,9 +119,9 @@ invalid_schemas:
         x: X!
       }
     errlist: [
-      {"message":"You can't add scalar definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
-      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
-      {"message":"You can't add input_object definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+    {"message":"You can't add scalar definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      #      {"message":"You can't add input_object definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
     ]
 
   -
@@ -154,7 +154,7 @@ invalid_schemas:
     input: |
       union U = R | S | T
     errlist: [
-      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
+    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
 
   -
@@ -752,8 +752,8 @@ invalid_schemas:
         getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST.",
-      "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST/PUT/PATCH/DELETE.",
+     "locations":[{"line":6, "column":31}]},
     ]
 
 valid_schemas:
@@ -866,8 +866,8 @@ valid_schemas:
       }
 
       type Query {
-        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
       }
       type Mutation {
-        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
       }

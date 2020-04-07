@@ -22,6 +22,8 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 	"text/scanner"
@@ -63,6 +65,7 @@ const (
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
 	DeleteMutation       MutationType = "delete"
+	HTTPMutation         MutationType = "http"
 	NotSupportedMutation MutationType = "notsupported"
 	IDType                            = "ID"
 	IDArgName                         = "id"
@@ -110,6 +113,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	HTTPResolver() (HTTPResolverConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -125,7 +129,6 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
-	HTTPResolver() (HTTPResolverConfig, error)
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -209,9 +212,12 @@ type mutation field
 type query field
 
 func (s *schema) Queries(t QueryType) []string {
+	if s.schema.Query == nil {
+		return nil
+	}
 	var result []string
 	for _, q := range s.schema.Query.Fields {
-		if queryType(q.Name, q.Directives.ForName("custom")) == t {
+		if queryType(q.Name, q.Directives.ForName(customDirective)) == t {
 			result = append(result, q.Name)
 		}
 	}
@@ -219,12 +225,12 @@ func (s *schema) Queries(t QueryType) []string {
 }
 
 func (s *schema) Mutations(t MutationType) []string {
-	var result []string
 	if s.schema.Mutation == nil {
 		return nil
 	}
+	var result []string
 	for _, m := range s.schema.Mutation.Fields {
-		if mutationType(m.Name) == t {
+		if mutationType(m.Name, m.Directives.ForName(customDirective)) == t {
 			result = append(result, m.Name)
 		}
 	}
@@ -697,6 +703,46 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
+func (f *field) HTTPResolver() (HTTPResolverConfig, error) {
+	// We have to fetch the original definition of the field from the name of the field to be
+	// able to get the value stored in custom directive.
+	// TODO - This should be cached later.
+	field := f.op.inSchema.schema.Types[f.GetObjectName()].Fields.ForName(f.Name())
+	custom := field.Directives.ForName(customDirective)
+	httpArg := custom.Arguments.ForName("http")
+	rc := HTTPResolverConfig{
+		URL:    httpArg.Value.Children.ForName("url").Raw,
+		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	var err error
+	argMap := f.field.ArgumentMap(f.op.vars)
+	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
+	if err != nil {
+		return rc, errors.Wrapf(err, "while substituting vars in URL")
+	}
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		body, err := substitueVarsInBody(bodyTemplate, argMap)
+		if err != nil {
+			return rc, err
+		}
+		rc.Body = string(body)
+	}
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+		}
+		rc.ForwardHeaders = headers
+	}
+
+	return rc, nil
+}
+
 func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
@@ -758,7 +804,7 @@ func (q *query) GetObjectName() string {
 }
 
 func (q *query) QueryType() QueryType {
-	return queryType(q.Name(), q.field.Directives.ForName("custom"))
+	return queryType(q.Name(), q.field.Directives.ForName(customDirective))
 }
 
 func queryType(name string, custom *ast.Directive) QueryType {
@@ -798,78 +844,8 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
-func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
-	error) {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return "", err
-	}
-	// Parse variables from the path and query params.
-	elems := strings.Split(u.Path, "/")
-	for idx, elem := range elems {
-		if strings.HasPrefix(elem, "$") {
-			elems[idx] = url.QueryEscape(fmt.Sprintf("%v", vars[elem[1:]]))
-		}
-	}
-	u.Path = strings.Join(elems, "/")
-
-	q := u.Query()
-	for k := range q {
-		val := q.Get(k)
-		if strings.HasPrefix(val, "$") {
-			qv, ok := vars[val[1:]]
-			if !ok {
-				q.Del(k)
-				continue
-			}
-			if qv == nil {
-				qv = ""
-			}
-			q.Set(k, fmt.Sprintf("%v", qv))
-		}
-	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
 func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
-	// We have to fetch the original definition of the query from the name of the query to be
-	// able to get the value stored in custom directive.
-	// TODO - This should be cached later.
-	query := q.op.inSchema.schema.Query.Fields.ForName(q.Name())
-	custom := query.Directives.ForName("custom")
-	httpArg := custom.Arguments.ForName("http")
-	rc := HTTPResolverConfig{
-		URL:    httpArg.Value.Children.ForName("url").Raw,
-		Method: httpArg.Value.Children.ForName("method").Raw,
-	}
-
-	var err error
-	argMap := q.field.ArgumentMap(q.op.vars)
-	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
-	if err != nil {
-		return rc, errors.Wrapf(err, "while substituting vars in URL")
-	}
-
-	bodyArg := httpArg.Value.Children.ForName("body")
-	if bodyArg != nil {
-		bodyTemplate := bodyArg.Raw
-		body, err := substitueVarsInBody(bodyTemplate, argMap)
-		if err != nil {
-			return rc, err
-		}
-		rc.Body = string(body)
-	}
-	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
-	if forwardHeaders != nil {
-		headers := http.Header{}
-		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, q.op.header.Get(h.Value.Raw))
-		}
-		rc.ForwardHeaders = headers
-	}
-
-	return rc, nil
+	return (*field)(q).HTTPResolver()
 }
 
 func (m *mutation) Name() string {
@@ -953,11 +929,13 @@ func (m *mutation) GetObjectName() string {
 }
 
 func (m *mutation) MutationType() MutationType {
-	return mutationType(m.Name())
+	return mutationType(m.Name(), m.field.Directives.ForName(customDirective))
 }
 
-func mutationType(name string) MutationType {
+func mutationType(name string, custom *ast.Directive) MutationType {
 	switch {
+	case custom != nil:
+		return HTTPMutation
 	case strings.HasPrefix(name, "add"):
 		return AddMutation
 	case strings.HasPrefix(name, "update"):
@@ -979,6 +957,10 @@ func (m *mutation) DgraphPredicate() string {
 
 func (m *mutation) TypeName(dgraphTypes []interface{}) string {
 	return (*field)(m).TypeName(dgraphTypes)
+}
+
+func (m *mutation) HTTPResolver() (HTTPResolverConfig, error) {
+	return (*field)(m).HTTPResolver()
 }
 
 func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
@@ -1287,6 +1269,150 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 	return nil
 }
 
+// convertSliceToStringSlice converts any slice passed as argument to a slice of string
+// Ensure that the argument is actually a slice, otherwise it will result in panic.
+func convertSliceToStringSlice(slice interface{}) []string {
+	val := reflect.ValueOf(slice)
+	size := val.Len()
+	list := make([]string, size)
+	for i := 0; i < size; i++ {
+		list[i] = fmt.Sprintf("%v", val.Index(i))
+	}
+	return list
+}
+
+func getAsPathParamValue(val interface{}) string {
+	switch v := val.(type) {
+	case string:
+		return v
+	case []string:
+		return strings.Join(v, ",")
+	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
+		[]uint32, []uint64, []float32, []float64:
+		return strings.Join(convertSliceToStringSlice(v), ",")
+	case []interface{}:
+		return getAsInterfaceSliceInPath(v)
+	case map[string]interface{}:
+		return getAsMapInPath(v)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+func getAsInterfaceSliceInPath(slice []interface{}) string {
+	var b strings.Builder
+	size := len(slice)
+	for i := 0; i < size; i++ {
+		b.WriteString(getAsPathParamValue(slice[i]))
+		if i != size-1 {
+			b.WriteString(",")
+		}
+	}
+	return b.String()
+}
+
+func getAsMapInPath(object map[string]interface{}) string {
+	var b strings.Builder
+	size := len(object)
+	i := 1
+
+	keys := make([]string, 0, size)
+	for k := range object {
+		keys = append(keys, k)
+	}
+	// ensure fixed order in output
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		b.WriteString(k)
+		b.WriteString(",")
+		b.WriteString(getAsPathParamValue(object[k]))
+		if i != size {
+			b.WriteString(",")
+		}
+		i++
+	}
+	return b.String()
+}
+
+func setQueryParamValue(queryParams url.Values, key string, val interface{}) {
+	switch v := val.(type) {
+	case []string:
+		queryParams[key] = v
+	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
+		[]uint32, []uint64, []float32, []float64:
+		queryParams[key] = convertSliceToStringSlice(v)
+	case []interface{}:
+		setInterfaceSliceInQuery(queryParams, key, v)
+	case map[string]interface{}:
+		setMapInQuery(queryParams, key, v)
+	default:
+		queryParams.Add(key, fmt.Sprintf("%v", val))
+	}
+}
+
+func setInterfaceSliceInQuery(queryParams url.Values, key string, slice []interface{}) {
+	for _, val := range slice {
+		setQueryParamValue(queryParams, key, val)
+	}
+}
+
+func setMapInQuery(queryParams url.Values, key string, object map[string]interface{}) {
+	for k, v := range object {
+		k = fmt.Sprintf("%s[%s]", key, k)
+		setQueryParamValue(queryParams, k, v)
+	}
+}
+
+func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
+	error) {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	// Parse variables from path params.
+	elems := strings.Split(u.Path, "/")
+	rawPathSegments := make([]string, len(elems))
+	for idx, elem := range elems {
+		if strings.HasPrefix(elem, "$") {
+			// see https://swagger.io/docs/specification/serialization/ to refer how different
+			// kinds of parameters get serialized when they appear in path
+			elems[idx] = getAsPathParamValue(vars[elem[1:]])
+			rawPathSegments[idx] = url.PathEscape(elems[idx])
+		} else {
+			rawPathSegments[idx] = elem
+		}
+	}
+	// we need both of them to make sure u.String() works correctly
+	u.Path = strings.Join(elems, "/")
+	u.RawPath = strings.Join(rawPathSegments, "/")
+
+	// Parse variables from query params.
+	q := u.Query()
+	for k := range q {
+		val := q.Get(k)
+		if strings.HasPrefix(val, "$") {
+			qv, ok := vars[val[1:]]
+			if !ok {
+				q.Del(k)
+				continue
+			}
+			if qv == nil {
+				qv = ""
+			}
+			// this ensures that any values added for this key by us are preserved,
+			// while the value with $ is removed, as that will be the first value in list
+			q[k] = q[k][1:]
+			// see https://swagger.io/docs/specification/serialization/ to refer how different
+			// kinds of parameters get serialized when they appear in query
+			setQueryParamValue(q, k, qv)
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String(), nil
+}
+
 func isName(s string) bool {
 	for _, r := range s {
 		switch {
@@ -1301,6 +1427,60 @@ func isName(s string) bool {
 	return true
 }
 
+func writeValInBody(val interface{}, buf *bytes.Buffer) {
+	switch v := val.(type) {
+	case string:
+		fmt.Fprintf(buf, `"%s"`, v)
+	case []string:
+		fmt.Fprintf(buf, `["%s"]`, strings.Join(v, "\",\""))
+	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
+		[]uint32, []uint64, []float32, []float64:
+		fmt.Fprintf(buf, `[%s]`,
+			strings.Join(convertSliceToStringSlice(v), ","))
+	case []interface{}:
+		writeInterfaceSliceInBody(v, buf)
+	case map[string]interface{}:
+		writeMapInBody(v, buf)
+	default:
+		fmt.Fprintf(buf, "%v", val)
+	}
+}
+
+func writeInterfaceSliceInBody(slice []interface{}, buf *bytes.Buffer) {
+	size := len(slice)
+	buf.WriteString("[")
+	for i := 0; i < size; i++ {
+		writeValInBody(slice[i], buf)
+		if i != size-1 {
+			buf.WriteString(",")
+		}
+	}
+	buf.WriteString("]")
+}
+
+func writeMapInBody(object map[string]interface{}, buf *bytes.Buffer) {
+	size := len(object)
+	i := 1
+
+	keys := make([]string, 0, size)
+	for k := range object {
+		keys = append(keys, k)
+	}
+	// ensure fixed order in output
+	sort.Strings(keys)
+
+	buf.WriteString("{")
+	for _, k := range keys {
+		buf.WriteString(fmt.Sprintf("\"%s\":", k))
+		writeValInBody(object[k], buf)
+		if i != size {
+			buf.WriteString(",")
+		}
+		i++
+	}
+	buf.WriteString("}")
+}
+
 // Given a template for a body with variables defined, this function parses the body, substitutes
 // the variables and returns the final JSON.
 // for e.g.
@@ -1308,6 +1488,24 @@ func isName(s string) bool {
 // { "author" : "0x3", "post": { "id": "0x9" }}
 // If the final result is not a valid JSON, then an error is returned.
 func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte, error) {
+	variableNotFoundError := func(varName string) error {
+		return errors.Errorf("couldn't find variable: %s in variables map", varName)
+	}
+
+	// if body directly contains a variable instead of a json template, marshal that
+	if body[0] == '$' {
+		varVal, ok := variables[body[1:]]
+		if !ok {
+			return nil, variableNotFoundError(body)
+		}
+		res, err := json.Marshal(varVal)
+		if err != nil {
+			return nil, err
+		}
+		return res, nil
+	}
+
+	// otherwise; body contains a json template
 	var s scanner.Scanner
 	s.Init(strings.NewReader(body))
 
@@ -1334,15 +1532,9 @@ func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte,
 				// Look it up in the map and replace.
 				val, ok := variables[text]
 				if !ok {
-					return nil, errors.Errorf("couldn't find variable: %s in variables map",
-						variable)
+					return nil, variableNotFoundError(variable)
 				}
-				switch v := val.(type) {
-				case string:
-					fmt.Fprintf(result, `"%s"`, v)
-				default:
-					fmt.Fprintf(result, "%v", val)
-				}
+				writeValInBody(val, result)
 				parsingVariable = false
 				continue
 			}
