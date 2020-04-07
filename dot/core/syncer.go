@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ChainSafe/gossamer/lib/runtime"
+
 	"golang.org/x/exp/rand"
 
 	"github.com/ChainSafe/gossamer/dot/core/types"
@@ -52,6 +54,8 @@ type Syncer struct {
 	// Core service control
 	chanLock *sync.Mutex
 	stopped  bool
+
+	runtime *runtime.Runtime
 }
 
 // SyncerConfig is the configuration for the Syncer.
@@ -63,6 +67,7 @@ type SyncerConfig struct {
 	Lock             *sync.Mutex
 	ChanLock         *sync.Mutex
 	TransactionQueue TransactionQueue
+	Runtime          *runtime.Runtime
 }
 
 var responseTimeout = 3 * time.Second
@@ -93,6 +98,7 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		requestStart:     1,
 		highestSeenBlock: big.NewInt(0),
 		transactionQueue: cfg.TransactionQueue,
+		runtime:          cfg.Runtime,
 	}, nil
 }
 
@@ -367,4 +373,19 @@ func (s *Syncer) handleBlock(block *types.Block) error {
 	}
 
 	return nil
+}
+
+// runs the block through runtime function Core_execute_block
+//  It doesn't seem to return data on success (although the spec say it should return
+//  a boolean value that indicate success.  will error if the call isn't successful
+func (s *Syncer) executeBlock(bd *types.Block) ([]byte, error) {
+	bdEnc, err := bd.Encode()
+	if err != nil {
+		return nil, err
+	}
+	return s.runtime.Exec(runtime.CoreExecuteBlock, bdEnc)
+}
+
+func (s *Syncer) executeBlockBytes(bd []byte) ([]byte, error) {
+	return s.runtime.Exec(runtime.CoreExecuteBlock, bd)
 }
