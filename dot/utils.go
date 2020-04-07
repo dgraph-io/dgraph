@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -82,10 +83,13 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 
 // NewTestGenesis returns a test genesis instance using "gssmr" raw data
 func NewTestGenesis(t *testing.T) *genesis.Genesis {
-	gssmrGen, err := genesis.LoadGenesisFromJSON("../node/gssmr/genesis.json")
+	fp := getGssmrGenesisPath(t)
+
+	gssmrGen, err := genesis.LoadGenesisFromJSON(fp)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	return &genesis.Genesis{
 		Name:       "test",
 		ID:         "test",
@@ -100,15 +104,12 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 	dir := utils.NewTestDir(t)
 
 	file, err := ioutil.TempFile(dir, "genesis-")
-	if err != nil {
-		fmt.Println(fmt.Errorf("failed to create temporary file: %s", err))
-		require.Nil(t, err)
-	}
+	require.Nil(t, err)
 
-	gssmrGen, err := genesis.LoadGenesisFromJSON("../node/gssmr/genesis.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	fp := getGssmrGenesisPath(t)
+
+	gssmrGen, err := genesis.LoadGenesisFromJSON(fp)
+	require.Nil(t, err)
 
 	gen := &genesis.Genesis{
 		Name:       cfg.Global.Name,
@@ -125,4 +126,26 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 	require.Nil(t, err)
 
 	return file
+}
+
+// getGssmrGenesisPath gets the gossamer genesis path
+func getGssmrGenesisPath(t *testing.T) string {
+	path1 := "../node/gssmr/genesis.json"
+	path2 := "../../node/gssmr/genesis.json"
+
+	var fp string
+	var err error
+
+	if utils.PathExists(path1) {
+
+		fp, err = filepath.Abs(path1)
+		require.Nil(t, err)
+
+	} else if utils.PathExists(path2) {
+
+		fp, err = filepath.Abs(path2)
+		require.Nil(t, err)
+	}
+
+	return fp
 }

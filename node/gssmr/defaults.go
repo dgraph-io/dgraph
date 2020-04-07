@@ -25,12 +25,13 @@ var (
 	DefaultID = string("gssmr")
 	// DefaultConfig Default toml configuration path
 	DefaultConfig = string("./node/gssmr/config.toml")
-	// DefaultGenesis Default genesis configuration path
-	DefaultGenesis = string("./node/gssmr/genesis.json")
 	// DefaultDataDir Default node data directory
 	DefaultDataDir = string("~/.gossamer/gssmr")
-	// DefaultRoles Default node roles
-	DefaultRoles = byte(4) // authority node (see Table D.2)
+
+	// InitConfig
+
+	// DefaultGenesis Default genesis configuration path
+	DefaultGenesis = string("./node/gssmr/genesis.json")
 
 	// AccountConfig
 
@@ -43,6 +44,8 @@ var (
 
 	// DefaultAuthority true if BABE block producer
 	DefaultAuthority = true
+	// DefaultRoles Default node roles
+	DefaultRoles = byte(4) // authority node (see Table D.2)
 
 	// NetworkConfig
 

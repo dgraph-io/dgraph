@@ -3,6 +3,9 @@ name = "gssmr"
 id = "gssmr"
 datadir = "~/.gossamer/gssmr"
 
+[init]
+genesis = "./node/gssmr/genesis.json"
+
 [account]
 key = ""
 unlock = ""
@@ -23,6 +26,3 @@ enabled = false
 port = 8545
 host = "localhost"
 modules = ["system", "author", "chain"]
-
-[init]
-genesis = "./node/gssmr/genesis.json"

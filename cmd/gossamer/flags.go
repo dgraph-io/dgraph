@@ -48,10 +48,15 @@ var (
 		Usage: "Supports levels crit (silent) to trce (trace)",
 		Value: log.LvlInfo.String(),
 	}
-	// NodeFlag node implementation name
+	// NameFlag node implementation name
+	NameFlag = cli.StringFlag{
+		Name:  "name",
+		Usage: "Node implementation name",
+	}
+	// NodeFlag node implementation id used to load default node configuration
 	NodeFlag = cli.StringFlag{
 		Name:  "node",
-		Usage: "Node implementation name",
+		Usage: "Node implementation id used to load default node configuration",
 	}
 	// ConfigFlag TOML configuration file
 	ConfigFlag = cli.StringFlag{
@@ -170,10 +175,12 @@ var (
 	// GlobalFlags are flags that are valid for use with all commands
 	GlobalFlags = []cli.Flag{
 		VerbosityFlag,
+		NameFlag,
 		NodeFlag,
 		ConfigFlag,
 		DataDirFlag,
 	}
+
 	// InitFlags are flags that are valid for use with the init subcommand
 	InitFlags = append(GlobalFlags, GenesisFlag)
 

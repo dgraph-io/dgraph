@@ -34,11 +34,11 @@ import (
 // Config is a collection of configurations throughout the system
 type Config struct {
 	Global  GlobalConfig  `toml:"global"`
+	Init    InitConfig    `toml:"init"`
 	Account AccountConfig `toml:"account"`
 	Core    CoreConfig    `toml:"core"`
 	Network NetworkConfig `toml:"network"`
 	RPC     RPCConfig     `toml:"rpc"`
-	Init    InitConfig    `toml:"init"`
 }
 
 // GlobalConfig is to marshal/unmarshal toml global config vars

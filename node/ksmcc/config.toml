@@ -3,6 +3,9 @@ name = "ksmcc"
 id = "ksmcc"
 datadir = "~/.gossamer/ksmcc"
 
+[init]
+genesis = "./node/ksmcc/genesis.json"
+
 [account]
 key = ""
 unlock = ""
@@ -23,6 +26,3 @@ enabled = false
 port = 8545
 host = "localhost"
 modules = ["system"]
-
-[init]
-genesis = "./node/ksmcc/genesis.json"

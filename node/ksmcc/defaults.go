@@ -25,12 +25,13 @@ var (
 	DefaultID = string("ksmcc")
 	// DefaultConfig Default toml configuration path
 	DefaultConfig = string("./node/ksmcc/config.toml")
-	// DefaultGenesis Default genesis configuration path
-	DefaultGenesis = string("./node/ksmcc/genesis.json")
 	// DefaultDataDir Default node data directory
 	DefaultDataDir = string("~/.gossamer/ksmcc")
-	// DefaultRoles Default node roles
-	DefaultRoles = byte(1) // full node (see Table D.2)
+
+	// InitConfig
+
+	// DefaultGenesis Default genesis configuration path
+	DefaultGenesis = string("./node/ksmcc/genesis.json")
 
 	// AccountConfig
 
@@ -43,6 +44,8 @@ var (
 
 	// DefaultAuthority true if BABE block producer
 	DefaultAuthority = false
+	// DefaultRoles Default node roles
+	DefaultRoles = byte(1) // full node (see Table D.2)
 
 	// NetworkConfig
 
