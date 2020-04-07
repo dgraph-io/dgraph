@@ -571,8 +571,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// multiple versions. We wish to store same keys with diff version/timestamp to
 	// ensure that we get all of them back when doing roll-up. WriteBatch can only be
 	// used when we want to write all txns at the same timestamp.
-	//tmpWriter := NewTxnWriter(tmpDB)
-	tmpBatchWriter := pstore.NewWriteBatchAt(r.startTs)
+	// tmpWriter := NewTxnWriter(tmpDB)
+	tmpBatchWriter := pstore.NewWriteBatchAt(counter)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
