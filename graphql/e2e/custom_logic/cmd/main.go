@@ -108,10 +108,10 @@ func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
-	w.Write(getDefaultResponse("myFavoriteMovies"))
+	_, _ = w.Write(getDefaultResponse("myFavoriteMovies"))
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -122,10 +122,10 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
-	w.Write(getDefaultResponse("myFavoriteMoviesPost"))
+	_, _ = w.Write(getDefaultResponse("myFavoriteMoviesPost"))
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
@@ -139,10 +139,10 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
-	w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`))
+	_, _ = w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -153,11 +153,11 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
-	w.Write([]byte(`
+	_, _ = w.Write([]byte(`
 	{
       "createMyFavouriteMovies": [
         {
@@ -186,11 +186,11 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
-	w.Write([]byte(`
+	_, _ = w.Write([]byte(`
 	{
       "updateMyFavouriteMovie": {
         "id": "0x1",
@@ -216,11 +216,11 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		w.Write([]byte(err.Error()))
+		_, _ = w.Write([]byte(err.Error()))
 		return
 	}
 
-	w.Write([]byte(`
+	_, _ = w.Write([]byte(`
 	{
       "deleteMyFavouriteMovie": {
         "id": "0x1",

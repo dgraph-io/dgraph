@@ -756,6 +756,19 @@ invalid_schemas:
      "locations":[{"line":6, "column":31}]},
     ]
 
+  - name: "input type can't have same name as the type generated for other types"
+    input: |
+      type Author {
+        id: ID!
+      }
+      input UpdateAuthorInput {
+        id: ID!
+      }
+    errlist: [
+    {"message": "UpdateAuthorInput is a reserved word, so you can't declare an input type with this name. Pick a different name for the input type.",
+     "locations":[{"line":4, "column":7}]},
+    ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
@@ -864,10 +877,13 @@ valid_schemas:
       type Author {
         id: ID!
       }
+      input AuthorUpdate {
+        id: ID!
+      }
 
       type Query {
         getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
       }
       type Mutation {
-        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
+        updateAuthor(input: AuthorUpdate!): Author! @custom(http: {url: "http://blah.com", method: "POST"})
       }

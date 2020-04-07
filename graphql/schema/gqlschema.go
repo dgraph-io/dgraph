@@ -70,8 +70,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {
@@ -278,6 +281,7 @@ var directiveValidators = map[string]directiveValidator{
 	},
 }
 
+var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
@@ -357,6 +361,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
+	errs = append(errs, applySchemaDocValidations(schema)...)
+
 	return errs
 }
 
@@ -382,6 +388,19 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
+		}
+	}
+
+	return errs
+}
+
+func applySchemaDocValidations(schema *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaDocValidations {
+		newErrs := rule(schema)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
 		}
 	}
 
