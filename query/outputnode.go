@@ -18,6 +18,7 @@ package query
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -56,13 +57,12 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	return sgr.toFastJSON(l)
 }
 
-func makeScalarNode(attr uint16, isChild bool, val []byte, list bool) *fastJsonNode {
-	fj := &fastJsonNode{}
-
-	fj.setAttr(attr)
-	fj.setIsChild(isChild)
-	fj.setScalarVal(val)
-	fj.setList(list)
+func (enc *encoder) makeScalarNode(attr uint16, isChild bool, val []byte, list bool) fastJsonNode {
+	fj := enc.newFastJsonNode()
+	fj.setAttr(enc, attr)
+	fj.setIsChild(enc, isChild)
+	fj.setScalarVal(enc, val)
+	fj.setList(enc, list)
 
 	return fj
 }
@@ -72,19 +72,28 @@ type encoder struct {
 	idMap   map[uint16]string
 	seqNo   uint16
 	arena   *arena
+
+	root          fastJsonNode
+	compositSlice []uint64
+	childrenMap   map[fastJsonNode][]fastJsonNode
 }
 
 func newEncoder() *encoder {
+	compositSlice := make([]uint64, 0)
+	compositSlice = append(compositSlice, 0) // Append dummy entry.
 	return &encoder{
 		attrMap: make(map[string]uint16),
 		idMap:   make(map[uint16]string),
 		seqNo:   uint16(0),
 		arena:   newArena(1 * 1024 /*1 KB*/),
+
+		compositSlice: compositSlice,
+		childrenMap:   make(map[fastJsonNode][]fastJsonNode),
 	}
 }
 
 var (
-	enc = newEncoder()
+// enc = newEncoder()
 )
 
 func (e *encoder) idForAttr(attr string) uint16 {
@@ -95,132 +104,176 @@ func (e *encoder) idForAttr(attr string) uint16 {
 	e.seqNo++
 	e.attrMap[attr] = e.seqNo
 	e.idMap[e.seqNo] = attr
-
 	return e.seqNo
 }
 
 func (e *encoder) attrForID(id uint16) string {
+	if id == 0 {
+		return ""
+	}
+
+	x.AssertTrue(id <= e.seqNo)
 	if attr, ok := e.idMap[id]; ok {
 		return attr
 	}
 
 	// Panic for now.
-	panic("id not found in map")
+	panic(fmt.Sprintf("id not found in map: %d", id))
 }
 
 const (
-	msbBit       = (uint64(1) << 63)
-	secondMsbBit = (uint64(1) << 62)
-	setByte56    = (uint64(0xFFFF) << 32)
+	msbBit       = uint64(1) << 63
+	secondMsbBit = uint64(1) << 62
+	setByte56    = uint64(0xFFFF) << 32
 	setBytes1234 = uint64(0xFFFFFFFF)
 )
 
-type fastJsonNode struct {
-	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
-	// Bytes 5-8 contains offset(uint32) for Arena.
-	// Bytes 3-4 contains attr.
-	// Bit MSB and (MSB-1) contains isChild and list fields values.
-	meta uint64
+type fastJsonNode int
 
-	attrs []*fastJsonNode
+func (enc *encoder) newFastJsonNode() fastJsonNode {
+	enc.compositSlice = append(enc.compositSlice, 0)
+	return fastJsonNode(len(enc.compositSlice) - 1)
 }
 
-func (fj *fastJsonNode) setAttr(attr uint16) {
-	fj.meta |= (uint64(attr) << 32)
+func (fj fastJsonNode) setAttr(enc *encoder, attr uint16) {
+	meta := enc.compositSlice[fj]
+	// First clear.
+	meta &= 0xFFFF0000FFFFFFFF
+	meta |= (uint64(attr) << 32)
+
+	enc.compositSlice[fj] = meta
 }
 
-func (fj *fastJsonNode) setScalarVal(sv []byte) {
-	fj.meta |= uint64(enc.arena.put(sv))
+func (fj fastJsonNode) setScalarVal(enc *encoder, sv []byte) {
+	meta := enc.compositSlice[fj]
+	meta |= uint64(enc.arena.put(sv))
+	enc.compositSlice[fj] = meta
 }
 
-func (fj *fastJsonNode) setIsChild(isChild bool) {
+func (fj fastJsonNode) setIsChild(enc *encoder, isChild bool) {
 	if isChild {
-		fj.meta |= msbBit
+		meta := enc.compositSlice[fj]
+		meta |= msbBit
+		enc.compositSlice[fj] = meta
 	}
 }
 
-func (fj *fastJsonNode) setList(list bool) {
+func (fj fastJsonNode) setList(enc *encoder, list bool) {
 	if list {
-		fj.meta |= secondMsbBit
+		meta := enc.compositSlice[fj]
+		meta |= secondMsbBit
+		enc.compositSlice[fj] = meta
 	}
 }
 
-func (fj *fastJsonNode) getAttr() uint16 {
-	return uint16((fj.meta & setByte56) >> 32)
+func (fj fastJsonNode) appendAttrs(enc *encoder, attrs []fastJsonNode) {
+	cs, ok := enc.childrenMap[fj]
+	if ok {
+		cs = append(cs, attrs...)
+	} else {
+		cs = make([]fastJsonNode, 0)
+		cs = append(cs, attrs...)
+	}
+	enc.childrenMap[fj] = cs
 }
 
-func (fj *fastJsonNode) getScalarVal() []byte {
-	offset := uint32(fj.meta & setBytes1234)
+func (fj fastJsonNode) getAttr(enc *encoder) uint16 {
+	meta := enc.compositSlice[fj]
+	return uint16((meta & setByte56) >> 32)
+}
+
+func (fj fastJsonNode) getScalarVal(enc *encoder) []byte {
+	meta := enc.compositSlice[fj]
+	offset := uint32(meta & setBytes1234)
 
 	return enc.arena.get(offset)
 }
 
-func (fj *fastJsonNode) getIsChild() bool {
-	return ((fj.meta & msbBit) > 0)
+func (fj fastJsonNode) getIsChild(enc *encoder) bool {
+	meta := enc.compositSlice[fj]
+	return ((meta & msbBit) > 0)
 }
 
-func (fj *fastJsonNode) getList() bool {
-	return ((fj.meta & secondMsbBit) > 0)
+func (fj fastJsonNode) getList(enc *encoder) bool {
+	meta := enc.compositSlice[fj]
+	return ((meta & secondMsbBit) > 0)
 }
 
-func (fj *fastJsonNode) AddValue(attr uint16, v types.Val) {
-	fj.AddListValue(attr, v, false)
+func (fj fastJsonNode) getAttrs(enc *encoder) []fastJsonNode {
+	if attrs, ok := enc.childrenMap[fj]; ok {
+		return attrs // Not copying it for now.
+	}
+
+	// // Returning nil if no attrs are found.
+	return nil
 }
 
-func (fj *fastJsonNode) AddListValue(attr uint16, v types.Val, list bool) {
+// For debugging.
+func (fj fastJsonNode) printMeta(enc *encoder) {
+	meta := enc.compositSlice[fj]
+	var b [8]byte
+	binary.BigEndian.PutUint64(b[:], meta)
+}
+
+func (enc *encoder) AddValue(fj fastJsonNode, attr uint16, v types.Val) {
+	enc.AddListValue(fj, attr, v, false)
+}
+
+func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list bool) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs, list))
+		fj.appendAttrs(enc, []fastJsonNode{enc.makeScalarNode(attr, false, bs, list)})
 	}
 }
 
-func (fj *fastJsonNode) AddMapChild(attr uint16, val *fastJsonNode, isRoot bool) {
-	var childNode *fastJsonNode
-	for _, c := range fj.attrs {
-		if c.getAttr() == attr {
+func (enc *encoder) AddMapChild(fj fastJsonNode, attr uint16, val fastJsonNode, isRoot bool) {
+	var childNode fastJsonNode
+	for _, c := range fj.getAttrs(enc) {
+		if c.getAttr(enc) == attr {
 			childNode = c
 			break
 		}
 	}
 
-	if childNode != nil {
-		val.setIsChild(true)
-		val.setAttr(attr)
-		childNode.attrs = append(childNode.attrs, val.attrs...)
+	if childNode > 0 {
+		val.setIsChild(enc, true)
+		val.setAttr(enc, attr)
+		childNode.appendAttrs(enc, val.getAttrs(enc))
 	} else {
-		val.setIsChild(false)
-		val.setAttr(attr)
-		fj.attrs = append(fj.attrs, val)
+		val.setIsChild(enc, false)
+		val.setAttr(enc, attr)
+		fj.appendAttrs(enc, []fastJsonNode{val})
 	}
 }
 
-func (fj *fastJsonNode) AddListChild(attr uint16, child *fastJsonNode) {
-	child.setAttr(attr)
-	child.setIsChild(true)
-	fj.attrs = append(fj.attrs, child)
+func (enc *encoder) AddListChild(fj fastJsonNode, attr uint16, child fastJsonNode) {
+	child.setAttr(enc, attr)
+	child.setIsChild(enc, true)
+	fj.appendAttrs(enc, []fastJsonNode{child})
 }
 
-func (fj *fastJsonNode) New(attr uint16) *fastJsonNode {
-	nn := &fastJsonNode{}
-	nn.setAttr(attr)
-	nn.setIsChild(false)
+func (enc *encoder) newFastJsonNodeWithAttr(attr uint16) fastJsonNode {
+	nn := enc.newFastJsonNode()
+	nn.setAttr(enc, attr)
+	nn.setIsChild(enc, false)
 	return nn
 }
 
-func (fj *fastJsonNode) SetUID(uid uint64, attr uint16) {
+func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) {
 	// if we're in debug mode, uid may be added second time, skip this
 	if attr == enc.idForAttr("uid") {
-		for _, a := range fj.attrs {
-			if a.getAttr() == attr {
+		for _, a := range fj.getAttrs(enc) {
+			if a.getAttr(enc) == attr {
 				return
 			}
 		}
 	}
-	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
-		false))
+
+	fj.appendAttrs(enc, []fastJsonNode{enc.makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
+		false)})
 }
 
-func (fj *fastJsonNode) IsEmpty() bool {
-	return len(fj.attrs) == 0
+func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
+	return len(fj.getAttrs(enc)) == 0
 }
 
 var (
@@ -367,26 +420,30 @@ func valToBytes(v types.Val) ([]byte, error) {
 	}
 }
 
-type nodeSlice []*fastJsonNode
+type nodeSlice struct {
+	nodes []fastJsonNode
+	enc   *encoder
+}
 
 func (n nodeSlice) Len() int {
-	return len(n)
+	return len(n.nodes)
 }
 
 func (n nodeSlice) Less(i, j int) bool {
-	cmp := strings.Compare(enc.attrForID(n[i].getAttr()), enc.attrForID(n[j].getAttr()))
+	cmp := strings.Compare(n.enc.attrForID(n.nodes[i].getAttr(n.enc)), n.enc.attrForID(n.nodes[j].getAttr(n.enc)))
 	return cmp < 0
 }
 
 func (n nodeSlice) Swap(i, j int) {
-	n[i], n[j] = n[j], n[i]
+	n.nodes[i], n.nodes[j] = n.nodes[j], n.nodes[i]
 }
 
-func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
+func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
 	if _, err := out.WriteRune('"'); err != nil {
 		return err
 	}
-	if _, err := out.WriteString(enc.attrForID(fj.getAttr())); err != nil {
+	attrId := fj.getAttr(enc)
+	if _, err := out.WriteString(enc.attrForID(attrId)); err != nil {
 		return err
 	}
 	if _, err := out.WriteRune('"'); err != nil {
@@ -398,7 +455,7 @@ func (fj *fastJsonNode) writeKey(out *bytes.Buffer) error {
 	return nil
 }
 
-func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
+func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 	fList []*api.Facet, facetIdx int) error {
 
 	for _, f := range fList {
@@ -409,42 +466,43 @@ func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
 		}
 
 		if !isList {
-			fj.AddValue(enc.idForAttr(fName), fVal)
+			enc.AddValue(fj, enc.idForAttr(fName), fVal)
 		} else {
-			facetNode := &fastJsonNode{}
-			facetNode.setAttr(enc.idForAttr(fName))
-			facetNode.AddValue(enc.idForAttr(strconv.Itoa(facetIdx)), fVal)
-			fj.AddMapChild(enc.idForAttr(fName), facetNode, false)
+			facetNode := enc.newFastJsonNode()
+			facetNode.setAttr(enc, enc.idForAttr(fName))
+			enc.AddValue(facetNode, enc.idForAttr(strconv.Itoa(facetIdx)), fVal)
+			enc.AddMapChild(fj, enc.idForAttr(fName), facetNode, false)
 		}
 	}
 
 	return nil
 }
 
-func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
+func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	i := 0
-	if i < len(fj.attrs) {
+	fjAttrs := fj.getAttrs(enc)
+	if i < len(fjAttrs) {
 		if _, err := out.WriteRune('{'); err != nil {
 			return err
 		}
-		cur := fj.attrs[i]
+		cur := fjAttrs[i]
 		i++
 		cnt := 1
 		last := false
 		inArray := false
 		for {
-			var next *fastJsonNode
-			if i < len(fj.attrs) {
-				next = fj.attrs[i]
+			var next fastJsonNode
+			if i < len(fjAttrs) {
+				next = fjAttrs[i]
 				i++
 			} else {
 				last = true
 			}
 
 			if !last {
-				if cur.getAttr() == next.getAttr() {
+				if cur.getAttr(enc) == next.getAttr(enc) {
 					if cnt == 1 {
-						if err := cur.writeKey(out); err != nil {
+						if err := enc.writeKey(cur, out); err != nil {
 							return err
 						}
 						if _, err := out.WriteRune('['); err != nil {
@@ -452,26 +510,26 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 						}
 						inArray = true
 					}
-					if err := cur.encode(out); err != nil {
+					if err := enc.encode(cur, out); err != nil {
 						return err
 					}
 					cnt++
 				} else {
 					if cnt == 1 {
-						if err := cur.writeKey(out); err != nil {
+						if err := enc.writeKey(cur, out); err != nil {
 							return err
 						}
-						if cur.getIsChild() || cur.getList() {
+						if cur.getIsChild(enc) || cur.getList(enc) {
 							if _, err := out.WriteRune('['); err != nil {
 								return err
 							}
 							inArray = true
 						}
 					}
-					if err := cur.encode(out); err != nil {
+					if err := enc.encode(cur, out); err != nil {
 						return err
 					}
-					if cnt != 1 || (cur.getIsChild() || cur.getList()) {
+					if cnt != 1 || (cur.getIsChild(enc) || cur.getList(enc)) {
 						if _, err := out.WriteRune(']'); err != nil {
 							return err
 						}
@@ -486,19 +544,19 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 				cur = next
 			} else {
 				if cnt == 1 {
-					if err := cur.writeKey(out); err != nil {
+					if err := enc.writeKey(cur, out); err != nil {
 						return err
 					}
 				}
-				if (cur.getIsChild() || cur.getList()) && !inArray {
+				if (cur.getIsChild(enc) || cur.getList(enc)) && !inArray {
 					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
 				}
-				if err := cur.encode(out); err != nil {
+				if err := enc.encode(cur, out); err != nil {
 					return err
 				}
-				if cnt != 1 || (cur.getIsChild() || cur.getList()) {
+				if cnt != 1 || (cur.getIsChild(enc) || cur.getList(enc)) {
 					if _, err := out.WriteRune(']'); err != nil {
 						return err
 					}
@@ -510,7 +568,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 			return err
 		}
 	} else {
-		if _, err := out.Write(fj.getScalarVal()); err != nil {
+		if _, err := out.Write(fj.getScalarVal(enc)); err != nil {
 			return err
 		}
 	}
@@ -518,13 +576,13 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 	return nil
 }
 
-func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode, error) {
+func merge(parent [][]fastJsonNode, child [][]fastJsonNode) ([][]fastJsonNode, error) {
 	if len(parent) == 0 {
 		return child, nil
 	}
 
 	// Here we merge two slices of maps.
-	mergedList := make([][]*fastJsonNode, 0, len(parent)*len(child))
+	mergedList := make([][]fastJsonNode, 0, len(parent)*len(child))
 	cnt := 0
 	for _, pa := range parent {
 		for _, ca := range child {
@@ -533,7 +591,7 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 				return nil, errors.Errorf(
 					"Couldn't evaluate @normalize directive - too many results")
 			}
-			list := make([]*fastJsonNode, 0, len(pa)+len(ca))
+			list := make([]fastJsonNode, 0, len(pa)+len(ca))
 			list = append(list, pa...)
 			list = append(list, ca...)
 			mergedList = append(mergedList, list)
@@ -543,9 +601,9 @@ func merge(parent [][]*fastJsonNode, child [][]*fastJsonNode) ([][]*fastJsonNode
 }
 
 // normalize returns all attributes of fj and its children (if any).
-func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
+func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 	cnt := 0
-	for _, a := range fj.attrs {
+	for _, a := range fj.getAttrs(enc) {
 		// Here we are counting all non-scalar attributes of fj. If there are any such
 		// attributes, we will flatten it, otherwise we will return all attributes.
 
@@ -554,7 +612,7 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		// such attribute, it creates an attribute with isChild = false. In those cases
 		// sometimes cnt remains zero  and normalize returns attributes without flattening.
 		// So we are using len(a.attrs) > 0 instead of a.isChild
-		if len(a.attrs) > 0 {
+		if len(a.getAttrs(enc)) > 0 {
 			cnt++
 		}
 	}
@@ -562,31 +620,32 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	if cnt == 0 {
 		// Recursion base case
 		// There are no children, we can just return slice with fj.attrs map.
-		return [][]*fastJsonNode{fj.attrs}, nil
+		return [][]fastJsonNode{fj.getAttrs(enc)}, nil
 	}
 
-	parentSlice := make([][]*fastJsonNode, 0, 5)
+	parentSlice := make([][]fastJsonNode, 0, 5)
 	// If the parents has attrs, lets add them to the slice so that it can be
 	// merged with children later.
-	attrs := make([]*fastJsonNode, 0, len(fj.attrs)-cnt)
-	for _, a := range fj.attrs {
+	attrs := make([]fastJsonNode, 0, len(fj.getAttrs(enc))-cnt)
+	for _, a := range fj.getAttrs(enc) {
 		// Check comment at previous occurrence of len(a.attrs) > 0
-		if len(a.attrs) == 0 {
+		if len(a.getAttrs(enc)) == 0 {
 			attrs = append(attrs, a)
 		}
 	}
 	parentSlice = append(parentSlice, attrs)
 
-	for ci := 0; ci < len(fj.attrs); {
-		childNode := fj.attrs[ci]
+	fjAttrs := fj.getAttrs(enc)
+	for ci := 0; ci < len(fjAttrs); {
+		childNode := fjAttrs[ci]
 		// Check comment at previous occurrence of len(a.attrs) > 0
-		if len(childNode.attrs) == 0 {
+		if len(childNode.getAttrs(enc)) == 0 {
 			ci++
 			continue
 		}
-		childSlice := make([][]*fastJsonNode, 0, 5)
-		for ci < len(fj.attrs) && childNode.getAttr() == fj.attrs[ci].getAttr() {
-			childSlice = append(childSlice, fj.attrs[ci].attrs)
+		childSlice := make([][]fastJsonNode, 0, 5)
+		for ci < len(fjAttrs) && childNode.getAttr(enc) == fjAttrs[ci].getAttr(enc) {
+			childSlice = append(childSlice, fjAttrs[ci].getAttrs(enc))
 			ci++
 		}
 		// Merging with parent.
@@ -597,12 +656,12 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 		}
 	}
 	for i, slice := range parentSlice {
-		sort.Sort(nodeSlice(slice))
+		sort.Sort(nodeSlice{nodes: slice, enc: enc})
 
 		first := -1
 		last := 0
 		for i := range slice {
-			if slice[i].getAttr() == enc.idForAttr("uid") {
+			if slice[i].getAttr(enc) == enc.idForAttr("uid") {
 				if first == -1 {
 					first = i
 				}
@@ -621,26 +680,26 @@ func (fj *fastJsonNode) normalize() ([][]*fastJsonNode, error) {
 	return parentSlice, nil
 }
 
-func (fj *fastJsonNode) addGroupby(sg *SubGraph, res *groupResults, fname string) {
+func (enc *encoder) addGroupby(fj fastJsonNode, sg *SubGraph, res *groupResults, fname string) {
 	// Don't add empty groupby
 	if len(res.group) == 0 {
 		return
 	}
-	g := fj.New(enc.idForAttr(fname))
+	g := enc.newFastJsonNodeWithAttr(enc.idForAttr(fname))
 	for _, grp := range res.group {
-		uc := g.New(enc.idForAttr("@groupby"))
+		uc := enc.newFastJsonNodeWithAttr(enc.idForAttr("@groupby"))
 		for _, it := range grp.keys {
-			uc.AddValue(enc.idForAttr(it.attr), it.key)
+			enc.AddValue(uc, enc.idForAttr(it.attr), it.key)
 		}
 		for _, it := range grp.aggregates {
-			uc.AddValue(enc.idForAttr(it.attr), it.key)
+			enc.AddValue(uc, enc.idForAttr(it.attr), it.key)
 		}
-		g.AddListChild(enc.idForAttr("@groupby"), uc)
+		enc.AddListChild(g, enc.idForAttr("@groupby"), uc)
 	}
-	fj.AddListChild(enc.idForAttr(fname), g)
+	enc.AddListChild(fj, enc.idForAttr(fname), g)
 }
 
-func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
+func (enc *encoder) addAggregations(fj fastJsonNode, sg *SubGraph) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.UidToVal[0]
 		if !ok {
@@ -655,17 +714,17 @@ func (fj *fastJsonNode) addAggregations(sg *SubGraph) error {
 			continue
 		}
 		fieldName := aggWithVarFieldName(child)
-		n1 := fj.New(enc.idForAttr(fieldName))
-		n1.AddValue(enc.idForAttr(fieldName), aggVal)
-		fj.AddListChild(enc.idForAttr(sg.Params.Alias), n1)
+		n1 := enc.newFastJsonNodeWithAttr(enc.idForAttr(fieldName))
+		enc.AddValue(n1, enc.idForAttr(fieldName), aggVal)
+		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), n1)
 	}
-	if fj.IsEmpty() {
-		fj.AddListChild(enc.idForAttr(sg.Params.Alias), &fastJsonNode{})
+	if enc.IsEmpty(fj) {
+		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newFastJsonNode())
 	}
 	return nil
 }
 
-func handleCountUIDNodes(sg *SubGraph, n *fastJsonNode, count int) bool {
+func handleCountUIDNodes(sg *SubGraph, enc *encoder, n fastJsonNode, count int) bool {
 	addedNewChild := false
 	fieldName := sg.fieldName()
 	for _, child := range sg.Children {
@@ -682,32 +741,31 @@ func handleCountUIDNodes(sg *SubGraph, n *fastJsonNode, count int) bool {
 				field = "count"
 			}
 
-			fjChild := n.New(enc.idForAttr(fieldName))
-			fjChild.AddValue(enc.idForAttr(field), c)
-			n.AddListChild(enc.idForAttr(fieldName), fjChild)
+			fjChild := enc.newFastJsonNodeWithAttr(enc.idForAttr(fieldName))
+			enc.AddValue(fjChild, enc.idForAttr(field), c)
+			enc.AddListChild(n, enc.idForAttr(fieldName), fjChild)
 		}
 	}
 
 	return addedNewChild
 }
 
-func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
-	var seedNode *fastJsonNode
+func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	if sg.Params.IsEmpty {
-		return fj.addAggregations(sg)
+		return enc.addAggregations(fj, sg)
 	}
 
 	if sg.uidMatrix == nil {
-		fj.AddListChild(enc.idForAttr(sg.Params.Alias), &fastJsonNode{})
+		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newFastJsonNode())
 		return nil
 	}
 
-	hasChild := handleCountUIDNodes(sg, fj, len(sg.DestUIDs.Uids))
+	hasChild := handleCountUIDNodes(sg, enc, fj, len(sg.DestUIDs.Uids))
 	if sg.Params.IsGroupBy {
 		if len(sg.GroupbyRes) == 0 {
 			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
-		fj.addGroupby(sg, sg.GroupbyRes[0], sg.Params.Alias)
+		enc.addGroupby(fj, sg, sg.GroupbyRes[0], sg.Params.Alias)
 		return nil
 	}
 
@@ -719,37 +777,40 @@ func processNodeUids(fj *fastJsonNode, sg *SubGraph) error {
 			continue
 		}
 
-		n1 := seedNode.New(enc.idForAttr(sg.Params.Alias))
-		if err := sg.preTraverse(uid, n1); err != nil {
+		n1 := enc.newFastJsonNodeWithAttr(enc.idForAttr(sg.Params.Alias))
+		n1.setAttr(enc, enc.idForAttr(sg.Params.Alias))
+		if err := sg.preTraverse(enc, uid, n1); err != nil {
 			if err.Error() == "_INV_" {
 				continue
 			}
 			return err
 		}
 
-		if n1.IsEmpty() {
+		if enc.IsEmpty(n1) {
 			continue
 		}
 
 		hasChild = true
 		if !sg.Params.Normalize {
-			fj.AddListChild(enc.idForAttr(sg.Params.Alias), n1)
+			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), n1)
 			continue
 		}
 
 		// Lets normalize the response now.
-		normalized, err := n1.normalize()
+		normalized, err := enc.normalize(n1)
 		if err != nil {
 			return err
 		}
 		for _, c := range normalized {
-			fj.AddListChild(enc.idForAttr(sg.Params.Alias), &fastJsonNode{attrs: c})
+			node := enc.newFastJsonNode()
+			node.appendAttrs(enc, c)
+			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), node)
 		}
 	}
 
 	if !hasChild {
 		// So that we return an empty key if the root didn't have any children.
-		fj.AddListChild(enc.idForAttr(sg.Params.Alias), &fastJsonNode{})
+		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newFastJsonNode())
 	}
 	return nil
 }
@@ -767,11 +828,11 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		l.Json = time.Since(encodingStart)
 	}()
 
-	var seedNode *fastJsonNode
+	enc := newEncoder()
 	var err error
-	n := seedNode.New(enc.idForAttr("_root_"))
+	n := enc.newFastJsonNodeWithAttr(enc.idForAttr("_root_"))
 	for _, sg := range sg.Children {
-		err = processNodeUids(n, sg)
+		err = processNodeUids(n, enc, sg)
 		if err != nil {
 			return nil, err
 		}
@@ -782,12 +843,12 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	// https://facebook.github.io/graphql/#sec-Response-Format
 
 	var bufw bytes.Buffer
-	if len(n.attrs) == 0 {
+	if len(n.getAttrs(enc)) == 0 {
 		if _, err := bufw.WriteString(`{}`); err != nil {
 			return nil, err
 		}
 	} else {
-		if err := n.encode(&bufw); err != nil {
+		if err := enc.encode(n, &bufw); err != nil {
 			return nil, err
 		}
 	}
@@ -802,7 +863,7 @@ func (sg *SubGraph) fieldName() string {
 	return fieldName
 }
 
-func addCount(pc *SubGraph, count uint64, dst *fastJsonNode) {
+func addCount(pc *SubGraph, enc *encoder, count uint64, dst fastJsonNode) {
 	if pc.Params.Normalize && pc.Params.Alias == "" {
 		return
 	}
@@ -812,7 +873,7 @@ func addCount(pc *SubGraph, count uint64, dst *fastJsonNode) {
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", pc.Attr)
 	}
-	dst.AddValue(enc.idForAttr(fieldName), c)
+	enc.AddValue(dst, enc.idForAttr(fieldName), c)
 }
 
 func aggWithVarFieldName(pc *SubGraph) string {
@@ -829,17 +890,17 @@ func aggWithVarFieldName(pc *SubGraph) string {
 	return fieldName
 }
 
-func addInternalNode(pc *SubGraph, uid uint64, dst *fastJsonNode) error {
+func addInternalNode(pc *SubGraph, enc *encoder, uid uint64, dst fastJsonNode) error {
 	sv, ok := pc.Params.UidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
 	}
 	fieldName := aggWithVarFieldName(pc)
-	dst.AddValue(enc.idForAttr(fieldName), sv)
+	enc.AddValue(dst, enc.idForAttr(fieldName), sv)
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst *fastJsonNode) {
+func addCheckPwd(pc *SubGraph, enc *encoder, vals []*pb.TaskValue, dst fastJsonNode) {
 	c := types.ValueForType(types.BoolID)
 	if len(vals) == 0 {
 		c.Value = false
@@ -851,7 +912,7 @@ func addCheckPwd(pc *SubGraph, vals []*pb.TaskValue, dst *fastJsonNode) {
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("checkpwd(%s)", pc.Attr)
 	}
-	dst.AddValue(enc.idForAttr(fieldName), c)
+	enc.AddValue(dst, enc.idForAttr(fieldName), c)
 }
 
 func alreadySeen(parentIds []uint64, uid uint64) bool {
@@ -871,7 +932,7 @@ func facetName(fieldName string, f *api.Facet) string {
 }
 
 // This method gets the values and children for a subprotos.
-func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
+func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) error {
 	if sg.Params.IgnoreReflex {
 		if alreadySeen(sg.Params.ParentIds, uid) {
 			// A node can't have itself as the child at any level.
@@ -894,7 +955,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			if pc.Params.Normalize && pc.Params.Alias == "" {
 				continue
 			}
-			if err := addInternalNode(pc, uid, dst); err != nil {
+			if err := addInternalNode(pc, enc, uid, dst); err != nil {
 				return err
 			}
 			continue
@@ -918,17 +979,17 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 				return errors.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
 					idx, len(pc.GroupbyRes))
 			}
-			dst.addGroupby(pc, pc.GroupbyRes[idx], pc.fieldName())
+			enc.addGroupby(dst, pc, pc.GroupbyRes[idx], pc.fieldName())
 			continue
 		}
 
 		fieldName := pc.fieldName()
 		switch {
 		case len(pc.counts) > 0:
-			addCount(pc, uint64(pc.counts[idx]), dst)
+			addCount(pc, enc, uint64(pc.counts[idx]), dst)
 
 		case pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd":
-			addCheckPwd(pc, pc.valueMatrix[idx].Values, dst)
+			addCheckPwd(pc, enc, pc.valueMatrix[idx].Values, dst)
 
 		case idx < len(pc.uidMatrix) && len(pc.uidMatrix[idx].Uids) > 0:
 			var fcsList []*pb.Facets
@@ -950,8 +1011,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 				if fieldName == "" || (invalidUids != nil && invalidUids[childUID]) {
 					continue
 				}
-				uc := dst.New(enc.idForAttr(fieldName))
-				if rerr := pc.preTraverse(childUID, uc); rerr != nil {
+				uc := enc.newFastJsonNodeWithAttr(enc.idForAttr(fieldName))
+				if rerr := pc.preTraverse(enc, childUID, uc); rerr != nil {
 					if rerr.Error() == "_INV_" {
 						if invalidUids == nil {
 							invalidUids = make(map[uint64]bool)
@@ -965,9 +1026,9 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 					return rerr
 				}
 
-				if !uc.IsEmpty() {
+				if !enc.IsEmpty(uc) {
 					if sg.Params.GetUid {
-						uc.SetUID(childUID, enc.idForAttr("uid"))
+						enc.SetUID(uc, childUID, enc.idForAttr("uid"))
 					}
 					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
 
@@ -977,7 +1038,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 						// Now normalize() only flattens one level,
 						// the expectation is that its children have
 						// already been normalized.
-						normAttrs, err := uc.normalize()
+						normAttrs, err := enc.normalize(uc)
 						if err != nil {
 							return err
 						}
@@ -1009,14 +1070,16 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 							// }
 							// boss should be of list type because there can be mutliple friends of
 							// boss.
-							dst.AddListChild(enc.idForAttr(fieldName), &fastJsonNode{attrs: c})
+							node := enc.newFastJsonNode()
+							node.appendAttrs(enc, c)
+							enc.AddListChild(dst, enc.idForAttr(fieldName), node)
 						}
 						continue
 					}
 					if pc.List {
-						dst.AddListChild(enc.idForAttr(fieldName), uc)
+						enc.AddListChild(dst, enc.idForAttr(fieldName), uc)
 					} else {
-						dst.AddMapChild(enc.idForAttr(fieldName), uc, false)
+						enc.AddMapChild(dst, enc.idForAttr(fieldName), uc, false)
 					}
 				}
 			}
@@ -1026,7 +1089,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			for _, uidIdx := range nonEmptyUID {
 				if pc.Params.Facet != nil && len(fcsList) > uidIdx {
 					fs := fcsList[uidIdx]
-					err := dst.attachFacets(fieldName, pc.List, fs.Facets, facetIdx)
+					err := enc.attachFacets(dst, fieldName, pc.List, fs.Facets, facetIdx)
 					if err != nil {
 						return err
 					}
@@ -1035,7 +1098,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			}
 
 			// add value for count(uid) nodes if any.
-			_ = handleCountUIDNodes(pc, dst, len(ul.Uids))
+			_ = handleCountUIDNodes(pc, enc, dst, len(ul.Uids))
 		default:
 			if pc.Params.Alias == "" && len(pc.Params.Langs) > 0 && pc.Params.Langs[0] != "*" {
 				fieldName += "@"
@@ -1043,14 +1106,14 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			}
 
 			if pc.Attr == "uid" {
-				dst.SetUID(uid, enc.idForAttr(pc.fieldName()))
+				enc.SetUID(dst, uid, enc.idForAttr(pc.fieldName()))
 				continue
 			}
 
 			if len(pc.facetsMatrix) > idx && len(pc.facetsMatrix[idx].FacetsList) > 0 {
 				// In case of Value we have only one Facets.
 				for i, fcts := range pc.facetsMatrix[idx].FacetsList {
-					if err := dst.attachFacets(fieldName, pc.List, fcts.Facets, i); err != nil {
+					if err := enc.attachFacets(dst, fieldName, pc.List, fcts.Facets, i); err != nil {
 						return err
 					}
 				}
@@ -1078,19 +1141,19 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 						fieldNameWithTag += "@" + lang
 					}
 					encodeAsList := pc.List && len(lang) == 0
-					dst.AddListValue(enc.idForAttr(fieldNameWithTag), sv, encodeAsList)
+					enc.AddListValue(dst, enc.idForAttr(fieldNameWithTag), sv, encodeAsList)
 					continue
 				}
 
 				encodeAsList := pc.List && len(pc.Params.Langs) == 0
 				if !pc.Params.Normalize {
-					dst.AddListValue(enc.idForAttr(fieldName), sv, encodeAsList)
+					enc.AddListValue(dst, enc.idForAttr(fieldName), sv, encodeAsList)
 					continue
 				}
 				// If the query had the normalize directive, then we only add nodes
 				// with an Alias.
 				if pc.Params.Alias != "" {
-					dst.AddListValue(enc.idForAttr(fieldName), sv, encodeAsList)
+					enc.AddListValue(dst, enc.idForAttr(fieldName), sv, encodeAsList)
 				}
 			}
 		}
@@ -1103,8 +1166,8 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 
 	// Only for shortest path query we wan't to return uid always if there is
 	// nothing else at that level.
-	if (sg.Params.GetUid && !dst.IsEmpty()) || sg.Params.Shortest {
-		dst.SetUID(uid, enc.idForAttr("uid"))
+	if (sg.Params.GetUid && !enc.IsEmpty(dst)) || sg.Params.Shortest {
+		enc.SetUID(dst, uid, enc.idForAttr("uid"))
 	}
 
 	if sg.pathMeta != nil {
@@ -1112,7 +1175,7 @@ func (sg *SubGraph) preTraverse(uid uint64, dst *fastJsonNode) error {
 			Tid:   types.FloatID,
 			Value: sg.pathMeta.weight,
 		}
-		dst.AddValue(enc.idForAttr("_weight_"), totalWeight)
+		enc.AddValue(dst, enc.idForAttr("_weight_"), totalWeight)
 	}
 
 	return nil
