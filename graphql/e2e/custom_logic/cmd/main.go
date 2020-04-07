@@ -99,6 +99,10 @@ type input struct {
 	ID string `json:"uid"`
 }
 
+func (i input) Name() string {
+	return "uname-" + i.ID
+}
+
 func getInput(r *http.Request, v interface{}) error {
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -138,6 +142,10 @@ type tinput struct {
 	ID string `json:"tid"`
 }
 
+func (i tinput) Name() string {
+	return "tname-" + i.ID
+}
+
 func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody []tinput
 	err := getInput(r, &inputBody)
@@ -162,6 +170,10 @@ func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 
 type sinput struct {
 	ID string `json:"sid"`
+}
+
+func (i sinput) Name() string {
+	return "sname-" + i.ID
 }
 
 func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
@@ -232,16 +244,24 @@ func classesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, string(b))
 }
 
-func userNameHandler(w http.ResponseWriter, r *http.Request) {
-	var inputBody input
-	err := getInput(r, &inputBody)
+type entity interface {
+	Name() string
+}
+
+func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
+	err := getInput(r, input)
 	if err != nil {
 		fmt.Println("while reading input: ", err)
 		return
 	}
 
-	n := fmt.Sprintf(`"uname-%s"`, inputBody.ID)
+	n := fmt.Sprintf(`"%s"`, input.Name())
 	fmt.Fprintf(w, n)
+}
+
+func userNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody input
+	nameHandler(w, r, &inputBody)
 }
 
 func carHandler(w http.ResponseWriter, r *http.Request) {
@@ -285,26 +305,12 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 
 func teacherNameHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody tinput
-	err := getInput(r, &inputBody)
-	if err != nil {
-		fmt.Println("while reading input: ", err)
-		return
-	}
-
-	n := fmt.Sprintf(`"tname-%s"`, inputBody.ID)
-	fmt.Fprintf(w, n)
+	nameHandler(w, r, &inputBody)
 }
 
 func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	var inputBody sinput
-	err := getInput(r, &inputBody)
-	if err != nil {
-		fmt.Println("while reading input: ", err)
-		return
-	}
-
-	n := fmt.Sprintf(`"sname-%s"`, inputBody.ID)
-	fmt.Fprintf(w, n)
+	nameHandler(w, r, &inputBody)
 }
 
 func main() {

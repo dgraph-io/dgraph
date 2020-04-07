@@ -1163,7 +1163,7 @@
 
 
 -
-  name: "Comments query should only rewrite fields without custom directive"
+  name: "Rewrite without custom fields"
   gqlquery: |
     query {
       getComment(id: "0x1") {
@@ -1188,7 +1188,7 @@
       }
     }
 -
-  name: "Comments query should ask for fields needed to process fields with custom directive"
+  name: "Include fields needed by custom directive"
   gqlquery: |
     query {
       getComment(id: "0x1") {
@@ -1209,7 +1209,7 @@
       }
     }
 -
-  name: "Post query should only rewrite fields without custom directive"
+  name: "Rewrite without custom fields deep"
   gqlquery: |-
     query {
       getPost(postID: "0x1") {
@@ -1241,7 +1241,7 @@
       }
     }
 -
-  name: "Post query should ask for fields needed to process other fields with custom directive"
+  name: "Include fields needed by custom directive deep"
   gqlquery: |-
     query {
       getPost(postID: "0x1") {
