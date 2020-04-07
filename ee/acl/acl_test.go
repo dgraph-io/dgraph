@@ -1951,7 +1951,7 @@ func TestAllowUIDAccess(t *testing.T) {
 }
 
 func TestAddNewPredicate(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1977,6 +1977,7 @@ func TestAddNewPredicate(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 	addToGroup(t, accessJwt, userid, "guardians")
+	time.Sleep(6 * time.Second)
 
 	// Alice is a guardian now, it can create new predicate.
 	err = userClient.Alter(ctx, &api.Operation{
@@ -1986,7 +1987,7 @@ func TestAddNewPredicate(t *testing.T) {
 }
 
 func TestCrossGroupPermission(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -2047,6 +2048,7 @@ func TestCrossGroupPermission(t *testing.T) {
 			addToGroup(t, accessJwt, "user"+userIdx, "reader")
 		}
 	}
+	time.Sleep(6 * time.Second)
 
 	// operations
 	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
@@ -2076,7 +2078,6 @@ func TestCrossGroupPermission(t *testing.T) {
 	}
 	dgAlter := func(client *dgo.Dgraph, shouldFail bool, user string) {
 		err := client.Alter(ctx, &api.Operation{Schema: `newpred: string @index(exact) .`})
-
 		require.True(t, (err != nil) == shouldFail,
 			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
 
