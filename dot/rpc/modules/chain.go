@@ -20,15 +20,16 @@ import (
 	"fmt"
 	"math/big"
 	"net/http"
+	"reflect"
+	"regexp"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
-// ChainHashRequest Hash
-//type ChainHashRequest common.Hash
+// ChainHashRequest Hash as a string
 type ChainHashRequest string
 
-// ChainBlockNumberRequest Int
+// ChainBlockNumberRequest interface is it can accept string or float64 or []
 type ChainBlockNumberRequest interface{}
 
 // ChainBlockResponse struct
@@ -51,10 +52,8 @@ type ChainBlockHeaderResponse struct {
 	Digest         [][]byte `json:"digest"`
 }
 
-// ChainHashResponse struct
-type ChainHashResponse struct {
-	ChainHash common.Hash `json:"chainHash"`
-}
+// ChainHashResponse interface to handle response
+type ChainHashResponse interface{}
 
 // ChainModule is an RPC module providing access to storage API points.
 type ChainModule struct {
@@ -98,11 +97,29 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 	return nil
 }
 
-// GetBlockHash isn't implemented properly yet.
-// TODO finish this
+// GetBlockHash Get hash of the 'n-th' block in the canon chain. If no parameters are provided,
+//  the latest block hash gets returned.
 func (cm *ChainModule) GetBlockHash(r *http.Request, req *ChainBlockNumberRequest, res *ChainHashResponse) error {
-	// TODO get values from req
-	return fmt.Errorf("not implemented yet")
+	// if request is empty, return highest hash
+	if *req == nil || reflect.ValueOf(*req).Len() == 0 {
+		*res = cm.blockAPI.HighestBlockHash().String()
+		return nil
+	}
+
+	val, err := cm.unwindRequest(*req)
+	// if result only returns 1 value, just use that (instead of array)
+	if len(val) == 1 {
+		*res = val[0]
+	} else {
+		*res = val
+	}
+
+	return err
+}
+
+// GetHead alias for GetBlockHash
+func (cm *ChainModule) GetHead(r *http.Request, req *ChainBlockNumberRequest, res *ChainHashResponse) error {
+	return cm.GetBlockHash(r, req, res)
 }
 
 // GetFinalizedHead isn't implemented properly yet.
@@ -144,4 +161,59 @@ func (cm *ChainModule) hashLookup(req *ChainHashRequest) (common.Hash, error) {
 		return hash, nil
 	}
 	return common.HexToHash(string(*req))
+}
+
+// unwindRequest takes request interface slice and makes call for each element
+func (cm *ChainModule) unwindRequest(req interface{}) ([]string, error) {
+	res := make([]string, 0)
+	switch x := (req).(type) {
+	case []interface{}:
+		for _, v := range x {
+			u, err := cm.unwindRequest(v)
+			if err != nil {
+				return nil, err
+			}
+			res = append(res, u[:]...)
+		}
+	case interface{}:
+		h, err := cm.lookupHashByInterface(x)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, h)
+	}
+	return res, nil
+}
+
+// lookupHashByInterface parses given interface to determine block number, then
+//  finds hash for that block number
+func (cm *ChainModule) lookupHashByInterface(i interface{}) (string, error) {
+	num := new(big.Int)
+	switch x := i.(type) {
+	case float64:
+		f := big.NewFloat(x)
+		f.Int(num)
+	case string:
+		// remove leading 0x (if there is one)
+		re, err := regexp.Compile(`0x`)
+		if err != nil {
+			return "", err
+		}
+		x = re.ReplaceAllString(x, "")
+
+		// cast string to big.Int
+		_, ok := num.SetString(x, 10)
+		if !ok {
+			return "", fmt.Errorf("error setting number from string")
+		}
+
+	default:
+		return "", fmt.Errorf("unknown request number type: %T", x)
+	}
+
+	h, err := cm.blockAPI.GetBlockHash(num)
+	if err != nil {
+		return "", err
+	}
+	return h.String(), nil
 }

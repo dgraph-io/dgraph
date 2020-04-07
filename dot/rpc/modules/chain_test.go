@@ -23,15 +23,69 @@ func newChainService(t *testing.T) *state.Service {
 
 	tr := trie.NewEmptyTrie()
 
+	stateSrvc.UseMemDB()
+
 	err = stateSrvc.Initialize(genesisHeader, tr)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	err = stateSrvc.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	err = loadTestBlocks(genesisHeader.Hash(), stateSrvc.Block)
+	if err != nil {
+		t.Fatal(err)
+	}
 	return stateSrvc
+}
+
+func loadTestBlocks(gh common.Hash, bs *state.BlockState) error {
+	// Create header
+	header0 := &types.Header{
+		Number:     big.NewInt(0),
+		Digest:     [][]byte{},
+		ParentHash: gh,
+	}
+	// Create blockHash
+	blockHash0 := header0.Hash()
+	// BlockBody with fake extrinsics
+	blockBody0 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+	block0 := &types.Block{
+		Header: header0,
+		Body:   &blockBody0,
+	}
+
+	err := bs.AddBlock(block0)
+	if err != nil {
+		return err
+	}
+
+	// Create header & blockData for block 1
+	header1 := &types.Header{
+		Number:     big.NewInt(1),
+		Digest:     [][]byte{},
+		ParentHash: blockHash0,
+	}
+
+	// Create Block with fake extrinsics
+	blockBody1 := types.Body{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+
+	block1 := &types.Block{
+		Header: header1,
+		Body:   &blockBody1,
+	}
+
+	// Add the block1 to the DB
+	err = bs.AddBlock(block1)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func TestChainGetHeader_Genesis(t *testing.T) {
@@ -56,10 +110,10 @@ func TestChainGetHeader_Latest(t *testing.T) {
 	chain := newChainService(t)
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
-		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         big.NewInt(0),
-		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
+		Number:         big.NewInt(1),
+		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
+		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Digest:         [][]byte{},
 	}
 	res := &ChainBlockHeaderResponse{}
@@ -119,10 +173,10 @@ func TestChainGetBlock_Latest(t *testing.T) {
 	chain := newChainService(t)
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
-		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         big.NewInt(0),
-		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
+		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
+		Number:         big.NewInt(1),
+		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
+		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
 		Digest:         [][]byte{},
 	}
 	expected := &ChainBlockResponse{
@@ -158,4 +212,63 @@ func TestChainGetBlock_Error(t *testing.T) {
 	req := ChainHashRequest("zz")
 	err := svc.GetBlock(nil, &req, res)
 	require.EqualError(t, err, "could not byteify non 0x prefixed string")
+}
+
+func TestChainGetBlockHash_Latest(t *testing.T) {
+	chain := newChainService(t)
+	svc := NewChainModule(chain.Block)
+
+	resString := string("")
+	res := ChainHashResponse(resString)
+	req := ChainBlockNumberRequest(nil)
+	err := svc.GetBlockHash(nil, &req, &res)
+
+	require.Nil(t, err)
+
+	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+}
+
+func TestChainGetBlockHash_ByNumber(t *testing.T) {
+	chain := newChainService(t)
+	svc := NewChainModule(chain.Block)
+
+	resString := string("")
+	res := ChainHashResponse(resString)
+	req := ChainBlockNumberRequest("1")
+	err := svc.GetBlockHash(nil, &req, &res)
+
+	require.Nil(t, err)
+
+	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+}
+
+func TestChainGetBlockHash_ByHex(t *testing.T) {
+	chain := newChainService(t)
+	svc := NewChainModule(chain.Block)
+
+	resString := string("")
+	res := ChainHashResponse(resString)
+	req := ChainBlockNumberRequest("0x01")
+	err := svc.GetBlockHash(nil, &req, &res)
+
+	require.Nil(t, err)
+
+	require.Equal(t, "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698", res)
+}
+
+func TestChainGetBlockHash_Array(t *testing.T) {
+	chain := newChainService(t)
+	svc := NewChainModule(chain.Block)
+
+	resString := string("")
+	res := ChainHashResponse(resString)
+	nums := make([]interface{}, 2)
+	nums[0] = float64(0)     // as number
+	nums[1] = string("0x01") // as hex string
+	req := ChainBlockNumberRequest(nums)
+	err := svc.GetBlockHash(nil, &req, &res)
+
+	require.Nil(t, err)
+
+	require.Equal(t, []string{"0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75", "0x80d653de440352760f89366c302c02a92ab059f396e2bfbf7f860e6e256cd698"}, res)
 }
