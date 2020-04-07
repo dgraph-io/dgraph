@@ -170,7 +170,8 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, keyfile string, dgraphClient *dgo.Dgraph) error {
+func processSchemaFile(ctx context.Context, file string, keyfile string,
+	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
