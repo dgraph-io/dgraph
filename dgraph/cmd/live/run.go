@@ -57,7 +57,7 @@ type options struct {
 	dataFiles      string
 	dataFormat     string
 	schemaFile     string
-	keyfile		   string
+	keyfile        string
 	zero           string
 	concurrent     int
 	batchSize      int
@@ -126,7 +126,7 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("keyfile", "k", "", "Loction of the key file to decrypt the schema and data files")
+	flag.StringP("keyfile", "k", "", "Location of the key file to decrypt the schema and data files")
 	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
 	flag.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
@@ -187,7 +187,7 @@ func processSchemaFile(ctx context.Context, file string, keyfile string, dgraphC
 	if strings.HasSuffix(strings.ToLower(file), ".gz") {
 		reader, err = gzip.NewReader(reader)
 		x.Check(err)
-	} 
+	}
 
 	b, err := ioutil.ReadAll(reader)
 	if err != nil {
@@ -373,7 +373,7 @@ func run() error {
 		dataFiles:      Live.Conf.GetString("files"),
 		dataFormat:     Live.Conf.GetString("format"),
 		schemaFile:     Live.Conf.GetString("schema"),
-		keyfile:		Live.Conf.GetString("keyfile"),
+		keyfile:        Live.Conf.GetString("keyfile"),
 		zero:           Live.Conf.GetString("zero"),
 		concurrent:     Live.Conf.GetInt("conc"),
 		batchSize:      Live.Conf.GetInt("batch"),
