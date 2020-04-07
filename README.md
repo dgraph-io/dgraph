@@ -1,5 +1,5 @@
 <div align="center">
-  <img alt="Gossamer logo" src="/.github/gossamer_logo.png" width="700" />
+  <img alt="Gossamer logo" src="/wiki/assets/gossamer_logo.png" width="700" />
 </div>
 <div align="center">
   <a href="https://www.gnu.org/licenses/gpl-3.0">
@@ -25,85 +25,75 @@
 </div>
 <br />
 
-## A Blockchain Framework
+## A Go Implementation of the Polkadot Host
 
 Gossamer is an implementation of the [Polkadot Host](https://github.com/w3f/polkadot-spec) - a blockchain framework used to build and run node implementations for different blockchain protocols within the Polkadot ecosystem.
 
-Gossamer includes official node implementations for major networks within the Polkadot ecosystem and makes building node implementations for other networks trivial; blockchain protocols built with any implementation of the Polkadot Host can plug a runtime blob into Gossamer to create an additional node implementation in Go.
+Gossamer includes official node implementations for major blockchains within the Polkadot ecosystem and makes building node implementations for other blockchains trivial; blockchains built with [Substrate](https://github.com/paritytech/substrate) can plug their compiled runtime into Gossamer to create a node implementation in Go.
 
-For more information about Gossamer and the Polkadot Host, check out [Gossamer Wiki](https://github.com/ChainSafe/gossamer/wiki).
+For more information about Gossamer, the Polkadot ecosystem, and how to use Gossamer to build and run nodes for different blockchain protocols within the Polkadot ecosystem, check out [Gossamer Wiki](https://github.com/ChainSafe/gossamer/wiki).
 
-## Package Architecture
-
-Gossamer includes [node implementations](#node-implementations) for major networks within the Polkadot ecosystem, [node services](#node-services) that can be used to build and run node implementations, and a collection of [modular packages](#modular-packages) that can be used to build and run node services and other supporting tools.
-
-### Node Implementations
-
-Gossamer includes node implementations in development for Gossamer Testnet and Kusama Network.
-
-| package           | description |
-|-                  |-            |
-| `node/gssmr`      | a full node implementation and rpc server for Gossamer Testnet |
-| `node/ksmcc`      | a full node implementation and rpc server for Kusama Network |
-
-### Node Services
-
-Gossamer includes node services used to build and run node implementations with a shared base protocol (currently each node implementation uses a set of shared node services that make up the base implementation for the Polkadot Host).
-
-| package           | description |
-|-                  |-            |
-| `dot/core`        | orchestrate service interactions |
-| `dot/network`     | peer-to-peer service using libp2p |
-| `dot/rpc`         | optional service for RPC server |
-| `dot/state`       | storage service for chain state |
-
-### Modular Packages
-
-Gossamer includes a collection of modular packages used to build and run node services and other supporting tools.
-
-| package           | description |
-|-                  |-            |
-| `lib/babe`        | BABE implementation |
-| `lib/blocktree`   | blocktree implementation |
-| `lib/common`      | common types and functions |
-| `lib/crypto`      | crypto keypair implementations |
-| `lib/database`    | generic database using badgerDB |
-| `lib/grandpa`     | GRANDPA implementation |
-| `lib/keystore`    | library for managing keystore |
-| `lib/runtime`     | WASM runtime integration using Wasmer |
-| `lib/scale`       | SCALE encoding and decoding |
-| `lib/services`    | common interface for node services |
-| `lib/transaction` | library for transaction queue |
-| `lib/trie`        | modified merkle-patricia trie implementation |
-
-## Running Gossamer
-
-The `gossamer` command can be used to run node implementations that are within this repository.
+## Get Started
 
 ### Prerequisites
 
-go 1.13.7
+install go version `1.13.7`
 
 ### Installation
 
+get the [ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) repository:
 ```
 go get -u github.com/ChainSafe/gossamer
 ```
 
-### Build Gossamer
+### Build Command
 
+build gossamer node:
 ```
 make gossamer
 ```
 
+### Run Default Node
+
+initialize default node:
+```
+./bin/gossamer --key alice init
+```
+
+start default node:
+```
+./bin/gossamer --key alice
+```
+
 ### Run Gossamer Node
 
+initialize gossamer node:
 ```
-./bin/gossamer init
+./bin/gossamer --node gssmr --key alice init
 ```
 
+start gossamer node:
 ```
-./bin/gossamer
+./bin/gossamer --node gssmr --key alice
+```
+
+### Run Kusama Node
+
+initialize kusama node:
+```
+./bin/gossamer --node ksmcc --key alice init
+```
+
+start kusama node:
+```
+./bin/gossamer --node ksmcc --key alice
+```
+
+### Run Tests
+
+run all package tests:
+```
+go test ./... -short
 ```
 
 ## Contribute
@@ -122,5 +112,5 @@ _GNU Lesser General Public License v3.0_
 
 <br />
 <p align="center">
-	<img src=".github/gopher.png">
+	<img src="/wiki/assets/gopher.png">
 </p>
