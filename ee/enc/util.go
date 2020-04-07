@@ -21,7 +21,6 @@ package enc
 import "io"
 import "github.com/dgraph-io/dgraph/x"
 
-
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
 
