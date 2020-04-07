@@ -101,7 +101,7 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	if ok {
 		return ch
 	}
-	ch = make(chan *subMutation, 1000)
+	ch = make(chan *subMutation, 100)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
 	go e.processMutationCh(ch)
