@@ -864,6 +864,7 @@ valid_schemas:
     input: |
       type Author {
         id: ID!
+        name: String!
       }
 
       type Query {

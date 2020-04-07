@@ -411,14 +411,21 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 	}
 
-	sch.Mutation = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Mutation",
-		Fields: make([]*ast.FieldDefinition, 0),
+	mutation := sch.Types["Mutation"]
+	if mutation != nil {
+		mutation.Kind = ast.Object
+		sch.Mutation = mutation
+		delete(sch.Types, "Mutation")
+	} else {
+		sch.Mutation = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Mutation",
+			Fields: make([]*ast.FieldDefinition, 0),
+		}
 	}
 
 	for _, key := range definitions {
-		if key == "Query" {
+		if key == "Query" || key == "Mutation" {
 			continue
 		}
 		defn := sch.Types[key]
@@ -1404,7 +1411,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typName == "Query" {
+		if typName == "Query" || typName == "Mutation" {
 			// This would be printed later in schema.Query
 			continue
 		}

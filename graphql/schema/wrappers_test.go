@@ -477,7 +477,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, err := substituteVarsInURL(test.url, test.variables)
+			b, err := SubstituteVarsInURL(test.url, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, string(b))
