@@ -233,7 +233,9 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	x.Check(ld.xids.Flush())
-	x.Check(db.Close())
+	if db != nil {
+		x.Check(db.Close())
+	}
 	ld.xids = nil
 }
 
