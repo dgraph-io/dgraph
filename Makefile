@@ -35,6 +35,12 @@ test:
 	@echo "  >  \033[32mRunning tests...\033[0m "
 	GOBIN=$(PWD)/bin go run scripts/ci.go test
 
+## it-stable: Runs Integration Tests Stable mode
+it-stable:
+	@echo "  >  \033[32mRunning Integration Tests...\033[0m "
+	@chmod +x scripts/integration-test-all.sh
+	./scripts/integration-test-all.sh
+
 ## test: Runs `go test -race` on project test files.
 test-state-race:
 	@echo "  >  \033[32mRunning race tests...\033[0m "
