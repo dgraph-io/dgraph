@@ -201,6 +201,7 @@ EOF
   diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
       1 dgraph.acl.rule
       1 dgraph.graphql.schema
+      1 dgraph.graphql.xid
       1 dgraph.password
       1 dgraph.rule.permission
       1 dgraph.rule.predicate

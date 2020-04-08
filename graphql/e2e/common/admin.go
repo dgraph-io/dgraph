@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/gogo/protobuf/jsonpb"
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"github.com/gogo/protobuf/jsonpb"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
@@ -44,6 +45,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -58,6 +68,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -78,6 +90,15 @@ const (
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
+        },
+        {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
         },
         {
             "predicate": "dgraph.type",
@@ -102,6 +123,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -139,6 +162,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -164,6 +196,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -209,6 +243,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -237,6 +280,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -275,6 +320,7 @@ func admin(t *testing.T) {
 	addGQLSchema(t, client)
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
+	gqlSchemaNodeHasXid(t, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -318,6 +364,21 @@ func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
 	require.JSONEq(t, adminSchemaEndptSchema, string(resp.GetJson()))
 
 	introspect(t, adminSchemaEndptGQLSchema)
+}
+
+func gqlSchemaNodeHasXid(t *testing.T, client *dgo.Dgraph) {
+	resp, err := client.NewReadOnlyTxn().Query(context.Background(), `query {
+		gqlSchema(func: type(dgraph.graphql)) {
+			dgraph.graphql.xid
+		}
+	}`)
+	require.NoError(t, err)
+	// confirm that there is only one node of type dgraph.graphql and it has xid.
+	require.JSONEq(t, `{
+		"gqlSchema": [{
+			"dgraph.graphql.xid": "dgraph.graphql.schema"
+		}]
+	}`, string(resp.GetJson()))
 }
 
 func introspect(t *testing.T, expected string) {

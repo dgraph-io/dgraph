@@ -19,10 +19,12 @@ package admin
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
+
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -46,6 +48,10 @@ const (
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
+	gqlSchemaXidKey = "dgraph.graphql.xid"
+	gqlSchemaXidVal = "dgraph.graphql.schema"
+	gqlSchemaPred   = "dgraph.graphql.schema"
+
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
 	"""
@@ -57,7 +63,7 @@ const (
 		"""
 		Input schema (GraphQL types) that was used in the latest schema update.
 		"""
-		schema: String!  @dgraph(type: "dgraph.graphql.schema")
+		schema: String!  @dgraph(pred: "dgraph.graphql.schema")
 
 		"""
 		The GraphQL schema that was generated from the 'schema' field.  
@@ -283,7 +289,7 @@ type adminServer struct {
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
 
-	schema gqlSchema
+	schema *gqlSchema
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
@@ -336,7 +342,7 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 	}
 
-	prefix := x.DataKey("dgraph.graphql.schema", 0)
+	prefix := x.DataKey(gqlSchemaPred, 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
@@ -368,31 +374,24 @@ func newAdminResolver(
 			return
 		}
 
-		newSchema := gqlSchema{
+		newSchema := &gqlSchema{
 			ID:     fmt.Sprintf("%#x", pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
 
-		schHandler, err := schema.NewHandler(newSchema.Schema)
+		gqlSchema, err := generateGQLSchema(newSchema)
 		if err != nil {
 			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 			return
 		}
 
-		newSchema.GeneratedSchema = schHandler.GQLSchema()
-		gqlSchema, err := schema.FromString(newSchema.GeneratedSchema)
-		if err != nil {
-			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
-			return
-		}
-
-		glog.Infof("Successfully updated GraphQL schema.")
+		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 
 		server.mux.Lock()
 		defer server.mux.Unlock()
 
 		server.schema = newSchema
-		server.resetSchema(gqlSchema)
+		server.resetSchema(*gqlSchema)
 	}, 1, closer)
 
 	go server.initServer()
@@ -501,14 +500,109 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf
 }
 
-func (as *adminServer) initServer() {
-	// It takes a few seconds for the Dgraph cluster to be up and running.
-	// Before that, trying to read the GraphQL schema will result in error:
-	// "Please retry again, server is not ready to accept requests."
-	// 5 seconds is a pretty reliable wait for a fresh instance to read the
-	// schema on a first try.
-	waitFor := 5 * time.Second
+func upsertEmptyGQLSchema() (*gqlSchema, error) {
+	existingSchemaVar := "ExistingGQLSchema"
+	xidInSchemaVar := "XidInSchema"
+	gqlType := "dgraph.graphql"
 
+	/*
+		query {
+		  ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
+		    uid
+		    dgraph.graphql.schema
+		    XidInSchema as dgraph.graphql.xid
+		  }
+		}
+	*/
+	qry := &gql.GraphQuery{
+		Attr: existingSchemaVar,
+		Var:  existingSchemaVar,
+		Func: &gql.Function{
+			Name: "type",
+			Args: []gql.Arg{{Value: gqlType}},
+		},
+		Children: []*gql.GraphQuery{
+			{Attr: "uid"},
+			{Attr: gqlSchemaPred},
+			{Attr: gqlSchemaXidKey, Var: xidInSchemaVar},
+		},
+	}
+
+	/*
+		mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
+			set {
+				"uid": "uid(ExistingGQLSchema)",
+				"dgraph.graphql.xid": "dgraph.graphql.schema"
+			}
+		}
+		mutation @if(eq(len(ExistingGQLSchema),0) AND eq(len(XidInSchema),0))
+			set {
+				"uid": "_:XidInSchema",
+				"dgraph.type": ["dgraph.graphql"],
+				"dgraph.graphql.xid": "dgraph.graphql.schema",
+				"dgraph.graphql.schema": ""
+			}
+		}
+	*/
+	mutations := []*dgoapi.Mutation{
+		{
+			SetJson: []byte(fmt.Sprintf(`
+			{
+				"uid": "uid(%s)",
+				"%s": "%s"
+			}`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
+		},
+		{
+			SetJson: []byte(fmt.Sprintf(`
+			{
+				"uid": "_:%s",
+				"dgraph.type": ["%s"],
+				"%s": "%s",
+				"%s": ""
+			}`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
+		},
+	}
+
+	assigned, result, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
+		mutations)
+	if err != nil {
+		return nil, err
+	}
+
+	// the Alpha which created a new gql schema node with xid will get the uid here
+	uid, ok := assigned[xidInSchemaVar]
+	if ok {
+		return &gqlSchema{ID: uid}, nil
+	}
+
+	// the Alphas which didn't create a new gql schema node, will get the uid here.
+	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
+	return &gqlSchema{
+		ID:     gqlSchemaNode["uid"].(string),
+		Schema: gqlSchemaNode[gqlSchemaPred].(string),
+	}, nil
+}
+
+func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
+	schHandler, err := schema.NewHandler(sch.Schema)
+	if err != nil {
+		return nil, err
+	}
+
+	sch.GeneratedSchema = schHandler.GQLSchema()
+	generatedSchema, err := schema.FromString(sch.GeneratedSchema)
+	if err != nil {
+		return nil, err
+	}
+
+	return &generatedSchema, nil
+}
+
+func (as *adminServer) initServer() {
 	// Nothing else should be able to lock before here.  The admin resolvers aren't yet
 	// set up (they all just error), so we will obtain the lock here without contention.
 	// We then setup the admin resolvers and they must wait until we are done before the
@@ -516,27 +610,32 @@ func (as *adminServer) initServer() {
 	as.mux.Lock()
 	defer as.mux.Unlock()
 
-	as.addConnectedAdminResolvers()
+	// It takes a few seconds for the Dgraph cluster to be up and running.
+	// Before that, trying to read the GraphQL schema will result in error:
+	// "Please retry again, server is not ready to accept requests."
+	// 5 seconds is a pretty reliable wait for a fresh instance to read the
+	// schema on a first try.
+	waitFor := 5 * time.Second
+
 	for {
 		<-time.After(waitFor)
 
-		sch, err := getCurrentGraphQLSchema(as.resolver)
+		sch, err := upsertEmptyGQLSchema()
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
-		} else if sch == nil {
+		}
+
+		as.schema = sch
+		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has ID
+		as.addConnectedAdminResolvers()
+
+		if sch.Schema == "" {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
 			break
 		}
 
-		schHandler, err := schema.NewHandler(sch.Schema)
-		if err != nil {
-			glog.Infof("Error processing GraphQL schema: %s.", err)
-			break
-		}
-
-		sch.GeneratedSchema = schHandler.GQLSchema()
-		generatedSchema, err := schema.FromString(sch.GeneratedSchema)
+		generatedSchema, err := generateGQLSchema(sch)
 		if err != nil {
 			glog.Infof("Error processing GraphQL schema: %s.", err)
 			break
@@ -544,8 +643,7 @@ func (as *adminServer) initServer() {
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
-		as.schema = *sch
-		as.resetSchema(generatedSchema)
+		as.resetSchema(*generatedSchema)
 
 		break
 	}
@@ -555,7 +653,6 @@ func (as *adminServer) initServer() {
 func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
-	addRw := resolve.NewAddRewriter()
 	updRw := resolve.NewUpdateRewriter()
 	qryExec := resolve.DgraphAsQueryExecutor()
 	mutExec := resolve.DgraphAsMutationExecutor()
@@ -567,7 +664,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		func(m schema.Mutation) resolve.MutationResolver {
 			updResolver := &updateSchemaResolver{
 				admin:                as,
-				baseAddRewriter:      addRw,
 				baseMutationRewriter: updRw,
 				baseMutationExecutor: mutExec,
 			}
@@ -581,9 +677,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
 				getResolver := &getSchemaResolver{
-					admin:        as,
-					baseRewriter: qryRw,
-					baseExecutor: resolve.AdminQueryExecutor(),
+					admin: as,
 				}
 
 				return resolve.NewQueryResolver(
@@ -678,23 +772,6 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					resolve.DgraphAsMutationExecutor(),
 					resolve.StdDeleteCompletion(m.Name()))
 			})
-}
-
-func getCurrentGraphQLSchema(r *resolve.RequestResolver) (*gqlSchema, error) {
-	req := &schema.Request{
-		Query: `query { getGQLSchema { id schema } }`}
-	resp := r.Resolve(context.Background(), req)
-	if len(resp.Errors) > 0 || resp.Data.Len() == 0 {
-		return nil, resp.Errors
-	}
-
-	var result struct {
-		GetGQLSchema *gqlSchema
-	}
-
-	err := json.Unmarshal(resp.Data.Bytes(), &result)
-
-	return result.GetGQLSchema, err
 }
 
 func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
