@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -30,7 +31,10 @@ type ExpectedRequest struct {
 	method    string
 	urlSuffix string
 	body      string
-	headers   map[string][]string
+	// Send headers as nil to ignore comparing headers.
+	// Provide nil value for a key just to ensure that the key exists in request headers.
+	// Provide both key and value to ensure that key exists with given value
+	headers map[string][]string
 }
 
 func getError(key, val string) error {
@@ -54,17 +58,30 @@ func verifyRequest(r *http.Request, expectedRequest ExpectedRequest) error {
 		return getError("Unexpected value for request body", string(b))
 	}
 
-	for k, v := range expectedRequest.headers {
-		rv, ok := r.Header[k]
-		if !ok {
-			return getError("Required header not found", k)
+	if expectedRequest.headers != nil {
+		actualHeaderLen := len(r.Header)
+		expectedHeaderLen := len(expectedRequest.headers)
+		if actualHeaderLen != expectedHeaderLen {
+			return getError(fmt.Sprintf("Wanted %d headers in request, got", expectedHeaderLen),
+				strconv.Itoa(actualHeaderLen))
 		}
 
-		sort.Strings(rv)
-		sort.Strings(v)
+		for k, v := range expectedRequest.headers {
+			rv, ok := r.Header[k]
+			if !ok {
+				return getError("Required header not found", k)
+			}
 
-		if !reflect.DeepEqual(rv, v) {
-			return getError(fmt.Sprintf("Unexpected value for %s header", k), fmt.Sprint(rv))
+			if v == nil {
+				continue
+			}
+
+			sort.Strings(rv)
+			sort.Strings(v)
+
+			if !reflect.DeepEqual(rv, v) {
+				return getError(fmt.Sprintf("Unexpected value for %s header", k), fmt.Sprint(rv))
+			}
 		}
 	}
 
@@ -134,8 +151,10 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		urlSuffix: "/verifyHeaders",
 		body:      "",
 		headers: map[string][]string{
-			"X-App-Token": {"app-token"},
-			"X-User-Id":   {"123"},
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
 		},
 	})
 	if err != nil {
@@ -211,8 +230,10 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		urlSuffix: "/favMoviesDelete/0x1",
 		body:      "",
 		headers: map[string][]string{
-			"X-App-Token": {"app-token"},
-			"X-User-Id":   {"123"},
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
 		},
 	})
 	if err != nil {
