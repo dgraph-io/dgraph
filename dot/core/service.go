@@ -343,39 +343,20 @@ func (s *Service) handleBabeSession() {
 		err := s.finalizeBabeSession()
 		if err != nil {
 			log.Error("[core] failed to finalize BABE session", "error", err)
-
-			err = s.safeBabeKill()
-			if err != nil {
-				log.Error("[core] failed to kill former BABE session", "error", err)
-			}
-
-			return // exit
 		}
 
 		// create new BABE session
 		bs, err := s.initializeBabeSession()
 		if err != nil {
 			log.Error("[core] failed to initialize BABE session", "error", err)
-
-			err = s.safeBabeKill()
-			if err != nil {
-				log.Error("[core] failed to kill former BABE session", "error", err)
-			}
-
-			return // exit
+			continue
 		}
 
 		// start new BABE session
 		err = bs.Start()
 		if err != nil {
 			log.Error("[core] failed to start BABE session", "error", err)
-
-			err = s.safeBabeKill()
-			if err != nil {
-				log.Error("[core] failed to kill BABE session", "error", err)
-			}
-
-			return // exit
+			continue
 		}
 
 		// append successfully started BABE session to core service
@@ -404,7 +385,7 @@ func (s *Service) receiveMessages() {
 		msg, ok := <-s.msgRec
 		if !ok {
 			log.Error("[core] failed to receive message from network service")
-			return // exit
+			continue
 		}
 
 		err := s.handleReceivedMessage(msg)

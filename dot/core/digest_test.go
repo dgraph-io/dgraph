@@ -41,8 +41,6 @@ func TestHandleBlockDigest(t *testing.T) {
 	require.Equal(t, number, s.firstBlock)
 
 	// test two blocks claiming to be first block
-	s.firstBlock = big.NewInt(1)
-
 	err = s.handleBlockDigest(header)
 	require.NotNil(t, err) // expect error: "first block already set for current epoch"
 
@@ -50,6 +48,7 @@ func TestHandleBlockDigest(t *testing.T) {
 	require.Equal(t, s.firstBlock, big.NewInt(1))
 
 	// test two blocks claiming to be first block
+	// block with lower number than existing `firstBlock` should be chosen
 	s.firstBlock = big.NewInt(99)
 
 	err = s.handleBlockDigest(header)

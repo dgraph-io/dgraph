@@ -75,7 +75,7 @@ func (s *Service) handleConsensusDigest(header *types.Header, digest *types.Cons
 	if err != nil {
 		return fmt.Errorf("failed to check if block header is from current epoch: %s", err)
 	} else if !currentEpoch {
-		return fmt.Errorf("block header is not from current epoch: %s", err)
+		return fmt.Errorf("block header is not from current epoch")
 	}
 
 	// check if first block has been set for current epoch

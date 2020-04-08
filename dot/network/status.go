@@ -195,6 +195,8 @@ func (status *status) sendNextMessage(ctx context.Context, peer peer.ID) {
 func (status *status) expireStatus(ctx context.Context, peer peer.ID) {
 
 	// wait to check for expired status message
+	// TODO: this wakes up every 6 minutes, while sendNextMessage wakes up every 5 minutes.
+	// this may cause the messages to get out of sync, investigate
 	time.Sleep(ExpireStatusInterval)
 
 	// get time of last confirmed status message

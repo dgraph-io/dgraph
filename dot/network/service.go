@@ -179,6 +179,10 @@ func (s *Service) Stop() error {
 // updateNetworkState updates the network state at the set time interval
 func (s *Service) updateNetworkState() {
 	for {
+		if s.closed {
+			return
+		}
+
 		s.networkState.SetHealth(s.Health())
 		s.networkState.SetNetworkState(s.NetworkState())
 		s.networkState.SetPeers(s.Peers())
