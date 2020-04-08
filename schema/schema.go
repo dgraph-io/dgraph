@@ -534,10 +534,6 @@ func InitialTypes() []*pb.TypeUpdate {
 					Predicate: "dgraph.graphql.schema",
 					ValueType: pb.Posting_STRING,
 				},
-				{
-					Predicate: "dgraph.graphql.xid",
-					ValueType: pb.Posting_STRING,
-				},
 			},
 		})
 
@@ -620,12 +616,6 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	}, &pb.SchemaUpdate{
 		Predicate: "dgraph.graphql.schema",
 		ValueType: pb.Posting_STRING,
-	}, &pb.SchemaUpdate{
-		Predicate: "dgraph.graphql.xid",
-		ValueType: pb.Posting_STRING,
-		Directive: pb.SchemaUpdate_INDEX,
-		Tokenizer: []string{"exact"},
-		Upsert:    true,
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
