@@ -48,7 +48,7 @@ func validateAuthNode(node *RuleNode, arg *ast.Value) gqlerror.List {
 
 	has := make(map[string]bool)
 	var child *ast.Value
-	if len(node.Or) > 0 || len(node.Or) > 0 || node.Not != nil {
+	if len(node.Or) > 0 || len(node.And) > 0 || node.Not != nil {
 		child = arg.Children[0].Value
 	}
 

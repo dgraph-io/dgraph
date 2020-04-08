@@ -577,7 +577,7 @@ func (ap *AuthParser) parseRules(rule map[string]interface{}) (*RuleNode, error)
 	if varIdxStart != -1 {
 		varType := ap.getFieldType(doc, isDirectFilter)
 		if varType == "" {
-			return nil, fmt.Errorf("Error while getting variable type for rule %s", ruleString)
+			return nil, fmt.Errorf("errror while getting variable type for rule %s", ruleString)
 		}
 		queryArgs = "query(" + ruleNode.varName + ": " + varType + ")"
 		authQuery = queryArgs + filterQuery
