@@ -51,7 +51,8 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
-				WithNumVersionsToKeep(math.MaxInt32))
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(enc.ReadEncryptionKeyFile(keyfile)))
 			if err != nil {
 				return 0, err
 			}
