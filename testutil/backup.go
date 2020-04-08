@@ -29,13 +29,13 @@ import (
 )
 
 // KEYFILE is set to the path of the file containing the key. Used for testing purposes only.
-var KEYFILE string
+var KeyFile string
 
 func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
 		// TOOD(Ibrahim): Remove compression level once badger is updated.
 		WithReadOnly(true).WithZSTDCompressionLevel(1).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(KEYFILE))
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(KeyFile))
 	return badger.OpenManaged(opt)
 }
 
