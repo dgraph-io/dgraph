@@ -34,7 +34,8 @@ var KEYFILE string
 func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
 		// TOOD(Ibrahim): Remove compression level once badger is updated.
-		WithReadOnly(true).WithZSTDCompressionLevel(1).WithEncryptionKey(enc.ReadEncryptionKeyFile(KEYFILE))
+		WithReadOnly(true).WithZSTDCompressionLevel(1).
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(KEYFILE))
 	return badger.OpenManaged(opt)
 }
 
