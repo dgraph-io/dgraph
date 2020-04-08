@@ -118,7 +118,7 @@ func TestSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				if sch.Name != "Invalid operator provided after predicate" {
+				if sch.Name != "No operator provided after predicate" {
 					return
 				}
 				schHandler, errlist := NewHandler(sch.Input)
