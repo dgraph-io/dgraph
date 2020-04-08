@@ -214,7 +214,7 @@ func addSchools(t *testing.T, teachers []*teacher) []*school {
 			}
 		}`,
 		Variables: map[string]interface{}{
-			// Ofcourse teachers don't work at multiple schools but in our example they do.
+			// teachers work at multiple schools.
 			"t1": []map[string]interface{}{{"tid": teachers[0].ID}, {"tid": teachers[1].ID}},
 			"t2": []map[string]interface{}{{"tid": teachers[1].ID}, {"tid": teachers[2].ID}},
 			"t3": []map[string]interface{}{{"tid": teachers[2].ID}, {"tid": teachers[0].ID}},

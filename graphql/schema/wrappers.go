@@ -1500,7 +1500,8 @@ func SubstituteVarsInBody(jsonTemplate map[string]interface{},
 			for _, mv := range val {
 				mapVal, ok := mv.(map[string]interface{})
 				if !ok {
-					// return error
+					return errors.Errorf("expected a map but got unexpected value in array: %+v",
+						mv)
 				}
 				if err := SubstituteVarsInBody(mapVal, variables); err != nil {
 					return err
