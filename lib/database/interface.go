@@ -23,17 +23,16 @@ type PutItem interface {
 
 // Database wraps all database operations. All methods are safe for concurrent use.
 type Database interface {
-	PutItem
-	Iteratee
-	Get(key []byte) ([]byte, error)
-	Has(key []byte) (bool, error)
-	Del(key []byte) error
+	Reader
+	Writer
+
 	NewBatch() Batch
 	Close() error
 	Path() string
+	NewIterator() Iterator
 }
 
-// Batch is a write-only operation
+// Batch is a write-only operation.
 type Batch interface {
 	PutItem
 	ValueSize() int
@@ -42,18 +41,13 @@ type Batch interface {
 	Delete(key []byte) error
 }
 
-// Iterator iterates over BadgerDBs key/value pairs in ascending key order
-// must be released after use
+// Iterator iterates over key/value pairs in ascending key order.
+// Must be released after use.
 type Iterator interface {
 	Next() bool
 	Key() []byte
 	Value() []byte
 	Release()
-}
-
-// Iteratee wraps the NewIterator methods of BadgerService
-type Iteratee interface {
-	NewIterator() Iterable
 }
 
 // Reader interface

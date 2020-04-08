@@ -66,9 +66,9 @@ func (dt *table) Close() error {
 	return nil
 }
 
-// NewIterator initializes type Iterable
-func (dt *table) NewIterator() Iterable {
-	return Iterable{}
+// NewIterator initializes type Iterator
+func (dt *table) NewIterator() Iterator {
+	return nil
 }
 
 // Path returns table prefix

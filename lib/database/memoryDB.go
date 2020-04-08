@@ -96,8 +96,8 @@ func (db *MemDatabase) NewBatch() Batch {
 }
 
 // NewIterator ...
-func (db *MemDatabase) NewIterator() Iterable {
-	return Iterable{}
+func (db *MemDatabase) NewIterator() Iterator {
+	return nil
 }
 
 // Path ...
