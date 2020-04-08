@@ -49,6 +49,7 @@ const (
 
 	gqlSchemaXidKey = "dgraph.graphql.xid"
 	gqlSchemaXidVal = "dgraph.graphql.schema"
+	gqlSchemaPred   = "dgraph.graphql.schema"
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
@@ -282,7 +283,7 @@ type adminServer struct {
 	// The GraphQL server that's being admin'd
 	gqlServer web.IServeGraphQL
 
-	schema gqlSchema
+	schema *gqlSchema
 
 	// When the schema changes, we use these to create a new RequestResolver for
 	// the main graphql endpoint (gqlServer) and thus refresh the API.
@@ -335,7 +336,7 @@ func newAdminResolver(
 		withIntrospection: withIntrospection,
 	}
 
-	prefix := x.DataKey("dgraph.graphql.schema", 0)
+	prefix := x.DataKey(gqlSchemaPred, 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
@@ -367,12 +368,12 @@ func newAdminResolver(
 			return
 		}
 
-		newSchema := gqlSchema{
+		newSchema := &gqlSchema{
 			ID:     fmt.Sprintf("%#x", pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
 
-		gqlSchema, err := generateGQLSchema(&newSchema)
+		gqlSchema, err := generateGQLSchema(newSchema)
 		if err != nil {
 			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
 			return
@@ -513,7 +514,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 				Args: []gql.Arg{{Value: gqlType}},
 			},
 		},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: "dgraph.graphql.schema"}},
+		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: gqlSchemaPred}},
 	}
 
 	mutations := []*dgoapi.Mutation{
@@ -523,8 +524,8 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 				"uid": "_:%s",
 				"dgraph.type": ["%s"],
 				"%s": "%s",
-				"dgraph.graphql.schema": ""
-			}`, varName, gqlType, gqlSchemaXidKey, gqlSchemaXidVal)),
+				"%s": ""
+			}`, varName, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),0))`, varName),
 		},
 	}
@@ -545,7 +546,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	gqlSchemaNode := result[varName].([]interface{})[0].(map[string]interface{})
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
-		Schema: gqlSchemaNode["dgraph.graphql.schema"].(string),
+		Schema: gqlSchemaNode[gqlSchemaPred].(string),
 	}, nil
 }
 
@@ -588,7 +589,7 @@ func (as *adminServer) initServer() {
 			continue
 		}
 
-		as.schema.ID = sch.ID
+		as.schema = sch
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has ID
 		as.addConnectedAdminResolvers()
 
@@ -605,7 +606,6 @@ func (as *adminServer) initServer() {
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
-		as.schema = *sch
 		as.resetSchema(*generatedSchema)
 
 		break

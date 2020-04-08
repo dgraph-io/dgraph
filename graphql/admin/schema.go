@@ -125,7 +125,7 @@ func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) 
 	return doQuery(gsr.admin.schema, gsr.gqlQuery)
 }
 
-func doQuery(gql gqlSchema, field schema.Field) ([]byte, error) {
+func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
