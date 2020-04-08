@@ -217,9 +217,11 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 }
 
 func (m *mapper) uid(xid string) uint64 {
-	if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
-		m.xids.BumpTo(uid)
-		return uid
+	if !m.opt.NewUids {
+		if uid, err := strconv.ParseUint(xid, 0, 64); err == nil {
+			m.xids.BumpTo(uid)
+			return uid
+		}
 	}
 
 	return m.lookupUid(xid)
