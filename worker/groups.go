@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -90,7 +89,8 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
 	for _, zeroAddr := range x.WorkerConfig.ZeroAddr {
 		x.AssertTruef(zeroAddr != x.WorkerConfig.MyAddr,
-			"Dgraph Zero address and Dgraph address (IP:Port) can't be the same.")
+			"Dgraph Zero address %d and Dgraph address (IP:Port) %d can't be the same.",
+			zeroAddr, x.WorkerConfig.MyAddr)
 	}
 
 	if x.WorkerConfig.RaftId == 0 {
@@ -650,16 +650,15 @@ func (g *groupi) connToZeroLeader() *conn.Pool {
 	// No leader found. Let's get the latest membership state from Zero.
 	delay := connBaseDelay
 	maxHalfDelay := time.Second
-	randSrc := rand.New(rand.NewSource(time.Now().UnixNano()))
-	for { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
+	for i := 0; ; i++ { // Keep on retrying. See: https://github.com/dgraph-io/dgraph/issues/2289
 		time.Sleep(delay)
 		if delay <= maxHalfDelay {
 			delay *= 2
 		}
 
 		zAddrList := x.WorkerConfig.ZeroAddr
-		// Pick a random zero address.
-		addr := zAddrList[randSrc.Intn(len(zAddrList))]
+		// Pick addresses in round robin manner.
+		addr := zAddrList[i%len(zAddrList)]
 
 		pl := g.AnyServer(0)
 		if pl == nil {
