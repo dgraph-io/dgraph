@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -47,10 +48,12 @@ type Options struct {
 // manner. It's memory friendly because the mapping is stored on disk, but fast
 // because it uses an LRU cache.
 type XidMap struct {
-	shards    []shard
-	kv        *badger.DB
-	opt       Options
-	newRanges chan *pb.AssignedIds
+	shards     []shard
+	kv         *badger.DB
+	opt        Options
+	newRanges  chan *pb.AssignedIds
+	zc         pb.ZeroClient
+	maxUidSeen uint64
 
 	noMapMu sync.Mutex
 	noMap   block // block for allocating uids without an xid to uid mapping
@@ -103,17 +106,19 @@ func New(kv *badger.DB, zero *grpc.ClientConn, opt Options) *XidMap {
 		xm.shards[i].queue = list.New()
 		xm.shards[i].xm = xm
 	}
+	xm.zc = pb.NewZeroClient(zero)
+
 	go func() {
-		zc := pb.NewZeroClient(zero)
 		const initBackoff = 10 * time.Millisecond
 		const maxBackoff = 5 * time.Second
 		backoff := initBackoff
 		for {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			assigned, err := zc.AssignUids(ctx, &pb.Num{Val: 10000})
+			assigned, err := xm.zc.AssignUids(ctx, &pb.Num{Val: 10000})
 			cancel()
 			if err == nil {
 				backoff = initBackoff
+				xm.updateMaxSeen(assigned.EndId)
 				xm.newRanges <- assigned
 				continue
 			}
@@ -187,6 +192,39 @@ func (s *shard) lookup(xid string) (uint64, bool) {
 		return uid, true
 	}
 	return 0, false
+}
+
+func (m *XidMap) updateMaxSeen(max uint64) {
+	for {
+		prev := atomic.LoadUint64(&m.maxUidSeen)
+		if prev >= max {
+			return
+		}
+		atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max)
+	}
+}
+
+// BumpTo can be used to make Zero allocate UIDs up to this given number. Attempts are made to
+// ensure all future allocations of UIDs be higher than this one, but results are not guaranteed.
+func (m *XidMap) BumpTo(uid uint64) {
+	curMax := atomic.LoadUint64(&m.maxUidSeen)
+	if uid <= curMax {
+		return
+	}
+
+	for {
+		glog.V(1).Infof("Bumping up to %v", uid)
+		num := x.Max(uid-curMax, 1e4)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		assigned, err := m.zc.AssignUids(ctx, &pb.Num{Val: num})
+		cancel()
+		if err == nil {
+			glog.V(1).Infof("Requested bump: %d. Got assigned: %v", uid, assigned)
+			m.updateMaxSeen(assigned.EndId)
+			return
+		}
+		glog.Errorf("While requesting AssignUids(%d): %v", num, err)
+	}
 }
 
 func (s *shard) add(xid string, uid uint64, persisted bool) {

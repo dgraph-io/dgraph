@@ -59,6 +59,7 @@ type options struct {
 	HttpAddr         string
 	IgnoreErrors     bool
 	CustomTokenizers string
+	NewUids          bool
 
 	MapShards    int
 	ReduceShards int
