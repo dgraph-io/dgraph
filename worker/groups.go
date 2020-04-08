@@ -89,7 +89,7 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	x.AssertTruef(len(x.WorkerConfig.ZeroAddr) > 0, "Providing dgraphzero address is mandatory.")
 	for _, zeroAddr := range x.WorkerConfig.ZeroAddr {
 		x.AssertTruef(zeroAddr != x.WorkerConfig.MyAddr,
-			"Dgraph Zero address %d and Dgraph address (IP:Port) %d can't be the same.",
+			"Dgraph Zero address %s and Dgraph address (IP:Port) %s can't be the same.",
 			zeroAddr, x.WorkerConfig.MyAddr)
 	}
 
