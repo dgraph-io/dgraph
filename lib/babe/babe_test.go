@@ -26,6 +26,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
@@ -85,7 +86,10 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	if cfg.BlockState == nil || cfg.StorageState == nil {
 		dbSrv := state.NewService("")
 		dbSrv.UseMemDB()
-		err = dbSrv.Initialize(genesisHeader, trie.NewEmptyTrie())
+
+		genesisData := new(genesis.Data)
+
+		err = dbSrv.Initialize(genesisData, genesisHeader, trie.NewEmptyTrie())
 		if err != nil {
 			t.Fatal(err)
 		}

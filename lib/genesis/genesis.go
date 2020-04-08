@@ -17,10 +17,6 @@
 package genesis
 
 import (
-	"encoding/json"
-	"io/ioutil"
-	"path/filepath"
-
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
@@ -44,23 +40,6 @@ type Data struct {
 // Fields stores genesis raw data
 type Fields struct {
 	Raw [2]map[string]string
-}
-
-// LoadGenesisFromJSON parses a JSON formatted genesis file
-func LoadGenesisFromJSON(file string) (*Genesis, error) {
-	fp, err := filepath.Abs(file)
-	if err != nil {
-		return nil, err
-	}
-
-	data, err := ioutil.ReadFile(filepath.Clean(fp))
-	if err != nil {
-		return nil, err
-	}
-
-	g := new(Genesis)
-	err = json.Unmarshal(data, g)
-	return g, err
 }
 
 // GenesisData formats genesis for trie storage

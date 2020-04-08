@@ -17,6 +17,7 @@
 package dot
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -25,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
 	"github.com/stretchr/testify/require"
@@ -85,7 +87,7 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 func NewTestGenesis(t *testing.T) *genesis.Genesis {
 	fp := getGssmrGenesisPath(t)
 
-	gssmrGen, err := genesis.LoadGenesisFromJSON(fp)
+	gssmrGen, err := genesis.NewGenesisFromJSON(fp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +110,7 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 
 	fp := getGssmrGenesisPath(t)
 
-	gssmrGen, err := genesis.LoadGenesisFromJSON(fp)
+	gssmrGen, err := genesis.NewGenesisFromJSON(fp)
 	require.Nil(t, err)
 
 	gen := &genesis.Genesis{
@@ -126,6 +128,39 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 	require.Nil(t, err)
 
 	return file
+}
+
+// NewTestGenesisAndRuntime create a new test runtime and a new test genesis
+// file with the test runtime stored in raw data and returns the genesis file
+// nolint
+func NewTestGenesisAndRuntime(t *testing.T) string {
+	dir := utils.NewTestDir(t)
+
+	_ = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+	runtimeFilePath := runtime.GetAbsolutePath(runtime.POLKADOT_RUNTIME_FP_c768a7e4c70e)
+
+	runtimeData, err := ioutil.ReadFile(runtimeFilePath)
+	require.Nil(t, err)
+
+	gen := NewTestGenesis(t)
+	hex := hex.EncodeToString(runtimeData)
+
+	gen.Genesis.Raw = [2]map[string]string{}
+	if gen.Genesis.Raw[0] == nil {
+		gen.Genesis.Raw[0] = make(map[string]string)
+	}
+	gen.Genesis.Raw[0]["0x3a636f6465"] = "0x" + hex
+
+	genFile, err := ioutil.TempFile(dir, "genesis-")
+	require.Nil(t, err)
+
+	genData, err := json.Marshal(gen)
+	require.Nil(t, err)
+
+	_, err = genFile.Write(genData)
+	require.Nil(t, err)
+
+	return genFile.Name()
 }
 
 // getGssmrGenesisPath gets the gossamer genesis path

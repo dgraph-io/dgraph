@@ -33,6 +33,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
+	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
@@ -48,7 +49,9 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()
 
-	err := stateSrvc.Initialize(testGenesisHeader, trie.NewEmptyTrie())
+	genesisData := new(genesis.Data)
+
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
 	if err != nil {
 		t.Fatal(err)
 	}

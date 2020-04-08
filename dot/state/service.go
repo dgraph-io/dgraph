@@ -23,6 +23,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/database"
+	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
 	log "github.com/ChainSafe/log15"
@@ -64,72 +65,103 @@ func (s *Service) DB() database.Database {
 }
 
 // Initialize initializes the genesis state of the DB using the given storage trie. The trie should be loaded with the genesis storage state.
-// The trie does not need a backing DB, since the DB will be created during Service.Start().
 // This only needs to be called during genesis initialization of the node; it doesn't need to be called during normal startup.
-func (s *Service) Initialize(genesisHeader *types.Header, t *trie.Trie) error {
+func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.Trie) error {
 	var db database.Database
+
+	// check database type
 	if s.isMemDB {
+
+		// create memory database
 		db = database.NewMemDatabase()
-		s.db = db
+
 	} else {
+
+		// get data directory from service
 		datadir, err := filepath.Abs(s.dbPath)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to read datadir: %s", err)
 		}
 
-		// initialize database
+		// initialize database using data directory
 		db, err = database.NewBadgerDB(datadir)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to create database: %s", err)
 		}
 	}
 
-	// load genesis storage state into db
+	// write initial genesis values to database
+	err := s.storeInitialValues(db, data, header, t)
+	if err != nil {
+		return fmt.Errorf("failed to write genesis values to database: %s", err)
+	}
+
+	// create and store blockree from genesis block
+	bt := blocktree.NewBlockTreeFromGenesis(header, db)
+	err = bt.Store()
+	if err != nil {
+		return fmt.Errorf("failed to write blocktree to database: %s", err)
+	}
+
+	// create storage state from genesis trie
 	storageState, err := NewStorageState(db, t)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create storage state from trie: %s", err)
 	}
 
-	err = storageState.StoreInDB()
+	// create block state from genesis block
+	blockState, err := NewBlockStateFromGenesis(db, header)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create block state from genesis: %s", err)
 	}
 
-	// load genesis hash into db
-	hash := genesisHeader.Hash()
-	err = StoreBestBlockHash(db, hash)
-	if err != nil {
-		return err
-	}
-
-	log.Trace("[state] initialize", "genesis hash", hash)
-
-	err = initializeBlockTree(db, genesisHeader)
-	if err != nil {
-		return err
-	}
-
-	// load genesis block into db
-	blockState, err := NewBlockStateFromGenesis(db, genesisHeader)
-	if err != nil {
-		return err
-	}
-
+	// check database type
 	if s.isMemDB {
+
+		// append memory database to state service
+		s.db = db
+
+		// append storage state and block state to state service
 		s.Storage = storageState
 		s.Block = blockState
-		return nil
+
+	} else {
+
+		// close database
+		err = db.Close()
+		if err != nil {
+			return fmt.Errorf("failed to close database: %s", err)
+		}
 	}
 
-	return db.Close()
+	return nil
 }
 
-// initializeBlockTree creates a new block tree from genesis and stores it in the db
-func initializeBlockTree(db database.Database, genesisHeader *types.Header) error {
-	bt := blocktree.NewBlockTreeFromGenesis(genesisHeader, db)
-	err := bt.Store()
+// storeInitialValues writes initial genesis values to the state database
+func (s *Service) storeInitialValues(db database.Database, data *genesis.Data, header *types.Header, t *trie.Trie) error {
+
+	// write genesis trie to database
+	err := StoreTrie(db, t)
 	if err != nil {
-		return fmt.Errorf("cannot store block tree in db: %s", err)
+		return fmt.Errorf("failed to write trie to database: %s", err)
+	}
+
+	// write storage hash to database
+	err = StoreLatestStorageHash(db, t)
+	if err != nil {
+		return fmt.Errorf("failed to write storage hash to database: %s", err)
+	}
+
+	// write best block hash to state database
+	err = StoreBestBlockHash(db, header.Hash())
+	if err != nil {
+		return fmt.Errorf("failed to write best block hash to database: %s", err)
+	}
+
+	// write genesis data to state database
+	err = StoreGenesisData(db, data)
+	if err != nil {
+		return fmt.Errorf("failed to write genesis data to database: %s", err)
 	}
 
 	return nil
@@ -160,7 +192,7 @@ func (s *Service) Start() error {
 	// retrieve latest header
 	bestHash, err := LoadBestBlockHash(db)
 	if err != nil {
-		return fmt.Errorf("cannot get latest hash: %s", err)
+		return fmt.Errorf("failed to get best block hash: %s", err)
 	}
 
 	log.Trace("[state] start", "best block hash", fmt.Sprintf("0x%x", bestHash))
@@ -168,7 +200,7 @@ func (s *Service) Start() error {
 	// create storage state
 	s.Storage, err = NewStorageState(db, trie.NewEmptyTrie())
 	if err != nil {
-		return fmt.Errorf("cannot make storage state: %s", err)
+		return fmt.Errorf("failed to create storage state: %s", err)
 	}
 
 	// load blocktree
@@ -181,12 +213,12 @@ func (s *Service) Start() error {
 	// create block state
 	s.Block, err = NewBlockState(db, bt)
 	if err != nil {
-		return fmt.Errorf("cannot make block state: %s", err)
+		return fmt.Errorf("failed to create block state: %s", err)
 	}
 
 	headBlock, err := s.Block.GetHeader(s.Block.BestBlockHash())
 	if err != nil {
-		return fmt.Errorf("cannot get chain head from db: %s", err)
+		return fmt.Errorf("failed to get chain head from database: %s", err)
 	}
 
 	log.Trace("[state] start", "best block state root", headBlock.StateRoot)
@@ -194,7 +226,7 @@ func (s *Service) Start() error {
 	// load current storage state
 	err = s.Storage.LoadFromDB(headBlock.StateRoot)
 	if err != nil {
-		return fmt.Errorf("cannot load state from DB: %s", err)
+		return fmt.Errorf("failed to get state root from database: %s", err)
 	}
 
 	// create network state

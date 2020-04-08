@@ -482,7 +482,7 @@ func TestUpdateConfigFromGenesis(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	testGen, err := genesis.LoadGenesisFromJSON(testGenFile.Name())
+	testGen, err := genesis.NewGenesisFromJSON(testGenFile.Name())
 	require.Nil(t, err)
 
 	testApp := cli.NewApp()
