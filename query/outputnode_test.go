@@ -20,9 +20,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"runtime"
+	"strings"
+	"sync"
 	"testing"
-	"unsafe"
 
+	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -30,94 +34,95 @@ import (
 // 	return fastJsonNode{}
 // }
 
-// func TestEncodeMemory(t *testing.T) {
-// 	//	if testing.Short() {
-// 	t.Skip("Skipping TestEncodeMemory")
-// 	//	}
-// 	var wg sync.WaitGroup
+func TestEncodeMemory(t *testing.T) {
+	//	if testing.Short() {
+	t.Skip("Skipping TestEncodeMemory")
+	//	}
+	var wg sync.WaitGroup
 
-// 	for i := 0; i < runtime.NumCPU(); i++ {
-// 		// n := makeFastJsonNode()
-// 		n := newFastJsonNode()
-// 		require.NotNil(t, n)
-// 		for i := 0; i < 15000; i++ {
-// 			n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)), types.ValueForType(types.StringID))
-// 			n.AddListChild(enc.idForAttr(fmt.Sprintf("another long child %06d", i)), newFastJsonNode())
-// 		}
-// 		wg.Add(1)
-// 		go func() {
-// 			defer wg.Done()
-// 			for j := 0; j < 1000; j++ {
-// 				var buf bytes.Buffer
-// 				n.encode(&buf)
-// 			}
-// 		}()
-// 	}
+	for i := 0; i < runtime.NumCPU(); i++ {
+		// n := makeFastJsonNode()
+		n := newFastJsonNode()
+		require.NotNil(t, n)
+		for i := 0; i < 15000; i++ {
+			n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)), types.ValueForType(types.StringID))
+			n.AddListChild(enc.idForAttr(fmt.Sprintf("another long child %06d", i)), newFastJsonNode())
+		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 1000; j++ {
+				var buf bytes.Buffer
+				n.encode(&buf)
+			}
+		}()
+	}
 
-// 	wg.Wait()
-// }
+	wg.Wait()
+}
 
-// func TestNormalizeJSONLimit(t *testing.T) {
-// 	// Set default normalize limit.
-// 	x.Config.NormalizeNodeLimit = 1e4
+func TestNormalizeJSONLimit(t *testing.T) {
+	// Set default normalize limit.
+	x.Config.NormalizeNodeLimit = 1e4
 
-// 	if testing.Short() {
-// 		t.Skip("Skipping TestNormalizeJSONLimit")
-// 	}
+	if testing.Short() {
+		t.Skip("Skipping TestNormalizeJSONLimit")
+	}
 
-// 	n := (newFastJsonNode()).newFastJsonNodeWithAttr(enc.idForAttr("root"))
-// 	require.NotNil(t, n)
-// 	for i := 0; i < 1000; i++ {
-// 		n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
-// 			types.ValueForType(types.StringID))
-// 		child1 := n.newFastJsonNodeWithAttr(enc.idForAttr("child1"))
-// 		n.AddListChild(enc.idForAttr("child1"), child1)
-// 		for j := 0; j < 100; j++ {
-// 			child1.AddValue(enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
-// 				types.ValueForType(types.StringID))
-// 		}
-// 		child2 := n.newFastJsonNodeWithAttr(enc.idForAttr("child2"))
-// 		n.AddListChild(enc.idForAttr("child2"), child2)
-// 		for j := 0; j < 100; j++ {
-// 			child2.AddValue(enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
-// 				types.ValueForType(types.StringID))
-// 		}
-// 		child3 := n.newFastJsonNodeWithAttr(enc.idForAttr("child3"))
-// 		n.AddListChild(enc.idForAttr("child3"), child3)
-// 		for j := 0; j < 100; j++ {
-// 			child3.AddValue(enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
-// 				types.ValueForType(types.StringID))
-// 		}
-// 	}
-// 	_, err := n.normalize()
-// 	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
-// }
+	enc := newEncoder()
+	n := enc.newFastJsonNodeWithAttr(enc.idForAttr("root"))
+	require.NotNil(t, n)
+	for i := 0; i < 1000; i++ {
+		enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+			types.ValueForType(types.StringID))
+		child1 := enc.newFastJsonNodeWithAttr(enc.idForAttr("child1"))
+		enc.AddListChild(n, enc.idForAttr("child1"), child1)
+		for j := 0; j < 100; j++ {
+			enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
+				types.ValueForType(types.StringID))
+		}
+		child2 := enc.newFastJsonNodeWithAttr(enc.idForAttr("child2"))
+		enc.AddListChild(n, enc.idForAttr("child2"), child2)
+		for j := 0; j < 100; j++ {
+			enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
+				types.ValueForType(types.StringID))
+		}
+		child3 := enc.newFastJsonNodeWithAttr(enc.idForAttr("child3"))
+		enc.AddListChild(n, enc.idForAttr("child3"), child3)
+		for j := 0; j < 100; j++ {
+			enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
+				types.ValueForType(types.StringID))
+		}
+	}
+	_, err := enc.normalize(n)
+	require.Error(t, err, "Couldn't evaluate @normalize directive - too many results")
+}
 
-// func BenchmarkJsonMarshal(b *testing.B) {
-// 	inputStrings := [][]string{
-// 		[]string{"largestring", strings.Repeat("a", 1024)},
-// 		[]string{"smallstring", "abcdef"},
-// 		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
-// 	}
+func BenchmarkJsonMarshal(b *testing.B) {
+	inputStrings := [][]string{
+		[]string{"largestring", strings.Repeat("a", 1024)},
+		[]string{"smallstring", "abcdef"},
+		[]string{"specialchars", "<><>^)(*&(%*&%&^$*&%)(*&)^)"},
+	}
 
-// 	var result []byte
+	var result []byte
 
-// 	for _, input := range inputStrings {
-// 		b.Run(fmt.Sprintf("STDJsonMarshal-%s", input[0]), func(b *testing.B) {
-// 			for i := 0; i < b.N; i++ {
-// 				result, _ = json.Marshal(input[1])
-// 			}
-// 		})
+	for _, input := range inputStrings {
+		b.Run(fmt.Sprintf("STDJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result, _ = json.Marshal(input[1])
+			}
+		})
 
-// 		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
-// 			for i := 0; i < b.N; i++ {
-// 				result = stringJsonMarshal(input[1])
-// 			}
-// 		})
-// 	}
+		b.Run(fmt.Sprintf("stringJsonMarshal-%s", input[0]), func(b *testing.B) {
+			for i := 0; i < b.N; i++ {
+				result = stringJsonMarshal(input[1])
+			}
+		})
+	}
 
-// 	_ = result
-// }
+	_ = result
+}
 
 func TestStringJsonMarshal(t *testing.T) {
 	inputs := []string{
@@ -149,33 +154,35 @@ func TestFastJsonNode(t *testing.T) {
 
 	enc := newEncoder()
 	fj := enc.newFastJsonNode()
-	fj.setAttr(enc, attrId)
-	fj.setScalarVal(enc, scalarVal)
-	fj.setIsChild(enc, isChild)
-	fj.setList(enc, list)
+	enc.setAttr(fj, attrId)
+	enc.setScalarVal(fj, scalarVal)
+	enc.setIsChild(fj, isChild)
+	enc.setList(fj, list)
 
-	require.Equal(t, attrId, fj.getAttr(enc))
-	require.Equal(t, scalarVal, fj.getScalarVal(enc))
-	require.Equal(t, isChild, fj.getIsChild(enc))
-	require.Equal(t, list, fj.getList(enc))
+	require.Equal(t, attrId, enc.getAttr(fj))
+	require.Equal(t, scalarVal, enc.getScalarVal(fj))
+	require.Equal(t, isChild, enc.getIsChild(fj))
+	require.Equal(t, list, enc.getList(fj))
 
 	fj2 := enc.newFastJsonNode()
-	fj2.setAttr(enc, attrId)
-	fj2.setScalarVal(enc, scalarVal)
-	fj2.setIsChild(enc, isChild)
-	fj2.setList(enc, list)
+	enc.setAttr(fj2, attrId)
+	enc.setScalarVal(fj2, scalarVal)
+	enc.setIsChild(fj2, isChild)
+	enc.setList(fj2, list)
 
-	require.Equal(t, attrId, fj2.getAttr(enc))
-	require.Equal(t, scalarVal, fj2.getScalarVal(enc))
-	require.Equal(t, isChild, fj2.getIsChild(enc))
-	require.Equal(t, list, fj2.getList(enc))
+	require.Equal(t, attrId, enc.getAttr(fj2))
+	require.Equal(t, scalarVal, enc.getScalarVal(fj2))
+	require.Equal(t, isChild, enc.getIsChild(fj2))
+	require.Equal(t, list, enc.getList(fj2))
 }
 
-func BenchmarkFastJsonNodeMemory(t *testing.B) {
-	var fjs []*fastJsonNode
-	for i := 0; i < 2e6; i++ {
-		fjs = append(fjs, new(fastJsonNode))
+func BenchmarkFastJsonNodeMemory(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		enc := newEncoder()
+		var fj fastJsonNode
+		for i := 0; i < 2e6; i++ {
+			fj = enc.newFastJsonNode()
+		}
+		_ = fj
 	}
-
-	fmt.Println(unsafe.Sizeof(fjs))
 }
