@@ -105,7 +105,7 @@ func (r *reducer) run() error {
 func (r *reducer) createBadger(i int) *badger.DB {
 	if r.opt.BadgerKeyFile != "" {
 		// Need to set zero addr in WorkerConfig before checking the license.
-		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
+		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
 
 		if !worker.EnterpriseEnabled() {
 			// Crash since the enterprise license is not enabled..
