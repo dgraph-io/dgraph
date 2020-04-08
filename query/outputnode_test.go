@@ -30,10 +30,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// func makeFastJsonNode() fastJsonNode {
-// 	return fastJsonNode{}
-// }
-
 func TestEncodeMemory(t *testing.T) {
 	//	if testing.Short() {
 	t.Skip("Skipping TestEncodeMemory")
@@ -41,19 +37,21 @@ func TestEncodeMemory(t *testing.T) {
 	var wg sync.WaitGroup
 
 	for i := 0; i < runtime.NumCPU(); i++ {
-		// n := makeFastJsonNode()
-		n := newFastJsonNode()
+		enc := newEncoder()
+		n := enc.newFastJsonNode()
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
-			n.AddValue(enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)), types.ValueForType(types.StringID))
-			n.AddListChild(enc.idForAttr(fmt.Sprintf("another long child %06d", i)), newFastJsonNode())
+			enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
+				types.ValueForType(types.StringID))
+			enc.AddListChild(n, enc.idForAttr(fmt.Sprintf("another long child %06d", i)),
+				enc.newFastJsonNode())
 		}
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 1000; j++ {
 				var buf bytes.Buffer
-				n.encode(&buf)
+				enc.encode(n, &buf)
 			}
 		}()
 	}

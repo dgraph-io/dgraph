@@ -96,24 +96,24 @@ func newEncoder() *encoder {
 	}
 }
 
-func (e *encoder) idForAttr(attr string) uint16 {
-	if id, ok := e.attrMap[attr]; ok {
+func (enc *encoder) idForAttr(attr string) uint16 {
+	if id, ok := enc.attrMap[attr]; ok {
 		return id
 	}
 
-	e.seqNo++
-	e.attrMap[attr] = e.seqNo
-	e.idMap[e.seqNo] = attr
-	return e.seqNo
+	enc.seqNo++
+	enc.attrMap[attr] = enc.seqNo
+	enc.idMap[enc.seqNo] = attr
+	return enc.seqNo
 }
 
-func (e *encoder) attrForID(id uint16) string {
+func (enc *encoder) attrForID(id uint16) string {
 	if id == 0 {
 		return ""
 	}
 
-	x.AssertTrue(id <= e.seqNo)
-	if attr, ok := e.idMap[id]; ok {
+	x.AssertTrue(id <= enc.seqNo)
+	if attr, ok := enc.idMap[id]; ok {
 		return attr
 	}
 
@@ -121,7 +121,7 @@ func (e *encoder) attrForID(id uint16) string {
 	panic(fmt.Sprintf("id for predicate id: %d is not found in encoder's idMap", id))
 }
 
-//
+// makeScalarNode returns a fastJsonNode with all of its meta data populated.
 func (enc *encoder) makeScalarNode(attr uint16, isChild bool, val []byte, list bool) fastJsonNode {
 	fj := enc.newFastJsonNode()
 	enc.setAttr(fj, attr)
@@ -297,8 +297,8 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) {
 		}
 	}
 
-	enc.appendAttrs(fj, []fastJsonNode{enc.makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
-		false)})
+	enc.appendAttrs(fj,
+		[]fastJsonNode{enc.makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)), false)})
 }
 
 func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
