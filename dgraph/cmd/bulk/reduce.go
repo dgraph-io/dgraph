@@ -91,14 +91,12 @@ func (r *reducer) run() error {
 
 func (r *reducer) createBadger(i int) *badger.DB {
 	if r.opt.BadgerKeyFile != "" {
-		// need to set zero addr in WorkerConfig before doing license check.
-		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
-		// non-nil key file
+		// Need to set zero addr in WorkerConfig before checking the license.
+		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
 		if !worker.EnterpriseEnabled() {
-			// not licensed --> crash.
+			// Crash since the enterprise license is not enabled..
 			log.Fatal("Enterprise License needed for the Encryption feature.")
 		} else {
-			// licensed --> OK.
 			log.Printf("Encryption feature enabled. Using encryption key file: %v", r.opt.BadgerKeyFile)
 		}
 	}

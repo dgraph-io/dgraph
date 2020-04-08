@@ -758,7 +758,7 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	require.Error(t, err,
 		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
 
-	// retry the mutatiton
+	// retry the mutation
 	txn3 := dg.NewTxn()
 	_, err = txn3.Mutate(ctxb, &mu)
 	x.Check(err)
