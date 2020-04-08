@@ -1,4 +1,20 @@
-package keyring
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
+package keystore
 
 import (
 	"reflect"
@@ -6,7 +22,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 )
 
-var privateKeys = []string{"0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309",
+var privateKeys = []string{
+	"0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309",
 	"0x00e5029dd32ed973146bc60131d929552b087d0376a8c284c5703a7a305f9009",
 	"0x2176a403c253c126b6f97d066604987e2cebad374155a51a4eb6baf29fd4050e",
 	"0x1eee623155d1fbe860ae9de9bb3e1b853af54f37cefc58bca6013f36214ddd08",

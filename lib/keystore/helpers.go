@@ -31,7 +31,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/secp256k1"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
-	"github.com/ChainSafe/gossamer/lib/keyring"
 	"github.com/ChainSafe/gossamer/lib/utils"
 )
 
@@ -127,7 +126,7 @@ func LoadKeystore(key string) (*Keystore, error) {
 
 	if key != "" {
 
-		kr, err := keyring.NewKeyring()
+		kr, err := NewKeyring()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create keyring")
 		}
