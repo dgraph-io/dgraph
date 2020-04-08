@@ -272,7 +272,8 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/enc-key"
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore", "-k", testutil.KEYFILE}
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
+		"-k", testutil.KeyFile}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
