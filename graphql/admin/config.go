@@ -19,11 +19,12 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/worker"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
@@ -35,18 +36,11 @@ type configInput struct {
 	LruMB float64
 }
 
-func (cr *configResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (cr *configResolver) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got config request through GraphQL admin API")
 
 	cr.mutation = m
-	input, err := getConfigInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = worker.UpdateLruMb(input.LruMB)
-	return nil, nil, err
+	return nil, nil, nil
 }
 
 func (cr *configResolver) FromMutationResult(
@@ -61,8 +55,18 @@ func (cr *configResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	err := edgraph.AuthorizeGuardians(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return nil, nil, nil
+	input, err := getConfigInput(cr.mutation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = worker.UpdateLruMb(input.LruMB)
+	return nil, nil, err
 }
 
 func (cr *configResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

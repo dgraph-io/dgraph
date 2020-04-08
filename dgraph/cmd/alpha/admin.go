@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -32,9 +33,11 @@ import (
 )
 
 // handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[string]bool) bool {
+func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[string]bool,
+	allowOnlyGuardians bool) bool {
 	if _, ok := allowedMethods[r.Method]; !ok {
 		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		w.WriteHeader(http.StatusMethodNotAllowed)
 		return false
 	}
 
@@ -43,36 +46,46 @@ func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[stri
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
 		return false
 	}
+
+	if allowOnlyGuardians {
+		err = edgraph.AuthorizeGuardians(x.AttachAccessJwt(context.Background(), r))
+		if err != nil {
+			x.SetStatus(w, x.ErrorUnauthorized, err.Error())
+			return false
+		}
+	}
 	return true
 }
 
 func drainingHandler(w http.ResponseWriter, r *http.Request) {
-	switch r.Method {
-	case http.MethodPut, http.MethodPost:
-		enableStr := r.URL.Query().Get("enable")
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodPut:  true,
+		http.MethodPost: true,
+	}, true) {
+		return
+	}
 
-		enable, err := strconv.ParseBool(enableStr)
-		if err != nil {
-			x.SetStatus(w, x.ErrorInvalidRequest,
-				"Found invalid value for the enable parameter")
-			return
-		}
+	enableStr := r.URL.Query().Get("enable")
 
-		x.UpdateDrainingMode(enable)
-		_, err = w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
-			`"message": "draining mode has been set to %v"}`, enable)))
-		if err != nil {
-			glog.Errorf("Failed to write response: %v", err)
-		}
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
+	enable, err := strconv.ParseBool(enableStr)
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"Found invalid value for the enable parameter")
+		return
+	}
+
+	x.UpdateDrainingMode(enable)
+	_, err = w.Write([]byte(fmt.Sprintf(`{"code": "Success",`+
+		`"message": "draining mode has been set to %v"}`, enable)))
+	if err != nil {
+		glog.Errorf("Failed to write response: %v", err)
 	}
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, map[string]bool{
 		http.MethodGet: true,
-	}) {
+	}, true) {
 		return
 	}
 
@@ -84,7 +97,7 @@ func shutDownHandler(w http.ResponseWriter, r *http.Request) {
 func exportHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, map[string]bool{
 		http.MethodGet: true,
-	}) {
+	}, true) {
 		return
 	}
 	if err := r.ParseForm(); err != nil {
@@ -114,13 +127,18 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
+	if !handlerInit(w, r, map[string]bool{
+		http.MethodGet: true,
+		http.MethodPut: true,
+	}, true) {
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		memoryLimitGetHandler(w, r)
 	case http.MethodPut:
 		memoryLimitPutHandler(w, r)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
 }
 

@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"github.com/dgraph-io/dgraph/edgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -36,26 +37,11 @@ type exportInput struct {
 	Format string
 }
 
-func (er *exportResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (er *exportResolver) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got export request through GraphQL admin API")
 
 	er.mutation = m
-	input, err := getExportInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	format := worker.DefaultExportFormat
-	if input.Format != "" {
-		format = worker.NormalizeExportFormat(input.Format)
-		if format == "" {
-			return nil, nil, errors.Errorf("invalid export format: %v", input.Format)
-		}
-	}
-
-	err = worker.ExportOverNetwork(context.Background(), format)
-	return nil, nil, errors.Wrapf(err, "export failed")
+	return nil, nil, nil
 }
 
 func (er *exportResolver) FromMutationResult(
@@ -70,8 +56,26 @@ func (er *exportResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	err := edgraph.AuthorizeGuardians(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return nil, nil, nil
+	input, err := getExportInput(er.mutation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	format := worker.DefaultExportFormat
+	if input.Format != "" {
+		format = worker.NormalizeExportFormat(input.Format)
+		if format == "" {
+			return nil, nil, errors.Errorf("invalid export format: %v", input.Format)
+		}
+	}
+
+	err = worker.ExportOverNetwork(context.Background(), format)
+	return nil, nil, errors.Wrapf(err, "export failed")
 }
 
 func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

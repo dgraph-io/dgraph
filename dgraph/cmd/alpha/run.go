@@ -462,7 +462,7 @@ func setupServer(closer *y.Closer) {
 				http.MethodPost:    true,
 				http.MethodGet:     true,
 				http.MethodOptions: true,
-			}) {
+			}, false) {
 				return
 			}
 			h.ServeHTTP(w, r)

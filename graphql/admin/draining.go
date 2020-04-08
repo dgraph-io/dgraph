@@ -19,11 +19,12 @@ package admin
 import (
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/x"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -32,15 +33,12 @@ type drainingResolver struct {
 	enable   bool
 }
 
-func (dr *drainingResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (dr *drainingResolver) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation,
+	error) {
 	glog.Info("Got draining request through GraphQL admin API")
 
 	dr.mutation = m
-	enable := getDrainingInput(m)
-
-	dr.enable = enable
-	x.UpdateDrainingMode(enable)
+	dr.enable = getDrainingInput(m)
 	return nil, nil, nil
 }
 
@@ -56,6 +54,12 @@ func (dr *drainingResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	err := edgraph.AuthorizeGuardians(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	x.UpdateDrainingMode(dr.enable)
 
 	return nil, nil, nil
 }

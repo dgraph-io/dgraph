@@ -794,8 +794,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
-// authorizeGuardians authorizes the operation for users which belong to Guardians group.
-func authorizeGuardians(ctx context.Context) error {
+// AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
+func AuthorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil
