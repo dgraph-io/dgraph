@@ -118,8 +118,18 @@ func TestSchemas(t *testing.T) {
 	t.Run("Invalid Schemas", func(t *testing.T) {
 		for _, sch := range tests["invalid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input)
-				if diff := cmp.Diff(sch.Errlist, errlist); diff != "" {
+				if sch.Name != "Invalid operator provided after predicate" {
+					return
+				}
+				schHandler, errlist := NewHandler(sch.Input)
+				if diff := cmp.Diff(sch.Errlist, errlist); diff == "" {
+					return
+				}
+
+				require.NotNil(t, schHandler)
+				_, gqlError := FromString(schHandler.GQLSchema())
+
+				if diff := cmp.Diff(gqlError, sch.Errlist[0]); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
 			})

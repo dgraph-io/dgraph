@@ -715,8 +715,9 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; username has no operation attached",
-      "locations":[{"line":2, "column":10}]},
+    {"message": 'Field "username" must not have a selection since type "String" has no subfields.',
+      "locations":[{"line":1, "column":21}],
+      "rule" : "ScalarLeafs"},
     ]
 
   - name: "No operator provided after predicate inside not"
@@ -727,8 +728,9 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; username has no operation attached",
-      "locations":[{"line":2, "column":18}]},
+    {"message": 'Field "username" must not have a selection since type "String" has no subfields.',
+      "locations":[{"line":1, "column":21}],
+      "rule" : "ScalarLeafs"},
     ]
 
 
@@ -832,7 +834,10 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": 'Cannot query field "xyz" on type "User".', "locations":[{"line":1, "column":44}]}]
+    {"message": 'Cannot query field "xyz" on type "User".',
+     "locations":[{"line":1, "column":44}],
+     "rule": "FieldsOnCorrectType",}
+    ]
 
   -
     name: "auth multiple rules in one node"
@@ -845,8 +850,9 @@ invalid_schemas:
           username: String! @id
       }
     errlist: [
-    {"message": "Type User; Rule has multiple fields true",
-      "locations":[{"line":1, "column":23}]},
+    {"message": 'Cannot query field "DENY" on type "User".',
+      "locations":[{"line":1, "column":21}],
+      "rule": "FieldsOnCorrectType"},
     ]
 
 valid_schemas:
