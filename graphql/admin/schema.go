@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 
 	"github.com/golang/glog"
 
@@ -79,6 +80,7 @@ func (asr *updateSchemaResolver) Rewrite(
 	}
 
 	asr.newSchema.GeneratedSchema = schHandler.GQLSchema()
+	fmt.Println(asr.newSchema.GeneratedSchema)
 	asr.newGQLSchema, err = schema.FromString(asr.newSchema.GeneratedSchema)
 	if err != nil {
 		return nil, nil, err

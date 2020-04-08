@@ -1410,6 +1410,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
+		case ast.InputObject:
+			x.Check2(original.WriteString(generateInputString(typ) + "\n"))
 		}
 		printed[typName] = true
 	}

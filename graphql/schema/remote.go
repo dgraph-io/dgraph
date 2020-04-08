@@ -250,15 +250,6 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				remoteQuery.Name)
 		}
 
-		if _, ok = graphqlScalarType[argType]; !ok {
-			fmt.Println(argType)
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
-					" argument is supported in the remote graphql call.",
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				remoteArg)
-		}
 		argValToType[remoteArgVal] = argType
 	}
 
@@ -280,7 +271,40 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 	}
 
-	// Validate given argument type is matching with the remote query argument.
+	fmt.Println(endpoint.field.Type.String())
+
+	// Now we have to expand the remote types and check with the local types.
+	expandedTypes := expandArgs(argValToType, remoteIntrospection)
+
+	for typeName, fields := range expandedTypes {
+		localType, ok := endpoint.schema.Types[typeName]
+		if !ok {
+			return gqlerror.ErrorPosf(
+				endpoint.directive.Position, "Unable to find remote type %s in the local schema",
+				typeName,
+			)
+		}
+		for _, field := range fields {
+			localField := localType.Fields.ForName(field.Name)
+			if localField == nil {
+				return gqlerror.ErrorPosf(
+					endpoint.directive.Position,
+					"%s field for the remote type %s is not present in the local type %s",
+					field.Name, localType, localType,
+				)
+			}
+			if localField.Type.NamedType != field.Type.Name {
+				return gqlerror.ErrorPosf(
+					endpoint.field.Position,
+					"expected type for the field %s is % but got %s",
+					field.Name,
+					field.Type.Name,
+					localField.Type.NamedType,
+				)
+			}
+		}
+	}
+
 	for variable, typeName := range argValToType {
 		localRemoteCallArg := endpoint.field.Arguments.ForName(variable[1:])
 		if localRemoteCallArg == nil {
@@ -307,6 +331,53 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	return nil
 }
 
+type expandArgParams struct {
+	expandedTypes      map[string]struct{}
+	introspectedSchema *IntrospectedSchema
+	typesToFields      map[string][]GqlField
+}
+
+func expandArgRecursively(arg string, param *expandArgParams) {
+	_, alreadyExpanded := param.expandedTypes[arg]
+	if alreadyExpanded {
+		return
+	}
+	// We're marking this to avoid recursive expansion.
+	param.expandedTypes[arg] = struct{}{}
+	for _, inputType := range param.introspectedSchema.Data.Schema.Types {
+		if inputType.Name == arg {
+			param.typesToFields[inputType.Name] = inputType.Fields
+			// Expand the non scalar types.
+			for _, field := range inputType.Fields {
+				_, ok := graphqlScalarType[field.Type.Name]
+				if !ok {
+					// expand this field.
+					expandArgRecursively(field.Type.Name, param)
+				}
+			}
+		}
+	}
+}
+
+func expandArgs(argToVal map[string]string,
+	introspectedSchema *IntrospectedSchema) map[string][]GqlField {
+
+	param := &expandArgParams{
+		expandedTypes:      make(map[string]struct{}, 0),
+		typesToFields:      make(map[string][]GqlField),
+		introspectedSchema: introspectedSchema,
+	}
+	// Expand the types that are required to do a query.
+	for _, typeTobeExpanded := range argToVal {
+		_, ok := graphqlScalarType[typeTobeExpanded]
+		if ok {
+			continue
+		}
+		expandArgRecursively(typeTobeExpanded, param)
+	}
+	return param.typesToFields
+}
+
 // collectArgumentsFromQuery will collect all the arguments and values from the query.
 func collectArgumentsFromQuery(query *ast.Field) map[string]string {
 	arguments := make(map[string]string)
@@ -328,6 +399,11 @@ func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string
 			notNullArgs[introspectedArg.Name] = 0
 		}
 
+		if introspectedArg.Type.OfType.Name == "" {
+			// user defined type.
+			arguments[introspectedArg.Name] = introspectedArg.Type.Name
+			continue
+		}
 		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
 	}
 	return arguments, notNullArgs

@@ -41,7 +41,8 @@ func init() {
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
-	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface {
+	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface ||
+		(defn.Kind == ast.InputObject && defn.Directives.ForName("remote") != nil) {
 		return nil
 	}
 	return gqlerror.ErrorPosf(

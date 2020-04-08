@@ -915,16 +915,12 @@ func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 	rc.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
 
 	for _, arg := range query.Arguments {
-		val, ok := rc.argMap[arg.Name]
-		if !ok {
-			continue
-		}
+		inputArg := q.field.Arguments.ForName(arg.Name)
 		value := ""
-		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
-			if val == nil {
-				val = "null"
-			}
-			value = `"` + fmt.Sprintf("%+v", val) + `"`
+		if inputArg == nil {
+			value = `"null"`
+		} else {
+			value = inputArg.Value.String()
 		}
 		remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
 	}
@@ -945,6 +941,10 @@ func (q *query) GraphqlResolver() (HTTPResolverConfig, error) {
 	rc.Method = "POST"
 
 	return rc, nil
+}
+
+func buildValueFromArgMap(val interface{}) {
+
 }
 
 // buildGraphqlRequestFields will build graphql request body from ast.

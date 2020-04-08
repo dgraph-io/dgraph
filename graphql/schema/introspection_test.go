@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -254,4 +255,22 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")
 	require.NoError(t, err)
 	testutil.CompareJSON(t, string(expectedBuf), string(resp))
+}
+
+func TestFullIntrospectionQueryYo(t *testing.T) {
+	sch := gqlparser.MustLoadSchema(
+		&ast.Source{Name: "schema.graphql", Input: `
+	schema {
+		query: TestType
+	}
+
+	type TestType {
+		testField: String
+	}
+	input TestIbput {
+		to: String
+	}
+`})
+	fmt.Printf("%+v", sch.Types["TestIbput"].Fields[0].Type.NamedType)
+
 }

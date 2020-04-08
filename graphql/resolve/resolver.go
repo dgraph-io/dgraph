@@ -1163,7 +1163,7 @@ func (hr *httpResolver) rewriteAndExecute(
 		}
 		graphqlResp, ok := graphqlResp["data"].(map[string]interface{})
 		if ok {
-			data, ok := graphqlResp[hrc.RemoteQueryName].(map[string]interface{})
+			data, ok := graphqlResp[hrc.RemoteQueryName]
 			if ok {
 				castedData := make(map[string]interface{})
 				castedData[query.Name()] = []interface{}{data}
