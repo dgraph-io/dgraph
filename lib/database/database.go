@@ -32,6 +32,8 @@ type BadgerDB struct {
 	lock   sync.RWMutex
 }
 
+var _ Database = (*BadgerDB)(nil)
+
 //Config defines configurations for BadgerService instance
 type Config struct {
 	DataDir string
@@ -273,8 +275,8 @@ func (b *batchWriter) ValueSize() int {
 	return b.size
 }
 
-// Delete removes the key from the batch and database
-func (b *batchWriter) Delete(key []byte) error {
+// Del removes the key from the batch and database
+func (b *batchWriter) Del(key []byte) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 	err := b.db.db.NewWriteBatch().Delete(key)

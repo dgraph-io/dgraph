@@ -27,6 +27,8 @@ type MemDatabase struct {
 	lock sync.RWMutex
 }
 
+var _ Database = (*MemDatabase)(nil)
+
 // NewMemDatabase returns an initialized mapping used for test database
 func NewMemDatabase() *MemDatabase {
 	return &MemDatabase{

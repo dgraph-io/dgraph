@@ -16,29 +16,26 @@
 
 package database
 
-// PutItem wraps the database write operation supported by regular database.
-type PutItem interface {
-	Put(key []byte, value []byte) error
-}
+import "io"
 
 // Database wraps all database operations. All methods are safe for concurrent use.
 type Database interface {
 	Reader
 	Writer
+	io.Closer
 
 	NewBatch() Batch
-	Close() error
 	Path() string
 	NewIterator() Iterator
 }
 
 // Batch is a write-only operation.
 type Batch interface {
-	PutItem
+	Writer
+
 	ValueSize() int
 	Write() error
 	Reset()
-	Delete(key []byte) error
 }
 
 // Iterator iterates over key/value pairs in ascending key order.
@@ -58,6 +55,6 @@ type Reader interface {
 
 // Writer interface
 type Writer interface {
-	PutItem
+	Put(key []byte, value []byte) error
 	Del(key []byte) error
 }

@@ -25,6 +25,8 @@ type table struct {
 	prefix string
 }
 
+var _ Database = (*table)(nil)
+
 type tableBatch struct {
 	batch  Batch
 	prefix string
@@ -107,8 +109,8 @@ func (tb *tableBatch) Reset() {
 }
 
 // Delete removes the key from the batch and database
-func (tb *tableBatch) Delete(k []byte) error {
-	err := tb.batch.Delete(k)
+func (tb *tableBatch) Del(k []byte) error {
+	err := tb.batch.Del(k)
 	if err != nil {
 		return err
 	}
