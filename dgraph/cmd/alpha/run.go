@@ -148,7 +148,7 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
-	flag.Bool("disable_sentry", false, "Turn off sending events to Sentry. (default false")
+	flag.Bool("disable_sentry", false, "Turn off sending events to Sentry. (default false)")
 
 	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
