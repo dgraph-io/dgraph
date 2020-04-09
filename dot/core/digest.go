@@ -20,7 +20,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 
 	log "github.com/ChainSafe/log15"

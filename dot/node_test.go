@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/core"
-	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -52,7 +52,7 @@ func TestInitNode(t *testing.T) {
 
 // TestNodeInitialized
 
-// TODO: improve dot node tests
+// TODO: improve dot tests #687
 
 // TestNewNode
 func TestNewNode(t *testing.T) {
@@ -73,7 +73,8 @@ func TestNewNode(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, ks)
 
-	cfg.Core.Authority = false // TODO: improve dot node tests
+	// TODO: improve dot tests #687
+	cfg.Core.Authority = false
 
 	_, err = NewNode(cfg, ks)
 	require.Nil(t, err)
@@ -98,7 +99,8 @@ func TestStartNode(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, ks)
 
-	cfg.Core.Authority = false // TODO: improve dot node tests
+	// TODO: improve dot tests #687
+	cfg.Core.Authority = false
 
 	node, err := NewNode(cfg, ks)
 	require.Nil(t, err)

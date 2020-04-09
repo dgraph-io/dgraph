@@ -14,23 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package common
 
-import (
-	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/common"
-)
-
-// BlockState interface for block state methods
-type BlockState interface {
-	BestBlockHeader() (*types.Header, error)
-	GenesisHash() common.Hash
-}
-
-// NetworkState interface for network state methods
-//nolint:golint
-type NetworkState interface {
-	SetHealth(common.Health)
-	SetNetworkState(common.NetworkState)
-	SetPeers([]common.PeerInfo)
-}
+// Address represents a base58 encoded public key
+type Address string

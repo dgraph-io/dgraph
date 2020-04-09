@@ -19,9 +19,10 @@ package modules
 import (
 	"net/http"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/transaction"
+
 	log "github.com/ChainSafe/log15"
 )
 

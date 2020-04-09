@@ -48,7 +48,7 @@ func TestLoadConfig(t *testing.T) {
 	err = LoadConfig(cfg, cfgFile.Name())
 	require.Nil(t, err)
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.NotNil(t, cfg)
 }
 
@@ -69,7 +69,7 @@ func TestExportConfig(t *testing.T) {
 
 	file := ExportConfig(cfg, cfgFile.Name())
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.NotNil(t, file)
 }
 
@@ -91,7 +91,7 @@ func TestLoadConfigGssmr(t *testing.T) {
 	err = LoadConfig(cfg, GssmrConfigPath)
 	require.Nil(t, err)
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.NotNil(t, cfg)
 }
 
@@ -115,7 +115,7 @@ func TestExportConfigGssmr(t *testing.T) {
 
 	file := ExportConfig(cfg, GssmrConfigPath)
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.NotNil(t, file)
 }
 
@@ -136,7 +136,7 @@ func TestLoadConfigKsmcc(t *testing.T) {
 
 	err = LoadConfig(cfg, KsmccConfigPath)
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.Nil(t, err)
 }
 
@@ -160,6 +160,6 @@ func TestExportConfigKsmcc(t *testing.T) {
 
 	file := ExportConfig(cfg, KsmccConfigPath)
 
-	// TODO: improve dot config tests
+	// TODO: improve dot tests #687
 	require.NotNil(t, file)
 }

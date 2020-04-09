@@ -19,7 +19,7 @@ package core
 import (
 	"fmt"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/scale"

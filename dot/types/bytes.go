@@ -14,23 +14,33 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package types
 
 import (
-	"github.com/ChainSafe/gossamer/dot/types"
+	"io"
+
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/scale"
 )
 
-// BlockState interface for block state methods
-type BlockState interface {
-	BestBlockHeader() (*types.Header, error)
-	GenesisHash() common.Hash
-}
+// decodeOptionalBytes decodes SCALE encoded optional bytes into an *optional.Bytes
+func decodeOptionalBytes(r io.Reader) (*optional.Bytes, error) {
+	sd := scale.Decoder{Reader: r}
 
-// NetworkState interface for network state methods
-//nolint:golint
-type NetworkState interface {
-	SetHealth(common.Health)
-	SetNetworkState(common.NetworkState)
-	SetPeers([]common.PeerInfo)
+	exists, err := common.ReadByte(r)
+	if err != nil {
+		return nil, err
+	}
+
+	if exists == 1 {
+		b, err := sd.Decode([]byte{})
+		if err != nil {
+			return nil, err
+		}
+
+		return optional.NewBytes(true, b.([]byte)), nil
+	}
+
+	return optional.NewBytes(false, nil), nil
 }

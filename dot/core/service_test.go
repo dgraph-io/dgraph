@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
@@ -178,7 +178,9 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 
 func TestStartService(t *testing.T) {
 	s := newTestService(t, nil)
-	require.NotNil(t, s) // TODO: improve dot core tests
+
+	// TODO: improve dot tests #687
+	require.NotNil(t, s)
 
 	err := s.Start()
 	require.Nil(t, err)

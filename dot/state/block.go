@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"

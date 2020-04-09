@@ -23,19 +23,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/common/optional"
-	"github.com/ChainSafe/gossamer/lib/runtime"
-
-	"github.com/ChainSafe/gossamer/dot/core/types"
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	"github.com/stretchr/testify/require"
 )
 
 func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {

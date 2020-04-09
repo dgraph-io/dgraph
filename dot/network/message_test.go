@@ -22,12 +22,12 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/lib/common/variadic"
-	"github.com/stretchr/testify/require"
-
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/common/variadic"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestDecodeMessageStatus(t *testing.T) {

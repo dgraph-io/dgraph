@@ -26,24 +26,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 )
 
-func TestBodyToExtrinsics(t *testing.T) {
-	exts := []Extrinsic{{1, 2, 3}, {7, 8, 9, 0}, {0xa, 0xb}}
-
-	body, err := NewBodyFromExtrinsics(exts)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	res, err := body.AsExtrinsics()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(res, exts) {
-		t.Fatalf("Fail: got %x expected %x", res, exts)
-	}
-}
-
 func TestBlockDataEncodeEmpty(t *testing.T) {
 	hash := common.NewHash([]byte{0})
 
@@ -318,84 +300,5 @@ func TestBlockDataArrayEncodeAndDecode(t *testing.T) {
 
 	if !reflect.DeepEqual(res[1], expected[1]) {
 		t.Fatalf("Fail: got %v expected %v", res[1], expected[1])
-	}
-}
-
-func TestDecodeBlock(t *testing.T) {
-	// see https://github.com/paritytech/substrate/blob/master/test-utils/runtime/src/system.rs#L376
-	data := []byte{69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 4, 39, 71, 171, 124, 13, 195, 139, 127, 42, 251, 168, 43, 213, 226, 214, 172, 239, 140, 49, 224, 152, 0, 246, 96, 183, 94, 200, 74, 112, 5, 9, 159, 3, 23, 10, 46, 117, 151, 183, 183, 227, 216, 76, 5, 57, 29, 19, 154, 98, 177, 87, 231, 135, 134, 216, 192, 130, 242, 157, 207, 76, 17, 19, 20, 0, 0}
-	bh := NewEmptyBlock()
-	err := bh.Decode(data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	parentHash, err := common.HexToHash("0x4545454545454545454545454545454545454545454545454545454545454545")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stateRoot, err := common.HexToHash("0x2747ab7c0dc38b7f2afba82bd5e2d6acef8c31e09800f660b75ec84a7005099f")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	extrinsicsRoot, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	header := &Header{
-		ParentHash:     parentHash,
-		Number:         big.NewInt(1),
-		StateRoot:      stateRoot,
-		ExtrinsicsRoot: extrinsicsRoot,
-		Digest:         [][]byte{},
-	}
-	expected := NewBlock(header, NewBody(nil))
-
-	if !reflect.DeepEqual(bh, expected) {
-		t.Fatalf("Fail: got %v, %v expected %v, %v", bh.Header, bh.Body, expected.Header, expected.Body)
-	}
-}
-
-func TestEncodeBlock(t *testing.T) {
-	// see https://github.com/paritytech/substrate/blob/master/test-utils/runtime/src/system.rs#L376
-	expected := []byte{69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69, 69,
-		4, 39, 71, 171, 124, 13, 195, 139, 127, 42, 251, 168, 43, 213, 226, 214, 172, 239, 140, 49, 224, 152, 0,
-		246, 96, 183, 94, 200, 74, 112, 5, 9, 159, 3, 23, 10, 46, 117, 151, 183, 183, 227, 216, 76, 5, 57, 29, 19,
-		154, 98, 177, 87, 231, 135, 134, 216, 192, 130, 242, 157, 207, 76, 17, 19, 20, 0, 0}
-
-	parentHash, err := common.HexToHash("0x4545454545454545454545454545454545454545454545454545454545454545")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	stateRoot, err := common.HexToHash("0x2747ab7c0dc38b7f2afba82bd5e2d6acef8c31e09800f660b75ec84a7005099f")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	extrinsicsRoot, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	header := &Header{
-		ParentHash:     parentHash,
-		Number:         big.NewInt(1),
-		StateRoot:      stateRoot,
-		ExtrinsicsRoot: extrinsicsRoot,
-		Digest:         [][]byte{},
-	}
-
-	block := NewBlock(header, NewBody([]byte{}))
-	enc, err := block.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(enc, expected) {
-		t.Fatalf("Fail: got %x expected %x", enc, expected)
 	}
 }

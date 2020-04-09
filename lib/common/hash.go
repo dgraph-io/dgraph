@@ -17,8 +17,10 @@
 package common
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
 )
@@ -27,6 +29,63 @@ const (
 	// HashLength is the expected length of the common.Hash type
 	HashLength = 32
 )
+
+// Hash used to store a blake2b hash
+type Hash [32]byte
+
+// NewHash casts a byte array to a Hash
+// if the input is longer than 32 bytes, it takes the first 32 bytes
+func NewHash(in []byte) (res Hash) {
+	res = [32]byte{}
+	copy(res[:], in)
+	return res
+}
+
+// ToBytes turns a hash to a byte array
+func (h Hash) ToBytes() []byte {
+	b := [32]byte(h)
+	return b[:]
+}
+
+// Equal compares two hashes
+func (h Hash) Equal(g Hash) bool {
+	return bytes.Equal(h[:], g[:])
+}
+
+// String returns the hex string for the hash
+func (h Hash) String() string {
+	return fmt.Sprintf("0x%x", h[:])
+}
+
+// SetBytes sets the hash to the value of b.
+// If b is larger than len(h), b will be cropped from the left.
+func (h *Hash) SetBytes(b []byte) {
+	if len(b) > len(h) {
+		b = b[len(b)-HashLength:]
+	}
+
+	copy(h[HashLength-len(b):], b)
+}
+
+// ReadHash reads a 32-byte hash from the reader and returns it
+func ReadHash(r io.Reader) (Hash, error) {
+	buf := make([]byte, 32)
+	_, err := r.Read(buf)
+	if err != nil {
+		return Hash{}, err
+	}
+	h := [32]byte{}
+	copy(h[:], buf)
+	return Hash(h), nil
+}
+
+// BytesToHash sets b to hash.
+// If b is larger than len(h), b will be cropped from the left.
+func BytesToHash(b []byte) Hash {
+	var h Hash
+	h.SetBytes(b)
+	return h
+}
 
 // HexToHash turns a 0x prefixed hex string into type Hash
 func HexToHash(in string) (Hash, error) {
@@ -41,16 +100,4 @@ func HexToHash(in string) (Hash, error) {
 	var buf = [32]byte{}
 	copy(buf[:], out)
 	return buf, err
-}
-
-// ReadHash reads a 32-byte hash from the reader and returns it
-func ReadHash(r io.Reader) (Hash, error) {
-	buf := make([]byte, 32)
-	_, err := r.Read(buf)
-	if err != nil {
-		return Hash{}, err
-	}
-	h := [32]byte{}
-	copy(h[:], buf)
-	return Hash(h), nil
 }

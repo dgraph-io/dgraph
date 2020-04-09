@@ -22,18 +22,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ChainSafe/gossamer/lib/runtime"
-
-	"golang.org/x/exp/rand"
-
-	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/network"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 
 	log "github.com/ChainSafe/log15"
+	"golang.org/x/exp/rand"
 )
 
 // Syncer deals with chain syncing by sending block request messages and watching for responses.

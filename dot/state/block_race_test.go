@@ -22,7 +22,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
 

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/utils"
+
 	"github.com/stretchr/testify/require"
 )
 

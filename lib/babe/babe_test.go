@@ -23,8 +23,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"

@@ -22,8 +22,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+
 	"github.com/stretchr/testify/require"
 )
 

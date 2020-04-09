@@ -14,23 +14,27 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package types
 
 import (
-	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/common"
+	"reflect"
+	"testing"
 )
 
-// BlockState interface for block state methods
-type BlockState interface {
-	BestBlockHeader() (*types.Header, error)
-	GenesisHash() common.Hash
-}
+func TestBodyToExtrinsics(t *testing.T) {
+	exts := []Extrinsic{{1, 2, 3}, {7, 8, 9, 0}, {0xa, 0xb}}
 
-// NetworkState interface for network state methods
-//nolint:golint
-type NetworkState interface {
-	SetHealth(common.Health)
-	SetNetworkState(common.NetworkState)
-	SetPeers([]common.PeerInfo)
+	body, err := NewBodyFromExtrinsics(exts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := body.AsExtrinsics()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(res, exts) {
+		t.Fatalf("Fail: got %x expected %x", res, exts)
+	}
 }

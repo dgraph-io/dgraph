@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/ChainSafe/gossamer/dot/core/types"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"

@@ -29,7 +29,8 @@ func TestNewConfig(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	require.NotNil(t, cfg) // TODO: improve dot utils tests
+	// TODO: improve dot tests #687
+	require.NotNil(t, cfg)
 }
 
 // TestNewConfigAndFile tests the NewTestConfigWithFile method
@@ -38,6 +39,7 @@ func TestNewConfigAndFile(t *testing.T) {
 
 	defer utils.RemoveTestDir(t)
 
-	require.NotNil(t, testCfg)     // TODO: improve dot utils tests
-	require.NotNil(t, testCfgFile) // TODO: improve dot utils tests
+	// TODO: improve dot tests #687
+	require.NotNil(t, testCfg)
+	require.NotNil(t, testCfgFile)
 }

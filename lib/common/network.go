@@ -16,17 +16,6 @@
 
 package common
 
-import (
-	"bytes"
-	"fmt"
-)
-
-// Address represents a base58 encoded public key
-type Address string
-
-// Hash used to store a blake2b hash
-type Hash [32]byte
-
 // Health is network information about host needed for the rpc server
 type Health struct {
 	Peers           int
@@ -46,46 +35,4 @@ type PeerInfo struct {
 	ProtocolVersion uint32
 	BestHash        Hash
 	BestNumber      uint64
-}
-
-// NewHash casts a byte array to a Hash
-// if the input is longer than 32 bytes, it takes the first 32 bytes
-func NewHash(in []byte) (res Hash) {
-	res = [32]byte{}
-	copy(res[:], in)
-	return res
-}
-
-// BytesToHash sets b to hash.
-// If b is larger than len(h), b will be cropped from the left.
-func BytesToHash(b []byte) Hash {
-	var h Hash
-	h.SetBytes(b)
-	return h
-}
-
-// ToBytes turns a hash to a byte array
-func (h Hash) ToBytes() []byte {
-	b := [32]byte(h)
-	return b[:]
-}
-
-// Equal compares two hashes
-func (h Hash) Equal(g Hash) bool {
-	return bytes.Equal(h[:], g[:])
-}
-
-// String returns the hex string for the hash
-func (h Hash) String() string {
-	return fmt.Sprintf("0x%x", h[:])
-}
-
-// SetBytes sets the hash to the value of b.
-// If b is larger than len(h), b will be cropped from the left.
-func (h *Hash) SetBytes(b []byte) {
-	if len(b) > len(h) {
-		b = b[len(b)-HashLength:]
-	}
-
-	copy(h[HashLength-len(b):], b)
 }
