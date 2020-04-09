@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -77,6 +77,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_str: string .
 			balance_float: float .
 		`,
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in setting up schema :: %v\n", err)
 	}
@@ -102,6 +103,7 @@ func TestParallelIndexing(t *testing.T) {
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
+		RunInBackground: true,
 	}); err != nil {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
@@ -111,15 +113,17 @@ func TestParallelIndexing(t *testing.T) {
 			balance_int: int @index(int) .
 			balance_str: string @index(fulltext, term, exact) .
 		`,
-	}); err != nil && !strings.Contains(err.Error(), "is already being modified") {
+		RunInBackground: true,
+	}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 		t.Fatalf("error in adding indexes :: %v\n", err)
 	}
 
 	// Wait until previous indexing is complete.
 	for {
 		if err := dg.Alter(context.Background(), &api.Operation{
-			Schema: `balance_float: float @index(float) .`,
-		}); err != nil && !strings.Contains(err.Error(), "is already being modified") {
+			Schema:          `balance_float: float @index(float) .`,
+			RunInBackground: true,
+		}); err != nil && !strings.Contains(err.Error(), "errIndexingInProgress") {
 			t.Fatalf("error in adding indexes :: %v\n", err)
 		} else if err == nil {
 			break
@@ -128,8 +132,7 @@ func TestParallelIndexing(t *testing.T) {
 	}
 
 	fmt.Println("waiting for float indexing to complete")
-	s := `balance_float: float @index(float) .`
-	testutil.WaitForAlter(context.Background(), dg, s)
+	waitForSchemaUpdate(`{ q(func: eq(balance_float, "2.0")) {uid}}`, dg)
 
 	// balance should be same as uid.
 	checkBalance := func(b int, pred string) error {

@@ -26,7 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -153,6 +153,10 @@ func AdminQueryExecutor() QueryExecutor {
 	return &adminExecutor{}
 }
 
+func AdminMutationExecutor() MutationExecutor {
+	return &adminExecutor{}
+}
+
 // DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
@@ -161,6 +165,16 @@ func DgraphAsMutationExecutor() MutationExecutor {
 func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
+}
+
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
+func (de *adminExecutor) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
@@ -698,8 +712,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Error("Got a list of length %v from Dgraph when expecting a " +
-					"one-item list.\n")
+				glog.Error("Got a list of length %v from Dgraph when expecting a "+
+					"one-item list.\n", len(val))
 
 				errs = append(errs,
 					x.GqlErrorf(

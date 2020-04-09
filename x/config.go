@@ -55,8 +55,10 @@ type WorkerOptions struct {
 	Tracing float64
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string
-	// ZeroAddr stores the address and port for the zero instance associated with this alpha.
-	ZeroAddr string
+	// ZeroAddr stores the list of address:port for the zero instances associated with this alpha.
+	// Alpha would communicate via only one zero address from the list. All
+	// the other addresses serve as fallback.
+	ZeroAddr []string
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.
 	RaftId uint64
@@ -80,6 +82,8 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
+	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
+	BadgerKeyFile string
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

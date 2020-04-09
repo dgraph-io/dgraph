@@ -35,7 +35,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -334,7 +334,7 @@ func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
 	// While exporting type definitions, "<" and ">" brackets must be written around
-	// the name of everse predicates or Dgraph won't be able to parse the exported schema.
+	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
 	if strings.HasPrefix(update.Predicate, "~") {
 		x.Check2(builder.WriteString("<"))
 		x.Check2(builder.WriteString(update.Predicate))

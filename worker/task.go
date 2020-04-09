@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -401,7 +401,11 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 			vals, fcs, err := retrieveValuesAndFacets(args, pl, facetsTree, listType)
 			switch {
-			case err == posting.ErrNoValue || len(vals) == 0:
+			case err == posting.ErrNoValue || (err == nil && len(vals) == 0):
+				// This branch is taken when the value does not exist in the pl or
+				// the number of values retreived is zero (there could still be facets).
+				// We add empty lists to the UidMatrix, FaceMatrix, ValueMatrix and
+				// LangMatrix so that all these data structure have predicatble layouts.
 				out.UidMatrix = append(out.UidMatrix, &pb.List{})
 				out.FacetMatrix = append(out.FacetMatrix, &pb.FacetsList{})
 				out.ValueMatrix = append(out.ValueMatrix,
@@ -1216,7 +1220,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				switch lang {
 				case "":
 					if isList {
-						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 						if err != nil {
 							filterErr = err
 							return false
@@ -1230,7 +1234,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						}
 						for _, sv := range svs {
 							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
+								arg.srcFn.eqTokens[row]) {
 								return true
 							}
 						}
@@ -1238,7 +1243,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						return false
 					}
 
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
@@ -1254,7 +1259,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
@@ -2238,6 +2243,13 @@ loop:
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return err
+		}
+
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
 		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids

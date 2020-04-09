@@ -246,6 +246,7 @@ var directiveValidators = map[string]directiveValidator{
 	},
 }
 
+var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
@@ -350,6 +351,21 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
+		}
+	}
+
+	errs = append(errs, applySchemaValidations(schema, definitions)...)
+
+	return errs
+}
+
+func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaValidations {
+		newErrs := rule(schema, definitions)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
 		}
 	}
 

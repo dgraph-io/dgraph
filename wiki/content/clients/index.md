@@ -62,7 +62,7 @@ The client can be obtained in the usual way via `go get`:
 ```sh
 # Requires at least Go 1.11
 export GO111MODULE=on
-go get -u -v github.com/dgraph-io/dgo/v2
+go get -u -v github.com/dgraph-io/dgo/v200
 ```
 
 The full [GoDoc](https://godoc.org/github.com/dgraph-io/dgo) contains
@@ -439,6 +439,14 @@ fmt.Println(string(resp.Json))
 
 ```
 
+## C\#
+
+The official C# client [can be found here](https://github.com/dgraph-io/dgraph.net).
+Follow the instructions in the [README](https://github.com/dgraph-io/dgraph.net#readme) to get
+it up and running.
+
+More details on the supported versions can be found at
+[this link](https://github.com/dgraph-io/dgraph.net#supported-versions).
 
 ## Java
 
@@ -496,7 +504,6 @@ These third-party clients are contributed by the community and are not officiall
 ### C\#
 
 - https://github.com/AlexandreDaSilva/DgraphNet
-- https://github.com/MichaelJCompton/Dgraph-dotnet
 
 ### Dart
 
@@ -571,11 +578,6 @@ type Person {
 ```
 
 If all goes well, the response should be `{"code":"Success","message":"Done"}`.
-
-We build indexes in the background so that mutations and queries are not blocked.
-In such a case, the new schema may not be reflected right away. You could poll the
-schema to check whether indexing has been completed. New alter requests will be
-rejected until the background indexing task is finished.
 
 Other operations can be performed via the `/alter` endpoint as well. A specific
 predicate or the entire database can be dropped.
@@ -920,24 +922,6 @@ $ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8
 ```
 {{% /notice %}}
 
-### Health Check and Alpha Info
-
-`/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
-The body of the response contains information about the running alpha and its version.
-
-```sh
-$ curl localhost:8080/health
-```
-
-```json
-{
-  "version": "v1.1.0",
-  "instance": "alpha",
-  "uptime": 1928423
-}
-```
-
-Here, `uptime` is in nanoseconds (type `time.Duration` in Go).
 
 ### Run a query in JSON format
 

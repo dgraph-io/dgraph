@@ -81,6 +81,7 @@ func init() {
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
 	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
@@ -129,6 +130,7 @@ func run() {
 		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
 		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
 		NewUids:          Bulk.Conf.GetBool("new_uids"),
+		ClientDir:        Bulk.Conf.GetString("xidmap"),
 
 		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),

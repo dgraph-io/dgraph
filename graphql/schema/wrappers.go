@@ -130,6 +130,7 @@ type Type interface {
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
+	FieldOriginatedFrom(fieldName string) string
 	fmt.Stringer
 }
 
@@ -282,6 +283,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 			if fieldName == interfaceField.Name {
 				return interfaceDef
 			}
+		}
+	}
+	return nil
+}
+
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
 		}
 	}
 	return nil
@@ -616,19 +633,6 @@ func (f *field) SelectionSet() (flds []Field) {
 				field: fld,
 				op:    f.op,
 			})
-		}
-		if fragment, ok := s.(*ast.InlineFragment); ok {
-			// This is the case where an inline fragment is defined within a query
-			// block. Usually this is for requesting some fields for a concrete type
-			// within a query for an interface.
-			for _, s := range fragment.SelectionSet {
-				if fld, ok := s.(*ast.Field); ok {
-					flds = append(flds, &field{
-						field: fld,
-						op:    f.op,
-					})
-				}
-			}
 		}
 	}
 
@@ -1205,4 +1209,21 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 		}
 	}
 	return nil
+}
+
+// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type, this type's name is returned.
+// Otherwise, empty string is returned.
+func (t *astType) FieldOriginatedFrom(fieldName string) string {
+	for _, implements := range t.inSchema.Implements[t.Name()] {
+		if implements.Fields.ForName(fieldName) != nil {
+			return implements.Name
+		}
+	}
+
+	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+		return t.Name()
+	}
+
+	return ""
 }
