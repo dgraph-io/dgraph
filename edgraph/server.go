@@ -40,8 +40,8 @@ import (
 	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
@@ -66,7 +66,8 @@ const (
 type GraphqlContextKey int
 
 const (
-	// IsGraphql is used to validate requests which are allowed to mutate dgraph.graphql.schema.
+	// IsGraphql is used to validate requests which are allowed to mutate GraphQL reserved
+	// predicates, like dgraph.graphql.schema and dgraph.graphql.xid.
 	IsGraphql GraphqlContextKey = iota
 	// Authorize is used to set if the request requires validation.
 	Authorize
@@ -239,23 +240,14 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	// If a background task is already running, we should reject all the new alter requests.
+	if schema.State().IndexingInProgress() {
+		return nil, errIndexingInProgress
+	}
+
 	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
-	}
-
-	// If a background task is already running, we should reject all the new alter requests.
-	const numTries = 3
-	for i := 0; i < numTries; i++ {
-		if !schema.State().IndexingInProgress() {
-			break
-		} else if i == numTries-1 {
-			return nil, errIndexingInProgress
-		}
-
-		// Let's wait a bit to see if some really simple indexing
-		// tasks can finish before we reject this request.
-		time.Sleep(time.Second)
 	}
 
 	for _, update := range result.Preds {
@@ -277,17 +269,21 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
+	if err != nil {
+		return empty, err
+	}
 
-	// wait for indexing to complete.
+	// wait for indexing to complete or context to be canceled.
 	for !op.RunInBackground {
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
 		if !schema.State().IndexingInProgress() {
 			break
 		}
-
 		time.Sleep(time.Second * 2)
 	}
-
-	return empty, err
+	return empty, nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -722,6 +718,8 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		Version:  x.Version(),
 		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho: time.Now().Unix(),
+		Ongoing:  worker.GetOngoingTasks(),
+		Indexing: schema.GetIndexingPredicates(),
 	})
 
 	var err error
@@ -767,6 +765,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+	if glog.V(3) {
+		glog.Infof("Got a query: %+v", req)
+	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
@@ -987,6 +988,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
 	}
+	var total uint64
+	for _, num := range resp.Metrics.NumUids {
+		total += num
+	}
+	resp.Metrics.NumUids["_total"] = total
 
 	return resp, err
 }

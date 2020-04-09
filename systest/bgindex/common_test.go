@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
+	"github.com/dgraph-io/dgo/v200"
 )
 
 func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
@@ -42,7 +42,7 @@ func printStats(counter *uint64, quit <-chan struct{}, wg *sync.WaitGroup) {
 }
 
 // blocks until query returns no error.
-func checkSchemaUpdate(query string, dg *dgo.Dgraph) {
+func waitForSchemaUpdate(query string, dg *dgo.Dgraph) {
 	for {
 		time.Sleep(2 * time.Second)
 		_, err := dg.NewReadOnlyTxn().Query(context.Background(), query)

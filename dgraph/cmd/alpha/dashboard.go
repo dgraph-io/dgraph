@@ -41,7 +41,11 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 // Used to return a list of keywords, so that UI can show them for autocompletion.
 func keywordHandler(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
-	if r.Method != "GET" {
+	if r.Method == http.MethodOptions {
+		return
+	}
+
+	if r.Method != http.MethodGet {
 		http.Error(w, x.ErrorInvalidMethod, http.StatusBadRequest)
 		return
 	}

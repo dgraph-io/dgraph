@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
@@ -371,9 +371,6 @@ func TestIgnoreIndexConflict(t *testing.T) {
 	if err := s.dg.Alter(context.Background(), op); err != nil {
 		log.Fatal(err)
 	}
-	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
-		log.Fatal(err)
-	}
 
 	txn := s.dg.NewTxn()
 	mu := &api.Mutation{}
@@ -425,9 +422,6 @@ func TestReadIndexKeySameTxn(t *testing.T) {
 	op = &api.Operation{}
 	op.Schema = `name: string @index(exact) .`
 	if err := s.dg.Alter(context.Background(), op); err != nil {
-		log.Fatal(err)
-	}
-	if err := testutil.WaitForAlter(context.Background(), s.dg, op.Schema); err != nil {
 		log.Fatal(err)
 	}
 
@@ -763,7 +757,7 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	require.Error(t, err,
 		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
 
-	// retry the mutatiton
+	// retry the mutation
 	txn3 := dg.NewTxn()
 	_, err = txn3.Mutate(ctxb, &mu)
 	x.Check(err)
@@ -940,5 +934,4 @@ func TestTxnDiscardBeforeCommit(t *testing.T) {
 func alterSchema(dg *dgo.Dgraph, schema string) {
 	op := api.Operation{Schema: schema}
 	x.Check(dg.Alter(ctxb, &op))
-	x.Check(testutil.WaitForAlter(ctxb, dg, schema))
 }
