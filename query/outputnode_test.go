@@ -172,6 +172,9 @@ func TestFastJsonNode(t *testing.T) {
 	require.Equal(t, scalarVal, enc.getScalarVal(fj2))
 	require.Equal(t, isChild, enc.getIsChild(fj2))
 	require.Equal(t, list, enc.getList(fj2))
+
+	enc.appendAttrs(fj, fj2)
+	require.Equal(t, []fastJsonNode{fj2}, enc.getAttrs(fj))
 }
 
 func BenchmarkFastJsonNodeMemory(b *testing.B) {
