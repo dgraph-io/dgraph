@@ -20,9 +20,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/dgraph-io/dgo/v200/protos/api"
 	"io"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -105,11 +105,11 @@ func (r *Response) AddData(p []byte) {
 	x.Check2(r.Data.WriteRune('}'))
 }
 
-// MergeExtensions merges the extensions given in ext to r. If ext is nil, the call has no effect.
+// MergeExtensions merges the extensions given in ext to r.
 // If r.Extensions is nil before the call, then r.Extensions becomes ext.
-// Otherwise, r.Extensions gets updated.
+// Otherwise, r.Extensions gets merged with ext.
 func (r *Response) MergeExtensions(ext *Extensions) {
-	if r == nil || ext == nil {
+	if r == nil {
 		return
 	}
 
