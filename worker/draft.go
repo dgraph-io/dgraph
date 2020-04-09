@@ -906,6 +906,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			close(done)
+			if x.WorkerConfig.LudicrousMode {
+				n.ex.closer.SignalAndWait()
+			}
 			return
 		}
 	}
