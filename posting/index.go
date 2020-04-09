@@ -576,7 +576,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	var counter uint64 = 1
 
 	// tmpWriter := NewTxnWriter(tmpDB)
-	tmpBatchWriter := pstore.NewWriteBatchAt(counter)
+	//tmpBatchWriter := pstore.NewWriteBatchAt(counter)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
