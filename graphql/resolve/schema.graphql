@@ -39,6 +39,7 @@ type Post {
         postType: PostType @search
         author: Author!
         category: Category @hasInverse(field: posts)
+        comments: [Comment]
 }
 
 type Category {
@@ -140,6 +141,27 @@ type Teacher implements People {
 
 type Student implements People {
         taughtBy: [Teacher]
+}
+
+type Comment {
+    id: ID!
+    author: String!
+    title: String
+    content: String @custom(http: {
+              url: "http://api-gateway.com/post/$ups?myId=$title",
+              method: "GET",
+              operation: "batch",
+              body: "{ myId: $id, theAuthor: $author}",
+              forwardHeaders: ["X-App-Token"]})
+
+    url: String
+    ups: Int
+    downs: Int
+    relatedUsers: [User] @custom(http: {
+              url: "http://api-gateway.com/relatedPosts",
+              method: "POST",
+              operation: "single",
+              body: "{ myId: $url }"})
 }
 
 type Query {

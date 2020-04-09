@@ -925,6 +925,7 @@ valid_schemas:
     input: |
       type Author {
         id: ID!
+        name: String!
       }
 
       type Query {
@@ -932,4 +933,28 @@ valid_schemas:
       }
       type Mutation {
         getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
+      }
+
+  -
+    name: "Schema with @custom directives on fields."
+    input: |
+      type Class @remote {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+        classes: [Class] @custom(http: {
+                  url: "http://mock:8888/classes",
+                  method: "POST",
+                  body: "{sid: $id}"
+                })
       }

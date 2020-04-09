@@ -121,8 +121,8 @@ func NewHandler(input string) (Handler, error) {
 		}
 		defns = append(defns, defn.Name)
 		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
-			notInDgraph := defn.Directives.ForName(remoteDirective)
-			if notInDgraph != nil {
+			remoteDir := defn.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
 				continue
 			}
 		}
