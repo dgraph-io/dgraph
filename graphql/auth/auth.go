@@ -17,6 +17,7 @@
 package auth
 
 import (
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -42,10 +43,13 @@ type QueryProcedure interface {
 // Changes that needs to be made to a mutation fragment. Would require one for
 // add, update, handling field auth and interfaces.
 type MutationProcedure interface {
-	OnJson()
-	OnMutationCond()
-	CollectMutations()
+	OnMutationField(mutation interface{}, typ schema.Type, fld schema.FieldDefinition)
+	OnMutation(mutation map[string]interface{}, typ schema.Type)
+	OnMutationCond(cond string)
+	OnMutationResult(mutation schema.Mutation, assigned map[string]string,
+		result map[string]interface{})
 
+	CollectMutations() []*dgoapi.Mutation
 	ProcedureBase
 }
 
@@ -58,25 +62,29 @@ type AuthResolver struct {
 	authState *schema.AuthState
 
 	queryProcedures    []*QueryProcedure
-	mutationProcedures []MutationProcedure
+	mutationProcedures []*MutationProcedure
 }
 
 func (a *AuthResolver) Init(sch *schema.Schema, authState *schema.AuthState) {
 	//Store schema and schema.Authorrizer here
 	a.sch = sch
 	a.authState = authState
-}
 
-func (a *AuthResolver) OnQuery(query *gql.GraphQuery) []*gql.GraphQuery {
 	// Init all queryProcedures
 	for _, procedure := range a.queryProcedures {
 		(*procedure).Init(a.sch, a.authState)
 	}
 
+	// Init all mutationProcedures
+	for _, procedure := range a.mutationProcedures {
+		(*procedure).Init(a.sch, a.authState)
+	}
+}
+
+func (a *AuthResolver) OnQuery(query *gql.GraphQuery) []*gql.GraphQuery {
 	// Create a queryWalker, pass it all the queryProcedures
-	qw := QueryWalker{}
-	qw.init(a.sch, a.queryProcedures)
-	qw.walk(query)
+	qw := newQueryWalker(a.sch, a.queryProcedures)
+	qw.walkQuery(query)
 
 	// Collect all queries from all the queryProcedures
 	queries := make([]*gql.GraphQuery, 1)
@@ -109,10 +117,70 @@ func getName(query *gql.GraphQuery) string {
 	return query.Attr
 }
 
-func (a *AuthResolver) OnMutation() {
-	// Init all mutationProcedures
-	// Create a mutationWalker, pass it all the mutationProcedures
+func (a *AuthResolver) OnMutationResult(mutation schema.Mutation, assigned map[string]string,
+	result map[string]interface{}) []*gql.GraphQuery {
+
+	for _, procedure := range a.mutationProcedures {
+		(*procedure).OnMutationResult(mutation, assigned, result)
+	}
+
+	visited := make(map[string]struct{})
+	var queries []*gql.GraphQuery
+
 	// Collect all queries from all the mutationProcedures
+	for _, procedure := range a.mutationProcedures {
+		for _, q := range (*procedure).CollectQueries() {
+			if _, ok := visited[getName(q)]; ok {
+				continue
+			}
+			visited[getName(q)] = struct{}{}
+			queries = append(queries, q)
+		}
+	}
+
+	return queries
+}
+
+func (a *AuthResolver) OnMutation(query *gql.GraphQuery, mutation []*dgoapi.Mutation) {
+	// Create a mutationWalker, pass it all the mutationProcedures
+	mw := newMutationWalker(a.sch, a.queryProcedures, a.mutationProcedures)
+	var queries []*gql.GraphQuery
+	if query != nil {
+		queries = append(queries, query.Children...)
+		if query.Attr != "" {
+			queries = []*gql.GraphQuery{query}
+		}
+	}
+
+	mw.walkMutation(queries, mutation)
+
+	// Collect all queries from all the queryProcedures
+	visited := make(map[string]struct{})
+	for _, query := range queries {
+		visited[getName(query)] = struct{}{}
+	}
+
+	for _, procedure := range a.queryProcedures {
+		for _, q := range (*procedure).CollectQueries() {
+			if _, ok := visited[getName(q)]; ok {
+				continue
+			}
+			visited[getName(q)] = struct{}{}
+			queries = append(queries, q)
+		}
+	}
+
+	// Collect all queries from all the mutationProcedures
+	for _, procedure := range a.mutationProcedures {
+		for _, q := range (*procedure).CollectQueries() {
+			if _, ok := visited[getName(q)]; ok {
+				continue
+			}
+			visited[getName(q)] = struct{}{}
+			queries = append(queries, q)
+		}
+	}
+
 	// Collect all mutations from all the mutationProcedures
 }
 
@@ -121,5 +189,5 @@ func (a *AuthResolver) AddQueryProcedure(q QueryProcedure) {
 }
 
 func (a *AuthResolver) AddMutaionProcedure(m MutationProcedure) {
-	a.mutationProcedures = append(a.mutationProcedures, m)
+	a.mutationProcedures = append(a.mutationProcedures, &m)
 }

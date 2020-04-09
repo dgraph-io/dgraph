@@ -23,10 +23,20 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
+type Walker struct {
+	sch   *schema.Schema
+	types map[string]schema.Type
+}
+
+func newQueryWalker(sch *schema.Schema, procedures []*QueryProcedure) *QueryWalker {
+	qw := &QueryWalker{Walker: &Walker{}}
+	qw.init(sch, procedures)
+	return qw
+}
+
 type QueryWalker struct {
-	sch        *schema.Schema
 	procedures []*QueryProcedure
-	types      map[string]schema.Type
+	*Walker
 }
 
 func (qw *QueryWalker) init(sch *schema.Schema, procedures []*QueryProcedure) {
@@ -116,9 +126,9 @@ func (qw *QueryWalker) getTypeFromRoot(query *gql.GraphQuery) schema.Type {
 	return qw.types[v]
 }
 
-// walk function goes to each node of the GraphQuery and calls the
-// corresponding procedures, for the query to be modified.
-func (qw *QueryWalker) walk(query *gql.GraphQuery) {
+// walkQuery function goes to each node of the GraphQuery and calls
+// the corresponding procedures, for the query to be modified.
+func (qw *QueryWalker) walkQuery(query *gql.GraphQuery) {
 	typ := qw.getTypeFromRoot(query)
 
 	if typ == nil {

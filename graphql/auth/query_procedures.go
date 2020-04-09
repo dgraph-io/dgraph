@@ -17,6 +17,9 @@
 package auth
 
 import (
+	"strings"
+
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -56,6 +59,39 @@ func (bp *BaseProcedure) GetTypeRule(ac *schema.AuthContainer) *schema.RuleNode 
 
 func (bp *BaseProcedure) SetRuleExtractor(re RuleExtractor) {
 	bp.re = re
+}
+
+type BaseMutationProcedure struct {
+	mutations  []*dgoapi.Mutation
+	conditions map[string]bool
+
+	*BaseProcedure
+}
+
+func (bmp *BaseMutationProcedure) CollectMutations() []*dgoapi.Mutation {
+	return bmp.mutations
+}
+
+func (bmp *BaseMutationProcedure) OnMutationCond(cond string) {
+	if cond == "" {
+		return
+	}
+	bmp.conditions = make(map[string]bool)
+
+	// trim @if( and )
+	cond = cond[4:]
+	cond = cond[:len(cond)-1]
+
+	// split by AND
+	splits := strings.Split(cond, " AND ")
+	for _, split := range splits {
+		split = split[7:]
+		splitAgain := strings.Split(split, ",")
+
+		varName := splitAgain[0][:len(splitAgain[0])-1]
+		varVal := ((splitAgain[1][1] - '0') != 0)
+		bmp.conditions[varName] = varVal
+	}
 }
 
 func QueryRuleExtractor(ac *schema.AuthContainer) *schema.RuleNode {

@@ -18,13 +18,16 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/auth"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -220,10 +223,6 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 	}
 }
 
-func performAuth(mutations []*dgoapi.Mutation) {
-
-}
-
 func (mr *mutationResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
@@ -232,7 +231,15 @@ func (mr *mutationResolver) rewriteAndExecute(
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	fmt.Println(mutations)
+	authVariables, err := x.ExtractAuthVariables(ctx)
+	rbacRule := make(map[int]schema.RuleResult)
+	a := schema.AuthState{AuthVariables: authVariables, RbacRule: rbacRule}
+	sch := mutation.Operation().Schema()
+
+	authResolver := auth.AuthResolver{}
+	authResolver.AddMutaionProcedure(auth.NewAddMutationProcedure())
+	authResolver.Init(&sch, &a)
+	authResolver.OnMutation(query, mutations)
 
 	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
@@ -248,6 +255,24 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	if dgQuery == nil && err != nil {
 		return nil, resolverFailed, errs
+	}
+
+	queries := authResolver.OnMutationResult(mutation, assigned, result)
+	authResult, err := mr.queryExecutor.Query(ctx, &gql.GraphQuery{Children: queries})
+	fmt.Println("RESP", string(authResult))
+
+	jsonMap := make(map[string]interface{})
+	err = json.Unmarshal(authResult, &jsonMap)
+
+	for _, value := range jsonMap {
+		result, ok := value.([]interface{})
+		if !ok {
+			continue
+		}
+		if len(result) == 0 {
+			return nil, resolverFailed, schema.AsGQLErrors(errors.
+				New("You are unauthorized to do this query"))
+		}
 	}
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
