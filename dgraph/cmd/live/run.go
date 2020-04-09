@@ -205,13 +205,40 @@ func (l *loader) uid(val string) string {
 	// later to another node. It is up to the user to avoid this.
 	if !opt.newUids {
 		if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-			l.alloc.BumpTo(uid)
 			return fmt.Sprintf("%#x", uid)
 		}
 	}
 
 	uid, _ := l.alloc.AssignUid(val)
 	return fmt.Sprintf("%#x", uint64(uid))
+}
+
+// allocateUids looks for the maximum uid value in the given NQuads and bumps the
+// maximum seen uid to that value.
+func (l *loader) allocateUids(nqs []*api.NQuad) {
+	if opt.newUids {
+		return
+	}
+
+	var maxUid uint64
+	for _, nq := range nqs {
+		sUid, err := strconv.ParseUint(nq.Subject, 0, 64)
+		if err != nil {
+			continue
+		}
+		if sUid > maxUid {
+			maxUid = sUid
+		}
+
+		oUid, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		if err != nil {
+			continue
+		}
+		if oUid > maxUid {
+			maxUid = oUid
+		}
+	}
+	l.alloc.BumpTo(maxUid)
 }
 
 // processFile forwards a file to the RDF or JSON processor as appropriate
@@ -281,6 +308,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			if len(nqs) == 0 {
 				continue
 			}
+
+			l.allocateUids(nqs)
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
