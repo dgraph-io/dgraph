@@ -38,7 +38,7 @@ type kv struct {
 func BenchmarkWriter(b *testing.B) {
 	createKVList := func() []kv {
 		var KVList = []kv{}
-		for i := 0; i < 5000000; i++ {
+		for i := 0; i < 50000; i++ {
 			n := kv{key: []byte(string(i)), value: []byte(string(i))}
 			KVList = append(KVList, n)
 		}
