@@ -55,7 +55,8 @@ func (dr *drainingResolver) FromMutationResult(
 func (dr *drainingResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, *schema.Extensions, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
 	return nil, nil, nil, nil
 }
