@@ -255,7 +255,7 @@
         "DgraphVersion": {
             "Description": "Dgraph version to deploy.",
             "Type": "String",
-            "Default": "v1.1.1"
+            "Default": "v20.03.0"
         },
         "Tag": {
             "Description": "Common tag to use for all the deployments.",
@@ -1030,12 +1030,11 @@
                                 "EOT\n",
                                 "\n\n",
                                 "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                 {
                                     "Ref": "DgraphVersion"
                                 },
-                                "/dgraph-linux-amd64.tar.gz\n",
-                                "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                " bash\n",
                                 "systemctl daemon-reload\n",
                                 "systemctl enable --now dgraph-zero.service\n"
                             ]
@@ -1177,12 +1176,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-zero.service"
                                 ]
@@ -1356,12 +1354,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-alpha.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-alpha.service"
                                 ]
@@ -1499,12 +1496,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-ratel.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-ratel.service"
                                 ]
