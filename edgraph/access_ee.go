@@ -23,7 +23,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2/y"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/ee/acl"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/schema"
@@ -581,7 +581,7 @@ func isAclPredMutation(nquads []*api.NQuad) bool {
 				var aclsToChange []acl.Acl
 				err := json.Unmarshal(aclBytes.BytesVal, &aclsToChange)
 				if err != nil {
-					glog.Errorf(fmt.Sprintf("Unable to unmalshal bytes under the dgraph.group.acl "+
+					glog.Errorf(fmt.Sprintf("Unable to unmarshal bytes under the dgraph.group.acl "+
 						"predicate:	%v", err))
 					continue
 				}

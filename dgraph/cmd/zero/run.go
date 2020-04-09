@@ -54,6 +54,7 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
+	LudicrousMode     bool
 }
 
 var opts options
@@ -180,6 +181,7 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
 	}
 
 	x.WorkerConfig = x.WorkerOptions{

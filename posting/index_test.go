@@ -183,7 +183,7 @@ func TestTokensTable(t *testing.T) {
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
 
 	key := x.DataKey("name", 1)
-	l, err := getNew(key, ps)
+	l, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	edge := &pb.DirectedEdge{
@@ -237,7 +237,7 @@ func addEdgeToValue(t *testing.T, attr string, src uint64,
 		Entity: src,
 		Op:     pb.DirectedEdge_SET,
 	}
-	l, err := GetNoStore(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src), startTs)
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -253,7 +253,7 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 		Entity:  src,
 		Op:      pb.DirectedEdge_SET,
 	}
-	l, err := GetNoStore(x.DataKey(attr, src))
+	l, err := GetNoStore(x.DataKey(attr, src), startTs)
 	require.NoError(t, err)
 	// No index entries added here as we do not call AddMutationWithIndex.
 	addMutation(t, l, edge, Set, startTs, commitTs, false)
@@ -293,7 +293,7 @@ func TestRebuildTokIndex(t *testing.T) {
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))
-		l, err := GetNoStore(key)
+		l, err := GetNoStore(key, 6)
 		require.NoError(t, err)
 		idxVals = append(idxVals, l)
 	}
@@ -356,7 +356,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 			continue
 		}
 		idxKeys = append(idxKeys, string(key))
-		l, err := GetNoStore(key)
+		l, err := GetNoStore(key, 7)
 		require.NoError(t, err)
 		idxVals = append(idxVals, l)
 	}

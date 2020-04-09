@@ -463,6 +463,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	}
 
 	if x.WorkerConfig.LudicrousMode {
+		// Conflict detection is not required for ludicrous mode.
 		return nil
 	}
 

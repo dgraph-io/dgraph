@@ -32,8 +32,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -154,7 +154,7 @@ func TestReverseIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: uid(0x01)) { ~balance { uid }}}`, dg)
+	waitForSchemaUpdate(`{ q(func: uid(0x01)) { ~balance { uid }}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")

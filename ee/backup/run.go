@@ -33,7 +33,7 @@ var Restore x.SubCommand
 var LsBackup x.SubCommand
 
 var opt struct {
-	backupId, location, pdir, zero string
+	backupId, location, pdir, zero, keyfile string
 }
 
 func init() {
@@ -105,6 +105,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
+	flag.StringVarP(&opt.keyfile, "keyfile", "k", "",
+		"Key file to decrypt the backup")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -185,7 +187,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId)
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.keyfile)
 	if result.Err != nil {
 		return result.Err
 	}
@@ -226,9 +228,9 @@ func runLsbackupCmd() error {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tSince\tGroups\n")
+	fmt.Printf("Name\tSince\tGroups\tEncrypted\n")
 	for path, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\n", path, manifest.Since, manifest.Groups)
+		fmt.Printf("%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted)
 	}
 
 	return nil

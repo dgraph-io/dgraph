@@ -26,7 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -694,8 +694,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Error("Got a list of length %v from Dgraph when expecting a " +
-					"one-item list.\n")
+				glog.Error("Got a list of length %v from Dgraph when expecting a "+
+					"one-item list.\n", len(val))
 
 				errs = append(errs,
 					x.GqlErrorf(

@@ -206,35 +206,35 @@ func checkSchema(t *testing.T, query, key string) {
 func TestBgIndexSchemaReverse(t *testing.T) {
 	require.NoError(t, dropAll())
 	q1 := `schema(pred: [value]) {}`
-	require.NoError(t, alterSchema(`value: [uid] .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] .`))
 	checkSchema(t, q1, "list")
-	require.NoError(t, alterSchema(`value: [uid] @count @reverse .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] @count @reverse .`))
 	checkSchema(t, q1, "reverse")
 }
 
 func TestBgIndexSchemaTokenizers(t *testing.T) {
 	require.NoError(t, dropAll())
 	q1 := `schema(pred: [value]) {}`
-	require.NoError(t, alterSchema(`value: string @index(fulltext, hash) .`))
+	require.NoError(t, alterSchemaInBackground(`value: string @index(fulltext, hash) .`))
 	checkSchema(t, q1, "fulltext")
-	require.NoError(t, alterSchema(`value: string @index(term, hash) @upsert .`))
+	require.NoError(t, alterSchemaInBackground(`value: string @index(term, hash) @upsert .`))
 	checkSchema(t, q1, "term")
 }
 
 func TestBgIndexSchemaCount(t *testing.T) {
 	require.NoError(t, dropAll())
 	q1 := `schema(pred: [value]) {}`
-	require.NoError(t, alterSchema(`value: [uid] @count .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] @count .`))
 	checkSchema(t, q1, "count")
-	require.NoError(t, alterSchema(`value: [uid] @reverse .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] @reverse .`))
 	checkSchema(t, q1, "reverse")
 }
 
 func TestBgIndexSchemaReverseAndCount(t *testing.T) {
 	require.NoError(t, dropAll())
 	q1 := `schema(pred: [value]) {}`
-	require.NoError(t, alterSchema(`value: [uid] @reverse .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] @reverse .`))
 	checkSchema(t, q1, "reverse")
-	require.NoError(t, alterSchema(`value: [uid] @count .`))
+	require.NoError(t, alterSchemaInBackground(`value: [uid] @count .`))
 	checkSchema(t, q1, "count")
 }

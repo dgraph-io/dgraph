@@ -33,8 +33,8 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -154,7 +154,7 @@ func TestStringIndex(t *testing.T) {
 		go runLoop()
 	}
 	go printStats(&counter, quit, &swg)
-	checkSchemaUpdate(`{ q(func: anyoftext(balance, "example")) {uid}}`, dg)
+	waitForSchemaUpdate(`{ q(func: anyoftext(balance, "example")) {uid}}`, dg)
 	close(quit)
 	swg.Wait()
 	fmt.Println("mutations done")

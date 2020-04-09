@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -177,7 +177,7 @@ func runRestore(t *testing.T, backupLocation, lastDir string, commitTs uint64) m
 	require.NoError(t, os.MkdirAll(restoreDir, os.ModePerm))
 
 	t.Logf("--- Restoring from: %q", backupLocation)
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "")
 	require.NoError(t, result.Err)
 
 	restored1, err := testutil.GetPredicateValues("./data/restore/p1", "name1", commitTs)

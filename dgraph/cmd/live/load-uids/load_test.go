@@ -25,8 +25,8 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -119,7 +119,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -133,7 +133,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
+		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -147,7 +147,7 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -161,7 +161,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live", "--new_uids",
+		{testutil.DgraphBinaryPath(), "live", "--new_uids",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
