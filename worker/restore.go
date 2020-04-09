@@ -84,6 +84,11 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
+	// Delete schemas and types. Each backup file should have a complete copy of the
+	// schema.
+	db.DropPrefix([]byte{x.ByteSchema})
+	db.DropPrefix([]byte{x.ByteType})
+
 	loader := db.NewKVLoader(16)
 	var maxUid uint64
 	for {
@@ -178,8 +183,10 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 
 			case posting.BitSchemaPosting:
 				// Schema and type keys are not stored in an intermediate format so their
-				// value can be written as is.
+				// value can be written as is. All such keys should be written with a
+				// version value of one.
 				kv.Key = restoreKey
+				kv.Version = 1
 				if err := loader.Set(kv); err != nil {
 					return 0, err
 				}
