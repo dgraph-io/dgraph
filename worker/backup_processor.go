@@ -277,12 +277,11 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.
 			return nil, err
 		}
 
-		// Schema and type keys should always be written with version 1.
 		kv := &bpb.KV{
 			Key:       backupKey,
 			Value:     valCopy,
 			UserMeta:  []byte{item.UserMeta()},
-			Version:   1,
+			Version:   item.Version(),
 			ExpiresAt: item.ExpiresAt(),
 		}
 		list.Kv = append(list.Kv, kv)
