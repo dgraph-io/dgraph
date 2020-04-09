@@ -79,22 +79,25 @@ type Post {
 	author: Author!
 }`
 
-func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	ex.failQuery--
 	if ex.failQuery == 0 {
-		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
+		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
 	}
-	return []byte(ex.resp), nil
+	return []byte(ex.resp), nil, nil
 }
 
 func (ex *executor) Mutate(ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	ex.failMutation--
 	if ex.failMutation == 0 {
-		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
+		return nil, nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
+			"Dgraph mutation failed")
 	}
-	return ex.assigned, ex.result, nil
+	return ex.assigned, ex.result, nil, nil
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
