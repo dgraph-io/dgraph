@@ -24,8 +24,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -322,13 +322,13 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 
 	// Ensure that another run works too
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 }
 

@@ -278,7 +278,7 @@ Users have to modify security rules or open firewall ports depending up on their
 
 **Port Offset** To make it easier for user to setup the cluster, Dgraph defaults the ports used by Dgraph nodes and let user to provide an offset  (through command option `--port_offset`) to define actual ports used by the node. Offset can also be used when starting multiple zero nodes in a HA setup.
 
-For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then the Alpha node binds to 7082 (gRPC-internal), 8082 (HTTP-external) & 9092 (gRPC-external) respectively.
+For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then the Alpha node binds to 7082 (gRPC-internal), 8082 (HTTP-external) & 9082 (gRPC-external) respectively.
 
 **Ratel UI** by default listens on port 8000. You can use the `-port` flag to configure to listen on any other port.
 
@@ -1980,6 +1980,7 @@ Dgraph alpha instances more evenly.
 
 ## Monitoring
 Dgraph exposes metrics via the `/debug/vars` endpoint in json format and the `/debug/prometheus_metrics` endpoint in Prometheus's text-based format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your Dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
+
 ```sh
 scrape_configs:
   - job_name: "dgraph"
@@ -1987,8 +1988,8 @@ scrape_configs:
     scrape_interval: "2s"
     static_configs:
     - targets:
-      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing metrics.
-      - 172.31.15.230:8080
+      - 172.31.9.133:6080     # For Dgraph zero, 6080 is the http endpoint exposing metrics.
+      - 172.31.15.230:8080    # For Dgraph alpha, 8080 is the http endpoint exposing metrics.
       - 172.31.0.170:8080
       - 172.31.8.118:8080
 ```
@@ -2039,13 +2040,14 @@ operating system and how much is actively in use.
 
 The activity metrics let you track the mutations, queries, and proposals of an Dgraph instance.
 
- Metrics                          | Description
- -------                          | -----------
- `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
- `dgraph_active_mutations_total`  | Total number of mutations currently running.
- `dgraph_pending_proposals_total` | Total pending Raft proposals.
- `dgraph_pending_queries_total`   | Total number of queries in progress.
- `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
+ Metrics                                            | Description
+ -------                                            | -----------
+ `go_goroutines`                                    | Total number of Goroutines currently running in Dgraph.
+ `dgraph_active_mutations_total`                    | Total number of mutations currently running.
+ `dgraph_pending_proposals_total`                   | Total pending Raft proposals.
+ `dgraph_pending_queries_total`                     | Total number of queries in progress.
+ `dgraph_num_queries_total{method="Server.Mutate"}` | Total number of mutations run in Dgraph.
+ `dgraph_num_queries_total{method="Server.Query"}`  | Total number of queries run in Dgraph.
 
 ### Health Metrics
 

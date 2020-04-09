@@ -17,7 +17,7 @@ require (
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200316175624-91c31ebe8c22
-	github.com/dgraph-io/dgo/v2 v2.2.1-0.20200319183917-53c7d5bc32a7
+	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
 	github.com/dgraph-io/ristretto v0.0.2-0.20200115201040-8f368f2f2ab3
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b

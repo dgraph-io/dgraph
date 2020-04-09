@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -1220,7 +1220,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				switch lang {
 				case "":
 					if isList {
-						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 						if err != nil {
 							filterErr = err
 							return false
@@ -1234,7 +1234,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						}
 						for _, sv := range svs {
 							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
+								arg.srcFn.eqTokens[row]) {
 								return true
 							}
 						}
@@ -1242,7 +1243,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						return false
 					}
 
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
@@ -1258,7 +1259,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false

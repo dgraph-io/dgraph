@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
@@ -757,7 +757,7 @@ func TestCountIndexConcurrentTxns(t *testing.T) {
 	require.Error(t, err,
 		"the txn2 should be aborted due to concurrent update on the count index of	<0x01>")
 
-	// retry the mutatiton
+	// retry the mutation
 	txn3 := dg.NewTxn()
 	_, err = txn3.Mutate(ctxb, &mu)
 	x.Check(err)

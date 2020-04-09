@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"google.golang.org/grpc"
 )
 
@@ -86,7 +86,7 @@ func upgradeACLRules() error {
 
 	groups, ok := data["rules"]
 	if !ok {
-		return fmt.Errorf("Unable to parse ACLs: %v", string(resp.Json))
+		return fmt.Errorf("unable to parse ACLs: %v", string(resp.Json))
 	}
 
 	counter := 1
@@ -98,7 +98,7 @@ func upgradeACLRules() error {
 
 		var rs rules
 		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
-			return fmt.Errorf("Unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
+			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
 		}
 
 		for _, r := range rs {

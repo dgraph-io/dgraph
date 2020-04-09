@@ -271,7 +271,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
+	testutil.KeyFile = "../../../ee/enc/enc-key"
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
+		"-k", testutil.KeyFile}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -289,8 +291,8 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 
 	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type",
-		"movie"}, restoredPreds)
+	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid",
+		"dgraph.type", "movie"}, restoredPreds)
 
 	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
 	require.NoError(t, err)
@@ -308,7 +310,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "")
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "../../../ee/enc/enc-key")
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

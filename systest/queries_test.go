@@ -25,8 +25,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -405,6 +405,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	  },
 	  {
         "predicate": "dgraph.graphql.schema"
+	  },
+	  {
+        "predicate": "dgraph.graphql.xid"
 	  },
       {
         "predicate": "dgraph.user.group"

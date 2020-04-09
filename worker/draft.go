@@ -97,6 +97,9 @@ const (
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
+// You should only call Done() on the returned closer. Calling other
+// functions (such as SignalAndWait) for closer could result in panics.
+// For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -111,7 +114,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
 			// If any other operation is running, this would error out. So, ignore error.
-			n.startTask(opRollup)
+			// Ignoring the error since stop task runs in a goruotine.
+			_, _ = n.startTask(opRollup)
 		}
 	}
 
@@ -126,6 +130,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
+				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
+				n.ops[opRollup] = nil
 				otherCloser.SignalAndWait()
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
@@ -159,14 +165,12 @@ func (n *node) stopAllTasks() {
 	defer n.closer.Done() // CLOSER:1
 	<-n.closer.HasBeenClosed()
 
-	var closers []*y.Closer
 	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
 	for _, closer := range n.ops {
-		closers = append(closers, closer)
-	}
-	n.opsLock.Unlock()
-
-	for _, closer := range closers {
+		if closer == nil {
+			continue
+		}
 		closer.SignalAndWait()
 	}
 	glog.Infof("Stopped all ongoing registered tasks.")
@@ -1575,7 +1579,9 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	n.startTask(opRollup)
+	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
+	// not be the right thing to do.
+	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
 	go n.Run()
 }

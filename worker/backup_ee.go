@@ -111,9 +111,26 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if err != nil {
 		return err
 	}
+
 	req.SinceTs = latestManifest.Since
 	if forceFull {
 		req.SinceTs = 0
+	} else {
+		if Config.BadgerKeyFile != "" {
+			// If encryption turned on, latest backup should be encrypted.
+			if latestManifest.Type != "" && !latestManifest.Encrypted {
+				err = errors.Errorf("latest manifest indicates the last backup was not encrypted " +
+					"but this instance has encryption turned on. Try \"forceFull\" flag.")
+				return err
+			}
+		} else {
+			// If encryption turned off, latest backup should be unencrypted.
+			if latestManifest.Type != "" && latestManifest.Encrypted {
+				err = errors.Errorf("latest manifest indicates the last backup was encrypted " +
+					"but this instance has encryption turned off. Try \"forceFull\" flag.")
+				return err
+			}
+		}
 	}
 
 	// Update the membership state to get the latest mapping of groups to predicates.
@@ -164,6 +181,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		m.Type = "incremental"
 		m.BackupId = latestManifest.BackupId
 		m.BackupNum = latestManifest.BackupNum + 1
+	}
+	if Config.BadgerKeyFile != "" {
+		m.Encrypted = true
 	}
 
 	bp := &BackupProcessor{Request: req}
