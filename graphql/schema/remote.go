@@ -24,10 +24,15 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 )
+
+// returnType is const key to represent graphql return. This key can't be used by user because,
+// TypeKey uses restricted delimiter to form the key.
+var returnType = string(x.TypeKey("graphql-return"))
 
 // introspectRemoteSchema introspectes remote schema
 func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
@@ -222,6 +227,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 			}
 		}
 	}
+	fmt.Println(endpoint.field.Type.Name())
 
 	if !queryExist {
 		return gqlerror.ErrorPosf(
@@ -271,7 +277,8 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 	}
 
-	fmt.Println(endpoint.field.Type.String())
+	// Add return type as well to expand. because, we need to type check the return type as well.
+	argValToType[returnType] = endpoint.field.Type.String()
 
 	// Now we have to expand the remote types and check with the local types.
 	expandedTypes := expandArgs(argValToType, remoteIntrospection)
@@ -305,7 +312,28 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 	}
 
+	// Type check for remote argument type with local query argument.
 	for variable, typeName := range argValToType {
+
+		if variable == returnType {
+			introspectedReturnType := ""
+			if introspectedRemoteQuery.Type.OfType.Name == "" {
+				introspectedReturnType = introspectedRemoteQuery.Type.Name
+			} else {
+				introspectedReturnType = introspectedRemoteQuery.Type.OfType.Name
+			}
+
+			if endpoint.field.Type.Name() != introspectedReturnType {
+				return gqlerror.ErrorPosf(
+					endpoint.directive.Position, "Type %s; Field %s; expected return type  "+
+						"is %s. But got %s",
+					endpoint.rootQuery.Name,
+					endpoint.field.Name,
+					introspectedReturnType,
+					endpoint.field.Type.Name())
+			}
+			continue
+		}
 		localRemoteCallArg := endpoint.field.Arguments.ForName(variable[1:])
 		if localRemoteCallArg == nil {
 			return gqlerror.ErrorPosf(
@@ -407,6 +435,17 @@ func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string
 		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
 	}
 	return arguments, notNullArgs
+}
+
+// findFieldFromType will go deep to find the type
+func findFieldFromType(field *GqlField) string {
+	if field.Type.Name != "" {
+		return field.Name
+	}
+	if field.Type.OfType.Name != "" {
+		return field.Name
+	}
+	// recursively find the name.
 }
 
 type IntrospectedSchema struct {
