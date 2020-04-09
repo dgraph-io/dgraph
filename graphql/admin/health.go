@@ -35,7 +35,8 @@ func (hr *healthResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.Gra
 	return nil, nil
 }
 
-func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "health":`))
 
@@ -50,5 +51,7 @@ func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 
 	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), err
+	ext := schema.NewExtensions(resp)
+
+	return buf.Bytes(), ext, err
 }

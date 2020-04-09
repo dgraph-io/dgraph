@@ -42,7 +42,8 @@ func (hr *stateResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.Grap
 	return nil, nil
 }
 
-func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	var buf bytes.Buffer
 	var resp *api.Response
 	var err error
@@ -76,7 +77,9 @@ func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 	}
 	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), err
+	ext := schema.NewExtensions(resp)
+
+	return buf.Bytes(), ext, err
 }
 
 // convertToGraphQLResp converts MembershipState proto to GraphQL layer response

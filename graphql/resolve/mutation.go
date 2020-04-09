@@ -104,7 +104,8 @@ type MutationExecutor interface {
 	Mutate(
 		ctx context.Context,
 		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
+		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+		*schema.Extensions, error)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
@@ -174,7 +175,7 @@ func (mr *mutationResolver) Resolve(
 			mutation.MutationType())
 	}
 
-	res, success, err := mr.rewriteAndExecute(ctx, mutation)
+	res, success, ext, err := mr.rewriteAndExecute(ctx, mutation)
 
 	completed, err := mr.resultCompleter.Complete(ctx, mutation.QueryField(), res, err)
 
@@ -203,8 +204,9 @@ func (mr *mutationResolver) Resolve(
 	}
 
 	return &Resolved{
-		Data: completed,
-		Err:  err,
+		Data:       completed,
+		Err:        err,
+		Extensions: ext,
 	}, success
 }
 
@@ -221,16 +223,16 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 }
 
 func (mr *mutationResolver) rewriteAndExecute(
-	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
+	ctx context.Context, mutation schema.Mutation) ([]byte, bool, *schema.Extensions, error) {
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
-		return nil, resolverFailed,
+		return nil, resolverFailed, nil,
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
+	assigned, result, extM, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
-		return nil, resolverFailed,
+		return nil, resolverFailed, extM,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
@@ -241,14 +243,19 @@ func (mr *mutationResolver) rewriteAndExecute(
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
 	if dgQuery == nil && err != nil {
-		return nil, resolverFailed, errs
+		return nil, resolverFailed, extM, errs
 	}
 
-	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
+	resp, extQ, err := mr.queryExecutor.Query(ctx, dgQuery)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
+	if extM == nil {
+		extM = extQ
+	} else {
+		extM.Merge(extQ)
+	}
 
-	return resp, resolverSucceeded, errs
+	return resp, resolverSucceeded, extM, errs
 }
 
 // deleteCompletion returns `{ "msg": "Deleted" }`

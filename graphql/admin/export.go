@@ -69,14 +69,16 @@ func (er *exportResolver) FromMutationResult(
 func (er *exportResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
-func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	buf := writeResponse(er.mutation, "Success", "Export completed.")
-	return buf, nil
+	return buf, nil, nil
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {

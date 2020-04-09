@@ -55,15 +55,16 @@ func (dr *drainingResolver) FromMutationResult(
 func (dr *drainingResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, *schema.Extensions, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
-func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	buf := writeResponse(dr.mutation, "Success",
 		fmt.Sprintf("draining mode has been set to %v", dr.enable))
-	return buf, nil
+	return buf, nil, nil
 }
 
 func getDrainingInput(m schema.Mutation) bool {

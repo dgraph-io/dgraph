@@ -50,12 +50,14 @@ func (sr *shutdownResolver) FromMutationResult(
 func (sr *shutdownResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
-func (sr *shutdownResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (sr *shutdownResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	buf := writeResponse(sr.mutation, "Success", "Server is shutting down")
-	return buf, nil
+	return buf, nil, nil
 }

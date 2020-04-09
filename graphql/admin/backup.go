@@ -75,12 +75,14 @@ func (br *backupResolver) FromMutationResult(
 func (br *backupResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
-func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	var buf bytes.Buffer
 
 	x.Check2(buf.WriteString(`{ "`))
@@ -104,7 +106,7 @@ func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 	}
 	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return buf.Bytes(), nil, nil
 }
 
 func getBackupInput(m schema.Mutation) (*backupInput, error) {

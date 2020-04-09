@@ -58,7 +58,8 @@ func (lr *loginResolver) FromMutationResult(
 func (lr *loginResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
 	input := getLoginInput(lr.mutation)
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
@@ -66,19 +67,21 @@ func (lr *loginResolver) Mutate(
 		Password:     input.Password,
 		RefreshToken: input.RefreshToken,
 	})
+	ext := schema.NewExtensions(resp)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, ext, err
 	}
 	jwt := &dgoapi.Jwt{}
 	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
-		return nil, nil, err
+		return nil, nil, ext, err
 	}
 	lr.accessJwt = jwt.AccessJwt
 	lr.refreshJwt = jwt.RefreshJwt
-	return nil, nil, nil
+	return nil, nil, ext, nil
 }
 
-func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	var buf bytes.Buffer
 
 	x.Check2(buf.WriteString(`{ "`))
@@ -102,7 +105,7 @@ func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 	}
 	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return buf.Bytes(), nil, nil
 }
 
 func getLoginInput(m schema.Mutation) *loginInput {

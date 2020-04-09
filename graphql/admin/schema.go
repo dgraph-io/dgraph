@@ -96,23 +96,26 @@ func (asr *updateSchemaResolver) FromMutationResult(
 func (asr *updateSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	assigned, result, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
+	assigned, result, ext, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, ext, err
 	}
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
-		return nil, nil, schema.GQLWrapf(err,
+		return nil, nil, ext, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
 
-	return assigned, result, nil
+	return assigned, result, ext, nil
 }
 
-func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
+func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
+	data, err := doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
+	return data, nil, err
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
@@ -121,8 +124,10 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 	return nil, nil
 }
 
-func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return doQuery(gsr.admin.schema, gsr.gqlQuery)
+func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
+	data, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
+	return data, nil, err
 }
 
 func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {

@@ -530,7 +530,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		},
 	}
 
-	assigned, result, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
+	assigned, result, _, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
 		mutations)
 	if err != nil {
 		return nil, err

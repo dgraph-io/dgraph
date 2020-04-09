@@ -60,14 +60,16 @@ func (cr *configResolver) FromMutationResult(
 func (cr *configResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
-func (cr *configResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (cr *configResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	buf := writeResponse(cr.mutation, "Success", "Config updated successfully")
-	return buf, nil
+	return buf, nil, nil
 }
 
 func getConfigInput(m schema.Mutation) (*configInput, error) {

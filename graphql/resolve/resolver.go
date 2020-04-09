@@ -125,8 +125,9 @@ type adminExecutor struct {
 // RequestResolver.Resolve() resolves all of them by finding the resolved answers
 // of the component queries/mutations and joining into a single schema.Response.
 type Resolved struct {
-	Data []byte
-	Err  error
+	Data       []byte
+	Err        error
+	Extensions *schema.Extensions
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -162,7 +163,8 @@ func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
 }
 
-func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
 }
@@ -172,12 +174,14 @@ func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 func (de *adminExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Mutate(ctx, query, mutations)
 }
 
-func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	return dgraph.Query(ctx, query)
 }
 
@@ -186,7 +190,8 @@ func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	return dgraph.Mutate(ctx, query, mutations)
 }
 
@@ -389,6 +394,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// AddData handle nil cases.
 			resp.WithError(res.Err)
 			resp.AddData(res.Data)
+			resp.MergeExtensions(res.Extensions)
 		}
 	case op.IsMutation():
 		// A mutation operation can contain any number of mutation fields.  Those should be executed
@@ -419,6 +425,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			resp.WithError(res.Err)
 			resp.AddData(res.Data)
+			resp.MergeExtensions(res.Extensions)
 		}
 	case op.IsSubscription():
 		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
