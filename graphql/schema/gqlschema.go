@@ -425,14 +425,21 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 	}
 
-	sch.Mutation = &ast.Definition{
-		Kind:   ast.Object,
-		Name:   "Mutation",
-		Fields: make([]*ast.FieldDefinition, 0),
+	mutation := sch.Types["Mutation"]
+	if mutation != nil {
+		mutation.Kind = ast.Object
+		sch.Mutation = mutation
+		delete(sch.Types, "Mutation")
+	} else {
+		sch.Mutation = &ast.Definition{
+			Kind:   ast.Object,
+			Name:   "Mutation",
+			Fields: make([]*ast.FieldDefinition, 0),
+		}
 	}
 
 	for _, key := range definitions {
-		if key == "Query" {
+		if key == "Query" || key == "Mutation" {
 			continue
 		}
 		defn := sch.Types[key]
@@ -577,6 +584,13 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
+		custom := fld.Directives.ForName("custom")
+		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// endpoint.
+		if custom != nil {
+			continue
+		}
+
 		// Filtering makes sense both for lists (= return only items that match
 		// this filter) and for singletons (= only have this value in the result
 		// if it satisfies this filter)
@@ -1157,6 +1171,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		custom := fld.Directives.ForName("custom")
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
+			continue
+		}
+
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -1189,6 +1209,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			continue
+		}
+
+		custom := fld.Directives.ForName("custom")
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
 			continue
 		}
 
@@ -1399,7 +1425,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// as the original schema.
 	for _, typName := range originalTypes {
 		typ := schema.Types[typName]
-		if typName == "Query" {
+		if typName == "Query" || typName == "Mutation" {
 			// This would be printed later in schema.Query
 			continue
 		}

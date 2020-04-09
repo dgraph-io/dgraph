@@ -559,7 +559,7 @@ func completeResult(ctx context.Context, field schema.Field, result []byte, e er
 	case []interface{}:
 		return completeList(path, field, val)
 	case map[string]interface{}:
-		return completeObject(path, field.Type(), []schema.Field{field}, val)
+		return completeObject(path, []schema.Field{field}, val)
 	}
 	return completeValue(path, field, val)
 }
@@ -728,6 +728,14 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	if err != nil {
+		errs = append(errs, x.GqlErrorf(err.Error()))
+		// TODO
+		// 1. All errors received from downstream remote servers should be propogated to the
+		// client.
+	}
+
 	// Errors should report the "path" into the result where the error was found.
 	//
 	// The definition of a path in a GraphQL error is here:
@@ -739,7 +747,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	path := make([]interface{}, 0, maxPathLength(field))
 
 	completed, gqlErrs := completeObject(
-		path, field.Type(), []schema.Field{field}, valToComplete)
+		path, []schema.Field{field}, valToComplete)
 
 	if len(completed) < 2 {
 		// This could only occur completeObject crushed the whole query, but
@@ -756,6 +764,277 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	}
 
 	return completed, append(errs, gqlErrs...)
+}
+
+func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
+	b, err := json.Marshal(input)
+	if err != nil {
+		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(b, &result); err != nil {
+		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
+	}
+	return result, nil
+}
+
+func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	fconf, _ := f.CustomHTTPConfig()
+
+	// Here we build the array of objects which is sent as the body for the request.
+	body := make([]map[string]interface{}, len(vals))
+	for i := 0; i < len(body); i++ {
+		temp, err := copyMap(fconf.Template)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		mu.RLock()
+		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+			errCh <- err
+			mu.RUnlock()
+			return
+		}
+		mu.RUnlock()
+		body[i] = temp
+	}
+
+	if fconf.Operation == "batch" {
+		b, err := json.Marshal(body)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
+			return
+		}
+
+		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+		if err != nil {
+			errCh <- errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
+			return
+		}
+
+		var result []interface{}
+		if err := json.Unmarshal(b, &result); err != nil {
+			errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
+			return
+		}
+
+		if len(result) != len(vals) {
+			errCh <- nil
+			return
+		}
+
+		// Here we walk through all the objects in the array and substitute the value
+		// that we got from the remote endpoint with the right key in the object.
+		mu.Lock()
+		for idx, val := range vals {
+			val.(map[string]interface{})[f.Alias()] = result[idx]
+			vals[idx] = val
+		}
+		mu.Unlock()
+		errCh <- nil
+		return
+	}
+
+	// This is single mode, make calls concurrently for each input and fill in the results.
+	var wg sync.WaitGroup
+	for i := 0; i < len(body); i++ {
+		wg.Add(1)
+		go func(idx int, input map[string]interface{}) {
+			defer wg.Done()
+			b, err := json.Marshal(input)
+			if err != nil {
+				// TODO - Propogate this error
+				return
+			}
+
+			mu.RLock()
+			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+			if err != nil {
+				mu.RUnlock()
+				return
+			}
+			mu.RUnlock()
+
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			if err != nil {
+				// TODO - Propogate this error.
+				return
+			}
+
+			var result interface{}
+			if err := json.Unmarshal(b, &result); err != nil {
+				// TODO - Propogate this error.
+				return
+			}
+
+			mu.Lock()
+			val, ok := vals[idx].(map[string]interface{})
+			if ok {
+				val[f.Alias()] = result
+			}
+			mu.Unlock()
+		}(i, body[i])
+	}
+	wg.Wait()
+	errCh <- nil
+}
+
+func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	// If this field doesn't have custom directive and also doesn't have any children,
+	// then there is nothing to do and we can just continue.
+	if len(f.SelectionSet()) == 0 {
+		errCh <- nil
+		return
+	}
+
+	// Here below we do the de-duplication by walking through the result set.
+	var input []interface{}
+	// node stores the pointer for a node. It is a map from id to the map for it.
+	nodes := make(map[string]interface{})
+
+	idField := f.Type().IDField()
+	if idField == nil {
+		errCh <- nil
+		return
+	}
+	// Here we walk through the array and collect all unique values for this field. In the
+	// example at the start of the function, we could be collecting all unique schools
+	// across all users. This is where the batching happens so that we make one call per
+	// field and not a separate call per user.
+	mu.RLock()
+	for _, v := range vals {
+		val, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fieldVals, ok := val[f.Name()].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, fieldVal := range fieldVals {
+			fv, ok := fieldVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			id, ok := fv[idField.Name()].(string)
+			if !ok {
+				continue
+			}
+			if _, ok := nodes[id]; !ok {
+				input = append(input, fieldVal)
+				nodes[id] = fieldVal
+			}
+		}
+	}
+	mu.RUnlock()
+
+	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
+		errCh <- nil
+		return
+	}
+
+	mu.Lock()
+	for _, v := range vals {
+		val, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		fieldVals, ok := val[f.Name()].([]interface{})
+		if !ok {
+			continue
+		}
+		for idx, fieldVal := range fieldVals {
+			fv, ok := fieldVal.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			// TODO - Support xids here.
+			id, ok := fv[idField.Name()].(string)
+			if !ok {
+				continue
+			}
+			// Get the pointer of the map corresponding to this id and put it at the
+			// correct place.
+			mval := nodes[id]
+			fieldVals[idx] = mval
+		}
+	}
+	mu.Unlock()
+	errCh <- nil
+}
+
+// resolveCustomFields resolves fields with custom directive. Here is the rough algorithm that it
+// follows.
+// queryUser {
+//	name @custom
+//	age
+//	school {
+//		name
+//		children
+//		class { @custom
+//			name
+//			numChildren
+//		}
+//	}
+//	cars { @custom
+//		name
+//	}
+// }
+// For fields with @custom directive
+// 1. There would be one query sent to the remote endpoint.
+// 2. In the above example, to fetch class all the school ids would be aggregated across different
+// users deduplicated and then one query sent. The results would then be filled back appropriately.
+//
+// For fields without custom directive we recursively call resolveCustomFields and let it do the
+// work.
+// TODO - We can be smarter about this and know before processing the query if we should be making
+// this recursive call upfront.
+func resolveCustomFields(fields []schema.Field, data interface{}) error {
+	if data == nil {
+		return nil
+	}
+
+	var vals []interface{}
+	switch v := data.(type) {
+	case []interface{}:
+		vals = v
+	case interface{}:
+		vals = []interface{}{v}
+	}
+
+	if len(vals) == 0 {
+		return nil
+	}
+
+	// This mutex protects access to vals as it is concurrently read and written to by multiple
+	// goroutines.
+	mu := &sync.RWMutex{}
+	errCh := make(chan error, len(fields))
+	numRoutines := 0
+
+	for _, f := range fields {
+		if f.Skip() || !f.Include() {
+			continue
+		}
+
+		numRoutines++
+		hasCustomDirective, _ := f.HasCustomDirective()
+		if !hasCustomDirective {
+			go resolveNestedFields(f, vals, mu, errCh)
+		} else {
+			go resolveCustomField(f, vals, mu, errCh)
+		}
+	}
+
+	var finalErr error
+	for i := 0; i < numRoutines; i++ {
+		if err := <-errCh; err != nil {
+			finalErr = err
+		}
+	}
+
+	return finalErr
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -793,7 +1072,6 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 // nil and the error propagates to the enclosing level.
 func completeObject(
 	path []interface{},
-	typ schema.Type,
 	fields []schema.Field,
 	res map[string]interface{}) ([]byte, x.GqlErrorList) {
 
@@ -870,7 +1148,7 @@ func completeValue(
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-		return completeObject(path, field.Type(), field.SelectionSet(), val)
+		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
 	default:
@@ -1112,9 +1390,32 @@ func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolv
 	defer stop()
 
 	res, err := hr.rewriteAndExecute(ctx, query)
-
 	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
 	return &Resolved{Data: completed, Err: err}
+}
+
+func makeRequest(client *http.Client, method, url, body string,
+	header http.Header) ([]byte, error) {
+	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header = header
+
+	// TODO - Needs to be fixed, we shouldn't be initiating a new HTTP client everytime.
+	if client == nil {
+		client = &http.Client{
+			Timeout: time.Minute,
+		}
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	b, err := ioutil.ReadAll(resp.Body)
+	return b, err
 }
 
 func (hr *httpResolver) rewriteAndExecute(
@@ -1123,18 +1424,5 @@ func (hr *httpResolver) rewriteAndExecute(
 	if err != nil {
 		return nil, err
 	}
-	req, err := http.NewRequest(hrc.Method, hrc.URL, bytes.NewBufferString(hrc.Body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header = hrc.ForwardHeaders
-
-	resp, err := hr.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	b, err := ioutil.ReadAll(resp.Body)
-	return b, err
+	return makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
 }
