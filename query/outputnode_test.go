@@ -177,7 +177,7 @@ func TestFastJsonNode(t *testing.T) {
 	require.Equal(t, []fastJsonNode{fj2}, enc.getAttrs(fj))
 }
 
-func BenchmarkFastJsonNodeMemory(b *testing.B) {
+func BenchmarkFastJsonNodeEmpty(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		enc := newEncoder()
 		var fj fastJsonNode
@@ -185,5 +185,40 @@ func BenchmarkFastJsonNodeMemory(b *testing.B) {
 			fj = enc.newFastJsonNode()
 		}
 		_ = fj
+	}
+}
+
+var (
+	testAttr = "abcdefghijklmnop"
+	testVal  = types.Val{Tid: types.DefaultID, Value: []byte(testAttr)}
+)
+
+func buildTestTree(enc *encoder, level, maxlevel int, fj fastJsonNode) {
+	if level >= maxlevel {
+		return
+	}
+
+	// Add only two children for now.
+	for i := 0; i < 2; i++ {
+		var ch fastJsonNode
+		if level == maxlevel-1 {
+			val, err := valToBytes(testVal)
+			if err != nil {
+				panic(err)
+			}
+			ch = enc.makeScalarNode(enc.idForAttr(testAttr), false, val, false)
+		} else {
+			ch := enc.newFastJsonNodeWithAttr(enc.idForAttr(testAttr))
+			buildTestTree(enc, level+1, maxlevel, ch)
+		}
+		enc.appendAttrs(fj, ch)
+	}
+}
+
+func BenchmarkFastJsonNode2Chilren(b *testing.B) {
+	for i := 0; i < b.N; i++ {
+		enc := newEncoder()
+		root := enc.newFastJsonNodeWithAttr(enc.idForAttr(testAttr))
+		buildTestTree(enc, 1, 20, root)
 	}
 }
