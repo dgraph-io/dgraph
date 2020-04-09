@@ -1159,34 +1159,36 @@ func (hr *httpResolver) rewriteAndExecute(
 		graphqlResp := make(map[string]interface{})
 		err := json.Unmarshal(b, &graphqlResp)
 		if err != nil {
-			return b, err
+			return nil, err
 		}
-		graphqlResp, ok := graphqlResp["data"].(map[string]interface{})
+		data, ok := graphqlResp["data"].(map[string]interface{})
 		if ok {
-			data, ok := graphqlResp[hrc.RemoteQueryName].(map[string]interface{})
+			data, ok := data[hrc.RemoteQueryName]
 			if ok {
 				castedData := make(map[string]interface{})
 				castedData[query.Name()] = []interface{}{data}
-				return json.Marshal(castedData)
+				// Check whether we have any error.
+				var errResp struct {
+					Errors []*x.GqlError `json:"errors,omitempty"`
+				}
+				err = json.Unmarshal(b, &errResp)
+				if err != nil {
+					return nil, err
+				}
+				response, err := json.Marshal(castedData)
+				if err != nil {
+					return nil, err
+				}
+
+				// Return error along with the response if any.
+				if len(errResp.Errors) > 0 {
+					graphqlErr := x.GqlErrorList{}
+					graphqlErr = append(graphqlErr, errResp.Errors...)
+					return response, graphqlErr
+				}
+
+				return response, nil
 			}
-		}
-
-		// Check whether we have any error.
-		var errResp struct {
-			Errors []*x.GqlError `json:"errors,omitempty"`
-		}
-		err = json.Unmarshal(b, &errResp)
-		if err != nil {
-			return b, err
-		}
-
-		// Build error string
-		errStr := ""
-		for _, err := range errResp.Errors {
-			errStr += err.Error() + ";"
-		}
-		if errStr != "" {
-			return b, errors.New(errStr)
 		}
 	}
 	return b, err

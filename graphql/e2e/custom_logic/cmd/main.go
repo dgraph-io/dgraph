@@ -274,6 +274,72 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 		}
 	  }`)
 }
+
+func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "ID",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+		return
+	}
+
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "country": {
+			"name": "Burundi",
+			"code": "BI"
+		  }
+		},
+		"errors":[{
+			"message": "dummy error"
+		}]
+	  }`)
+}
 func main() {
 
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
@@ -283,6 +349,7 @@ func main() {
 	http.HandleFunc("/invalidargument", invalidArgument)
 	http.HandleFunc("/invalidtype", invalidType)
 	http.HandleFunc("/validcountry", validCountryResponse)
+	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
 }

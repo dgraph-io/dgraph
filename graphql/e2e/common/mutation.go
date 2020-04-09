@@ -95,7 +95,7 @@ func addCountry(t *testing.T, executeRequest requestExecutor) *country {
 		{ "addCountry": { "country": [{ "id": "_UID_", "name": "Testland" }] } }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddCountry struct {
@@ -140,7 +140,7 @@ func requireCountry(t *testing.T, uid string, expectedCountry *country, includeS
 		Variables: map[string]interface{}{"id": uid, "includeStates": includeStates},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetCountry *country
@@ -198,7 +198,7 @@ func addAuthor(t *testing.T, countryUID string,
 	} }`, countryUID)
 
 	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddAuthor struct {
@@ -250,7 +250,7 @@ func requireAuthor(t *testing.T, authorID string, expectedAuthor *author,
 		Variables: map[string]interface{}{"id": authorID},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetAuthor *author
@@ -279,7 +279,7 @@ func addCategory(t *testing.T, executeRequest requestExecutor) *category {
 		{ "addCategory": { "category": [{ "id": "_UID_", "name": "A Category" }] } }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addCategoryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddCategory struct {
@@ -398,7 +398,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		UpdateAuthor struct {
@@ -534,7 +534,7 @@ func addMultipleAuthorFromRef(t *testing.T, newAuthor []*author,
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		AddAuthor struct {
@@ -598,7 +598,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
 		AddState struct {
@@ -668,7 +668,7 @@ func deepXIDTest(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var updResult struct {
 		AddState struct {
@@ -752,7 +752,7 @@ func addPost(t *testing.T, authorID, countryID string,
 	} }`, authorID, countryID)
 
 	gqlResponse := executeRequest(t, graphqlURL, addPostParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddPost struct {
@@ -807,7 +807,7 @@ func requirePost(
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetPost *post
@@ -921,7 +921,7 @@ func updateRemove(t *testing.T) {
 	}
 
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{
 			"updatePost": {
@@ -960,7 +960,7 @@ func updateCountry(t *testing.T, filter map[string]interface{}, newName string, 
 	}
 
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		UpdateCountry struct {
@@ -1042,7 +1042,7 @@ func filterInUpdate(t *testing.T) {
 			}
 
 			gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-			requireNoGQLErrors(t, gqlResponse)
+			RequireNoGQLErrors(t, gqlResponse)
 
 			var result struct {
 				UpdateCountry struct {
@@ -1150,7 +1150,7 @@ func addMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 		}},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, addAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
 		AddAuthor struct {
@@ -1197,7 +1197,7 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
 		AddCountry1 struct {
@@ -1255,7 +1255,7 @@ func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 		},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	// The original author no longer has newPost in its list of posts
 	newAuthor.Posts = []*post{}
@@ -1295,7 +1295,7 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
 		AddCountry struct {
@@ -1329,7 +1329,7 @@ func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) 
 	}
 
 	gqlResponse = executeRequest(t, graphqlURL, updateCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	// newCountry doesn't have "ABC" in it's states list
 	requireCountry(t, addResult.AddCountry.Country[0].ID,
@@ -1373,7 +1373,7 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 	}
 
 	gqlResponse := executeRequest(t, graphqlURL, addCountryParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var addResult struct {
 		AddCountry struct {
@@ -1397,7 +1397,7 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 		Variables: map[string]interface{}{"id": addResult.AddCountry.Country[0].States[0].ID},
 	}
 	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{"getState":{"country":null}}`, string(gqlResponse.Data))
 }
@@ -1420,7 +1420,7 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 	}
 
 	gqlResponse := updateParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	// show that this post is in the author's posts
 	newAuthor.Posts = []*post{{
@@ -1448,7 +1448,7 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 		Variables: map[string]interface{}{"id": newCategory.ID},
 	}
 	gqlResponse = getCatParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, `{"getCategory":{"posts":[]}}`, string(gqlResponse.Data))
 
@@ -1584,7 +1584,7 @@ func manyMutations(t *testing.T) {
 	}`
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		Add1 struct {
@@ -1681,7 +1681,7 @@ func testSelectionInAddObject(t *testing.T) {
 			}
 
 			gqlResponse := postExecutor(t, graphqlURL, addPostParams)
-			requireNoGQLErrors(t, gqlResponse)
+			RequireNoGQLErrors(t, gqlResponse)
 			var result struct {
 				AddPost struct {
 					Post []*post
@@ -1770,7 +1770,7 @@ func mutationWithDeepFilter(t *testing.T) {
 	} }`
 
 	gqlResponse := addPostParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddPost struct {
@@ -1940,7 +1940,7 @@ func addStarship(t *testing.T) *starship {
 	}
 
 	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
 		"starship":[{
@@ -1990,7 +1990,7 @@ func addHuman(t *testing.T, starshipID string) string {
 	}
 
 	gqlResponse := addHumanParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		AddHuman struct {
@@ -2023,7 +2023,7 @@ func addDroid(t *testing.T) string {
 	}
 
 	gqlResponse := addDroidParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		AddDroid struct {
@@ -2059,7 +2059,7 @@ func updateCharacter(t *testing.T, id string) {
 	}
 
 	gqlResponse := updateCharacterParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 }
 
 func queryInterfaceAfterAddMutation(t *testing.T) {
@@ -2090,7 +2090,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		}
 
 		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
 			"queryCharacter": [
@@ -2140,7 +2140,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		}
 
 		gqlResponse := queryCharacterByNameParams.ExecuteAsPost(t, graphqlURL)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
 		"queryCharacter": [
@@ -2178,7 +2178,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		}
 
 		gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
 		"queryHuman": [
@@ -2216,7 +2216,7 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 		}
 
 		gqlResponse := queryHumanParamsByName.ExecuteAsPost(t, graphqlURL)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		expected := fmt.Sprintf(`{
 		"queryHuman": [
@@ -2271,7 +2271,7 @@ func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 }`
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		DeleteStarhip struct {
@@ -2313,7 +2313,7 @@ func requireState(t *testing.T, uid string, expectedState *state,
 		Variables: map[string]interface{}{"id": uid},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, params)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		GetState *state
@@ -2343,7 +2343,7 @@ func addState(t *testing.T, name string, executeRequest requestExecutor) *state 
 		{ "addState": { "state": [{ "id": "_UID_", "name": "` + name + `", "xcode": "cal" } ]} }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addStateParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddState struct {
@@ -2520,7 +2520,7 @@ func addMovie(t *testing.T, executeRequest requestExecutor) *movie {
 		{ "addMovie": { "movie": [{ "id": "_UID_", "name": "Testmovie", "director": [] }] } }`
 
 	gqlResponse := executeRequest(t, graphqlURL, addMovieParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddMovie struct {
@@ -2567,7 +2567,7 @@ func cleanupMovieAndDirector(t *testing.T, movieID, directorID string) {
 }`
 
 	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	testutil.CompareJSON(t, multiMutationExpected, string(gqlResponse.Data))
 }
@@ -2597,7 +2597,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 	addMovieDirectorExpected := `{ "addMovieDirector": { "movieDirector": [{ "id": "_UID_", "name": "Spielberg" }] } }`
 
 	gqlResponse := postExecutor(t, graphqlURL, addMovieDirectorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var expected, result struct {
 		AddMovieDirector struct {
@@ -2635,7 +2635,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 	}
 
 	gqlResponse = getMovieParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 	expectedResponse := `{"getMovie":{"name":"Testmovie","director":[{"name":"Spielberg"}]}}`
 	require.Equal(t, expectedResponse, string(gqlResponse.Data))
 
@@ -2686,7 +2686,7 @@ func testNumUids(t *testing.T) {
 	}
 
 	gqlResponse := postExecutor(t, graphqlURL, addAuthorParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	t.Run("Test numUID in add", func(t *testing.T) {
 		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -2714,7 +2714,7 @@ func testNumUids(t *testing.T) {
 		}
 
 		gqlResponse = postExecutor(t, graphqlURL, updatePostParams)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		var updateResult struct {
 			UpdatePost struct {
@@ -2754,7 +2754,7 @@ func testNumUids(t *testing.T) {
 			},
 		}
 		gqlResponse = postExecutor(t, graphqlURL, deleteAuthorParams)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		var deleteResult struct {
 			DeleteAuthor struct {
@@ -2791,7 +2791,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 	}
 
 	gqlResponse := checkUserParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		CheckUserPasword *user `json:"checkUserPassword,omitempty"`
@@ -2820,7 +2820,7 @@ func deleteUser(t *testing.T, userObj user) {
 
 	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
 
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 	require.JSONEq(t, `{"deleteUser": {"msg": "Deleted"}}`, string(gqlResponse.Data))
 }
 
@@ -2863,7 +2863,7 @@ func passwordTest(t *testing.T) {
 
 	t.Run("Test add and update user", func(t *testing.T) {
 		gqlResponse := postExecutor(t, graphqlURL, addUserParams)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 		require.Equal(t, `{"addUser":{"user":[{"name":"Test User"}]}}`,
 			string(gqlResponse.Data))
 
@@ -2871,7 +2871,7 @@ func passwordTest(t *testing.T) {
 		checkUser(t, &user{Name: "Test User", Password: "Wrong Pass"}, nil)
 
 		gqlResponse = postExecutor(t, graphqlURL, updateUserParams)
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 		require.Equal(t, `{"updateUser":{"user":[{"name":"Test User"}]}}`,
 			string(gqlResponse.Data))
 		checkUser(t, newUser, nil)

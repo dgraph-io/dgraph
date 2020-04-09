@@ -532,7 +532,7 @@ func requireUID(t *testing.T, uid string) {
 	require.NoError(t, err)
 }
 
-func requireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
+func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 	require.Nil(t, resp.Errors,
 		"required no GraphQL errors, but received :\n%s", serializeOrError(resp.Errors))
 }
