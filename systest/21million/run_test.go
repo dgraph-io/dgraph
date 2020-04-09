@@ -64,7 +64,7 @@ func TestQueries(t *testing.T) {
 		}
 		t.Run(file.Name(), func(t *testing.T) {
 			filename := path.Join(queryDir, file.Name())
-			reader, cleanup := chunker.FileReader(filename)
+			reader, cleanup := chunker.FileReader(filename, "")
 			bytes, err := ioutil.ReadAll(reader)
 			if err != nil {
 				t.Fatalf("Error reading file: %s", err.Error())
