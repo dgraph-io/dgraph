@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
+	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has ByteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
 
 	// ByteData indicates the key stores data.
@@ -43,10 +43,9 @@ const (
 	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
 	// order of data doesn't change keys of same attributes are located together.
 	DefaultPrefix = byte(0x00)
-	byteSchema    = byte(0x01)
-	byteType      = byte(0x02)
-	// ByteSplit is a constant to specify a given key corresponds to a posting list split
-	// into multiple parts.
+	ByteSchema    = byte(0x01)
+	ByteType      = byte(0x02)
+	// ByteSplit signals that the key stores an individual part of a multi-part list.
 	ByteSplit = byte(0x01)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
@@ -80,22 +79,22 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 // separately with unique prefix, since we need to iterate over all schema keys.
 // The structure of a schema key is as follows:
 //
-// byte 0: key type prefix (set to byteSchema)
+// byte 0: key type prefix (set to ByteSchema)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 func SchemaKey(attr string) []byte {
-	return generateKey(byteSchema, attr, 1+2+len(attr))
+	return generateKey(ByteSchema, attr, 1+2+len(attr))
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
 // with a unique prefix, since we need to iterate over all type keys.
 // The structure of a type key is as follows:
 //
-// byte 0: key type prefix (set to byteType)
+// byte 0: key type prefix (set to ByteType)
 // byte 1-2: length of typeName
 // next len(attr) bytes: value of attr (the type name)
 func TypeKey(attr string) []byte {
-	return generateKey(byteType, attr, 1+2+len(attr))
+	return generateKey(ByteType, attr, 1+2+len(attr))
 }
 
 // DataKey generates a data key with the given attribute and UID.
@@ -219,7 +218,7 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
-	byteType    byte
+	ByteType    byte
 	Attr        string
 	Uid         uint64
 	HasStartUid bool
@@ -231,12 +230,12 @@ type ParsedKey struct {
 
 // IsData returns whether the key is a data key.
 func (p ParsedKey) IsData() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
+	return p.bytePrefix == DefaultPrefix && p.ByteType == ByteData
 }
 
 // IsReverse returns whether the key is a reverse key.
 func (p ParsedKey) IsReverse() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
+	return p.bytePrefix == DefaultPrefix && p.ByteType == ByteReverse
 }
 
 // IsCountOrCountRev returns whether the key is a count or a count rev key.
@@ -246,27 +245,27 @@ func (p ParsedKey) IsCountOrCountRev() bool {
 
 // IsCount returns whether the key is a count key.
 func (p ParsedKey) IsCount() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCount
+	return p.bytePrefix == DefaultPrefix && p.ByteType == ByteCount
 }
 
 // IsCountRev returns whether the key is a count rev key.
 func (p ParsedKey) IsCountRev() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCountRev
+	return p.bytePrefix == DefaultPrefix && p.ByteType == ByteCountRev
 }
 
 // IsIndex returns whether the key is an index key.
 func (p ParsedKey) IsIndex() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteIndex
+	return p.bytePrefix == DefaultPrefix && p.ByteType == ByteIndex
 }
 
 // IsSchema returns whether the key is a schema key.
 func (p ParsedKey) IsSchema() bool {
-	return p.bytePrefix == byteSchema
+	return p.bytePrefix == ByteSchema
 }
 
 // IsType returns whether the key is a type key.
 func (p ParsedKey) IsType() bool {
-	return p.bytePrefix == byteType
+	return p.bytePrefix == ByteType
 }
 
 // IsOfType checks whether the key is of the given type.
@@ -300,14 +299,14 @@ func (p ParsedKey) SkipPredicate() []byte {
 // SkipSchema returns the first key after all the schema keys.
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
-	buf[0] = byteSchema + 1
+	buf[0] = ByteSchema + 1
 	return buf[:]
 }
 
 // SkipType returns the first key after all the type keys.
 func (p ParsedKey) SkipType() []byte {
 	var buf [1]byte
-	buf[0] = byteType + 1
+	buf[0] = ByteType + 1
 	return buf[:]
 }
 
@@ -426,14 +425,14 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	var buf [1]byte
-	buf[0] = byteSchema
+	buf[0] = ByteSchema
 	return buf[:]
 }
 
 // TypePrefix returns the prefix for Schema keys.
 func TypePrefix() []byte {
 	var buf [1]byte
-	buf[0] = byteType
+	buf[0] = ByteType
 	return buf[:]
 }
 
@@ -483,18 +482,18 @@ func Parse(key []byte) (ParsedKey, error) {
 	k = k[sz:]
 
 	switch p.bytePrefix {
-	case byteSchema, byteType:
+	case ByteSchema, ByteType:
 		return p, nil
 	default:
 	}
 
-	p.byteType = k[0]
+	p.ByteType = k[0]
 	k = k[1:]
 
 	p.HasStartUid = k[0] == ByteSplit
 	k = k[1:]
 
-	switch p.byteType {
+	switch p.ByteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
 			return p, errors.Errorf("uid length < 8 for key: %q, parsed key: %+v", key, p)
