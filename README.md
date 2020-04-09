@@ -43,7 +43,7 @@ docker pull dgraph/dgraph:latest
 
 ## Install from Source
 
-If you want to install from source, install Go 1.11+ or later and the following dependencies:
+If you want to install from source, install Go 1.13+ or later and the following dependencies:
 
 Ubuntu:
 ```bash

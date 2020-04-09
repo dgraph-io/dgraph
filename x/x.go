@@ -39,8 +39,8 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -83,10 +83,10 @@ const (
 	Star = "_STAR_ALL"
 
 	// GrpcMaxSize is the maximum possible size for a gRPC message.
-	// Dgraph uses the maximum size for the most flexibility (4GB - equal
+	// Dgraph uses the maximum size for the most flexibility (2GB - equal
 	// to the max grpc frame size). Users will still need to set the max
 	// message sizes allowable on the client size when dialing.
-	GrpcMaxSize = 4 << 30
+	GrpcMaxSize = math.MaxInt32
 
 	// PortZeroGrpc is the default gRPC port for zero.
 	PortZeroGrpc = 5080
@@ -121,10 +121,12 @@ const (
 `
 
 	InitialTypes = `
-	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
+"types": [
+{"fields":[{"name":"dgraph.graphql.schema"},{"name":"dgraph.graphql.xid"}],"name":"dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
 {"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
-{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}]`
+{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}
+]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -132,12 +134,15 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
-	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `{"predicate":"dgraph.graphql.schema", "type": "string"}`
-
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
 		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
+
+	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
+	GraphqlPredicates = `
+{"predicate":"dgraph.graphql.schema", "type": "string"},
+{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
+`
 )
 
 var (

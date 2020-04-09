@@ -125,3 +125,19 @@ func TestGqlError(t *testing.T) {
 		})
 	}
 }
+
+func TestVersionString(t *testing.T) {
+	dgraphVersion = "v1.2.2-rc1-g1234567"
+	require.True(t, DevVersion())
+
+	dgraphVersion = "v20.03-1-beta-Mar20-g12345678"
+	require.True(t, DevVersion())
+
+	dgraphVersion = "v20.03"
+	require.False(t, DevVersion())
+
+	// less than 7 hex digits in commit-hash
+	dgraphVersion = "v1.2.2-rc1-g123456"
+	require.False(t, DevVersion())
+
+}
