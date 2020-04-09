@@ -59,10 +59,11 @@ func (a *arena) get(offset uint32) []byte {
 	return a.buf[offset : offset+uint32(size)]
 }
 
-func (a *arena) size() int {
-	return len(a.buf) - 1 // -1 for dummy byte.
-}
+// commenting below functions, those are not used for now.
+// func (a *arena) size() int {
+// 	return len(a.buf) - 1 // -1 for dummy byte.
+// }
 
-func (a *arena) reset() {
-	a.buf = a.buf[:1]
-}
+// func (a *arena) reset() {
+// 	a.buf = a.buf[:1]
+// }
