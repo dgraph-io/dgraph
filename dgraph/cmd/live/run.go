@@ -126,8 +126,10 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.StringP("keyfile", "k", "", "Location of the key file to decrypt the schema and data files")
-	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
+	flag.StringP("keyfile", "k", "", "Location of the key file to decrypt the schema "+
+		"and data files")
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
+		"from filename")
 	flag.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
