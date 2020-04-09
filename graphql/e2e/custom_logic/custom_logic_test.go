@@ -17,7 +17,6 @@
 package custom_logic
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -192,6 +191,5 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 	require.NoError(t, err)
 
 	headers := strings.Split(resp.Header.Get("Access-Control-Allow-Headers"), ",")
-	fmt.Println(headers)
 	require.Subset(t, headers, []string{"X-App-Token", "X-User-Id", "User-Id", "X-App-User", "X-Group-Id"})
 }
