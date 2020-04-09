@@ -130,6 +130,9 @@ func undoSchemaUpdate(predicate string) {
 }
 
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+	if len(updates) == 0 {
+		return nil
+	}
 	// Wait until schema modification for all predicates is complete. There cannot be two
 	// background tasks running as this is a race condition. We typically won't propose an
 	// index update if one is already going on. If that's not the case, then the receiver
@@ -144,10 +147,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
 	gr.Node.waitForTask(opIndexing)
-
-	// There is a race condition in stopTask and waitForTask.
-	// We wait here for stopTask to finish.
-	time.Sleep(time.Millisecond)
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
