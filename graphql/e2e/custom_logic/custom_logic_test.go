@@ -94,7 +94,7 @@ func TestCustomGetQuery(t *testing.T) {
                 method: "GET"
         })
 	}`
-	require.Nil(t, updateSchema(t, schema).Errors)
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	query := `
 	query {
 		myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
@@ -125,7 +125,7 @@ func TestCustomPostQuery(t *testing.T) {
                 method: "POST"
         })
 	}`
-	require.Nil(t, updateSchema(t, schema).Errors)
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	query := `
 	query {
@@ -158,7 +158,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				forwardHeaders: ["X-App-Token", "X-User-Id"]
         })
 	}`
-	require.Nil(t, updateSchema(t, schema).Errors)
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	query := `
 	query {
@@ -232,8 +232,33 @@ func TestCustomLogicGraphql(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	require.JSONEq(t, string(result.Data), `
 	{"getCountry":{"code":"BI","name":"Burundi"}}
 	`)
+}
+
+func TestCustomLogicGraphqlWithError(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountry":{"code":"BI","name":"Burundi"}}
+	`)
+	require.Equal(t, "dummy error", result.Errors.Error())
 }
