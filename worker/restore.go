@@ -84,6 +84,14 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
+	// Delete schemas and types. Each backup file should have a complete copy of the schema.
+	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
+		return 0, err
+	}
+	if err := db.DropPrefix([]byte{x.ByteType}); err != nil {
+		return 0, err
+	}
+
 	loader := db.NewKVLoader(16)
 	var maxUid uint64
 	for {
