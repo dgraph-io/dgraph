@@ -53,6 +53,7 @@ func TestStorageTerm(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
@@ -103,6 +104,7 @@ func TestStorageEntries(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}, {Index: 6, Term: 6}}
 	tests := []struct {
@@ -148,6 +150,7 @@ func TestStorageLastIndex(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -178,6 +181,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -191,7 +195,7 @@ func TestStorageFirstIndex(t *testing.T) {
 	}
 
 	batch := db.NewWriteBatch()
-	require.NoError(t, ds.deleteUntil(batch, 4))
+	require.NoError(t, ds.deleteRange(batch, 0, 4))
 	require.NoError(t, batch.Flush())
 	ds.cache.Store(firstKey, 0)
 	first, err = ds.FirstIndex()
@@ -211,6 +215,7 @@ func TestStorageCompact(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	require.NoError(t, ds.reset(ents))
@@ -230,8 +235,10 @@ func TestStorageCompact(t *testing.T) {
 	}
 
 	for i, tt := range tests {
+		first, err := ds.FirstIndex()
+		require.NoError(t, err)
 		batch := db.NewWriteBatch()
-		err := ds.deleteUntil(batch, tt.i)
+		err = ds.deleteRange(batch, first-1, tt.i)
 		require.NoError(t, batch.Flush())
 		if err != tt.werr {
 			t.Errorf("#%d: err = %v, want %v", i, err, tt.werr)
@@ -260,6 +267,7 @@ func TestStorageCreateSnapshot(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	cs := &pb.ConfState{Nodes: []uint64{1, 2, 3}}
@@ -297,6 +305,7 @@ func TestStorageAppend(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	ds := Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	ents := []pb.Entry{{Index: 3, Term: 3}, {Index: 4, Term: 4}, {Index: 5, Term: 5}}
 	tests := []struct {
