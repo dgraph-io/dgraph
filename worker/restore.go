@@ -86,8 +86,12 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 
 	// Delete schemas and types. Each backup file should have a complete copy of the
 	// schema.
-	db.DropPrefix([]byte{x.ByteSchema})
-	db.DropPrefix([]byte{x.ByteType})
+	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
+		return 0, err
+	}
+	if err := db.DropPrefix([]byte{x.ByteType}); err != nil {
+		return 0, err
+	}
 
 	loader := db.NewKVLoader(16)
 	var maxUid uint64
