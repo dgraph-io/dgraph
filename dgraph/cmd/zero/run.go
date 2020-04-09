@@ -290,6 +290,8 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Stop Raft store.
+		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 		st.node.trySnapshot(0)
