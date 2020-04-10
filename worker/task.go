@@ -492,9 +492,7 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 			end = srcFn.n
 		}
 		g.Go(func() error {
-			s := start
-			e := end
-			return calculate(s, e)
+			return calculate(start, end)
 		})
 	}
 	if err := g.Wait(); err != nil {
