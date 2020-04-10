@@ -8,7 +8,7 @@ readonly template="dgraph.json"
 
 # validate arguments
 [[ $# -lt 2 ]] && \
- { echo "Usage $0 STACK_NAME SSH_KEY_NAME [REGION]." &> /dev/stderr; exit 1; }
+ { echo "Usage $0 STACK_NAME SSH_KEY_NAME [REGION] [S3_BUCKET_NAME]." &> /dev/stderr; exit 1; }
 [[ -z $stack_name ]] && \
  { echo "Stack name not specified.  Exiting." &> /dev/stderr; exit 1; }
 [[ -z $ssh_key_name ]] && \
