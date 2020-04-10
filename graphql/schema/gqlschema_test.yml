@@ -801,6 +801,75 @@ invalid_schemas:
       "locations":[{"line":6, "column":31}]},
     ]
 
+  -
+    name: "@custom directive on field where body uses undefined field"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc, jam: $blah }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, body template must use fields
+       defined within the type, found: abc.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field where body required itself"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $name, id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field where type doesn't have id field"
+    input: |
+      type Author {
+        foo: String
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc, jam: $blah }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive is only allowed on fields where the type
+       definition has a field with type ID! or a field with @id directive.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field yo: @custom directive, body template must use a field with type
+      ID! or a field with @id directive.",
+      "locations":[{"line":5, "column":16}]},
+    ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
@@ -939,6 +1008,29 @@ valid_schemas:
                   url: "http://mock:8888/classes",
                   method: "POST",
                   body: "{sid: $id}"
+                })
+      }
+
+  -
+    name: "Schema with @custom directives on field where body requires field with @id directive."
+    input: |
+      type Class @remote {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        established: String! @id
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames",
+                method: "POST",
+                body: "{sid: $established}"
+                })
+        classes: [Class] @custom(http: {
+                  url: "http://mock:8888/classes",
+                  method: "POST",
+                  body: "{sid: $established}"
                 })
       }
 

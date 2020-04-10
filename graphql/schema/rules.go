@@ -858,6 +858,73 @@ func customDirectiveValidation(sch *ast.Schema,
 			field.Name)
 	}
 
+	defn := sch.Types[typ.Name]
+	id := getIDField(defn)
+	xid := getXIDField(defn)
+	if typ.Name != "Query" && typ.Name != "Mutation" {
+		if len(id) == 0 && len(xid) == 0 {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s; @custom directive is only allowed on fields where the type"+
+					" definition has a field with type ID! or a field with @id directive.",
+				typ.Name, field.Name,
+			)
+		}
+	}
+
+	body := httpArg.Value.Children.ForName("body")
+	if body != nil {
+		br := body.Raw
+		_, rf, err := parseBodyTemplate(br)
+		if err != nil {
+			return gqlerror.ErrorPosf(dir.Position,
+				"Type %s; Field %s; body template inside @custom directive could not be parsed.",
+				typ.Name, field.Name)
+		}
+
+		var idField *ast.FieldDefinition
+		if len(id) > 0 {
+			idField = id[0]
+		} else {
+			idField = xid[0]
+		}
+
+		// 1. The required fields within the body template should contain an ID! field or a field
+		// with @id directive as we use that to do de-duplication before resolving these entities
+		// from the remote endpoint.
+		// 2. All the required fields should be defined within this type.
+		// 3. The required fields for a given field can't contain this field itself.
+		requiresID := false
+		for fname := range rf {
+			if fname == field.Name {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s; @custom directive, body template can't require itself.",
+					typ.Name, field.Name,
+				)
+			}
+			if fd := typ.Fields.ForName(fname); fd == nil {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s; @custom directive, body template must use fields defined "+
+						"within the type, found: %s.",
+					typ.Name, field.Name, fname,
+				)
+			}
+			if fname == idField.Name {
+				requiresID = true
+			}
+		}
+		if !requiresID {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s: @custom directive, body template must use a field with type "+
+					"ID! or a field with @id directive.",
+				typ.Name, field.Name,
+			)
+		}
+	}
+
 	method := httpArg.Value.Children.ForName("method")
 	if method == nil {
 		return gqlerror.ErrorPosf(
