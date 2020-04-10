@@ -34,6 +34,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -61,6 +62,7 @@ type options struct {
 	IgnoreErrors     bool
 	CustomTokenizers string
 	NewUids          bool
+	ClientDir        string
 
 	MapShards    int
 	ReduceShards int
@@ -114,7 +116,7 @@ func newLoader(opt *options) *loader {
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
 	}
-	st.schema = newSchemaStore(readSchema(opt.SchemaFile), opt, st)
+	st.schema = newSchemaStore(readSchema(opt.SchemaFile, opt.BadgerKeyFile), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -141,13 +143,14 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string) *schema.ParsedSchema {
+func readSchema(filename string, keyfile string) *schema.ParsedSchema {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
-	var r io.Reader = f
+	r, err := enc.GetReader(keyfile, f)
+	x.Check(err)
 	if filepath.Ext(filename) == ".gz" {
-		r, err = gzip.NewReader(f)
+		r, err = gzip.NewReader(r)
 		x.Check(err)
 	}
 
@@ -161,7 +164,15 @@ func readSchema(filename string) *schema.ParsedSchema {
 
 func (ld *loader) mapStage() {
 	ld.prog.setPhase(mapPhase)
-	ld.xids = xidmap.New(ld.zero, nil)
+	var db *badger.DB
+	if len(ld.opt.ClientDir) > 0 {
+		x.Check(os.MkdirAll(ld.opt.ClientDir, 0700))
+
+		var err error
+		db, err = badger.Open(badger.DefaultOptions(ld.opt.ClientDir))
+		x.Checkf(err, "Error while creating badger KV posting store")
+	}
+	ld.xids = xidmap.New(ld.zero, db)
 
 	files := x.FindDataFiles(ld.opt.DataFiles, []string{".rdf", ".rdf.gz", ".json", ".json.gz"})
 	if len(files) == 0 {
@@ -197,7 +208,7 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done(nil)
 
-			r, cleanup := chunker.FileReader(file)
+			r, cleanup := chunker.FileReader(file, ld.opt.BadgerKeyFile)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)
@@ -224,6 +235,9 @@ func (ld *loader) mapStage() {
 		ld.mappers[i] = nil
 	}
 	x.Check(ld.xids.Flush())
+	if db != nil {
+		x.Check(db.Close())
+	}
 	ld.xids = nil
 }
 
