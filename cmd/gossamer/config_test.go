@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
@@ -472,61 +474,84 @@ func TestRPCConfigFromFlags(t *testing.T) {
 	}
 }
 
-// TestUpdateConfigFromGenesis tests updateDotConfigFromGenesis
-func TestUpdateConfigFromGenesis(t *testing.T) {
+// TestUpdateConfigFromGenesisJSON tests updateDotConfigFromGenesisJSON
+func TestUpdateConfigFromGenesisJSON(t *testing.T) {
 	testCfg, testCfgFile := dot.NewTestConfigWithFile(t)
-	require.NotNil(t, testCfg)
-	require.NotNil(t, testCfgFile)
-
-	testGenFile := dot.NewTestGenesisFile(t, testCfg)
 
 	defer utils.RemoveTestDir(t)
 
-	testGen, err := genesis.NewGenesisFromJSON(testGenFile.Name())
+	ctx, err := newTestContext(
+		t.Name(),
+		[]string{"config", "name"},
+		[]interface{}{testCfgFile.Name(), "TESTNODE"},
+	)
 	require.Nil(t, err)
 
-	testApp := cli.NewApp()
-	testApp.Writer = ioutil.Discard
-
-	testcases := []struct {
-		description string
-		flags       []string
-		values      []interface{}
-		expected    dot.Config
-	}{
-		{
-			"Test gossamer --genesis",
-			[]string{"config", "genesis"},
-			[]interface{}{testCfgFile.Name(), testGenFile.Name()},
-			dot.Config{
-				Global: dot.GlobalConfig{
-					Name:    testGen.Name, // genesis name
-					ID:      testGen.ID,   // genesis id
-					DataDir: testCfg.Global.DataDir,
-				},
-				Account: testCfg.Account,
-				Core:    testCfg.Core,
-				Network: dot.NetworkConfig{
-					Port:        testCfg.Network.Port,
-					Bootnodes:   testGen.Bootnodes,  // genesis bootnodes
-					ProtocolID:  testGen.ProtocolID, // genesis protocol id
-					NoBootstrap: testCfg.Network.NoBootstrap,
-					NoMDNS:      testCfg.Network.NoMDNS,
-				},
-				RPC: testCfg.RPC,
-			},
+	expected := &dot.Config{
+		Global: dot.GlobalConfig{
+			Name:    "TESTNODE",
+			ID:      testCfg.Global.ID,
+			DataDir: testCfg.Global.DataDir,
 		},
+		Account: testCfg.Account,
+		Core:    testCfg.Core,
+		Network: testCfg.Network,
+		RPC:     testCfg.RPC,
 	}
 
-	for _, c := range testcases {
-		c := c // bypass scopelint false positive
-		t.Run(c.description, func(t *testing.T) {
-			ctx, err := newTestContext(c.description, c.flags, c.values)
-			require.Nil(t, err)
-			cfg, err := createDotConfig(ctx)
-			require.Nil(t, err)
+	cfg, err := createDotConfig(ctx)
+	require.Nil(t, err)
 
-			require.Equal(t, &c.expected, cfg)
-		})
+	updateDotConfigFromGenesisJSON(ctx, cfg)
+
+	require.Equal(t, expected, cfg)
+}
+
+func TestUpdateConfigFromGenesisData(t *testing.T) {
+	testCfg, testCfgFile := dot.NewTestConfigWithFile(t)
+
+	defer utils.RemoveTestDir(t)
+
+	ctx, err := newTestContext(
+		t.Name(),
+		[]string{"config", "name"},
+		[]interface{}{testCfgFile.Name(), "TESTNODE"},
+	)
+	require.Nil(t, err)
+
+	expected := &dot.Config{
+		Global: dot.GlobalConfig{
+			Name:    "TESTNODE",
+			ID:      testCfg.Global.ID,
+			DataDir: testCfg.Global.DataDir,
+		},
+		Account: testCfg.Account,
+		Core:    testCfg.Core,
+		Network: testCfg.Network,
+		RPC:     testCfg.RPC,
 	}
+
+	cfg, err := createDotConfig(ctx)
+	require.Nil(t, err)
+
+	db, err := database.NewBadgerDB(cfg.Global.DataDir)
+	require.Nil(t, err)
+
+	genFile := dot.NewTestGenesisFile(t, testCfg)
+
+	gen, err := genesis.NewGenesisFromJSON(genFile.Name())
+	require.Nil(t, err)
+
+	gen.Name = "TESTNODE" // simulate initialized node with name
+
+	err = state.StoreGenesisData(db, gen.GenesisData())
+	require.Nil(t, err)
+
+	err = db.Close()
+	require.Nil(t, err)
+
+	err = updateDotConfigFromGenesisData(ctx, cfg) // name should not be updated if provided as flag value
+	require.Nil(t, err)
+
+	require.Equal(t, expected, cfg)
 }

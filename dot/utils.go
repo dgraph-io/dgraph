@@ -55,7 +55,7 @@ func NewTestConfig(t *testing.T) *Config {
 		},
 		Network: NetworkConfig{
 			Port:        uint32(7001),
-			Bootnodes:   []string(nil),
+			Bootnodes:   []string{"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"},
 			ProtocolID:  string("/gossamer/test/0"),
 			NoBootstrap: false,
 			NoMDNS:      false,

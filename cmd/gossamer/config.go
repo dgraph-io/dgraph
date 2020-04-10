@@ -22,6 +22,9 @@ import (
 	"strings"
 
 	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 
 	log "github.com/ChainSafe/log15"
@@ -84,7 +87,7 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	setDotGlobalConfig(ctx, &cfg.Global)
 
 	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesis(ctx, cfg)
+	updateDotConfigFromGenesisJSON(ctx, cfg)
 
 	// set remaining cli configuration values
 	setDotAccountConfig(ctx, &cfg.Account)
@@ -110,7 +113,7 @@ func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	setDotInitConfig(ctx, &cfg.Init)
 
 	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesis(ctx, cfg)
+	updateDotConfigFromGenesisJSON(ctx, cfg)
 
 	return cfg, nil
 }
@@ -295,8 +298,8 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 	)
 }
 
-// updateDotConfigFromGenesis updates the configuration based on the genesis file values
-func updateDotConfigFromGenesis(ctx *cli.Context, cfg *dot.Config) {
+// updateDotConfigFromGenesisJSON updates the configuration based on the genesis file values
+func updateDotConfigFromGenesisJSON(ctx *cli.Context, cfg *dot.Config) {
 
 	// load Genesis from genesis configuration file
 	gen, err := genesis.NewGenesisFromJSON(cfg.Init.Genesis)
@@ -340,4 +343,64 @@ func updateDotConfigFromGenesis(ctx *cli.Context, cfg *dot.Config) {
 		log.Warn("[cmd] genesis mismatch, overwriting protocol", "protocol", gen.ProtocolID)
 		cfg.Network.ProtocolID = gen.ProtocolID
 	}
+
+	log.Debug(
+		"[cmd] Configuration after genesis json",
+		"name", cfg.Global.Name,
+		"id", cfg.Global.ID,
+		"bootnodes", cfg.Network.Bootnodes,
+		"protocol", cfg.Network.ProtocolID,
+	)
+}
+
+// updateDotConfigFromGenesisData updates the configuration from genesis data of an initialized node
+func updateDotConfigFromGenesisData(ctx *cli.Context, cfg *dot.Config) error {
+
+	// initialize database using data directory
+	db, err := database.NewBadgerDB(cfg.Global.DataDir)
+	if err != nil {
+		return fmt.Errorf("failed to create database: %s", err)
+	}
+
+	// load genesis data from initialized node database
+	gen, err := state.LoadGenesisData(db)
+	if err != nil {
+		return fmt.Errorf("failed to load genesis data: %s", err)
+	}
+
+	// check genesis name and use genesis name if --name flag not set
+	if !ctx.GlobalIsSet(NameFlag.Name) {
+		cfg.Global.Name = gen.Name
+	}
+
+	// check genesis id and use genesis id if --node flag not set
+	if !ctx.GlobalIsSet(NodeFlag.Name) {
+		cfg.Global.ID = gen.ID
+	}
+
+	// check genesis bootnodes and use genesis --bootnodes if name flag not set
+	if !ctx.GlobalIsSet(BootnodesFlag.Name) {
+		cfg.Network.Bootnodes = common.BytesToStringArray(gen.Bootnodes)
+	}
+
+	// check genesis protocol and use genesis --protocol if name flag not set
+	if !ctx.GlobalIsSet(ProtocolFlag.Name) {
+		cfg.Network.ProtocolID = gen.ProtocolID
+	}
+
+	// close database
+	err = db.Close()
+	if err != nil {
+		return fmt.Errorf("failed to close database: %s", err)
+	}
+
+	log.Debug(
+		"[cmd] Configuration after genesis data",
+		"name", cfg.Global.Name,
+		"id", cfg.Global.ID,
+		"bootnodes", cfg.Network.Bootnodes,
+		"protocol", cfg.Network.ProtocolID,
+	)
+
+	return nil
 }
