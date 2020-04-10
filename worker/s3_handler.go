@@ -239,10 +239,10 @@ func (h *s3Handler) readManifest(mc *minio.Client, object string, m *Manifest) e
 // Load creates a new session, scans for backup objects in a bucket, then tries to
 // load any backup objects found.
 // Returns nil and the maximum Since value on success, error otherwise.
-func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
+func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) loadResult {
 	mc, err := h.setup(uri)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return loadResult{0, 0, err}
 	}
 
 	var paths []string
@@ -257,7 +257,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 		}
 	}
 	if len(paths) == 0 {
-		return LoadResult{0, 0, errors.Errorf("No manifests found at: %s", uri.String())}
+		return loadResult{0, 0, errors.Errorf("No manifests found at: %s", uri.String())}
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
@@ -273,14 +273,14 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(mc, path, &m); err != nil {
-			return LoadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
+			return loadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
 	manifests, err = filterManifests(manifests, backupId)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return loadResult{0, 0, err}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
@@ -300,16 +300,16 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 			object := filepath.Join(path, backupName(manifest.Since, gid))
 			reader, err := mc.GetObject(h.bucketName, object, minio.GetObjectOptions{})
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to get %q", object)}
+				return loadResult{0, 0, errors.Wrapf(err, "Failed to get %q", object)}
 			}
 			defer reader.Close()
 
 			st, err := reader.Stat()
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Stat failed %q", object)}
+				return loadResult{0, 0, errors.Wrapf(err, "Stat failed %q", object)}
 			}
 			if st.Size <= 0 {
-				return LoadResult{0, 0,
+				return loadResult{0, 0,
 					errors.Errorf("Remote object is empty or inaccessible: %s", object)}
 			}
 			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
@@ -320,7 +320,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 
 			groupMaxUid, err := fn(reader, int(gid), predSet)
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return loadResult{0, 0, err}
 			}
 			if groupMaxUid > maxUid {
 				maxUid = groupMaxUid
@@ -329,7 +329,7 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return loadResult{since, maxUid, nil}
 }
 
 // ListManifests loads the manifests in the locations and returns them.

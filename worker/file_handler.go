@@ -111,9 +111,9 @@ func (h *fileHandler) CreateManifest(uri *url.URL, req *pb.BackupRequest) error 
 
 // Load uses tries to load any backup files found.
 // Returns the maximum value of Since on success, error otherwise.
-func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
+func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) loadResult {
 	if !pathExist(uri.Path) {
-		return LoadResult{0, 0,
+		return loadResult{0, 0,
 			errors.Errorf("The path %q does not exist or it is inaccessible.", uri.Path)}
 	}
 
@@ -122,7 +122,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 		return !isdir && strings.HasSuffix(path, suffix)
 	})
 	if len(paths) == 0 {
-		return LoadResult{0, 0, errors.Errorf("No manifests found at path: %s", uri.Path)}
+		return loadResult{0, 0, errors.Errorf("No manifests found at path: %s", uri.Path)}
 	}
 	sort.Strings(paths)
 	if glog.V(3) {
@@ -135,14 +135,14 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 	for _, path := range paths {
 		var m Manifest
 		if err := h.readManifest(path, &m); err != nil {
-			return LoadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
+			return loadResult{0, 0, errors.Wrapf(err, "While reading %q", path)}
 		}
 		m.Path = path
 		manifests = append(manifests, &m)
 	}
 	manifests, err := filterManifests(manifests, backupId)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return loadResult{0, 0, err}
 	}
 
 	// Process each manifest, first check that they are valid and then confirm the
@@ -163,7 +163,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 			file := filepath.Join(path, backupName(manifest.Since, gid))
 			fp, err := os.Open(file)
 			if err != nil {
-				return LoadResult{0, 0, errors.Wrapf(err, "Failed to open %q", file)}
+				return loadResult{0, 0, errors.Wrapf(err, "Failed to open %q", file)}
 			}
 			defer fp.Close()
 
@@ -173,7 +173,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 
 			groupMaxUid, err := fn(fp, int(gid), predSet)
 			if err != nil {
-				return LoadResult{0, 0, err}
+				return loadResult{0, 0, err}
 			}
 			if groupMaxUid > maxUid {
 				maxUid = groupMaxUid
@@ -182,7 +182,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 		since = manifest.Since
 	}
 
-	return LoadResult{since, maxUid, nil}
+	return loadResult{since, maxUid, nil}
 }
 
 // ListManifests loads the manifests in the locations and returns them.

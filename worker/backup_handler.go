@@ -74,7 +74,7 @@ type UriHandler interface {
 	// created after will be ignored.
 	// Objects implementing this function will be used for retrieving (dowload) backup files
 	// and loading the data into a DB. The restore CLI command uses this call.
-	Load(*url.URL, string, loadFn) LoadResult
+	Load(*url.URL, string, loadFn) loadResult
 
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
@@ -175,16 +175,16 @@ type loadFn func(reader io.Reader, groupId int, preds predicateSet) (uint64, err
 
 // LoadBackup will scan location l for backup files in the given backup series and load them
 // sequentially. Returns the maximum Since value on success, otherwise an error.
-func LoadBackup(location, backupId string, fn loadFn) LoadResult {
+func LoadBackup(location, backupId string, fn loadFn) loadResult {
 	uri, err := url.Parse(location)
 	if err != nil {
-		return LoadResult{0, 0, err}
+		return loadResult{0, 0, err}
 	}
 
 	// TODO(martinmr): allow overriding credentials during restore.
 	h := getHandler(uri.Scheme, nil)
 	if h == nil {
-		return LoadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
+		return loadResult{0, 0, errors.Errorf("Unsupported URI: %v", uri)}
 	}
 
 	return h.Load(uri, backupId, fn)

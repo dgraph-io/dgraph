@@ -42,8 +42,8 @@ type BackupProcessor struct {
 	Request *pb.BackupRequest
 }
 
-// LoadResult holds the output of a Load operation.
-type LoadResult struct {
+// loadResult holds the output of a Load operation.
+type loadResult struct {
 	// Version is the timestamp at which the database is after loading a backup.
 	Version uint64
 	// MaxLeaseUid is the max UID seen by the load operation. Needed to request zero
