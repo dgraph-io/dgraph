@@ -35,7 +35,7 @@ func init() {
 func backupHandler(w http.ResponseWriter, r *http.Request) {
 	if !handlerInit(w, r, map[string]bool{
 		http.MethodPost: true,
-	}, false) {
+	}, true) {
 		return
 	}
 

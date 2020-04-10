@@ -20,12 +20,12 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/edgraph"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -44,6 +44,12 @@ func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[stri
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return false
+	}
+
+	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
+		"X-Dgraph-AuthToken") {
+		x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
 		return false
 	}
 

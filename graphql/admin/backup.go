@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -43,25 +44,11 @@ type backupInput struct {
 	ForceFull    bool
 }
 
-func (br *backupResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (br *backupResolver) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	glog.Info("Got backup request")
 
 	br.mutation = m
-	input, err := getBackupInput(m)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
-		Destination:  input.Destination,
-		AccessKey:    input.AccessKey,
-		SecretKey:    input.SecretKey,
-		SessionToken: input.SessionToken,
-		Anonymous:    input.Anonymous,
-	}, input.ForceFull)
-
-	return nil, nil, err
+	return nil, nil, nil
 }
 
 func (br *backupResolver) FromMutationResult(
@@ -76,8 +63,25 @@ func (br *backupResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
 	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	err := edgraph.AuthorizeGuardians(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 
-	return nil, nil, nil
+	input, err := getBackupInput(br.mutation)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
+		Destination:  input.Destination,
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	}, input.ForceFull)
+
+	return nil, nil, err
 }
 
 func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
