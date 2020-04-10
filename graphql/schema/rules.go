@@ -960,6 +960,15 @@ func customDirectiveValidation(sch *ast.Schema,
 			url:        u.Raw,
 		})
 	}
+
+	search := field.Directives.ForName(searchDirective)
+	if search != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; custom directive not allowed along with @search directive.",
+			typ.Name, field.Name,
+		)
+	}
 	return nil
 }
 

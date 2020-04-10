@@ -903,6 +903,22 @@ invalid_schemas:
         "locations":[{"line":3, "column":22}]},
       ]
 
+  -
+    name: "@custom directive not allowed along with @search directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @search @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @search directive.",
+          "locations":[{"line":3, "column":26}]},
+        ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
