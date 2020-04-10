@@ -22,6 +22,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -99,7 +101,7 @@ func TestMemDB_Start(t *testing.T) {
 	state.Stop()
 }
 
-func addBlocksToState(blockState *BlockState, depth int) ([]*types.Header, []*types.Header) {
+func addBlocksToState(t *testing.T, blockState *BlockState, depth int) ([]*types.Header, []*types.Header) {
 	previousHash := blockState.BestBlockHash()
 
 	branches := []testBranch{}
@@ -123,7 +125,9 @@ func addBlocksToState(blockState *BlockState, depth int) ([]*types.Header, []*ty
 		currentChain = append(currentChain, block.Header)
 
 		hash := block.Header.Hash()
-		blockState.AddBlockWithArrivalTime(block, arrivalTime)
+		err := blockState.AddBlockWithArrivalTime(block, arrivalTime)
+		require.Nil(t, err)
+
 		previousHash = hash
 
 		isBranch := r.Intn(2)
@@ -155,7 +159,9 @@ func addBlocksToState(blockState *BlockState, depth int) ([]*types.Header, []*ty
 			branchChains = append(branchChains, block.Header)
 
 			hash := block.Header.Hash()
-			blockState.AddBlockWithArrivalTime(block, arrivalTime)
+			err := blockState.AddBlockWithArrivalTime(block, arrivalTime)
+			require.Nil(t, err)
+
 			previousHash = hash
 
 			arrivalTime++
@@ -192,7 +198,7 @@ func TestService_BlockTree(t *testing.T) {
 	}
 
 	// add blocks to state
-	addBlocksToState(stateA.Block, 10)
+	addBlocksToState(t, stateA.Block, 10)
 
 	stateA.Stop()
 

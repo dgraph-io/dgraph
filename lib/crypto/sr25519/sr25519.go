@@ -301,6 +301,7 @@ func (k *PublicKey) VrfVerify(msg []byte, out []byte, proof []byte) (bool, error
 	}
 
 	inout := o.AttachInput(k.key, t)
+
 	return k.key.VrfVerify(t, inout, p)
 }
 

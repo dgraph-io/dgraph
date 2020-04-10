@@ -370,6 +370,11 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 	return err
 }
 
+// GetAllBlocksAtDepth returns all hashes with the depth of the given hash plus one
+func (bs *BlockState) GetAllBlocksAtDepth(hash common.Hash) []common.Hash {
+	return bs.bt.GetAllBlocksAtDepth(hash)
+}
+
 func (bs *BlockState) isBlockOnCurrentChain(header *types.Header) (bool, error) {
 	bestBlock, err := bs.BestBlockHeader()
 	if err != nil {

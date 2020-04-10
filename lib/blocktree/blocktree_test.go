@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"math/big"
 	"math/rand"
+	"reflect"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -54,7 +55,8 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 		hash := block.Header.Hash()
 		hashes = append(hashes, hash)
 
-		bt.AddBlock(block, 0)
+		err := bt.AddBlock(block, 0)
+		require.Nil(t, err)
 		previousHash = hash
 	}
 
@@ -62,7 +64,6 @@ func createFlatTree(t *testing.T, depth int) (*BlockTree, []common.Hash) {
 }
 
 func TestBlockTree_GetBlock(t *testing.T) {
-	// Calls AddBlock
 	bt, hashes := createFlatTree(t, 2)
 
 	n := bt.getNode(hashes[2])
@@ -88,7 +89,8 @@ func TestBlockTree_AddBlock(t *testing.T) {
 	}
 
 	hash := block.Header.Hash()
-	bt.AddBlock(block, 0)
+	err := bt.AddBlock(block, 0)
+	require.Nil(t, err)
 
 	node := bt.getNode(hash)
 
@@ -133,7 +135,8 @@ func TestBlockTree_LongestPath(t *testing.T) {
 	}
 
 	extraBlock.Header.Hash()
-	bt.AddBlock(extraBlock, 0)
+	err := bt.AddBlock(extraBlock, 0)
+	require.NotNil(t, err)
 
 	longestPath := bt.longestPath()
 
@@ -158,7 +161,8 @@ func TestBlockTree_Subchain(t *testing.T) {
 	}
 
 	extraBlock.Header.Hash()
-	bt.AddBlock(extraBlock, 0)
+	err := bt.AddBlock(extraBlock, 0)
+	require.NotNil(t, err)
 
 	subChain, err := bt.subChain(hashes[1], hashes[3])
 	if err != nil {
@@ -238,8 +242,79 @@ func TestBlockTree_GetNode(t *testing.T) {
 		}
 
 		err := bt.AddBlock(block, 0)
-		if err != nil {
-			t.Fatal(err)
+		require.Nil(t, err)
+	}
+}
+
+func TestBlockTree_GetAllBlocksAtDepth(t *testing.T) {
+	header := &types.Header{
+		ParentHash: zeroHash,
+		Number:     big.NewInt(0),
+	}
+
+	bt, _ := createTestBlockTree(header, 8, nil)
+	hashes := bt.head.getNodesWithDepth(big.NewInt(10), []common.Hash{})
+
+	expected := []common.Hash{}
+
+	if !reflect.DeepEqual(hashes, expected) {
+		t.Fatalf("Fail: expected empty array")
+	}
+
+	// create one-path tree
+	btDepth := 8
+	desiredDepth := 6
+	bt, btHashes := createFlatTree(t, btDepth)
+
+	expected = []common.Hash{btHashes[desiredDepth]}
+
+	// add branch
+	previousHash := btHashes[4]
+
+	for i := 4; i <= btDepth; i++ {
+		block := &types.Block{
+			Header: &types.Header{
+				ParentHash: previousHash,
+				Number:     big.NewInt(int64(i)),
+				Digest:     [][]byte{{9}},
+			},
+			Body: &types.Body{},
 		}
+
+		hash := block.Header.Hash()
+		bt.AddBlock(block, 0)
+		previousHash = hash
+
+		if i == desiredDepth-1 {
+			expected = append(expected, hash)
+		}
+	}
+
+	// add another branch
+	previousHash = btHashes[2]
+
+	for i := 2; i <= btDepth; i++ {
+		block := &types.Block{
+			Header: &types.Header{
+				ParentHash: previousHash,
+				Number:     big.NewInt(int64(i)),
+				Digest:     [][]byte{{7}},
+			},
+			Body: &types.Body{},
+		}
+
+		hash := block.Header.Hash()
+		bt.AddBlock(block, 0)
+		previousHash = hash
+
+		if i == desiredDepth-1 {
+			expected = append(expected, hash)
+		}
+	}
+
+	hashes = bt.head.getNodesWithDepth(big.NewInt(int64(desiredDepth)), []common.Hash{})
+
+	if !reflect.DeepEqual(hashes, expected) {
+		t.Fatalf("Fail: did not get all expected hashes got %v expected %v", hashes, expected)
 	}
 }

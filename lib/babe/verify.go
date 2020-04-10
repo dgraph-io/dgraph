@@ -96,7 +96,7 @@ func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool
 	}
 
 	if !ok {
-		return false, fmt.Errorf("could not verify slot claim")
+		return false, ErrBadSlotClaim
 	}
 
 	// verify the seal is valid
@@ -106,9 +106,51 @@ func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool
 	}
 
 	if !ok {
-		return false, fmt.Errorf("could not verify signature")
+		return false, ErrBadSignature
 	}
 
-	// TODO: check if the producer has equivocated, ie. have they produced a conflicting block?
+	// check if the producer has equivocated, ie. have they produced a conflicting block?
+	hashes := b.blockState.GetAllBlocksAtDepth(header.ParentHash)
+
+	for _, hash := range hashes {
+		currentHeader, err := b.blockState.GetHeader(hash)
+		if err != nil {
+			continue
+		}
+
+		currentBlockProducerIndex, err := getBlockProducerIndex(currentHeader)
+		if err != nil {
+			continue
+		}
+
+		existingBlockProducerIndex := babeHeader.BlockProducerIndex
+
+		if currentBlockProducerIndex == existingBlockProducerIndex && hash != header.Hash() {
+			return false, ErrProducerEquivocated
+		}
+	}
+
 	return true, nil
+}
+
+func getBlockProducerIndex(header *types.Header) (uint64, error) {
+	preDigestBytes := header.Digest[0]
+
+	digestItem, err := types.DecodeDigestItem(preDigestBytes)
+	if err != nil {
+		return 0, err
+	}
+
+	preDigest, ok := digestItem.(*types.PreRuntimeDigest)
+	if !ok {
+		return 0, err
+	}
+
+	babeHeader := new(babetypes.BabeHeader)
+	err = babeHeader.Decode(preDigest.Data)
+	if err != nil {
+		return 0, err
+	}
+
+	return babeHeader.BlockProducerIndex, nil
 }

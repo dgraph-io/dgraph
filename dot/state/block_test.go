@@ -218,7 +218,7 @@ func TestIsBlockOnCurrentChain(t *testing.T) {
 	}
 
 	bs := newTestBlockState(genesisHeader)
-	currChain, branchChains := addBlocksToState(bs, 8)
+	currChain, branchChains := addBlocksToState(t, bs, 8)
 
 	for _, header := range currChain {
 		onChain, err := bs.isBlockOnCurrentChain(header)
@@ -248,7 +248,7 @@ func TestAddBlock_BlockNumberToHash(t *testing.T) {
 	}
 
 	bs := newTestBlockState(genesisHeader)
-	currChain, branchChains := addBlocksToState(bs, 8)
+	currChain, branchChains := addBlocksToState(t, bs, 8)
 
 	bestHash := bs.BestBlockHash()
 	bestHeader, err := bs.BestBlockHeader()

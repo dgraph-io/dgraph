@@ -32,6 +32,7 @@ type BlockState interface {
 	BestBlock() (*types.Block, error)
 	SubChain(start, end common.Hash) ([]common.Hash, error)
 	AddBlock(*types.Block) error
+	GetAllBlocksAtDepth(hash common.Hash) []common.Hash
 	AddBlockWithArrivalTime(*types.Block, uint64) error
 	GetHeader(common.Hash) (*types.Header, error)
 	GetBlockByNumber(*big.Int) (*types.Block, error)

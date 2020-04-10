@@ -48,7 +48,7 @@ func NewEmptyBlockTree(db database.Database) *BlockTree {
 }
 
 // NewBlockTreeFromGenesis initializes a blocktree with a genesis block.
-// Currently passes in arrival time as a parameter instead of setting it as time of instanciation
+// Currently passes in arrival time as a parameter instead of setting it as time of instantiation
 func NewBlockTreeFromGenesis(genesis *types.Header, db database.Database) *BlockTree {
 	head := &node{
 		hash:        genesis.Hash(),
@@ -98,6 +98,25 @@ func (bt *BlockTree) AddBlock(block *types.Block, arrivalTime uint64) error {
 	bt.leaves.replace(parent, n)
 
 	return nil
+}
+
+// GetAllBlocksAtDepth will return all blocks hashes with the depth of the given hash plus one.
+// To find all blocks at a depth matching a certain block, pass in that block's parent hash
+func (bt *BlockTree) GetAllBlocksAtDepth(hash common.Hash) []common.Hash {
+	hashes := []common.Hash{}
+
+	if bt.getNode(hash) == nil {
+		return hashes
+	}
+
+	depth := big.NewInt(0).Add(bt.getNode(hash).depth, big.NewInt(1))
+
+	if bt.head.depth.Cmp(depth) == 0 {
+		hashes = append(hashes, bt.head.hash)
+		return hashes
+	}
+
+	return bt.head.getNodesWithDepth(depth, hashes)
 }
 
 // getNode finds and returns a node based on its Hash. Returns nil if not found.
