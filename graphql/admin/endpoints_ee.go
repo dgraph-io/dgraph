@@ -284,7 +284,8 @@ const adminMutations = `
 	backup(input: BackupInput!) : BackupPayload
 
 	"""
-	Start restoring a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
+	Start restoring a binary backup.  See :
+		https://docs.dgraph.io/enterprise-features/#binary-backups
 	"""
 	restore(input: RestoreInput!) : RestorePayload
 

@@ -278,14 +278,14 @@ message RestoreRequest {
 }
 
 message Proposal {
-	Mutations mutations = 2;
-	repeated KV kv = 4;
-	MembershipState state = 5;
-	string clean_predicate = 6;	 // Delete the predicate which was moved to other group.
-	string key = 7;
-	OracleDelta delta = 8;
-	Snapshot snapshot = 9;	 // Used to tell the group when to take snapshot.
-	uint64 index = 10; // Used to store Raft index, in raft.Ready.
+	Mutations mutations    = 2;
+	repeated KV kv         = 4;
+	MembershipState state  = 5;
+	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
+	string key             = 7;
+	OracleDelta delta      = 8;
+	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
+	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
 	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
 	RestoreRequest restore = 12;
 }

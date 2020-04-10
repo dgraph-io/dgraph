@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
 )
 
 type restoreResolver struct {
@@ -44,7 +43,6 @@ type restoreInput struct {
 
 func (rr *restoreResolver) Rewrite(
 	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
-	glog.Info("Got restore request")
 
 	rr.mutation = m
 	input, err := getRestoreInput(m)

@@ -43,6 +43,7 @@ type BackupProcessor struct {
 }
 
 // LoadResult holds the output of a Load operation.
+// TODO: make LoadResult a private struct.
 type LoadResult struct {
 	// Version is the timestamp at which the database is after loading a backup.
 	Version uint64

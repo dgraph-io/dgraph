@@ -80,8 +80,9 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
-// If ts is greater than zero, the key-value pairs will be written with that timestamp.
+// If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
 // Otherwise, the original value is used.
+// TODO(DGRAPH-1234): Check whether restoreTs can be removed.
 func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet) (
 	uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
@@ -193,9 +194,6 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				}
 
 			case posting.BitSchemaPosting:
-				// Schema and type keys should always have a timestamp equal to 1.
-				kv.Version = 1
-
 				// Schema and type keys are not stored in an intermediate format so their
 				// value can be written as is.
 				kv.Key = restoreKey

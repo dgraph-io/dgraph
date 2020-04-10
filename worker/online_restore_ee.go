@@ -113,6 +113,11 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &emptyRes, nil
 }
 
+// TODO(DGRAPH-1220): Online restores support passing the backup id.
+// TODO(DGRAPH-1230): Track restore operations.
+// TODO(DGRAPH-1231): Use draining mode during restores.
+// TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
+// TODO(DGRAPH-1233): Online restores support encrypted backups.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
 		return errors.Errorf("nil restore request")
@@ -183,7 +188,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
 	if err := groups().Node.proposeSnapshot(1); err != nil {
-		return err
+		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
 	}
 
 	// Update the membership state to re-compute the group checksums.
@@ -195,12 +200,12 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
-				return 0, err
+				return 0, errors.Wrapf(err, "cannot create gzip reader")
 			}
 
 			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
 			if err != nil {
-				return 0, err
+				return 0, errors.Wrapf(err, "cannot write backup")
 			}
 
 			// Use the value of maxUid to update the uid lease.
@@ -210,14 +215,16 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 					"cannot update uid lease due to no connection to zero leader")
 			}
 			zc := pb.NewZeroClient(pl.Get())
-			_, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid})
-			if err != nil {
-				return 0, err
+			if _, err = zc.AssignUids(ctx, &pb.Num{Val: maxUid}); err != nil {
+				return 0, errors.Wrapf(err, "cannot update max uid lease after restore.")
 			}
 
 			// We return the maxUid to enforce the signature of the method but it will
 			// be ignored as the uid lease was updated above.
 			return maxUid, nil
 		})
-	return res.Err
+	if res.Err != nil {
+		return errors.Wrapf(res.Err, "cannot write backup")
+	}
+	return nil
 }
