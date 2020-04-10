@@ -15,8 +15,8 @@ Edit the `deploy.sh` file to change these variables to the configured values.
 
 Parameters:
 
-* **name-of-cloudformation-stack**, e.g. `my-dgraph-cluster`
-* **name-of-key-pair**, e.g. `my-dgraph-cluster-key`
+* **name-of-cloudformation-stack**, e.g. `mydgraph-cluster`
+* **name-of-key-pair**, e.g. `mydgraph-cluster-key`
 * **target-region** (optional), e.g. `us-east-2`, region from default profile using `aws configure get region` will be used if not specified.
 * **s3-bucket-name** (optional), e.g. `dgraph-marketplace-cf-stack-mydgraph-cluster-us-east-2`.  This will be created if not specified.
 
@@ -31,7 +31,7 @@ Also note the DNS for the LoadBalancer, like `xxxxx-Dgrap-XXXXXXXXXXXXX-11111111
 
 ### **Accessing Systems with SSH**
 
-If you need to access the EC2 instances themselves through SSH, update the security group on those instances. On any EC2 instance, edit the security group that looks like this `cluster-name-DgraphSecurityGroup-XXXXXXXXXXXX` and open up port 22 to your office.  Afterward, you can log into the system with something like this:
+If you need to access the EC2 instances themselves through SSH, update the security group on those instances. On any EC2 instance, edit the security group that looks like this `mydgraph-cluster-DgraphSecurityGroup-XXXXXXXXXXXX` and open up port 22 to your office.  Afterward, you can log into the system with something like this:
 
 ```bash
 ssh -i /path/to/my-dgraph-cluster-key.pem ubuntu@ec2-X-XX-XXX-XXX.us-east-2.compute.amazonaws.com
