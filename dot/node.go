@@ -27,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/services"
@@ -79,7 +80,9 @@ func InitNode(cfg *Config) error {
 	data := gen.GenesisData()
 
 	// set genesis data using configuration values (assumes the genesis values
-	// have already been loaded into the configuration)
+	// have already been set for the configuration, which allows for us to take
+	// into account dynamic genesis values if the corresponding flag values are
+	// provided when using the dot package with the gossamer command)
 	data.Name = cfg.Global.Name
 	data.ID = cfg.Global.ID
 	data.Bootnodes = common.StringArrayToBytes(cfg.Network.Bootnodes)
@@ -105,16 +108,16 @@ func InitNode(cfg *Config) error {
 
 // NodeInitialized returns true if, within the configured data directory for the
 // node, the state database has been created and the genesis data has been loaded
-func NodeInitialized(cfg *Config, expected bool) bool {
+func NodeInitialized(datadir string, expected bool) bool {
 
 	// check if key registry exists
-	registry := path.Join(cfg.Global.DataDir, "KEYREGISTRY")
+	registry := path.Join(datadir, "KEYREGISTRY")
 	_, err := os.Stat(registry)
 	if os.IsNotExist(err) {
 		if expected {
 			log.Warn(
 				"[dot] Node has not been initialized",
-				"datadir", cfg.Global.DataDir,
+				"datadir", datadir,
 				"error", "failed to locate KEYREGISTRY file in data directory",
 			)
 		}
@@ -122,20 +125,46 @@ func NodeInitialized(cfg *Config, expected bool) bool {
 	}
 
 	// check if manifest exists
-	manifest := path.Join(cfg.Global.DataDir, "MANIFEST")
+	manifest := path.Join(datadir, "MANIFEST")
 	_, err = os.Stat(manifest)
 	if os.IsNotExist(err) {
 		if expected {
 			log.Warn(
 				"[dot] Node has not been initialized",
-				"datadir", cfg.Global.DataDir,
+				"datadir", datadir,
 				"error", "failed to locate MANIFEST file in data directory",
 			)
 		}
 		return false
 	}
 
-	// TODO: investigate cheap way to confirm valid genesis data has been loaded
+	// initialize database using data directory
+	db, err := database.NewBadgerDB(datadir)
+	if err != nil {
+		log.Error(
+			"[dot] Failed to create database",
+			"datadir", datadir,
+			"error", err,
+		)
+		return false
+	}
+
+	// load genesis data from initialized node database
+	_, err = state.LoadGenesisData(db)
+	if err != nil {
+		log.Warn(
+			"[dot] Node has not been initialized",
+			"datadir", datadir,
+			"error", err,
+		)
+		return false
+	}
+
+	// close database
+	err = db.Close()
+	if err != nil {
+		log.Error("[dot] Failed to close database", "error", err)
+	}
 
 	return true
 }
@@ -151,12 +180,10 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	// Node Services
 
 	log.Info(
-		"[dot] Creating node services...",
+		"[dot] Initializing node services...",
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"datadir", cfg.Global.DataDir,
-		"bootnodes", cfg.Network.Bootnodes,
-		"protocol", cfg.Network.ProtocolID,
 	)
 
 	var nodeSrvcs []services.Service

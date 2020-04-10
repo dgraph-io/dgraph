@@ -64,7 +64,6 @@ func (dt *table) Close() error {
 		log.Crit("Failed to close *db.Database", "err", err)
 		return err
 	}
-	log.Debug("Database *db.Database closed successfully")
 	return nil
 }
 

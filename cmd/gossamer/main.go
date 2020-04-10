@@ -124,7 +124,7 @@ func gossamerAction(ctx *cli.Context) error {
 	cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
 
 	// check if node has not been initialized (expected true - add warning log)
-	if !dot.NodeInitialized(cfg, true) {
+	if !dot.NodeInitialized(cfg.Global.DataDir, true) {
 
 		// initialize node (initialize databases and load genesis data)
 		err = dot.InitNode(cfg)
@@ -188,7 +188,7 @@ func initAction(ctx *cli.Context) error {
 	cfg.Global.DataDir = utils.ExpandDir(cfg.Global.DataDir)
 
 	// check if node has been initialized (expected false - no warning log)
-	if dot.NodeInitialized(cfg, false) {
+	if dot.NodeInitialized(cfg.Global.DataDir, false) {
 
 		// TODO: prompt user to confirm when reinitializing a node #760
 		log.Warn("[cmd] Node has already been initialized, reinitializing node...")

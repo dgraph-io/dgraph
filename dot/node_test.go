@@ -51,8 +51,26 @@ func TestInitNode(t *testing.T) {
 }
 
 // TestNodeInitialized
+func TestNodeInitialized(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
 
-// TODO: improve dot tests #687
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Init.Genesis = genFile.Name()
+
+	expected := NodeInitialized(cfg.Global.DataDir, false)
+	require.Equal(t, expected, false)
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	expected = NodeInitialized(cfg.Global.DataDir, true)
+	require.Equal(t, expected, true)
+}
 
 // TestNewNode
 func TestNewNode(t *testing.T) {

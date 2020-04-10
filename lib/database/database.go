@@ -155,7 +155,6 @@ func (db *BadgerDB) Close() error {
 		log.Crit("Failed to close *badger.DB", "err", err)
 		return err
 	}
-	log.Debug("Database *badger.DB closed successfully")
 	return nil
 }
 
