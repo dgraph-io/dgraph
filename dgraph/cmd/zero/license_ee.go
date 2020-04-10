@@ -135,7 +135,8 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 
 // applyLicenseFile applies the license file stored at the given path.
 func (st *state) applyLicenseFile(path string) error {
-	content, err := ioutil.ReadFile(path); if err != nil {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
 		return err
 	}
 
