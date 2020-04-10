@@ -809,7 +809,7 @@ invalid_schemas:
         name: String! @custom(http: {
           url: "http://google.com",
           method: "GET",
-          body: "{ abc: $abc, jam: $blah }"
+          body: "{ abc: $abc }"
         })
       }
     errlist: [
@@ -869,6 +869,39 @@ invalid_schemas:
       ID! or a field with @id directive.",
       "locations":[{"line":5, "column":16}]},
     ]
+
+  -
+    name: "@custom directive not allowed on field of type ID!"
+    input: |
+      type Author {
+        id: ID! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
+      field with @id directive.",
+      "locations":[{"line":2, "column":12}]},
+    ]
+
+  -
+      name: "@custom directive not allowed on field with @id directive"
+      input: |
+        type Author {
+          id: ID!
+          name: String! @id @custom(http: {
+            url: "http://google.com",
+            method: "GET",
+            body: "{ id: $id }"
+          })
+        }
+      errlist: [
+        {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or
+        field with @id directive.",
+        "locations":[{"line":3, "column":22}]},
+      ]
 
 valid_schemas:
   -

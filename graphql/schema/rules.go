@@ -882,11 +882,20 @@ func customDirectiveValidation(sch *ast.Schema,
 				typ.Name, field.Name)
 		}
 
-		var idField *ast.FieldDefinition
+		var idField, xidField string
 		if len(id) > 0 {
-			idField = id[0]
-		} else {
-			idField = xid[0]
+			idField = id[0].Name
+		}
+		if len(xid) > 0 {
+			xidField = xid[0].Name
+		}
+
+		if field.Name == idField || field.Name == xidField {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s; custom directive not allowed on field of type ID! or field "+
+					"with @id directive.", typ.Name, field.Name,
+			)
 		}
 
 		// 1. The required fields within the body template should contain an ID! field or a field
@@ -911,7 +920,7 @@ func customDirectiveValidation(sch *ast.Schema,
 					typ.Name, field.Name, fname,
 				)
 			}
-			if fname == idField.Name {
+			if fname == idField || fname == xidField {
 				requiresID = true
 			}
 		}
