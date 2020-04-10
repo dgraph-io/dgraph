@@ -251,7 +251,10 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
-		return []byte(fmt.Sprintf("%f", v.Value)), nil
+		// Using json.Marshal as it correctly skips values that cannot be represented by JSON,
+		// for example +Inf, -Inf. As per benchmarks, it's marginally (8%) slower
+		// https://gist.github.com/gja/6d6723a0e8c3620b6bcb38ebbe264956
+		return json.Marshal(v.Value)
 	case types.BoolID:
 		if v.Value.(bool) {
 			return boolTrue, nil
