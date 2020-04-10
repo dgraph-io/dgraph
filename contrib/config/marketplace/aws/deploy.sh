@@ -15,8 +15,8 @@ readonly template="dgraph.json"
  { echo "SSH Key Name not specified. Exiting." &> /dev/stderr; exit 1; }
 
 # create required bucket if it doesn't exist
-aws s3 ls --region ${region} ${s3_bucket_name} &> /dev/null || \
- aws s3 mb --region ${region} ${s3_bucket_name}
+aws s3 ls --region ${region} "s3://${s3_bucket_name}" &> /dev/null || \
+ aws s3 mb --region ${region} "s3://${s3_bucket_name}"
 
 # create cfn stack
 aws cloudformation deploy \
