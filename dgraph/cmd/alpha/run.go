@@ -148,6 +148,7 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
@@ -594,14 +595,12 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
-	x.InitSentry(enc.EeBuild)
-	defer x.FlushSentry()
-	x.ConfigureSentryScope("alpha")
-	x.WrapPanics()
-
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("alpha exception"))
-	// x.Panic(errors.New("alpha manual panic will send 2 events"))
+	if Alpha.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("alpha")
+		x.WrapPanics()
+	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

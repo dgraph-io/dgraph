@@ -90,6 +90,7 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
+	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -162,14 +163,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	x.InitSentry(enc.EeBuild)
-	defer x.FlushSentry()
-	x.ConfigureSentryScope("zero")
-	x.WrapPanics()
-
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("zero exception"))
-	// x.Panic(errors.New("zero manual panic will send 2 events"))
+	if Zero.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("zero")
+		x.WrapPanics()
+	}
 
 	x.PrintVersion()
 	opts = options{
