@@ -257,6 +257,14 @@ var directiveValidators = map[string]directiveValidator{
 		dir *ast.Directive) *gqlerror.Error {
 		return nil
 	},
+	// Just go get it printed into generated schema
+	authDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
 }
 
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
