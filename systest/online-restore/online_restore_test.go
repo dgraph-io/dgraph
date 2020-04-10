@@ -71,7 +71,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph) {
 			continue
 		}
 		filename := path.Join(queryDir, file.Name())
-		reader, cleanup := chunker.FileReader(filename)
+		reader, cleanup := chunker.FileReader(filename, "")
 		bytes, err := ioutil.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
