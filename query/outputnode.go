@@ -252,7 +252,8 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
-		// +Inf, -Inf and NaN are not representable. Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
+		// +Inf, -Inf and NaN are not representable in JSON.
+		// Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
 		if math.IsInf(v.Value, 0) || math.IsNaN(f) {
 			return nil, errors.New("Unsupported Inf or NaN in float field")
 		}
