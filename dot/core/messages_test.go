@@ -46,7 +46,7 @@ func TestService_ProcessBlockRequestMessage(t *testing.T) {
 		MsgSend: msgSend,
 	}
 
-	s := newTestService(t, cfg)
+	s := NewTestService(t, cfg)
 
 	addTestBlocksToState(t, 2, s.blockState)
 
@@ -267,7 +267,7 @@ func TestService_ProcessBlockResponseMessage(t *testing.T) {
 		MsgSend:         msgSend,
 	}
 
-	s := newTestService(t, cfg)
+	s := NewTestService(t, cfg)
 
 	hash := common.NewHash([]byte{0})
 	body := optional.CoreBody{0xa, 0xb, 0xc, 0xd}
@@ -341,7 +341,7 @@ func TestService_ProcessBlockAnnounceMessage(t *testing.T) {
 		IsBabeAuthority: false,
 	}
 
-	s := newTestService(t, cfg)
+	s := NewTestService(t, cfg)
 	err := s.Start()
 	require.Nil(t, err)
 
@@ -396,7 +396,7 @@ func TestService_ProcessTransactionMessage(t *testing.T) {
 		IsBabeAuthority:  true,
 	}
 
-	s := newTestService(t, cfg)
+	s := NewTestService(t, cfg)
 
 	// https://github.com/paritytech/substrate/blob/5420de3face1349a97eb954ae71c5b0b940c31de/core/transaction-pool/src/tests.rs#L95
 	ext := []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 189, 4, 169, 159, 214, 130, 44, 133, 88, 133, 76, 205, 227, 154, 86, 132, 231, 165, 109, 162, 125, 142, 175, 4, 21, 22, 135, 115, 99, 38, 201, 254, 161, 126, 37, 252, 82, 135, 97, 54, 147, 201, 18, 144, 156, 178, 38, 170, 71, 148, 242, 106, 72, 69, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 216, 5, 113, 87, 87, 40, 221, 120, 247, 252, 137, 201, 74, 231, 222, 101, 85, 108, 102, 39, 31, 190, 210, 14, 215, 124, 19, 160, 180, 203, 54, 110, 167, 163, 149, 45, 12, 108, 80, 221, 65, 238, 57, 237, 199, 16, 10, 33, 185, 8, 244, 184, 243, 139, 5, 87, 252, 245, 24, 225, 37, 154, 163, 142}

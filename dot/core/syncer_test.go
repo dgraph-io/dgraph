@@ -276,7 +276,7 @@ func TestWatchForResponses(t *testing.T) {
 
 	syncer.highestSeenBlock = big.NewInt(16)
 
-	coreSrv := newTestService(t, nil)
+	coreSrv := NewTestService(t, nil)
 	addTestBlocksToState(t, 16, coreSrv.blockState)
 
 	startNum := 1
@@ -354,7 +354,7 @@ func TestWatchForResponses_MissingBlocks(t *testing.T) {
 
 	syncer.highestSeenBlock = big.NewInt(16)
 
-	coreSrv := newTestService(t, nil)
+	coreSrv := NewTestService(t, nil)
 	addTestBlocksToState(t, 16, coreSrv.blockState)
 
 	startNum := 16

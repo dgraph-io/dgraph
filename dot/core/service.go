@@ -27,6 +27,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -499,4 +500,9 @@ func (s *Service) checkForRuntimeChanges() error {
 	}
 
 	return nil
+}
+
+// InsertKey inserts keypair into keystore
+func (s *Service) InsertKey(kp crypto.Keypair) {
+	s.keys.Insert(kp)
 }

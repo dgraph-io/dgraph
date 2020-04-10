@@ -17,7 +17,12 @@
 package modules
 
 import (
+	"fmt"
 	"net/http"
+	"reflect"
+
+	"github.com/ChainSafe/gossamer/lib/crypto"
+	"github.com/ChainSafe/gossamer/lib/keystore"
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -33,11 +38,7 @@ type AuthorModule struct {
 }
 
 // KeyInsertRequest is used as model for the JSON
-type KeyInsertRequest struct {
-	KeyType   string `json:"keyType"`
-	Suri      string `json:"suri"`
-	PublicKey []byte `json:"publicKey"`
-}
+type KeyInsertRequest []string
 
 // Extrinsic represents a hex-encoded extrinsic
 type Extrinsic string
@@ -52,7 +53,6 @@ type ExtrinsicOrHash struct {
 type ExtrinsicOrHashRequest []ExtrinsicOrHash
 
 // KeyInsertResponse []byte
-// TODO: Waiting on Block type defined here https://github.com/ChainSafe/gossamer/pull/233
 type KeyInsertResponse []byte
 
 // PendingExtrinsicsResponse is a bi-dimensional array of bytes for allocating the pending extrisics
@@ -91,7 +91,29 @@ func NewAuthorModule(coreAPI CoreAPI, txQueueAPI TransactionQueueAPI) *AuthorMod
 
 // InsertKey inserts a key into the keystore
 func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *KeyInsertResponse) error {
-	_ = cm.coreAPI
+	keyReq := *req
+
+	pkDec, err := common.HexToHash(keyReq[1])
+	if err != nil {
+		return err
+	}
+
+	privateKey, err := keystore.DecodePrivateKey(pkDec.ToBytes(), determineKeyType(keyReq[0]))
+	if err != nil {
+		return err
+	}
+
+	keyPair, err := keystore.PrivateKeyToKeypair(privateKey)
+	if err != nil {
+		return err
+	}
+
+	if !reflect.DeepEqual(keyPair.Public().Hex(), keyReq[2]) {
+		return fmt.Errorf("generated public key does not equal provide public key")
+	}
+
+	cm.coreAPI.InsertKey(keyPair)
+	log.Info("[rpc] inserted key into keystore", "key", keyPair.Public().Hex())
 	return nil
 }
 
@@ -154,4 +176,27 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 	*res = ExtrinsicHashResponse(hash)
 	log.Info("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
 	return nil
+}
+
+// determineKeyType takes string as defined in https://github.com/w3f/PSPs/blob/psp-rpc-api/psp-002.md#Key-types
+//  and returns the crypto.KeyType
+func determineKeyType(t string) crypto.KeyType {
+	// TODO: create separate keystores for different key types, issue #768
+	switch t {
+	case "babe":
+		return crypto.Sr25519Type
+	case "gran":
+		return crypto.Sr25519Type
+	case "acco":
+		return crypto.Sr25519Type
+	case "aura":
+		return crypto.Sr25519Type
+	case "imon":
+		return crypto.Sr25519Type
+	case "audi":
+		return crypto.Sr25519Type
+	case "dumy":
+		return crypto.Sr25519Type
+	}
+	return "unknown keytype"
 }
