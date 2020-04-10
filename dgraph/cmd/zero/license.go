@@ -37,3 +37,7 @@ func (n *node) updateEnterpriseState(closer *y.Closer) {
 func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNotFound)
 }
+
+func (st *state) applyLicenceFile(path string) error {
+	return nil
+}
