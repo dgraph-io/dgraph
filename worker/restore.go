@@ -51,7 +51,8 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
 				WithValueThreshold(1 << 10).
-				WithNumVersionsToKeep(math.MaxInt32))
+				WithNumVersionsToKeep(math.MaxInt32).
+				WithEncryptionKey(enc.ReadEncryptionKeyFile(keyfile)))
 			if err != nil {
 				return 0, err
 			}
@@ -82,6 +83,14 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
+
+	// Delete schemas and types. Each backup file should have a complete copy of the schema.
+	if err := db.DropPrefix([]byte{x.ByteSchema}); err != nil {
+		return 0, err
+	}
+	if err := db.DropPrefix([]byte{x.ByteType}); err != nil {
+		return 0, err
+	}
 
 	loader := db.NewKVLoader(16)
 	var maxUid uint64

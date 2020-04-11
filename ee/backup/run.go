@@ -105,8 +105,8 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
-	flag.StringVarP(&opt.keyfile, "keyfile", "k", "",
-		"Key file to decrypt the backup")
+	flag.StringVarP(&opt.keyfile, "keyfile", "k", "", "Key file to decrypt the backup. "+
+		"The same key is also used to re-encrypt the restored data.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }

@@ -66,7 +66,8 @@ const (
 type GraphqlContextKey int
 
 const (
-	// IsGraphql is used to validate requests which are allowed to mutate dgraph.graphql.schema.
+	// IsGraphql is used to validate requests which are allowed to mutate GraphQL reserved
+	// predicates, like dgraph.graphql.schema and dgraph.graphql.xid.
 	IsGraphql GraphqlContextKey = iota
 	// Authorize is used to set if the request requires validation.
 	Authorize
