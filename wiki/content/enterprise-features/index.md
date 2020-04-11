@@ -166,7 +166,7 @@ mutation {
 
 ### Encrypted Backups
 
-Encrypted backups are a Enterprise feature that allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
 
 ### New flag “Encrypted” in manifest.json
 
