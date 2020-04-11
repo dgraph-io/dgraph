@@ -53,7 +53,7 @@ This will put the source code in a Git repo under `$GOPATH/src/github.com/dgraph
 
 ### Protocol buffers
 
-We use [protocol buffers](https://developers.google.com/protocol-buffers/) to serialize data between our server and the Go client and also for inter-worker communication. If you make any changes to the `.proto` files, you would have to recompile them. 
+We use [protocol buffers](https://developers.google.com/protocol-buffers/) to serialize data between our server and the Go client and also for inter-worker communication. If you make any changes to the `.proto` files, you would have to recompile them.
 
 Install the `protoc` compiler which is required for compiling proto files used for gRPC communication. Get `protoc` version 3.0.0 or above from [GitHub releases page](https://github.com/google/protobuf/releases/latest) (look for the binary releases at the bottom, or compile from sources [following the instructions](https://github.com/google/protobuf/tree/master/src)).
 
@@ -144,7 +144,7 @@ Run the `test.sh` script in the root folder.
 
 
     $ ./test.sh
-    
+
     INFO: Running tests using the default cluster
     …
     INFO: Running test for github.com/dgraph-io/dgraph/algo
@@ -164,6 +164,9 @@ also contains a `docker-compose.yml` to set up the cluster as needed.
 
  **IMPORTANT:** All containers should be labeled with `cluster: test` so they may be correctly
  restarted and cleaned up by the test script.
+
+If you would like to start the test cluster, then manually run tests with `go test`, then you
+can use the `contrib/test-cluster.sh` script to start a testing cluster
 
 #### Badger
 Run `go test` in the root folder.
@@ -208,7 +211,7 @@ Run `go test` in the root folder.
   ```
 
 * Once the draft release is published on Github by Travis, modify it to add the release notes. The release
-  notes would mostly be the same as changes for the current version in `CHANGELOG.md`. Finally publish the 
+  notes would mostly be the same as changes for the current version in `CHANGELOG.md`. Finally publish the
   release and announce to users on community Slack.
 
 * To make sure that docs are added for the newly released version, add the version to
