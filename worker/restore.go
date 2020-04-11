@@ -147,8 +147,9 @@ func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicat
 				maxUid = parsedKey.Uid
 			}
 
-			// Override the version if requested.
-			if restoreTs > 0 {
+			// Override the version if requested. Should not be done for type and schema predicates,
+			// which always have their version set to 1.
+			if restoreTs > 0 && !parsedKey.IsSchema() && !parsedKey.IsType() {
 				kv.Version = restoreTs
 			}
 

@@ -34,5 +34,5 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 // Restore implements the Worker interface.
 func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
-	return &pb.Status, x.ErrNotSupported
+	return &pb.Status{}, x.ErrNotSupported
 }
