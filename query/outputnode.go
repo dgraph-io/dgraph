@@ -132,9 +132,10 @@ func (enc *encoder) makeScalarNode(attr uint16, isChild bool, val []byte, list b
 const (
 	msbBit       = 0x8000000000000000
 	secondMsbBit = 0x4000000000000000
-	setBytes56   = 0x0000FFFF00000000
-	unsetBytes56 = 0xFFFF0000FFFFFFFF
-	setBytes1234 = 0x00000000FFFFFFFF
+	setBytes76   = 0x00FFFF0000000000
+	unsetBytes76 = 0xFF0000FFFFFFFFFF
+	setBytes5    = 0x000000FF00000000
+	setBytes4321 = 0x00000000FFFFFFFF
 )
 
 // fastJsonNode represents node of a tree, which is formed to convert a subgraph into json response
@@ -172,14 +173,16 @@ func (enc *encoder) setAttr(fj fastJsonNode, attr uint16) {
 	meta := enc.metaSlice[fj]
 	// There can be some cases where we change name of attr for fastJsoNode and
 	// hence first clear the existing attr, then store new one.
-	meta &= unsetBytes56
-	meta |= (uint64(attr) << 32)
+	meta &= unsetBytes76
+	meta |= (uint64(attr) << 40)
 
 	enc.metaSlice[fj] = meta
 }
 
 func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) {
-	enc.metaSlice[fj] |= uint64(enc.arena.put(sv))
+	idx, offset := enc.arena.put(sv)
+	enc.metaSlice[fj] |= uint64(offset)
+	enc.metaSlice[fj] |= (uint64(idx) << 32)
 }
 
 func (enc *encoder) setIsChild(fj fastJsonNode, isChild bool) {
@@ -206,14 +209,14 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
 	meta := enc.metaSlice[fj]
-	return uint16((meta & setBytes56) >> 32)
+	return uint16((meta & setBytes76) >> 40)
 }
 
 func (enc *encoder) getScalarVal(fj fastJsonNode) []byte {
 	meta := enc.metaSlice[fj]
-	offset := uint32(meta & setBytes1234)
-
-	return enc.arena.get(offset)
+	offset := uint32(meta & setBytes4321)
+	idx := uint8(meta & setBytes5)
+	return enc.arena.get(idx, offset)
 }
 
 func (enc *encoder) getIsChild(fj fastJsonNode) bool {
