@@ -338,6 +338,12 @@ func (fj *fastJsonNode) attachFacets(fieldName string, isList bool,
 }
 
 func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
+	if len(fj.attrs) == 0 && len(fj.scalarVal) == 0 {
+		fmt.Printf("%+v", fj)
+		_, err := out.WriteString("{}")
+		return err
+	}
+
 	// set relative ordering
 	for i, a := range fj.attrs {
 		a.order = i
