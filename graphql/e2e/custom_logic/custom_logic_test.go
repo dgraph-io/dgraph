@@ -257,6 +257,41 @@ func addPerson(t *testing.T) *user {
 	return res.AddPerson.Person[0]
 }
 
+func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+                url: "http://mock:8888/nonExistentURL/$id?name=$name&num=$num",
+                method: "GET"
+        })
+	}`
+	updateSchema(t, schema)
+
+	query := `
+	query {
+		myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			id
+			name
+			director {
+				id
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, `{ "myFavoriteMovies": null }`, string(result.Data))
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message:   "couldn't unmarshal result because invalid character 'p' after top-level value",
+			Locations: []x.Location{{3, 3}},
+		},
+	}, result.Errors)
+}
+
 func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	schema := `
 	type Car {
