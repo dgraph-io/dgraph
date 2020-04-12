@@ -742,12 +742,9 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
-	if err != nil {
-		errs = append(errs, x.GqlErrorf(err.Error()))
-		// TODO
-		// 1. All errors received from downstream remote servers should be propogated to the
-		// client.
+	gqlErr := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	if len(gqlErr) != 0 {
+		errs = append(errs, gqlErr...)
 	}
 
 	// Errors should report the "path" into the result where the error was found.
@@ -793,7 +790,7 @@ func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
 	return result, nil
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan x.GqlErrorList) {
 	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
@@ -801,12 +798,12 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	for i := 0; i < len(body); i++ {
 		temp, err := copyMap(fconf.Template)
 		if err != nil {
-			errCh <- err
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			return
 		}
 		mu.RLock()
 		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
-			errCh <- err
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			mu.RUnlock()
 			return
 		}
@@ -817,24 +814,29 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	if fconf.Operation == "batch" {
 		b, err := json.Marshal(body)
 		if err != nil {
-			errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
+			err = errors.Wrapf(err, "while json marshaling body: %s", b)
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			return
 		}
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
-			errCh <- errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
+			err = errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			return
 		}
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
+			err = errors.Errorf("while json unmarshaling result: %s for field: %s", b, f.Name())
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			return
 		}
 
 		if len(result) != len(vals) {
-			errCh <- nil
+			err = errors.Errorf("expected result to be of size %v, got: %v for field: %s",
+				len(vals), len(result), f.Name())
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
 			return
 		}
 
@@ -852,13 +854,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
 	var wg sync.WaitGroup
+	errs := make(x.GqlErrorList, len(body))
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
 		go func(idx int, input map[string]interface{}) {
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
-				// TODO - Propogate this error
+				errs[idx] = x.GqlErrorf("while json marshaling input: %+v to resolve "+
+					"field: %s", input, f.Name())
 				return
 			}
 
@@ -866,19 +870,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
 			if err != nil {
 				mu.RUnlock()
+				errs[idx] = x.GqlErrorf("while substituting variables in URL to resolve"+
+					" field: %s, err: %s", f.Name(), err)
 				return
 			}
 			mu.RUnlock()
 
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
-				// TODO - Propogate this error.
+				errs[idx] = x.GqlErrorf("while making request to resolve field: %s, err: %s",
+					f.Name(), err)
 				return
 			}
 
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
-				// TODO - Propogate this error.
+				errs[idx] = x.GqlErrorf("while json unmarshaling result: %s for field: %s",
+					b, f.Name())
 				return
 			}
 
@@ -891,10 +899,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}(i, body[i])
 	}
 	wg.Wait()
-	errCh <- nil
+	errCh <- errs
 }
 
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan x.GqlErrorList) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {
@@ -944,7 +953,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 	mu.RUnlock()
 
 	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
-		errCh <- nil
+		errCh <- err
 		return
 	}
 
@@ -1004,7 +1013,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) error {
+func resolveCustomFields(fields []schema.Field, data interface{}) x.GqlErrorList {
 	if data == nil {
 		return nil
 	}
@@ -1024,7 +1033,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	// This mutex protects access to vals as it is concurrently read and written to by multiple
 	// goroutines.
 	mu := &sync.RWMutex{}
-	errCh := make(chan error, len(fields))
+	errCh := make(chan x.GqlErrorList, len(fields))
 	numRoutines := 0
 
 	for _, f := range fields {
@@ -1041,14 +1050,15 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		}
 	}
 
-	var finalErr error
+	var errs x.GqlErrorList
+
 	for i := 0; i < numRoutines; i++ {
 		if err := <-errCh; err != nil {
-			finalErr = err
+			errs = append(errs, &x.GqlError{Message: err.Error()})
 		}
 	}
 
-	return finalErr
+	return errs
 }
 
 // completeObject builds a json GraphQL result object for the current query level.

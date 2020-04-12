@@ -18,11 +18,13 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -153,6 +155,116 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Nil(t, result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
+}
+
+func addPerson(t *testing.T) *user {
+	addTeacherParams := &common.GraphQLParams{
+		Query: `mutation addPerson {
+			addPerson(input: [{ age: 28 }]) {
+				person {
+					id
+					age
+				}
+			}
+		}`,
+	}
+
+	result := addTeacherParams.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	var res struct {
+		AddPerson struct {
+			Person []*user
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddPerson.Person), 1)
+	return res.AddPerson.Person[0]
+}
+
+func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
+	schema := `
+	type Car {
+		id: ID!
+		name: String!
+	}
+
+	type MotorBike {
+		id: ID!
+		name: String!
+	}
+
+	type School {
+		id: ID!
+		name: String!
+	}
+
+	type Person {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/carsWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		bikes: MotorBike @custom(http: {
+						url: "http://mock:8888/bikesWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "single"
+					})
+	}`
+
+	updateSchema(t, schema)
+	p := addPerson(t)
+
+	queryPerson := `
+	query {
+		queryPerson {
+			name
+			age
+			cars {
+				name
+			}
+			bikes {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryPerson,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	expected := fmt.Sprintf(`
+	{
+		"queryPerson": [
+			{
+				"name": "uname-%s",
+				"age": 28,
+				"cars": null,
+				"bikes": null
+			}
+		]
+	}`, p.ID)
+	require.JSONEq(t, expected, string(result.Data))
+	require.Equal(t, 2, len(result.Errors))
+
+	expectedErrors := x.GqlErrorList{
+		x.GqlErrorf("while json unmarshaling result: 404 page not found\n for field: cars"),
+		x.GqlErrorf("while json unmarshaling result: 404 page not found\n for field: bikes"),
+	}
+	require.Contains(t, result.Errors, expectedErrors[0])
+	require.Contains(t, result.Errors, expectedErrors[1])
 }
 
 type teacher struct {
