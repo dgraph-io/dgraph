@@ -22,6 +22,7 @@ import (
 	"context"
 	"sync"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
@@ -36,24 +37,23 @@ type subMutation struct {
 type executor struct {
 	sync.RWMutex
 	predChan map[string]chan *subMutation
+	closer   *y.Closer
 }
 
 func newExecutor() *executor {
-	return &executor{
+	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
+		closer:   y.NewCloser(0),
 	}
+	go ex.shutdown()
+	return ex
 }
 
 func (e *executor) processMutationCh(ch chan *subMutation) {
+	defer e.closer.Done()
+
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
-		select {
-		case <-ShutdownCh:
-			// Ignore all the unfinished mutation after shutdown signal.
-			glog.Infof("Ignoring further unfinished mutations")
-			return
-		default:
-		}
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
 			for {
@@ -77,6 +77,15 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 	}
 }
 
+func (e *executor) shutdown() {
+	<-e.closer.HasBeenClosed()
+	e.RLock()
+	defer e.RUnlock()
+	for _, ch := range e.predChan {
+		close(ch)
+	}
+}
+
 func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	e.RLock()
 	ch, ok := e.predChan[pred]
@@ -94,6 +103,7 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	}
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
+	e.closer.AddRunning(1)
 	go e.processMutationCh(ch)
 	return ch
 }
