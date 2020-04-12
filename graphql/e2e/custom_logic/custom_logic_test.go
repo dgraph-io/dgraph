@@ -18,6 +18,7 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +38,7 @@ const (
 		 name: String!
 		 directed: [Movie]
 	 }
- 
+
 	 type Movie @remote {
 		 id: ID!
 		 name: String!
@@ -47,7 +49,7 @@ const (
 		name: String
 		countries: [Country]
 	  }
-	  
+
 	  type Country @remote {
 		code: String
 		name: String
@@ -60,15 +62,15 @@ const (
 		emojiU: String
 		states: [State]
 	  }
-	  
+
 	  type Language @remote {
 		code: String
 		name: String
 		native: String
 		rtl: Int
 	  }
-	  
-	  
+
+
 	  type State @remote {
 		code: String
 		name: String
@@ -226,6 +228,116 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 
 	headers := strings.Split(resp.Header.Get("Access-Control-Allow-Headers"), ",")
 	require.Subset(t, headers, []string{"X-App-Token", "X-User-Id", "User-Id", "X-App-User", "X-Group-Id"})
+}
+
+func addPerson(t *testing.T) *user {
+	addTeacherParams := &common.GraphQLParams{
+		Query: `mutation addPerson {
+			addPerson(input: [{ age: 28 }]) {
+				person {
+					id
+					age
+				}
+			}
+		}`,
+	}
+
+	result := addTeacherParams.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	var res struct {
+		AddPerson struct {
+			Person []*user
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddPerson.Person), 1)
+	return res.AddPerson.Person[0]
+}
+
+func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
+	schema := `
+	type Car {
+		id: ID!
+		name: String!
+	}
+
+	type MotorBike {
+		id: ID!
+		name: String!
+	}
+
+	type School {
+		id: ID!
+		name: String!
+	}
+
+	type Person {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/carsWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		bikes: MotorBike @custom(http: {
+						url: "http://mock:8888/bikesWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "single"
+					})
+	}`
+
+	updateSchema(t, schema)
+	p := addPerson(t)
+
+	queryPerson := `
+	query {
+		queryPerson {
+			name
+			age
+			cars {
+				name
+			}
+			bikes {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryPerson,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	expected := fmt.Sprintf(`
+	{
+		"queryPerson": [
+			{
+				"name": "uname-%s",
+				"age": 28,
+				"cars": null,
+				"bikes": null
+			}
+		]
+	}`, p.ID)
+	require.JSONEq(t, expected, string(result.Data))
+	require.Equal(t, 2, len(result.Errors))
+
+	expectedErrors := x.GqlErrorList{
+		x.GqlErrorf("while json unmarshaling result: 404 page not found\n for field: cars"),
+		x.GqlErrorf("while json unmarshaling result: 404 page not found\n for field: bikes"),
+	}
+	require.Contains(t, result.Errors, expectedErrors[0])
+	require.Contains(t, result.Errors, expectedErrors[1])
 }
 
 type teacher struct {
@@ -617,7 +729,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -635,7 +747,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -653,12 +765,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -684,7 +796,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -702,7 +814,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -720,12 +832,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -744,7 +856,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
@@ -754,7 +866,7 @@ func TestForInvalidArguement(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; code arg not present in the remote query country\n")
@@ -764,7 +876,7 @@ func TestForInvalidType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
@@ -774,7 +886,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Nil(t, res.Errors)
@@ -782,7 +894,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
@@ -800,14 +912,14 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	query := `
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
