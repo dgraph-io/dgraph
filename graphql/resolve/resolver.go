@@ -686,14 +686,16 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
+	// Update - This function is also called by HTTP resolver for resolving custom logic queries
+	// hence the comment above doesn't hold right now.
 	var valToComplete map[string]interface{}
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
-		glog.Errorf("%+v \n Dgraph result :\n%s\n",
-			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
+		glog.Errorf("%+v \n result :\n%s\n",
+			errors.Wrap(err, "failed to unmarshal query result"),
 			string(dgResult))
 		return nullResponse(),
-			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
+			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal result")
 	}
 
 	switch val := valToComplete[field.ResponseName()].(type) {
