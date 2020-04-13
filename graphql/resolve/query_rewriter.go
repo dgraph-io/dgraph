@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/pkg/errors"
@@ -67,7 +68,7 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		return dgQuery, nil
 
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery, authVariables), nil
+		return rewriteAsQuery(gqlQuery, authVariables, false), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
@@ -183,7 +184,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
-	addSelectionSetFrom(dgQuery, field, nil, nil) // FIXME: should also handle auth
+	addSelectionSetFrom(dgQuery, field, nil, nil, false) // FIXME: should also handle auth
 	addUID(dgQuery)
 	return dgQuery
 }
@@ -230,12 +231,15 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 			Func: eqXidFunc,
 		}
 	}
-	addSelectionSetFrom(dgQuery, field, nil, nil)
+	addSelectionSetFrom(dgQuery, field, nil, nil, false) // FIXME: should do auth
 	addUID(dgQuery)
 	return dgQuery
 }
 
-func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *gql.GraphQuery {
+func rewriteAsQuery(
+	field schema.Field,
+	authVariables map[string]interface{},
+	isAuthRewrite bool) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 	}
@@ -250,26 +254,24 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 
 	varGen := NewVariableGenerator()
 	varName := varGen.Next(field.Type(), "", "")
-	if authVariables != nil {
-		authVariables["dgraph.uid"] = varName
-	}
 
 	addArgumentsToField(dgQuery, field)
-	selectionAuth := addSelectionSetFrom(dgQuery, field, varGen, authVariables)
+	selectionAuth := addSelectionSetFrom(dgQuery, field, varGen, authVariables, isAuthRewrite)
 	addUID(dgQuery)
 
 	if authVariables == nil || field.IsAuthQuery() {
 		return dgQuery
 	}
 
-	authQueries, filter := rewriteAuthQueries(field, varGen, authVariables)
-	authQueries = append(authQueries, selectionAuth...)
-	if len(authQueries) > 0 {
+	authVariables["dgraph.uid"] = varName
+	fldAuthQueries, filter := rewriteAuthQueries(field, varGen, authVariables)
+	authQueries := selectionAuth
+	if len(fldAuthQueries) > 0 {
 		// build a query like
 		// Todo1 as var(func: ... ) @filter(...)
 		// that has the filter from the user query in it.  This is then used as
 		// the starting point for both the user query and the auth query.
-		varQry := rewriteAsQuery(field, nil)
+		varQry := rewriteAsQuery(field, nil, true)
 		varQry.Var = varName
 		varQry.Alias = ""
 		varQry.Attr = "var"
@@ -283,12 +285,15 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 		}
 		dgQuery.Filter = filter
 
-		q := &gql.GraphQuery{
-			Children: append([]*gql.GraphQuery{dgQuery, varQry}, authQueries...),
-		}
-		// fmt.Println(dgraph.AsString(q))
-		return q
+		fldAuthQueries = append([]*gql.GraphQuery{varQry}, fldAuthQueries...)
+		authQueries = append(fldAuthQueries, selectionAuth...)
 	}
+
+	if len(authQueries) > 0 {
+		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, authQueries...)}
+	}
+
+	fmt.Println(dgraph.AsString(dgQuery))
 
 	return dgQuery
 }
@@ -352,7 +357,7 @@ func rewriteRuleNode(
 		qry := rn.Rule.AuthFor(field, authVariables)
 
 		varName := varGen.Next(field.Type(), "", "")
-		r1 := rewriteAsQuery(qry, authVariables)
+		r1 := rewriteAsQuery(qry, authVariables, true)
 		r1.Var = varName
 		r1.Attr = "var"
 		r1.Cascade = true
@@ -414,7 +419,8 @@ func addSelectionSetFrom(
 	q *gql.GraphQuery,
 	field schema.Field,
 	varGen *VariableGenerator,
-	authVariables map[string]interface{}) []*gql.GraphQuery {
+	authVariables map[string]interface{},
+	isAuthRewrite bool) []*gql.GraphQuery {
 
 	var authQueries []*gql.GraphQuery
 
@@ -453,14 +459,14 @@ func addSelectionSetFrom(
 		addOrder(child, f)
 		addPagination(child, f)
 
-		selectionAuth := addSelectionSetFrom(child, f, varGen, authVariables)
+		selectionAuth := addSelectionSetFrom(child, f, varGen, authVariables, isAuthRewrite)
 		q.Children = append(q.Children, child)
 
-		if _, isAuthQuery := authVariables["dgraph.uid"]; isAuthQuery {
+		if isAuthRewrite {
 			continue
 		}
 
-		fieldAuth, authFilter := rewriteAuthQueries(field, varGen, authVariables)
+		fieldAuth, authFilter := rewriteAuthQueries(f, varGen, authVariables)
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
 		if len(fieldAuth) > 0 {

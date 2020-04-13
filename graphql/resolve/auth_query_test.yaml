@@ -39,7 +39,7 @@
         dgraph.uid : uid
       }
       Todo2 as var(func: type(Todo)) @cascade {
-        dgraph.uid : uid
         owner : Todo.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
       }
     }

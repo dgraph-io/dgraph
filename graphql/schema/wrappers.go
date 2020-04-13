@@ -724,12 +724,19 @@ func (q *query) IsAuthQuery() bool {
 
 func (q *query) AuthFor(f Field, jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
+	var sch *schema
+	if fld, ok := f.(*field); ok {
+		sch = fld.op.inSchema
+	} else {
+		sch = f.(*query).op.inSchema
+	}
+
 	return &query{
 		field: (*field)(q).field,
 		op: &operation{op: q.op.op,
 			query:    q.op.query,
 			doc:      q.op.doc,
-			inSchema: f.(*query).op.inSchema,
+			inSchema: sch,
 			vars:     jwtVars,
 		},
 		sel: q.sel}
