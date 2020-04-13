@@ -344,7 +344,7 @@ func RefreshAcls(closer *y.Closer) {
 
 const queryAcls = `
 {
-  allAcls(func: type(dgrpah.type.Group)) {
+  allAcls(func: type(dgraph.type.Group)) {
     dgraph.xid
 	dgraph.acl.rule {
 		dgraph.rule.predicate
@@ -825,8 +825,8 @@ func authorizeGuardians(ctx context.Context) error {
 	addUserFilterToQuery applies makes sure that a user can access only its own
 	acl info by applying filter of userid and groupid to acl predicates. A query like
 	Conversion pattern:
-	* me(func: type(dgrpah.type.Group)) -> me(func: type(dgrpah.type.Group)) @filter(eq("dgraph.xid", groupIds...))
-	* me(func: type(dgrpah.type.User)) -> me(func: type(dgrpah.type.User)) @filter(eq("dgraph.xid", userId))
+	* me(func: type(dgraph.type.Group)) -> me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+	* me(func: type(dgraph.type.User)) -> me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 
 */
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
@@ -915,7 +915,7 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 
 /*
  addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
- If the *filter* have type(dgrpah.type.Group) or type(dgrpah.type.User) functions, it generate a *newFilter* with function
+ If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions, it generate a *newFilter* with function
  like eq(dgraph.xid, userId) or eq(dgraph.xid, groupId...) and return a filter of the form
 
 		&gql.FilterTree{

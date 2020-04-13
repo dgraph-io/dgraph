@@ -30,7 +30,7 @@ import (
 const (
 	oldACLQuery = `
 		{
-			rules(func: type(dgrpah.type.Group)) {
+			rules(func: type(dgraph.type.Group)) {
 				uid
 				dgraph.group.acl
 			}

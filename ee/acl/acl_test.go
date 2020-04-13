@@ -1400,7 +1400,7 @@ func TestQueryUserInfo(t *testing.T) {
 
 	query := `
 	{
-		me(func: type(dgrpah.type.User)) {
+		me(func: type(dgraph.type.User)) {
 			dgraph.xid
 			dgraph.user.group {
 				dgraph.xid
