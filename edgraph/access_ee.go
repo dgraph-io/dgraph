@@ -836,7 +836,7 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 			return
 		}
 		arg := gq.Func.Args[0]
-		// The case where value of some varialble v (say) is "Group" and a
+		// The case where value of some varialble v (say) is "dgraph.type.Group" and a
 		// query comes like `eq(dgraph.type, val(v))`, will be ignored here.
 		if arg.Value == "dgraph.type.User" {
 			newFilter := userFilter(userId)
