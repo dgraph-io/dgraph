@@ -734,7 +734,11 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 		}
 		fconf.ForwardHeaders = headers
 	}
-	fconf.Operation = httpArg.Value.Children.ForName("operation").Raw
+	fconf.Operation = "batch"
+	op := httpArg.Value.Children.ForName("operation")
+	if op != nil {
+		fconf.Operation = op.Raw
+	}
 	return fconf, nil
 }
 

@@ -259,6 +259,10 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 func commonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x.AddCorsHeaders(w)
+		// Overwrite the allowed headers after also including headers which are part of
+		// forwardHeaders.
+		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
+
 		w.Header().Set("Content-Type", "application/json")
 
 		next.ServeHTTP(w, r)

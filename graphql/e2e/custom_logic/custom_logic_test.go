@@ -18,7 +18,9 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"net/http"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
@@ -155,6 +157,46 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Equal(t, expected, string(result.Data))
 }
 
+func TestServerShouldAllowForwardHeaders(t *testing.T) {
+	schema := `
+	type User {
+		id: ID!
+		name: String!
+	}
+	type Movie @remote {
+		id: ID!
+		name: String! @custom(http: {
+			url: "http://mock:8888/movieName",
+			method: "POST",
+			forwardHeaders: ["X-App-User", "X-Group-Id"]
+		})
+		director: [User] @custom(http: {
+			url: "http://mock:8888/movieName",
+			method: "POST",
+			forwardHeaders: ["User-Id", "X-App-Token"]
+		})
+	}
+
+	type Query {
+		verifyHeaders(id: ID!): [Movie] @custom(http: {
+				url: "http://mock:8888/verifyHeaders",
+				method: "GET",
+				forwardHeaders: ["X-App-Token", "X-User-Id"]
+		})
+	}`
+
+	updateSchema(t, schema)
+
+	req, err := http.NewRequest(http.MethodOptions, alphaURL, nil)
+	require.NoError(t, err)
+
+	resp, err := (&http.Client{}).Do(req)
+	require.NoError(t, err)
+
+	headers := strings.Split(resp.Header.Get("Access-Control-Allow-Headers"), ",")
+	require.Subset(t, headers, []string{"X-App-Token", "X-User-Id", "User-Id", "X-App-User", "X-Group-Id"})
+}
+
 type teacher struct {
 	ID  string `json:"tid,omitempty"`
 	Age int
@@ -162,7 +204,7 @@ type teacher struct {
 
 func addTeachers(t *testing.T) []*teacher {
 	addTeacherParams := &common.GraphQLParams{
-		Query: `mutation addTeacher {
+		Query: `mutation {
 			addTeacher(input: [{ age: 28 }, { age: 27 }, { age: 26 }]) {
 				teacher {
 					tid
