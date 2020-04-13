@@ -17,8 +17,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strconv"
+	"strings"
 	"syscall"
 
 	log "github.com/ChainSafe/log15"
@@ -44,7 +47,7 @@ func startLogger(ctx *cli.Context) error {
 	return nil
 }
 
-// prompt user to enter password for encrypted keystore
+// getPassword prompts user to enter password
 func getPassword(msg string) []byte {
 	for {
 		fmt.Println(msg)
@@ -56,5 +59,17 @@ func getPassword(msg string) []byte {
 			fmt.Printf("\n")
 			return password
 		}
+	}
+}
+
+// confirmMessage prompts user to confirm message and returns true if "Y"
+func confirmMessage(msg string) bool {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println(msg)
+	fmt.Print("> ")
+	for {
+		text, _ := reader.ReadString('\n')
+		text = strings.Replace(text, "\n", "", -1)
+		return strings.Compare("Y", text) == 0
 	}
 }

@@ -126,7 +126,7 @@ func gossamerAction(ctx *cli.Context) error {
 	// check if node has not been initialized (expected true - add warning log)
 	if !dot.NodeInitialized(cfg.Global.DataDir, true) {
 
-		// initialize node (initialize databases and load genesis data)
+		// initialize node (initialize state database and load genesis data)
 		err = dot.InitNode(cfg)
 		if err != nil {
 			log.Error("[cmd] Failed to initialize node", "error", err)
@@ -135,7 +135,7 @@ func gossamerAction(ctx *cli.Context) error {
 	}
 
 	// ensure configuration matches genesis data stored during node initialization
-	// and overwrite with flag values if flag values are provided
+	// but do not overwrite configuration if the corresponding flag value is set
 	err = updateDotConfigFromGenesisData(ctx, cfg)
 	if err != nil {
 		log.Error("[cmd] Failed to update config from genesis data", "error", err)
@@ -190,15 +190,18 @@ func initAction(ctx *cli.Context) error {
 	// check if node has been initialized (expected false - no warning log)
 	if dot.NodeInitialized(cfg.Global.DataDir, false) {
 
-		// TODO: prompt user to confirm when reinitializing a node #760
-		log.Warn("[cmd] Node has already been initialized, reinitializing node...")
-	}
+		// prompt user to confirm reinitialization
+		if confirmMessage("Are you sure you want to reinitialize the node? [Y/n]") {
 
-	// initialize node (initialize databases and load genesis data)
-	err = dot.InitNode(cfg)
-	if err != nil {
-		log.Error("[cmd] Failed to initialize node", "error", err)
-		return err
+			log.Info("[cmd] Reinitializing node...", "datadir", cfg.Global.DataDir)
+
+			// initialize node (initialize state database and load genesis data)
+			err = dot.InitNode(cfg)
+			if err != nil {
+				log.Error("[cmd] Failed to initialize node", "error", err)
+				return err
+			}
+		}
 	}
 
 	return nil
