@@ -36,3 +36,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
 	return &pb.Status{}, x.ErrNotSupported
 }
+
+func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	return nil
+}
