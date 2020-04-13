@@ -133,7 +133,10 @@ const (
 	GroupIdFileName = "group_id"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `{"predicate":"dgraph.graphql.schema", "type": "string"}`
+	GraphqlPredicates = `
+{"predicate":"dgraph.graphql.schema", "type": "string"},
+{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
+`
 )
 
 var (

@@ -1572,8 +1572,10 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 // fillShortestPathVars reads value of the uid variable from mp map and fills it into From and To
 // parameters.
 func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
-	// The uidVar.Uids can be nil if the variable didn't return any uids. This would mean
-	// sg.Params.From or sg.Params.To is 0 and the query would return an empty result.
+	// The uidVar.Uids can be nil or have an empty uid list if the variable didn't
+	// return any uids. This would mean sg.Params.From or sg.Params.To is 0 and the
+	// query would return an empty result.
+
 	if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
 		fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
 		uidVar, ok := mp[fromVar]
@@ -1581,7 +1583,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of from var(%s) should have already been populated",
 				fromVar)
 		}
-		if uidVar.Uids != nil {
+		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
 			if len(uidVar.Uids.Uids) > 1 {
 				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
 			}
@@ -1596,7 +1598,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of to var(%s) should have already been populated",
 				toVar)
 		}
-		if uidVar.Uids != nil {
+		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
 			if len(uidVar.Uids.Uids) > 1 {
 				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
 			}

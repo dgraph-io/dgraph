@@ -138,7 +138,7 @@ they form a Raft group and provide synchronous replication.
 	flag.String("my", "",
 		"IP_ADDRESS:PORT of this Dgraph Alpha, so other Dgraph Alphas can talk to this.")
 	flag.StringP("zero", "z", fmt.Sprintf("localhost:%d", x.PortZeroGrpc),
-		"IP_ADDRESS:PORT of a Dgraph Zero.")
+		"Comma separated list of Dgraph zero addresses of the form IP_ADDRESS:PORT.")
 	flag.Uint64("idx", 0,
 		"Optional Raft ID that this Dgraph Alpha will use to join RAFT groups.")
 	flag.Int("max_retries", -1,
@@ -148,6 +148,7 @@ they form a Raft group and provide synchronous replication.
 		"If set, all Alter requests to Dgraph would need to have this token."+
 			" The token can be passed as follows: For HTTP requests, in X-Dgraph-AuthToken header."+
 			" For Grpc, in auth-token key in the context.")
+	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	flag.String("acl_secret_file", "", "The file that stores the HMAC secret, "+
 		"which is used for signing the JWT and should have at least 32 ASCII characters. "+
@@ -575,7 +576,7 @@ func run() {
 		NumPendingProposals: Alpha.Conf.GetInt("pending_proposals"),
 		Tracing:             Alpha.Conf.GetFloat64("trace"),
 		MyAddr:              Alpha.Conf.GetString("my"),
-		ZeroAddr:            Alpha.Conf.GetString("zero"),
+		ZeroAddr:            strings.Split(Alpha.Conf.GetString("zero"), ","),
 		RaftId:              cast.ToUint64(Alpha.Conf.GetString("idx")),
 		WhiteListedIPRanges: ips,
 		MaxRetries:          Alpha.Conf.GetInt("max_retries"),
@@ -594,14 +595,12 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 
-	x.InitSentry(enc.EeBuild)
-	defer x.FlushSentry()
-	x.ConfigureSentryScope("alpha")
-	x.WrapPanics()
-
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("alpha exception"))
-	// x.Panic(errors.New("alpha manual panic will send 2 events"))
+	if Alpha.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("alpha")
+		x.WrapPanics()
+	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

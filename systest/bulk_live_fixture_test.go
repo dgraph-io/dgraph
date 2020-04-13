@@ -139,7 +139,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 			"-s", schemaFile,
 			"--http", "localhost:"+strconv.Itoa(freePort(0)),
 			"-j=1",
-			"-x=true",
+			"--store_xids=true",
 			"-z", "localhost:"+s.bulkCluster.zeroPort,
 		)
 		bulkCmd.Dir = bulkDir
