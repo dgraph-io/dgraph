@@ -125,6 +125,12 @@ func upgradeACLRules() error {
 				ObjectId:  newRuleStr,
 			})
 
+			nquads = append(nquads, &api.NQuad{
+				Subject:   newRuleStr,
+				Predicate: "dgraph.type",
+				ObjectId:  "dgraph.type.Rule",
+			})
+
 			counter++
 		}
 	}
