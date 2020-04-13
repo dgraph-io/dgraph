@@ -26,8 +26,8 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -45,6 +45,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -59,6 +68,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -79,6 +90,15 @@ const (
         {
             "predicate": "dgraph.graphql.schema",
             "type": "string"
+        },
+        {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
         },
         {
             "predicate": "dgraph.type",
@@ -103,6 +123,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -140,6 +162,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -165,6 +196,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"
@@ -210,6 +243,15 @@ const (
             "type": "string"
         },
         {
+            "predicate": "dgraph.graphql.xid",
+            "type": "string",
+            "index": true,
+            "tokenizer": [
+                "exact"
+            ],
+            "upsert": true
+        },
+        {
             "predicate": "dgraph.type",
             "type": "string",
             "index": true,
@@ -238,6 +280,8 @@ const (
             "fields": [
                 {
                     "name": "dgraph.graphql.schema"
+                },{
+                    "name": "dgraph.graphql.xid"
                 }
             ],
             "name": "dgraph.graphql"

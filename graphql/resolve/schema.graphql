@@ -11,6 +11,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
+        capital: String
 }
 
 type Author {
@@ -38,6 +39,7 @@ type Post {
         postType: PostType @search
         author: Author!
         category: Category @hasInverse(field: posts)
+        comments: [Comment]
 }
 
 type Category {
@@ -103,13 +105,63 @@ type Computer {
 }
 
 type ComputerOwner {
-	name: String! @id
-	nickName: String
-	computers: Computer! @hasInverse(field: owners)
+        name: String! @id
+        nickName: String
+        computers: Computer! @hasInverse(field: owners)
 }
 
 type User @secret(field: "pwd") {
-	name: String! @id
+        name: String! @id
+}
+
+# For testing duplicate XID in single mutation
+type District {
+        code: String! @id
+        name: String!
+        cities: [City] @hasInverse(field: district)
+}
+
+type City {
+        id: ID!
+        name: String!
+        district: District
+}
+
+# For testing duplicate XID in single mutation for interface
+interface People {
+        id: ID!
+        xid: String! @id
+        name: String!
+}
+
+type Teacher implements People {
+        subject: String
+        teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher]
+}
+
+type Comment {
+    id: ID!
+    author: String!
+    title: String
+    content: String @custom(http: {
+              url: "http://api-gateway.com/post/$ups?myId=$title",
+              method: "GET",
+              operation: "batch",
+              body: "{ myId: $id, theAuthor: $author}",
+              forwardHeaders: ["X-App-Token"]})
+
+    url: String
+    ups: Int
+    downs: Int
+    relatedUsers: [User] @custom(http: {
+              url: "http://api-gateway.com/relatedPosts",
+              method: "POST",
+              operation: "single",
+              body: "{ myId: $url }"})
 }
 
 type Query {

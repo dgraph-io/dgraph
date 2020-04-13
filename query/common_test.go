@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
@@ -34,10 +34,6 @@ func setSchema(schema string) {
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
-	}
-
-	if err := testutil.WaitForAlter(context.Background(), client, schema); err != nil {
-		panic(err)
 	}
 }
 

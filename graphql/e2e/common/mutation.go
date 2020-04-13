@@ -27,8 +27,8 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
@@ -305,6 +305,8 @@ func ignoreOpts() []cmp.Option {
 		cmpopts.IgnoreFields(post{}, "PostID"),
 		cmpopts.IgnoreFields(state{}, "ID"),
 		cmpopts.IgnoreFields(category{}, "ID"),
+		cmpopts.IgnoreFields(teacher{}, "ID"),
+		cmpopts.IgnoreFields(student{}, "ID"),
 	}
 }
 
@@ -2370,21 +2372,41 @@ func addState(t *testing.T, name string, executeRequest requestExecutor) *state 
 func deleteState(
 	t *testing.T,
 	filter map[string]interface{},
-	deleteStateExpected string,
+	expectedNumUids int,
+	expectedErrors x.GqlErrorList) {
+	deleteGqlType(t, "State", filter, expectedNumUids, expectedErrors)
+}
+
+func deleteGqlType(
+	t *testing.T,
+	typeName string,
+	filter map[string]interface{},
+	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
 
-	deleteStateParams := &GraphQLParams{
-		Query: `mutation deleteState($filter: StateFilter!) {
-			deleteState(filter: $filter) { msg }
-		}`,
+	deleteTypeParams := &GraphQLParams{
+		Query: fmt.Sprintf(`mutation delete%s($filter: %sFilter!) {
+			delete%s(filter: $filter) { msg numUids }
+		}`, typeName, typeName, typeName),
 		Variables: map[string]interface{}{"filter": filter},
 	}
 
-	gqlResponse := deleteStateParams.ExecuteAsPost(t, graphqlURL)
-	require.JSONEq(t, deleteStateExpected, string(gqlResponse.Data))
+	gqlResponse := deleteTypeParams.ExecuteAsPost(t, graphqlURL)
+	if len(expectedErrors) == 0 {
+		requireNoGQLErrors(t, gqlResponse)
 
-	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-		t.Errorf("errors mismatch (-want +got):\n%s", diff)
+		var result map[string]interface{}
+		err := json.Unmarshal(gqlResponse.Data, &result)
+		require.NoError(t, err)
+
+		deleteField := fmt.Sprintf(`delete%s`, typeName)
+		deleteType := result[deleteField].(map[string]interface{})
+		require.Equal(t, "Deleted", deleteType["msg"])
+		require.Equal(t, expectedNumUids, int(deleteType["numUids"].(float64)))
+	} else {
+		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
+			t.Errorf("errors mismatch (-want +got):\n%s", diff)
+		}
 	}
 }
 
@@ -2412,9 +2434,8 @@ func addMutationWithXid(t *testing.T, executeRequest requestExecutor) {
 	require.Contains(t, gqlResponse.Errors[0].Error(),
 		"because id cal already exists for type State")
 
-	deleteStateExpected := `{"deleteState" : { "msg": "Deleted" } }`
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "cal"}}
-	deleteState(t, filter, deleteStateExpected, nil)
+	deleteState(t, filter, 1, nil)
 }
 
 func addMutationWithXID(t *testing.T) {
@@ -2880,4 +2901,126 @@ func passwordTest(t *testing.T) {
 	})
 
 	deleteUser(t, *newUser)
+}
+
+func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
+	newStudents := []*student{
+		{
+			Xid:  "S0",
+			Name: "Stud0",
+			TaughtBy: []*teacher{
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
+			},
+		},
+		{
+			Xid:  "S1",
+			Name: "Stud1",
+			TaughtBy: []*teacher{
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
+				{
+					Xid:     "T0",
+					Name:    "Teacher0",
+					Subject: "English",
+				},
+			},
+		},
+	}
+
+	addStudentParams := &GraphQLParams{
+		Query: `mutation addStudent($input: [AddStudentInput!]!) {
+			addStudent(input: $input) {
+				student {
+					xid
+					name
+					taughtBy {
+						id
+						xid
+						name
+						subject
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newStudents},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
+	requireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddStudent struct {
+			Student []*student
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+
+	ignoreOpts := append(ignoreOpts(), sliceSorter())
+	if diff := cmp.Diff(actualResult.AddStudent.Student, []*student{
+		newStudents[0],
+		{
+			Xid:      newStudents[1].Xid,
+			Name:     newStudents[1].Name,
+			TaughtBy: []*teacher{newStudents[1].TaughtBy[0]},
+		},
+	}, ignoreOpts...); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].ID,
+		actualResult.AddStudent.Student[1].TaughtBy[0].ID)
+
+	// cleanup
+	filter := getXidFilter("xid", []string{newStudents[0].Xid, newStudents[1].Xid})
+	deleteGqlType(t, "Student", filter, 2, nil)
+	filter = getXidFilter("xid", []string{newStudents[0].TaughtBy[0].Xid})
+	deleteGqlType(t, "Teacher", filter, 1, nil)
+}
+
+func sliceSorter() cmp.Option {
+	return cmpopts.SortSlices(func(v1, v2 interface{}) bool {
+		switch t1 := v1.(type) {
+		case *country:
+			t2 := v2.(*country)
+			return t1.Name < t2.Name
+		case *state:
+			t2 := v2.(*state)
+			return t1.Name < t2.Name
+		case *teacher:
+			t2 := v2.(*teacher)
+			return t1.Xid < t2.Xid
+		case *student:
+			t2 := v2.(*student)
+			return t1.Xid < t2.Xid
+		}
+		return v1.(string) < v2.(string)
+	})
+}
+
+func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
+	if len(xidVals) == 0 || xidKey == "" {
+		return nil
+	}
+
+	filter := map[string]interface{}{
+		xidKey: map[string]interface{}{"eq": xidVals[0]},
+	}
+
+	var currLevel = filter
+
+	for i := 1; i < len(xidVals); i++ {
+		currLevel["or"] = map[string]interface{}{
+			xidKey: map[string]interface{}{"eq": xidVals[i]},
+		}
+		currLevel = currLevel["or"].(map[string]interface{})
+	}
+
+	return filter
 }
