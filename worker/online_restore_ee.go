@@ -208,6 +208,11 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 				return 0, errors.Wrapf(err, "cannot write backup")
 			}
 
+			if maxUid == 0 {
+				// No need to update the lease, return here.
+				return 0, nil
+			}
+
 			// Use the value of maxUid to update the uid lease.
 			pl := groups().connToZeroLeader()
 			if pl == nil {
