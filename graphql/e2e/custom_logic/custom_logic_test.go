@@ -601,11 +601,11 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	teachers := addTeachers(t)
 	sort.Slice(teachers, func(i, j int) bool {
-		return teachers[i].ID < teachers[i].ID
+		return teachers[i].ID < teachers[j].ID
 	})
 	schools := addSchools(t, teachers)
 	sort.Slice(schools, func(i, j int) bool {
-		return schools[i].ID < schools[i].ID
+		return schools[i].ID < schools[j].ID
 	})
 	users := addUsers(t, schools)
 
