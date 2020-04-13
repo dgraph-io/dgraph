@@ -121,7 +121,7 @@ const (
 `
 
 	InitialTypes = `
-	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
+	"types": [{"fields": [{"name": "dgraph.graphql.schema"},{"name": "dgraph.graphql.xid"}],"name": "dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "dgraph.type.User"},
 {"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "dgraph.type.Group"},
 {"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "dgraph.type.Rule"}]`

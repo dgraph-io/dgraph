@@ -103,33 +103,32 @@ func upgradeACLRules() error {
 
 		for _, r := range rs {
 			newRuleStr := fmt.Sprintf("_:newrule%d", counter)
-			nquads = append(nquads, &api.NQuad{
-				Subject:   newRuleStr,
-				Predicate: "dgraph.rule.predicate",
-				ObjectValue: &api.Value{
-					Val: &api.Value_StrVal{StrVal: r.Predicate},
+			nquads = append(nquads, []*api.NQuad{
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.rule.predicate",
+					ObjectValue: &api.Value{
+						Val: &api.Value_StrVal{StrVal: r.Predicate},
+					},
 				},
-			})
-
-			nquads = append(nquads, &api.NQuad{
-				Subject:   newRuleStr,
-				Predicate: "dgraph.rule.permission",
-				ObjectValue: &api.Value{
-					Val: &api.Value_IntVal{IntVal: int64(r.Permission)},
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.rule.permission",
+					ObjectValue: &api.Value{
+						Val: &api.Value_IntVal{IntVal: int64(r.Permission)},
+					},
 				},
-			})
-
-			nquads = append(nquads, &api.NQuad{
-				Subject:   group.UID,
-				Predicate: "dgraph.acl.rule",
-				ObjectId:  newRuleStr,
-			})
-
-			nquads = append(nquads, &api.NQuad{
-				Subject:   newRuleStr,
-				Predicate: "dgraph.type",
-				ObjectId:  "dgraph.type.Rule",
-			})
+				{
+					Subject:   group.UID,
+					Predicate: "dgraph.acl.rule",
+					ObjectId:  newRuleStr,
+				},
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.type",
+					ObjectId:  "dgraph.type.Rule",
+				},
+			}...)
 
 			counter++
 		}
