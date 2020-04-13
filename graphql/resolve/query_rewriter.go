@@ -183,6 +183,8 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
+	addSelectionSetFrom(dgQuery, field, nil, nil) // FIXME: should also handle auth
+	addUID(dgQuery)
 	return dgQuery
 }
 
@@ -193,8 +195,6 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addFilter(dgQuery, field.Type(), filter)
 	addOrder(dgQuery, field)
 	addPagination(dgQuery, field)
-	addSelectionSetFrom(dgQuery, field)
-	addUID(dgQuery)
 }
 
 func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
@@ -230,7 +230,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 			Func: eqXidFunc,
 		}
 	}
-	addSelectionSetFrom(dgQuery, field)
+	addSelectionSetFrom(dgQuery, field, nil, nil)
 	addUID(dgQuery)
 	return dgQuery
 }
@@ -240,8 +240,8 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 		Attr: field.ResponseName(),
 	}
 
-	if field.IsAuthQuery() {
-		addVariableUIDFunc(dgQuery, authVariables["dgraph.uid"].(string))
+	if a, ok := authVariables["dgraph.uid"].(string); ok && field.IsAuthQuery() {
+		addVariableUIDFunc(dgQuery, a)
 	} else if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
@@ -250,16 +250,20 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 
 	varGen := NewVariableGenerator()
 	varName := varGen.Next(field.Type(), "", "")
+	if authVariables != nil {
+		authVariables["dgraph.uid"] = varName
+	}
 
-	// FIXME: varGen needs to go in here for deeper fields
 	addArgumentsToField(dgQuery, field)
+	selectionAuth := addSelectionSetFrom(dgQuery, field, varGen, authVariables)
+	addUID(dgQuery)
 
 	if authVariables == nil || field.IsAuthQuery() {
 		return dgQuery
 	}
 
-	authVariables["dgraph.uid"] = varName
-	authQueries, filter := addAuth(field, varGen, authVariables)
+	authQueries, filter := rewriteAuthQueries(field, varGen, authVariables)
+	authQueries = append(authQueries, selectionAuth...)
 	if len(authQueries) > 0 {
 		// build a query like
 		// Todo1 as var(func: ... ) @filter(...)
@@ -289,7 +293,7 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 	return dgQuery
 }
 
-func addAuth(field schema.Field, varGen *VariableGenerator, authVariables map[string]interface{}) (
+func rewriteAuthQueries(field schema.Field, varGen *VariableGenerator, authVariables map[string]interface{}) (
 	[]*gql.GraphQuery, *gql.FilterTree) {
 
 	auth := field.Operation().Schema().AuthRules(field.Type())
@@ -297,7 +301,7 @@ func addAuth(field schema.Field, varGen *VariableGenerator, authVariables map[st
 	// FIXME: also process any rules attached to the field itself.  Those should AND'd with
 	// the type rules
 
-	if auth == nil || auth.Rules.Query == nil {
+	if auth == nil || auth.Rules == nil || auth.Rules.Query == nil {
 		return nil, nil
 	}
 
@@ -402,7 +406,16 @@ func addTypeFunc(q *gql.GraphQuery, typ string) {
 
 }
 
-func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
+// addSelectionSetFrom adds all the selections from field into q, and returns a list
+// of extra queries needed to satisfy auth requirements
+func addSelectionSetFrom(
+	q *gql.GraphQuery,
+	field schema.Field,
+	varGen *VariableGenerator,
+	authVariables map[string]interface{}) []*gql.GraphQuery {
+
+	var authQueries []*gql.GraphQuery
+
 	// Only add dgraph.type as a child if this field is an interface type and has some children.
 	// dgraph.type would later be used in completeObject as different objects in the resulting
 	// JSON would return different fields based on their concrete type.
@@ -438,10 +451,28 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 		addOrder(child, f)
 		addPagination(child, f)
 
-		addSelectionSetFrom(child, f)
-
+		selectionAuth := addSelectionSetFrom(child, f, varGen, authVariables)
 		q.Children = append(q.Children, child)
+
+		if _, isAuthQuery := authVariables["dgraph.uid"]; isAuthQuery {
+			continue
+		}
+
+		fieldAuth, authFilter := rewriteAuthQueries(field, varGen, authVariables)
+		authQueries = append(authQueries, selectionAuth...)
+		authQueries = append(authQueries, fieldAuth...)
+		if len(fieldAuth) > 0 {
+			if child.Filter == nil {
+				child.Filter = authFilter
+			} else {
+				child.Filter = &gql.FilterTree{
+					Op:    "and",
+					Child: []*gql.FilterTree{authFilter, child.Filter},
+				}
+			}
+		}
 	}
+	return authQueries
 }
 
 func addOrder(q *gql.GraphQuery, field schema.Field) {

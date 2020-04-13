@@ -1,5 +1,4 @@
--
-  name: "Top-level auth writes var queries"
+- name: "Top-level auth no filter"
   gqlquery: |
     query {
       queryTodo {
@@ -16,5 +15,31 @@
       Todo2 as var(func: uid(Todo1)) @cascade {
         owner : Todo.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
+      }
+    }
+
+- name: "Deep auth query no filter"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        todos {
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryUser(func: type(User)) {
+        username : User.username
+        todos : User.todos @filter(uid(Todo2)) {
+          title : Todo.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Todo2 as var(func: type(Todo)) @cascade {
+        dgraph.uid : uid
+        owner : Todo.owner @filter(eq(User.username, "user1"))
       }
     }
