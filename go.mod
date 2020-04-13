@@ -35,6 +35,7 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.0.0
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
+	github.com/mitchellh/mapstructure v1.2.2
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect

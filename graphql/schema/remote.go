@@ -19,12 +19,14 @@ package schema
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/mitchellh/mapstructure"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
@@ -297,15 +299,15 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				return gqlerror.ErrorPosf(
 					endpoint.directive.Position,
 					"%s field for the remote type %s is not present in the local type %s",
-					field.Name, localType, localType,
+					field.Name, localType.Name, localType.Name,
 				)
 			}
-			if localField.Type.NamedType != field.Type.Name {
+			if localField.Type.NamedType != recursivelyFindName(&field.Type) {
 				return gqlerror.ErrorPosf(
 					endpoint.field.Position,
-					"expected type for the field %s is % but got %s",
+					"expected type for the field %s is %s but got %s",
 					field.Name,
-					field.Type.Name,
+					recursivelyFindName(&field.Type),
 					localField.Type.NamedType,
 				)
 			}
@@ -316,21 +318,15 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	for variable, typeName := range argValToType {
 
 		if variable == returnType {
-			introspectedReturnType := ""
-			if introspectedRemoteQuery.Type.OfType.Name == "" {
-				introspectedReturnType = introspectedRemoteQuery.Type.Name
-			} else {
-				introspectedReturnType = introspectedRemoteQuery.Type.OfType.Name
-			}
-
-			if endpoint.field.Type.Name() != introspectedReturnType {
+			introspectedReturnType := buildTypeStringFromGqlType(&introspectedRemoteQuery.Type)
+			if endpoint.field.Type.String() != introspectedReturnType {
 				return gqlerror.ErrorPosf(
 					endpoint.directive.Position, "Type %s; Field %s; expected return type  "+
 						"is %s. But got %s",
 					endpoint.rootQuery.Name,
 					endpoint.field.Name,
 					introspectedReturnType,
-					endpoint.field.Type.Name())
+					endpoint.field.Type.String())
 			}
 			continue
 		}
@@ -377,10 +373,10 @@ func expandArgRecursively(arg string, param *expandArgParams) {
 			param.typesToFields[inputType.Name] = inputType.Fields
 			// Expand the non scalar types.
 			for _, field := range inputType.Fields {
-				_, ok := graphqlScalarType[field.Type.Name]
+				_, ok := graphqlScalarType[recursivelyFindName(&field.Type)]
 				if !ok {
 					// expand this field.
-					expandArgRecursively(field.Type.Name, param)
+					expandArgRecursively(recursivelyFindName(&field.Type), param)
 				}
 			}
 		}
@@ -427,25 +423,53 @@ func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string
 			notNullArgs[introspectedArg.Name] = 0
 		}
 
-		if introspectedArg.Type.OfType.Name == "" {
-			// user defined type.
-			arguments[introspectedArg.Name] = introspectedArg.Type.Name
-			continue
-		}
-		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
+		arguments[introspectedArg.Name] = recursivelyFindName(&introspectedArg.Type)
 	}
 	return arguments, notNullArgs
 }
 
+func buildTypeStringFromGqlType(in *GqlType) string {
+	if in.Kind == "LIST" {
+		tmp := &GqlType{}
+		mappedField, ok := in.OfType.(map[string]interface{})
+		if !ok {
+			// List of type can't be nil. Need a proper error message.
+			x.Panic(errors.New("Of type should have map value"))
+		}
+		mapstructure.Decode(mappedField, tmp)
+		return "[" + buildTypeStringFromGqlType(tmp) + "]"
+	} else if in.Kind == "NON_NULL" {
+		tmp := &GqlType{}
+		mappedField, ok := in.OfType.(map[string]interface{})
+		if !ok {
+			// List of type can't be nil. Need a proper error message.
+			x.Panic(errors.New("Of type should have map value"))
+		}
+		mapstructure.Decode(mappedField, tmp)
+		return buildTypeStringFromGqlType(tmp) + "!"
+	}
+	return in.Name
+}
+
+func recursivelyFindName(in *GqlType) string {
+	if in.Name != "" {
+		return in.Name
+	}
+	if in.OfType != nil {
+		tmp := &GqlType{}
+		mappedField, ok := in.OfType.(map[string]interface{})
+		if !ok {
+			x.Panic(errors.New("Of type should have map value"))
+		}
+		mapstructure.Decode(mappedField, tmp)
+		return recursivelyFindName(tmp)
+	}
+	return ""
+}
+
 // findFieldFromType will go deep to find the type
-func findFieldFromType(field *GqlField) string {
-	if field.Type.Name != "" {
-		return field.Name
-	}
-	if field.Type.OfType.Name != "" {
-		return field.Name
-	}
-	// recursively find the name.
+func recursivelyBuildTypeString(interface{}) string {
+	return ""
 }
 
 type IntrospectedSchema struct {
@@ -454,16 +478,12 @@ type IntrospectedSchema struct {
 type IntrospectionQueryType struct {
 	Name string `json:"name"`
 }
-type OfType struct {
+type GqlType struct {
 	Kind   string      `json:"kind"`
 	Name   string      `json:"name"`
 	OfType interface{} `json:"ofType"`
 }
-type GqlType struct {
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	OfType OfType `json:"ofType"`
-}
+
 type GqlField struct {
 	Name              string      `json:"name"`
 	Args              []Args      `json:"args"`

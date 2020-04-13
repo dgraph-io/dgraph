@@ -260,17 +260,16 @@ func TestFullIntrospectionQuery(t *testing.T) {
 func TestFullIntrospectionQueryYo(t *testing.T) {
 	sch := gqlparser.MustLoadSchema(
 		&ast.Source{Name: "schema.graphql", Input: `
-	schema {
-		query: TestType
+
+
+	
+	type Continent {
+		name: String
 	}
 
-	type TestType {
-		testField: String
-	}
-	input TestIbput {
-		to: String
+	type Query {
+			Hello(a: String): Continent!
 	}
 `})
-	fmt.Printf("%+v", sch.Types["TestIbput"].Fields[0].Type.NamedType)
-
+	fmt.Printf("%+v", sch.Types["Query"].Fields.ForName("Hello").Type.String())
 }
