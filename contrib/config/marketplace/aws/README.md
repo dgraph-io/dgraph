@@ -25,17 +25,17 @@ Parameters:
 
 ### **Accessing Endpoint**
 
-The security groups created will allow access from the Load Balancer. If you wish to access the endpoints from your office, you will need to edit the security group attached to the Load Balancer.  In the AWS web console, this can be found in the Description tab of the Load Balancer, from EC2 &rarr; Load Balancers &rarr; dgraph-load-balancer ( e.g. `xxxxx-Dgrap-XXXXXXXXXXXXX`).
+The security groups created will allow access from the Load Balancer. If you wish to access the endpoints from your public IP, you will need to edit the security group attached to the Load Balancer.  In the AWS web console, this can be found in the Description tab of the Load Balancer, from EC2 &rarr; Load Balancers &rarr; dgraph-load-balancer ( e.g. `xxxxx-Dgrap-XXXXXXXXXXXXX`).
 
-In the Security field, there the `sg-xxxxxxxxxxxxxxxxx`, which you can click this link to get sent Security Groups, then edit the inbound rules for the same SG.  There should be existing inbound rules for ports `8000`, `8080`, `9080`.  Add new entries from your office to access those ports.
+In the Security field, there the `sg-xxxxxxxxxxxxxxxxx`, which you can click this link to get sent Security Groups, then edit the inbound rules for the same SG.  There should be existing inbound rules for ports `8000`, `8080`, `9080`.  Add new entries from your public IP to access those ports.
 
 Also note the DNS information on Load Balancer description tab, like `xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com`, which you'll need to use to access the endpoint once access is enabled.  
 
-Afterward, you can visit the website `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8000`.  Once in the DGraph UI, configure the server connection as: `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8080`.
+Afterward, you can visit the website `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8000`.  Once in the DGraph Ratel UI, configure the server connection as: `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8080`.
 
 ### **Accessing Systems with SSH**
 
-If you need to access the EC2 instances themselves through SSH, update the security group on those instances. On any EC2 instance, edit the security group that looks like this `mydgraph-cluster-DgraphSecurityGroup-XXXXXXXXXXXX` and open up port 22 to your office.  Afterward, you can log into the system with something like this:
+If you need to access the EC2 instances themselves through SSH, update the security group on those instances. On any EC2 instance, edit the security group that looks like this `mydgraph-cluster-DgraphSecurityGroup-XXXXXXXXXXXX` and open up port 22 to your public IP.  Afterward, you can log into the system with something like this:
 
 ```bash
 ssh -i /path/to/my-dgraph-cluster-key.pem ubuntu@ec2-X-XX-XXX-XXX.us-east-2.compute.amazonaws.com
