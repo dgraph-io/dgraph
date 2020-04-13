@@ -1,52 +1,60 @@
 package query
 
 import (
-	"bytes"
 	"math"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/types"
+	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/task"
 	"github.com/stretchr/testify/require"
 )
 
-func assertJSON(t *testing.T, expected string, fj *fastJsonNode) {
-	var bufw bytes.Buffer
-	err := fj.encode(&bufw)
+func subgraphWithSingleResultAndSingleValue(val *pb.TaskValue) *SubGraph {
+	return &SubGraph{
+		Params:    params{Alias: "query"},
+		SrcUIDs:   &pb.List{Uids: []uint64{1}},
+		DestUIDs:  &pb.List{Uids: []uint64{1}},
+		uidMatrix: []*pb.List{&pb.List{Uids: []uint64{1}}},
+		Children: []*SubGraph{
+			&SubGraph{
+				Attr:      "val",
+				SrcUIDs:   &pb.List{Uids: []uint64{1}},
+				uidMatrix: []*pb.List{&pb.List{}},
+				valueMatrix: []*pb.ValueList{
+					// UID 1
+					&pb.ValueList{
+						Values: []*pb.TaskValue{val},
+					},
+				},
+			},
+		},
+	}
+}
+
+func assertJSON(t *testing.T, expected string, sg *SubGraph) {
+	buf, err := ToJson(&Latency{}, []*SubGraph{sg})
 	require.Nil(t, err)
-	require.Equal(t, expected, bufw.String())
+	require.Equal(t, expected, string(buf))
 }
 
 func TestSubgraphToFastJSON(t *testing.T) {
-	// No idea why New is on an object
-	var fastJSONFactory *fastJsonNode
-
-	t.Run("serializing an empty fastjson", func(t *testing.T) {
-		seedNode := fastJSONFactory.New("_root_")
-		assertJSON(t, `{}`, seedNode)
+	t.Run("With a string result", func(t *testing.T) {
+		sg := subgraphWithSingleResultAndSingleValue(task.FromString("ABC"))
+		assertJSON(t, `{"query":[{"val":"ABC"}]}`, sg)
 	})
 
-	t.Run("serializing a fastjson with an integer", func(t *testing.T) {
-		seedNode := fastJSONFactory.New("_root_")
-		seedNode.AddValue("foo", types.Val{Tid: types.IntID, Value: 42})
-		assertJSON(t, `{"foo":42}`, seedNode)
+	t.Run("With an integer result", func(t *testing.T) {
+		sg := subgraphWithSingleResultAndSingleValue(task.FromInt(42))
+		assertJSON(t, `{"query":[{"val":42}]}`, sg)
 	})
 
-	// FIXME: This is returning invalid JSON
-	t.Run("serializing a fastjson with an map", func(t *testing.T) {
-		seedNode := fastJSONFactory.New("_root_")
-		seedNode.AddMapChild("foo", &fastJsonNode{isChild: true}, false)
-		assertJSON(t, `{"foo":{}}`, seedNode)
+	t.Run("With a valid float result", func(t *testing.T) {
+		sg := subgraphWithSingleResultAndSingleValue(task.FromFloat(42.0))
+		assertJSON(t, `{"query":[{"val":42.000000}]}`, sg)
 	})
 
-	t.Run("serializing a fastjson with a float", func(t *testing.T) {
-		seedNode := fastJSONFactory.New("_root_")
-		seedNode.AddValue("foo", types.Val{Tid: types.FloatID, Value: 42.0})
-		assertJSON(t, `{"foo":42.000000}`, seedNode)
-	})
-
-	t.Run("serializing a fastjson with an invalid float", func(t *testing.T) {
-		seedNode := fastJSONFactory.New("_root_")
-		seedNode.AddValue("foo", types.Val{Tid: types.FloatID, Value: math.NaN()})
-		assertJSON(t, `{}`, seedNode)
+	t.Run("With invalid floating points", func(t *testing.T) {
+		assertJSON(t, `{"query":[]}`, subgraphWithSingleResultAndSingleValue(task.FromFloat(math.NaN())))
+		assertJSON(t, `{"query":[]}`, subgraphWithSingleResultAndSingleValue(task.FromFloat(math.Inf(1))))
 	})
 }
