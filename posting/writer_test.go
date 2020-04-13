@@ -140,6 +140,7 @@ func BenchmarkWriter(b *testing.B) {
 				}
 			})
 			require.NoError(b, err)
+			wg.Wait()
 
 		}
 	})
