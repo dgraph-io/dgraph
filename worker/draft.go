@@ -567,6 +567,19 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
+
+	case proposal.Restore != nil:
+		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+			return err
+		}
+
+		// Call commitOrAbort to update the group checksums.
+		ts := proposal.Restore.RestoreTs
+		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			Txns: []*pb.TxnStatus{
+				{StartTs: ts, CommitTs: ts},
+			},
+		})
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
