@@ -28,7 +28,96 @@ invalid_schemas:
         Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
       "locations":[{"line":5, "column":28}]}
     ]
-      
+
+  - name: "Empty rule"
+    input: |
+      type X @auth(
+        query: { rule: ""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "a rule should be exactly one query, found 0 GraphQL operations",
+     "locations":[{"line":5, "column":28}]}
+    ]
+
+  - name: "Invalid auth syntax"
+    input: |
+      type X @auth(
+        query: { xyz: ""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+     "locations":[{"line":5, "column":21}]}
+    ]
+
+  - name: "Single or rule"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" }
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "it doesn't make sense to 'OR' less than two rules",
+     "locations":[{"line":5, "column":25}]}
+    ]
+
+  - name: "Multiple logical operation at same level"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ],
+            and: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+     "locations":[{"line":5, "column":21}]}
+    ]
+
 
 valid_schemas:
 
@@ -85,4 +174,42 @@ valid_schemas:
       }
       type User {
         username: String! @id
+      }
+
+  - name: "Rules using logical operation"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Auth rules with logical not"
+    input: |
+      type X @auth(
+        query: { not: { rule: """
+          query {
+            queryX(filter: { userRole: { eq: "ADMIN" } }) {
+              __typename
+            }
+          }"""
+        } }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
       }
