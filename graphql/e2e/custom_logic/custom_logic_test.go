@@ -843,4 +843,36 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 	  }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+
+	// In this case the types have ID! field but it is not being requested as part of the query
+	// explicitly, so custom logic de-duplication should check for "dgraph-uid" field.
+	schema = `
+	type Episode {
+		id: ID!
+		name: String! @id
+		anotherName: String! @custom(http: {
+					url: "http://mock:8888/userNames",
+					method: "GET",
+					body: "{uid: $name}",
+					operation: "batch"
+				})
+	}
+
+	type Character {
+		id: ID!
+		name: String! @id
+		lastName: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $name}",
+						operation: "batch"
+					})
+		episodes: [Episode]
+	}`
+	updateSchema(t, schema)
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+	testutil.CompareJSON(t, expected, string(result.Data))
+
 }
