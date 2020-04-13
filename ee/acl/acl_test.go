@@ -1252,11 +1252,11 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 		_:g2  <dgraph.xid>       "dev-b" .
 		_:g2  <dgraph.type>      "dgraph.type.Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
-		_:r1 <dgraph.type> "Rule" .
+		_:r1 <dgraph.type> "dgraph.type.Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
 		_:r1 <dgraph.rule.permission> "4" .
 		_:g  <dgraph.acl.rule>   _:r2 .
-		_:r2 <dgraph.type> "Rule" .
+		_:r2 <dgraph.type> "dgraph.type.Rule" .
 		_:r2 <dgraph.rule.predicate>  "nickname" .
 		_:r2 <dgraph.rule.permission> "2" .
 	`

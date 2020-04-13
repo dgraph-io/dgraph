@@ -571,7 +571,7 @@ func InitialTypes() []*pb.TypeUpdate {
 				},
 			},
 			&pb.TypeUpdate{
-				TypeName: "Rule",
+				TypeName: "dgraph.type.Rule",
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.rule.predicate",
