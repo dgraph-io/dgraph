@@ -62,6 +62,7 @@ type Schema interface {
 	Operation(r *Request) (Operation, error)
 	Queries(t QueryType) []string
 	Mutations(t MutationType) []string
+	AuthRules(Type) *TypeAuth
 }
 
 // An Operation is a single valid GraphQL operation.  It contains either
@@ -97,6 +98,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	IsAuthQuery() bool
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -112,6 +114,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
+	AuthFor(f Field, jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -214,6 +217,10 @@ func (s *schema) Mutations(t MutationType) []string {
 		}
 	}
 	return result
+}
+
+func (s *schema) AuthRules(t Type) *TypeAuth {
+	return s.authRules[t.Name()]
 }
 
 func (o *operation) IsQuery() bool {
@@ -530,6 +537,10 @@ func (f *field) SetArgTo(arg string, val interface{}) {
 	}
 }
 
+func (f *field) IsAuthQuery() bool {
+	return f.field.Arguments.ForName("dgraph.uid") != nil
+}
+
 func (f *field) ArgValue(name string) interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
@@ -705,6 +716,23 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 
 	}
 	return false
+}
+
+func (q *query) IsAuthQuery() bool {
+	return (*field)(q).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (q *query) AuthFor(f Field, jwtVars map[string]interface{}) Query {
+	// copy the template, so that multiple queries can run rewriting for the rule.
+	return &query{
+		field: (*field)(q).field,
+		op: &operation{op: q.op.op,
+			query:    q.op.query,
+			doc:      q.op.doc,
+			inSchema: f.(*query).op.inSchema,
+			vars:     jwtVars,
+		},
+		sel: q.sel}
 }
 
 func (q *query) Rename(newName string) {
@@ -917,6 +945,10 @@ func (m *mutation) TypeName(dgraphTypes []interface{}) string {
 
 func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(m).IncludeInterfaceField(dgraphTypes)
+}
+
+func (m *mutation) IsAuthQuery() bool {
+	return (*field)(m).field.Arguments.ForName("dgraph.uid") != nil
 }
 
 func (t *astType) Field(name string) FieldDefinition {

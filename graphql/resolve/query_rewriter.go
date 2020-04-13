@@ -39,6 +39,11 @@ func NewQueryRewriter() QueryRewriter {
 func (qr *queryRewriter) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
+	// FIXME: should come from the JWT
+	authVariables := map[string]interface{}{
+		"User": "user1",
+	}
+
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
 
@@ -62,7 +67,7 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		return dgQuery, nil
 
 	case schema.FilterQuery:
-		return rewriteAsQuery(gqlQuery), nil
+		return rewriteAsQuery(gqlQuery, authVariables), nil
 	case schema.PasswordQuery:
 		return passwordQuery(gqlQuery)
 	default:
@@ -230,19 +235,131 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 	return dgQuery
 }
 
-func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
+func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 	}
 
-	if ids := idFilter(field, field.Type().IDField()); ids != nil {
+	if field.IsAuthQuery() {
+		addVariableUIDFunc(dgQuery, authVariables["dgraph.uid"].(string))
+	} else if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, field.Type().DgraphName())
 	}
 
+	varGen := NewVariableGenerator()
+	varName := varGen.Next(field.Type(), "", "")
+
+	// FIXME: varGen needs to go in here for deeper fields
 	addArgumentsToField(dgQuery, field)
+
+	if authVariables == nil || field.IsAuthQuery() {
+		return dgQuery
+	}
+
+	authVariables["dgraph.uid"] = varName
+	authQueries, filter := addAuth(field, varGen, authVariables)
+	if len(authQueries) > 0 {
+		// build a query like
+		// Todo1 as var(func: ... ) @filter(...)
+		// that has the filter from the user query in it.  This is then used as
+		// the starting point for both the user query and the auth query.
+		varQry := rewriteAsQuery(field, nil)
+		varQry.Var = varName
+		varQry.Alias = ""
+		varQry.Attr = "var"
+		varQry.Children = nil
+
+		// The user query starts from the var query generated above and is filtered
+		// by the the filter generated from auth processing.
+		dgQuery.Func = &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: varName}},
+		}
+		dgQuery.Filter = filter
+
+		q := &gql.GraphQuery{
+			Children: append([]*gql.GraphQuery{dgQuery, varQry}, authQueries...),
+		}
+		// fmt.Println(dgraph.AsString(q))
+		return q
+	}
+
 	return dgQuery
+}
+
+func addAuth(field schema.Field, varGen *VariableGenerator, authVariables map[string]interface{}) (
+	[]*gql.GraphQuery, *gql.FilterTree) {
+
+	auth := field.Operation().Schema().AuthRules(field.Type())
+
+	// FIXME: also process any rules attached to the field itself.  Those should AND'd with
+	// the type rules
+
+	if auth == nil || auth.Rules.Query == nil {
+		return nil, nil
+	}
+
+	return rewriteRuleNode(field, auth.Rules.Query, varGen, authVariables)
+}
+
+func rewriteRuleNode(
+	field schema.Field,
+	rn *schema.RuleNode,
+	varGen *VariableGenerator,
+	authVariables map[string]interface{}) ([]*gql.GraphQuery, *gql.FilterTree) {
+
+	nodeList := func(field schema.Field, rns []*schema.RuleNode, varGen *VariableGenerator,
+		authVariables map[string]interface{}) ([]*gql.GraphQuery, []*gql.FilterTree) {
+		var qrys []*gql.GraphQuery
+		var filts []*gql.FilterTree
+		for _, orRn := range rns {
+			q, f := rewriteRuleNode(field, orRn, varGen, authVariables)
+			qrys = append(qrys, q...)
+			filts = append(filts, f)
+		}
+		return qrys, filts
+	}
+
+	switch {
+	case len(rn.And) > 0:
+		qrys, filts := nodeList(field, rn.And, varGen, authVariables)
+		return qrys, &gql.FilterTree{
+			Op:    "and",
+			Child: filts,
+		}
+	case len(rn.Or) > 0:
+		qrys, filts := nodeList(field, rn.Or, varGen, authVariables)
+		return qrys, &gql.FilterTree{
+			Op:    "or",
+			Child: filts,
+		}
+	case rn.Not != nil:
+		qrys, filter := rewriteRuleNode(field, rn.Not, varGen, authVariables)
+		return qrys, &gql.FilterTree{
+			Op:    "not",
+			Child: []*gql.FilterTree{filter},
+		}
+	case rn.Rule != nil:
+		// create a copy of the auth query that's specialized for the values from the JWT
+		qry := rn.Rule.AuthFor(field, authVariables)
+
+		varName := varGen.Next(field.Type(), "", "")
+		r1 := rewriteAsQuery(qry, authVariables)
+		r1.Var = varName
+		r1.Attr = "var"
+		r1.Cascade = true
+
+		return []*gql.GraphQuery{r1}, &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: varName}},
+			},
+		}
+
+	}
+	return nil, nil
 }
 
 func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
@@ -260,6 +377,13 @@ func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 			Op:    "and",
 			Child: []*gql.FilterTree{q.Filter, thisFilter},
 		}
+	}
+}
+
+func addVariableUIDFunc(q *gql.GraphQuery, varName string) {
+	q.Func = &gql.Function{
+		Name: "uid",
+		Args: []gql.Arg{{Value: varName}},
 	}
 }
 

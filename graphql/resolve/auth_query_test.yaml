@@ -1,0 +1,20 @@
+-
+  name: "Top-level auth writes var queries"
+  gqlquery: |
+    query {
+      queryTodo {
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryTodo(func: uid(Todo1)) @filter(uid(Todo2)) {
+        title : Todo.title
+        dgraph.uid : uid
+      }
+      Todo1 as var(func: type(Todo))
+      Todo2 as var(func: uid(Todo1)) @cascade {
+        owner : Todo.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
