@@ -45,7 +45,9 @@ type QueryProcedure interface {
 type MutationProcedure interface {
 	OnMutationField(mutation interface{}, typ schema.Type, fld schema.FieldDefinition)
 	OnMutation(mutation map[string]interface{}, typ schema.Type)
-	OnMutationCond(cond string)
+	OnMutationRoot(mutation *dgoapi.Mutation)
+	OnMutationCond(conditions map[string][]bool)
+
 	OnMutationResult(mutation schema.Mutation, assigned map[string]string,
 		result map[string]interface{})
 
@@ -179,6 +181,10 @@ func (a *AuthResolver) OnMutation(query *gql.GraphQuery, mutation []*dgoapi.Muta
 			visited[getName(q)] = struct{}{}
 			queries = append(queries, q)
 		}
+	}
+
+	if query != nil {
+		query.Children = queries
 	}
 
 	// Collect all mutations from all the mutationProcedures

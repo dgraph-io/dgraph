@@ -20,12 +20,13 @@ import (
 	"strconv"
 	"strings"
 
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
-func NewAddMutationProcedure() *AddMutationProcedure {
-	fqp := AddMutationProcedure{BaseMutationProcedure: &BaseMutationProcedure{
+func NewPostMutationAddProcedure() *PostMutationAddProcedure {
+	fqp := PostMutationAddProcedure{BaseMutationProcedure: &BaseMutationProcedure{
 		BaseProcedure: &BaseProcedure{}},
 		blankNodes: make(map[string]schema.Type),
 	}
@@ -33,18 +34,21 @@ func NewAddMutationProcedure() *AddMutationProcedure {
 	return &fqp
 }
 
-type AddMutationProcedure struct {
+type PostMutationAddProcedure struct {
 	*BaseMutationProcedure
 
 	blankNodes map[string]schema.Type
 	currentTyp schema.Type
 }
 
-func (amp *AddMutationProcedure) OnMutationField(mutation interface{}, typ schema.Type,
+func (amp *PostMutationAddProcedure) OnMutationRoot(mutation *dgoapi.Mutation) {
+}
+
+func (amp *PostMutationAddProcedure) OnMutationField(mutation interface{}, typ schema.Type,
 	fld schema.FieldDefinition) {
 }
 
-func (amp *AddMutationProcedure) OnMutation(mutation map[string]interface{}, typ schema.Type) {
+func (amp *PostMutationAddProcedure) OnMutation(mutation map[string]interface{}, typ schema.Type) {
 	uid, ok := mutation["uid"].(string)
 	if !ok || (!strings.HasPrefix(uid, "_:") && len(mutation) > 1) {
 		return
@@ -88,8 +92,8 @@ func createQuery(typ schema.Type, name string, uid uint64,
 	}
 }
 
-func (amp *AddMutationProcedure) OnMutationResult(mutation schema.Mutation, assigned map[string]string,
-	result map[string]interface{}) {
+func (amp *PostMutationAddProcedure) OnMutationResult(mutation schema.Mutation,
+	assigned map[string]string, result map[string]interface{}) {
 
 	amp.queries = make([]*gql.GraphQuery, 0)
 

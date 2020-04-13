@@ -28,7 +28,7 @@ type Todo @auth(
 
 type User @auth(
   add: { rule: "$MyApp.Role: { eq: ADD-BOT }" },
-  update: { rule: "filter: { username: { eq: $X-MyApp-User } }" }
+  update: { rule: "username: { eq: $X-MyApp-User }" }
 ){
   username: String! @id
   todos: [Todo]

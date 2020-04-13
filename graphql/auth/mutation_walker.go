@@ -116,12 +116,49 @@ func (mw *MutationWalker) runMutation(mutation *dgoapi.Mutation) {
 	typ := mw.findType(v)
 
 	for _, i := range mw.mutationProcedures {
-		(*i).OnMutationCond(mutation.Cond)
+		(*i).OnMutationRoot(mutation)
 	}
+
 	mw.fieldMutationWalk(v, typ)
 }
 
+func (mw *MutationWalker) readConditions(mutations []*dgoapi.Mutation) {
+	conditions := make(map[string][]bool)
+
+	for _, mutation := range mutations {
+		cond := mutation.Cond
+		if cond == "" {
+			continue
+		}
+
+		// trim @if( and )
+		cond = cond[4:]
+		cond = cond[:len(cond)-1]
+
+		// split by AND
+		splits := strings.Split(cond, " AND ")
+		for _, split := range splits {
+			split = split[7:]
+			splitAgain := strings.Split(split, ",")
+
+			varName := splitAgain[0][:len(splitAgain[0])-1]
+			varVal := splitAgain[1][1] - '0'
+
+			if _, ok := conditions[varName]; !ok {
+				conditions[varName] = []bool{false, false}
+			}
+			conditions[varName][varVal] = true
+		}
+	}
+
+	for _, i := range mw.mutationProcedures {
+		(*i).OnMutationCond(conditions)
+	}
+}
+
 func (mw *MutationWalker) walkMutation(queries []*gql.GraphQuery, mutations []*dgoapi.Mutation) {
+	mw.readConditions(mutations)
+
 	for _, i := range queries {
 		typ := mw.getTypeFromRoot(i)
 		if i.Var != "" {

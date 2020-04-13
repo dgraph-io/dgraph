@@ -237,7 +237,10 @@ func (mr *mutationResolver) rewriteAndExecute(
 	sch := mutation.Operation().Schema()
 
 	authResolver := auth.AuthResolver{}
-	authResolver.AddMutaionProcedure(auth.NewAddMutationProcedure())
+	qp := auth.NewMutationQueryProcedure()
+	authResolver.AddQueryProcedure(qp)
+	authResolver.AddMutaionProcedure(qp)
+	authResolver.AddMutaionProcedure(auth.NewPostMutationAddProcedure())
 	authResolver.Init(&sch, &a)
 	authResolver.OnMutation(query, mutations)
 
@@ -259,7 +262,6 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	queries := authResolver.OnMutationResult(mutation, assigned, result)
 	authResult, err := mr.queryExecutor.Query(ctx, &gql.GraphQuery{Children: queries})
-	fmt.Println("RESP", string(authResult))
 
 	jsonMap := make(map[string]interface{})
 	err = json.Unmarshal(authResult, &jsonMap)

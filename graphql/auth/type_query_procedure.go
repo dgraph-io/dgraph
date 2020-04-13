@@ -21,16 +21,14 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
-type TypeNodeQueryProcedure struct {
-	*BaseProcedure
-
-	currentTyp schema.Type
-}
-
 func NewTypeNodeQueryProcedure(re RuleExtractor) *TypeNodeQueryProcedure {
 	tnqp := TypeNodeQueryProcedure{BaseProcedure: &BaseProcedure{}}
 	tnqp.SetRuleExtractor(re)
 	return &tnqp
+}
+
+type TypeNodeQueryProcedure struct {
+	*BaseProcedure
 }
 
 func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *schema.RuleNode) {
@@ -56,7 +54,6 @@ func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *s
 }
 
 func (tnqp *TypeNodeQueryProcedure) OnQueryRoot(gqlQuery *gql.GraphQuery, typ schema.Type) {
-	tnqp.currentTyp = typ
 	rules := tnqp.getTypeRules(typ.Name())
 	if rules == nil {
 		return

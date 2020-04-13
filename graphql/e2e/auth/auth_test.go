@@ -70,7 +70,6 @@ func getJWT(t *testing.T, user, role string) string {
 	require.NoError(t, err)
 
 	return ss
-
 }
 
 func TestQueryAllTodos(t *testing.T) {
