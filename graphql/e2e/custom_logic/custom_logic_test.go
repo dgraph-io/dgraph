@@ -17,17 +17,13 @@
 package custom_logic
 
 import (
-	"context"
 	"encoding/json"
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -44,40 +40,38 @@ const (
 		 name: String!
 		 director: [MovieDirector]
 	 }
- `
-	remoteGraphqlSchema = `
- type Continent @remote {
-	code: String
-	name: String
-	countries: [Country]
-  }
-  
-  type Country @remote {
-	code: String
-	name: String
-	native: String
-	phone: String
-	continent: Continent
-	currency: String
-	languages: [Language]
-	emoji: String
-	emojiU: String
-	states: [State]
-  }
-  
-  type Language @remote {
-	code: String
-	name: String
-	native: String
-	rtl: Int
-  }
-  
-  
-  type State @remote {
-	code: String
-	name: String
-	country: Country
-  }
+	 type Continent @remote {
+		code: String
+		name: String
+		countries: [Country]
+	  }
+	  
+	  type Country @remote {
+		code: String
+		name: String
+		native: String
+		phone: String
+		continent: Continent
+		currency: String
+		languages: [Language]
+		emoji: String
+		emojiU: String
+		states: [State]
+	  }
+	  
+	  type Language @remote {
+		code: String
+		name: String
+		native: String
+		rtl: Int
+	  }
+	  
+	  
+	  type State @remote {
+		code: String
+		name: String
+		country: Country
+	  }
  `
 )
 
@@ -316,18 +310,8 @@ func addUsers(t *testing.T, schools []*school) []*user {
 	return res.AddUser.User
 }
 
-func addAndVerifyData(t *testing.T) {
-	teachers := addTeachers(t)
-	sort.Slice(teachers, func(i, j int) bool {
-		return teachers[i].ID < teachers[i].ID
-	})
-	schools := addSchools(t, teachers)
-	sort.Slice(schools, func(i, j int) bool {
-		return schools[i].ID < schools[i].ID
-	})
-	users := addUsers(t, schools)
-
-	query := `
+func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*school) {
+	queryUser := `
 	 query {
 		 queryUser(order: {asc: age}) {
 			 name
@@ -349,7 +333,7 @@ func addAndVerifyData(t *testing.T) {
 		 }
 	 }`
 	params := &common.GraphQLParams{
-		Query: query,
+		Query: queryUser,
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
@@ -582,15 +566,11 @@ func addAndVerifyData(t *testing.T) {
 	 }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+
 }
 
-func TestCustomFieldsBatchModeShouldBeResolved(t *testing.T) {
-	d, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-	require.NoError(t, err)
-
-	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
-	client.Alter(context.Background(), &api.Operation{DropAll: true})
-
+func TestCustomFieldsShouldBeResolved(t *testing.T) {
+	// lets check batch mode first
 	schema := `type Car @remote {
 		 id: ID!
 		 name: String!
@@ -649,17 +629,21 @@ func TestCustomFieldsBatchModeShouldBeResolved(t *testing.T) {
 	 }`
 
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-	addAndVerifyData(t)
-}
 
-func TestCustomFieldsSingleModeShouldBeResolved(t *testing.T) {
-	d, err := grpc.Dial("localhost:9180", grpc.WithInsecure())
-	require.NoError(t, err)
+	teachers := addTeachers(t)
+	sort.Slice(teachers, func(i, j int) bool {
+		return teachers[i].ID < teachers[i].ID
+	})
+	schools := addSchools(t, teachers)
+	sort.Slice(schools, func(i, j int) bool {
+		return schools[i].ID < schools[i].ID
+	})
+	users := addUsers(t, schools)
 
-	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
-	client.Alter(context.Background(), &api.Operation{DropAll: true})
+	verifyData(t, users, teachers, schools)
 
-	schema := `
+	// lets update the schema and check single mode now
+	schema = `
 	 type Car @remote {
 		 id: ID!
 		 name: String!
@@ -717,12 +701,11 @@ func TestCustomFieldsSingleModeShouldBeResolved(t *testing.T) {
 					   })
 	 }`
 
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-	addAndVerifyData(t)
+	verifyData(t, users, teachers, schools)
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {
-	schema := remoteGraphqlSchema + `
+	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
 	}	
@@ -732,7 +715,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 }
 
 func TestForInvalidArguement(t *testing.T) {
-	schema := remoteGraphqlSchema + `
+	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
 	}	
@@ -742,7 +725,7 @@ func TestForInvalidArguement(t *testing.T) {
 }
 
 func TestForInvalidType(t *testing.T) {
-	schema := remoteGraphqlSchema + `
+	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
 	}	
@@ -752,7 +735,7 @@ func TestForInvalidType(t *testing.T) {
 }
 
 func TestCustomLogicGraphql(t *testing.T) {
-	schema := remoteGraphqlSchema + `
+	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
 	}	
@@ -778,7 +761,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 }
 
 func TestCustomLogicGraphqlWithError(t *testing.T) {
-	schema := remoteGraphqlSchema + `
+	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
 	}	

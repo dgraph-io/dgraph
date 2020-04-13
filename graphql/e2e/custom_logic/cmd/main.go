@@ -9,9 +9,13 @@ import (
 	"reflect"
 	"sort"
 	"strings"
-
-	"github.com/dgraph-io/dgraph/x"
 )
+
+func check2(v interface{}, err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
+}
 
 func handleCustomRequest(r *http.Request, expectedMethod, resKey string) ([]byte, error) {
 	if r.Method != expectedMethod {
@@ -54,19 +58,19 @@ func handleCustomRequest(r *http.Request, expectedMethod, resKey string) ([]byte
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	b, err := handleCustomRequest(r, http.MethodGet, "myFavoriteMovies")
 	if err != nil {
-		x.Check2(w.Write([]byte(err.Error())))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	x.Check2(w.Write(b))
+	check2(w.Write(b))
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 	b, err := handleCustomRequest(r, http.MethodPost, "myFavoriteMoviesPost")
 	if err != nil {
-		x.Check2(w.Write([]byte(err.Error())))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	x.Check2(w.Write(b))
+	check2(w.Write(b))
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {

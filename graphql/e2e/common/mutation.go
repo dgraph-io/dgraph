@@ -2393,7 +2393,7 @@ func deleteGqlType(
 
 	gqlResponse := deleteTypeParams.ExecuteAsPost(t, graphqlURL)
 	if len(expectedErrors) == 0 {
-		requireNoGQLErrors(t, gqlResponse)
+		RequireNoGQLErrors(t, gqlResponse)
 
 		var result map[string]interface{}
 		err := json.Unmarshal(gqlResponse.Data, &result)
@@ -2953,7 +2953,7 @@ func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 	}
 
 	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var actualResult struct {
 		AddStudent struct {
