@@ -293,8 +293,10 @@ func rewriteAsQuery(field schema.Field, authVariables map[string]interface{}) *g
 	return dgQuery
 }
 
-func rewriteAuthQueries(field schema.Field, varGen *VariableGenerator, authVariables map[string]interface{}) (
-	[]*gql.GraphQuery, *gql.FilterTree) {
+func rewriteAuthQueries(
+	field schema.Field,
+	varGen *VariableGenerator,
+	authVariables map[string]interface{}) ([]*gql.GraphQuery, *gql.FilterTree) {
 
 	auth := field.Operation().Schema().AuthRules(field.Type())
 
