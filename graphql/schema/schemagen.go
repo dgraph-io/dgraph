@@ -57,7 +57,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema), nil
+	return AsSchema(gqlSchema)
 }
 
 func (s *handler) GQLSchema() string {

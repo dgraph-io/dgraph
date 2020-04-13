@@ -164,6 +164,8 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// Map from typename to auth rules
+	authRules map[string]*TypeAuth
 }
 
 type operation struct {
@@ -476,14 +478,23 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
+func AsSchema(s *ast.Schema) (Schema, error) {
+
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	authRules, err := authRules(s)
+	if err != nil {
+		return nil, err
+	}
+
 	dgraphPredicate := dgraphMapping(s)
 	return &schema{
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
-	}
+		authRules:       authRules,
+	}, nil
 }
 
 func responseName(f *ast.Field) string {
