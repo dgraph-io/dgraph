@@ -225,3 +225,15 @@ type Mutation {
 	deleteBook(filter: BookFilter!): DeleteBookPayload
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getLibraryItem(refID: String!): LibraryItem
+	queryLibraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
+	getBook(refID: String!): Book
+	queryBook(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
+	queryLibrary(first: Int, offset: Int): [Library]
+}

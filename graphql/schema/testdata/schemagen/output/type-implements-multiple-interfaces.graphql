@@ -256,3 +256,15 @@ type Mutation {
 	updateHuman(input: UpdateHumanInput!): UpdateHumanPayload
 	deleteHuman(filter: HumanFilter!): DeleteHumanPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getCharacter(id: ID!): Character
+	queryCharacter(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
+	queryEmployee(order: EmployeeOrder, first: Int, offset: Int): [Employee]
+	getHuman(id: ID!): Human
+	queryHuman(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
+}
