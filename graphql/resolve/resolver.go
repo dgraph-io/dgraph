@@ -791,26 +791,26 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
+func copyTemplate(input *interface{}) (*interface{}, error) {
 	b, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
 	}
 
-	var result map[string]interface{}
+	var result interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
 		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
 	}
-	return result, nil
+	return &result, nil
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]map[string]interface{}, len(vals))
+	body := make([]interface{}, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyMap(fconf.Template)
+		temp, err := copyTemplate(fconf.Template)
 		if err != nil {
 			errCh <- err
 			return
@@ -822,7 +822,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			return
 		}
 		mu.RUnlock()
-		body[i] = temp
+		body[i] = *temp
 	}
 
 	if fconf.Operation == "batch" {
@@ -865,7 +865,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	var wg sync.WaitGroup
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
-		go func(idx int, input map[string]interface{}) {
+		go func(idx int, input interface{}) {
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
@@ -1454,7 +1454,7 @@ func (hr *httpResolver) rewriteAndExecute(
 	}
 	var body string
 	if hrc.Template != nil {
-		b, err := json.Marshal(hrc.Template)
+		b, err := json.Marshal(*hrc.Template)
 		if err != nil {
 			return nil, err
 		}

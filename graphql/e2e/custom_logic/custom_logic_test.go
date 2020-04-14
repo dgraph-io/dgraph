@@ -800,7 +800,7 @@ func TestCustomPatchMutation(t *testing.T) {
         updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
 			url: "http://mock:8888/favMoviesUpdate/$id",
 			method: "PATCH",
-			body: "{ movie: $input }"
+			body: "$input"
         })
 	}`
 	updateSchema(t, schema)

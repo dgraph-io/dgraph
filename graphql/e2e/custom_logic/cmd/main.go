@@ -208,7 +208,7 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, ExpectedRequest{
 		method:    http.MethodPatch,
 		urlSuffix: "/favMoviesUpdate/0x1",
-		body:      `{"movie":{"director":[{"name":"Dir1"}],"name":"Mov1"}}`,
+		body:      `{"director":[{"name":"Dir1"}],"name":"Mov1"}`,
 		headers:   nil,
 	})
 	if err != nil {

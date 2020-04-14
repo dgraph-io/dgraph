@@ -50,7 +50,7 @@ type MutationType string
 type FieldHTTPConfig struct {
 	URL            string
 	Method         string
-	Template       map[string]interface{}
+	Template       *interface{}
 	Operation      string
 	ForwardHeaders http.Header
 }
@@ -733,7 +733,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		if err != nil {
 			return fconf, errors.Wrapf(err, "while substituting vars in URL")
 		}
-		if len(fconf.Template) > 0 {
+		if fconf.Template != nil {
 			if err = SubstituteVarsInBody(fconf.Template, argMap); err != nil {
 				return fconf, errors.Wrapf(err, "while substituting vars in Body")
 			}
@@ -1515,67 +1515,13 @@ func isName(s string) bool {
 	return true
 }
 
-func writeValInBody(val interface{}, buf *bytes.Buffer) {
-	switch v := val.(type) {
-	case string:
-		fmt.Fprintf(buf, `"%s"`, v)
-	case []string:
-		fmt.Fprintf(buf, `["%s"]`, strings.Join(v, "\",\""))
-	case []bool, []int, []int8, []int16, []int32, []int64, []uint, []uint8, []uint16,
-		[]uint32, []uint64, []float32, []float64:
-		fmt.Fprintf(buf, `[%s]`,
-			strings.Join(convertSliceToStringSlice(v), ","))
-	case []interface{}:
-		writeInterfaceSliceInBody(v, buf)
-	case map[string]interface{}:
-		writeMapInBody(v, buf)
-	default:
-		fmt.Fprintf(buf, "%v", val)
-	}
-}
-
-func writeInterfaceSliceInBody(slice []interface{}, buf *bytes.Buffer) {
-	size := len(slice)
-	buf.WriteString("[")
-	for i := 0; i < size; i++ {
-		writeValInBody(slice[i], buf)
-		if i != size-1 {
-			buf.WriteString(",")
-		}
-	}
-	buf.WriteString("]")
-}
-
-func writeMapInBody(object map[string]interface{}, buf *bytes.Buffer) {
-	size := len(object)
-	i := 1
-
-	keys := make([]string, 0, size)
-	for k := range object {
-		keys = append(keys, k)
-	}
-	// ensure fixed order in output
-	sort.Strings(keys)
-
-	buf.WriteString("{")
-	for _, k := range keys {
-		buf.WriteString(fmt.Sprintf("\"%s\":", k))
-		writeValInBody(object[k], buf)
-		if i != size {
-			buf.WriteString(",")
-		}
-		i++
-	}
-	buf.WriteString("}")
-}
-
 // Given a template for a body with variables defined, this function parses the body
 // and converts it into a JSON representation and returns that.
 // for e.g.
 // { author: $id, post: { id: $postID }}
 // { "author" : "$id", "post": { "id": "$postID" }}
 // If the final result is not a valid JSON, then an error is returned.
-func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, error) {
+func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(body))
 
@@ -1620,11 +1566,11 @@ func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, er
 		return nil, nil, nil
 	}
 
-	m := make(map[string]interface{})
+	var m interface{}
 	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
 		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
 	}
-	return m, requiredFields, nil
+	return &m, requiredFields, nil
 }
 
 func getVar(key string, variables map[string]interface{}) (interface{}, error) {
@@ -1639,48 +1585,86 @@ func getVar(key string, variables map[string]interface{}) (interface{}, error) {
 	return val, nil
 }
 
+func substituteSingleVarInBody(key string, valPtr *interface{},
+	variables map[string]interface{}) error {
+	// Look it up in the map and replace.
+	val, err := getVar(key, variables)
+	if err != nil {
+		return err
+	}
+	*valPtr = val
+	return nil
+}
+
+func substituteVarInMapInBody(object map[string]interface{},
+	variables map[string]interface{}) error {
+	for k, v := range object {
+		switch val := v.(type) {
+		case string:
+			vval, err := getVar(val, variables)
+			if err != nil {
+				return err
+			}
+			object[k] = vval
+		case map[string]interface{}:
+			if err := substituteVarInMapInBody(val, variables); err != nil {
+				return err
+			}
+		case []interface{}:
+			if err := substituteVarInSliceInBody(val, variables); err != nil {
+				return err
+			}
+		default:
+			return errors.Errorf("got unexpected type value in map: %+v", v)
+		}
+	}
+	return nil
+}
+
+func substituteVarInSliceInBody(slice []interface{}, variables map[string]interface{}) error {
+	for k, v := range slice {
+		switch val := v.(type) {
+		case string:
+			vval, err := getVar(val, variables)
+			if err != nil {
+				return err
+			}
+			slice[k] = vval
+		case map[string]interface{}:
+			if err := substituteVarInMapInBody(val, variables); err != nil {
+				return err
+			}
+		case []interface{}:
+			if err := substituteVarInSliceInBody(val, variables); err != nil {
+				return err
+			}
+		default:
+			return errors.Errorf("got unexpected type value in array: %+v", v)
+		}
+	}
+	return nil
+}
+
 // Given a JSON representation for a body with variables defined, this function substitutes
 // the variables and returns the final JSON.
 // for e.g.
 // { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
 // should return { "author" : "0x3", "post": { "id": "0x9" }}
-func SubstituteVarsInBody(jsonTemplate map[string]interface{},
-	variables map[string]interface{}) error {
-	for k, v := range jsonTemplate {
-		switch val := v.(type) {
-		case string:
-			// Look it up in the map and replace.
-			vval, err := getVar(val, variables)
-			if err != nil {
-				return err
-			}
-			jsonTemplate[k] = vval
-		case map[string]interface{}:
-			if err := SubstituteVarsInBody(val, variables); err != nil {
-				return err
-			}
-		case []interface{}:
-			for i, mv := range val {
-				switch mapVal := mv.(type) {
-				case string:
-					// Look it up in the map and replace.
-					vval, err := getVar(mapVal, variables)
-					if err != nil {
-						return err
-					}
-					val[i] = vval
-				case map[string]interface{}:
-					if err := SubstituteVarsInBody(mapVal, variables); err != nil {
-						return err
-					}
-				default:
-					return errors.Errorf("got unexpected type value in array: %+v", mv)
-				}
-			}
-		default:
-		}
+func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interface{}) error {
+	if jsonTemplate == nil {
+		return nil
 	}
-	return nil
+
+	switch val := (*jsonTemplate).(type) {
+	case string:
+		return substituteSingleVarInBody(val, jsonTemplate, variables)
+	case map[string]interface{}:
+		return substituteVarInMapInBody(val, variables)
+	case []interface{}:
+		return substituteVarInSliceInBody(val, variables)
+	default:
+		return errors.Errorf("got unexpected type value in jsonTemplate: %+v", val)
+	}
 }
 
 // FieldOriginatedFrom returns the name of the interface from which given field was inherited.

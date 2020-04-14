@@ -328,8 +328,8 @@ func TestSubstituteVarsInBody(t *testing.T) {
 	tcases := []struct {
 		name        string
 		variables   map[string]interface{}
-		template    map[string]interface{}
-		expected    map[string]interface{}
+		template    interface{}
+		expected    interface{}
 		expectedErr error
 	}{
 		{
@@ -403,6 +403,15 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			nil,
 		},
 		{
+			"substitutes direct body variable correctly",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"$authors",
+			[]interface{}{map[string]interface{}{"id": 1, "name": "George"},
+				map[string]interface{}{"id": 2, "name": "Jerry"}},
+			nil,
+		},
+		{
 			"variable not found error",
 			map[string]interface{}{"postID": "0x9"},
 			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
@@ -413,7 +422,13 @@ func TestSubstituteVarsInBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := SubstituteVarsInBody(test.template, test.variables)
+			var templatePtr *interface{}
+			if test.template == nil {
+				templatePtr = nil
+			} else {
+				templatePtr = &test.template
+			}
+			err := SubstituteVarsInBody(templatePtr, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, test.template)
@@ -428,7 +443,7 @@ func TestParseBodyTemplate(t *testing.T) {
 	tcases := []struct {
 		name           string
 		template       string
-		expected       map[string]interface{}
+		expected       interface{}
 		requiredFields map[string]bool
 		expectedErr    error
 	}{
@@ -481,6 +496,13 @@ func TestParseBodyTemplate(t *testing.T) {
 			nil,
 		},
 		{
+			"parses body template with direct variable correctly",
+			`$authors`,
+			"$authors",
+			map[string]bool{"authors": true},
+			nil,
+		},
+		{
 			"json unmarshal error",
 			`{ author: $id, post: { id $postID }}`,
 			nil,
@@ -510,7 +532,11 @@ func TestParseBodyTemplate(t *testing.T) {
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.requiredFields, requiredFields)
-				require.Equal(t, test.expected, b)
+				if b == nil {
+					require.Nil(t, test.expected)
+				} else {
+					require.Equal(t, test.expected, *b)
+				}
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
 			}
