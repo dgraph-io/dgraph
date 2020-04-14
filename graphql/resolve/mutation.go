@@ -239,11 +239,10 @@ func (mr *mutationResolver) rewriteAndExecute(
 		resolved.Data = map[string]interface{}{}
 	}
 
-	if dgRes, ok := resolved.Data.(map[string]interface{}); ok {
-		dgRes[schema.NumUid] = numUids
-		dgRes[schema.Typename] = mutation.Type().Name()
-		resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
-	}
+	dgRes := resolved.Data.(map[string]interface{})
+	dgRes[schema.NumUid] = numUids
+	dgRes[schema.Typename] = mutation.Type().Name()
+	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
 
 	resolved.Field = mutation
 	return resolved, resolverSucceeded
