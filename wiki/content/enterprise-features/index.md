@@ -181,9 +181,12 @@ The `--postings` (`-p`) flag sets the directory to which the restored posting
 directories will be saved. This directory will contain a posting directory for
 each group in the restored backup.
 
-The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
-start timestamp using the restored version. Otherwise, the timestamp must be
-manually updated through Zero's HTTP 'assign' endpoint.
+The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
+timestamp and UID lease using the restored version. If no zero address is
+passed, the command will complain unless you set the value of the
+`--force_zero` flag to false. If do not pass a zero value to this command,
+the timestamp and UID lease must be manually updated through Zero's HTTP
+'assign' endpoint using the values printed near the end of the command's output.
 
 The `--backup_id` optional flag specifies the ID of the backup series to
 restore. A backup series consists of a full backup and all the incremental
