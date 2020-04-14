@@ -18,61 +18,80 @@ package query
 
 import (
 	"encoding/binary"
+	"errors"
 	"math"
+	"sync"
 
 	"github.com/dgraph-io/ristretto/z"
 )
 
+var (
+	errArenaFull     = errors.New("arena is full")
+	errInvalidOffset = errors.New("arena get performed with invalid get")
+
+	maxArenaSize = math.MaxUint32
+)
+
+// arena can used to store []byte. It has one underlying large buffer([]byte). All of []byte to be
+// stored in arena are appended to this underlying buffer. For futher optimizations, arena also
+// keeps mapping from memhash([]byte) => offset in buffer. This ensure single []byte is put into
+// arena only once.
+// For now, max size for underlying buffer is limit to math.MaxUint32.
 type arena struct {
-	buf       []byte
-	offsetMap map[uint64]uint32
+	buf         []byte
+	offsetMap   map[uint64]uint32
+	sizeBufPool *sync.Pool
 }
 
+// newArena returns arena with initial capacity size.
 func newArena(size int) *arena {
-	// TODO: return error from here.
-	// x.AssertTruef(int64(size) < int64(math.MaxUint32), "size should be < math.MaxUint32 at init.")
-	a := new(arena)
-
-	// Append dummy byte to avoid reading bytes when offset is
-	// storing default value 0 in fastJsonNode.
-	a.buf = make([]byte, 0, size)
-	a.buf = append(a.buf, []byte("a")...)
-	a.offsetMap = make(map[uint64]uint32)
-	return a
+	// Start offset from 1, to avoid reading bytes when offset is storing default value(0) in
+	// fastJsonNode. Hence append dummy byte.
+	buf := make([]byte, 0, size)
+	return &arena{
+		buf:       append(buf, []byte("a")...),
+		offsetMap: make(map[uint64]uint32),
+		sizeBufPool: &sync.Pool{
+			New: func() interface{} {
+				return make([]byte, binary.MaxVarintLen64)
+			},
+		},
+	}
 }
 
-// put appends b in arena. It first checks if last buffer in arena has enough space for b.
-// If not, it appends new buffer in arena's buffers.
+// put stores b in arena and returns offset for it. Return offset is always > 0(if no error).
 // Note: for now this function can only put buffers such that:
-// varint(len(b)) + len(b) < math.MaxUint32.
-func (a *arena) put(b []byte) uint32 {
+// len(current arena buf) + varint(len(b)) + len(b) <= math.MaxUint32.
+func (a *arena) put(b []byte) (uint32, error) {
 	// Check if we already have b.
 	fp := z.MemHash(b)
 	if co, ok := a.offsetMap[fp]; ok {
-		return co
+		return co, nil
 	}
 	// First put length of buffer(varint encoded), then put actual buffer.
-	sizeBuf := make([]byte, binary.MaxVarintLen64)
+	sizeBuf := (a.sizeBufPool.Get()).([]byte)
 	w := binary.PutVarint(sizeBuf, int64(len(b)))
 	offset := len(a.buf)
 	if int64(len(a.buf)+w+len(b)) > int64(math.MaxUint32) {
-		// Panic for now once we have filled the buffer.
-		// TODO: fix this.
-		panic("underlying buffer is full in arena")
+		return 0, errArenaFull
 	}
 
 	a.buf = append(a.buf, sizeBuf[:w]...)
 	a.buf = append(a.buf, b...)
 
-	// Store offset in map.
-	a.offsetMap[fp] = uint32(offset)
-	return uint32(offset)
+	a.sizeBufPool.Put(sizeBuf)
+	a.offsetMap[fp] = uint32(offset) // Store offset in map.
+	return uint32(offset), nil
 }
 
 func (a *arena) get(offset uint32) []byte {
 	// We have only dummy values at offset 0.
 	if offset == 0 {
 		return nil
+	}
+
+	if int64(offset) >= int64(len(a.buf)) {
+		// TODO: also check validity of offset.
 	}
 
 	// First read length, then read actual buffer.

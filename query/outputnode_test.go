@@ -152,7 +152,7 @@ func TestFastJsonNode(t *testing.T) {
 	enc := newEncoder()
 	fj := enc.newNode()
 	enc.setAttr(fj, attrId)
-	enc.setScalarVal(fj, scalarVal)
+	require.NoError(t, enc.setScalarVal(fj, scalarVal))
 	enc.setList(fj, list)
 
 	require.Equal(t, attrId, enc.getAttr(fj))
@@ -161,7 +161,7 @@ func TestFastJsonNode(t *testing.T) {
 
 	fj2 := enc.newNode()
 	enc.setAttr(fj2, attrId)
-	enc.setScalarVal(fj2, scalarVal)
+	require.NoError(t, enc.setScalarVal(fj2, scalarVal))
 	enc.setList(fj2, list)
 
 	require.Equal(t, attrId, enc.getAttr(fj2))
@@ -188,7 +188,7 @@ var (
 	testVal  = types.Val{Tid: types.DefaultID, Value: []byte(testAttr)}
 )
 
-func buildTestTree(enc *encoder, level, maxlevel int, fj fastJsonNode) {
+func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonNode) {
 	if level >= maxlevel {
 		return
 	}
@@ -201,10 +201,12 @@ func buildTestTree(enc *encoder, level, maxlevel int, fj fastJsonNode) {
 			if err != nil {
 				panic(err)
 			}
-			ch = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
+
+			ch, err = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
+			require.NoError(b, err)
 		} else {
 			ch := enc.newNodeWithAttr(enc.idForAttr(testAttr))
-			buildTestTree(enc, level+1, maxlevel, ch)
+			buildTestTree(b, enc, level+1, maxlevel, ch)
 		}
 		enc.appendAttrs(fj, ch)
 	}
@@ -214,6 +216,6 @@ func BenchmarkFastJsonNode2Chilren(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		enc := newEncoder()
 		root := enc.newNodeWithAttr(enc.idForAttr(testAttr))
-		buildTestTree(enc, 1, 20, root)
+		buildTestTree(b, enc, 1, 20, root)
 	}
 }
