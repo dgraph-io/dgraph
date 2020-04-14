@@ -17,38 +17,43 @@
 language: go
 
 go:
-  - 1.13.x
-
+- 1.13.x
 env:
   global:
-    - GO111MODULE=on
-    - CC_TEST_REPORTER_ID=abdad8b2e2ec0bfdd7af57d955c44e9470f4d174e744b824047f3037800f5b40
-
+  - CC_TEST_REPORTER_ID=abdad8b2e2ec0bfdd7af57d955c44e9470f4d174e744b824047f3037800f5b40
 cache:
   directories:
-    - $HOME/.cache/go-build
-    - $GOPATH/pkg/mod
-
+  - "$HOME/.cache/go-build"
+  - "$GOPATH/pkg/mod"
 before_cache:
-  - rm -f ./trie/failing_test_data
-
+- rm -f ./trie/failing_test_data
 matrix:
   include:
-    - name: "Unit Tests"
-      before_script:
-        - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-        - chmod +x ./cc-test-reporter
-        - ./cc-test-reporter before-build
-      script: ./scripts/ci.sh
-      after_script:
-        - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
-    - name: "Test State - Race"
-      script: make test-state-race
-    - name: "Integration Tests - Stable"
-      script: make it-stable
-    - name: "Golang-ci Linter"
-      script: make lint
-    - name: "Build docker image"
-      script:
-        - make docker-build
-        - make docker-version
+  - name: Unit Tests
+    before_script:
+    - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
+    - chmod +x ./cc-test-reporter
+    - "./cc-test-reporter before-build"
+    script: "./scripts/ci.sh"
+    after_script:
+    - "./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT"
+  - name: Test State - Race
+    script: make test-state-race
+  - name: Integration Tests - Stable
+    script: make it-stable
+  - name: Golang-ci Linter
+    script: make lint
+  - name: Build docker image
+    script:
+    - make docker-build
+    - make docker-version
+notifications:
+  slack:
+    secure: 0kBLVAFOp1nNrnhYbe1tULFbhqM0HgF5gYFkZDwPFSwbNshfygy4dLScxsIYe0ZAWedkiw9+Eb5oYcnsXR1ltzX35ORnyAEiOdqM5YVfa1J0xWm6kI2ZD3QLfWuhlin42eflicr2lSkDlTbbkRu85Qn/ieJZXsgpOEPQrQI6p/0iEIbNeTykIvmEJP74NQGUd4JQSIDayw0fhb1kDdON++dAovkxOwVvklh6f63Lu0V2S2ZVHl6oXePD9Hr4Nk35XoK3R98qstCwChQ/hIh4oXHBSO4GKFBAXtaC+0jqk/c1+Cjd9H++QyP3z3whYCsbX0Dh2Gt+V7J148rhQi8WKWrymCLIOXCYJnZSijJR0BDtwacPtgF2T8TTV05Xr8p/IFVGSCLI18lIfpPcTk4b684RAo0fAgm1nIAfGvKxPr7vECAxbbd8PVALo0O9k2GLFirZ6Sur6SdVfdKqErBXp6kTldQOy7zJOqAbEt4PMqrrZpMAHPF4BeSY023lezUwyU0HVXFZPD1GS+iO3GsH4IYJIWM4S1hA0Qoxf7kgAZVogco+f67l+wIS0NjYaG25nCxGiJPqqI/foCTQFYCtG2iOFWrsa0KNzyD0d4eQoq5j3OcoMumj9tPiqfMJZkNT0ZOhdSEwmb1oytf1+SoE7tWQUsLksR8egZLCXexu8JA=
+    on_success: change # default: change
+    on_failure: always # default: always
+  # email:
+  #   recipients:
+  #   - gossamer@chainsafe.io
+  #   on_success: change # default: change
+  #   on_failure: always # default: always
