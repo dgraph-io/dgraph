@@ -18,6 +18,7 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -824,5 +825,57 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	require.JSONEq(t, string(result.Data), `
 	{"getCountry":{"code":"BI","name":"Burundi"}}
 	`)
+	require.Equal(t, "dummy error", result.Errors.Error())
+}
+
+func TestCustomLogicGraphqlValidSlice(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountries", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	fmt.Println(string(result.Data))
+	require.JSONEq(t, string(result.Data), `
+	{"getCountry":[
+		{
+		  "name": "Burundi",
+		  "code": "BI"
+		}
+	  ]}
+	`)
+}
+
+func TestCustomLogicWithErrorResponse(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): [Country] @custom(http: {url: "http://mock:8888/graphqlerr", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
 	require.Equal(t, "dummy error", result.Errors.Error())
 }

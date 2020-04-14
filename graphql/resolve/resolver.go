@@ -1462,6 +1462,20 @@ func (hr *httpResolver) rewriteAndExecute(
 	if err != nil {
 		return nil, err
 	}
+
+	getRemoteError := func() error {
+		// Check whether we have any error.
+		var errResp struct {
+			Errors x.GqlErrorList `json:"errors,omitempty"`
+		}
+		err = json.Unmarshal(b, &errResp)
+		if err != nil {
+			return err
+		}
+
+		return errResp.Errors
+	}
+
 	graphqlResp := make(map[string]interface{})
 	err = json.Unmarshal(b, &graphqlResp)
 	if err != nil {
@@ -1469,36 +1483,24 @@ func (hr *httpResolver) rewriteAndExecute(
 	}
 	data, ok := graphqlResp["data"].(map[string]interface{})
 	if !ok {
-		return b, err
+		return b, getRemoteError()
 
 	}
 	data2, ok := data[hrc.RemoteQueryName]
 	if !ok {
-		return b, err
+		return b, getRemoteError()
 	}
 
 	castedData := make(map[string]interface{})
-	castedData[query.Name()] = []interface{}{data2}
-	// Check whether we have any error.
-	var errResp struct {
-		Errors []*x.GqlError `json:"errors,omitempty"`
-	}
-	err = json.Unmarshal(b, &errResp)
-	if err != nil {
-		return nil, err
+	if _, slice := data2.([]interface{}); slice {
+		castedData[query.Name()] = data2
+	} else {
+		castedData[query.Name()] = []interface{}{data2}
 	}
 
 	response, err := json.Marshal(castedData)
 	if err != nil {
-		return nil, err
+		return b, err
 	}
-
-	// Return error along with the response if any.
-	if len(errResp.Errors) > 0 {
-		graphqlErr := x.GqlErrorList{}
-		graphqlErr = append(graphqlErr, errResp.Errors...)
-		return response, graphqlErr
-	}
-
-	return response, nil
+	return response, getRemoteError()
 }

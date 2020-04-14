@@ -282,6 +282,66 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 	  }`)
 }
 
+func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "ID",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+		return
+	}
+
+	fmt.Fprintf(w, `
+	{
+	   "errors":[{
+			"message": "dummy error"
+		}]
+	  }`)
+}
+
 func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
@@ -345,6 +405,71 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 		"errors":[{
 			"message": "dummy error"
 		}]
+	  }`)
+}
+
+func validCountries(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, `
+	{
+	"data": {
+		"__schema": {
+		  "queryType": {
+			"name": "Query"
+		  },
+		  "mutationType": null,
+		  "subscriptionType": null,
+		  "types": [
+			{
+			  "kind": "OBJECT",
+			  "name": "Query",
+			  "fields": [
+				{
+					"name": "country",
+					"args": [
+					  {
+						"name": "code",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "SCALAR",
+							"name": "ID",
+							"ofType": null
+						  }
+						},
+						"defaultValue": null
+					  }
+					],
+					"type": {
+					  "kind": "OBJECT",
+					  "name": "Country",
+					  "ofType": null
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				  }
+			  ]
+			}]
+		  }
+	   }
+	}
+	`)
+		return
+	}
+
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "country": [
+			{
+			  "name": "Burundi",
+			  "code": "BI"
+			}
+		  ]
+	  }
 	  }`)
 }
 
@@ -578,6 +703,8 @@ func main() {
 	http.HandleFunc("/invalidtype", invalidType)
 	http.HandleFunc("/validcountry", validCountryResponse)
 	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
+	http.HandleFunc("/graphqlerr", graphqlErrResponse)
+	http.HandleFunc("/validcountries", validCountries)
 
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
