@@ -153,7 +153,7 @@ const (
 // value(id).
 // 2. Now any meta for this node can be updated using setXXX functions.
 // 3. Children of this node are store in encoder's children map.
-type fastJsonNode int // TODO: can this be a uint32?
+type fastJsonNode uint32
 
 // newNode returns a fastJsonNode with its meta set to 0.
 func (enc *encoder) newNode() fastJsonNode {
