@@ -21,6 +21,7 @@ import (
 	"math"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 )
 
 const (
@@ -28,7 +29,8 @@ const (
 )
 
 type arena struct {
-	bufs [][]byte
+	bufs      [][]byte
+	offsetMap map[uint64]uint32
 }
 
 func newArena(size int) *arena {
@@ -40,6 +42,7 @@ func newArena(size int) *arena {
 	buf := make([]byte, 0, size)
 	buf = append(buf, []byte("a")...)
 	a.bufs = append(a.bufs, buf)
+	a.offsetMap = make(map[uint64]uint32)
 	return a
 }
 
@@ -48,6 +51,12 @@ func newArena(size int) *arena {
 // Note: for now this function can only put buffers such that:
 // varint(len(b)) + len(b) < math.MaxUint32.
 func (a *arena) put(b []byte) (uint8, uint32) {
+	// Check if we already have buffer.
+	fp := z.MemHash(b)
+	if co, ok := a.offsetMap[fp]; ok {
+		// TODO: for now only return 0 for idx.
+		return 0, co
+	}
 	// First put length of buffer(varint encoded), then put actual buffer.
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	w := binary.PutVarint(sizeBuf, int64(len(b)))
@@ -57,20 +66,26 @@ func (a *arena) put(b []byte) (uint8, uint32) {
 	offset := len(a.bufs[last])
 
 	if int64(offset+w+len(b)) > int64(math.MaxUint32) {
-		buf := make([]byte, 0, minSize)
-		buf = append(buf, []byte("a")...)
-		a.bufs = append(a.bufs, buf)
-		last = len(a.bufs) - 1
-		offset = 1
-		x.AssertTruef(last < int(math.MaxUint8),
-			"Number of bufs in arena should be < math.MaxUint8")
-		x.AssertTruef(int64(offset+w+len(b)) < int64(math.MaxUint32),
-			"varint(len(buf))+len(buf): %d is too large for arena", w+len(b))
+		// Panic for now once we have filled the buffer.
+		// TODO: fix this.
+		panic("underlying buffer is full in arena")
+
+		// buf := make([]byte, 0, minSize)
+		// buf = append(buf, []byte("a")...)
+		// a.bufs = append(a.bufs, buf)
+		// last = len(a.bufs) - 1
+		// offset = 1
+		// x.AssertTruef(last < int(math.MaxUint8),
+		// 	"Number of bufs in arena should be < math.MaxUint8")
+		// x.AssertTruef(int64(offset+w+len(b)) < int64(math.MaxUint32),
+		// 	"varint(len(buf))+len(buf): %d is too large for arena", w+len(b))
 	}
 
 	a.bufs[last] = append(a.bufs[last], sizeBuf[:w]...)
 	a.bufs[last] = append(a.bufs[last], b...)
 
+	// Store offset in map.
+	a.offsetMap[fp] = uint32(offset)
 	return uint8(last), uint32(offset)
 }
 
