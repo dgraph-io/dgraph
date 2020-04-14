@@ -250,6 +250,7 @@ func run() {
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.
+	fmt.Println("Start the node - Anurag")
 	x.Check(st.node.initAndStartNode())
 
 	if Zero.Conf.GetBool("telemetry") {

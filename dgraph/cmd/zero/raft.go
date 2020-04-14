@@ -642,7 +642,7 @@ func (n *node) Run() {
 	}
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
-
+	fmt.Println("Raft code has been accessed -- Anurag")
 	var timer x.Timer
 	for {
 		select {
