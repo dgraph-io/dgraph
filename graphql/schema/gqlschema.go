@@ -246,6 +246,7 @@ var directiveValidators = map[string]directiveValidator{
 	},
 }
 
+var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
@@ -353,6 +354,21 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		}
 	}
 
+	errs = append(errs, applySchemaValidations(schema, definitions)...)
+
+	return errs
+}
+
+func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaValidations {
+		newErrs := rule(schema, definitions)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
+		}
+	}
+
 	return errs
 }
 
@@ -390,6 +406,12 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	sch.Mutation = &ast.Definition{
 		Kind:   ast.Object,
 		Name:   "Mutation",
+		Fields: make([]*ast.FieldDefinition, 0),
+	}
+
+	sch.Subscription = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Subscription",
 		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
@@ -948,6 +970,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -964,6 +987,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1002,6 +1026,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1432,7 +1457,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Mutations\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+	x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Subscriptions\n#######################\n\n"))
+	x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
 
 	return sch.String()
 }

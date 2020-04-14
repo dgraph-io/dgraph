@@ -28,8 +28,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -140,6 +140,7 @@ type state struct {
 	ID      string   `json:"id,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	Code    string   `json:"xcode,omitempty"`
+	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
 }
 
@@ -152,6 +153,21 @@ type movie struct {
 type director struct {
 	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
+}
+
+type teacher struct {
+	ID      string     `json:"id,omitempty"`
+	Xid     string     `json:"xid,omitempty"`
+	Name    string     `json:"name,omitempty"`
+	Subject string     `json:"subject,omitempty"`
+	Teaches []*student `json:"teaches,omitempty"`
+}
+
+type student struct {
+	ID       string     `json:"id,omitempty"`
+	Xid      string     `json:"xid,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	TaughtBy []*teacher `json:"taughtBy,omitempty"`
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -210,6 +226,7 @@ func RunAll(t *testing.T) {
 	// query tests
 	t.Run("get request", getRequest)
 	t.Run("get query empty variable", getQueryEmptyVariable)
+	t.Run("post request with application/graphql", queryApplicationGraphQl)
 	t.Run("query by type", queryByType)
 	t.Run("uid alias", uidAlias)
 	t.Run("order at root", orderAtRoot)
@@ -278,6 +295,7 @@ func RunAll(t *testing.T) {
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
+	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -425,6 +443,17 @@ func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLRes
 	return params.Execute(t, req)
 }
 
+// ExecuteAsPostApplicationGraphql builds an HTTP Post with type application/graphql
+// Note, variables are not allowed
+func (params *GraphQLParams) ExecuteAsPostApplicationGraphql(t *testing.T, url string) *GraphQLResponse {
+	require.Empty(t, params.Variables)
+
+	req, err := params.createApplicationGQLPost(url)
+	require.NoError(t, err)
+
+	return params.Execute(t, req)
+}
+
 // ExecuteAsGet builds a HTTP GET request from the GraphQL input structure
 // and executes the request to url.
 func (params *GraphQLParams) ExecuteAsGet(t *testing.T, url string) *GraphQLResponse {
@@ -465,12 +494,8 @@ func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
 	return req, nil
 }
 
-func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
-	body, err := json.Marshal(params)
-	if err != nil {
-		return nil, err
-	}
-
+func (params *GraphQLParams) buildPostRequest(url string, body []byte, contentType string) (*http.Request, error) {
+	var err error
 	if params.gzipEncoding {
 		if body, err = gzipData(body); err != nil {
 			return nil, err
@@ -481,7 +506,7 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 	if params.gzipEncoding {
 		req.Header.Set("Content-Encoding", "gzip")
 	}
@@ -491,6 +516,19 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 	}
 
 	return req, nil
+}
+
+func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
+	body, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return params.buildPostRequest(url, body, "application/json")
+}
+
+func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request, error) {
+	return params.buildPostRequest(url, []byte(params.Query), "application/graphql")
 }
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
@@ -616,7 +654,7 @@ func checkGraphQLStarted(url string) error {
 func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	schemaQry := &GraphQLParams{
-		Query: `query { getGQLSchema { id } }`,
+		Query: `query { getGQLSchema { schema } }`,
 	}
 	req, err := schemaQry.createGQLPost(url)
 	if err != nil {
@@ -640,7 +678,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	var sch struct {
 		GetGQLSchema struct {
-			ID string
+			Schema string
 		}
 	}
 
@@ -649,7 +687,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
 	}
 
-	if sch.GetGQLSchema.ID == "" {
+	if sch.GetGQLSchema.Schema == "" {
 		return false, nil
 	}
 

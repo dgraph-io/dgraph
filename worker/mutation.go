@@ -30,8 +30,8 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -130,6 +130,9 @@ func undoSchemaUpdate(predicate string) {
 }
 
 func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+	if len(updates) == 0 {
+		return nil
+	}
 	// Wait until schema modification for all predicates is complete. There cannot be two
 	// background tasks running as this is a race condition. We typically won't propose an
 	// index update if one is already going on. If that's not the case, then the receiver
@@ -144,10 +147,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
 	// block here and wait for indexing to be finished.
 	gr.Node.waitForTask(opIndexing)
-
-	// There is a race condition in stopTask and waitForTask.
-	// We wait here for stopTask to finish.
-	time.Sleep(time.Millisecond)
 
 	// done is used to ensure that we only stop the indexing task once.
 	var done uint32
@@ -176,9 +175,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	defer stopIndexing(closer)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
-		// in case background indexing is running, we should call it here again.
-		defer stopIndexing(closer)
-
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
@@ -197,6 +193,9 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	wg.Add(1)
 	defer wg.Done()
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+		// In case background indexing is running, we should call it here again.
+		defer stopIndexing(closer)
+
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
 		// and write indexes for another predicate simultaneously. because that could

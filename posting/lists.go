@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"os/exec"
 	"runtime"
@@ -32,7 +33,7 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/golang/glog"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -146,8 +147,8 @@ func Cleanup() {
 
 // GetNoStore returns the list stored in the key or creates a new one if it doesn't exist.
 // It does not store the list in any cache.
-func GetNoStore(key []byte) (rlist *List, err error) {
-	return getNew(key, pstore)
+func GetNoStore(key []byte, readTs uint64) (rlist *List, err error) {
+	return getNew(key, pstore, readTs)
 }
 
 // LocalCache stores a cache of posting lists and deltas.
@@ -205,7 +206,7 @@ func (lc *LocalCache) SetIfAbsent(key string, updated *List) *List {
 
 func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) {
 	if lc == nil {
-		return getNew(key, pstore)
+		return getNew(key, pstore, math.MaxUint64)
 	}
 	skey := string(key)
 	if pl := lc.getNoStore(skey); pl != nil {
@@ -215,7 +216,7 @@ func (lc *LocalCache) getInternal(key []byte, readFromDisk bool) (*List, error) 
 	var pl *List
 	if readFromDisk {
 		var err error
-		pl, err = getNew(key, pstore)
+		pl, err = getNew(key, pstore, lc.startTs)
 		if err != nil {
 			return nil, err
 		}

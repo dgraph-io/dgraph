@@ -162,6 +162,9 @@ func TestSchema_Normal(t *testing.T) {
 			"predicate": "State.country",
 			"type": "uid"
 		}, {
+			"predicate": "State.capital",
+			"type": "string"
+		}, {
 			"predicate": "State.name",
 			"type": "string"
 		}, {
@@ -177,11 +180,37 @@ func TestSchema_Normal(t *testing.T) {
 			"tokenizer": ["hash"],
 			"upsert": true
 		}, {
+			"predicate": "People.xid",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["hash"],
+			"upsert": true
+		}, {
+			"predicate": "People.name",
+			"type": "string"
+		}, {
+			"predicate": "Teacher.subject",
+			"type": "string"
+		}, {
+			"predicate": "Teacher.teaches",
+			"type": "uid",
+			"list": true
+		}, {
+			"predicate": "Student.taughtBy",
+			"type": "uid",
+			"list": true
+		}, {
 			"predicate": "User.password",
 			"type": "password"
 		}, {
 			"predicate": "dgraph.graphql.schema",
 			"type": "string"
+		}, {
+			"predicate": "dgraph.graphql.xid",
+			"type": "string",
+			"index": true,
+			"tokenizer": ["exact"],
+			"upsert": true
 		}, {
 			"predicate": "dgraph.type",
 			"type": "string",
@@ -298,6 +327,8 @@ func TestSchema_Normal(t *testing.T) {
 			}, {
 				"name": "State.name"
 			}, {
+				"name": "State.capital"
+			}, {
 				"name": "State.country"
 			}],
 			"name": "State"
@@ -310,7 +341,36 @@ func TestSchema_Normal(t *testing.T) {
 			"name": "User"
 		}, {
 			"fields": [{
+				"name": "People.xid"
+			}, {
+				"name": "People.name"
+			}],
+			"name": "People"
+		}, {
+			"fields": [{
+				"name": "People.xid"
+			}, {
+				"name": "People.name"
+			}, {
+				"name": "Teacher.subject"
+			}, {
+				"name": "Teacher.teaches"
+			}],
+			"name": "Teacher"
+		}, {
+			"fields": [{
+				"name": "People.xid"
+			}, {
+				"name": "People.name"
+			}, {
+				"name": "Student.taughtBy"
+			}],
+			"name": "Student"
+		}, {
+			"fields": [{
 				"name": "dgraph.graphql.schema"
+			}, {
+				"name": "dgraph.graphql.xid"
 			}],
 			"name": "dgraph.graphql"
 		}]

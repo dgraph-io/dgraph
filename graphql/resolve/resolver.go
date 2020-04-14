@@ -26,7 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
@@ -153,6 +153,10 @@ func AdminQueryExecutor() QueryExecutor {
 	return &adminExecutor{}
 }
 
+func AdminMutationExecutor() MutationExecutor {
+	return &adminExecutor{}
+}
+
 // DgraphAsMutationExecutor builds a MutationExecutor.
 func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
@@ -161,6 +165,16 @@ func DgraphAsMutationExecutor() MutationExecutor {
 func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
+}
+
+// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
+// performed queries/mutations
+func (de *adminExecutor) Mutate(
+	ctx context.Context,
+	query *gql.GraphQuery,
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	ctx = context.WithValue(ctx, edgraph.Authorize, false)
+	return dgraph.Mutate(ctx, query, mutations)
 }
 
 func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
@@ -340,13 +354,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		}
 	}
 
-	// A single request can contain either queries or mutations - not both.
-	// GraphQL validation on the request would have caught that error case
-	// before we get here.  At this point, we know it's valid, it's passed
-	// GraphQL validation and any additional validation we've added.  So here,
-	// we can just execute it.
-	switch {
-	case op.IsQuery():
+	// resolveQueries will resolve user's queries.
+	resolveQueries := func() {
 		// Queries run in parallel and are independent of each other: e.g.
 		// an error in one query, doesn't affect the others.
 
@@ -376,6 +385,15 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			resp.WithError(res.Err)
 			resp.AddData(res.Data)
 		}
+	}
+	// A single request can contain either queries or mutations - not both.
+	// GraphQL validation on the request would have caught that error case
+	// before we get here.  At this point, we know it's valid, it's passed
+	// GraphQL validation and any additional validation we've added.  So here,
+	// we can just execute it.
+	switch {
+	case op.IsQuery():
+		resolveQueries()
 	case op.IsMutation():
 		// A mutation operation can contain any number of mutation fields.  Those should be executed
 		// serially.
@@ -407,7 +425,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			resp.AddData(res.Data)
 		}
 	case op.IsSubscription():
-		resp.WithError(errors.Errorf("Subscriptions not yet supported."))
+		resolveQueries()
 	}
 
 	return resp

@@ -182,3 +182,13 @@ type Mutation {
 	addQuestion(input: [AddQuestionInput!]!): AddQuestionPayload
 	addUser(input: [AddUserInput!]!): AddUserPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryMessage(order: MessageOrder, first: Int, offset: Int): [Message]
+	queryQuestion(order: QuestionOrder, first: Int, offset: Int): [Question]
+	queryUser(order: UserOrder, first: Int, offset: Int): [User]
+}

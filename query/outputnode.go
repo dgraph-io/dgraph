@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ import (
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
@@ -119,10 +120,9 @@ func (enc *encoder) attrForID(id uint16) string {
 }
 
 // makeScalarNode returns a fastJsonNode with all of its meta data populated.
-func (enc *encoder) makeScalarNode(attr uint16, isChild bool, val []byte, list bool) fastJsonNode {
+func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) fastJsonNode {
 	fj := enc.newNode()
 	enc.setAttr(fj, attr)
-	enc.setIsChild(fj, isChild)
 	enc.setScalarVal(fj, val)
 	enc.setList(fj, list)
 
@@ -185,12 +185,6 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) {
 	enc.metaSlice[fj] |= (uint64(idx) << 32)
 }
 
-func (enc *encoder) setIsChild(fj fastJsonNode, isChild bool) {
-	if isChild {
-		enc.metaSlice[fj] |= msbBit
-	}
-}
-
 func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	if list {
 		enc.metaSlice[fj] |= secondMsbBit
@@ -219,10 +213,6 @@ func (enc *encoder) getScalarVal(fj fastJsonNode) []byte {
 	return enc.arena.get(idx, offset)
 }
 
-func (enc *encoder) getIsChild(fj fastJsonNode) bool {
-	return ((enc.metaSlice[fj] & msbBit) > 0)
-}
-
 func (enc *encoder) getList(fj fastJsonNode) bool {
 	return ((enc.metaSlice[fj] & secondMsbBit) > 0)
 }
@@ -242,7 +232,7 @@ func (enc *encoder) AddValue(fj fastJsonNode, attr uint16, v types.Val) {
 
 func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list bool) {
 	if bs, err := valToBytes(v); err == nil {
-		enc.appendAttrs(fj, enc.makeScalarNode(attr, false, bs, list))
+		enc.appendAttrs(fj, enc.makeScalarNode(attr, bs, list))
 	}
 }
 
@@ -256,11 +246,8 @@ func (enc *encoder) AddMapChild(fj fastJsonNode, attr uint16, val fastJsonNode) 
 	}
 
 	if childNode > 0 {
-		enc.setIsChild(val, true)
-		enc.setAttr(val, attr)
 		enc.appendAttrs(childNode, enc.getAttrs(val)...)
 	} else {
-		enc.setIsChild(val, false)
 		enc.setAttr(val, attr)
 		enc.appendAttrs(fj, val)
 	}
@@ -268,7 +255,7 @@ func (enc *encoder) AddMapChild(fj fastJsonNode, attr uint16, val fastJsonNode) 
 
 func (enc *encoder) AddListChild(fj fastJsonNode, attr uint16, child fastJsonNode) {
 	enc.setAttr(child, attr)
-	enc.setIsChild(child, true)
+	enc.setList(child, true)
 	enc.appendAttrs(fj, child)
 }
 
@@ -283,7 +270,7 @@ func (enc *encoder) SetUID(fj fastJsonNode, uid uint64, attr uint16) {
 		}
 	}
 
-	enc.appendAttrs(fj, enc.makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)), false))
+	enc.appendAttrs(fj, enc.makeScalarNode(attr, []byte(fmt.Sprintf("\"%#x\"", uid)), false))
 }
 
 func (enc *encoder) IsEmpty(fj fastJsonNode) bool {
@@ -410,7 +397,15 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
-		return []byte(fmt.Sprintf("%f", v.Value)), nil
+		f, fOk := v.Value.(float64)
+
+		// +Inf, -Inf and NaN are not representable in JSON.
+		// Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
+		if !fOk || math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil, errors.New("Unsupported floating point number in float field")
+		}
+
+		return []byte(fmt.Sprintf("%f", f)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
 			return boolTrue, nil
@@ -498,98 +493,98 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 }
 
 func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
-	i := 0
 	fjAttrs := enc.getAttrs(fj)
-	if i < len(fjAttrs) {
-		if _, err := out.WriteRune('{'); err != nil {
-			return err
-		}
-		cur := fjAttrs[i]
-		i++
-		cnt := 1
-		last := false
-		inArray := false
-		for {
-			var next fastJsonNode
-			if i < len(fjAttrs) {
-				next = fjAttrs[i]
-				i++
-			} else {
-				last = true
-			}
+	// This is a scalar value.
+	if len(fjAttrs) == 0 {
+		_, err := out.Write(enc.getScalarVal(fj))
+		return err
+	}
 
-			if !last {
-				if enc.getAttr(cur) == enc.getAttr(next) {
-					if cnt == 1 {
-						if err := enc.writeKey(cur, out); err != nil {
-							return err
-						}
-						if _, err := out.WriteRune('['); err != nil {
-							return err
-						}
-						inArray = true
-					}
-					if err := enc.encode(cur, out); err != nil {
+	i := 0
+	if _, err := out.WriteRune('{'); err != nil {
+		return err
+	}
+	cur := fjAttrs[i]
+	i++
+	cnt := 1
+	last := false
+	inArray := false
+	for {
+		var next fastJsonNode
+		if i < len(fjAttrs) {
+			next = fjAttrs[i]
+			i++
+		} else {
+			last = true
+		}
+
+		if !last {
+			if enc.getAttr(cur) == enc.getAttr(next) {
+				if cnt == 1 {
+					if err := enc.writeKey(cur, out); err != nil {
 						return err
 					}
-					cnt++
-				} else {
-					if cnt == 1 {
-						if err := enc.writeKey(cur, out); err != nil {
-							return err
-						}
-						if enc.getIsChild(cur) || enc.getList(cur) {
-							if _, err := out.WriteRune('['); err != nil {
-								return err
-							}
-							inArray = true
-						}
-					}
-					if err := enc.encode(cur, out); err != nil {
+					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
-					if cnt != 1 || (enc.getIsChild(cur) || enc.getList(cur)) {
-						if _, err := out.WriteRune(']'); err != nil {
-							return err
-						}
-						inArray = false
-					}
-					cnt = 1
+					inArray = true
 				}
-				if _, err := out.WriteRune(','); err != nil {
+				if err := enc.encode(cur, out); err != nil {
 					return err
 				}
-
-				cur = next
+				cnt++
 			} else {
 				if cnt == 1 {
 					if err := enc.writeKey(cur, out); err != nil {
 						return err
 					}
-				}
-				if (enc.getIsChild(cur) || enc.getList(cur)) && !inArray {
-					if _, err := out.WriteRune('['); err != nil {
-						return err
+					if enc.getList(cur) {
+						if _, err := out.WriteRune('['); err != nil {
+							return err
+						}
+						inArray = true
 					}
 				}
 				if err := enc.encode(cur, out); err != nil {
 					return err
 				}
-				if cnt != 1 || (enc.getIsChild(cur) || enc.getList(cur)) {
+				if cnt != 1 || enc.getList(cur) {
 					if _, err := out.WriteRune(']'); err != nil {
 						return err
 					}
+					inArray = false
 				}
-				break
+				cnt = 1
 			}
+			if _, err := out.WriteRune(','); err != nil {
+				return err
+			}
+
+			cur = next
+		} else {
+			if cnt == 1 {
+				if err := enc.writeKey(cur, out); err != nil {
+					return err
+				}
+			}
+			if enc.getList(cur) && !inArray {
+				if _, err := out.WriteRune('['); err != nil {
+					return err
+				}
+			}
+			if err := enc.encode(cur, out); err != nil {
+				return err
+			}
+			if cnt != 1 || enc.getList(cur) {
+				if _, err := out.WriteRune(']'); err != nil {
+					return err
+				}
+			}
+			break
 		}
-		if _, err := out.WriteRune('}'); err != nil {
-			return err
-		}
-	} else {
-		if _, err := out.Write(enc.getScalarVal(fj)); err != nil {
-			return err
-		}
+	}
+	if _, err := out.WriteRune('}'); err != nil {
+		return err
 	}
 
 	return nil
@@ -871,6 +866,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 			return nil, err
 		}
 	}
+
 	return bufw.Bytes(), nil
 }
 

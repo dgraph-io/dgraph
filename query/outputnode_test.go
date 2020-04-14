@@ -147,30 +147,25 @@ func TestStringJsonMarshal(t *testing.T) {
 func TestFastJsonNode(t *testing.T) {
 	attrId := uint16(20)
 	scalarVal := bytes.Repeat([]byte("a"), 160)
-	isChild := true
 	list := true
 
 	enc := newEncoder()
 	fj := enc.newNode()
 	enc.setAttr(fj, attrId)
 	enc.setScalarVal(fj, scalarVal)
-	enc.setIsChild(fj, isChild)
 	enc.setList(fj, list)
 
 	require.Equal(t, attrId, enc.getAttr(fj))
 	require.Equal(t, scalarVal, enc.getScalarVal(fj))
-	require.Equal(t, isChild, enc.getIsChild(fj))
 	require.Equal(t, list, enc.getList(fj))
 
 	fj2 := enc.newNode()
 	enc.setAttr(fj2, attrId)
 	enc.setScalarVal(fj2, scalarVal)
-	enc.setIsChild(fj2, isChild)
 	enc.setList(fj2, list)
 
 	require.Equal(t, attrId, enc.getAttr(fj2))
 	require.Equal(t, scalarVal, enc.getScalarVal(fj2))
-	require.Equal(t, isChild, enc.getIsChild(fj2))
 	require.Equal(t, list, enc.getList(fj2))
 
 	enc.appendAttrs(fj, fj2)
@@ -206,7 +201,7 @@ func buildTestTree(enc *encoder, level, maxlevel int, fj fastJsonNode) {
 			if err != nil {
 				panic(err)
 			}
-			ch = enc.makeScalarNode(enc.idForAttr(testAttr), false, val, false)
+			ch = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
 		} else {
 			ch := enc.newNodeWithAttr(enc.idForAttr(testAttr))
 			buildTestTree(enc, level+1, maxlevel, ch)

@@ -59,6 +59,7 @@ func TestCalculateSnapshot(t *testing.T) {
 	db, err := openBadger(dir)
 	require.NoError(t, err)
 	ds := raftwal.Init(db, 0, 0)
+	defer ds.Closer.SignalAndWait()
 
 	n := newNode(ds, 1, 1, "")
 	var entries []raftpb.Entry
