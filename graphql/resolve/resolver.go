@@ -791,7 +791,7 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func copyTemplate(input *interface{}) (*interface{}, error) {
+func copyTemplate(input interface{}) (interface{}, error) {
 	b, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
@@ -801,7 +801,7 @@ func copyTemplate(input *interface{}) (*interface{}, error) {
 	if err := json.Unmarshal(b, &result); err != nil {
 		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
 	}
-	return &result, nil
+	return result, nil
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
@@ -810,19 +810,19 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]interface{}, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyTemplate(fconf.Template)
+		temp, err := copyTemplate(*fconf.Template)
 		if err != nil {
 			errCh <- err
 			return
 		}
 		mu.RLock()
-		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
 			errCh <- err
 			mu.RUnlock()
 			return
 		}
 		mu.RUnlock()
-		body[i] = *temp
+		body[i] = temp
 	}
 
 	if fconf.Operation == "batch" {
@@ -1470,5 +1470,5 @@ func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Re
 func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved,
 	bool) {
 	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
-	return resolved, resolved.Err == nil
+	return resolved, resolved.Err.Error() == ""
 }

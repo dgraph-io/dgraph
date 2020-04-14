@@ -28,7 +28,7 @@ import (
 	"strings"
 )
 
-type ExpectedRequest struct {
+type expectedRequest struct {
 	method    string
 	urlSuffix string
 	body      string
@@ -48,7 +48,7 @@ func getError(key, val string) error {
 	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
 }
 
-func verifyRequest(r *http.Request, expectedRequest ExpectedRequest) error {
+func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 	if r.Method != expectedRequest.method {
 		return getError("Invalid HTTP method", r.Method)
 	}
@@ -125,7 +125,7 @@ func getDefaultResponse(resKey string) []byte {
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
 		urlSuffix: "/0x123?name=Author&num=10",
 		body:      "",
@@ -139,7 +139,7 @@ func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/0x123?name=Author&num=10",
 		body:      "",
@@ -153,7 +153,7 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
 		urlSuffix: "/verifyHeaders",
 		body:      "",
@@ -172,7 +172,7 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
 		urlSuffix: "/favMoviesCreate",
 		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":"Mov2"}]}`,
@@ -205,7 +205,7 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPatch,
 		urlSuffix: "/favMoviesUpdate/0x1",
 		body:      `{"director":[{"name":"Dir1"}],"name":"Mov1"}`,
@@ -232,7 +232,7 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
-	err := verifyRequest(r, ExpectedRequest{
+	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodDelete,
 		urlSuffix: "/favMoviesDelete/0x1",
 		body:      "",
@@ -477,9 +477,12 @@ func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
+	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+
+	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
