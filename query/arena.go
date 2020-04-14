@@ -72,7 +72,7 @@ func (a *arena) put(b []byte) (uint32, error) {
 	sizeBuf := (a.sizeBufPool.Get()).([]byte)
 	w := binary.PutVarint(sizeBuf, int64(len(b)))
 	offset := len(a.buf)
-	if int64(len(a.buf)+w+len(b)) > int64(math.MaxUint32) {
+	if int64(len(a.buf)+w+len(b)) > int64(maxArenaSize) {
 		return 0, errArenaFull
 	}
 

@@ -1108,7 +1108,9 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 
 				if !enc.IsEmpty(uc) {
 					if sg.Params.GetUid {
-						enc.SetUID(uc, childUID, enc.idForAttr("uid"))
+						if err := enc.SetUID(uc, childUID, enc.idForAttr("uid")); err != nil {
+							return err
+						}
 					}
 					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
 
@@ -1188,7 +1190,9 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			}
 
 			if pc.Attr == "uid" {
-				enc.SetUID(dst, uid, enc.idForAttr(pc.fieldName()))
+				if err := enc.SetUID(dst, uid, enc.idForAttr(pc.fieldName())); err != nil {
+					return err
+				}
 				continue
 			}
 
@@ -1258,7 +1262,9 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 	// Only for shortest path query we wan't to return uid always if there is
 	// nothing else at that level.
 	if (sg.Params.GetUid && !enc.IsEmpty(dst)) || sg.Params.Shortest {
-		enc.SetUID(dst, uid, enc.idForAttr("uid"))
+		if err := enc.SetUID(dst, uid, enc.idForAttr("uid")); err != nil {
+			return err
+		}
 	}
 
 	if sg.pathMeta != nil {
