@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -138,7 +139,15 @@ func valToBytes(v types.Val) ([]byte, error) {
 	case types.IntID:
 		return []byte(fmt.Sprintf("%d", v.Value)), nil
 	case types.FloatID:
-		return []byte(fmt.Sprintf("%f", v.Value)), nil
+		f, fOk := v.Value.(float64)
+
+		// +Inf, -Inf and NaN are not representable in JSON.
+		// Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
+		if !fOk || math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil, errors.New("Unsupported floating point number in float field")
+		}
+
+		return []byte(fmt.Sprintf("%f", f)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
 			return []byte("true"), nil
