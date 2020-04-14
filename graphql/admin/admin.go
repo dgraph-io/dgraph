@@ -17,7 +17,6 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -426,81 +425,25 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				})
 		}).
 		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
-			export := &exportResolver{}
-
-			// export implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				export,
-				export,
-				export,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveExport)
 		}).
 		WithMutationResolver("draining", func(m schema.Mutation) resolve.MutationResolver {
-			draining := &drainingResolver{}
-
-			// draining implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				draining,
-				draining,
-				draining,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveDraining)
 		}).
 		WithMutationResolver("shutdown", func(m schema.Mutation) resolve.MutationResolver {
-			shutdown := &shutdownResolver{}
-
-			// shutdown implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				shutdown,
-				shutdown,
-				shutdown,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveShutdown)
 		}).
 		WithMutationResolver("config", func(m schema.Mutation) resolve.MutationResolver {
-			config := &configResolver{}
-
-			// config implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				config,
-				config,
-				config,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveConfig)
 		}).
 		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
-			backup := &backupResolver{}
-
-			// backup implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				backup,
-				backup,
-				backup,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveBackup)
 		}).
 		WithMutationResolver("restore", func(m schema.Mutation) resolve.MutationResolver {
-			restore := &restoreResolver{}
-
-			// restore implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				restore,
-				restore,
-				restore,
-				resolve.StdMutationCompletion(m.ResponseName()))
+			return resolve.MutationResolverFunc(resolveRestore)
 		}).
 		WithMutationResolver("login", func(m schema.Mutation) resolve.MutationResolver {
-			login := &loginResolver{}
-
-			// login implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				login,
-				login,
-				login,
-				resolve.StdQueryCompletion())
+			return resolve.MutationResolverFunc(resolveLogin)
 		}).
 		WithSchemaIntrospection()
 
@@ -776,29 +719,15 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 }
 
-func writeResponse(m schema.Mutation, code, message string) []byte {
-	var buf bytes.Buffer
+func response(code, msg string) map[string]interface{} {
+	return map[string]interface{}{
+		"response": map[string]string{"code": "Success", "message": "Export completed."}}
+}
 
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(m.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range m.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = code
-		case "message":
-			val = message
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
+func emptyResult(f schema.Field, err error) *resolve.Resolved {
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{f.Name(): nil},
+		Field: f,
+		Err:   err,
 	}
-	x.Check2(buf.WriteString("}]}"))
-
-	return buf.Bytes()
 }
