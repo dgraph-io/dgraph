@@ -27,7 +27,7 @@ import (
 
 var (
 	errArenaFull     = errors.New("arena is full")
-	errInvalidOffset = errors.New("arena get performed with invalid get")
+	errInvalidOffset = errors.New("arena get performed with invalid offset")
 
 	maxArenaSize = math.MaxUint32
 )
@@ -84,18 +84,18 @@ func (a *arena) put(b []byte) (uint32, error) {
 	return uint32(offset), nil
 }
 
-func (a *arena) get(offset uint32) []byte {
+func (a *arena) get(offset uint32) ([]byte, error) {
 	// We have only dummy values at offset 0.
 	if offset == 0 {
-		return nil
+		return nil, nil
 	}
 
 	if int64(offset) >= int64(len(a.buf)) {
-		// TODO: also check validity of offset.
+		return nil, errInvalidOffset
 	}
 
 	// First read length, then read actual buffer.
 	size, r := binary.Varint(a.buf[offset:])
 	offset += uint32(r)
-	return a.buf[offset : offset+uint32(size)]
+	return a.buf[offset : offset+uint32(size)], nil
 }

@@ -221,7 +221,7 @@ func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
 	return uint16((meta & setBytes76) >> 40)
 }
 
-func (enc *encoder) getScalarVal(fj fastJsonNode) []byte {
+func (enc *encoder) getScalarVal(fj fastJsonNode) ([]byte, error) {
 	meta := enc.metaSlice[fj]
 	offset := uint32(meta & setBytes4321)
 	return enc.arena.get(offset)
@@ -527,7 +527,11 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	fjAttrs := enc.getAttrs(fj)
 	// This is a scalar value.
 	if len(fjAttrs) == 0 {
-		_, err := out.Write(enc.getScalarVal(fj))
+		val, err := enc.getScalarVal(fj)
+		if err != nil {
+			return err
+		}
+		_, err = out.Write(val)
 		return err
 	}
 

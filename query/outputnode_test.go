@@ -156,7 +156,9 @@ func TestFastJsonNode(t *testing.T) {
 	enc.setList(fj, list)
 
 	require.Equal(t, attrId, enc.getAttr(fj))
-	require.Equal(t, scalarVal, enc.getScalarVal(fj))
+	sv, err := enc.getScalarVal(fj)
+	require.NoError(t, err)
+	require.Equal(t, scalarVal, sv)
 	require.Equal(t, list, enc.getList(fj))
 
 	fj2 := enc.newNode()
@@ -164,8 +166,9 @@ func TestFastJsonNode(t *testing.T) {
 	require.NoError(t, enc.setScalarVal(fj2, scalarVal))
 	enc.setList(fj2, list)
 
-	require.Equal(t, attrId, enc.getAttr(fj2))
-	require.Equal(t, scalarVal, enc.getScalarVal(fj2))
+	sv, err = enc.getScalarVal(fj2)
+	require.NoError(t, err)
+	require.Equal(t, scalarVal, sv)
 	require.Equal(t, list, enc.getList(fj2))
 
 	enc.appendAttrs(fj, fj2)
