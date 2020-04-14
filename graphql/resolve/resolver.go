@@ -731,6 +731,17 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	errCh <- nil
 }
 
+// resolveNestedFields resolves fields which themselves don't have the @custom directive but their
+// children might
+//
+// queryUser {
+//	 id
+//	 classes {
+//	   name @custom...
+//   }
+// }
+// In the example above, resolveNestedFields would be called on classes field and vals would be the
+// list of all users.
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
@@ -739,18 +750,27 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 		return
 	}
 
-	// Here below we do the de-duplication by walking through the result set.
+	// Here below we do the de-duplication by walking through the result set. That is we would
+	// go over vals and find the data for f to collect all unique values.
 	var input []interface{}
 	// node stores the pointer for a node. It is a map from id to the map for it.
 	nodes := make(map[string]interface{})
 
 	idField := f.Type().IDField()
 	if idField == nil {
-		errCh <- nil
-		return
+		idField = f.Type().XIDField()
+		if idField == nil {
+			// This should not happen as we only allow custom fields on types which either have
+			// ID or a field with @id directive.
+			errCh <- nil
+			return
+		}
 	}
+
+	idFieldName := idField.Name()
+
 	// Here we walk through the array and collect all unique values for this field. In the
-	// example at the start of the function, we could be collecting all unique schools
+	// example at the start of the function, we could be collecting all unique classes
 	// across all users. This is where the batching happens so that we make one call per
 	// field and not a separate call per user.
 	mu.RLock()
@@ -768,9 +788,15 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 			if !ok {
 				continue
 			}
-			id, ok := fv[idField.Name()].(string)
+			id, ok := fv[idFieldName].(string)
 			if !ok {
-				continue
+				// If a type has a field of type ID! and it is not explicitly requested by the
+				// user as part of the query, we would still have asked for it under the alias
+				// dgraph.uid, so let's look for that here.
+				id, ok = fv["dgraph.uid"].(string)
+				if !ok {
+					continue
+				}
 			}
 			if _, ok := nodes[id]; !ok {
 				input = append(input, fieldVal)
@@ -800,10 +826,12 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 			if !ok {
 				continue
 			}
-			// TODO - Support xids here.
-			id, ok := fv[idField.Name()].(string)
+			id, ok := fv[idFieldName].(string)
 			if !ok {
-				continue
+				id, ok = fv["dgraph.uid"].(string)
+				if !ok {
+					continue
+				}
 			}
 			// Get the pointer of the map corresponding to this id and put it at the
 			// correct place.
