@@ -29,12 +29,14 @@ import (
 	"strings"
 
 	"github.com/golang/glog"
+	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"go.opencensus.io/trace"
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 )
@@ -55,12 +57,16 @@ type IServeGraphQL interface {
 type graphqlHandler struct {
 	resolver *resolve.RequestResolver
 	handler  http.Handler
+	poller   *subscription.Poller
 }
 
 // NewServer returns a new IServeGraphQL that can serve the given resolvers
-func NewServer(resolver *resolve.RequestResolver) IServeGraphQL {
-	gh := &graphqlHandler{resolver: resolver}
-	gh.handler = recoveryHandler(commonHeaders(gh))
+func NewServer(schemaEpoch *uint64, resolver *resolve.RequestResolver) IServeGraphQL {
+	gh := &graphqlHandler{
+		resolver: resolver,
+		poller:   subscription.NewPoller(schemaEpoch, resolver),
+	}
+	gh.handler = recoveryHandler(commonHeaders(gh.Handler()))
 	return gh
 }
 
@@ -69,6 +75,7 @@ func (gh *graphqlHandler) HTTPHandler() http.Handler {
 }
 
 func (gh *graphqlHandler) ServeGQL(resolver *resolve.RequestResolver) {
+	gh.poller.UpdateResolver(resolver)
 	gh.resolver = resolver
 }
 
@@ -93,6 +100,41 @@ func write(w http.ResponseWriter, rr *schema.Response, acceptGzip bool) {
 	if _, err := rr.WriteTo(out); err != nil {
 		glog.Error(err)
 	}
+}
+
+type graphqlSubscription struct {
+	graphqlHandler *graphqlHandler
+}
+
+func (gs *graphqlSubscription) Subscribe(
+	ctx context.Context,
+	document string,
+	operationName string,
+	variableValues map[string]interface{}) (payloads <-chan interface{},
+	err error) {
+	req := &schema.Request{
+		OperationName: operationName,
+		Query:         document,
+		Variables:     variableValues,
+	}
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		// Context is cancelled when a client disconnects, so delete subscription after client
+		// disconnects.
+		<-ctx.Done()
+		gs.graphqlHandler.poller.TerminateSubscription(res.BucketID, res.SubscriptionID)
+	}()
+	return res.UpdateCh, ctx.Err()
+}
+
+func (gh *graphqlHandler) Handler() http.Handler {
+	return graphqlws.NewHandlerFunc(&graphqlSubscription{
+		graphqlHandler: gh,
+	}, gh)
 }
 
 // ServeHTTP handles GraphQL queries and mutations that get resolved

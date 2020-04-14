@@ -231,7 +231,7 @@ func (o *operation) Schema() Schema {
 }
 
 func (o *operation) Queries() (qs []Query) {
-	if !o.IsQuery() {
+	if o.IsMutation() {
 		return
 	}
 
@@ -354,6 +354,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
 		if inputTyp.BuiltIn || inputTyp.Name == "Query" || inputTyp.Name == "Mutation" ||
+			inputTyp.Name == "Subscription" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
 		}

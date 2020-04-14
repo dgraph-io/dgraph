@@ -241,9 +241,9 @@ func panicCatcher(t *testing.T) {
 
 	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -304,9 +304,9 @@ func clientInfoLogin(t *testing.T) {
 
 	resolverFactory := resolve.NewResolverFactory(nil, mErr).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
