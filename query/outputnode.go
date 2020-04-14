@@ -56,10 +56,9 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 	return sgr.toFastJSON(l)
 }
 
-func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonNode {
+func makeScalarNode(attr string, val []byte, list bool) *fastJsonNode {
 	return &fastJsonNode{
 		attr:      attr,
-		isChild:   isChild,
 		scalarVal: val,
 		list:      list,
 	}
@@ -68,7 +67,6 @@ func makeScalarNode(attr string, isChild bool, val []byte, list bool) *fastJsonN
 type fastJsonNode struct {
 	attr      string
 	order     int // relative ordering (for sorted results)
-	isChild   bool
 	scalarVal []byte
 	attrs     []*fastJsonNode
 	list      bool
@@ -80,7 +78,7 @@ func (fj *fastJsonNode) AddValue(attr string, v types.Val) {
 
 func (fj *fastJsonNode) AddListValue(attr string, v types.Val, list bool) {
 	if bs, err := valToBytes(v); err == nil {
-		fj.attrs = append(fj.attrs, makeScalarNode(attr, false, bs, list))
+		fj.attrs = append(fj.attrs, makeScalarNode(attr, bs, list))
 	}
 }
 
@@ -94,11 +92,8 @@ func (fj *fastJsonNode) AddMapChild(attr string, val *fastJsonNode, isRoot bool)
 	}
 
 	if childNode != nil {
-		val.isChild = true
-		val.attr = attr
 		childNode.attrs = append(childNode.attrs, val.attrs...)
 	} else {
-		val.isChild = false
 		val.attr = attr
 		fj.attrs = append(fj.attrs, val)
 	}
@@ -106,12 +101,12 @@ func (fj *fastJsonNode) AddMapChild(attr string, val *fastJsonNode, isRoot bool)
 
 func (fj *fastJsonNode) AddListChild(attr string, child *fastJsonNode) {
 	child.attr = attr
-	child.isChild = true
+	child.list = true
 	fj.attrs = append(fj.attrs, child)
 }
 
 func (fj *fastJsonNode) New(attr string) *fastJsonNode {
-	return &fastJsonNode{attr: attr, isChild: false}
+	return &fastJsonNode{attr: attr}
 }
 
 func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
@@ -123,8 +118,7 @@ func (fj *fastJsonNode) SetUID(uid uint64, attr string) {
 			}
 		}
 	}
-	fj.attrs = append(fj.attrs, makeScalarNode(attr, false, []byte(fmt.Sprintf("\"%#x\"", uid)),
-		false))
+	fj.attrs = append(fj.attrs, makeScalarNode(attr, []byte(fmt.Sprintf("\"%#x\"", uid)), false))
 }
 
 func (fj *fastJsonNode) IsEmpty() bool {
@@ -376,7 +370,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 						if err := cur.writeKey(out); err != nil {
 							return err
 						}
-						if cur.isChild || cur.list {
+						if cur.list {
 							if _, err := out.WriteRune('['); err != nil {
 								return err
 							}
@@ -386,7 +380,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					if err := cur.encode(out); err != nil {
 						return err
 					}
-					if cnt != 1 || (cur.isChild || cur.list) {
+					if cnt != 1 || cur.list {
 						if _, err := out.WriteRune(']'); err != nil {
 							return err
 						}
@@ -405,7 +399,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 						return err
 					}
 				}
-				if (cur.isChild || cur.list) && !inArray {
+				if cur.list && !inArray {
 					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
@@ -413,7 +407,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 				if err := cur.encode(out); err != nil {
 					return err
 				}
-				if cnt != 1 || (cur.isChild || cur.list) {
+				if cnt != 1 || cur.list {
 					if _, err := out.WriteRune(']'); err != nil {
 						return err
 					}
@@ -706,6 +700,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 			return nil, err
 		}
 	}
+
 	return bufw.Bytes(), nil
 }
 
