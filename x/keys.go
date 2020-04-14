@@ -550,6 +550,12 @@ var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }
 
+var internalTypesMap = map[string]struct{}{
+	"dgraph.type.Group": {},
+	"dgraph.type.User":  {},
+	"dgraph.type.Rule":  {},
+}
+
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
 func IsGraphqlReservedPredicate(pred string) bool {
 	_, ok := graphqlReservedPredicate[pred]
@@ -590,5 +596,11 @@ func AllACLPredicates() []string {
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
 func IsInternalPredicate(pred string) bool {
 	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	return ok
+}
+
+// IsInternalType returns whether typ is an internal type used by dgraph.
+func IsInternalType(typ string) bool {
+	_, ok := internalTypesMap[typ]
 	return ok
 }

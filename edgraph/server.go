@@ -264,6 +264,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 	}
 
+	for _, typ := range result.Types {
+		if x.IsInternalType(typ.TypeName) {
+			err = errors.Errorf("type %s is an internal type and can't be modified", typ.TypeName)
+			return nil, err
+		}
+	}
+
 	glog.Infof("Got schema: %+v\n", result)
 	// TODO: Maybe add some checks about the schema.
 	m.Schema = result.Preds

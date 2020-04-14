@@ -17,12 +17,51 @@
 package query
 
 import (
+	"context"
 	"testing"
+	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
 func TestReserverPredicateForMutation(t *testing.T) {
 	err := addTriplesToCluster(`_:x <dgraph.graphql.schema> "df"`)
 	require.Error(t, err, "Cannot mutate graphql reserved predicate dgraph.graphql.schema")
+}
+
+func TestAlterInternalTypes(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	op := &api.Operation{Schema: `
+		type dgraph.type.User {
+			name: string
+			age: int
+		}
+	`}
+	err = dg.Alter(ctx, op)
+	require.Error(t, err, "altering internal type shouldn't have succeeded")
+
+	op = &api.Operation{Schema: `
+		type dgraph.type.Group {
+			name: string
+			age: int
+		}
+	`}
+	err = dg.Alter(ctx, op)
+	require.Error(t, err, "altering internal type shouldn't have succeeded")
+
+	op = &api.Operation{Schema: `
+		type dgraph.type.Rule {
+			name: string
+			age: int
+		}
+	`}
+	err = dg.Alter(ctx, op)
+	require.Error(t, err, "altering internal type shouldn't have succeeded")
 }
