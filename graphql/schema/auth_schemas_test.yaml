@@ -118,6 +118,46 @@ invalid_schemas:
      "locations":[{"line":5, "column":21}]}
     ]
 
+  - name: "Same logical operation at same level"
+    input: |
+      type X @auth(
+        query: {
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ],
+            or: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+            ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+     "locations":[{"line":5, "column":21}]}
+    ]
+
 
 valid_schemas:
 
