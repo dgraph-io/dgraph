@@ -31,7 +31,7 @@ In the Security field, there the `sg-xxxxxxxxxxxxxxxxx`, which you can click thi
 
 Also note the DNS information on Load Balancer description tab, like `xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com`, which you'll need to use to access the endpoint once access is enabled.  
 
-Afterward, you can visit the website `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8000`.  Once in the DGraph Ratel UI, configure the server connection as: `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8080`.
+Afterward, you can visit the website `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8000`.  Once in the Dgraph Ratel UI, configure the server connection as: `http://xxxxx-Dgrap-XXXXXXXXXXXXX-1111111111.us-east-2.elb.amazonaws.com:8080`.
 
 ### **Accessing Systems with SSH**
 
