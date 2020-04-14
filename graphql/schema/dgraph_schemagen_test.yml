@@ -435,8 +435,7 @@ schemas:
       A.p: string .
       A.q: string .
 
-  -
-    name: "remote types shouldn't be part of Dgraph schema"
+  - name: "remote types shouldn't be part of Dgraph schema"
     input: |
       interface C {
         c: String
@@ -463,8 +462,7 @@ schemas:
       }
       B.p: string .
 
-  -
-    name: "fields with same @dgraph(pred: ...) occur only once in schema"
+  - name: "fields with same @dgraph(pred: ...) occur only once in schema"
     input: |
       interface A {
         p: String @dgraph(pred: "key")
@@ -494,8 +492,7 @@ schemas:
       }
       C.name: string .
 
-  -
-    name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
+  - name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
     combined"
     input: |
       type A {

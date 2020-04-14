@@ -1,3 +1,19 @@
+/*
+ * Copyright 2020 Dgraph Labs, Inc. and Contributors
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package main
 
 import (
@@ -8,8 +24,19 @@ import (
 	"net/http"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 )
+
+type expectedRequest struct {
+	method    string
+	urlSuffix string
+	body      string
+	// Send headers as nil to ignore comparing headers.
+	// Provide nil value for a key just to ensure that the key exists in request headers.
+	// Provide both key and value to ensure that key exists with given value
+	headers map[string][]string
+}
 
 func check2(v interface{}, err error) {
 	if err != nil {
@@ -17,16 +44,58 @@ func check2(v interface{}, err error) {
 	}
 }
 
-func handleCustomRequest(r *http.Request, expectedMethod, resKey string) ([]byte, error) {
-	if r.Method != expectedMethod {
-		return nil, fmt.Errorf(`{ "errors": [{"message": "Invalid HTTP method: %s"}] }`,
-			r.Method)
+func getError(key, val string) error {
+	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
+}
+
+func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
+	if r.Method != expectedRequest.method {
+		return getError("Invalid HTTP method", r.Method)
 	}
 
-	if !strings.HasSuffix(r.URL.String(), "/0x123?name=Author&num=10") {
-		return nil, fmt.Errorf(`{ "errors": [{"message": "Invalid URL: %s"}] }`, r.URL.String())
+	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+		return getError("Invalid URL", r.URL.String())
 	}
 
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return getError("Unable to read request body", err.Error())
+	}
+	if string(b) != expectedRequest.body {
+		return getError("Unexpected value for request body", string(b))
+	}
+
+	if expectedRequest.headers != nil {
+		actualHeaderLen := len(r.Header)
+		expectedHeaderLen := len(expectedRequest.headers)
+		if actualHeaderLen != expectedHeaderLen {
+			return getError(fmt.Sprintf("Wanted %d headers in request, got", expectedHeaderLen),
+				strconv.Itoa(actualHeaderLen))
+		}
+
+		for k, v := range expectedRequest.headers {
+			rv, ok := r.Header[k]
+			if !ok {
+				return getError("Required header not found", k)
+			}
+
+			if v == nil {
+				continue
+			}
+
+			sort.Strings(rv)
+			sort.Strings(v)
+
+			if !reflect.DeepEqual(rv, v) {
+				return getError(fmt.Sprintf("Unexpected value for %s header", k), fmt.Sprint(rv))
+			}
+		}
+	}
+
+	return nil
+}
+
+func getDefaultResponse(resKey string) []byte {
 	resTemplate := `{
 		"%s": [
 			{
@@ -52,53 +121,140 @@ func handleCustomRequest(r *http.Request, expectedMethod, resKey string) ([]byte
 		]
 	}`
 
-	return []byte(fmt.Sprintf(resTemplate, resKey)), nil
+	return []byte(fmt.Sprintf(resTemplate, resKey))
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := handleCustomRequest(r, http.MethodGet, "myFavoriteMovies")
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/0x123?name=Author&num=10",
+		body:      "",
+		headers:   nil,
+	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write(b))
+	check2(w.Write(getDefaultResponse("myFavoriteMovies")))
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := handleCustomRequest(r, http.MethodPost, "myFavoriteMoviesPost")
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/0x123?name=Author&num=10",
+		body:      "",
+		headers:   nil,
+	})
 	if err != nil {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write(b))
+	check2(w.Write(getDefaultResponse("myFavoriteMoviesPost")))
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
-	headers := r.Header
-	expectedKeys := []string{"Accept-Encoding", "User-Agent", "X-App-Token", "X-User-Id"}
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/verifyHeaders",
+		body:      "",
+		headers: map[string][]string{
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
+		},
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)))
+}
 
-	actualKeys := make([]string, 0, len(headers))
-	for k := range headers {
-		actualKeys = append(actualKeys, k)
-	}
-	sort.Strings(expectedKeys)
-	sort.Strings(actualKeys)
-	if !reflect.DeepEqual(expectedKeys, actualKeys) {
-		fmt.Fprint(w, `{"errors": [ { "message": "Expected headers not same as actual." } ]}`)
+func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPost,
+		urlSuffix: "/favMoviesCreate",
+		body:      `{"movies":[{"director":[{"name":"Dir1"}],"name":"Mov1"},{"name":"Mov2"}]}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
 
-	appToken := r.Header.Get("X-App-Token")
-	if appToken != "app-token" {
-		fmt.Fprintf(w, `{"errors": [ { "message": "Unexpected value for X-App-Token header: %s." } ]}`, appToken)
+	check2(w.Write([]byte(`
+	{
+      "createMyFavouriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Mov2"
+        }
+      ]
+    }`)))
+}
+
+func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodPatch,
+		urlSuffix: "/favMoviesUpdate/0x1",
+		body:      `{"director":[{"name":"Dir1"}],"name":"Mov1"}`,
+		headers:   nil,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	userId := r.Header.Get("X-User-Id")
-	if userId != "123" {
-		fmt.Fprintf(w, `{"errors": [ { "message": "Unexpected value for X-User-Id header: %s." } ]}`, userId)
+
+	check2(w.Write([]byte(`
+	{
+      "updateMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      }
+    }`)))
+}
+
+func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodDelete,
+		urlSuffix: "/favMoviesDelete/0x1",
+		body:      "",
+		headers: map[string][]string{
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
+		},
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	fmt.Fprintf(w, `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)
+
+	check2(w.Write([]byte(`
+	{
+      "deleteMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1"
+      }
+    }`)))
 }
 
 type input struct {
@@ -141,7 +297,7 @@ func userNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type tinput struct {
@@ -171,7 +327,7 @@ func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type sinput struct {
@@ -201,7 +357,7 @@ func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func carsHandler(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +380,7 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func classesHandler(w http.ResponseWriter, r *http.Request) {
@@ -247,7 +403,7 @@ func classesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type entity interface {
@@ -262,7 +418,7 @@ func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
 	}
 
 	n := fmt.Sprintf(`"%s"`, input.Name())
-	fmt.Fprintf(w, n)
+	check2(fmt.Fprint(w, n))
 }
 
 func userNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -287,7 +443,7 @@ func carHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func classHandler(w http.ResponseWriter, r *http.Request) {
@@ -306,7 +462,7 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func teacherNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -321,9 +477,15 @@ func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 
+	// for queries
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+
+	// for mutations
+	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
+	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
+	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
 
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)

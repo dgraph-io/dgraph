@@ -19,6 +19,7 @@ package resolve
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -74,7 +75,7 @@ func TestQueryRewriting(t *testing.T) {
 type HTTPRewritingCase struct {
 	Name             string
 	GQLQuery         string
-	Variables        map[string]interface{}
+	Variables        string
 	HTTPResponse     string
 	ResolvedResponse string
 	Method           string
@@ -135,10 +136,16 @@ func TestCustomHTTPQuery(t *testing.T) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.Variables != "" {
+				err := json.Unmarshal([]byte(tcase.Variables), &vars)
+				require.NoError(t, err)
+			}
+
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,
-					Variables: tcase.Variables,
+					Variables: vars,
 					Header: map[string][]string{
 						"bogus":       []string{"header"},
 						"X-App-Token": []string{"val"},
@@ -149,7 +156,7 @@ func TestCustomHTTPQuery(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPResolver(client, nil, nil, StdQueryCompletion())
+			resolver := NewHTTPQueryResolver(client, StdQueryCompletion())
 			resolved := resolver.Resolve(context.Background(), gqlQuery)
 			res := `{` + string(resolved.Data) + `}`
 			testutil.CompareJSON(t, tcase.ResolvedResponse, res)

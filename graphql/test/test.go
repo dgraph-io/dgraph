@@ -75,8 +75,8 @@ func GetMutation(t *testing.T, op schema.Operation) schema.Mutation {
 	return mutations[0]
 }
 
-// GetQuery gets a single schema.Mutation from a schema.Operation.
-// It will fail if op is not a mutation or there's more than one mutation in
+// GetQuery gets a single schema.Query from a schema.Operation.
+// It will fail if op is not a query or there's more than one query in
 // op.
 func GetQuery(t *testing.T, op schema.Operation) schema.Query {
 	require.NotNil(t, op)
