@@ -176,7 +176,7 @@ valid_schemas:
         username: String! @id
       }
 
-  - name: "Rules using logical operation"
+  - name: "Rule using logical `or` operation"
     input: |
       type X @auth(
         query: {
@@ -199,7 +199,30 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
-  - name: "Auth rules with logical not"
+  - name: "Rule using logical `and` operation"
+    input: |
+      type X @auth(
+        query: {
+            and: [ { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+                  { rule: """
+                        query {
+                          queryX(filter: { userRole: { eq: "ADMIN" } }) {
+                            __typename
+                          }
+                        }""" },
+          ]
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Rule using logical `not` operation"
     input: |
       type X @auth(
         query: { not: { rule: """
