@@ -191,22 +191,16 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 
-	emptyResult := func(err error, uids int) *Resolved {
+	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data: map[string]interface{}{
-				mutation.ResponseName(): map[string]interface{}{
-					schema.NumUid:                        uids,
-					schema.Typename:                      mutation.TypeName,
-					mutation.QueryField().ResponseName(): nil,
-				}},
+			Data:  map[string]interface{}{mutation.ResponseName(): nil},
 			Field: mutation,
 			Err:   err,
 		}
 	}
 
 	if err != nil {
-		return emptyResult(
-				schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name()), 0),
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
 	}
 
@@ -214,7 +208,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
-		return emptyResult(gqlErr, 0), resolverFailed
+		return emptyResult(gqlErr), resolverFailed
 
 	}
 
@@ -223,7 +217,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 	errs := schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 
 	if dgQuery == nil && err != nil {
-		return emptyResult(errs, numUids), resolverFailed
+		return emptyResult(errs), resolverFailed
 	}
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
@@ -232,7 +226,16 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
 	if resolved.Data == nil && resolved.Err != nil {
-		return emptyResult(resolved.Err, numUids), resolverSucceeded
+		return &Resolved{
+			Data: map[string]interface{}{
+				mutation.ResponseName(): map[string]interface{}{
+					schema.NumUid:                        numUids,
+					schema.Typename:                      mutation.TypeName,
+					mutation.QueryField().ResponseName(): nil,
+				}},
+			Field: mutation,
+			Err:   err,
+		}, resolverSucceeded
 	}
 
 	if resolved.Data == nil {
