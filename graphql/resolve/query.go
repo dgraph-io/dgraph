@@ -106,6 +106,10 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	defer stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
+	if resolved.Data == nil {
+		resolved.Data = map[string]interface{}{query.ResponseName(): nil}
+	}
+
 	qr.resultCompleter.Complete(ctx, resolved)
 	return resolved
 }
