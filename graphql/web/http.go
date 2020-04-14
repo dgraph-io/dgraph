@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"io/ioutil"
 	"mime"
 	"net"
 	"net/http"
@@ -191,12 +192,18 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 			if err = d.Decode(&gqlReq); err != nil {
 				return nil, errors.Wrap(err, "Not a valid GraphQL request body")
 			}
+		case "application/graphql":
+			bytes, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				return nil, errors.Wrap(err, "Could not read GraphQL request body")
+			}
+			gqlReq.Query = string(bytes)
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json
 			// content type ..."
 			return nil, errors.New(
-				"Unrecognised Content-Type.  Please use application/json for GraphQL requests")
+				"Unrecognised Content-Type.  Please use application/json or application/graphql for GraphQL requests")
 		}
 	default:
 		return nil,
