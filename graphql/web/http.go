@@ -197,7 +197,7 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 			if err != nil {
 				return nil, errors.Wrap(err, "Could not read GraphQL request body")
 			}
-			gqlReq.Query = string(string(bytes))
+			gqlReq.Query = string(bytes)
 		default:
 			// https://graphql.org/learn/serving-over-http/#post-request says:
 			// "A standard GraphQL POST request should use the application/json
