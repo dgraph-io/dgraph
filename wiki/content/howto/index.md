@@ -616,7 +616,7 @@ In the Nginx access logs (in the docker-compose up shell window), you'll see acc
 
 {{% notice "note" %}}
 It is important to take into account with gRPC load balancing that every request hits a different Alpha, potentially increasing read throughput.
-{{% /notice "note" %}}
+{{% /notice %}}
 
 ```
 nginx_1   | [15/Jan/2020:03:12:02 +0000] 172.20.0.9 - - -  nginx to: 172.20.0.7:9080: POST /api.Dgraph/Query HTTP/2.0 200 upstream_response_time 0.008 msec 1579057922.135 request_time 0.009
