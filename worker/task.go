@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
@@ -364,7 +365,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
@@ -484,21 +484,21 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		return nil
 	} // End of calculate function.
 
+	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
 		if end > srcFn.n {
 			end = srcFn.n
 		}
-		go func(start, end int) {
-			errCh <- calculate(start, end)
-		}(start, end)
+		g.Go(func() error {
+			return calculate(start, end)
+		})
 	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
+
 	// All goroutines are done. Now attach their results.
 	out := args.out
 	for _, chunk := range outputs {

@@ -114,7 +114,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
 			// If any other operation is running, this would error out. So, ignore error.
-			n.startTask(opRollup)
+			// Ignoring the error since stop task runs in a goruotine.
+			_, _ = n.startTask(opRollup)
 		}
 	}
 
@@ -566,6 +567,19 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
+
+	case proposal.Restore != nil:
+		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+			return err
+		}
+
+		// Call commitOrAbort to update the group checksums.
+		ts := proposal.Restore.RestoreTs
+		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			Txns: []*pb.TxnStatus{
+				{StartTs: ts, CommitTs: ts},
+			},
+		})
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
@@ -905,6 +919,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			close(done)
+			if x.WorkerConfig.LudicrousMode {
+				n.ex.closer.SignalAndWait()
+			}
 			return
 		}
 	}
@@ -1578,7 +1595,9 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	n.startTask(opRollup)
+	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
+	// not be the right thing to do.
+	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
 	go n.Run()
 }

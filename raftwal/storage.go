@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/proto"
@@ -40,15 +41,30 @@ type DiskStorage struct {
 	gid  uint32
 	elog trace.EventLog
 
-	cache *sync.Map
+	cache          *sync.Map
+	Closer         *y.Closer
+	indexRangeChan chan indexRange
+}
+
+type indexRange struct {
+	from, until uint64 // index range for deletion, until index is not deleted.
 }
 
 // Init initializes returns a properly initialized instance of DiskStorage.
+// To gracefully shutdown DiskStorage, store.Closer.SignalAndWait() should be called.
 func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
-	w := &DiskStorage{db: db, id: id, gid: gid, cache: new(sync.Map)}
+	w := &DiskStorage{db: db,
+		id:             id,
+		gid:            gid,
+		cache:          new(sync.Map),
+		Closer:         y.NewCloser(1),
+		indexRangeChan: make(chan indexRange, 16),
+	}
 	if prev, err := RaftId(db); err != nil || prev != id {
 		x.Check(w.StoreRaftId(id))
 	}
+	go w.processIndexRange()
+
 	w.elog = trace.NewEventLog("Badger", "RaftStorage")
 
 	snap, err := w.Snapshot()
@@ -57,14 +73,52 @@ func Init(db *badger.DB, id uint64, gid uint32) *DiskStorage {
 		return w
 	}
 
-	_, err = w.FirstIndex()
+	first, err := w.FirstIndex()
 	if err == errNotFound {
 		ents := make([]raftpb.Entry, 1)
 		x.Check(w.reset(ents))
 	} else {
 		x.Check(err)
 	}
+
+	// If db is not closed properly, there might be index ranges for which delete entries are not
+	// inserted. So insert delete entries for those ranges starting from 0 to (first-1).
+	w.indexRangeChan <- indexRange{0, first - 1}
+
 	return w
+}
+
+func (w *DiskStorage) processIndexRange() {
+	defer w.Closer.Done()
+
+	processSingleRange := func(r indexRange) {
+		batch := w.db.NewWriteBatch()
+		if err := w.deleteRange(batch, r.from, r.until); err != nil {
+			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
+				err, r.from, r.until)
+		}
+		if err := batch.Flush(); err != nil {
+			glog.Errorf("processDeleteRange batch flush failed with error: %v,\n", err)
+		}
+	}
+
+loop:
+	for {
+		select {
+		case r := <-w.indexRangeChan:
+			processSingleRange(r)
+		case <-w.Closer.HasBeenClosed():
+			break loop
+		}
+	}
+
+	// As we have already shutdown the node, it is safe to close indexRangeChan.
+	// node.processApplyChan() calls CreateSnapshot, which internally sends values on this chan.
+	close(w.indexRangeChan)
+
+	for r := range w.indexRangeChan {
+		processSingleRange(r)
+	}
 }
 
 var idKey = []byte("raftid")
@@ -243,12 +297,13 @@ var (
 // possibly available via Entries (older entries have been incorporated
 // into the latest Snapshot).
 func (w *DiskStorage) FirstIndex() (uint64, error) {
-	if val, ok := w.cache.Load(snapshotKey); ok {
-		snap, ok := val.(*raftpb.Snapshot)
-		if ok && !raft.IsEmptySnap(*snap) {
-			return snap.Metadata.Index + 1, nil
-		}
+	// We are deleting index ranges in background after taking snapshot, so we should check for last
+	// snapshot in WAL(Badger) if it is not found in cache. If no snapshot is found, then we can
+	// check firstKey.
+	if snap, err := w.Snapshot(); err == nil && !raft.IsEmptySnap(snap) {
+		return snap.Metadata.Index + 1, nil
 	}
+
 	if val, ok := w.cache.Load(firstKey); ok {
 		if first, ok := val.(uint64); ok {
 			return first, nil
@@ -276,11 +331,11 @@ func (w *DiskStorage) LastIndex() (uint64, error) {
 	return w.seekEntry(nil, math.MaxUint64, true)
 }
 
-// Delete all entries from [0, until), i.e. excluding until.
+// Delete all entries from [from, until), i.e. excluding until.
 // Keep the entry at the snapshot index, for simplification of logic.
-// It is the application's responsibility to not attempt to deleteUntil an index
+// It is the application's responsibility to not attempt to deleteRange an index
 // greater than raftLog.applied.
-func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error {
+func (w *DiskStorage) deleteRange(batch *badger.WriteBatch, from, until uint64) error {
 	var keys []string
 	err := w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
@@ -289,7 +344,7 @@ func (w *DiskStorage) deleteUntil(batch *badger.WriteBatch, until uint64) error 
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.EntryKey(0)
+		start := w.EntryKey(from)
 		first := true
 		var index uint64
 		for itr.Seek(start); itr.Valid(); itr.Next() {
@@ -488,15 +543,19 @@ func (w *DiskStorage) InitialState() (hs raftpb.HardState, cs raftpb.ConfState, 
 
 // NumEntries returns the number of entries in the write-ahead log.
 func (w *DiskStorage) NumEntries() (int, error) {
+	first, err := w.FirstIndex()
+	if err != nil {
+		return 0, err
+	}
 	var count int
-	err := w.db.View(func(txn *badger.Txn) error {
+	err = w.db.View(func(txn *badger.Txn) error {
 		opt := badger.DefaultIteratorOptions
 		opt.PrefetchValues = false
 		opt.Prefix = w.entryPrefix()
 		itr := txn.NewIterator(opt)
 		defer itr.Close()
 
-		start := w.EntryKey(0)
+		start := w.EntryKey(first)
 		for itr.Seek(start); itr.Valid(); itr.Next() {
 			count++
 		}
@@ -622,10 +681,16 @@ func (w *DiskStorage) CreateSnapshot(i uint64, cs *raftpb.ConfState, data []byte
 	if err := w.setSnapshot(batch, &snap); err != nil {
 		return err
 	}
-	if err := w.deleteUntil(batch, snap.Metadata.Index); err != nil {
+
+	if err := batch.Flush(); err != nil {
 		return err
 	}
-	return batch.Flush()
+
+	// deleteRange deletes all entries in the range except the last one(which is SnapshotIndex) and
+	// first index is last snapshotIndex+1, hence start index for indexRange should be (first-1).
+	// TODO: If deleteRangeChan is full, it might block mutations.
+	w.indexRangeChan <- indexRange{first - 1, snap.Metadata.Index}
+	return nil
 }
 
 // Save would write Entries, HardState and Snapshot to persistent storage in order, i.e. Entries
