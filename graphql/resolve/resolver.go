@@ -1470,5 +1470,5 @@ func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Re
 func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved,
 	bool) {
 	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
-	return resolved, resolved.Err.Error() == ""
+	return resolved, resolved.Err == nil
 }
