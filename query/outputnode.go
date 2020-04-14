@@ -66,14 +66,15 @@ type encoder struct {
 	// seqNo is used to assign id to predicate.
 	seqNo uint16
 	// arena is used to store scalarVal for fastJsonNodes. Offset of scalarVal inside arena buffer
-	// is stored in fastJsonNode composite.
+	// is stored in fastJsonNode meta.
 	arena *arena
 
 	// metaSlice has meta data for all fastJsonNodes.
 	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
-	// Bytes 5-8 contains offset(uint32) for Arena.
-	// Bytes 3-4 contains attr.
-	// Bit MSB and (MSB-1) contains isChild and list fields values.
+	// Bytes 4-1 contains offset(uint32) for Arena.
+	// Bytes 7-6 contains attr.
+	// Bit MSB(first bit in Byte-8) contains list field value.
+	// Byte-5 is not getting used as of now.
 	metaSlice []uint64
 	// childrenMap contains mapping of fastJsonNode to its children.
 	childrenMap map[fastJsonNode][]fastJsonNode
@@ -81,7 +82,7 @@ type encoder struct {
 
 func newEncoder() *encoder {
 	ms := make([]uint64, 0)
-	// Append dummy entry, to avoid getting value for a fastJsonNode with default value.
+	// Append dummy entry, to avoid getting meta for a fastJsonNode with default value(0).
 	ms = append(ms, 0)
 	return &encoder{
 		attrMap: make(map[string]uint16),
@@ -99,6 +100,7 @@ func (enc *encoder) idForAttr(attr string) uint16 {
 		return id
 	}
 
+	// TODO: check for overflow.
 	enc.seqNo++
 	enc.attrMap[attr] = enc.seqNo
 	enc.idMap[enc.seqNo] = attr
@@ -131,10 +133,8 @@ func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) fastJsonN
 
 const (
 	msbBit       = 0x8000000000000000
-	secondMsbBit = 0x4000000000000000
 	setBytes76   = 0x00FFFF0000000000
 	unsetBytes76 = 0xFF0000FFFFFFFFFF
-	setBytes5    = 0x000000FF00000000
 	setBytes4321 = 0x00000000FFFFFFFF
 )
 
@@ -180,14 +180,13 @@ func (enc *encoder) setAttr(fj fastJsonNode, attr uint16) {
 }
 
 func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) {
-	idx, offset := enc.arena.put(sv)
+	offset := enc.arena.put(sv)
 	enc.metaSlice[fj] |= uint64(offset)
-	enc.metaSlice[fj] |= (uint64(idx) << 32)
 }
 
 func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	if list {
-		enc.metaSlice[fj] |= secondMsbBit
+		enc.metaSlice[fj] |= msbBit
 	}
 }
 
@@ -209,12 +208,11 @@ func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
 func (enc *encoder) getScalarVal(fj fastJsonNode) []byte {
 	meta := enc.metaSlice[fj]
 	offset := uint32(meta & setBytes4321)
-	idx := uint8(meta & setBytes5)
-	return enc.arena.get(idx, offset)
+	return enc.arena.get(offset)
 }
 
 func (enc *encoder) getList(fj fastJsonNode) bool {
-	return ((enc.metaSlice[fj] & secondMsbBit) > 0)
+	return ((enc.metaSlice[fj] & msbBit) > 0)
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) []fastJsonNode {
