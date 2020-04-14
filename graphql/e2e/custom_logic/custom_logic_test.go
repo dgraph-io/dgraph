@@ -642,13 +642,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	updateSchema(t, schema)
 
 	teachers := addTeachers(t)
-	sort.Slice(teachers, func(i, j int) bool {
-		return teachers[i].ID < teachers[i].ID
-	})
 	schools := addSchools(t, teachers)
-	sort.Slice(schools, func(i, j int) bool {
-		return schools[i].ID < schools[i].ID
-	})
 	users := addUsers(t, schools)
 
 	verifyData(t, users, teachers, schools)
@@ -713,4 +707,208 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	}`
 
 	verifyData(t, users, teachers, schools)
+}
+
+type episode struct {
+	Name string
+}
+
+func addEpisode(t *testing.T, name string) {
+	params := &common.GraphQLParams{
+		Query: `mutation addEpisode($name: String!) {
+			addEpisode(input: [{ name: $name }]) {
+				episode {
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name": name,
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	var res struct {
+		AddEpisode struct {
+			Episode []*episode
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddEpisode.Episode), 1)
+}
+
+type character struct {
+	Name string
+}
+
+func addCharacter(t *testing.T, name string, episodes interface{}) {
+	params := &common.GraphQLParams{
+		Query: `mutation addCharacter($name: String!, $episodes: [EpisodeRef]) {
+			addCharacter(input: [{ name: $name, episodes: $episodes }]) {
+				character {
+					name
+					episodes {
+						name
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name":     name,
+			"episodes": episodes,
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	var res struct {
+		AddCharacter struct {
+			Character []*character
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddCharacter.Character), 1)
+}
+
+func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
+	schema := `
+	type Episode {
+		name: String! @id
+		anotherName: String! @custom(http: {
+					url: "http://mock:8888/userNames",
+					method: "GET",
+					body: "{uid: $name}",
+					operation: "batch"
+				})
+	}
+
+	type Character {
+		name: String! @id
+		lastName: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $name}",
+						operation: "batch"
+					})
+		episodes: [Episode]
+	}`
+	updateSchema(t, schema)
+
+	ep1 := "episode-1"
+	ep2 := "episode-2"
+	ep3 := "episode-3"
+
+	addEpisode(t, ep1)
+	addEpisode(t, ep2)
+	addEpisode(t, ep3)
+
+	addCharacter(t, "character-1", []map[string]interface{}{{"name": ep1}, {"name": ep2}})
+	addCharacter(t, "character-2", []map[string]interface{}{{"name": ep2}, {"name": ep3}})
+	addCharacter(t, "character-3", []map[string]interface{}{{"name": ep3}, {"name": ep1}})
+
+	queryCharacter := `
+	query {
+		queryCharacter {
+			name
+			lastName
+			episodes {
+				name
+				anotherName
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryCharacter,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected := `{
+		"queryCharacter": [
+		  {
+			"name": "character-1",
+			"lastName": "uname-character-1",
+			"episodes": [
+			  {
+				"name": "episode-1",
+				"anotherName": "uname-episode-1"
+			  },
+			  {
+				"name": "episode-2",
+				"anotherName": "uname-episode-2"
+			  }
+			]
+		  },
+		  {
+			"name": "character-2",
+			"lastName": "uname-character-2",
+			"episodes": [
+			  {
+				"name": "episode-2",
+				"anotherName": "uname-episode-2"
+			  },
+			  {
+				"name": "episode-3",
+				"anotherName": "uname-episode-3"
+			  }
+			]
+		  },
+		  {
+			"name": "character-3",
+			"lastName": "uname-character-3",
+			"episodes": [
+			  {
+				"name": "episode-1",
+				"anotherName": "uname-episode-1"
+			  },
+			  {
+				"name": "episode-3",
+				"anotherName": "uname-episode-3"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	testutil.CompareJSON(t, expected, string(result.Data))
+
+	// In this case the types have ID! field but it is not being requested as part of the query
+	// explicitly, so custom logic de-duplication should check for "dgraph-uid" field.
+	schema = `
+	type Episode {
+		id: ID!
+		name: String! @id
+		anotherName: String! @custom(http: {
+					url: "http://mock:8888/userNames",
+					method: "GET",
+					body: "{uid: $name}",
+					operation: "batch"
+				})
+	}
+
+	type Character {
+		id: ID!
+		name: String! @id
+		lastName: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $name}",
+						operation: "batch"
+					})
+		episodes: [Episode]
+	}`
+	updateSchema(t, schema)
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+	testutil.CompareJSON(t, expected, string(result.Data))
+
 }
