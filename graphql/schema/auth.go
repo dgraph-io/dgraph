@@ -132,7 +132,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	if ands := val.Children.ForName("and"); ands != nil && len(ands.Children) > 0 {
 		for _, and := range ands.Children {
 			rn, err := parseAuthNode(s, typ, and.Value)
-			result.Or = append(result.Or, rn)
+			result.And = append(result.And, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
 		if len(result.And) < 2 {
@@ -147,7 +147,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		len(not.Children) == 1 && not.Children[0] != nil {
 
 		var err error
-		result.Not, err = parseAuthNode(s, typ, not.Children[0].Value)
+		result.Not, err = parseAuthNode(s, typ, not)
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
