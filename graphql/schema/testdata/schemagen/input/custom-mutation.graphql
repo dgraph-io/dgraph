@@ -1,17 +1,10 @@
-type User @remote {
+type User {
 	id: ID!
 	name: String!
 }
 
 input UserInput {
 	name: String!
-}
-
-type Query {
-	getMyFavoriteUsers(id: ID!): [User] @custom(http: {
-		url: "http://my-api.com",
-		method: "GET"
-	})
 }
 
 type Mutation {

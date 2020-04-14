@@ -70,8 +70,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {
@@ -278,6 +281,7 @@ var directiveValidators = map[string]directiveValidator{
 	},
 }
 
+var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
@@ -358,6 +362,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
 	}
 
+	errs = append(errs, applySchemaDocValidations(schema)...)
+
 	return errs
 }
 
@@ -387,6 +393,19 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	}
 
 	errs = append(errs, applySchemaValidations(schema, definitions)...)
+
+	return errs
+}
+
+func applySchemaDocValidations(schema *ast.SchemaDocument) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaDocValidations {
+		newErrs := rule(schema)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
+		}
+	}
 
 	return errs
 }
@@ -426,13 +445,12 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 }
 
 // completeSchema generates all the required types and fields for
-// query/mutation/update for all the types mentioned the the schema.
+// query/mutation/update for all the types mentioned in the schema.
 func completeSchema(sch *ast.Schema, definitions []string) {
 	query := sch.Types["Query"]
 	if query != nil {
 		query.Kind = ast.Object
 		sch.Query = query
-		delete(sch.Types, "Query")
 	} else {
 		sch.Query = &ast.Definition{
 			Kind:   ast.Object,
@@ -445,7 +463,6 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	if mutation != nil {
 		mutation.Kind = ast.Object
 		sch.Mutation = mutation
-		delete(sch.Types, "Mutation")
 	} else {
 		sch.Mutation = &ast.Definition{
 			Kind:   ast.Object,
@@ -606,7 +623,7 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
-		custom := fld.Directives.ForName("custom")
+		custom := fld.Directives.ForName(customDirective)
 		// Filtering and ordering for fields with @custom directive is handled by the remote
 		// endpoint.
 		if custom != nil {
@@ -1196,7 +1213,7 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
-		custom := fld.Directives.ForName("custom")
+		custom := fld.Directives.ForName(customDirective)
 		// Fields with @custom directive should not be part of mutation input, hence we skip them.
 		if custom != nil {
 			continue
@@ -1237,7 +1254,7 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 			continue
 		}
 
-		custom := fld.Directives.ForName("custom")
+		custom := fld.Directives.ForName(customDirective)
 		// Fields with @custom directive should not be part of mutation input, hence we skip them.
 		if custom != nil {
 			continue
@@ -1449,11 +1466,11 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// original defs can only be types and enums, print those in the same order
 	// as the original schema.
 	for _, typName := range originalTypes {
-		typ := schema.Types[typName]
 		if typName == "Query" || typName == "Mutation" {
-			// This would be printed later in schema.Query
+			// These would be printed later in schema.Query and schema.Mutation
 			continue
 		}
+		typ := schema.Types[typName]
 		switch typ.Kind {
 		case ast.Interface:
 			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
@@ -1461,6 +1478,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
+		case ast.InputObject:
+			x.Check2(original.WriteString(generateInputString(typ) + "\n"))
 		}
 		printed[typName] = true
 	}
@@ -1482,6 +1501,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// left to be printed.
 	typeNames := make([]string, 0, len(schema.Types)-len(printed))
 	for typName, typDef := range schema.Types {
+		if typName == "Query" || typName == "Mutation" {
+			// These would be printed later in schema.Query and schema.Mutation
+			continue
+		}
 		if typDef.BuiltIn {
 			// These are the types that are coming from ast.Prelude
 			continue
@@ -1513,17 +1536,17 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
-	if len(object.String()) > 0 {
+	if object.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Types\n#######################\n\n"))
 		x.Check2(sch.WriteString(object.String()))
 	}
-	if len(enum.String()) > 0 {
+	if enum.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Enums\n#######################\n\n"))
 		x.Check2(sch.WriteString(enum.String()))
 	}
-	if len(input.String()) > 0 {
+	if input.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Inputs\n#######################\n\n"))
 		x.Check2(sch.WriteString(input.String()))

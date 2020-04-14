@@ -119,9 +119,9 @@ invalid_schemas:
         x: X!
       }
     errlist: [
-      {"message":"You can't add scalar definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
-      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
-      {"message":"You can't add input_object definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
+    {"message":"You can't add scalar definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":8}]},
+    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":5, "column":7}]},
+      #      {"message":"You can't add input_object definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":6, "column":7}]},
     ]
 
   -
@@ -154,7 +154,7 @@ invalid_schemas:
     input: |
       union U = R | S | T
     errlist: [
-      {"message":"You can't add union definitions. Only type, interface and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
+    {"message":"You can't add union definitions. Only type, interface, input and enums are allowed in initial schema.", "locations":[{"line":1, "column":7}]}
     ]
 
   -
@@ -700,15 +700,14 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
-  -
-    name: "Conflicting secret directive and field"
+  - name: "Conflicting secret directive and field"
     input: |
       type X @secret(field:"f1"){
         f1: String!
       }
     errlist: [
-      {"message": "Type X; has a secret directive and field of the same name f1",
-      "locations":[{"line":1, "column":6}]},
+    {"message": "Type X; has a secret directive and field of the same name f1",
+     "locations":[{"line":1, "column":6}]},
     ]
 
   -
@@ -770,6 +769,20 @@ invalid_schemas:
       "locations":[{"line":6, "column":31}]},
     ]
 
+  - name: "@custom directive with wrong argument name"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor: http argument for @custom directive should not be empty.",
+     "locations":[{"line":6, "column":31}]},
+    ]
+
   -
     name: "@custom directive with wrong url"
     input: |
@@ -796,8 +809,21 @@ invalid_schemas:
         getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST.",
-      "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST/PUT/PATCH/DELETE.",
+     "locations":[{"line":6, "column":31}]},
+    ]
+
+  - name: "input type can't have same name as the type generated for other types"
+    input: |
+      type Author {
+        id: ID!
+      }
+      input UpdateAuthorInput {
+        id: ID!
+      }
+    errlist: [
+    {"message": "UpdateAuthorInput is a reserved word, so you can't declare an input type with this name. Pick a different name for the input type.",
+     "locations":[{"line":4, "column":7}]},
     ]
 
 valid_schemas:
@@ -927,16 +953,19 @@ valid_schemas:
         id: ID!
         name: String!
       }
+      input AuthorUpdate {
+        id: ID!
+      }
 
       type Query {
-        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+        getMyAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
       }
       type Mutation {
-        getAuthro(id: ID): Author! @custom(http: {url: "http://blah.com", method: "POST"})
+        updateMyAuthor(input: AuthorUpdate!): Author! @custom(http: {url: "http://blah.com",
+      method: "POST"})
       }
 
-  -
-    name: "Schema with @custom directives on fields."
+  - name: "Schema with @custom directives on fields."
     input: |
       type Class @remote {
         id: ID!
@@ -957,4 +986,21 @@ valid_schemas:
                   method: "POST",
                   body: "{sid: $id}"
                 })
+      }
+
+  - name: "@dgraph predicate type validation gives no errors with non-null variations"
+    input: |
+      type X {
+        f1: String @dgraph(pred: "f1")
+        f2: [String] @dgraph(pred: "f2")
+        f3: [String!] @dgraph(pred: "f3")
+        f4: [String]! @dgraph(pred: "f4")
+        f5: String
+      }
+      type Y {
+        f1: String! @dgraph(pred: "f1")
+        f2: [String!] @dgraph(pred: "f2")
+        f3: [String]! @dgraph(pred: "f3")
+        f4: [String!]! @dgraph(pred: "f4")
+        f5: String @dgraph(pred: "X.f5")
       }

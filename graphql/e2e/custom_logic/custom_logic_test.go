@@ -912,3 +912,171 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(result.Data))
 
 }
+
+func TestCustomPostMutation(t *testing.T) {
+	schema := customTypes + `
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+			url: "http://mock:8888/favMoviesCreate",
+			method: "POST",
+			body: "{ movies: $input}"
+        })
+	}`
+	updateSchema(t, schema)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation createMovies($movs: [MovieInput!]) {
+			createMyFavouriteMovies(input: $movs) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"movs": []interface{}{
+				map[string]interface{}{
+					"name":     "Mov1",
+					"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+				},
+				map[string]interface{}{"name": "Mov2"},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected := `
+	{
+      "createMyFavouriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Mov2",
+          "director": []
+        }
+      ]
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
+func TestCustomPatchMutation(t *testing.T) {
+	schema := customTypes + `
+	input MovieDirectorInput {
+		id: ID
+		name: String
+		directed: [MovieInput]
+	}
+	input MovieInput {
+		id: ID
+		name: String
+		director: [MovieDirectorInput]
+	}
+	type Mutation {
+        updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
+			url: "http://mock:8888/favMoviesUpdate/$id",
+			method: "PATCH",
+			body: "$input"
+        })
+	}`
+	updateSchema(t, schema)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation updateMovies($id: ID!, $mov: MovieInput!) {
+			updateMyFavouriteMovie(id: $id, input: $mov) {
+				id
+				name
+				director {
+					id
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id": "0x1",
+			"mov": map[string]interface{}{
+				"name":     "Mov1",
+				"director": []interface{}{map[string]interface{}{"name": "Dir1"}},
+			}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected := `
+	{
+      "updateMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      }
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
+func TestCustomMutationShouldForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+        deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
+			url: "http://mock:8888/favMoviesDelete/$id",
+			method: "DELETE",
+			forwardHeaders: ["X-App-Token", "X-User-Id"]
+        })
+	}`
+	updateSchema(t, schema)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation {
+			deleteMyFavouriteMovie(id: "0x1") {
+				id
+				name
+			}
+		}`,
+		Headers: map[string][]string{
+			"X-App-Token":   {"app-token"},
+			"X-User-Id":     {"123"},
+			"Random-header": {"random"},
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	expected := `
+	{
+      "deleteMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1"
+      }
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}

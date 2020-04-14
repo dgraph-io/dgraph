@@ -65,7 +65,8 @@
         }
       }
     }
-  variables: { "id": "0x9" }
+  variables: |
+    { "id": "0x9" }
   httpresponse: |
     {
       "myFavoriteMoviesPart2": [

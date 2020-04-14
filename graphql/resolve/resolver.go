@@ -205,7 +205,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPResolver(&http.Client{
+			return NewHTTPQueryResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
 			}, StdQueryCompletion())
@@ -227,6 +227,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewDgraphResolver(fns.Drw, fns.Ex, deleteCompletion())
+		})
+	}
+
+	for _, m := range s.Mutations(schema.HTTPMutation) {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewHTTPMutationResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -592,6 +601,8 @@ func completeDgraphResult(
 
 			valToComplete[field.ResponseName()] = internalVal
 		}
+	case interface{}:
+		// no need to error in this case, this can be returned for custom HTTP query/mutation
 	default:
 		if val != nil {
 			return dgraphError()
@@ -617,13 +628,13 @@ func completeDgraphResult(
 	}
 }
 
-func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
+func copyTemplate(input interface{}) (interface{}, error) {
 	b, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
 	}
 
-	var result map[string]interface{}
+	var result interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
 		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
 	}
@@ -634,15 +645,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]map[string]interface{}, len(vals))
+	body := make([]interface{}, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyMap(fconf.Template)
+		temp, err := copyTemplate(*fconf.Template)
 		if err != nil {
 			errCh <- err
 			return
 		}
 		mu.RLock()
-		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
 			errCh <- err
 			mu.RUnlock()
 			return
@@ -691,7 +702,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	var wg sync.WaitGroup
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
-		go func(idx int, input map[string]interface{}) {
+		go func(idx int, input interface{}) {
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
@@ -1247,56 +1258,33 @@ func aliasObject(
 	return result, errs
 }
 
-// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
+// a httpResolver can resolve a single GraphQL field from an HTTP endpoint
 type httpResolver struct {
 	*http.Client
 	resultCompleter ResultCompleter
 }
 
-// NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
-func NewHTTPResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
-	return &httpResolver{hc, rc}
+type httpQueryResolver httpResolver
+type httpMutationResolver httpResolver
+
+// NewHTTPQueryResolver creates a resolver that can resolve GraphQL query from an HTTP endpoint
+func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
+	return &httpQueryResolver{hc, rc}
 }
 
-func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+// NewHTTPMutationResolver creates a resolver that resolves GraphQL mutation from an HTTP endpoint
+func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter) MutationResolver {
+	return &httpMutationResolver{hc, rc}
+}
+
+func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolved {
 	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveHTTPQuery")
+	stop := x.SpanTimer(span, "resolveHTTP")
 	defer stop()
 
-	resolved := hr.rewriteAndExecute(ctx, query)
-
+	resolved := hr.rewriteAndExecute(ctx, field)
 	hr.resultCompleter.Complete(ctx, resolved)
 	return resolved
-}
-
-func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) *Resolved {
-	emptyResult := func(err error) *Resolved {
-		return &Resolved{
-			Data:  map[string]interface{}{query.Name(): nil},
-			Field: query,
-			Err:   err,
-		}
-	}
-
-	hrc, err := query.HTTPResolver()
-	if err != nil {
-		return emptyResult(err)
-	}
-
-	res, err := makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
-	if err != nil {
-		return emptyResult(err)
-	}
-
-	var result map[string]interface{}
-	if err := json.Unmarshal(res, &result); err != nil {
-		return emptyResult(err)
-	}
-	return &Resolved{
-		Data:  result,
-		Field: query,
-	}
 }
 
 func makeRequest(client *http.Client, method, url, body string,
@@ -1320,6 +1308,49 @@ func makeRequest(client *http.Client, method, url, body string,
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
-
 	return b, err
+}
+
+func (hr *httpResolver) rewriteAndExecute(
+	ctx context.Context, field schema.Field) *Resolved {
+	emptyResult := func(err error) *Resolved {
+		return &Resolved{
+			Data:  map[string]interface{}{field.Name(): nil},
+			Field: field,
+			Err:   err,
+		}
+	}
+
+	hrc, err := field.CustomHTTPConfig()
+	if err != nil {
+		return emptyResult(err)
+	}
+	var body string
+	if hrc.Template != nil {
+		b, err := json.Marshal(*hrc.Template)
+		if err != nil {
+			return emptyResult(err)
+		}
+		body = string(b)
+	}
+
+	res, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+	var result map[string]interface{}
+	if err := json.Unmarshal(res, &result); err != nil {
+		return emptyResult(err)
+	}
+	return &Resolved{
+		Data:  result,
+		Field: field,
+	}
+}
+
+func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	return (*httpResolver)(h).Resolve(ctx, query)
+}
+
+func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved,
+	bool) {
+	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
+	return resolved, resolved.Err == nil || resolved.Err.Error() == ""
 }

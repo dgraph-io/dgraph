@@ -2,11 +2,13 @@
 # Input Schema
 #######################
 
-type Message {
+type User {
 	id: ID!
-	content: String!
-	author: String
-	datePosted: DateTime
+	name: String!
+}
+
+input UserInput {
+	name: String!
 }
 
 #######################
@@ -113,18 +115,18 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeleteMessagePayload {
+type DeleteUserPayload {
 	msg: String
 	numUids: Int
 }
 
-type UpdateMessagePayload {
-	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
@@ -132,50 +134,42 @@ type UpdateMessagePayload {
 # Generated Enums
 #######################
 
-enum MessageOrderable {
-	content
-	author
-	datePosted
+enum UserOrderable {
+	name
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddMessageInput {
-	content: String!
-	author: String
-	datePosted: DateTime
+input AddUserInput {
+	name: String!
 }
 
-input MessageFilter {
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
 	id: [ID!]
-	not: MessageFilter
+	not: UserFilter
 }
 
-input MessageOrder {
-	asc: MessageOrderable
-	desc: MessageOrderable
-	then: MessageOrder
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input MessagePatch {
-	content: String
-	author: String
-	datePosted: DateTime
+input UserPatch {
+	name: String
 }
 
-input MessageRef {
+input UserRef {
 	id: ID
-	content: String
-	author: String
-	datePosted: DateTime
-}
-
-input UpdateMessageInput {
-	filter: MessageFilter!
-	set: MessagePatch
-	remove: MessagePatch
+	name: String
 }
 
 #######################
@@ -183,8 +177,8 @@ input UpdateMessageInput {
 #######################
 
 type Query {
-	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -192,9 +186,10 @@ type Query {
 #######################
 
 type Mutation {
-	addMessage(input: [AddMessageInput!]!): AddMessagePayload
-	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
-	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
 #######################
@@ -202,6 +197,6 @@ type Mutation {
 #######################
 
 type Subscription {
-	getMessage(id: ID!): Message
-	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }

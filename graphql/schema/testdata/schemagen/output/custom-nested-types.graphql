@@ -18,6 +18,16 @@ type User implements Person @remote {
 	cars: [Car]
 }
 
+input UserInput {
+	name: String!
+	age: Int!
+	cars: [CarInput]
+}
+
+input CarInput {
+	name: String!
+}
+
 #######################
 # Extended Definitions
 #######################
@@ -41,8 +51,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {
@@ -121,5 +134,13 @@ input StringHashFilter {
 
 type Query {
 	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"$input"})
 }
 
