@@ -171,7 +171,7 @@ func checkValue(t *testing.T, ol *List, val string, readTs uint64) {
 // TODO(txn): Add tests after lru eviction
 func TestAddMutation_Value(t *testing.T) {
 	key := x.DataKey("value", 10)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	edge := &pb.DirectedEdge{
 		Value: []byte("oh hey there"),
@@ -194,7 +194,7 @@ func TestAddMutation_Value(t *testing.T) {
 
 func TestAddMutation_jchiu1(t *testing.T) {
 	key := x.DataKey("value", 12)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -241,7 +241,7 @@ func TestAddMutation_jchiu1(t *testing.T) {
 
 func TestAddMutation_DelSet(t *testing.T) {
 	key := x.DataKey("value", 1534)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// DO sp*, don't commit
@@ -267,7 +267,7 @@ func TestAddMutation_DelSet(t *testing.T) {
 
 func TestAddMutation_DelRead(t *testing.T) {
 	key := x.DataKey("value", 1543)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to newcars, and commit it
@@ -306,7 +306,7 @@ func TestAddMutation_DelRead(t *testing.T) {
 
 func TestAddMutation_jchiu2(t *testing.T) {
 	key := x.DataKey("value", 15)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
@@ -330,7 +330,7 @@ func TestAddMutation_jchiu2(t *testing.T) {
 
 func TestAddMutation_jchiu2_Commit(t *testing.T) {
 	key := x.DataKey("value", 16)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Del a value cars and but don't merge.
@@ -357,7 +357,7 @@ func TestAddMutation_jchiu2_Commit(t *testing.T) {
 
 func TestAddMutation_jchiu3(t *testing.T) {
 	key := x.DataKey("value", 29)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -401,7 +401,7 @@ func TestAddMutation_jchiu3(t *testing.T) {
 
 func TestAddMutation_mrjn1(t *testing.T) {
 	key := x.DataKey("value", 21)
-	ol, err := GetNoStore(key)
+	ol, err := GetNoStore(key, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set a value cars and merge.
@@ -454,7 +454,7 @@ func TestMillion(t *testing.T) {
 	maxListSize = math.MaxInt32
 
 	key := x.DataKey("bal", 1331)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var commits int
 	N := int(1e6)
@@ -472,7 +472,7 @@ func TestMillion(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -492,7 +492,7 @@ func TestMillion(t *testing.T) {
 func TestAddMutation_mrjn2(t *testing.T) {
 	ctx := context.Background()
 	key := x.DataKey("bal", 1001)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	var readTs uint64
 	for readTs = 1; readTs < 10; readTs++ {
@@ -570,7 +570,7 @@ func TestAddMutation_mrjn2(t *testing.T) {
 
 func TestAddMutation_gru(t *testing.T) {
 	key := x.DataKey("question.tag", 0x01)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -607,7 +607,7 @@ func TestAddMutation_gru(t *testing.T) {
 
 func TestAddMutation_gru2(t *testing.T) {
 	key := x.DataKey("question.tag", 0x100)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -659,7 +659,7 @@ func TestAddAndDelMutation(t *testing.T) {
 	// Ensure each test uses unique key since we don't clear the postings
 	// after each test
 	key := x.DataKey("dummy_key", 0x927)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	{
@@ -689,7 +689,7 @@ func TestAddAndDelMutation(t *testing.T) {
 
 func TestAfterUIDCount(t *testing.T) {
 	key := x.DataKey("value", 22)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	// Set value to cars and merge to BadgerDB.
 	edge := &pb.DirectedEdge{
@@ -763,7 +763,7 @@ func TestAfterUIDCount(t *testing.T) {
 
 func TestAfterUIDCount2(t *testing.T) {
 	key := x.DataKey("value", 23)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -793,7 +793,7 @@ func TestAfterUIDCount2(t *testing.T) {
 
 func TestDelete(t *testing.T) {
 	key := x.DataKey("value", 25)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -817,7 +817,7 @@ func TestDelete(t *testing.T) {
 
 func TestAfterUIDCountWithCommit(t *testing.T) {
 	key := x.DataKey("value", 26)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Set value to cars and merge to BadgerDB.
@@ -903,7 +903,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}()
 
 	key := x.DataKey(uuid.New().String(), 1331)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -921,7 +921,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -933,7 +933,7 @@ func createMultiPartList(t *testing.T, size int, addLabel bool) (*List, int) {
 	}
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps)
+	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 0)
 
@@ -948,7 +948,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 	}()
 
 	key := x.DataKey(uuid.New().String(), 1331)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -963,7 +963,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -983,7 +983,7 @@ func createAndDeleteMultiPartList(t *testing.T, size int) (*List, int) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 		commits++
@@ -1089,7 +1089,7 @@ func TestMultiPartListWriteToDisk(t *testing.T) {
 	require.Equal(t, len(kvs), len(originalList.plist.Splits)+1)
 
 	require.NoError(t, writePostingListToDisk(kvs))
-	newList, err := getNew(kvs[0].Key, ps)
+	newList, err := getNew(kvs[0].Key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	opt := ListOptions{ReadTs: uint64(size) + 1}
@@ -1140,7 +1140,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 
 	// Add entries to the maps.
 	key := x.DataKey(uuid.New().String(), 1331)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for i := 1; i <= size; i++ {
 		edge := &pb.DirectedEdge{
@@ -1154,7 +1154,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1181,7 +1181,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1190,7 +1190,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps)
+	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	for _, kv := range kvs {
 		require.Equal(t, baseStartTs+uint64(1+size/2), kv.Version)
@@ -1218,7 +1218,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 			kvs, err := ol.Rollup()
 			require.NoError(t, err)
 			require.NoError(t, writePostingListToDisk(kvs))
-			ol, err = getNew(key, ps)
+			ol, err = getNew(key, ps, math.MaxUint64)
 			require.NoError(t, err)
 		}
 	}
@@ -1227,7 +1227,7 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	kvs, err = ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps)
+	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 
 	// Verify all entries are once again in the list.
@@ -1280,7 +1280,7 @@ func TestRecursiveSplits(t *testing.T) {
 	// Create a list that should be split recursively.
 	size := int(1e5)
 	key := x.DataKey(uuid.New().String(), 1331)
-	ol, err := getNew(key, ps)
+	ol, err := getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	commits := 0
 	for i := 1; i <= size; i++ {
@@ -1302,7 +1302,7 @@ func TestRecursiveSplits(t *testing.T) {
 	kvs, err := ol.Rollup()
 	require.NoError(t, err)
 	require.NoError(t, writePostingListToDisk(kvs))
-	ol, err = getNew(key, ps)
+	ol, err = getNew(key, ps, math.MaxUint64)
 	require.NoError(t, err)
 	require.True(t, len(ol.plist.Splits) > 2)
 
@@ -1344,7 +1344,7 @@ func TestMain(m *testing.M) {
 
 func BenchmarkAddMutations(b *testing.B) {
 	key := x.DataKey("name", 1)
-	l, err := getNew(key, ps)
+	l, err := getNew(key, ps, math.MaxUint64)
 	if err != nil {
 		b.Error(err)
 	}

@@ -324,99 +324,164 @@ func TestCheckNonNulls(t *testing.T) {
 	}
 }
 
-func TestParseCustomBody(t *testing.T) {
+func TestSubstituteVarsInBody(t *testing.T) {
 	tcases := []struct {
 		name        string
 		variables   map[string]interface{}
-		template    string
-		expected    string
+		template    map[string]interface{}
+		expected    map[string]interface{}
 		expectedErr error
 	}{
 		{
+			"handle nil template correctly",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"handle empty object template correctly",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			map[string]interface{}{},
+			map[string]interface{}{},
+			nil,
+		},
+		{
 			"substitutes variables correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
-			`{ author: $id, post: { id: $postID }}`,
-			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]interface{}{"author": "0x3", "post": map[string]interface{}{"id": "0x9"}},
+			nil,
+		},
+		{
+			"substitutes variables with an array in template correctly",
+			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
+				"text": "Random comment", "age": 28},
+			map[string]interface{}{"author": "$id", "admin": "$admin",
+				"post": map[string]interface{}{"id": "$postID",
+					"comments": []interface{}{map[string]interface{}{"text": "$text"}}}, "age": "$age"},
+			map[string]interface{}{"author": "0x3", "admin": false,
+				"post": map[string]interface{}{"id": "0x9",
+					"comments": []interface{}{map[string]interface{}{"text": "Random comment"}}}, "age": 28},
 			nil,
 		},
 		{
 			"substitutes array variables correctly",
 			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
 				"check": []interface{}{1, 3.14, "test"}},
-			`{ ids: $ids, names: $names, check: $check }`,
-			`{ "ids": [1,2,3], "names": ["M1","M2"], "check": [1,3.14,"test"] }`,
+			map[string]interface{}{"ids": "$ids", "names": "$names", "check": "$check"},
+			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
+				"check": []interface{}{1, 3.14, "test"}},
 			nil,
 		},
 		{
 			"substitutes object variables correctly",
 			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
-			`{ author: $author }`,
-			`{ "author": {"id":1,"name":"George"} }`,
+			map[string]interface{}{"author": "$author"},
+			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
 			nil,
 		},
 		{
 			"substitutes array of object variables correctly",
 			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
 				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
-			`{ authors: $authors }`,
-			`{ "authors": [{"id":1,"name":"George"},{"id":2,"name":"Jerry"}] }`,
-			nil,
-		},
-		{
-			"substitutes direct body variable correctly",
+			map[string]interface{}{"authors": "$authors"},
 			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
 				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
-			`$authors`,
-			`[{"id":1,"name":"George"},{"id":2,"name":"Jerry"}]`,
-			nil,
-		},
-		{
-			"substitutes variables with multiple properties correctly",
-			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
-				"text": "Random comment", "age": 28},
-			`{ author: $id, admin: $admin, post: { id: $postID, comments: [{ text: $text }] },
-			   age: $age}`,
-			`{ "author": "0x3", "admin": false, "post": { "id": "0x9",
-			   "comments": [{ "text": "Random comment"}]}, "age": 28}`,
 			nil,
 		},
 		{
 			"variable not found error",
 			map[string]interface{}{"postID": "0x9"},
-			`{ author: $id, post: { id: $postID }}`,
-			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			nil,
 			errors.New("couldn't find variable: $id in variables map"),
+		},
+	}
+
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			err := SubstituteVarsInBody(test.template, test.variables)
+			if test.expectedErr == nil {
+				require.NoError(t, err)
+				require.Equal(t, test.expected, test.template)
+			} else {
+				require.EqualError(t, err, test.expectedErr.Error())
+			}
+		})
+	}
+}
+
+func TestParseBodyTemplate(t *testing.T) {
+	tcases := []struct {
+		name           string
+		template       string
+		expected       map[string]interface{}
+		requiredFields map[string]bool
+		expectedErr    error
+	}{
+		{
+			"parses empty body template correctly",
+			``,
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"parses empty object body template correctly",
+			`{}`,
+			map[string]interface{}{},
+			map[string]bool{},
+			nil,
+		},
+		{
+			"parses body template correctly",
+			`{ author: $id, post: { id: $postID }}`,
+			map[string]interface{}{"author": "$id", "post": map[string]interface{}{"id": "$postID"}},
+			map[string]bool{"id": true, "postID": true},
+			nil,
+		},
+		{
+			"parses body template with an array correctly",
+			`{ author: $id, admin: $admin, post: { id: $postID, comments: [{ text: $text }] },
+			   age: $age}`,
+			map[string]interface{}{"author": "$id", "admin": "$admin",
+				"post": map[string]interface{}{"id": "$postID",
+					"comments": []interface{}{map[string]interface{}{"text": "$text"}}}, "age": "$age"},
+			map[string]bool{"id": true, "admin": true, "postID": true, "text": true, "age": true},
+			nil,
 		},
 		{
 			"json unmarshal error",
-			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			`{ author: $id, post: { id $postID }}`,
-			`{ "author": "0x3", "post": { "id": "0x9" }}`,
-			errors.New("couldn't unmarshal HTTP body: {\"author\":\"0x3\",\"post\":{\"id\"\"0x9\"}}" +
+			nil,
+			nil,
+			errors.New("couldn't unmarshal HTTP body: {\"author\":\"$id\",\"post\":{\"id\"\"$postID\"}}" +
 				" as JSON"),
 		},
 		{
 			"unmatched brackets error",
-			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			`{{ author: $id, post: { id: $postID }}`,
-			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			nil,
+			nil,
 			errors.New("found unmatched curly braces while parsing body template"),
 		},
 		{
 			"invalid character error",
-			map[string]interface{}{"id": "0x3", "postID": "0x9"},
 			`(author: $id, post: { id: $postID }}`,
-			`{ "author": "0x3", "post": { "id": "0x9" }}`,
+			nil,
+			nil,
 			errors.New("invalid character: ( while parsing body template"),
 		},
 	}
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, err := substitueVarsInBody(test.template, test.variables)
+			b, requiredFields, err := parseBodyTemplate(test.template)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
-				require.JSONEq(t, test.expected, string(b))
+				require.Equal(t, test.requiredFields, requiredFields)
+				require.Equal(t, test.expected, b)
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
 			}
@@ -519,7 +584,7 @@ func TestSubstituteVarsInURL(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			b, err := substituteVarsInURL(test.url, test.variables)
+			b, err := SubstituteVarsInURL(test.url, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, string(b))

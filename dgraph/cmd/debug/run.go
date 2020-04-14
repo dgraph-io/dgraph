@@ -30,6 +30,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/dgraph/codec"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -55,6 +56,7 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
+	badgerKeyFile string
 
 	// Options related to the WAL.
 	wdir           string
@@ -85,6 +87,8 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
+	flag.StringVarP(&opt.badgerKeyFile, "encryption_key_file", "k", "",
+		"File where the encryption key is stored.")
 
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
@@ -763,7 +767,7 @@ func run() {
 	}
 	bopts := badger.DefaultOptions(dir).
 		WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(opt.readOnly)
+		WithReadOnly(opt.readOnly).WithEncryptionKey(enc.ReadEncryptionKeyFile(opt.badgerKeyFile))
 
 	// TODO(Ibrahim): Remove this once badger is updated.
 	bopts.ZSTDCompressionLevel = 1

@@ -31,8 +31,8 @@ clean:
 check:
 	@./depcheck.sh && \
 		(echo "Upgrading proto libraries before regenerating." ; \
-		go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+		GO111MODULE=off go get -u github.com/golang/protobuf/protoc-gen-go ; \
+		GO111MODULE=off go get -u github.com/gogo/protobuf/protoc-gen-gofast)
 
 .PHONY: regenerate
 regenerate: check clean
@@ -43,7 +43,7 @@ regenerate: check clean
 	@sed -i'' -e 's;github.com/dgraph-io/badger/v2/pb/pb.proto;github.com/dgraph-io/badger/pb/pb.proto;' pb.proto
 	@protoc \
 		--proto_path=${PROTO_PATH} \
-		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v2/protos/api:pb \
+		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v200/protos/api:pb \
 		pb.proto
 	@sed -i'' -e 's;github.com/dgraph-io/badger/pb/pb.proto;github.com/dgraph-io/badger/v2/pb/pb.proto;' pb.proto
 	@sed -i'' -e 's;github.com/dgraph-io/badger/pb;github.com/dgraph-io/badger/v2/pb;' pb/pb.pb.go

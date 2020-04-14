@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
@@ -87,7 +87,6 @@ func (exp *Experiment) verify() {
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{DropAll: true}), "drop all failed")
 	require.NoError(exp.t, dg.Alter(ctx, &api.Operation{Schema: exp.schema}),
 		"schema change failed")
-	require.NoError(exp.t, testutil.WaitForAlter(ctx, dg, exp.schema))
 
 	_, err = dg.NewTxn().Mutate(ctx,
 		&api.Mutation{Set: exp.nqs, CommitNow: true})

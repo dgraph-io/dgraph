@@ -47,10 +47,11 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
-type HTTPResolverConfig struct {
+type FieldHTTPConfig struct {
 	URL            string
 	Method         string
-	Body           string
+	Template       map[string]interface{}
+	Operation      string
 	ForwardHeaders http.Header
 }
 
@@ -103,6 +104,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
+	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
 	Location() x.Location
@@ -113,7 +115,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	HTTPResolver() (HTTPResolverConfig, error)
+	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -147,6 +149,7 @@ type Type interface {
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
+	FieldOriginatedFrom(fieldName string) string
 	fmt.Stringer
 }
 
@@ -306,6 +309,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 			if fieldName == interfaceField.Name {
 				return interfaceDef
 			}
+		}
+	}
+	return nil
+}
+
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
 		}
 	}
 	return nil
@@ -559,6 +578,52 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
+func (f *field) HasCustomDirective() (bool, map[string]bool) {
+	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
+	if typeDef == nil {
+		return false, nil
+	}
+	tf := typeDef.Fields.ForName(f.Name())
+	if tf == nil {
+		return false, nil
+	}
+	custom := tf.Directives.ForName("custom")
+	if custom == nil {
+		return false, nil
+	}
+
+	var rf map[string]bool
+	httpArg := custom.Arguments.ForName("http")
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		_, rf, _ = parseBodyTemplate(bodyTemplate)
+	}
+
+	if rf == nil {
+		rf = make(map[string]bool)
+	}
+	rawURL := httpArg.Value.Children.ForName("url").Raw
+	// Error here should be nil as we should have parsed and validated the URL
+	// already.
+	u, _ := url.Parse(rawURL)
+	// Parse variables from the path and query params.
+	elems := strings.Split(u.Path, "/")
+	for _, elem := range elems {
+		if strings.HasPrefix(elem, "$") {
+			rf[elem[1:]] = true
+		}
+	}
+	for k := range u.Query() {
+		val := u.Query().Get(k)
+		if strings.HasPrefix(val, "$") {
+			rf[val[1:]] = true
+		}
+	}
+	return true, rf
+}
+
 func (f *field) XIDArg() string {
 	xidArgName := ""
 	passwordField := f.Type().PasswordField()
@@ -632,6 +697,61 @@ func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
 }
 
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
+	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
+	tf := typeDef.Fields.ForName(f.Name())
+	custom := tf.Directives.ForName(customDirective)
+	httpArg := custom.Arguments.ForName("http")
+	fconf := FieldHTTPConfig{
+		URL:    httpArg.Value.Children.ForName("url").Raw,
+		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	bodyArg := httpArg.Value.Children.ForName("body")
+	if bodyArg != nil {
+		bodyTemplate := bodyArg.Raw
+		bt, _, err := parseBodyTemplate(bodyTemplate)
+		if err != nil {
+			return fconf, err
+		}
+		fconf.Template = bt
+	}
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		headers := http.Header{}
+		for _, h := range forwardHeaders.Children {
+			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+		}
+		fconf.ForwardHeaders = headers
+	}
+
+	// if it is a query or mutation, substitute the vars in URL and Body here itself
+	if isQueryOrMutation {
+		var err error
+		argMap := f.field.ArgumentMap(f.op.vars)
+		fconf.URL, err = SubstituteVarsInURL(fconf.URL, argMap)
+		if err != nil {
+			return fconf, errors.Wrapf(err, "while substituting vars in URL")
+		}
+		if len(fconf.Template) > 0 {
+			if err = SubstituteVarsInBody(fconf.Template, argMap); err != nil {
+				return fconf, errors.Wrapf(err, "while substituting vars in Body")
+			}
+		}
+	} else {
+		fconf.Operation = "batch"
+		op := httpArg.Value.Children.ForName("operation")
+		if op != nil {
+			fconf.Operation = op.Raw
+		}
+	}
+	return fconf, nil
+}
+
+func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false)
+}
+
 func (f *field) SelectionSet() (flds []Field) {
 	for _, s := range f.field.SelectionSet {
 		if fld, ok := s.(*ast.Field); ok {
@@ -703,46 +823,6 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
-func (f *field) HTTPResolver() (HTTPResolverConfig, error) {
-	// We have to fetch the original definition of the field from the name of the field to be
-	// able to get the value stored in custom directive.
-	// TODO - This should be cached later.
-	field := f.op.inSchema.schema.Types[f.GetObjectName()].Fields.ForName(f.Name())
-	custom := field.Directives.ForName(customDirective)
-	httpArg := custom.Arguments.ForName("http")
-	rc := HTTPResolverConfig{
-		URL:    httpArg.Value.Children.ForName("url").Raw,
-		Method: httpArg.Value.Children.ForName("method").Raw,
-	}
-
-	var err error
-	argMap := f.field.ArgumentMap(f.op.vars)
-	rc.URL, err = substituteVarsInURL(rc.URL, argMap)
-	if err != nil {
-		return rc, errors.Wrapf(err, "while substituting vars in URL")
-	}
-
-	bodyArg := httpArg.Value.Children.ForName("body")
-	if bodyArg != nil {
-		bodyTemplate := bodyArg.Raw
-		body, err := substitueVarsInBody(bodyTemplate, argMap)
-		if err != nil {
-			return rc, err
-		}
-		rc.Body = string(body)
-	}
-	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
-	if forwardHeaders != nil {
-		headers := http.Header{}
-		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
-		}
-		rc.ForwardHeaders = headers
-	}
-
-	return rc, nil
-}
-
 func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
@@ -775,6 +855,10 @@ func (q *query) Include() bool {
 	return true
 }
 
+func (q *query) HasCustomDirective() (bool, map[string]bool) {
+	return (*field)(q).HasCustomDirective()
+}
+
 func (q *query) IDArgValue() (*string, uint64, error) {
 	return (*field)(q).IDArgValue()
 }
@@ -801,6 +885,10 @@ func (q *query) ResponseName() string {
 
 func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
+}
+
+func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true)
 }
 
 func (q *query) QueryType() QueryType {
@@ -844,10 +932,6 @@ func (q *query) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(q).IncludeInterfaceField(dgraphTypes)
 }
 
-func (q *query) HTTPResolver() (HTTPResolverConfig, error) {
-	return (*field)(q).HTTPResolver()
-}
-
 func (m *mutation) Name() string {
 	return (*field)(m).Name()
 }
@@ -874,6 +958,10 @@ func (m *mutation) Skip() bool {
 
 func (m *mutation) Include() bool {
 	return true
+}
+
+func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
+	return (*field)(m).HasCustomDirective()
 }
 
 func (m *mutation) Type() Type {
@@ -924,6 +1012,10 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
+func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true)
+}
+
 func (m *mutation) GetObjectName() string {
 	return m.field.ObjectDefinition.Name
 }
@@ -957,10 +1049,6 @@ func (m *mutation) DgraphPredicate() string {
 
 func (m *mutation) TypeName(dgraphTypes []interface{}) string {
 	return (*field)(m).TypeName(dgraphTypes)
-}
-
-func (m *mutation) HTTPResolver() (HTTPResolverConfig, error) {
-	return (*field)(m).HTTPResolver()
 }
 
 func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
@@ -1364,7 +1452,7 @@ func setMapInQuery(queryParams url.Values, key string, object map[string]interfa
 	}
 }
 
-func substituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
+func SubstituteVarsInURL(rawURL string, vars map[string]interface{}) (string,
 	error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -1481,37 +1569,20 @@ func writeMapInBody(object map[string]interface{}, buf *bytes.Buffer) {
 	buf.WriteString("}")
 }
 
-// Given a template for a body with variables defined, this function parses the body, substitutes
-// the variables and returns the final JSON.
+// Given a template for a body with variables defined, this function parses the body
+// and converts it into a JSON representation and returns that.
 // for e.g.
-// { author: $id, post: { id: $postID }} with variables {"id": "0x3", postID: "0x9"} should return
-// { "author" : "0x3", "post": { "id": "0x9" }}
+// { author: $id, post: { id: $postID }}
+// { "author" : "$id", "post": { "id": "$postID" }}
 // If the final result is not a valid JSON, then an error is returned.
-func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte, error) {
-	variableNotFoundError := func(varName string) error {
-		return errors.Errorf("couldn't find variable: %s in variables map", varName)
-	}
-
-	// if body directly contains a variable instead of a json template, marshal that
-	if body[0] == '$' {
-		varVal, ok := variables[body[1:]]
-		if !ok {
-			return nil, variableNotFoundError(body)
-		}
-		res, err := json.Marshal(varVal)
-		if err != nil {
-			return nil, err
-		}
-		return res, nil
-	}
-
-	// otherwise; body contains a json template
+func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, error) {
 	var s scanner.Scanner
 	s.Init(strings.NewReader(body))
 
 	result := new(bytes.Buffer)
 	parsingVariable := false
 	depth := 0
+	requiredFields := make(map[string]bool)
 	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
 		text := s.TokenText()
 		switch {
@@ -1527,29 +1598,90 @@ func substitueVarsInBody(body string, variables map[string]interface{}) ([]byte,
 			parsingVariable = true
 		case isName(text):
 			// Name could either be a key or be part of a variable after dollar.
-			if parsingVariable {
-				variable := "$" + text
-				// Look it up in the map and replace.
-				val, ok := variables[text]
-				if !ok {
-					return nil, variableNotFoundError(variable)
-				}
-				writeValInBody(val, result)
-				parsingVariable = false
+			if !parsingVariable {
+				result.WriteString(fmt.Sprintf(`"%s"`, text))
 				continue
 			}
-			result.WriteString(fmt.Sprintf(`"%s"`, text))
+			requiredFields[text] = true
+			variable := "$" + text
+			fmt.Fprintf(result, `"%s"`, variable)
+			parsingVariable = false
+
 		default:
-			return nil, errors.Errorf("invalid character: %s while parsing body template", text)
+			return nil, nil, errors.Errorf("invalid character: %s while parsing body template",
+				text)
 		}
 	}
 	if depth != 0 {
-		return nil, errors.New("found unmatched curly braces while parsing body template")
+		return nil, nil, errors.New("found unmatched curly braces while parsing body template")
+	}
+
+	if result.Len() == 0 {
+		return nil, nil, nil
 	}
 
 	m := make(map[string]interface{})
 	if err := json.Unmarshal(result.Bytes(), &m); err != nil {
-		return nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
+		return nil, nil, errors.Errorf("couldn't unmarshal HTTP body: %s as JSON", result.Bytes())
 	}
-	return result.Bytes(), nil
+	return m, requiredFields, nil
+}
+
+// Given a JSON representation for a body with variables defined, this function substitutes
+// the variables and returns the final JSON.
+// for e.g.
+// { "author" : "$id", "post": { "id": "$postID" }} with variables {"id": "0x3", postID: "0x9"}
+// should return { "author" : "0x3", "post": { "id": "0x9" }}
+func SubstituteVarsInBody(jsonTemplate map[string]interface{},
+	variables map[string]interface{}) error {
+	for k, v := range jsonTemplate {
+		switch val := v.(type) {
+		case string:
+			// Look it up in the map and replace.
+			if !strings.HasPrefix(val, "$") {
+				return errors.Errorf("expected a variable to start with $. Found: %s", val)
+			}
+			vval, ok := variables[val[1:]]
+			if !ok {
+				return errors.Errorf("couldn't find variable: %s in variables map",
+					val)
+			}
+			jsonTemplate[k] = vval
+		case map[string]interface{}:
+			if err := SubstituteVarsInBody(val, variables); err != nil {
+				return err
+			}
+		case []interface{}:
+			for _, mv := range val {
+				mapVal, ok := mv.(map[string]interface{})
+				if !ok {
+					return errors.Errorf("expected a map but got unexpected value in array: %+v",
+						mv)
+				}
+				if err := SubstituteVarsInBody(mapVal, variables); err != nil {
+					return err
+				}
+			}
+		default:
+
+		}
+	}
+	return nil
+}
+
+// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type, this type's name is returned.
+// Otherwise, empty string is returned.
+func (t *astType) FieldOriginatedFrom(fieldName string) string {
+	for _, implements := range t.inSchema.Implements[t.Name()] {
+		if implements.Fields.ForName(fieldName) != nil {
+			return implements.Name
+		}
+	}
+
+	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+		return t.Name()
+	}
+
+	return ""
 }

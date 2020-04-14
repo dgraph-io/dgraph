@@ -282,6 +282,7 @@ var directiveValidators = map[string]directiveValidator{
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
+var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
@@ -391,6 +392,8 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 		}
 	}
 
+	errs = append(errs, applySchemaValidations(schema, definitions)...)
+
 	return errs
 }
 
@@ -399,6 +402,19 @@ func applySchemaDocValidations(schema *ast.SchemaDocument) gqlerror.List {
 
 	for _, rule := range schemaDocValidations {
 		newErrs := rule(schema)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
+		}
+	}
+
+	return errs
+}
+
+func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaValidations {
+		newErrs := rule(schema, definitions)
 		for _, err := range newErrs {
 			errs = appendIfNotNull(errs, err)
 		}
@@ -601,6 +617,13 @@ func addPatchType(schema *ast.Schema, defn *ast.Definition) {
 // }
 func addFieldFilters(schema *ast.Schema, defn *ast.Definition) {
 	for _, fld := range defn.Fields {
+		custom := fld.Directives.ForName(customDirective)
+		// Filtering and ordering for fields with @custom directive is handled by the remote
+		// endpoint.
+		if custom != nil {
+			continue
+		}
+
 		// Filtering makes sense both for lists (= return only items that match
 		// this filter) and for singletons (= only have this value in the result
 		// if it satisfies this filter)
@@ -1181,6 +1204,12 @@ func getNonIDFields(schema *ast.Schema, defn *ast.Definition) ast.FieldList {
 			continue
 		}
 
+		custom := fld.Directives.ForName(customDirective)
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
+			continue
+		}
+
 		// Remove edges which have a reverse predicate as they should only be updated through their
 		// forward edge.
 		fname := fieldName(fld, defn.Name)
@@ -1213,6 +1242,12 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 	fldList := make([]*ast.FieldDefinition, 0)
 	for _, fld := range defn.Fields {
 		if isIDField(defn, fld) {
+			continue
+		}
+
+		custom := fld.Directives.ForName(customDirective)
+		// Fields with @custom directive should not be part of mutation input, hence we skip them.
+		if custom != nil {
 			continue
 		}
 

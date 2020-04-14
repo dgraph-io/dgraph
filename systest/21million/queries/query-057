@@ -1,0 +1,13 @@
+{
+  q(func: eq(count(starring), 100)) {
+	count: count(uid)
+  }
+}
+---
+{
+  "q": [
+    {
+      "count": 10
+    }
+  ]
+}

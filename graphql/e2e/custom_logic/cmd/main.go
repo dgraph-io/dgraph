@@ -17,6 +17,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -35,6 +36,12 @@ type ExpectedRequest struct {
 	// Provide nil value for a key just to ensure that the key exists in request headers.
 	// Provide both key and value to ensure that key exists with given value
 	headers map[string][]string
+}
+
+func check2(v interface{}, err error) {
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 
 func getError(key, val string) error {
@@ -125,10 +132,10 @@ func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	_, _ = w.Write(getDefaultResponse("myFavoriteMovies"))
+	check2(w.Write(getDefaultResponse("myFavoriteMovies")))
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -139,10 +146,10 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	_, _ = w.Write(getDefaultResponse("myFavoriteMoviesPost"))
+	check2(w.Write(getDefaultResponse("myFavoriteMoviesPost")))
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
@@ -158,10 +165,10 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	_, _ = w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`))
+	check2(w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -172,11 +179,11 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
 		headers:   nil,
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
 
-	_, _ = w.Write([]byte(`
+	check2(w.Write([]byte(`
 	{
       "createMyFavouriteMovies": [
         {
@@ -194,22 +201,22 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
           "name": "Mov2"
         }
       ]
-    }`))
+    }`)))
 }
 
 func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, ExpectedRequest{
 		method:    http.MethodPatch,
 		urlSuffix: "/favMoviesUpdate/0x1",
-		body:      `{"director":[{"name":"Dir1"}],"name":"Mov1"}`,
+		body:      `{"movie":{"director":[{"name":"Dir1"}],"name":"Mov1"}}`,
 		headers:   nil,
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
 
-	_, _ = w.Write([]byte(`
+	check2(w.Write([]byte(`
 	{
       "updateMyFavouriteMovie": {
         "id": "0x1",
@@ -221,7 +228,7 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
           }
         ]
       }
-    }`))
+    }`)))
 }
 
 func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
@@ -237,17 +244,235 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		_, _ = w.Write([]byte(err.Error()))
+		check2(w.Write([]byte(err.Error())))
 		return
 	}
 
-	_, _ = w.Write([]byte(`
+	check2(w.Write([]byte(`
 	{
       "deleteMyFavouriteMovie": {
         "id": "0x1",
         "name": "Mov1"
       }
-    }`))
+    }`)))
+}
+
+type input struct {
+	ID string `json:"uid"`
+}
+
+func (i input) Name() string {
+	return "uname-" + i.ID
+}
+
+func getInput(r *http.Request, v interface{}) error {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		fmt.Println("while reading body: ", err)
+		return err
+	}
+	if err := json.Unmarshal(b, v); err != nil {
+		fmt.Println("while doing JSON unmarshal: ", err)
+		return err
+	}
+	return nil
+}
+
+func userNamesHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []input
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	// append uname to the id and return it.
+	res := make([]interface{}, 0, len(inputBody))
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, "uname-"+inputBody[i].ID)
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+type tinput struct {
+	ID string `json:"tid"`
+}
+
+func (i tinput) Name() string {
+	return "tname-" + i.ID
+}
+
+func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []tinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	// append tname to the id and return it.
+	res := make([]interface{}, 0, len(inputBody))
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, "tname-"+inputBody[i].ID)
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+type sinput struct {
+	ID string `json:"sid"`
+}
+
+func (i sinput) Name() string {
+	return "sname-" + i.ID
+}
+
+func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []sinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	// append sname to the id and return it.
+	res := make([]interface{}, 0, len(inputBody))
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, "sname-"+inputBody[i].ID)
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func carsHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []input
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := []interface{}{}
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, map[string]interface{}{
+			"name": "car-" + inputBody[i].ID,
+		})
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func classesHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody []sinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := []interface{}{}
+	for i := 0; i < len(inputBody); i++ {
+		res = append(res, []map[string]interface{}{{
+			"name": "class-" + inputBody[i].ID,
+		}})
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+type entity interface {
+	Name() string
+}
+
+func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
+	err := getInput(r, input)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	n := fmt.Sprintf(`"%s"`, input.Name())
+	fmt.Fprintf(w, n)
+}
+
+func userNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody input
+	nameHandler(w, r, &inputBody)
+}
+
+func carHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody input
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := map[string]interface{}{
+		"name": "car-" + inputBody.ID,
+	}
+
+	b, err := json.Marshal(res)
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func classHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody sinput
+	err := getInput(r, &inputBody)
+	if err != nil {
+		fmt.Println("while reading input: ", err)
+		return
+	}
+
+	res := make(map[string]interface{})
+	res["name"] = "class-" + inputBody.ID
+
+	b, err := json.Marshal([]interface{}{res})
+	if err != nil {
+		fmt.Println("while marshaling result: ", err)
+		return
+	}
+	fmt.Fprintf(w, string(b))
+}
+
+func teacherNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody tinput
+	nameHandler(w, r, &inputBody)
+}
+
+func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
+	var inputBody sinput
+	nameHandler(w, r, &inputBody)
 }
 
 func main() {
@@ -258,6 +483,20 @@ func main() {
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
+
+	// for testing batch mode
+	http.HandleFunc("/userNames", userNamesHandler)
+	http.HandleFunc("/cars", carsHandler)
+	http.HandleFunc("/classes", classesHandler)
+	http.HandleFunc("/teacherNames", teacherNamesHandler)
+	http.HandleFunc("/schoolNames", schoolNamesHandler)
+
+	// for testing single mode
+	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/car", carHandler)
+	http.HandleFunc("/class", classHandler)
+	http.HandleFunc("/teacherName", teacherNameHandler)
+	http.HandleFunc("/schoolName", schoolNameHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))

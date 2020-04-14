@@ -27,8 +27,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -92,9 +92,6 @@ func setup(c *dgo.Dgraph) {
 		`,
 	}
 	x.Check(c.Alter(ctx, op))
-	if err := testutil.WaitForAlter(ctx, c, op.Schema); err != nil {
-		x.Check(err)
-	}
 }
 
 func doUpserts(c *dgo.Dgraph) {

@@ -178,6 +178,22 @@ func (s *state) DeleteMutSchema(pred string) {
 	delete(s.mutSchema, pred)
 }
 
+// GetIndexingPredicates returns the list of predicates for which we are building indexes.
+func GetIndexingPredicates() []string {
+	s := State()
+	s.Lock()
+	defer s.Unlock()
+	if len(s.mutSchema) == 0 {
+		return nil
+	}
+
+	ps := make([]string, 0, len(s.mutSchema))
+	for p := range s.mutSchema {
+		ps = append(ps, p)
+	}
+	return ps
+}
+
 // SetType sets the type for the given predicate in memory.
 // schema mutations must flow through the update function, which are synced to the db.
 func (s *state) SetType(typeName string, typ pb.TypeUpdate) {
@@ -518,6 +534,10 @@ func InitialTypes() []*pb.TypeUpdate {
 					Predicate: "dgraph.graphql.schema",
 					ValueType: pb.Posting_STRING,
 				},
+				{
+					Predicate: "dgraph.graphql.xid",
+					ValueType: pb.Posting_STRING,
+				},
 			},
 		})
 
@@ -600,6 +620,12 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	}, &pb.SchemaUpdate{
 		Predicate: "dgraph.graphql.schema",
 		ValueType: pb.Posting_STRING,
+	}, &pb.SchemaUpdate{
+		Predicate: "dgraph.graphql.xid",
+		ValueType: pb.Posting_STRING,
+		Directive: pb.SchemaUpdate_INDEX,
+		Tokenizer: []string{"exact"},
+		Upsert:    true,
 	})
 
 	if all || x.WorkerConfig.AclEnabled {
