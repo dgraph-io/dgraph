@@ -1627,6 +1627,18 @@ func parseBodyTemplate(body string) (map[string]interface{}, map[string]bool, er
 	return m, requiredFields, nil
 }
 
+func getVar(key string, variables map[string]interface{}) (interface{}, error) {
+	if !strings.HasPrefix(key, "$") {
+		return nil, errors.Errorf("expected a variable to start with $. Found: %s", key)
+	}
+	val, ok := variables[key[1:]]
+	if !ok {
+		return nil, errors.Errorf("couldn't find variable: %s in variables map", key)
+	}
+
+	return val, nil
+}
+
 // Given a JSON representation for a body with variables defined, this function substitutes
 // the variables and returns the final JSON.
 // for e.g.
@@ -1638,13 +1650,9 @@ func SubstituteVarsInBody(jsonTemplate map[string]interface{},
 		switch val := v.(type) {
 		case string:
 			// Look it up in the map and replace.
-			if !strings.HasPrefix(val, "$") {
-				return errors.Errorf("expected a variable to start with $. Found: %s", val)
-			}
-			vval, ok := variables[val[1:]]
-			if !ok {
-				return errors.Errorf("couldn't find variable: %s in variables map",
-					val)
+			vval, err := getVar(val, variables)
+			if err != nil {
+				return err
 			}
 			jsonTemplate[k] = vval
 		case map[string]interface{}:
@@ -1652,18 +1660,24 @@ func SubstituteVarsInBody(jsonTemplate map[string]interface{},
 				return err
 			}
 		case []interface{}:
-			for _, mv := range val {
-				mapVal, ok := mv.(map[string]interface{})
-				if !ok {
-					return errors.Errorf("expected a map but got unexpected value in array: %+v",
-						mv)
-				}
-				if err := SubstituteVarsInBody(mapVal, variables); err != nil {
-					return err
+			for i, mv := range val {
+				switch mapVal := mv.(type) {
+				case string:
+					// Look it up in the map and replace.
+					vval, err := getVar(mapVal, variables)
+					if err != nil {
+						return err
+					}
+					val[i] = vval
+				case map[string]interface{}:
+					if err := SubstituteVarsInBody(mapVal, variables); err != nil {
+						return err
+					}
+				default:
+					return errors.Errorf("got unexpected type value in array: %+v", mv)
 				}
 			}
 		default:
-
 		}
 	}
 	return nil
