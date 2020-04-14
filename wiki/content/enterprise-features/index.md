@@ -11,10 +11,13 @@ forum](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code. The license can
-be applied to the cluster by including it as the body of a POST request and calling
-`/enterpriseLicense` HTTP endpoint on any Zero server.
+continue enjoying the enterprise features released in the proprietary code.
 
+The license can be applied to the cluster by including it as the body of a POST
+request and calling `/enterpriseLicense` HTTP endpoint on any Zero server. It
+can also be applied by passing the path to the enterprise license file (using
+the flag `--enterprise_license`) to the `dgraph zero` command used to start the
+server. The second option is useful when the process needs to be automated.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
