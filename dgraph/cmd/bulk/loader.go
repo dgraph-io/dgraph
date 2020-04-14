@@ -63,6 +63,7 @@ type options struct {
 	CustomTokenizers string
 	NewUids          bool
 	ClientDir        string
+	Encrypted        bool
 
 	MapShards    int
 	ReduceShards int
@@ -116,7 +117,7 @@ func newLoader(opt *options) *loader {
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
 	}
-	st.schema = newSchemaStore(readSchema(opt.SchemaFile, opt.BadgerKeyFile), opt, st)
+	st.schema = newSchemaStore(readSchema(opt.SchemaFile, opt.BadgerKeyFile, opt.Encrypted), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -143,10 +144,14 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string, keyfile string) *schema.ParsedSchema {
+func readSchema(filename string, keyfile string, fileEncrypted bool) *schema.ParsedSchema {
 	f, err := os.Open(filename)
 	x.Check(err)
 	defer f.Close()
+
+	if !fileEncrypted {
+		keyfile = ""
+	}
 	r, err := enc.GetReader(keyfile, f)
 	x.Check(err)
 	if filepath.Ext(filename) == ".gz" {
@@ -208,7 +213,11 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done(nil)
 
-			r, cleanup := chunker.FileReader(file, ld.opt.BadgerKeyFile)
+			keyfile := ld.opt.BadgerKeyFile
+			if !ld.opt.Encrypted {
+				keyfile = ""
+			}
+			r, cleanup := chunker.FileReader(file, keyfile)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)
