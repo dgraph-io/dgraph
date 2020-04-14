@@ -39,7 +39,7 @@ test:
 it-stable:
 	@echo "  >  \033[32mRunning Integration Tests...\033[0m "
 	@chmod +x scripts/integration-test-all.sh
-	./scripts/integration-test-all.sh
+	./scripts/integration-test-all.sh -q 3 -s 10
 
 ## test: Runs `go test -race` on project test files.
 test-state-race:

@@ -83,11 +83,11 @@ func TestStableRPC(t *testing.T) {
 		expected    interface{}
 	}{
 		{
-			description: "test system_Health",
+			description: "test system_health",
 			method:      "system_health",
 			expected: modules.SystemHealthResponse{
 				Health: common.Health{
-					Peers:           0,
+					Peers:           2,
 					IsSyncing:       false,
 					ShouldHavePeers: true,
 				},
@@ -146,11 +146,17 @@ func TestStableRPC(t *testing.T) {
 
 			switch test.method {
 
-			case "system_Health":
+			case "system_health":
 				var target modules.SystemHealthResponse
 				err = decoder.Decode(&target)
 				require.Nil(t, err)
-				require.Equal(t, target, test.expected)
+
+				log.Debug("Will assert payload", "target", target)
+
+				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.IsSyncing, target.Health.IsSyncing)
+				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, target.Health.ShouldHavePeers)
+
+				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, target.Health.Peers)
 			}
 
 		})
