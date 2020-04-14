@@ -615,10 +615,6 @@ func run() {
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
 
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("alpha exception"))
-	// x.Panic(errors.New("alpha manual panic will send 2 events"))
-
 	if Alpha.Conf.GetBool("enable_sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
