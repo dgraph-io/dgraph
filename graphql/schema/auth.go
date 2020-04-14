@@ -159,7 +159,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		numChildren++
 	}
 
-	if numChildren != 1 {
+	if numChildren != 1 || len(val.Children) > 1 {
 		errResult = AppendGQLErrs(errResult,
 			gqlerror.ErrorPosf(val.Position,
 				`there should be only one of "and", "or", "not" and "rule"`))
