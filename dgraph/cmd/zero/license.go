@@ -38,6 +38,6 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func (st *state) applyLicenceFile(path string) error {
+func (st *state) applyLicenseFile(path string) error {
 	return nil
 }
