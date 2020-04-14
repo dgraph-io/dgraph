@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -246,12 +245,15 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
+		f, fOk := v.Value.(float64)
+
 		// +Inf, -Inf and NaN are not representable in JSON.
 		// Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
-		if math.IsInf(v.Value.(float64), 0) || math.IsNaN(v.Value.(float64)) {
-			return nil, errors.New("Unsupported Inf or NaN in float field")
+		if !fOk || math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil, errors.New("Unsupported floating point number in float field")
 		}
-		return []byte(fmt.Sprintf("%f", v.Value)), nil
+
+		return []byte(fmt.Sprintf("%f", f)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
 			return boolTrue, nil
@@ -337,10 +339,11 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 		a.order = i
 	}
 
-	// Scalar Value
+	// This is a scalar value
 	if len(fj.attrs) == 0 {
-		_, err := out.Write(fj.scalarVal)
-		return err
+		if _, err := out.Write(fj.scalarVal); err != nil {
+			return err
+		}
 	}
 
 	i := 0
@@ -367,29 +370,10 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					if err := cur.writeKey(out); err != nil {
 						return err
 					}
-					cnt++
-				} else {
-					if cnt == 1 {
-						if err := cur.writeKey(out); err != nil {
-							return err
-						}
-						if cur.list {
-							if _, err := out.WriteRune('['); err != nil {
-								return err
-							}
-							inArray = true
-						}
-					}
-					if err := cur.encode(out); err != nil {
+					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
-					if cnt != 1 || cur.list {
-						if _, err := out.WriteRune(']'); err != nil {
-							return err
-						}
-						inArray = false
-					}
-					cnt = 1
+					inArray = true
 				}
 				if err := cur.encode(out); err != nil {
 					return err
@@ -400,10 +384,11 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					if err := cur.writeKey(out); err != nil {
 						return err
 					}
-				}
-				if cur.list && !inArray {
-					if _, err := out.WriteRune('['); err != nil {
-						return err
+					if cur.list {
+						if _, err := out.WriteRune('['); err != nil {
+							return err
+						}
+						inArray = true
 					}
 				}
 				if err := cur.encode(out); err != nil {
@@ -428,7 +413,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					return err
 				}
 			}
-			if (cur.isChild || cur.list) && !inArray {
+			if cur.list && !inArray {
 				if _, err := out.WriteRune('['); err != nil {
 					return err
 				}
@@ -436,7 +421,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 			if err := cur.encode(out); err != nil {
 				return err
 			}
-			if cnt != 1 || (cur.isChild || cur.list) {
+			if cnt != 1 || cur.list {
 				if _, err := out.WriteRune(']'); err != nil {
 					return err
 				}
@@ -447,6 +432,7 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 	if _, err := out.WriteRune('}'); err != nil {
 		return err
 	}
+
 	return nil
 }
 
