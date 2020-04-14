@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"sync"
 	"time"
+
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -401,7 +402,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 			return resolve.NewQueryResolver(
 				health,
 				health,
-				resolve.AliasQueryCompletion())
+				resolve.StdQueryCompletion())
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
 			state := &stateResolver{}
@@ -409,18 +410,19 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 			return resolve.NewQueryResolver(
 				state,
 				state,
-				resolve.AliasQueryCompletion())
+				resolve.StdQueryCompletion())
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}, false
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: m},
+						false
 				})
 		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
 		}).
 		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
@@ -752,12 +754,12 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 	errFunc := func(name string) error { return errors.Errorf(msg, name) }
 	qErr :=
 		resolve.QueryResolverFunc(func(ctx context.Context, query schema.Query) *resolve.Resolved {
-			return &resolve.Resolved{Err: errFunc(query.ResponseName())}
+			return &resolve.Resolved{Err: errFunc(query.ResponseName()), Field: query}
 		})
 
 	mErr := resolve.MutationResolverFunc(
 		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
-			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName()), Field: mutation}, false
 		})
 
 	return resolve.NewResolverFactory(qErr, mErr)

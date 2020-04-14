@@ -844,11 +844,11 @@ func (m *mutation) SelectionSet() []Field {
 }
 
 func (m *mutation) QueryField() Field {
-	for _, i := range m.SelectionSet() {
-		if i.Name() == NumUid {
+	for _, f := range m.SelectionSet() {
+		if f.Name() == NumUid {
 			continue
 		}
-		return i
+		return f
 	}
 	return m.SelectionSet()[0]
 }

@@ -112,7 +112,7 @@ func (asr *updateSchemaResolver) Mutate(
 }
 
 func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
+	return doQuery(asr.admin.schema, asr.mutation.QueryField())
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
