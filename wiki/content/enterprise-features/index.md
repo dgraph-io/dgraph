@@ -674,7 +674,7 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-You can use the following command to create the encryption key file (set _count_ equals to the
+You can use the following command to create the encryption key file (set _count_ to the
 desired key size):
 
 ```
@@ -687,7 +687,7 @@ Here is an example that starts one zero server and one alpha server with the enc
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
 
 If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
@@ -701,5 +701,5 @@ Later we can point the generated `p` directory to a new alpha server.
 Here's an example to run bulk loader with a key used to write encrypted data:
 
 ```bash
-dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
