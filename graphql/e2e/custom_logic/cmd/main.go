@@ -297,7 +297,7 @@ func userNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type tinput struct {
@@ -327,7 +327,7 @@ func teacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type sinput struct {
@@ -357,7 +357,7 @@ func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func carsHandler(w http.ResponseWriter, r *http.Request) {
@@ -380,7 +380,7 @@ func carsHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func classesHandler(w http.ResponseWriter, r *http.Request) {
@@ -403,7 +403,7 @@ func classesHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 type entity interface {
@@ -418,7 +418,7 @@ func nameHandler(w http.ResponseWriter, r *http.Request, input entity) {
 	}
 
 	n := fmt.Sprintf(`"%s"`, input.Name())
-	fmt.Fprintf(w, n)
+	check2(fmt.Fprint(w, n))
 }
 
 func userNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -443,7 +443,7 @@ func carHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func classHandler(w http.ResponseWriter, r *http.Request) {
@@ -462,7 +462,7 @@ func classHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Println("while marshaling result: ", err)
 		return
 	}
-	fmt.Fprintf(w, string(b))
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func teacherNameHandler(w http.ResponseWriter, r *http.Request) {
