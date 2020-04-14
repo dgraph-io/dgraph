@@ -82,6 +82,8 @@ type WorkerOptions struct {
 	LudicrousMode bool
 	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
 	BadgerKeyFile string
+	// LogRequest indicates whehter alpha should print all the requests
+	LogRequest int32
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

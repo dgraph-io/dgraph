@@ -20,8 +20,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"sync"
 	"time"
 
@@ -30,6 +28,8 @@ import (
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -65,7 +65,7 @@ const (
 		schema: String!  @dgraph(pred: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema that was generated from the 'schema' field.  
+		The GraphQL schema that was generated from the 'schema' field.
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
@@ -212,10 +212,16 @@ const (
 	input ConfigInput {
 
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		Estimated memory the LRU cache can take. Actual usage by the process would be
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
+
+		"""
+		Positive value of logRequest will make alpha print all the request it gets.
+		Negative value will will make alpha stop priting all the subsequent requets.
+		"""
+		logRequest: Int
 	}
 
 	type ConfigPayload {

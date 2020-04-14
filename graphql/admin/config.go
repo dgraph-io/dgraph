@@ -19,11 +19,13 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"sync/atomic"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -33,6 +35,12 @@ type configResolver struct {
 
 type configInput struct {
 	LruMB float64
+	// Positive value of logRequest will make alpha print all the request it gets.
+	// To stop we should set it to a negative value, zero value is being ignored because
+	// that might be the case when this parameter isn't specified in query.
+	// It will be used like a boolean. We are keeping int32 because we want to
+	// modify it using atomics(atomics doesn't have support for bool).
+	LogRequest int32
 }
 
 func (cr *configResolver) Rewrite(
@@ -45,8 +53,16 @@ func (cr *configResolver) Rewrite(
 		return nil, nil, err
 	}
 
-	err = worker.UpdateLruMb(input.LruMB)
-	return nil, nil, err
+	if input.LruMB > 0 {
+		if err = worker.UpdateLruMb(input.LruMB); err != nil {
+			return nil, nil, err
+		}
+	}
+	if input.LogRequest != 0 {
+		atomic.StoreInt32(&x.WorkerConfig.LogRequest, input.LogRequest)
+	}
+
+	return nil, nil, nil
 }
 
 func (cr *configResolver) FromMutationResult(
