@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/database"
@@ -458,7 +457,7 @@ func (bs *BlockState) GetSlotForBlock(hash common.Hash) (uint64, error) {
 		return 0, fmt.Errorf("first digest item is not pre-digest")
 	}
 
-	babeHeader := new(babetypes.BabeHeader)
+	babeHeader := new(types.BabeHeader)
 	err = babeHeader.Decode(preDigest.Data)
 	if err != nil {
 		return 0, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
@@ -507,8 +506,8 @@ func babeHeaderKey(epoch uint64, slot uint64) []byte {
 }
 
 // GetBabeHeader retrieves a BabeHeader from the database
-func (bs *BlockState) GetBabeHeader(epoch uint64, slot uint64) (*babetypes.BabeHeader, error) {
-	result := new(babetypes.BabeHeader)
+func (bs *BlockState) GetBabeHeader(epoch uint64, slot uint64) (*types.BabeHeader, error) {
+	result := new(types.BabeHeader)
 
 	data, err := bs.db.Get(babeHeaderKey(epoch, slot))
 	if err != nil {
@@ -521,7 +520,7 @@ func (bs *BlockState) GetBabeHeader(epoch uint64, slot uint64) (*babetypes.BabeH
 }
 
 // SetBabeHeader sets a BabeHeader in the database
-func (bs *BlockState) SetBabeHeader(epoch uint64, slot uint64, bh *babetypes.BabeHeader) error {
+func (bs *BlockState) SetBabeHeader(epoch uint64, slot uint64, bh *types.BabeHeader) error {
 	// Write the encoded header
 	enc := bh.Encode()
 

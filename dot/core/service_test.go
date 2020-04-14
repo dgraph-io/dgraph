@@ -29,7 +29,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
-	"github.com/ChainSafe/gossamer/tests"
 
 	"github.com/stretchr/testify/require"
 )
@@ -45,7 +44,7 @@ func newTestServiceWithFirstBlock(t *testing.T) *Service {
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	err = tt.Put(tests.AuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
+	err = tt.Put(TestAuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
 	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()

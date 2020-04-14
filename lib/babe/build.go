@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
@@ -155,12 +154,12 @@ func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error
 
 // buildBlockBabeHeader creates the BABE header for the slot.
 // the BABE header includes the proof of authorship right for this slot.
-func (b *Session) buildBlockBabeHeader(slot Slot) (*babetypes.BabeHeader, error) {
+func (b *Session) buildBlockBabeHeader(slot Slot) (*types.BabeHeader, error) {
 	if b.slotToProof[slot.number] == nil {
 		return nil, errors.New("not authorized to produce block")
 	}
 	outAndProof := b.slotToProof[slot.number]
-	return &babetypes.BabeHeader{
+	return &types.BabeHeader{
 		VrfOutput:          outAndProof.output,
 		VrfProof:           outAndProof.proof,
 		BlockProducerIndex: b.authorityIndex,

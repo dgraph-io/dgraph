@@ -21,11 +21,10 @@ import (
 	"fmt"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	babetypes "github.com/ChainSafe/gossamer/lib/babe/types"
 )
 
-// verifySlotWinner verifies the claim for a slot, given the BabeHeader for that slot.
-func (b *Session) verifySlotWinner(slot uint64, header *babetypes.BabeHeader) (bool, error) {
+// verifySlotWinner verifies the claim for a slot, given the types.BabeHeader for that slot.
+func (b *Session) verifySlotWinner(slot uint64, header *types.BabeHeader) (bool, error) {
 	if len(b.authorityData) <= int(header.BlockProducerIndex) {
 		return false, fmt.Errorf("no authority data for index %d", header.BlockProducerIndex)
 	}
@@ -71,7 +70,7 @@ func (b *Session) verifyAuthorshipRight(slot uint64, header *types.Header) (bool
 		return false, fmt.Errorf("last digest item is not seal")
 	}
 
-	babeHeader := new(babetypes.BabeHeader)
+	babeHeader := new(types.BabeHeader)
 	err = babeHeader.Decode(preDigest.Data)
 	if err != nil {
 		return false, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
@@ -146,7 +145,7 @@ func getBlockProducerIndex(header *types.Header) (uint64, error) {
 		return 0, err
 	}
 
-	babeHeader := new(babetypes.BabeHeader)
+	babeHeader := new(types.BabeHeader)
 	err = babeHeader.Decode(preDigest.Data)
 	if err != nil {
 		return 0, err
