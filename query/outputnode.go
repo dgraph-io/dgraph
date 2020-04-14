@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -245,7 +246,15 @@ func valToBytes(v types.Val) ([]byte, error) {
 			return []byte(fmt.Sprintf("%d", v.Value)), nil
 		}
 	case types.FloatID:
-		return []byte(fmt.Sprintf("%f", v.Value)), nil
+		f, fOk := v.Value.(float64)
+
+		// +Inf, -Inf and NaN are not representable in JSON.
+		// Please see https://golang.org/src/encoding/json/encode.go?s=6458:6501#L573
+		if !fOk || math.IsInf(f, 0) || math.IsNaN(f) {
+			return nil, errors.New("Unsupported floating point number in float field")
+		}
+
+		return []byte(fmt.Sprintf("%f", f)), nil
 	case types.BoolID:
 		if v.Value.(bool) {
 			return boolTrue, nil
@@ -331,77 +340,55 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 		a.order = i
 	}
 
-	i := 0
-	if i < len(fj.attrs) {
-		if _, err := out.WriteRune('{'); err != nil {
-			return err
-		}
-		cur := fj.attrs[i]
-		i++
-		cnt := 1
-		last := false
-		inArray := false
-		for {
-			var next *fastJsonNode
-			if i < len(fj.attrs) {
-				next = fj.attrs[i]
-				i++
-			} else {
-				last = true
-			}
+	// This is a scalar value
+	if len(fj.attrs) == 0 {
+		_, err := out.Write(fj.scalarVal)
+		return err
+	}
 
-			if !last {
-				if cur.attr == next.attr {
-					if cnt == 1 {
-						if err := cur.writeKey(out); err != nil {
-							return err
-						}
-						if _, err := out.WriteRune('['); err != nil {
-							return err
-						}
-						inArray = true
-					}
-					if err := cur.encode(out); err != nil {
+	i := 0
+	if _, err := out.WriteRune('{'); err != nil {
+		return err
+	}
+	cur := fj.attrs[i]
+	i++
+	cnt := 1
+	last := false
+	inArray := false
+	for {
+		var next *fastJsonNode
+		if i < len(fj.attrs) {
+			next = fj.attrs[i]
+			i++
+		} else {
+			last = true
+		}
+
+		if !last {
+			if cur.attr == next.attr {
+				if cnt == 1 {
+					if err := cur.writeKey(out); err != nil {
 						return err
 					}
-					cnt++
-				} else {
-					if cnt == 1 {
-						if err := cur.writeKey(out); err != nil {
-							return err
-						}
-						if cur.list {
-							if _, err := out.WriteRune('['); err != nil {
-								return err
-							}
-							inArray = true
-						}
-					}
-					if err := cur.encode(out); err != nil {
+					if _, err := out.WriteRune('['); err != nil {
 						return err
 					}
-					if cnt != 1 || cur.list {
-						if _, err := out.WriteRune(']'); err != nil {
-							return err
-						}
-						inArray = false
-					}
-					cnt = 1
+					inArray = true
 				}
-				if _, err := out.WriteRune(','); err != nil {
+				if err := cur.encode(out); err != nil {
 					return err
 				}
-
-				cur = next
+				cnt++
 			} else {
 				if cnt == 1 {
 					if err := cur.writeKey(out); err != nil {
 						return err
 					}
-				}
-				if cur.list && !inArray {
-					if _, err := out.WriteRune('['); err != nil {
-						return err
+					if cur.list {
+						if _, err := out.WriteRune('['); err != nil {
+							return err
+						}
+						inArray = true
 					}
 				}
 				if err := cur.encode(out); err != nil {
@@ -411,17 +398,39 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 					if _, err := out.WriteRune(']'); err != nil {
 						return err
 					}
+					inArray = false
 				}
-				break
+				cnt = 1
 			}
+			if _, err := out.WriteRune(','); err != nil {
+				return err
+			}
+
+			cur = next
+		} else {
+			if cnt == 1 {
+				if err := cur.writeKey(out); err != nil {
+					return err
+				}
+			}
+			if cur.list && !inArray {
+				if _, err := out.WriteRune('['); err != nil {
+					return err
+				}
+			}
+			if err := cur.encode(out); err != nil {
+				return err
+			}
+			if cnt != 1 || cur.list {
+				if _, err := out.WriteRune(']'); err != nil {
+					return err
+				}
+			}
+			break
 		}
-		if _, err := out.WriteRune('}'); err != nil {
-			return err
-		}
-	} else {
-		if _, err := out.Write(fj.scalarVal); err != nil {
-			return err
-		}
+	}
+	if _, err := out.WriteRune('}'); err != nil {
+		return err
 	}
 
 	return nil
