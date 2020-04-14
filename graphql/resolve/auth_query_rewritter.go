@@ -24,33 +24,53 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
+	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
 )
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 
-type QueryRewritingCase struct {
+type AuthQueryRewritingCase struct {
 	Name      string
 	GQLQuery  string
 	Variables map[string]interface{}
 	DGQuery   string
+	User      string
+	Role      string
 }
 
-func TestQueryRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("query_test.yaml")
+func TestAuthQueryRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("auth_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
-	var tests []QueryRewritingCase
+	var tests []AuthQueryRewritingCase
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	testRewriter := NewQueryRewriter()
 
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+	type MyCustomClaims struct {
+		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
+		jwt.StandardClaims
+	}
+
+	// Create the Claims
+	claims := MyCustomClaims{
+		map[string]interface{}{},
+		jwt.StandardClaims{
+			ExpiresAt: 15000,
+			Issuer:    "test",
+		},
+	}
+	claims.Foo["User"] = "user1"
+
+	gqlSchema := test.LoadSchemaFromFile(t, "auth-schema.graphql")
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,
@@ -60,6 +80,14 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			ctx := context.Background()
+			claims.Foo["Role"] = tcase.Role
+			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			ss, err := token.SignedString([]byte("Secret"))
+			require.NoError(t, err)
+
+			md := metadata.New(nil)
+			md.Append("authorizationJwt", ss)
+			ctx = metadata.NewIncomingContext(ctx, md)
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)

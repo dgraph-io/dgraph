@@ -1,0 +1,151 @@
+-
+  name: "Authorization filter at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+          }
+        }
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Authorization filter at deep node, rbac rules false"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        columns {
+          name
+          tickets {
+            id
+            title
+          }
+        }
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at root node, rbac rules false"
+  gqlquery: |
+    query {
+      getUser(username: "user1") {
+        username
+        bio
+        disabled
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at deep node, rbac rules false"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+            bio 
+            disabled
+          }
+        }
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+    }
+
+
+-
+  name: "Authorization filter at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+          }
+        }
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Authorization filter at deep node, rbac rules true"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        columns {
+          name
+          tickets {
+            id
+            title
+          }
+        }
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at root node, rbac rules true"
+  gqlquery: |
+    query {
+      getUser(username: "user1") {
+        username
+        bio
+        disabled
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+    }
+
+-
+  name: "Field authorization filters at deep node, rbac rules true"
+  gqlquery: |
+    query {
+      getProject(projID: "0x1") {
+        name
+        roles {
+          permissions
+          assingedTo {
+            username 
+            bio 
+            disabled
+          }
+        }
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+    }
+
