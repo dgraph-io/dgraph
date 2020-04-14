@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -341,9 +342,8 @@ func (fj *fastJsonNode) encode(out *bytes.Buffer) error {
 
 	// This is a scalar value
 	if len(fj.attrs) == 0 {
-		if _, err := out.Write(fj.scalarVal); err != nil {
-			return err
-		}
+		_, err := out.Write(fj.scalarVal)
+		return err
 	}
 
 	i := 0
