@@ -7,7 +7,7 @@
       if (window.docsearch) {
         var version = 'latest';
         var path = window.location.pathname;
-        var arr = /^(?:\/)?((?:master)|(?:v[0-9][^\/]+))(?:\/)?.*$/.exec(path);
+        var arr = /(?:\/)?((?:master)|(?:v[0-9][^\/]+))(?:\/)?.*$/.exec(path);
         if (arr != null && arr.length > 1) {
           version = arr[1];
         }
