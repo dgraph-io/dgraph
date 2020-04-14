@@ -94,7 +94,7 @@ func (mqtp *MutationQueryTypeProcedure) OnQueryRoot(gqlQuery *gql.GraphQuery, ty
 		query := gqlQuery
 		if alreadyUpdated {
 			query = &gql.GraphQuery{
-				Var:      fmt.Sprintf("%s_%d", gqlQuery.Var, i),
+				Var:      fmt.Sprintf("%s.%d", gqlQuery.Var, i),
 				Func:     gqlQuery.Func,
 				Filter:   origFilter,
 				Children: gqlQuery.Children,
@@ -117,6 +117,13 @@ func (mqtp *MutationQueryTypeProcedure) OnQueryRoot(gqlQuery *gql.GraphQuery, ty
 
 func (amp *MutationQueryTypeProcedure) OnMutationResult(mutation schema.Mutation,
 	assigned map[string]string, result map[string]interface{}) {
+	amp.queries = make([]*gql.GraphQuery, 0)
+	for _, i := range amp.queryType {
+		if i == nil {
+			continue
+		}
+		i.queries = make([]*gql.GraphQuery, 0)
+	}
 }
 
 func (mqtp *MutationQueryTypeProcedure) OnField(path []*gql.GraphQuery, typ schema.Type,
