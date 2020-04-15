@@ -55,7 +55,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 			m.Name(): map[string]interface{}{
 				"response": map[string]interface{}{
 					"accessJWT":  jwt.AccessJwt,
-					"refreshJwt": jwt.RefreshJwt}}},
+					"refreshJWT": jwt.RefreshJwt}}},
 		Field: m,
 		Err:   nil,
 	}, true
