@@ -37,7 +37,7 @@ import (
 
 func sendRestoreRequest(t *testing.T) {
 	restoreRequest := `mutation restore() {
-		 restore(input: {location: "/data/alpha1/backup"}) {
+		 restore(input: {location: "/data/alpha1/backup", backupId: "compassionate_antonelli7"}) {
 			response {
 				code
 				message
