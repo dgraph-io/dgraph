@@ -13,13 +13,10 @@
 package acl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"os/exec"
 	"testing"
 	"time"
@@ -623,23 +620,7 @@ type group struct {
 }
 
 func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams) []byte {
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("X-Dgraph-AccessToken", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	return b
+	return testutil.MakeGQLRequestWithAccessJwt(t, &params, accessToken)
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
@@ -1735,54 +1716,53 @@ func TestWrongPermission(t *testing.T) {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
-func TestHealthForAcl(t *testing.T) {
+func assertNonGuardianFailure(t *testing.T, queryName string, params testutil.GraphQLParams) {
 	resetUser(t)
 
-	gqlQuery := `
-	query {
-		health {
-			instance
-			address
-			lastEcho
-			status
-			version
-			uptime
-			group
-		}
-	}`
-
-	params := testutil.GraphQLParams{
-		Query: gqlQuery,
-	}
-
-	// assert errors for non-guardians
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
 		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
 	})
 	require.NoError(t, err, "login failed")
-
 	b := makeRequest(t, accessJwt, params)
 
-	require.NoError(t, err, "health request failed")
-	testutil.CompareJSON(t, `{
-		"errors": [
-			{
-				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
+	var resp testutil.GraphQLResponse
+	err = json.Unmarshal(b, &resp)
+	require.NoError(t, err)
+
+	require.Len(t, resp.Errors, 1)
+	require.Contains(t, resp.Errors[0].Message,
+		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
+			" User '%s' is not a member of guardians group.", userid))
+	if len(resp.Data) != 0 {
+		require.JSONEq(t, fmt.Sprintf(`{"%s": null}`, queryName), string(resp.Data))
+	}
+}
+
+func TestHealthForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		Query: `
+		query {
+			health {
+				instance
+				address
+				lastEcho
+				status
+				version
+				uptime
+				group
 			}
-		]
-	}`, string(b))
+		}`,
+	}
+
+	// assert errors for non-guardians
+	assertNonGuardianFailure(t, "health", params)
 
 	// assert data for guardians
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "groot login failed")
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 
-	b = makeRequest(t, accessJwt, params)
+	b := makeRequest(t, accessJwt, params)
 	var guardianResp struct {
 		Data struct {
 			Health []struct {
@@ -1799,7 +1779,7 @@ func TestHealthForAcl(t *testing.T) {
 			Message string
 		}
 	}
-	err = json.Unmarshal(b, &guardianResp)
+	err := json.Unmarshal(b, &guardianResp)
 
 	require.NoError(t, err, "health request failed")
 	require.NotNil(t, guardianResp.Data)
@@ -1816,6 +1796,171 @@ func TestHealthForAcl(t *testing.T) {
 		require.NotNil(t, v.UpTime)
 		require.NotNil(t, v.Group)
 	}
+}
+
+func TestBackupForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// query is wrong by choice, as we don't want to do an actual backup here :)
+		Query: `
+		mutation {
+		  backup(input: {destination: ""}) {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "backup", params)
+
+	// assert non-ACL error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "mutation backup failed because you must specify a 'destination' value",
+				"locations": [
+					{
+						"line": 3,
+						"column": 5
+					}
+				]
+			}
+		],
+		"data": {
+			"backup": null
+		}
+	}`, string(b))
+}
+
+func TestConfigForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// query is wrong by choice, as we don't want to change lruMb :)
+		Query: `
+		mutation {
+		  config(input: {lruMb: 0}) {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "config", params)
+
+	// assert non-ACL error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "mutation config failed because lru_mb must be at least 1024\n",
+				"locations": [
+					{
+						"line": 3,
+						"column": 5
+					}
+				]
+			}
+		],
+		"data": {
+			"config": null
+		}
+	}`, string(b))
+}
+
+func TestDrainingForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// we don't want to enable draining mode here
+		Query: `
+		mutation {
+		  draining(enable: false) {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "draining", params)
+
+	// assert success for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"data": {
+			"draining": {
+				"response": {
+					"code": "Success",
+					"message": "draining mode has been set to false"
+				}
+			}
+		}
+	}`, string(b))
+}
+
+func TestExportForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// we don't want to do an actual export
+		Query: `
+		mutation {
+		  export(input: {format: "invalid"}) {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "export", params)
+
+	// assert non-ACL error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	b := makeRequest(t, accessJwt, params)
+	testutil.CompareJSON(t, `{
+		"errors": [
+			{
+				"message": "mutation export failed because invalid export format: invalid",
+				"locations": [
+					{
+						"line": 3,
+						"column": 5
+					}
+				]
+			}
+		],
+		"data": {
+			"export": null
+		}
+	}`, string(b))
+}
+
+func TestShutdownForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// can't do a positive test, only negative test is possible for this,
+		// as we don't want to really shutdown the test server
+		Query: `
+		mutation {
+		  shutdown {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "shutdown", params)
 }
 
 func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
