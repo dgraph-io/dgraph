@@ -395,16 +395,15 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 
-	adminMutationResolvers :=
-		map[string]func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool){
-			"backup":   resolveBackup,
-			"config":   resolveConfig,
-			"draining": resolveDraining,
-			"export":   resolveExport,
-			"login":    resolveLogin,
-			"restore":  resolveRestore,
-			"shutdown": resolveShutdown,
-		}
+	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
+		"backup":   resolveBackup,
+		"config":   resolveConfig,
+		"draining": resolveDraining,
+		"export":   resolveExport,
+		"login":    resolveLogin,
+		"restore":  resolveRestore,
+		"shutdown": resolveShutdown,
+	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
@@ -432,15 +431,17 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				})
 		})
 
-	for op, fn := range adminMutationResolvers {
-		rf.WithMutationResolver(op, func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(fn)
-		})
+	for gqlMut, resolver := range adminMutationResolvers {
+		// gotta force go to evaluate the right function at each loop iteration
+		// otherwise you get variable capture issues
+		func(f resolve.MutationResolverFunc) {
+			rf.WithMutationResolver(gqlMut, func(m schema.Mutation) resolve.MutationResolver {
+				return f
+			})
+		}(resolver)
 	}
 
-	rf.WithSchemaIntrospection()
-
-	return rf
+	return rf.WithSchemaIntrospection()
 }
 
 func upsertEmptyGQLSchema() (*gqlSchema, error) {
