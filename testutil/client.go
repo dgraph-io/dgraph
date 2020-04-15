@@ -269,11 +269,11 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 	}
 
 	newAccessJwt, found := response["accessJWT"].(string)
-	if !found {
+	if !found || newAccessJwt == "" {
 		return "", "", errors.Errorf("no access JWT found in the output")
 	}
 	newRefreshJwt, found := response["refreshJWT"].(string)
-	if !found {
+	if !found || newRefreshJwt == "" {
 		return "", "", errors.Errorf("no refresh JWT found in the output")
 	}
 

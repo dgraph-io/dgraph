@@ -283,12 +283,12 @@ func (dg *panicClient) Mutate(
 func clientInfoLogin(t *testing.T) {
 	loginQuery := &GraphQLParams{
 		Query: `mutation {
-  						login(input: {userId: "groot", password: "password"}) {
-    						response {
-      							accessJWT
-    						}
-  						}
-					}`,
+					login(userId: "groot", password: "password") {
+						response {
+							accessJWT
+						}
+					}
+				}`,
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
