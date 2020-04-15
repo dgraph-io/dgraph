@@ -26,6 +26,7 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -114,14 +115,14 @@ func (asr *updateSchemaResolver) FromMutationResult(
 func (asr *updateSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string, map[string]interface{}, error) {
 
 	asr.admin.mux.Lock()
 	defer asr.admin.mux.Unlock()
 
-	assigned, result, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
+	tc, assigned, result, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	if asr.admin.schema.ID == "" {
@@ -135,7 +136,7 @@ func (asr *updateSchemaResolver) Mutate(
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
-		return nil, nil, schema.GQLWrapf(err,
+		return nil, nil, nil, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
 
@@ -144,7 +145,12 @@ func (asr *updateSchemaResolver) Mutate(
 
 	glog.Infof("Successfully loaded new GraphQL schema.  Serving New GraphQL API.")
 
-	return assigned, result, nil
+	return tc, assigned, result, nil
+}
+
+func (asr *updateSchemaResolver) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return dgraph.CommitOrAbort(ctx, tc)
 }
 
 func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

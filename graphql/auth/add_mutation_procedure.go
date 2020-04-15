@@ -17,7 +17,6 @@
 package auth
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -97,9 +96,6 @@ func (amp *PostMutationAddProcedure) OnMutationResult(mutation schema.Mutation,
 	assigned map[string]string, result map[string]interface{}) {
 
 	amp.queries = make([]*gql.GraphQuery, 0)
-
-	fmt.Println("assigned", assigned)
-	fmt.Println("result", result)
 
 	for node, uid := range assigned {
 		typ := amp.blankNodes[node]

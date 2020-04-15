@@ -23,6 +23,7 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -58,7 +59,7 @@ func (lr *loginResolver) FromMutationResult(
 func (lr *loginResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string, map[string]interface{}, error) {
 
 	input := getLoginInput(lr.mutation)
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
@@ -67,15 +68,21 @@ func (lr *loginResolver) Mutate(
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	jwt := &dgoapi.Jwt{}
 	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	lr.accessJwt = jwt.AccessJwt
 	lr.refreshJwt = jwt.RefreshJwt
-	return nil, nil, nil
+	return nil, nil, nil, nil
+}
+
+func (lr *loginResolver) CommitOrAbort(
+	ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return dgraph.CommitOrAbort(ctx, tc)
 }
 
 func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

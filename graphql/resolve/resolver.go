@@ -172,8 +172,14 @@ func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string, map[string]interface{}, error) {
 	return dgraph.Mutate(ctx, query, mutations)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(
+	ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return dgraph.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(

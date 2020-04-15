@@ -270,12 +270,17 @@ func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte
 	return nil, nil
 }
 
+func (dg *panicClient) CommitOrAbort(ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return nil, nil
+}
+
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string, map[string]interface{}, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

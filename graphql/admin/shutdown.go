@@ -21,6 +21,7 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
@@ -50,9 +51,15 @@ func (sr *shutdownResolver) FromMutationResult(
 func (sr *shutdownResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string, map[string]interface{}, error) {
 
-	return nil, nil, nil
+	return nil, nil, nil, nil
+}
+
+func (sr *shutdownResolver) CommitOrAbort(
+	ctx context.Context,
+	tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return dgraph.CommitOrAbort(ctx, tc)
 }
 
 func (sr *shutdownResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {

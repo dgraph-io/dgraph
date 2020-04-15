@@ -19,6 +19,7 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/golang/glog"
@@ -38,18 +39,26 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	defer stop()
 
 	queryStr := AsString(query)
+	fmt.Println(ctx.Value("value"))
 
 	if glog.V(3) {
 		glog.Infof("Executing Dgraph query: \n%s\n", queryStr)
 	}
+
+	startTs, ok := ctx.Value("startTs").(uint64)
 
 	req := &dgoapi.Request{
 		Query:    queryStr,
 		ReadOnly: true,
 	}
 
+	if ok {
+		req.StartTs = startTs
+	}
+
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
+	fmt.Println(string(resp.GetJson()))
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 
@@ -57,14 +66,15 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 func Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string,
+	map[string]interface{}, error) {
 
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Mutate")
 	defer stop()
 
 	if query == nil && len(mutations) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	queryStr := AsString(query)
@@ -79,24 +89,36 @@ func Mutate(
 			queryStr, strings.Join(muts, "\n"))
 	}
 
+	commitNow := true
+	if cN, ok := ctx.Value("keepOpen").(bool); cN && ok {
+		commitNow = false
+	}
+
 	req := &dgoapi.Request{
 		Query:     queryStr,
-		CommitNow: true,
+		CommitNow: commitNow,
 		Mutations: mutations,
 	}
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
-		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
+		return nil, nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}
 
 	result := make(map[string]interface{})
 	if query != nil && len(resp.GetJson()) != 0 {
 		if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-			return nil, nil,
+			return nil, nil, nil,
 				schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 		}
 	}
-	return resp.GetUids(), result, schema.GQLWrapf(err, "Dgraph mutation failed")
+	return resp.GetTxn(), resp.GetUids(), result,
+		schema.GQLWrapf(err, "Dgraph mutation failed")
+}
+
+func CommitOrAbort(
+	ctx context.Context,
+	txnCtx *dgoapi.TxnContext) (*dgoapi.TxnContext, error) {
+	return (&edgraph.Server{}).CommitOrAbort(ctx, txnCtx)
 }

@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/auth"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -107,7 +106,12 @@ type MutationExecutor interface {
 	Mutate(
 		ctx context.Context,
 		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
+		mutations []*dgoapi.Mutation) (*dgoapi.TxnContext, map[string]string,
+		map[string]interface{}, error)
+
+	CommitOrAbort(
+		ctx context.Context,
+		tc *dgoapi.TxnContext) (*dgoapi.TxnContext, error)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
@@ -244,13 +248,16 @@ func (mr *mutationResolver) rewriteAndExecute(
 	authResolver.Init(&sch, &a)
 	authResolver.OnMutation(query, mutations)
 
-	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
+	ctx = context.WithValue(ctx, "keepOpen", true)
+
+	tc, assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
 	}
 
-	mr.getNumUids(mutation, assigned, result)
+	startTsCtx := context.WithValue(ctx, "startTs", tc.StartTs)
+
 	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
@@ -261,7 +268,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 	}
 
 	queries := authResolver.OnMutationResult(mutation, assigned, result)
-	authResult, err := mr.queryExecutor.Query(ctx, &gql.GraphQuery{Children: queries})
+	authResult, err := mr.queryExecutor.Query(startTsCtx, &gql.GraphQuery{Children: queries})
 
 	jsonMap := make(map[string]interface{})
 	err = json.Unmarshal(authResult, &jsonMap)
@@ -272,10 +279,15 @@ func (mr *mutationResolver) rewriteAndExecute(
 			continue
 		}
 		if len(result) == 0 {
-			return nil, resolverFailed, schema.AsGQLErrors(errors.
-				New("You are unauthorized to do this query"))
+			tc.Aborted = true
+			break
 		}
 	}
+
+	if !tc.Aborted {
+		mr.getNumUids(mutation, assigned, result)
+	}
+	mr.mutationExecutor.CommitOrAbort(startTsCtx, tc)
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
