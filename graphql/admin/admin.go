@@ -399,7 +399,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		map[string]func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool){
 			"backup":   resolveBackup,
 			"config":   resolveConfig,
-			"draining": resolveExport,
+			"draining": resolveDraining,
 			"export":   resolveExport,
 			"login":    resolveLogin,
 			"restore":  resolveRestore,
