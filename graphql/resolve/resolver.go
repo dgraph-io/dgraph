@@ -1514,13 +1514,14 @@ func (hr *httpResolver) rewriteAndExecute(
 	}
 
 	resp := &graphqlResp{}
-	err = json.Unmarshal(b, &resp)
+	err = json.Unmarshal(b, resp)
 	if err != nil {
-		return nil, err
+		resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
+		return nil, resp.Errors
 	}
 	data2, ok := resp.Data[hrc.RemoteQueryName]
 	if !ok {
-		return b, resp.Errors
+		return nil, resp.Errors
 	}
 
 	// We need array response for the completer to complete the response. So, if get an array
@@ -1536,7 +1537,8 @@ func (hr *httpResolver) rewriteAndExecute(
 
 	response, err := json.Marshal(castedData)
 	if err != nil {
-		return nil, err
+		resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
+		return nil, resp.Errors
 	}
 	return response, resp.Errors
 }
