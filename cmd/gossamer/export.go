@@ -17,11 +17,12 @@
 package main
 
 import (
-	"os"
-	"path/filepath"
+	"fmt"
+
+	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/lib/utils"
 
 	log "github.com/ChainSafe/log15"
-	"github.com/naoina/toml"
 	"github.com/urfave/cli"
 )
 
@@ -29,47 +30,49 @@ import (
 func exportAction(ctx *cli.Context) error {
 	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to start logger", "error", err)
+		log.Error("[cmd] failed to start logger", "error", err)
 		return err
 	}
 
-	cfg, err := createDotConfig(ctx)
-	if err != nil {
-		return err
+	// use --config value as export destination
+	config := ctx.GlobalString(ConfigFlag.Name)
+
+	// check if --config value is set
+	if config == "" {
+		return fmt.Errorf("export destination undefined: --config value required")
 	}
 
-	comment := ""
+	// check if configuration file already exists at export destination
+	if utils.PathExists(config) {
+		log.Warn(
+			"[cmd] toml configuration file already exists",
+			"config", config,
+		)
 
-	out, err := toml.Marshal(cfg)
-	if err != nil {
-		return err
-	}
+		// use --force value to force overwrite the toml configuration file
+		force := ctx.Bool(ForceFlag.Name)
 
-	export := os.Stdout
-
-	if ctx.NArg() > 0 {
-		/* #nosec */
-		export, err = os.OpenFile(filepath.Clean(ctx.Args().Get(0)), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-		if err != nil {
-			return err
+		// prompt user to confirm overwriting existing toml configuration file
+		if force || confirmMessage("Are you sure you want to overwrite the file? [Y/n]") {
+			log.Warn(
+				"[cmd] overwriting toml configuration file",
+				"config", config,
+			)
+		} else {
+			log.Warn(
+				"[cmd] exiting without exporting toml configuration file",
+				"config", config,
+			)
+			return nil // exit if reinitialization is not confirmed
 		}
-		defer func() {
-			err = export.Close()
-			if err != nil {
-				log.Error("[cmd] Failed to close connection", "error", err)
-			}
-		}()
 	}
 
-	_, err = export.WriteString(comment)
-	if err != nil {
-		log.Error("[cmd] Failed to write output for export command", "error", err)
-	}
+	cfg := createExportConfig(ctx)
 
-	_, err = export.Write(out)
-	if err != nil {
-		log.Error("[cmd] Failed to write output for export command", "error", err)
-	}
+	file := dot.ExportConfig(cfg, config)
+	// export config will exit and log error on error
+
+	log.Info("[cmd] exported toml configuration file", "path", file.Name())
 
 	return nil
 }

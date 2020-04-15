@@ -37,14 +37,14 @@ func accountAction(ctx *cli.Context) error {
 	// start gossamer logger
 	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to start logger", "error", err)
+		log.Error("[cmd] failed to start logger", "error", err)
 		return err
 	}
 
 	// create dot configuration
 	cfg, err := createDotConfig(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to create dot configuration", "error", err)
+		log.Error("[cmd] failed to create dot configuration", "error", err)
 		return err
 	}
 
@@ -52,7 +52,7 @@ func accountAction(ctx *cli.Context) error {
 
 	// check --generate flag and generate new keypair
 	if keygen := ctx.Bool(GenerateFlag.Name); keygen {
-		log.Info("[cmd] Generating keypair...")
+		log.Info("[cmd] generating keypair...")
 
 		// check if --ed25519, --sr25519, --secp256k1 is set
 		keytype := crypto.Sr25519Type
@@ -77,21 +77,21 @@ func accountAction(ctx *cli.Context) error {
 		var file string
 		file, err = keystore.GenerateKeypair(keytype, datadir, password)
 		if err != nil {
-			log.Error("[cmd] Failed to generate keypair", "error", err)
+			log.Error("[cmd] failed to generate keypair", "error", err)
 			return err
 		}
 
-		log.Info("[cmd] Generated key", "file", file)
+		log.Info("[cmd] generated key", "file", file)
 	}
 
 	// check if --import is set
 	if keyimport := ctx.String(ImportFlag.Name); keyimport != "" {
-		log.Info("[cmd] Importing keypair...")
+		log.Info("[cmd] importing keypair...")
 
 		// import keypair
 		_, err = keystore.ImportKeypair(keyimport, datadir)
 		if err != nil {
-			log.Error("[cmd] Failed to import key", "error", err)
+			log.Error("[cmd] failed to import key", "error", err)
 			return err
 		}
 	}
@@ -100,7 +100,7 @@ func accountAction(ctx *cli.Context) error {
 	if keylist := ctx.Bool(ListFlag.Name); keylist {
 		_, err = utils.KeystoreFilepaths(datadir)
 		if err != nil {
-			log.Error("[cmd] Failed to list keys", "error", err)
+			log.Error("[cmd] failed to list keys", "error", err)
 			return err
 		}
 	}

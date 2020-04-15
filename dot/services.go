@@ -34,7 +34,7 @@ import (
 
 // createStateService creates the state service and initialize state database
 func createStateService(cfg *Config) (*state.Service, error) {
-	log.Info("[dot] Creating state service...")
+	log.Info("[dot] creating state service...")
 
 	stateSrvc := state.NewService(cfg.Global.DataDir)
 
@@ -64,7 +64,7 @@ func createStateService(cfg *Config) (*state.Service, error) {
 // createCoreService creates the core service from the provided core configuration
 func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
 	log.Info(
-		"[dot] Creating core service...",
+		"[dot] creating core service...",
 		"authority", cfg.Core.Authority,
 	)
 
@@ -96,7 +96,7 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 	// create new core service
 	coreSrvc, err := core.NewService(coreConfig)
 	if err != nil {
-		log.Error("[dot] Failed to create core service", "error", err)
+		log.Error("[dot] failed to create core service", "error", err)
 		return nil, err
 	}
 
@@ -108,7 +108,7 @@ func createCoreService(cfg *Config, ks *keystore.Keystore, stateSrvc *state.Serv
 // createNetworkService creates a network service from the command configuration and genesis data
 func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*network.Service, error) {
 	log.Info(
-		"[dot] Creating network service...",
+		"[dot] creating network service...",
 		"roles", cfg.Core.Roles,
 		"port", cfg.Network.Port,
 		"bootnodes", cfg.Network.Bootnodes,
@@ -135,7 +135,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 
 	networkSrvc, err := network.NewService(&networkConfig)
 	if err != nil {
-		log.Error("[dot] Failed to create network service", "error", err)
+		log.Error("[dot] failed to create network service", "error", err)
 		return nil, err
 	}
 
@@ -147,7 +147,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 // createRPCService creates the RPC service from the provided core configuration
 func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service) *rpc.HTTPServer {
 	log.Info(
-		"[dot] Creating rpc service...",
+		"[dot] creating rpc service...",
 		"host", cfg.RPC.Host,
 		"port", cfg.RPC.Port,
 		"mods", cfg.RPC.Modules,

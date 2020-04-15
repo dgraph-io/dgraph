@@ -28,6 +28,11 @@ var (
 		Name:  "unlock",
 		Usage: "Unlock an account. eg. --unlock=0,2 to unlock accounts 0 and 2. Can be used with --password=[password] to avoid prompt. For multiple passwords, do --password=password1,password2",
 	}
+	// ForceFlag disables all confirm prompts ("Y" to all)
+	ForceFlag = cli.BoolFlag{
+		Name:  "force",
+		Usage: "Disable all confirm prompts (the same as answering \"Y\" to all)",
+	}
 	// KeyFlag specifies a test keyring account to use
 	KeyFlag = cli.StringFlag{
 		Name:  "key",
@@ -171,8 +176,9 @@ var (
 	}
 )
 
+// flag sets that are shared by multiple commands
 var (
-	// GlobalFlags are flags that are valid for use with all commands
+	// GlobalFlags are flags that are valid for use with the root command and all subcommands
 	GlobalFlags = []cli.Flag{
 		VerbosityFlag,
 		NameFlag,
@@ -181,22 +187,9 @@ var (
 		DataDirFlag,
 	}
 
-	// InitFlags are flags that are valid for use with the init subcommand
-	InitFlags = append(GlobalFlags, GenesisFlag)
-
-	// AccountFlags are flags that are valid for use with the account subcommand
-	AccountFlags = append([]cli.Flag{
-		GenerateFlag,
-		PasswordFlag,
-		ImportFlag,
-		ListFlag,
-		Ed25519Flag,
-		Sr25519Flag,
-		Secp256k1Flag,
-	}, GlobalFlags...)
-
-	// CLIFlags are the flags that are valid for use with the gossamer command
-	CLIFlags = append([]cli.Flag{
+	// StartupFlags are flags that are valid for use with the root command and the export subcommand
+	StartupFlags = []cli.Flag{
+		// keystore flags
 		KeyFlag,
 		UnlockFlag,
 
@@ -213,6 +206,35 @@ var (
 		RPCHostFlag,
 		RPCPortFlag,
 		RPCModulesFlag,
+	}
+)
+
+// command specific flag sets for the root gossamer command and all subcommands
+var (
+	// RootFlags are the flags that are valid for use with the root gossamer command
+	RootFlags = append(GlobalFlags, StartupFlags...)
+
+	// InitFlags are flags that are valid for use with the init subcommand
+	InitFlags = append([]cli.Flag{
+		ForceFlag,
+		GenesisFlag,
+	}, GlobalFlags...)
+
+	// ExportFlags are the flags that are valid for use with the export subcommand
+	ExportFlags = append([]cli.Flag{
+		ForceFlag,
+		GenesisFlag,
+	}, append(GlobalFlags, StartupFlags...)...)
+
+	// AccountFlags are flags that are valid for use with the account subcommand
+	AccountFlags = append([]cli.Flag{
+		GenerateFlag,
+		PasswordFlag,
+		ImportFlag,
+		ListFlag,
+		Ed25519Flag,
+		Sr25519Flag,
+		Secp256k1Flag,
 	}, GlobalFlags...)
 )
 

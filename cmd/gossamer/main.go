@@ -38,10 +38,10 @@ var (
 		Name:      "export",
 		Usage:     "Export configuration values to TOML configuration file",
 		ArgsUsage: "",
-		Flags:     CLIFlags,
-		Category:  "CONFIGURATION",
+		Flags:     ExportFlags,
+		Category:  "EXPORT",
 		Description: "The export command exports configuration values from the command flags to a TOML configuration file.\n" +
-			"\tUsage: gossamer export --config node/custom/config.toml --datadir ~/.gossamer/custom --protocol /gossamer/custom/0",
+			"\tUsage: gossamer export --config node/test/config.toml --datadir ~/.gossamer/test",
 	}
 	// initCommand defines the "init" subcommand (ie, `gossamer init`)
 	initCommand = cli.Command{
@@ -83,7 +83,7 @@ func init() {
 		initCommand,
 		accountCommand,
 	}
-	app.Flags = CLIFlags
+	app.Flags = RootFlags
 }
 
 // main runs the cli application
@@ -107,7 +107,7 @@ func gossamerAction(ctx *cli.Context) error {
 	// start gossamer logger
 	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to start logger", "error", err)
+		log.Error("[cmd] failed to start logger", "error", err)
 		return err
 	}
 
@@ -115,7 +115,7 @@ func gossamerAction(ctx *cli.Context) error {
 	// cli application from the flag values provided)
 	cfg, err := createDotConfig(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to create node configuration", "error", err)
+		log.Error("[cmd] failed to create node configuration", "error", err)
 		return err
 	}
 
@@ -129,7 +129,7 @@ func gossamerAction(ctx *cli.Context) error {
 		// initialize node (initialize state database and load genesis data)
 		err = dot.InitNode(cfg)
 		if err != nil {
-			log.Error("[cmd] Failed to initialize node", "error", err)
+			log.Error("[cmd] failed to initialize node", "error", err)
 			return err
 		}
 	}
@@ -138,29 +138,29 @@ func gossamerAction(ctx *cli.Context) error {
 	// but do not overwrite configuration if the corresponding flag value is set
 	err = updateDotConfigFromGenesisData(ctx, cfg)
 	if err != nil {
-		log.Error("[cmd] Failed to update config from genesis data", "error", err)
+		log.Error("[cmd] failed to update config from genesis data", "error", err)
 		return err
 	}
 
 	ks, err := keystore.LoadKeystore(cfg.Account.Key)
 	if err != nil {
-		log.Error("[cmd] Failed to load keystore", "error", err)
+		log.Error("[cmd] failed to load keystore", "error", err)
 		return err
 	}
 
 	err = unlockKeystore(ks, cfg.Global.DataDir, cfg.Account.Unlock, ctx.String(PasswordFlag.Name))
 	if err != nil {
-		log.Error("[cmd] Failed to unlock keystore", "error", err)
+		log.Error("[cmd] failed to unlock keystore", "error", err)
 		return err
 	}
 
 	node, err := dot.NewNode(cfg, ks)
 	if err != nil {
-		log.Error("[cmd] Failed to create node services", "error", err)
+		log.Error("[cmd] failed to create node services", "error", err)
 		return err
 	}
 
-	log.Info("[cmd] Starting node...", "name", node.Name)
+	log.Info("[cmd] starting node...", "name", node.Name)
 
 	// start node
 	node.Start()
@@ -173,13 +173,13 @@ func gossamerAction(ctx *cli.Context) error {
 func initAction(ctx *cli.Context) error {
 	err := startLogger(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to start logger", "error", err)
+		log.Error("[cmd] failed to start logger", "error", err)
 		return err
 	}
 
 	cfg, err := createInitConfig(ctx)
 	if err != nil {
-		log.Error("[cmd] Failed to create node configuration", "error", err)
+		log.Error("[cmd] failed to create node configuration", "error", err)
 		return err
 	}
 
@@ -190,18 +190,29 @@ func initAction(ctx *cli.Context) error {
 	// check if node has been initialized (expected false - no warning log)
 	if dot.NodeInitialized(cfg.Global.DataDir, false) {
 
+		// use --force value to force initialize the node
+		force := ctx.Bool(ForceFlag.Name)
+
 		// prompt user to confirm reinitialization
-		if confirmMessage("Are you sure you want to reinitialize the node? [Y/n]") {
-
-			log.Info("[cmd] Reinitializing node...", "datadir", cfg.Global.DataDir)
-
-			// initialize node (initialize state database and load genesis data)
-			err = dot.InitNode(cfg)
-			if err != nil {
-				log.Error("[cmd] Failed to initialize node", "error", err)
-				return err
-			}
+		if force || confirmMessage("Are you sure you want to reinitialize the node? [Y/n]") {
+			log.Info(
+				"[cmd] reinitializing node...",
+				"datadir", cfg.Global.DataDir,
+			)
+		} else {
+			log.Warn(
+				"[cmd] exiting without reinitializing the node",
+				"datadir", cfg.Global.DataDir,
+			)
+			return nil // exit if reinitialization is not confirmed
 		}
+	}
+
+	// initialize node (initialize state database and load genesis data)
+	err = dot.InitNode(cfg)
+	if err != nil {
+		log.Error("[cmd] failed to initialize node", "error", err)
+		return err
 	}
 
 	return nil

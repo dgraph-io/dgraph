@@ -63,7 +63,7 @@ func NewTestConfig(t *testing.T) *Config {
 		RPC: RPCConfig{
 			Host:    string("localhost"),
 			Port:    uint32(8545),
-			Modules: []string{"system", "author"},
+			Modules: []string{"system", "author", "chain"},
 		},
 	}
 }

@@ -41,7 +41,38 @@ func newTestContext(description string, flags []string, values []interface{}) (*
 			return nil, fmt.Errorf("unexpected cli value type: %T", values[i])
 		}
 	}
+
 	ctx := cli.NewContext(nil, set, nil)
+
+	for i := range values {
+		switch v := values[i].(type) {
+		case bool:
+			if v {
+				err := ctx.Set(flags[i], "true")
+				if err != nil {
+					return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
+				}
+			} else {
+				err := ctx.Set(flags[i], "false")
+				if err != nil {
+					return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
+				}
+			}
+		case string:
+			err := ctx.Set(flags[i], v)
+			if err != nil {
+				return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
+			}
+		case uint:
+			err := ctx.Set(flags[i], string(v))
+			if err != nil {
+				return nil, fmt.Errorf("failed to set cli flag: %T", flags[i])
+			}
+		default:
+			return nil, fmt.Errorf("unexpected cli value type: %T", values[i])
+		}
+	}
+
 	return ctx, nil
 }
 
