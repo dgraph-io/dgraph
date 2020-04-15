@@ -328,10 +328,24 @@ func TestSubstituteVarsInBody(t *testing.T) {
 	tcases := []struct {
 		name        string
 		variables   map[string]interface{}
-		template    map[string]interface{}
-		expected    map[string]interface{}
+		template    interface{}
+		expected    interface{}
 		expectedErr error
 	}{
+		{
+			"handle nil template correctly",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"handle empty object template correctly",
+			map[string]interface{}{"id": "0x3", "postID": "0x9"},
+			map[string]interface{}{},
+			map[string]interface{}{},
+			nil,
+		},
 		{
 			"substitutes variables correctly",
 			map[string]interface{}{"id": "0x3", "postID": "0x9"},
@@ -340,7 +354,19 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			nil,
 		},
 		{
-			"substitutes variables with an array correctly",
+			"substitutes variables with an array in template correctly",
+			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
+				"text": "Random comment", "age": 28},
+			map[string]interface{}{"author": "$id", "admin": "$admin",
+				"post": map[string]interface{}{"id": "$postID",
+					"comments": []interface{}{"$text", "$age"}}, "age": "$age"},
+			map[string]interface{}{"author": "0x3", "admin": false,
+				"post": map[string]interface{}{"id": "0x9",
+					"comments": []interface{}{"Random comment", 28}}, "age": 28},
+			nil,
+		},
+		{
+			"substitutes variables with an array of object in template correctly",
 			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
 				"text": "Random comment", "age": 28},
 			map[string]interface{}{"author": "$id", "admin": "$admin",
@@ -349,6 +375,40 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			map[string]interface{}{"author": "0x3", "admin": false,
 				"post": map[string]interface{}{"id": "0x9",
 					"comments": []interface{}{map[string]interface{}{"text": "Random comment"}}}, "age": 28},
+			nil,
+		},
+		{
+			"substitutes array variables correctly",
+			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
+				"check": []interface{}{1, 3.14, "test"}},
+			map[string]interface{}{"ids": "$ids", "names": "$names", "check": "$check"},
+			map[string]interface{}{"ids": []int{1, 2, 3}, "names": []string{"M1", "M2"},
+				"check": []interface{}{1, 3.14, "test"}},
+			nil,
+		},
+		{
+			"substitutes object variables correctly",
+			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
+			map[string]interface{}{"author": "$author"},
+			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
+			nil,
+		},
+		{
+			"substitutes array of object variables correctly",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			map[string]interface{}{"authors": "$authors"},
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			nil,
+		},
+		{
+			"substitutes direct body variable correctly",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"$authors",
+			[]interface{}{map[string]interface{}{"id": 1, "name": "George"},
+				map[string]interface{}{"id": 2, "name": "Jerry"}},
 			nil,
 		},
 		{
@@ -362,7 +422,13 @@ func TestSubstituteVarsInBody(t *testing.T) {
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			err := SubstituteVarsInBody(test.template, test.variables)
+			var templatePtr *interface{}
+			if test.template == nil {
+				templatePtr = nil
+			} else {
+				templatePtr = &test.template
+			}
+			err := SubstituteVarsInBody(templatePtr, test.variables)
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.expected, test.template)
@@ -377,10 +443,31 @@ func TestParseBodyTemplate(t *testing.T) {
 	tcases := []struct {
 		name           string
 		template       string
-		expected       map[string]interface{}
+		expected       interface{}
 		requiredFields map[string]bool
 		expectedErr    error
 	}{
+		{
+			"parses empty body template correctly",
+			``,
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"parses whitespace body template correctly",
+			` `,
+			nil,
+			nil,
+			nil,
+		},
+		{
+			"parses empty object body template correctly",
+			`{}`,
+			map[string]interface{}{},
+			map[string]bool{},
+			nil,
+		},
 		{
 			"parses body template correctly",
 			`{ author: $id, post: { id: $postID }}`,
@@ -390,12 +477,29 @@ func TestParseBodyTemplate(t *testing.T) {
 		},
 		{
 			"parses body template with an array correctly",
+			`{ author: $id, admin: $admin, post: { id: $postID, comments: [$text] },
+			   age: $age}`,
+			map[string]interface{}{"author": "$id", "admin": "$admin",
+				"post": map[string]interface{}{"id": "$postID",
+					"comments": []interface{}{"$text"}}, "age": "$age"},
+			map[string]bool{"id": true, "admin": true, "postID": true, "text": true, "age": true},
+			nil,
+		},
+		{
+			"parses body template with an array of object correctly",
 			`{ author: $id, admin: $admin, post: { id: $postID, comments: [{ text: $text }] },
 			   age: $age}`,
 			map[string]interface{}{"author": "$id", "admin": "$admin",
 				"post": map[string]interface{}{"id": "$postID",
 					"comments": []interface{}{map[string]interface{}{"text": "$text"}}}, "age": "$age"},
 			map[string]bool{"id": true, "admin": true, "postID": true, "text": true, "age": true},
+			nil,
+		},
+		{
+			"parses body template with direct variable correctly",
+			`$authors`,
+			"$authors",
+			map[string]bool{"authors": true},
 			nil,
 		},
 		{
@@ -428,7 +532,11 @@ func TestParseBodyTemplate(t *testing.T) {
 			if test.expectedErr == nil {
 				require.NoError(t, err)
 				require.Equal(t, test.requiredFields, requiredFields)
-				require.Equal(t, test.expected, b)
+				if b == nil {
+					require.Nil(t, test.expected)
+				} else {
+					require.Equal(t, test.expected, *b)
+				}
 			} else {
 				require.EqualError(t, err, test.expectedErr.Error())
 			}
@@ -445,11 +553,42 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		expectedErr error
 	}{
 		{
+			"Return url as is when no params",
+			nil,
+			"http://myapi.com/favMovies/1?num=10",
+			"http://myapi.com/favMovies/1?num=10",
+			nil,
+		},
+		{
 			"Substitute query params with space properly",
 			map[string]interface{}{"id": "0x9", "name": "Michael Compton",
 				"num": 10},
 			"http://myapi.com/favMovies/$id?name=$name&num=$num",
 			"http://myapi.com/favMovies/0x9?name=Michael+Compton&num=10",
+			nil,
+		},
+		{
+			"Substitute query params for variables with array value",
+			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+				"check": []interface{}{1, 3.14, "test"}},
+			"http://myapi.com/favMovies?id=$ids&name=$names&check=$check",
+			"http://myapi.com/favMovies?check=1&check=3.14&check=test&id=1&id=2&name=M1&name=M2",
+			nil,
+		},
+		{
+			"Substitute query params for variables with object value",
+			map[string]interface{}{"data": map[string]interface{}{"id": 1, "name": "George"}},
+			"http://myapi.com/favMovies?author=$data",
+			"http://myapi.com/favMovies?author%5Bid%5D=1&author%5Bname%5D=George",
+			nil,
+		},
+		{
+			"Substitute query params for variables with array of object value",
+			map[string]interface{}{"data": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"http://myapi.com/favMovies?author=$data",
+			"http://myapi.com/favMovies?author%5Bid%5D=1&author%5Bid%5D=2&author%5Bname%5D=George" +
+				"&author%5Bname%5D=Jerry",
 			nil,
 		},
 		{
@@ -471,6 +610,29 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			map[string]interface{}{"id": "0x9", "num": 10},
 			"http://myapi.com/favMovies/$id/$num",
 			"http://myapi.com/favMovies/0x9/10",
+			nil,
+		},
+		{
+			"Substitute path params for variables with array value",
+			map[string]interface{}{"ids": []int{1, 2}, "names": []string{"M1", "M2"},
+				"check": []interface{}{1, 3.14, "test"}},
+			"http://myapi.com/favMovies/$ids/$names/$check",
+			"http://myapi.com/favMovies/1%2C2/M1%2CM2/1%2C3.14%2Ctest",
+			nil,
+		},
+		{
+			"Substitute path params for variables with object value",
+			map[string]interface{}{"author": map[string]interface{}{"id": 1, "name": "George"}},
+			"http://myapi.com/favMovies/$author",
+			"http://myapi.com/favMovies/id%2C1%2Cname%2CGeorge",
+			nil,
+		},
+		{
+			"Substitute path params for variables with array of object value",
+			map[string]interface{}{"authors": []interface{}{map[string]interface{}{"id": 1,
+				"name": "George/"}, map[string]interface{}{"id": 2, "name": "Jerry"}}},
+			"http://myapi.com/favMovies/$authors",
+			"http://myapi.com/favMovies/id%2C1%2Cname%2CGeorge%2F%2Cid%2C2%2Cname%2CJerry",
 			nil,
 		},
 	}

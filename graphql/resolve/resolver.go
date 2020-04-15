@@ -234,10 +234,10 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPResolver(&http.Client{
+			return NewHTTPQueryResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, nil, nil, StdQueryCompletion())
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -259,6 +259,15 @@ func (rf *resolverFactory) WithConventionResolvers(
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
 				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+		})
+	}
+
+	for _, m := range s.Mutations(schema.HTTPMutation) {
+		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
+			return NewHTTPMutationResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -732,6 +741,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 
 			valToComplete[field.ResponseName()] = internalVal
 		}
+	case interface{}:
+		// no need to error in this case, this can be returned for custom HTTP query/mutation
 	default:
 		if val != nil {
 			return dgraphError()
@@ -780,13 +791,13 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	return completed, append(errs, gqlErrs...)
 }
 
-func copyMap(input map[string]interface{}) (map[string]interface{}, error) {
+func copyTemplate(input interface{}) (interface{}, error) {
 	b, err := json.Marshal(input)
 	if err != nil {
 		return nil, errors.Wrapf(err, "while marshaling map input: %+v", input)
 	}
 
-	var result map[string]interface{}
+	var result interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
 		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
 	}
@@ -797,15 +808,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]map[string]interface{}, len(vals))
+	body := make([]interface{}, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyMap(fconf.Template)
+		temp, err := copyTemplate(*fconf.Template)
 		if err != nil {
 			errCh <- err
 			return
 		}
 		mu.RLock()
-		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
+		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
 			errCh <- err
 			mu.RUnlock()
 			return
@@ -854,7 +865,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	var wg sync.WaitGroup
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
-		go func(idx int, input map[string]interface{}) {
+		go func(idx int, input interface{}) {
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
@@ -894,6 +905,17 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	errCh <- nil
 }
 
+// resolveNestedFields resolves fields which themselves don't have the @custom directive but their
+// children might
+//
+// queryUser {
+//	 id
+//	 classes {
+//	   name @custom...
+//   }
+// }
+// In the example above, resolveNestedFields would be called on classes field and vals would be the
+// list of all users.
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
@@ -902,18 +924,27 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 		return
 	}
 
-	// Here below we do the de-duplication by walking through the result set.
+	// Here below we do the de-duplication by walking through the result set. That is we would
+	// go over vals and find the data for f to collect all unique values.
 	var input []interface{}
 	// node stores the pointer for a node. It is a map from id to the map for it.
 	nodes := make(map[string]interface{})
 
 	idField := f.Type().IDField()
 	if idField == nil {
-		errCh <- nil
-		return
+		idField = f.Type().XIDField()
+		if idField == nil {
+			// This should not happen as we only allow custom fields on types which either have
+			// ID or a field with @id directive.
+			errCh <- nil
+			return
+		}
 	}
+
+	idFieldName := idField.Name()
+
 	// Here we walk through the array and collect all unique values for this field. In the
-	// example at the start of the function, we could be collecting all unique schools
+	// example at the start of the function, we could be collecting all unique classes
 	// across all users. This is where the batching happens so that we make one call per
 	// field and not a separate call per user.
 	mu.RLock()
@@ -931,9 +962,15 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 			if !ok {
 				continue
 			}
-			id, ok := fv[idField.Name()].(string)
+			id, ok := fv[idFieldName].(string)
 			if !ok {
-				continue
+				// If a type has a field of type ID! and it is not explicitly requested by the
+				// user as part of the query, we would still have asked for it under the alias
+				// dgraph.uid, so let's look for that here.
+				id, ok = fv["dgraph.uid"].(string)
+				if !ok {
+					continue
+				}
 			}
 			if _, ok := nodes[id]; !ok {
 				input = append(input, fieldVal)
@@ -963,10 +1000,12 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 			if !ok {
 				continue
 			}
-			// TODO - Support xids here.
-			id, ok := fv[idField.Name()].(string)
+			id, ok := fv[idFieldName].(string)
 			if !ok {
-				continue
+				id, ok = fv["dgraph.uid"].(string)
+				if !ok {
+					continue
+				}
 			}
 			// Get the pointer of the map corresponding to this id and put it at the
 			// correct place.
@@ -1382,29 +1421,32 @@ func aliasObject(
 	return result, errs
 }
 
-// a httpResolver can resolve a single GraphQL query field from an HTTP endpoint
+// a httpResolver can resolve a single GraphQL field from an HTTP endpoint
 type httpResolver struct {
 	*http.Client
-	httpRewriter    QueryRewriter
-	httpExecutor    QueryExecutor
 	resultCompleter ResultCompleter
 }
 
-// NewHTTPResolver creates a resolver that can resolve GraphQL query/mutation from an HTTP endpoint
-func NewHTTPResolver(hc *http.Client,
-	qr QueryRewriter,
-	qe QueryExecutor,
-	rc ResultCompleter) QueryResolver {
-	return &httpResolver{hc, qr, qe, rc}
+type httpQueryResolver httpResolver
+type httpMutationResolver httpResolver
+
+// NewHTTPQueryResolver creates a resolver that can resolve GraphQL query from an HTTP endpoint
+func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
+	return &httpQueryResolver{hc, rc}
 }
 
-func (hr *httpResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+// NewHTTPMutationResolver creates a resolver that resolves GraphQL mutation from an HTTP endpoint
+func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter) MutationResolver {
+	return &httpMutationResolver{hc, rc}
+}
+
+func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolved {
 	span := otrace.FromContext(ctx)
-	stop := x.SpanTimer(span, "resolveHTTPQuery")
+	stop := x.SpanTimer(span, "resolveHTTP")
 	defer stop()
 
-	res, err := hr.rewriteAndExecute(ctx, query)
-	completed, err := hr.resultCompleter.Complete(ctx, query, res, err)
+	res, err := hr.rewriteAndExecute(ctx, field)
+	completed, err := hr.resultCompleter.Complete(ctx, field, res, err)
 	return &Resolved{Data: completed, Err: err}
 }
 
@@ -1433,10 +1475,28 @@ func makeRequest(client *http.Client, method, url, body string,
 }
 
 func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
-	hrc, err := query.HTTPResolver()
+	ctx context.Context, field schema.Field) ([]byte, error) {
+	hrc, err := field.CustomHTTPConfig()
 	if err != nil {
 		return nil, err
 	}
-	return makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
+	var body string
+	if hrc.Template != nil {
+		b, err := json.Marshal(*hrc.Template)
+		if err != nil {
+			return nil, err
+		}
+		body = string(b)
+	}
+	return makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+}
+
+func (h *httpQueryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	return (*httpResolver)(h).Resolve(ctx, query)
+}
+
+func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Mutation) (*Resolved,
+	bool) {
+	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
+	return resolved, resolved.Err.Error() == ""
 }
