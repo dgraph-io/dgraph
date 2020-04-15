@@ -11,10 +11,13 @@ forum](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code. The license can
-be applied to the cluster by including it as the body of a POST request and calling
-`/enterpriseLicense` HTTP endpoint on any Zero server.
+continue enjoying the enterprise features released in the proprietary code.
 
+The license can be applied to the cluster by including it as the body of a POST
+request and calling `/enterpriseLicense` HTTP endpoint on any Zero server. It
+can also be applied by passing the path to the enterprise license file (using
+the flag `--enterprise_license`) to the `dgraph zero` command used to start the
+server. The second option is useful when the process needs to be automated.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
@@ -178,9 +181,12 @@ The `--postings` (`-p`) flag sets the directory to which the restored posting
 directories will be saved. This directory will contain a posting directory for
 each group in the restored backup.
 
-The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
-start timestamp using the restored version. Otherwise, the timestamp must be
-manually updated through Zero's HTTP 'assign' endpoint.
+The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
+timestamp and UID lease using the restored version. If no zero address is
+passed, the command will complain unless you set the value of the
+`--force_zero` flag to false. If do not pass a zero value to this command,
+the timestamp and UID lease must be manually updated through Zero's HTTP
+'assign' endpoint using the values printed near the end of the command's output.
 
 The `--backup_id` optional flag specifies the ID of the backup series to
 restore. A backup series consists of a full backup and all the incremental
