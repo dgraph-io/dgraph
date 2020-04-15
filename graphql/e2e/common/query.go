@@ -1401,3 +1401,19 @@ func queryPostWithAuthor(t *testing.T) {
 		`{"queryPost":[{"title":"Introducing GraphQL in Dgraph","author":{"name":"Ann Author"}}]}`,
 		string(gqlResponse.Data))
 }
+
+func queriesHaveExtensions(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+			queryPost {
+				title
+			}
+		}`,
+	}
+
+	touchedUidskey := "touched_uids"
+	gqlResponse := query.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, gqlResponse.Extensions[touchedUidskey], 0)
+}
