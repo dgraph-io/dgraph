@@ -864,18 +864,36 @@ func customDirectiveValidation(sch *ast.Schema,
 	elems := strings.Split(parsedURL.Path, "/")
 	for _, elem := range elems {
 		if strings.HasPrefix(elem, "$") {
-			fd := defn.Fields.ForName(elem[1:])
-			if fd == nil {
-				return gqlerror.ErrorPosf(
-					dir.Position,
-					"Type %s; Field %s; url path inside @custom directive uses a field %s that is "+
-						"not defined.", typ.Name, field.Name, elem[1:])
-			}
-			if !fd.Type.NonNull {
-				return gqlerror.ErrorPosf(
-					dir.Position,
-					"Type %s; Field %s; url path inside @custom directive uses a field %s that "+
-						"can be null.", typ.Name, field.Name, elem[1:])
+			if typ.Name != "Query" && typ.Name != "Mutation" {
+				// For fields url variables come from the fields defined within the type. So we
+				// check that they should be a valid field in the type definition.
+				fd := defn.Fields.ForName(elem[1:])
+				if fd == nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; url path inside @custom directive uses a field %s that is "+
+							"not defined.", typ.Name, field.Name, elem[1:])
+				}
+				if !fd.Type.NonNull {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; url path inside @custom directive uses a field %s that "+
+							"can be null.", typ.Name, field.Name, elem[1:])
+				}
+			} else {
+				arg := field.Arguments.ForName(elem[1:])
+				if arg == nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; url path inside @custom directive uses a field %s that is "+
+							"not defined.", typ.Name, field.Name, elem[1:])
+				}
+				if !arg.Type.NonNull {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; url path inside @custom directive uses a field %s that "+
+							"can be null.", typ.Name, field.Name, elem[1:])
+				}
 			}
 		}
 	}

@@ -787,6 +787,21 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive with null parameter in path is not allowed"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/$id", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; url path inside @custom directive uses a field id that can be null.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
     name: "@custom directive with wrong value for method"
     input: |
       type Author {
@@ -1084,7 +1099,7 @@ valid_schemas:
         id: ID!
         established: String!
         name: String! @custom(http: {
-                url: "http://mock:8888/schoolNames",
+                url: "http://mock:8888/schoolNames/$id/$established",
                 method: "POST",
                 body: "{sid: $id}"
                 })
