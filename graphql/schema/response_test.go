@@ -121,22 +121,9 @@ func TestDataAndErrors(t *testing.T) {
 	}
 }
 
-func TestWriteTo_BadDataWithReqID(t *testing.T) {
-	resp := &Response{}
-	resp.AddData([]byte(`"not json"`))
-
-	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
-
-	assert.JSONEq(t,
-		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}], 
-		"data": null}`,
-		buf.String())
-}
-
 func TestWriteTo_BadData(t *testing.T) {
 	resp := &Response{}
-	resp.AddData([]byte(`"not json"`))
+	resp.AddData([]byte(`not json`))
 
 	buf := new(bytes.Buffer)
 	resp.WriteTo(buf)
