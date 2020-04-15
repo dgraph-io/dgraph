@@ -892,6 +892,24 @@ func customDirectiveValidation(sch *ast.Schema,
 	field *ast.FieldDefinition,
 	dir *ast.Directive) *gqlerror.Error {
 
+	search := field.Directives.ForName(searchDirective)
+	if search != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; custom directive not allowed along with @search directive.",
+			typ.Name, field.Name,
+		)
+	}
+
+	dgraph := field.Directives.ForName(dgraphDirective)
+	if dgraph != nil {
+		return gqlerror.ErrorPosf(
+			dir.Position,
+			"Type %s; Field %s; custom directive not allowed along with @dgraph directive.",
+			typ.Name, field.Name,
+		)
+	}
+
 	httpArg := dir.Arguments.ForName("http")
 	if httpArg == nil || httpArg.Value.String() == "" {
 		return gqlerror.ErrorPosf(
@@ -1081,14 +1099,6 @@ func customDirectiveValidation(sch *ast.Schema,
 		})
 	}
 
-	search := field.Directives.ForName(searchDirective)
-	if search != nil {
-		return gqlerror.ErrorPosf(
-			dir.Position,
-			"Type %s; Field %s; custom directive not allowed along with @search directive.",
-			typ.Name, field.Name,
-		)
-	}
 	return nil
 }
 

@@ -784,7 +784,7 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive with null parameter in path is not allowed"
+    name: "@custom directive on a query with null parameter in path is not allowed"
     input: |
       type Author {
         id: ID!
@@ -878,11 +878,11 @@ invalid_schemas:
     name: "@custom directive on field where type doesn't have id field"
     input: |
       type Author {
-        foo: String
+        foo: String!
         name: String! @custom(http: {
           url: "http://google.com",
           method: "GET",
-          body: "{ abc: $abc, jam: $blah }"
+          body: "{ abc: $abc, jam: $foo }"
         })
       }
     errlist: [
@@ -960,12 +960,28 @@ invalid_schemas:
         ]
 
   -
-    name: "@custom directive only defined fields allowed in url path"
+    name: "@custom directive not allowed along with @dgraph directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @dgraph(pred: "foo") @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @dgraph directive.",
+          "locations":[{"line":3, "column":39}]},
+        ]
+
+  -
+    name: "@custom directive on a field in a type, only defined fields allowed in url path"
     input: |
       type Author {
         id: ID!
         bar: Int
-        name: String! @search @custom(http: {
+        name: String! @custom(http: {
           url: "http://google.com/$fooz/$bar",
           method: "GET",
           body: "{ id: $id }"
@@ -973,17 +989,17 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
-          "locations":[{"line":4, "column":26}]},
+          "locations":[{"line":4, "column":18}]},
         ]
 
   -
-    name: "@custom directive only mandatory fields allowed in url path"
+    name: "@custom directive on a field in a type, only mandatory fields allowed in url path"
     input: |
       type Author {
         id: ID!
         foo: String
         bar: Int
-        name: String! @search @custom(http: {
+        name: String! @custom(http: {
           url: "http://google.com/$foo/$bar",
           method: "GET",
           body: "{ id: $id }"
@@ -991,7 +1007,7 @@ invalid_schemas:
       }
     errlist: [
       {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
-          "locations":[{"line":5, "column":26}]},
+          "locations":[{"line":5, "column":18}]},
         ]
 
 valid_schemas:
