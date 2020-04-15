@@ -540,10 +540,6 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !checkIpIsWhitelisted(w, r) {
-		return
-	}
-
 	b := readRequest(w, r)
 	if b == nil {
 		return
