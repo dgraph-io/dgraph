@@ -263,7 +263,12 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
-	response, found := data["response"].(map[string]interface{})
+	l, found := data["login"].(map[string]interface{})
+	if !found {
+		return "", "", errors.Wrapf(err, "data entry found in the output")
+	}
+
+	response, found := l["response"].(map[string]interface{})
 	if !found {
 		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
