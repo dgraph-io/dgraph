@@ -919,6 +919,41 @@ invalid_schemas:
           "locations":[{"line":3, "column":26}]},
         ]
 
+  -
+    name: "@custom directive only defined fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        bar: Int
+        name: String! @search @custom(http: {
+          url: "http://google.com/$fooz/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
+          "locations":[{"line":4, "column":26}]},
+        ]
+
+  -
+    name: "@custom directive only mandatory fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        foo: String
+        bar: Int
+        name: String! @search @custom(http: {
+          url: "http://google.com/$foo/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
+          "locations":[{"line":5, "column":26}]},
+        ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"

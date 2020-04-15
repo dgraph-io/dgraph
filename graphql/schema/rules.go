@@ -844,6 +844,8 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name,
 		)
 	}
+
+	defn := sch.Types[typ.Name]
 	u := httpArg.Value.Children.ForName("url")
 	if u == nil {
 		return gqlerror.ErrorPosf(
@@ -851,14 +853,33 @@ func customDirectiveValidation(sch *ast.Schema,
 			"Type %s; Field %s; url field inside @custom directive is mandatory.", typ.Name,
 			field.Name)
 	}
-	if _, err := url.ParseRequestURI(u.Raw); err != nil {
+	parsedURL, err := url.ParseRequestURI(u.Raw)
+	if err != nil {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; Field %s; url field inside @custom directive is invalid.", typ.Name,
 			field.Name)
 	}
 
-	defn := sch.Types[typ.Name]
+	elems := strings.Split(parsedURL.Path, "/")
+	for _, elem := range elems {
+		if strings.HasPrefix(elem, "$") {
+			fd := defn.Fields.ForName(elem[1:])
+			if fd == nil {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s; url path inside @custom directive uses a field %s that is "+
+						"not defined.", typ.Name, field.Name, elem[1:])
+			}
+			if !fd.Type.NonNull {
+				return gqlerror.ErrorPosf(
+					dir.Position,
+					"Type %s; Field %s; url path inside @custom directive uses a field %s that "+
+						"can be null.", typ.Name, field.Name, elem[1:])
+			}
+		}
+	}
+
 	id := getIDField(defn)
 	xid := getXIDField(defn)
 	if typ.Name != "Query" && typ.Name != "Mutation" {
