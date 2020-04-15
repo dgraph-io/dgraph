@@ -32,6 +32,24 @@ import (
 	"github.com/golang/glog"
 )
 
+func checkIpIsWhitelisted(w http.ResponseWriter, r *http.Request) bool {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
+		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+		return false
+	}
+	return true
+}
+
+func checkPoormansAcl(w http.ResponseWriter, r *http.Request) bool {
+	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
+		"X-Dgraph-AuthToken") {
+		x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
+		return false
+	}
+	return true
+}
+
 // handlerInit does some standard checks. Returns false if something is wrong.
 func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[string]bool,
 	allowOnlyGuardians bool) bool {
@@ -41,20 +59,12 @@ func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[stri
 		return false
 	}
 
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
-		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
-		return false
-	}
-
-	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
-		"X-Dgraph-AuthToken") {
-		x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
+	if !checkIpIsWhitelisted(w, r) || !checkPoormansAcl(w, r) {
 		return false
 	}
 
 	if allowOnlyGuardians {
-		err = edgraph.AuthorizeGuardians(x.AttachAccessJwt(context.Background(), r))
+		err := edgraph.AuthorizeGuardians(x.AttachAccessJwt(context.Background(), r))
 		if err != nil {
 			x.SetStatus(w, x.ErrorUnauthorized, err.Error())
 			return false

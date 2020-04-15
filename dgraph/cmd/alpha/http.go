@@ -540,6 +540,10 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !checkIpIsWhitelisted(w, r) {
+		return
+	}
+
 	b := readRequest(w, r)
 	if b == nil {
 		return
@@ -578,6 +582,10 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 
 func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
 	if commonHandler(w, r) {
+		return
+	}
+
+	if !checkIpIsWhitelisted(w, r) || !checkPoormansAcl(w, r) {
 		return
 	}
 
