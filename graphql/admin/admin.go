@@ -416,12 +416,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				resolve.StdQueryCompletion())
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
-			state := &stateResolver{}
-
-			return resolve.NewQueryResolver(
-				state,
-				state,
-				resolve.StdQueryCompletion())
+			return resolve.QueryResolverFunc(resolveState)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
