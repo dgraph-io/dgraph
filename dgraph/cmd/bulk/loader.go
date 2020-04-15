@@ -117,7 +117,7 @@ func newLoader(opt *options) *loader {
 		readerChunkCh: make(chan *bytes.Buffer, opt.NumGoroutines),
 		writeTs:       getWriteTimestamp(zero),
 	}
-	st.schema = newSchemaStore(readSchema(opt.SchemaFile, opt.BadgerKeyFile, opt.Encrypted), opt, st)
+	st.schema = newSchemaStore(readSchema(opt), opt, st)
 	ld := &loader{
 		state:   st,
 		mappers: make([]*mapper, opt.NumGoroutines),
@@ -144,17 +144,18 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	}
 }
 
-func readSchema(filename string, keyfile string, fileEncrypted bool) *schema.ParsedSchema {
-	f, err := os.Open(filename)
+func readSchema(opt *options) *schema.ParsedSchema {
+	f, err := os.Open(opt.SchemaFile)
 	x.Check(err)
 	defer f.Close()
 
-	if !fileEncrypted {
+	keyfile := opt.BadgerKeyFile
+	if !opt.Encrypted {
 		keyfile = ""
 	}
 	r, err := enc.GetReader(keyfile, f)
 	x.Check(err)
-	if filepath.Ext(filename) == ".gz" {
+	if filepath.Ext(opt.SchemaFile) == ".gz" {
 		r, err = gzip.NewReader(r)
 		x.Check(err)
 	}

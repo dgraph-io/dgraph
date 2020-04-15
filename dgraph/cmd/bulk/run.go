@@ -106,7 +106,7 @@ func init() {
 		"The file that stores the encryption key. The key size must be 16/24/32 bytes long."+
 			" The key size indicates the chosen AES encryption (AES-128/192/256 respectively). "+
 			" This key is used to encrypt the output data directories and to decrypt the input "+
-			" schema and data files (if enncrytped). Enterprise feature.")
+			" schema and data files (if encrytped). Enterprise feature.")
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
 }
