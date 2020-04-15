@@ -288,14 +288,11 @@
         "RatelInstanceType": {
             "Description": "Instance type for dgraph Ratel nodes",
             "Type": "String",
-            "Default": "m5a.large",
+            "Default": "t3a.small",
             "AllowedValues": [
-                "m5a.large",
-                "m4a.large",
-                "r5a.large",
-                "r4a.large",
-                "c5a.large",
-                "c4a.large"
+                "t3a.small",
+                "t3a.medium",
+                "t3a.large"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type."
         },
