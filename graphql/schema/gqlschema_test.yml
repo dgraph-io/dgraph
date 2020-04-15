@@ -817,6 +817,21 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive with wrong value for operation"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "random"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; operation field inside @custom directive can only be single/batch.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
     name: "@custom directive on field where body uses undefined field"
     input: |
       type Author {
@@ -902,21 +917,21 @@ invalid_schemas:
     ]
 
   -
-      name: "@custom directive not allowed on field with @id directive"
-      input: |
-        type Author {
-          id: ID!
-          name: String! @id @custom(http: {
-            url: "http://google.com",
-            method: "GET",
-            body: "{ id: $id }"
-          })
-        }
-      errlist: [
-        {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or
-        field with @id directive.",
-        "locations":[{"line":3, "column":22}]},
-      ]
+    name: "@custom directive not allowed on field with @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or
+      field with @id directive.",
+      "locations":[{"line":3, "column":22}]},
+    ]
 
   -
     name: "@custom directive not allowed along with @search directive"

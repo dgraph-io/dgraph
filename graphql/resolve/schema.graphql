@@ -154,8 +154,8 @@ type Comment {
               body: "{ myId: $id, theAuthor: $author}",
               forwardHeaders: ["X-App-Token"]})
 
-    url: String
-    ups: Int
+    url: String! @id
+    ups: Int!
     downs: Int
     relatedUsers: [User] @custom(http: {
               url: "http://api-gateway.com/relatedPosts",

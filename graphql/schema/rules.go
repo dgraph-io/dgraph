@@ -937,39 +937,44 @@ func customDirectiveValidation(sch *ast.Schema,
 			)
 		}
 
-		// 1. The required fields within the body template should contain an ID! field or a field
-		// with @id directive as we use that to do de-duplication before resolving these entities
-		// from the remote endpoint.
-		// 2. All the required fields should be defined within this type.
-		// 3. The required fields for a given field can't contain this field itself.
-		requiresID := false
-		for fname := range rf {
-			if fname == field.Name {
+		// TODO - We also need to have point no. 2 validation for custom queries/mutation.
+		// Add that later.
+		if typ.Name != "Query" && typ.Name != "Mutation" {
+			// 1. The required fields within the body template should contain an ID! field or a field
+			// with @id directive as we use that to do de-duplication before resolving these entities
+			// from the remote endpoint.
+			// 2. All the required fields should be defined within this type.
+			// 3. The required fields for a given field can't contain this field itself.
+			requiresID := false
+			for fname := range rf {
+				if fname == field.Name {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; @custom directive, body template can't require itself.",
+						typ.Name, field.Name,
+					)
+				}
+
+				if fd := typ.Fields.ForName(fname); fd == nil {
+					return gqlerror.ErrorPosf(
+						dir.Position,
+						"Type %s; Field %s; @custom directive, body template must use fields defined "+
+							"within the type, found: %s.",
+						typ.Name, field.Name, fname,
+					)
+				}
+				if fname == idField || fname == xidField {
+					requiresID = true
+				}
+			}
+			if !requiresID {
 				return gqlerror.ErrorPosf(
 					dir.Position,
-					"Type %s; Field %s; @custom directive, body template can't require itself.",
+					"Type %s; Field %s: @custom directive, body template must use a field with type "+
+						"ID! or a field with @id directive.",
 					typ.Name, field.Name,
 				)
 			}
-			if fd := typ.Fields.ForName(fname); fd == nil {
-				return gqlerror.ErrorPosf(
-					dir.Position,
-					"Type %s; Field %s; @custom directive, body template must use fields defined "+
-						"within the type, found: %s.",
-					typ.Name, field.Name, fname,
-				)
-			}
-			if fname == idField || fname == xidField {
-				requiresID = true
-			}
-		}
-		if !requiresID {
-			return gqlerror.ErrorPosf(
-				dir.Position,
-				"Type %s; Field %s: @custom directive, body template must use a field with type "+
-					"ID! or a field with @id directive.",
-				typ.Name, field.Name,
-			)
 		}
 	}
 
@@ -985,6 +990,17 @@ func customDirectiveValidation(sch *ast.Schema,
 			dir.Position,
 			"Type %s; Field %s; method field inside @custom directive can only be GET/POST.",
 			typ.Name, field.Name)
+	}
+
+	operation := httpArg.Value.Children.ForName("operation")
+	if operation != nil {
+		op := operation.Raw
+		if op != "single" && op != "batch" {
+			return gqlerror.ErrorPosf(
+				dir.Position,
+				"Type %s; Field %s; operation field inside @custom directive can only be "+
+					"single/batch.", typ.Name, field.Name)
+		}
 	}
 
 	graphqlArg := dir.Arguments.ForName("graphql")
