@@ -821,57 +821,56 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	require.Equal(t, "dummy error", result.Errors.Error())
 }
 
-// func TestCustomLogicGraphqlValidSlice(t *testing.T) {
-// 	schema := customTypes + `
-// 	type Query {
-// 		getCountry(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountries", method: "POST"}, graphql: {query: "country(code: $id)"})
-// 	}
-// 	`
-// 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-// 	query := `
-// 	query {
-// 		getCountry(id: "BI"){
-// 			code
-// 			name
-// 		}
-// 	}`
-// 	params := &common.GraphQLParams{
-// 		Query: query,
-// 	}
+func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountries", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountries(id: "BI"){
+			code
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
 
-// 	result := params.ExecuteAsPost(t, alphaURL)
-// 	fmt.Println(string(result.Data))
-// 	require.JSONEq(t, string(result.Data), `
-// 	{"getCountry":[
-// 		{
-// 		  "name": "Burundi",
-// 		  "code": "BI"
-// 		}
-// 	  ]}
-// 	`)
-// }
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountries":[
+		{
+		  "name": "Burundi",
+		  "code": "BI"
+		}
+	  ]}
+	`)
+}
 
-// func TestCustomLogicWithErrorResponse(t *testing.T) {
-// 	schema := customTypes + `
-// 	type Query {
-// 		getCountry(id: ID!): [Country] @custom(http: {url: "http://mock:8888/graphqlerr", method: "POST"}, graphql: {query: "country(code: $id)"})
-// 	}
-// 	`
-// 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-// 	query := `
-// 	query {
-// 		getCountry(id: "BI"){
-// 			code
-// 			name
-// 		}
-// 	}`
-// 	params := &common.GraphQLParams{
-// 		Query: query,
-// 	}
+func TestCustomLogicWithErrorResponse(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/graphqlerr", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountries(id: "BI"){
+			code
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
 
-// 	result := params.ExecuteAsPost(t, alphaURL)
-// 	require.Equal(t, "dummy error", result.Errors.Error())
-// }
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, "dummy error", result.Errors.Error())
+}
 
 type episode struct {
 	Name string
