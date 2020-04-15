@@ -516,7 +516,7 @@ func (params *GraphQLParams) createGQLPost(url string) (*http.Request, error) {
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -549,7 +549,7 @@ func requireUID(t *testing.T, uid string) {
 	require.NoError(t, err)
 }
 
-func requireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
+func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 	require.Nil(t, resp.Errors,
 		"required no GraphQL errors, but received :\n%s", serializeOrError(resp.Errors))
 }

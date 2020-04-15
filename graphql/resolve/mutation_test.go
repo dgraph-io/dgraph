@@ -19,10 +19,11 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgraph/testutil"
 	"io/ioutil"
 	"strings"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -252,7 +253,7 @@ func TestCustomHTTPMutation(t *testing.T) {
 			gqlMutation := test.GetMutation(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPMutationResolver(client, StdQueryCompletion())
+			resolver := NewHTTPMutationResolver(client, StdQueryCompletion(), false)
 			resolved, isResolved := resolver.Resolve(context.Background(), gqlMutation)
 			require.True(t, isResolved)
 
