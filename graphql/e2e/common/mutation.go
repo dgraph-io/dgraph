@@ -3040,16 +3040,16 @@ func mutationsHaveExtensions(t *testing.T) {
 	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
-	require.Greater(t, gqlResponse.Extensions[touchedUidskey], 0)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 
 	// cleanup
 	var resp struct {
 		AddCategory struct {
-			Category category
+			Category []category
 		}
 	}
 	err := json.Unmarshal(gqlResponse.Data, &resp)
 	require.NoError(t, err)
 	deleteGqlType(t, "Category",
-		map[string]interface{}{"id": []string{resp.AddCategory.Category.ID}}, 1, nil)
+		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
 }

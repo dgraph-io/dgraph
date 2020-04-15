@@ -1415,5 +1415,5 @@ func queriesHaveExtensions(t *testing.T) {
 	gqlResponse := query.ExecuteAsPost(t, graphqlURL)
 	requireNoGQLErrors(t, gqlResponse)
 	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
-	require.Greater(t, gqlResponse.Extensions[touchedUidskey], 0)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 }
