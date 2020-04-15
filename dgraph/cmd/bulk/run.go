@@ -58,6 +58,8 @@ func init() {
 		"Location of schema file.")
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename.")
+	flag.Bool("encrypted", false,
+		"Flag to indicate whether schema and data files are encrypted.")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -101,9 +103,10 @@ func init() {
 
 	// Options around how to set up Badger.
 	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+		"The file that stores the encryption key. The key size must be 16/24/32 bytes long."+
+			" The key size indicates the chosen AES encryption (AES-128/192/256 respectively). "+
+			" This key is used to encrypt the output data directories and to decrypt the input "+
+			" schema and data files (if encrytped). Enterprise feature.")
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
 }
@@ -113,6 +116,7 @@ func run() {
 		DataFiles:        Bulk.Conf.GetString("files"),
 		DataFormat:       Bulk.Conf.GetString("format"),
 		SchemaFile:       Bulk.Conf.GetString("schema"),
+		Encrypted:        Bulk.Conf.GetBool("encrypted"),
 		OutDir:           Bulk.Conf.GetString("out"),
 		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
 		TmpDir:           Bulk.Conf.GetString("tmp"),
@@ -143,6 +147,10 @@ func run() {
 	// OSS, non-nil key file --> crash
 	if !enc.EeBuild && opt.BadgerKeyFile != "" {
 		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
+		os.Exit(1)
+	}
+	if opt.Encrypted && opt.BadgerKeyFile == "" {
+		fmt.Printf("Must use --encryption_key_file option with --encrypted option.\n")
 		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {

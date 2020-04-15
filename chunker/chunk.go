@@ -348,9 +348,10 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
+// FileReader returns an open reader on the given file. Gzip-compressed input is detected
+// and decompressed automatically even without the gz extension. The keyfile, if non-nil,
+// is used to decrypt the file. The caller is responsible for calling the returned cleanup
+// function when done with the reader.
 func FileReader(file string, keyfile string) (rd *bufio.Reader, cleanup func()) {
 	var f *os.File
 	var err error
