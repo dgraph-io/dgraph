@@ -91,12 +91,14 @@ func newEncoder() *encoder {
 	ms := make([]uint64, 0)
 	// Append dummy entry, to avoid getting meta for a fastJsonNode with default value(0).
 	ms = append(ms, 0)
+	a := (arenaPool.Get()).(*arena)
+	a.reset()
 
 	return &encoder{
 		attrMap:     make(map[string]uint16),
 		idMap:       make(map[uint16]string),
 		seqNo:       uint16(0),
-		arena:       newArena(1 * 1024 /*1 KB*/),
+		arena:       a,
 		metaSlice:   ms,
 		childrenMap: make(map[fastJsonNode][]fastJsonNode),
 	}
@@ -917,6 +919,8 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		}
 	}
 
+	// Put arena encoder back to arena pool.
+	arenaPool.Put(enc.arena)
 	return bufw.Bytes(), nil
 }
 

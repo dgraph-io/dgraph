@@ -25,11 +25,18 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 )
 
+const maxArenaSize = math.MaxUint32
+
 var (
 	errArenaFull     = errors.New("arena is full")
 	errInvalidOffset = errors.New("arena get performed with invalid offset")
 
-	maxArenaSize = math.MaxUint32
+	arenaPool = sync.Pool{
+		New: func() interface{} {
+			a := newArena(1 * 1024)
+			return a
+		},
+	}
 )
 
 // arena can used to store []byte. It has one underlying large buffer([]byte). All of []byte to be
@@ -38,9 +45,8 @@ var (
 // arena only once.
 // For now, max size for underlying buffer is limit to math.MaxUint32.
 type arena struct {
-	buf         []byte
-	offsetMap   map[uint64]uint32
-	sizeBufPool *sync.Pool
+	buf       []byte
+	offsetMap map[uint64]uint32
 }
 
 // newArena returns arena with initial capacity size.
@@ -51,11 +57,6 @@ func newArena(size int) *arena {
 	return &arena{
 		buf:       append(buf, []byte("a")...),
 		offsetMap: make(map[uint64]uint32),
-		sizeBufPool: &sync.Pool{
-			New: func() interface{} {
-				return make([]byte, binary.MaxVarintLen64)
-			},
-		},
 	}
 }
 
@@ -69,7 +70,7 @@ func (a *arena) put(b []byte) (uint32, error) {
 		return co, nil
 	}
 	// First put length of buffer(varint encoded), then put actual buffer.
-	sizeBuf := (a.sizeBufPool.Get()).([]byte)
+	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	w := binary.PutVarint(sizeBuf, int64(len(b)))
 	offset := len(a.buf)
 	if int64(len(a.buf)+w+len(b)) > int64(maxArenaSize) {
@@ -79,7 +80,6 @@ func (a *arena) put(b []byte) (uint32, error) {
 	a.buf = append(a.buf, sizeBuf[:w]...)
 	a.buf = append(a.buf, b...)
 
-	a.sizeBufPool.Put(sizeBuf)
 	a.offsetMap[fp] = uint32(offset) // Store offset in map.
 	return uint32(offset), nil
 }
@@ -98,4 +98,12 @@ func (a *arena) get(offset uint32) ([]byte, error) {
 	size, r := binary.Varint(a.buf[offset:])
 	offset += uint32(r)
 	return a.buf[offset : offset+uint32(size)], nil
+}
+
+func (a *arena) reset() {
+	a.buf = a.buf[:1]
+
+	for k := range a.offsetMap {
+		delete(a.offsetMap, k)
+	}
 }
