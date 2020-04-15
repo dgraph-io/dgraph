@@ -1768,6 +1768,7 @@ func TestHealthForAcl(t *testing.T) {
 
 	require.NoError(t, err, "health request failed")
 	testutil.CompareJSON(t, `{
+		"data": { "health": [] },
 		"errors": [
 			{
 				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
