@@ -1162,8 +1162,7 @@
     }
 
 
--
-  name: "Rewrite without custom fields"
+- name: "Rewrite without custom fields"
   gqlquery: |
     query {
       getComment(id: "0x1") {
@@ -1187,8 +1186,7 @@
         url : Comment.url
       }
     }
--
-  name: "Include fields needed by custom directive"
+- name: "Include fields needed by custom directive"
   gqlquery: |
     query {
       getComment(id: "0x1") {
@@ -1208,8 +1206,7 @@
         url : Comment.url
       }
     }
--
-  name: "Rewrite without custom fields deep"
+- name: "Rewrite without custom fields deep"
   gqlquery: |-
     query {
       getPost(postID: "0x1") {
@@ -1240,8 +1237,7 @@
         }
       }
     }
--
-  name: "Include fields needed by custom directive deep"
+- name: "Include fields needed by custom directive deep"
   gqlquery: |-
     query {
       getPost(postID: "0x1") {

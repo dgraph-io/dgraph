@@ -242,7 +242,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		argType, ok := introspectedArgs[remoteArg]
 		if !ok {
 			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s;%s arg not present in the remote"+
+				endpoint.directive.Position, "Type %s; Field %s; %s arg not present in the remote"+
 					" query %s",
 				endpoint.rootQuery.Name,
 				endpoint.field.Name,

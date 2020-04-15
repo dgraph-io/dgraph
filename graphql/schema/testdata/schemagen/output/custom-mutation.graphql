@@ -2,16 +2,13 @@
 # Input Schema
 #######################
 
-enum Role {
-	Admin
-	User
+type User {
+	id: ID!
+	name: String!
 }
 
-type Product {
-	id: ID!
-	price: Float! @search
-	name: String! @search @dgraph(pred: "p")
-	name2: String! @search @dgraph(pred: "p")
+input UserInput {
+	name: String!
 }
 
 #######################
@@ -118,18 +115,18 @@ input StringHashFilter {
 # Generated Types
 #######################
 
-type AddProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+type AddUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
-type DeleteProductPayload {
+type DeleteUserPayload {
 	msg: String
 	numUids: Int
 }
 
-type UpdateProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+type UpdateUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	numUids: Int
 }
 
@@ -137,55 +134,42 @@ type UpdateProductPayload {
 # Generated Enums
 #######################
 
-enum ProductOrderable {
-	price
+enum UserOrderable {
 	name
-	name2
 }
 
 #######################
 # Generated Inputs
 #######################
 
-input AddProductInput {
-	price: Float!
+input AddUserInput {
 	name: String!
-	name2: String!
 }
 
-input ProductFilter {
+input UpdateUserInput {
+	filter: UserFilter!
+	set: UserPatch
+	remove: UserPatch
+}
+
+input UserFilter {
 	id: [ID!]
-	price: FloatFilter
-	name: StringTermFilter
-	name2: StringTermFilter
-	and: ProductFilter
-	or: ProductFilter
-	not: ProductFilter
+	not: UserFilter
 }
 
-input ProductOrder {
-	asc: ProductOrderable
-	desc: ProductOrderable
-	then: ProductOrder
+input UserOrder {
+	asc: UserOrderable
+	desc: UserOrderable
+	then: UserOrder
 }
 
-input ProductPatch {
-	price: Float
+input UserPatch {
 	name: String
-	name2: String
 }
 
-input ProductRef {
+input UserRef {
 	id: ID
-	price: Float
 	name: String
-	name2: String
-}
-
-input UpdateProductInput {
-	filter: ProductFilter!
-	set: ProductPatch
-	remove: ProductPatch
 }
 
 #######################
@@ -193,8 +177,8 @@ input UpdateProductInput {
 #######################
 
 type Query {
-	getProduct(id: ID!): Product
-	queryProduct(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -202,7 +186,8 @@ type Query {
 #######################
 
 type Mutation {
-	addProduct(input: [AddProductInput!]!): AddProductPayload
-	updateProduct(input: UpdateProductInput!): UpdateProductPayload
-	deleteProduct(filter: ProductFilter!): DeleteProductPayload
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
+	addUser(input: [AddUserInput!]!): AddUserPayload
+	updateUser(input: UpdateUserInput!): UpdateUserPayload
+	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
