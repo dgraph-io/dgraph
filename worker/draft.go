@@ -95,7 +95,7 @@ const (
 )
 
 // startTask is used to check whether an op is already going on.
-// If rollup is going on, we cancel and wait for rollup to complete
+// If a rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
 // You should only call Done() on the returned closer. Calling other
 // functions (such as SignalAndWait) for closer could result in panics.
