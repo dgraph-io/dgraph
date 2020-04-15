@@ -255,7 +255,7 @@ func TestCustomHTTPMutation(t *testing.T) {
 			gqlMutation := test.GetMutation(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPMutationResolver(client, StdQueryCompletion())
+			resolver := NewHTTPMutationResolver(client, StdQueryCompletion(), false)
 			resolved, isResolved := resolver.Resolve(context.Background(), gqlMutation)
 			require.True(t, isResolved)
 

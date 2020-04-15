@@ -32,55 +32,86 @@ const (
 	alphaURL      = "http://localhost:8180/graphql"
 	alphaAdminURL = "http://localhost:8180/admin"
 	customTypes   = `type MovieDirector @remote {
-		id: ID!
-		name: String!
-		directed: [Movie]
-	}
-
-	type Movie @remote {
-		id: ID!
-		name: String!
-		director: [MovieDirector]
-	}
-`
+		 id: ID!
+		 name: String!
+		 directed: [Movie]
+	 }
+ 
+	 type Movie @remote {
+		 id: ID!
+		 name: String!
+		 director: [MovieDirector]
+	 }
+	 type Continent @remote {
+		code: String
+		name: String
+		countries: [Country]
+	  }
+	  
+	  type Country @remote {
+		code: String
+		name: String
+		native: String
+		phone: String
+		continent: Continent
+		currency: String
+		languages: [Language]
+		emoji: String
+		emojiU: String
+		states: [State]
+	  }
+	  
+	  type Language @remote {
+		code: String
+		name: String
+		native: String
+		rtl: Int
+	  }
+	  
+	  
+	  type State @remote {
+		code: String
+		name: String
+		country: Country
+	  }
+ `
 )
 
-func updateSchema(t *testing.T, sch string) {
+func updateSchema(t *testing.T, sch string) *common.GraphQLResponse {
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
+			 updateGQLSchema(input: { set: { schema: $sch }}) {
+				 gqlSchema {
+					 schema
+				 }
+			 }
+		 }`,
 		Variables: map[string]interface{}{"sch": sch},
 	}
-	addResult := add.ExecuteAsPost(t, alphaAdminURL)
-	require.Nil(t, addResult.Errors)
+	return add.ExecuteAsPost(t, alphaAdminURL)
 }
 
 func TestCustomGetQuery(t *testing.T) {
 	schema := customTypes + `
-	type Query {
-        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-                url: "http://mock:8888/favMovies/$id?name=$name&num=$num",
-                method: "GET"
-        })
-	}`
-	updateSchema(t, schema)
+	 type Query {
+		 myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMovies/$id?name=$name&num=$num",
+				 method: "GET"
+		 })
+	 }`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	query := `
-	query {
-		myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
-			id
-			name
-			director {
-				id
-				name
-			}
-		}
-	}`
+	 query {
+		 myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
 	params := &common.GraphQLParams{
 		Query: query,
 	}
@@ -94,25 +125,25 @@ func TestCustomGetQuery(t *testing.T) {
 
 func TestCustomPostQuery(t *testing.T) {
 	schema := customTypes + `
-	type Query {
-        myFavoriteMoviesPost(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
-                url: "http://mock:8888/favMoviesPost/$id?name=$name&num=$num",
-                method: "POST"
-        })
-	}`
-	updateSchema(t, schema)
+	 type Query {
+		 myFavoriteMoviesPost(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+				 url: "http://mock:8888/favMoviesPost/$id?name=$name&num=$num",
+				 method: "POST"
+		 })
+	 }`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	query := `
-	query {
-		myFavoriteMoviesPost(id: "0x123", name: "Author", num: 10) {
-			id
-			name
-			director {
-				id
-				name
-			}
-		}
-	}`
+	 query {
+		 myFavoriteMoviesPost(id: "0x123", name: "Author", num: 10) {
+			 id
+			 name
+			 director {
+				 id
+				 name
+			 }
+		 }
+	 }`
 	params := &common.GraphQLParams{
 		Query: query,
 	}
@@ -126,22 +157,22 @@ func TestCustomPostQuery(t *testing.T) {
 
 func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	schema := customTypes + `
-	type Query {
-        verifyHeaders(id: ID!): [Movie] @custom(http: {
-                url: "http://mock:8888/verifyHeaders",
-				method: "GET",
-				forwardHeaders: ["X-App-Token", "X-User-Id"]
-        })
-	}`
-	updateSchema(t, schema)
+	 type Query {
+		 verifyHeaders(id: ID!): [Movie] @custom(http: {
+				 url: "http://mock:8888/verifyHeaders",
+				 method: "GET",
+				 forwardHeaders: ["X-App-Token", "X-User-Id"]
+		 })
+	 }`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	query := `
-	query {
-		verifyHeaders(id: "0x123") {
-			id
-			name
-		}
-	}`
+	 query {
+		 verifyHeaders(id: "0x123") {
+			 id
+			 name
+		 }
+	 }`
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
@@ -243,14 +274,14 @@ func addSchools(t *testing.T, teachers []*teacher) []*school {
 
 	params := &common.GraphQLParams{
 		Query: `mutation addSchool($t1: [TeacherRef], $t2: [TeacherRef], $t3: [TeacherRef]) {
-			addSchool(input: [{ established: 1980, teachers: $t1 },
-				{ established: 1981, teachers: $t2 }, { established: 1982, teachers: $t3 }]) {
-				school {
-					id
-					established
-				}
-			}
-		}`,
+			 addSchool(input: [{ established: 1980, teachers: $t1 },
+				 { established: 1981, teachers: $t2 }, { established: 1982, teachers: $t3 }]) {
+				 school {
+					 id
+					 established
+				 }
+			 }
+		 }`,
 		Variables: map[string]interface{}{
 			// teachers work at multiple schools.
 			"t1": []map[string]interface{}{{"tid": teachers[0].ID}, {"tid": teachers[1].ID}},
@@ -286,14 +317,14 @@ type user struct {
 func addUsers(t *testing.T, schools []*school) []*user {
 	params := &common.GraphQLParams{
 		Query: `mutation addUser($s1: [SchoolRef], $s2: [SchoolRef], $s3: [SchoolRef]) {
-			addUser(input: [{ age: 10, schools: $s1 },
-				{ age: 11, schools: $s2 }, { age: 12, schools: $s3 }]) {
-				user {
-					id
-					age
-				}
-			}
-		}`,
+			 addUser(input: [{ age: 10, schools: $s1 },
+				 { age: 11, schools: $s2 }, { age: 12, schools: $s3 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
 		Variables: map[string]interface{}{
 			// Users could have gone to multiple schools
 			"s1": []map[string]interface{}{{"id": schools[0].ID}, {"id": schools[1].ID}},
@@ -323,26 +354,26 @@ func addUsers(t *testing.T, schools []*school) []*user {
 
 func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*school) {
 	queryUser := `
-	query {
-		queryUser(order: {asc: age}) {
-			name
-			age
-			cars {
-				name
-			}
-			schools(order: {asc: established}) {
-				name
-				established
-				teachers(order: {desc: age}) {
-					name
-					age
-				}
-				classes {
-					name
-				}
-			}
-		}
-	}`
+	 query {
+		 queryUser(order: {asc: age}) {
+			 name
+			 age
+			 cars {
+				 name
+			 }
+			 schools(order: {asc: established}) {
+				 name
+				 established
+				 teachers(order: {desc: age}) {
+					 name
+					 age
+				 }
+				 classes {
+					 name
+				 }
+			 }
+		 }
+	 }`
 	params := &common.GraphQLParams{
 		Query: queryUser,
 	}
@@ -351,174 +382,174 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	require.Nil(t, result.Errors)
 
 	expected := `{
-		"queryUser": [
-		  {
-			"name": "uname-` + users[0].ID + `",
-			"age": 10,
-			"cars": {
-				"name": "car-` + users[0].ID + `"
-			},
-			"schools": [
-				{
-					"name": "sname-` + schools[0].ID + `",
-					"established": 1980,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[0].ID + `",
-							"age": 28
-						},
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[0].ID + `"
-						}
-					]
-				},
-				{
-					"name": "sname-` + schools[1].ID + `",
-					"established": 1981,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						},
-						{
-							"name": "tname-` + teachers[2].ID + `",
-							"age": 26
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[1].ID + `"
-						}
-					]
-				}
-			]
-		  },
-		  {
-			"name": "uname-` + users[1].ID + `",
-			"age": 11,
-			"cars": {
-				"name": "car-` + users[1].ID + `"
-			},
-			"schools": [
-				{
-					"name": "sname-` + schools[1].ID + `",
-					"established": 1981,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						},
-						{
-							"name": "tname-` + teachers[2].ID + `",
-							"age": 26
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[1].ID + `"
-						}
-					]
-				},
-				{
-					"name": "sname-` + schools[2].ID + `",
-					"established": 1982,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[0].ID + `",
-							"age": 28
-						},
-						{
-							"name": "tname-` + teachers[2].ID + `",
-							"age": 26
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[2].ID + `"
-						}
-					]
-				}
-			]
-		  },
-		  {
-			"name": "uname-` + users[2].ID + `",
-			"age": 12,
-			"cars": {
-				"name": "car-` + users[2].ID + `"
-			},
-			"schools": [
-				{
-					"name": "sname-` + schools[0].ID + `",
-					"established": 1980,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[0].ID + `",
-							"age": 28
-						},
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[0].ID + `"
-						}
-					]
-				},
-				{
-					"name": "sname-` + schools[2].ID + `",
-					"established": 1982,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[0].ID + `",
-							"age": 28
-						},
-						{
-							"name": "tname-` + teachers[2].ID + `",
-							"age": 26
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[2].ID + `"
-						}
-					]
-				}
-			]
-		  }
-		]
-	  }`
+		 "queryUser": [
+		   {
+			 "name": "uname-` + users[0].ID + `",
+			 "age": 10,
+			 "cars": {
+				 "name": "car-` + users[0].ID + `"
+			 },
+			 "schools": [
+				 {
+					 "name": "sname-` + schools[0].ID + `",
+					 "established": 1980,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[0].ID + `",
+							 "age": 28
+						 },
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[0].ID + `"
+						 }
+					 ]
+				 },
+				 {
+					 "name": "sname-` + schools[1].ID + `",
+					 "established": 1981,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 },
+						 {
+							 "name": "tname-` + teachers[2].ID + `",
+							 "age": 26
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[1].ID + `"
+						 }
+					 ]
+				 }
+			 ]
+		   },
+		   {
+			 "name": "uname-` + users[1].ID + `",
+			 "age": 11,
+			 "cars": {
+				 "name": "car-` + users[1].ID + `"
+			 },
+			 "schools": [
+				 {
+					 "name": "sname-` + schools[1].ID + `",
+					 "established": 1981,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 },
+						 {
+							 "name": "tname-` + teachers[2].ID + `",
+							 "age": 26
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[1].ID + `"
+						 }
+					 ]
+				 },
+				 {
+					 "name": "sname-` + schools[2].ID + `",
+					 "established": 1982,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[0].ID + `",
+							 "age": 28
+						 },
+						 {
+							 "name": "tname-` + teachers[2].ID + `",
+							 "age": 26
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[2].ID + `"
+						 }
+					 ]
+				 }
+			 ]
+		   },
+		   {
+			 "name": "uname-` + users[2].ID + `",
+			 "age": 12,
+			 "cars": {
+				 "name": "car-` + users[2].ID + `"
+			 },
+			 "schools": [
+				 {
+					 "name": "sname-` + schools[0].ID + `",
+					 "established": 1980,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[0].ID + `",
+							 "age": 28
+						 },
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[0].ID + `"
+						 }
+					 ]
+				 },
+				 {
+					 "name": "sname-` + schools[2].ID + `",
+					 "established": 1982,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[0].ID + `",
+							 "age": 28
+						 },
+						 {
+							 "name": "tname-` + teachers[2].ID + `",
+							 "age": 26
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[2].ID + `"
+						 }
+					 ]
+				 }
+			 ]
+		   }
+		 ]
+	   }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
 
 	singleUserQuery := `
-	query {
-		getUser(id: "` + users[0].ID + `") {
-			name
-			age
-			cars {
-				name
-			}
-			schools(order: {asc: established}) {
-				name
-				established
-				teachers(order: {desc: age}) {
-					name
-					age
-				}
-				classes {
-					name
-				}
-			}
-		}
-	}`
+	 query {
+		 getUser(id: "` + users[0].ID + `") {
+			 name
+			 age
+			 cars {
+				 name
+			 }
+			 schools(order: {asc: established}) {
+				 name
+				 established
+				 teachers(order: {desc: age}) {
+					 name
+					 age
+				 }
+				 classes {
+					 name
+				 }
+			 }
+		 }
+	 }`
 	params = &common.GraphQLParams{
 		Query: singleUserQuery,
 	}
@@ -527,54 +558,54 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	require.Nil(t, result.Errors)
 
 	expected = `{
-		"getUser": {
-			"name": "uname-` + users[0].ID + `",
-			"age": 10,
-			"cars": {
-				"name": "car-` + users[0].ID + `"
-			},
-			"schools": [
-				{
-					"name": "sname-` + schools[0].ID + `",
-					"established": 1980,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[0].ID + `",
-							"age": 28
-						},
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[0].ID + `"
-						}
-					]
-				},
-				{
-					"name": "sname-` + schools[1].ID + `",
-					"established": 1981,
-					"teachers": [
-						{
-							"name": "tname-` + teachers[1].ID + `",
-							"age": 27
-						},
-						{
-							"name": "tname-` + teachers[2].ID + `",
-							"age": 26
-						}
-					],
-					"classes": [
-						{
-							"name": "class-` + schools[1].ID + `"
-						}
-					]
-				}
-			]
-		}
-	}`
+		 "getUser": {
+			 "name": "uname-` + users[0].ID + `",
+			 "age": 10,
+			 "cars": {
+				 "name": "car-` + users[0].ID + `"
+			 },
+			 "schools": [
+				 {
+					 "name": "sname-` + schools[0].ID + `",
+					 "established": 1980,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[0].ID + `",
+							 "age": 28
+						 },
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[0].ID + `"
+						 }
+					 ]
+				 },
+				 {
+					 "name": "sname-` + schools[1].ID + `",
+					 "established": 1981,
+					 "teachers": [
+						 {
+							 "name": "tname-` + teachers[1].ID + `",
+							 "age": 27
+						 },
+						 {
+							 "name": "tname-` + teachers[2].ID + `",
+							 "age": 26
+						 }
+					 ],
+					 "classes": [
+						 {
+							 "name": "class-` + schools[1].ID + `"
+						 }
+					 ]
+				 }
+			 ]
+		 }
+	 }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
 
@@ -583,63 +614,63 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// lets check batch mode first
 	schema := `type Car @remote {
-		id: ID!
-		name: String!
-	}
+		 id: ID!
+		 name: String!
+	 }
+ 
+	 type User {
+		 id: ID!
+		 name: String @custom(http: {
+						 url: "http://mock:8888/userNames",
+						 method: "GET",
+						 body: "{uid: $id}",
+						 operation: "batch"
+					 })
+		 age: Int! @search
+		 cars: Car @custom(http: {
+						 url: "http://mock:8888/cars",
+						 method: "GET",
+						 body: "{uid: $id}",
+						 operation: "batch"
+					 })
+		 schools: [School]
+	 }
+ 
+	 type School {
+		 id: ID!
+		 established: Int! @search
+		 name: String @custom(http: {
+						 url: "http://mock:8888/schoolNames",
+						 method: "POST",
+						 body: "{sid: $id}",
+						 operation: "batch"
+					   })
+		 classes: [Class] @custom(http: {
+							 url: "http://mock:8888/classes",
+							 method: "POST",
+							 body: "{sid: $id}",
+							 operation: "batch"
+						 })
+		 teachers: [Teacher]
+	 }
+ 
+	 type Class @remote {
+		 id: ID!
+		 name: String!
+	 }
+ 
+	 type Teacher {
+		 tid: ID!
+		 age: Int!
+		 name: String @custom(http: {
+						 url: "http://mock:8888/teacherNames",
+						 method: "POST",
+						 body: "{tid: $tid}",
+						 operation: "batch"
+					 })
+	 }`
 
-	type User {
-		id: ID!
-		name: String @custom(http: {
-						url: "http://mock:8888/userNames",
-						method: "GET",
-						body: "{uid: $id}",
-						operation: "batch"
-					})
-		age: Int! @search
-		cars: Car @custom(http: {
-						url: "http://mock:8888/cars",
-						method: "GET",
-						body: "{uid: $id}",
-						operation: "batch"
-					})
-		schools: [School]
-	}
-
-	type School {
-		id: ID!
-		established: Int! @search
-		name: String @custom(http: {
-						url: "http://mock:8888/schoolNames",
-						method: "POST",
-						body: "{sid: $id}",
-						operation: "batch"
-					  })
-		classes: [Class] @custom(http: {
-							url: "http://mock:8888/classes",
-							method: "POST",
-							body: "{sid: $id}",
-							operation: "batch"
-						})
-		teachers: [Teacher]
-	}
-
-	type Class @remote {
-		id: ID!
-		name: String!
-	}
-
-	type Teacher {
-		tid: ID!
-		age: Int!
-		name: String @custom(http: {
-						url: "http://mock:8888/teacherNames",
-						method: "POST",
-						body: "{tid: $tid}",
-						operation: "batch"
-					})
-	}`
-
-	updateSchema(t, schema)
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
@@ -649,64 +680,196 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	// lets update the schema and check single mode now
 	schema = `
-	type Car @remote {
-		id: ID!
-		name: String!
-	}
-
-	type User {
-		id: ID!
-		name: String @custom(http: {
-						url: "http://mock:8888/userName",
-						method: "GET",
-						body: "{uid: $id}",
-						operation: "single"
-					})
-		age: Int! @search
-		cars: Car @custom(http: {
-						url: "http://mock:8888/car",
-						method: "GET",
-						body: "{uid: $id}",
-						operation: "single"
-					})
-		schools: [School]
-	}
-
-	type School {
-		id: ID!
-		established: Int! @search
-		name: String @custom(http: {
-						url: "http://mock:8888/schoolName",
-						method: "POST",
-						body: "{sid: $id}",
-						operation: "single"
-					  })
-		classes: [Class] @custom(http: {
-							url: "http://mock:8888/class",
-							method: "POST",
-							body: "{sid: $id}",
-							operation: "single"
-						})
-		teachers: [Teacher]
-	}
-
-	type Class @remote {
-		id: ID!
-		name: String!
-	}
-
-	type Teacher {
-		tid: ID!
-		age: Int!
-		name: String @custom(http: {
-						url: "http://mock:8888/teacherName",
-						method: "POST",
-						body: "{tid: $tid}",
-						operation: "single"
-					  })
-	}`
+	 type Car @remote {
+		 id: ID!
+		 name: String!
+	 }
+ 
+	 type User {
+		 id: ID!
+		 name: String @custom(http: {
+						 url: "http://mock:8888/userName",
+						 method: "GET",
+						 body: "{uid: $id}",
+						 operation: "single"
+					 })
+		 age: Int! @search
+		 cars: Car @custom(http: {
+						 url: "http://mock:8888/car",
+						 method: "GET",
+						 body: "{uid: $id}",
+						 operation: "single"
+					 })
+		 schools: [School]
+	 }
+ 
+	 type School {
+		 id: ID!
+		 established: Int! @search
+		 name: String @custom(http: {
+						 url: "http://mock:8888/schoolName",
+						 method: "POST",
+						 body: "{sid: $id}",
+						 operation: "single"
+					   })
+		 classes: [Class] @custom(http: {
+							 url: "http://mock:8888/class",
+							 method: "POST",
+							 body: "{sid: $id}",
+							 operation: "single"
+						 })
+		 teachers: [Teacher]
+	 }
+ 
+	 type Class @remote {
+		 id: ID!
+		 name: String!
+	 }
+ 
+	 type Teacher {
+		 tid: ID!
+		 age: Int!
+		 name: String @custom(http: {
+						 url: "http://mock:8888/teacherName",
+						 method: "POST",
+						 body: "{tid: $tid}",
+						 operation: "single"
+					   })
+	 }`
 
 	verifyData(t, users, teachers, schools)
+}
+
+func TestForInvalidCustomQuery(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
+}
+
+func TestForInvalidArguement(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; code arg not present in the remote query country\n")
+}
+
+func TestForInvalidType(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
+}
+
+func TestCustomLogicGraphql(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	res := updateSchema(t, schema)
+	require.Nil(t, res.Errors)
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountry":{"code":"BI","name":"Burundi"}}
+	`)
+}
+
+func TestCustomLogicGraphqlWithError(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}	
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountry(id: "BI"){
+			code
+			name 
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountry":{"code":"BI","name":"Burundi"}}
+	`)
+	require.Equal(t, "dummy error", result.Errors.Error())
+}
+
+func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountries", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountries(id: "BI"){
+			code
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, string(result.Data), `
+	{"getCountries":[
+		{
+		  "name": "Burundi",
+		  "code": "BI"
+		}
+	  ]}
+	`)
+}
+
+func TestCustomLogicWithErrorResponse(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/graphqlerr", method: "POST"}, graphql: {query: "country(code: $id)"})
+	}
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query {
+		getCountries(id: "BI"){
+			code
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, "dummy error", result.Errors.Error())
 }
 
 type episode struct {
