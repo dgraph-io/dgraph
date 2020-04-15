@@ -37,7 +37,7 @@ import (
 
 func sendRestoreRequest(t *testing.T) {
 	restoreRequest := `mutation restore() {
-		 restore(input: {location: "/data/alpha1/backup"}) {
+		 restore(input: {location: "/data/alpha1/backup", backupId: "compassionate_antonelli7"}) {
 			response {
 				code
 				message
@@ -134,4 +134,28 @@ func TestBasicRestore(t *testing.T) {
 	sendRestoreRequest(t)
 	runQueries(t, dg)
 	runMutations(t, dg)
+}
+
+func TestInvalidBackupId(t *testing.T) {
+	restoreRequest := `mutation restore() {
+		 restore(input: {location: "/data/alpha1/backup", backupId: "bad-backup-id"}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: restoreRequest,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(buf), "failed to verify backup")
 }

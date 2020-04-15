@@ -35,6 +35,7 @@ type restoreResolver struct {
 
 type restoreInput struct {
 	Location     string
+	BackupId     string
 	AccessKey    string
 	SecretKey    string
 	SessionToken string
@@ -52,6 +53,7 @@ func (rr *restoreResolver) Rewrite(
 
 	req := pb.RestoreRequest{
 		Location:     input.Location,
+		BackupId:     input.BackupId,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
