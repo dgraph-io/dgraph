@@ -721,7 +721,7 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 
 func response(code, msg string) map[string]interface{} {
 	return map[string]interface{}{
-		"response": map[string]string{"code": code, "message": msg}}
+		"response": map[string]interface{}{"code": code, "message": msg}}
 }
 
 func emptyResult(f schema.Field, err error) *resolve.Resolved {
