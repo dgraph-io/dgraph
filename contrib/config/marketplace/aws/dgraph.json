@@ -333,6 +333,18 @@
                 },
                 "true"
             ]
+        },
+        "AllowThirdSubnet": {
+            "Fn::Not" : [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "us-west-1"
+                    ]
+                }
+            ]
         }
     },
     "Resources": {
@@ -488,6 +500,7 @@
         },
         "SubnetC": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "AllowThirdSubnet",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -516,6 +529,7 @@
         },
         "SubnetCRouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "AllowThirdSubnet",
             "Properties": {
                 "SubnetId": {
                     "Ref": "SubnetC"
@@ -533,17 +547,32 @@
                         "Ref": "DgraphALBSecurityGroup"
                     }
                 ],
-                "Subnets": [
+                "Subnets":
                     {
-                        "Ref": "SubnetA"
-                    },
-                    {
-                        "Ref": "SubnetB"
-                    },
-                    {
-                        "Ref": "SubnetC"
+                        "Fn::If": [
+                            "AllowThirdSubnet",
+                            [
+                                {
+                                    "Ref": "SubnetA"
+                                },
+                                {
+                                    "Ref": "SubnetB"
+                                },
+                                {
+                                    "Ref": "SubnetC"
+                                }
+                            ],
+                            [
+                                {
+                                    "Ref": "SubnetA"
+                                },
+                                {
+                                    "Ref": "SubnetB"
+                                }
+                            ]
+                        ]
                     }
-                ],
+                ,
                 "Tags": [
                     {
                         "Key": "context",
