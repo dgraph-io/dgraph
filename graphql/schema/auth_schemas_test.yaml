@@ -47,6 +47,16 @@ valid_schemas:
         userRole: String @search(by: [hash])
       }
 
+  - name: "GraphQL auth RBAC rule"
+    input: |
+      type X @auth(
+        query: {rule: """{"$X_MyApp_Role": {"eq": "ADMIN"}}"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
   - name: "GraphQL With Variable Should Parse"
     input: |
       type X @auth(
