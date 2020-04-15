@@ -73,6 +73,7 @@ type Operation interface {
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
+	GetRBACOperator() (string, string)
 }
 
 // A Field is one field from an Operation.
@@ -258,6 +259,28 @@ func (o *operation) Mutations() (ms []Mutation) {
 	}
 
 	return
+}
+
+func (f *operation) GetRBACOperator() (string, string) {
+	variables := f.op.VariableDefinitions
+	if len(variables) != 1 {
+		return "", ""
+	}
+	variableName := variables[0].Variable
+
+	if len(f.op.SelectionSet) != 1 {
+		return "", ""
+	}
+	field := f.op.SelectionSet[0].(*ast.Field)
+
+	if len(field.Arguments) != 1 {
+		return "", ""
+	}
+	child := field.Arguments[0].Value
+	if len(child.Children) != 1 {
+		return "", ""
+	}
+	return variableName, child.Children[0].Value.Raw
 }
 
 // parentInterface returns the name of an interface that a field belonging to a type definition
