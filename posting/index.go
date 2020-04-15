@@ -555,7 +555,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
 	tmpDB, err := badger.OpenManaged(dbOpts)

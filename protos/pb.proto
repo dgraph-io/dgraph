@@ -279,7 +279,7 @@ message RestoreRequest {
 
 message Proposal {
 	Mutations mutations    = 2;
-	repeated KV kv         = 4;
+	repeated dgraph.badger.v2.pb.KV kv = 4;
 	MembershipState state  = 5;
 	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
 	string key             = 7;
@@ -291,7 +291,7 @@ message Proposal {
 }
 
 message KVS {
- repeated pb.KV kv = 1;
+ repeated dgraph.badger.v2.pb.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
 }
@@ -531,7 +531,7 @@ service Worker {
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream dgraph.badger.v2.pb.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -539,7 +539,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+    dgraph.badger.v2.pb.KVList kvs = 1;
 }
 
 message Num {
