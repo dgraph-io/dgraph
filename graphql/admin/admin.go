@@ -394,6 +394,18 @@ func newAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
+
+	adminMutationResolvers :=
+		map[string]func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool){
+			"backup":   resolveBackup,
+			"config":   resolveConfig,
+			"draining": resolveExport,
+			"export":   resolveExport,
+			"login":    resolveLogin,
+			"restore":  resolveRestore,
+			"shutdown": resolveShutdown,
+		}
+
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
 			health := &healthResolver{}
@@ -423,29 +435,15 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady), Field: q}
 				})
-		}).
-		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveExport)
-		}).
-		WithMutationResolver("draining", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveDraining)
-		}).
-		WithMutationResolver("shutdown", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveShutdown)
-		}).
-		WithMutationResolver("config", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveConfig)
-		}).
-		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveBackup)
-		}).
-		WithMutationResolver("restore", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveRestore)
-		}).
-		WithMutationResolver("login", func(m schema.Mutation) resolve.MutationResolver {
-			return resolve.MutationResolverFunc(resolveLogin)
-		}).
-		WithSchemaIntrospection()
+		})
+
+	for op, fn := range adminMutationResolvers {
+		rf.WithMutationResolver(op, func(m schema.Mutation) resolve.MutationResolver {
+			return resolve.MutationResolverFunc(fn)
+		})
+	}
+
+	rf.WithSchemaIntrospection()
 
 	return rf
 }
