@@ -799,6 +799,21 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive on a query with null parameter in path is not allowed"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/$id", method: "GET"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; url path inside @custom directive uses a field id that can be null.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
     name: "@custom directive with wrong value for method"
     input: |
       type Author {
@@ -825,6 +840,190 @@ invalid_schemas:
     {"message": "UpdateAuthorInput is a reserved word, so you can't declare an input type with this name. Pick a different name for the input type.",
      "locations":[{"line":4, "column":7}]},
     ]
+
+  -
+    name: "@custom directive with wrong value for operation"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "random"})
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthor; operation field inside @custom directive can only be single/batch.",
+      "locations":[{"line":6, "column":31}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses undefined field"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, body template must use fields
+       defined within the type, found: abc.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field where body required itself"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $name, id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field where type doesn't have id field"
+    input: |
+      type Author {
+        foo: String!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc, jam: $foo }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive is only allowed on fields where the type
+       definition has a field with type ID! or a field with @id directive.",
+      "locations":[{"line":3, "column":18}]},
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field yo: @custom directive, body template must use a field with type
+      ID! or a field with @id directive.",
+      "locations":[{"line":5, "column":16}]},
+    ]
+
+  -
+    name: "@custom directive not allowed on field of type ID!"
+    input: |
+      type Author {
+        id: ID! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
+      field with @id directive.",
+      "locations":[{"line":2, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive not allowed on field with @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or
+      field with @id directive.",
+      "locations":[{"line":3, "column":22}]},
+    ]
+
+  -
+    name: "@custom directive not allowed along with @search directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @search @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @search directive.",
+          "locations":[{"line":3, "column":26}]},
+        ]
+
+  -
+    name: "@custom directive not allowed along with @dgraph directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @dgraph(pred: "foo") @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; custom directive not allowed along with @dgraph directive.",
+          "locations":[{"line":3, "column":39}]},
+        ]
+
+  -
+    name: "@custom directive on a field in a type, only defined fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com/$fooz/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
+          "locations":[{"line":4, "column":18}]},
+        ]
+
+  -
+    name: "@custom directive on a field in a type, only mandatory fields allowed in url path"
+    input: |
+      type Author {
+        id: ID!
+        foo: String
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com/$foo/$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
+          "locations":[{"line":5, "column":18}]},
+        ]
 
 valid_schemas:
   -
@@ -977,7 +1176,7 @@ valid_schemas:
         id: ID!
         established: String!
         name: String! @custom(http: {
-                url: "http://mock:8888/schoolNames",
+                url: "http://mock:8888/schoolNames/$id/$established",
                 method: "POST",
                 body: "{sid: $id}"
                 })
@@ -985,6 +1184,29 @@ valid_schemas:
                   url: "http://mock:8888/classes",
                   method: "POST",
                   body: "{sid: $id}"
+                })
+      }
+
+  -
+    name: "Schema with @custom directives on field where body requires field with @id directive."
+    input: |
+      type Class @remote {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        established: String! @id
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames",
+                method: "POST",
+                body: "{sid: $established}"
+                })
+        classes: [Class] @custom(http: {
+                  url: "http://mock:8888/classes",
+                  method: "POST",
+                  body: "{sid: $established}"
                 })
       }
 

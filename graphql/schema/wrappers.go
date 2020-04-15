@@ -1576,10 +1576,12 @@ func isName(s string) bool {
 }
 
 // Given a template for a body with variables defined, this function parses the body
-// and converts it into a JSON representation and returns that.
+// and converts it into a JSON representation and returns that. It also returns a list of the field
+// names that are required by this template.
 // for e.g.
 // { author: $id, post: { id: $postID }}
-// { "author" : "$id", "post": { "id": "$postID" }}
+// would return
+// { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
 func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
 	var s scanner.Scanner
