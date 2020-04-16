@@ -83,7 +83,7 @@ func NewGraphQLSubscription(url string, req *schema.Request) (*GraphQLSubscripti
 
 	if msg.Type != ackMsg {
 		fmt.Println(string(msg.Payload))
-		return nil, fmt.Errorf("Expected ack response from the server but got %+v", msg)
+		return nil, fmt.Errorf("expected ack response from the server but got %+v", msg)
 	}
 
 	// We got ack, now send start the subscription by sending the query to the server.
