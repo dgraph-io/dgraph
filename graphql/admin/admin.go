@@ -221,7 +221,7 @@ const (
 		Positive value of logRequest will make alpha print all the request it gets.
 		Negative value will will make alpha stop priting all the subsequent requets.
 		"""
-		logRequest: Int
+		logRequest: Boolean
 	}
 
 	type ConfigPayload {

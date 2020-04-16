@@ -40,7 +40,7 @@ type configInput struct {
 	// that might be the case when this parameter isn't specified in query.
 	// It will be used like a boolean. We are keeping int32 because we want to
 	// modify it using atomics(atomics doesn't have support for bool).
-	LogRequest int32
+	LogRequest *bool
 }
 
 func (cr *configResolver) Rewrite(
@@ -58,8 +58,12 @@ func (cr *configResolver) Rewrite(
 			return nil, nil, err
 		}
 	}
-	if input.LogRequest != 0 {
-		atomic.StoreInt32(&x.WorkerConfig.LogRequest, input.LogRequest)
+	if input.LogRequest != nil {
+		if *input.LogRequest {
+			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
+		} else {
+			atomic.StoreInt32(&x.WorkerConfig.LogRequest, -1)
+		}
 	}
 
 	return nil, nil, nil
