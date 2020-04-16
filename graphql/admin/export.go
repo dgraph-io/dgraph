@@ -56,7 +56,6 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{m.Name(): response("Success", "Export completed.")},
 		Field: m,
-		Err:   err,
 	}, true
 }
 

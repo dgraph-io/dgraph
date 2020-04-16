@@ -36,7 +36,6 @@ func resolveDraining(ctx context.Context, m schema.Mutation) (*resolve.Resolved,
 		Data: map[string]interface{}{
 			m.Name(): response("Success", fmt.Sprintf("draining mode has been set to %v", enable))},
 		Field: m,
-		Err:   nil,
 	}, true
 }
 

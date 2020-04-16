@@ -56,7 +56,6 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{m.Name(): response("Success", "Restore completed.")},
 		Field: m,
-		Err:   err,
 	}, true
 }
 

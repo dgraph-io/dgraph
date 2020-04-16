@@ -64,7 +64,6 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{q.Name(): resultState},
 		Field: q,
-		Err:   err,
 	}
 }
 
