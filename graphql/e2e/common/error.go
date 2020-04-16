@@ -241,9 +241,9 @@ func panicCatcher(t *testing.T) {
 
 	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -258,7 +258,7 @@ func panicCatcher(t *testing.T) {
 					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
-			require.Nil(t, gqlResponse.Data)
+			require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
 		})
 	}
 }
@@ -285,12 +285,12 @@ func (dg *panicClient) Mutate(
 func clientInfoLogin(t *testing.T) {
 	loginQuery := &GraphQLParams{
 		Query: `mutation {
-  						login(input: {userId: "groot", password: "password"}) {
-    						response {
-      							accessJWT
-    						}
-  						}
-					}`,
+					login(userId: "groot", password: "password") {
+						response {
+							accessJWT
+						}
+					}
+				}`,
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
@@ -301,14 +301,14 @@ func clientInfoLogin(t *testing.T) {
 	mErr := resolve.MutationResolverFunc(
 		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
 			loginCtx = ctx
-			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName()), Field: mutation}, false
 		})
 
 	resolverFactory := resolve.NewResolverFactory(nil, mErr).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

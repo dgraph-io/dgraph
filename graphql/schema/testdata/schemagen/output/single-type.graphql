@@ -174,3 +174,12 @@ type Mutation {
 	updateMessage(input: UpdateMessageInput!): UpdateMessagePayload
 	deleteMessage(filter: MessageFilter!): DeleteMessagePayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getMessage(id: ID!): Message
+	queryMessage(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
+}

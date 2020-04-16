@@ -96,8 +96,8 @@ func (asr *updateSchemaResolver) FromMutationResult(
 func (asr *updateSchemaResolver) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
-	*schema.Extensions, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, *schema.Extensions,
+	error) {
 	assigned, result, ext, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		return nil, nil, ext, err
@@ -114,8 +114,7 @@ func (asr *updateSchemaResolver) Mutate(
 
 func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
 	*schema.Extensions, error) {
-	data, err := doQuery(asr.admin.schema, asr.mutation.SelectionSet()[0])
-	return data, nil, err
+	return doQuery(asr.admin.schema, asr.mutation.QueryField())
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
@@ -126,11 +125,10 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 
 func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
 	*schema.Extensions, error) {
-	data, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
-	return data, nil, err
+	return doQuery(gsr.admin.schema, gsr.gqlQuery)
 }
 
-func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
+func doQuery(gql *gqlSchema, field schema.Field) ([]byte, *schema.Extensions, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
@@ -160,7 +158,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 	}
 	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return buf.Bytes(), nil, nil
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

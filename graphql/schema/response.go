@@ -91,17 +91,16 @@ func (r *Response) AddData(p []byte) {
 		return
 	}
 
-	if r.Data.Len() > 0 {
-		// The end of the buffer is always the closing `}`
-		r.Data.Truncate(r.Data.Len() - 1)
-		x.Check2(r.Data.WriteRune(','))
-	}
-
 	if r.Data.Len() == 0 {
-		x.Check2(r.Data.WriteRune('{'))
+		x.Check2(r.Data.Write(p))
+		return
 	}
 
-	x.Check2(r.Data.Write(p))
+	// The end of the buffer is always the closing `}`
+	r.Data.Truncate(r.Data.Len() - 1)
+	x.Check2(r.Data.WriteRune(','))
+
+	x.Check2(r.Data.Write(p[1 : len(p)-1]))
 	x.Check2(r.Data.WriteRune('}'))
 }
 
@@ -124,22 +123,7 @@ func (r *Response) MergeExtensions(ext *Extensions) {
 // WriteTo writes the GraphQL response as unindented JSON to w
 // and returns the number of bytes written and error, if any.
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
-	if r == nil {
-		i, err := w.Write([]byte(
-			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
-				` "data": null }`))
-		return int64(i), err
-	}
-
-	js, err := json.Marshal(struct {
-		Errors     []*x.GqlError   `json:"errors,omitempty"`
-		Data       json.RawMessage `json:"data,omitempty"`
-		Extensions *Extensions     `json:"extensions,omitempty"`
-	}{
-		Errors:     r.Errors,
-		Data:       r.Data.Bytes(),
-		Extensions: r.Extensions,
-	})
+	js, err := json.Marshal(r.Output())
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
@@ -150,4 +134,26 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 	i, err := w.Write(js)
 	return int64(i), err
+}
+
+// Output returns json interface of the response
+func (r *Response) Output() interface{} {
+	if r == nil {
+		return struct {
+			Errors json.RawMessage `json:"errors,omitempty"`
+			Data   json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
+			Data:   []byte("null"),
+		}
+	}
+	return struct {
+		Errors     []*x.GqlError   `json:"errors,omitempty"`
+		Data       json.RawMessage `json:"data,omitempty"`
+		Extensions *Extensions     `json:"extensions,omitempty"`
+	}{
+		Errors:     r.Errors,
+		Data:       r.Data.Bytes(),
+		Extensions: r.Extensions,
+	}
 }

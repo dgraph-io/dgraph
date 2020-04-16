@@ -285,3 +285,16 @@ type Mutation {
 	updateDirector(input: UpdateDirectorInput!): UpdateDirectorPayload
 	deleteDirector(filter: DirectorFilter!): DeleteDirectorPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getMovie(id: ID!): Movie
+	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
+	getOscarMovie(id: ID!): OscarMovie
+	queryOscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	getDirector(id: ID!): Director
+	queryDirector(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
+}

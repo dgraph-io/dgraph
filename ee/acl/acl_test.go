@@ -136,7 +136,7 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 
 func TestInvalidGetUser(t *testing.T) {
 	currentUser := getCurrentUser(t, "invalid token")
-	require.Len(t, currentUser.Data, 0)
+	require.Equal(t, currentUser.Data, []byte(`{"getCurrentUser":null}`))
 	require.Equal(t, currentUser.Errors, x.GqlErrorList{{
 		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
 			" contains an invalid number of segments",
@@ -1792,6 +1792,7 @@ func TestHealthForAcl(t *testing.T) {
 	require.Equal(t, x.GqlErrorList{{
 		Message: expectedError,
 	}}, resp.Errors)
+	require.Equal(t, []byte(`{ "health": [] }`), resp.Data)
 
 	// assert data for guardians
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{

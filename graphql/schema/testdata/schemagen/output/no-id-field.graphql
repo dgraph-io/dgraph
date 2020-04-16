@@ -232,3 +232,14 @@ type Mutation {
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryPost(order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	queryGenre(order: GenreOrder, first: Int, offset: Int): [Genre]
+}

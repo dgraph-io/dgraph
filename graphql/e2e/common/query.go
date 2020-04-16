@@ -1045,6 +1045,29 @@ func enumFilter(t *testing.T) {
 	}
 }
 
+func queryApplicationGraphQl(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPostApplicationGraphql(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryCountry": [
+          { "name": "Angola"},
+          { "name": "Bangladesh"},
+          { "name": "Mozambique"}
+        ]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+}
+
 func queryTypename(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query queryCountry {
