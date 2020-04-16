@@ -134,7 +134,8 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 func TestInvalidGetUser(t *testing.T) {
 	require.Equal(t, string(getCurrentUser(t, "invalid token")),
 		`{"errors":[{"message":"couldn't rewrite query getCurrentUser because unable to`+
-			` parse jwt token: token contains an invalid number of segments"}]}`)
+			` parse jwt token: token contains an invalid number of segments"}],`+
+			`"data":{"getCurrentUser":null}}`)
 }
 
 func TestPasswordReturn(t *testing.T) {
@@ -1767,9 +1768,10 @@ func TestHealthForAcl(t *testing.T) {
 
 	require.NoError(t, err, "health request failed")
 	testutil.CompareJSON(t, `{
+		"data": { "health": [] },
 		"errors": [
 			{
-				"message": "Dgraph query failed because Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
+				"message": "Error: rpc error: code = PermissionDenied desc = Only guardians are allowed access. User '`+userid+`' is not a member of guardians group."
 			}
 		]
 	}`, string(b))

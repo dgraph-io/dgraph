@@ -37,6 +37,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -358,9 +359,12 @@ func (writer *fileWriter) open(fpath string) error {
 	if err != nil {
 		return err
 	}
-
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	writer.gw, err = gzip.NewWriterLevel(writer.bw, gzip.BestCompression)
+	w, err := enc.GetWriter(Config.BadgerKeyFile, writer.bw)
+	if err != nil {
+		return err
+	}
+	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestCompression)
 	return err
 }
 
