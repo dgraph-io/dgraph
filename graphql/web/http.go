@@ -247,7 +247,8 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 			// "A standard GraphQL POST request should use the application/json
 			// content type ..."
 			return nil, errors.New(
-				"Unrecognised Content-Type.  Please use application/json or application/graphql for GraphQL requests")
+				"Unrecognised Content-Type.  Please use application/json or application/graphql" +
+					" for GraphQL requests")
 		}
 	default:
 		return nil,

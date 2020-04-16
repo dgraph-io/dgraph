@@ -23,6 +23,7 @@ import (
 	"net/http"
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/gorilla/websocket"
 )
 
@@ -77,7 +78,7 @@ func NewGraphQLSubscription(url string, req *schema.Request) (*GraphQLSubscripti
 
 	msg := operationMessage{}
 	if err = conn.ReadJSON(&msg); err != nil {
-		conn.Close()
+		x.Check(conn.Close())
 		return nil, err
 	}
 
@@ -89,7 +90,7 @@ func NewGraphQLSubscription(url string, req *schema.Request) (*GraphQLSubscripti
 	// We got ack, now send start the subscription by sending the query to the server.
 	payload, err := json.Marshal(req)
 	if err != nil {
-		conn.Close()
+		x.Check(conn.Close())
 		return nil, err
 	}
 
@@ -100,7 +101,7 @@ func NewGraphQLSubscription(url string, req *schema.Request) (*GraphQLSubscripti
 	msg.Payload = payload
 
 	if err = conn.WriteJSON(msg); err != nil {
-		conn.Close()
+		x.Check(conn.Close())
 		return nil, err
 	}
 	return &GraphQLSubscriptionClient{

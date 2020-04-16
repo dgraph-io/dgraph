@@ -449,7 +449,8 @@ func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLRes
 
 // ExecuteAsPostApplicationGraphql builds an HTTP Post with type application/graphql
 // Note, variables are not allowed
-func (params *GraphQLParams) ExecuteAsPostApplicationGraphql(t *testing.T, url string) *GraphQLResponse {
+func (params *GraphQLParams) ExecuteAsPostApplicationGraphql(t *testing.T,
+	url string) *GraphQLResponse {
 	require.Empty(t, params.Variables)
 
 	req, err := params.createApplicationGQLPost(url)
@@ -498,7 +499,8 @@ func (params *GraphQLParams) createGQLGet(url string) (*http.Request, error) {
 	return req, nil
 }
 
-func (params *GraphQLParams) buildPostRequest(url string, body []byte, contentType string) (*http.Request, error) {
+func (params *GraphQLParams) buildPostRequest(url string, body []byte,
+	contentType string) (*http.Request, error) {
 	var err error
 	if params.gzipEncoding {
 		if body, err = gzipData(body); err != nil {
