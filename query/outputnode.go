@@ -78,9 +78,9 @@ type encoder struct {
 	// |-----------------------------------------------------------------------|
 	// |    8   |    7   |    6   |    5   |    4   |    3   |    2   |    1   |
 	// |-----------------------------------------------------------------------|
-	// | MSB    |        | Unused |        |                                   |
-	// | for    | Attr ID| For    |        |        Offset inside Arena        |
-	// | list   |        | Now    |        |                                   |
+	// | MSB    |                 | Unused |                                   |
+	// | for    |     Attr ID     | For    |        Offset inside Arena        |
+	// | list   |                 | Now    |                                   |
 	// |-----------------------------------------------------------------------|
 	metaSlice []uint64
 	// childrenMap contains mapping of fastJsonNode to its children.
@@ -109,7 +109,7 @@ func (enc *encoder) idForAttr(attr string) uint16 {
 		return id
 	}
 
-	// TODO: check for overflow.
+	// TODO(Ashish): check for overflow.
 	enc.seqNo++
 	enc.attrMap[attr] = enc.seqNo
 	enc.idMap[enc.seqNo] = attr
@@ -129,7 +129,7 @@ func (enc *encoder) attrForID(id uint16) string {
 	return ""
 }
 
-// makeScalarNode returns a fastJsonNode with all of its meta data populated.
+// makeScalarNode returns a fastJsonNode with all of its meta data, scalarVal populated.
 func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (fastJsonNode, error) {
 	fj := enc.newNode()
 	enc.setAttr(fj, attr)
@@ -142,7 +142,7 @@ func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (fastJson
 }
 
 const (
-	// Value with most significant digit set to 1.
+	// Value with most significant bit set to 1.
 	msbBit = 0x8000000000000000
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = 0x00FFFF0000000000
@@ -165,18 +165,18 @@ const (
 // 1. Default meta(0) is appened to metaSlice of encoder and index of this meta
 // 	becomes fastJsonNode value(id).
 // 2. Now any meta for this node can be updated using setXXX functions.
-// 3. Children of this node are store in encoder's children map.
+// 3. Children for this node are store in encoder's children map.
 type fastJsonNode uint32
 
 // newNode returns a fastJsonNode with its meta set to 0.
 func (enc *encoder) newNode() fastJsonNode {
-	// TODO: check if are exceeding math.MaxUint32 here.
+	// TODO(Ashish): check if are exceeding math.MaxUint32 here.
 	enc.metaSlice = append(enc.metaSlice, 0)
 	return fastJsonNode(len(enc.metaSlice) - 1)
 }
 
 // newNodeWithAttr returns a fastJsonNode with its attr set to attr,
-// with all other meta set to their default value.
+// and all other meta set to their default value.
 func (enc *encoder) newNodeWithAttr(attr uint16) fastJsonNode {
 	nn := enc.newNode()
 	enc.setAttr(nn, attr)
@@ -919,7 +919,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 		}
 	}
 
-	// Put arena encoder back to arena pool.
+	// Put encoder's arena back to arena pool.
 	arenaPool.Put(enc.arena)
 	return bufw.Bytes(), nil
 }

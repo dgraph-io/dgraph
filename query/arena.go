@@ -41,9 +41,9 @@ var (
 
 // arena can used to store []byte. It has one underlying large buffer([]byte). All of []byte to be
 // stored in arena are appended to this underlying buffer. For futher optimizations, arena also
-// keeps mapping from memhash([]byte) => offset in buffer. This ensure single []byte is put into
+// keeps mapping from memhash([]byte) => offset in map. This ensures same []byte is put into
 // arena only once.
-// For now, max size for underlying buffer is limit to math.MaxUint32.
+// For now, max size for underlying buffer is limited to math.MaxUint32.
 type arena struct {
 	buf       []byte
 	offsetMap map[uint64]uint32
@@ -60,7 +60,7 @@ func newArena(size int) *arena {
 	}
 }
 
-// put stores b in arena and returns offset for it. Return offset is always > 0(if no error).
+// put stores b in arena and returns offset for it. Returned offset is always > 0(if no error).
 // Note: for now this function can only put buffers such that:
 // len(current arena buf) + varint(len(b)) + len(b) <= math.MaxUint32.
 func (a *arena) put(b []byte) (uint32, error) {
@@ -85,7 +85,7 @@ func (a *arena) put(b []byte) (uint32, error) {
 }
 
 func (a *arena) get(offset uint32) ([]byte, error) {
-	// We have only dummy values at offset 0.
+	// We have only dummy value at offset 0.
 	if offset == 0 {
 		return nil, nil
 	}
