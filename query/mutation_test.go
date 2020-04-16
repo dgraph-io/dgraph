@@ -37,7 +37,6 @@ func TestAlterInternalTypes(t *testing.T) {
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
-	testutil.DropAll(t, dg)
 	op := &api.Operation{Schema: `
 		type dgraph.type.User {
 			name: string
