@@ -2,7 +2,6 @@ package query
 
 import (
 	"bytes"
-	"fmt"
 	"math"
 	"testing"
 
@@ -91,7 +90,7 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, string(buf.Bytes()))
+		`, buf.String())
 	})
 
 	t.Run("with value list predicate", func(t *testing.T) {
@@ -110,7 +109,7 @@ func TestEncode(t *testing.T) {
 				"bob"
 			]
 		}
-		`, string(buf.Bytes()))
+		`, buf.String())
 	})
 
 	t.Run("with uid predicate", func(t *testing.T) {
@@ -124,7 +123,6 @@ func TestEncode(t *testing.T) {
 
 		buf := new(bytes.Buffer)
 		require.NoError(t, enc.encode(root, buf))
-		fmt.Println(string(buf.Bytes()))
 		testutil.CompareJSON(t, `
 		{
 			"person":[
@@ -134,6 +132,6 @@ func TestEncode(t *testing.T) {
 				}
 			]
 		}
-		`, string(buf.Bytes()))
+		`, buf.String())
 	})
 }
