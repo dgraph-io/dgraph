@@ -43,7 +43,7 @@ type AuthQueryRewritingCase struct {
 }
 
 func TestAuthQueryRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("auth_test.yaml")
+	b, err := ioutil.ReadFile("auth_tests.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []AuthQueryRewritingCase

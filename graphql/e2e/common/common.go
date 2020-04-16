@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -184,6 +185,7 @@ func BootstrapServer(schema, data []byte) {
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
+		fmt.Println("Here", err)
 		x.Panic(err)
 	}
 

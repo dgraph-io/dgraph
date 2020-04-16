@@ -590,6 +590,7 @@ func (r *RuleAst) GetName() string {
 
 // Builds query used to get authorized nodes and their uids
 func (r *RuleAst) BuildQueries(ruleID int, AuthVariables map[string]string) *gql.GraphQuery {
+	return nil
 	operation := r.GetOperation()
 	if operation.GetName() != "filter" {
 		return nil
@@ -623,6 +624,8 @@ func (r *RuleAst) GetFilters(AuthVariables map[string]string) *gql.FilterTree {
 	if operation.IsFilter() {
 		return nil
 	}
+
+	return nil
 
 	var ruleValue string
 	if operation.GetOperand().IsJWT() && AuthVariables != nil {

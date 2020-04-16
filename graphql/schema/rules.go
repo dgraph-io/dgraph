@@ -60,7 +60,7 @@ func validateAuthNode(node *RuleNode) gqlerror.List {
 
 	if ast := node.Rule; ast != nil {
 		has["rule"] = true
-		result = append(result, ast.Validate()...)
+		//result = append(result, ast.Validate()...)
 	}
 
 	if len(has) > 1 {
