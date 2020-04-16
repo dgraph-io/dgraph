@@ -1189,9 +1189,6 @@
                             "AssociatePublicIpAddress": "true",
                             "DeviceIndex": "0",
                             "DeleteOnTermination": "true",
-                            "SubnetId": {
-                                "Ref": "SubnetA"
-                            },
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1284,11 +1281,30 @@
         "ZeroAutoscalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetA"
-                    }
-                ],
+                "VPCZoneIdentifier": {
+                    "Fn::If": [
+                        "AllowThirdSubnet",
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            },
+                            {
+                                "Ref": "SubnetC"
+                            }
+                        ],
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            }
+                        ]
+                    ]
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "ZeroLaunchTemplate"
@@ -1374,9 +1390,6 @@
                             "AssociatePublicIpAddress": "true",
                             "DeviceIndex": "0",
                             "DeleteOnTermination": "true",
-                            "SubnetId": {
-                                "Ref": "SubnetA"
-                            },
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1471,11 +1484,30 @@
                 "ZeroAutoscalingGroup"
             ],
             "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetA"
-                    }
-                ],
+                "VPCZoneIdentifier":  {
+                    "Fn::If": [
+                        "AllowThirdSubnet",
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            },
+                            {
+                                "Ref": "SubnetC"
+                            }
+                        ],
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            }
+                        ]
+                    ]
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "AlphaLaunchTemplate"
