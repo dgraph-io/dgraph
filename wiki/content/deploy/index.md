@@ -1739,7 +1739,7 @@ Dgraph Live Loader (run with `dgraph live`) is a small helper program which read
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
-{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `-x` flag, which can reused
+{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `--xidmap` flag, which can reused
 given that live loader completed successfully in the previous run.{{% /notice %}}
 
 ```sh
@@ -1783,6 +1783,8 @@ Do not confuse with `-C`.
 Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
+
+`-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
 ### Bulk Loader
 
@@ -1932,6 +1934,10 @@ ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
 `--format`: Specify file format (rdf or json) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
+
+`--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna use [External IDs](/mutations#external-ids).
+
+`--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
 #### Tuning & monitoring
 
