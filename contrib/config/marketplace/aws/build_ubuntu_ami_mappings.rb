@@ -1,15 +1,30 @@
 #!/usr/bin/env ruby
 
-# Purpose: This builds a list of mappings of AMI images in either YAML or JSON
+# Purpose:
+#  This builds a list of mappings of AMI images in either YAML or JSON
 #  for use with CFN (CloudFormation) scripts.
-# Background: In AWS, each region has unique AMI id for the desired images, so
+# Background:
+#  In AWS, each region has unique AMI id for the desired images, so
 #  you need to build a list of target AMI IDs for use with your scripts.
-# Requirements: aws cli tools with profile configured
+# Requirements:
+#  aws cli tools with profile (~/.aws/) configured
 #
 require 'yaml'
 require 'json'
 
+# main
+#  main
 def main
+  # get arguments
+  (mode, owner, filter) = parse_arguments
+
+  # print results in JSON or YAML
+  print_mappings(mode, owner, filter)
+end
+
+# parse_arguments
+#   process command line arguments
+def parse_arguments
   # get command line arguments
   (mode, owner, filter) = ARGV[0, 2]
 
@@ -21,18 +36,29 @@ def main
     filter = 'ubuntu/images/hvm-ssd/ubuntu-bionic-*amd64-server*'
   end
 
-  # print results in JSON or YAML
+  [mode, owner, filter]
+end
+
+# print_mappings
+#   output final rendered result
+def print_mappings(mode, owner, filter)
+  mappings = build_ami_mappings(owner, filter)
+
   if mode =~ /json/
-    puts JSON.pretty_generate(build_ami_mappings(owner, filter))
+    puts JSON.pretty_generate(mappings)
   elsif mode =~ /yaml|yml/
-    puts build_ami_mappings(owner, filter).to_yaml
+    puts mappings.to_yaml
   end
 end
 
+# list_regions
+#  return a list of regions that are accessible given your profile
 def list_regions
   `aws ec2 describe-regions --query "Regions[].{Name:RegionName}" --output text`
 end
 
+# get_latest_image
+#  returns the most recent image given the owner and filter
 def get_latest_image(owner, filter)
   owners = { canonical: '099720109477' }
 
@@ -46,25 +72,28 @@ def get_latest_image(owner, filter)
   images.split[-1]
 end
 
-def get_latest_ami(owner, filter, region)
+# get_region_ami_id
+#  returns ami for a given region given an example image name for the filter
+def get_region_ami_id(owner, filter, region)
   owners = { canonical: '099720109477' }
 
-  images = `aws ec2 describe-images \
+  ami_id = `aws ec2 describe-images \
     --region #{region} \
     --owners #{owners[owner]} \
     --filters "Name=name,Values=#{filter}" \
     --query Images[].ImageId \
-    --output text`
+    --output text`.chomp
 
-  # return latest
-  images.split[-1]
+  ami_id
 end
 
+# build_ami_mappings
+#   returns a hash of AMI mappings
 def build_ami_mappings(owner, filter)
   ami_mappings = {}
   image_name = get_latest_image(owner, filter)
   list_regions.split.each do |region|
-    ami_id = get_latest_ami(owner, image_name, region)
+    ami_id = get_region_ami_id(owner, image_name, region)
     ami_mappings.merge!({ region => { '64' => ami_id } })
   end
 
