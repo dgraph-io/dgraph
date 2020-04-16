@@ -191,7 +191,9 @@ func (m *XidMap) updateMaxSeen(max uint64) {
 		if prev >= max {
 			return
 		}
-		atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max)
+		if atomic.CompareAndSwapUint64(&m.maxUidSeen, prev, max) {
+			return
+		}
 	}
 }
 
