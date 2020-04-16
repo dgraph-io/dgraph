@@ -69,6 +69,12 @@ const adminTypes = `
 		backupId: String!
 
 		"""
+		Path to the key file needed to unencrypt the backup. This file should be accessible
+		by all alphas in the group.
+		"""
+		keyFile: String!
+
+		"""
 		Access key credential for the destination.
 		"""
 		accessKey: String

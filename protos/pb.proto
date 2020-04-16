@@ -275,6 +275,9 @@ message RestoreRequest {
 	string secret_key = 6;
 	string session_token = 7;
 	bool anonymous = 8;
+
+	// Info needed to process encrypted backups.
+	string key_file = 9;
 }
 
 message Proposal {

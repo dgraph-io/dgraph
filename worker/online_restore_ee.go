@@ -19,6 +19,7 @@ import (
 	"net/url"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -198,6 +199,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
+			r, err := enc.GetReader(req.GetKeyFile(), r)
+			if err != nil {
+				return 0, errors.Wrapf(err, "cannot get encrypted reader")
+			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot create gzip reader")

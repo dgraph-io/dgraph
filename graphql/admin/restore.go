@@ -29,6 +29,7 @@ import (
 type restoreInput struct {
 	Location     string
 	BackupId     string
+	KeyFile      string
 	AccessKey    string
 	SecretKey    string
 	SessionToken string
@@ -45,6 +46,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	req := pb.RestoreRequest{
 		Location:     input.Location,
 		BackupId:     input.BackupId,
+		KeyFile:      input.KeyFile,
 		AccessKey:    input.AccessKey,
 		SecretKey:    input.SecretKey,
 		SessionToken: input.SessionToken,
