@@ -45,6 +45,9 @@ type executor struct {
 	resp     string
 	assigned map[string]string
 	result   map[string]interface{}
+	// these will be returned as extensions by .Query() and .Mutate() respectively
+	queryExtensions  *schema.Extensions
+	mutateExtensions *schema.Extensions
 
 	// start reporting Dgraph fails at this point (0 = never fail, 1 = fail on
 	// first request, 2 = succeed once and then fail on 2nd request, etc.)
@@ -85,7 +88,7 @@ func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
 	if ex.failQuery == 0 {
 		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
 	}
-	return []byte(ex.resp), nil, nil
+	return []byte(ex.resp), ex.queryExtensions, nil
 }
 
 func (ex *executor) Mutate(ctx context.Context,
@@ -97,7 +100,7 @@ func (ex *executor) Mutate(ctx context.Context,
 		return nil, nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
 			"Dgraph mutation failed")
 	}
-	return ex.assigned, ex.result, nil, nil
+	return ex.assigned, ex.result, ex.mutateExtensions, nil
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
@@ -436,6 +439,50 @@ func TestManyMutationsWithError(t *testing.T) {
 			require.JSONEq(t, tcase.expected, resp.Data.String())
 		})
 	}
+}
+
+func TestQueriesPropagateExtensions(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	query := `
+	query {
+      getAuthor(id: "0x1") {
+        name
+      }
+    }`
+
+	resp := resolveWithClient(gqlSchema, query, nil,
+		&executor{
+			queryExtensions:  &schema.Extensions{TouchedUids: 2},
+			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+		})
+
+	expectedExtensions := &schema.Extensions{TouchedUids: 2}
+
+	require.NotNil(t, resp)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
+func TestMutationsPropagateExtensions(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	mutation := `mutation {
+		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
+			post {
+				title
+			}
+		}
+	}`
+
+	resp := resolveWithClient(gqlSchema, mutation, nil,
+		&executor{
+			queryExtensions:  &schema.Extensions{TouchedUids: 2},
+			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+		})
+
+	// as both .Mutate() and .Query() should get called, so we should get their merged result
+	expectedExtensions := &schema.Extensions{TouchedUids: 7}
+
+	require.NotNil(t, resp)
+	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {

@@ -17,6 +17,7 @@
 package subscription_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -86,11 +87,16 @@ func TestSubscription(t *testing.T) {
 		  }`,
 	})
 	require.Nil(t, err)
-	res, err := subscriptionClient.RecvMsg()
 
+	res, err := subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
-	require.JSONEq(t, `{"data":{"getProduct":{"name":"sanitizer"}}}`, string(res))
+	var subscriptionResp common.GraphQLResponse
+	err = json.Unmarshal(res, &subscriptionResp)
+	require.NoError(t, err)
+	require.Nil(t, subscriptionResp.Errors)
+
+	require.JSONEq(t, `{"getProduct":{"name":"sanitizer"}}`, string(subscriptionResp.Data))
 
 	// Background indexing is happening so wait till it get indexed.
 	time.Sleep(time.Second * 2)
@@ -112,8 +118,13 @@ func TestSubscription(t *testing.T) {
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
 
+	subscriptionResp.Data = nil
+	err = json.Unmarshal(res, &subscriptionResp)
+	require.NoError(t, err)
+	require.Nil(t, subscriptionResp.Errors)
+
 	// Check the latest update.
-	require.JSONEq(t, `{"data":{"getProduct":{"name":"mask"}}}`, string(res))
+	require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
 
 	time.Sleep(2 * time.Second)
 	// Change schema to terminate subscription..

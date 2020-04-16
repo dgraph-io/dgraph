@@ -130,11 +130,11 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 
 func TestInvalidGetUser(t *testing.T) {
 	currentUser := getCurrentUser(t, "invalid token")
-	require.Equal(t, currentUser.Data, []byte(`{"getCurrentUser":null}`))
-	require.Equal(t, currentUser.Errors, x.GqlErrorList{{
+	require.Equal(t, `{"getCurrentUser":null}`, string(currentUser.Data))
+	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query getCurrentUser because unable to parse jwt token: token" +
 			" contains an invalid number of segments",
-	}})
+	}}, currentUser.Errors)
 }
 
 func TestPasswordReturn(t *testing.T) {
@@ -1799,13 +1799,11 @@ func TestHealthForAcl(t *testing.T) {
 	require.NoError(t, err, "login failed")
 
 	resp := makeRequest(t, accessJwt, params)
-	expectedError := fmt.Sprintf("Dgraph query failed because Error: rpc error: code"+
+	expectedError := fmt.Sprintf("Error: rpc error: code"+
 		" = PermissionDenied desc = Only guardians are allowed access. "+
 		"User '%s' is not a member of guardians group.", userid)
-	require.Equal(t, x.GqlErrorList{{
-		Message: expectedError,
-	}}, resp.Errors)
-	require.Equal(t, []byte(`{ "health": [] }`), resp.Data)
+	require.Equal(t, x.GqlErrorList{{Message: expectedError}}, resp.Errors)
+	require.JSONEq(t, `{ "health": [] }`, string(resp.Data))
 
 	// assert data for guardians
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
