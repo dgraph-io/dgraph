@@ -4,18 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/pkg/errors"
 )
-
-type stateResolver struct {
-}
 
 type membershipState struct {
 	Counter    uint64         `json:"counter,omitempty"`
@@ -37,45 +34,37 @@ type clusterGroup struct {
 	Checksum   uint64       `json:"checksum,omitempty"`
 }
 
-func (hr *stateResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-	return nil, nil
-}
-
-func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-	var resp *api.Response
-	var err error
-
-	x.Check2(buf.WriteString(`{ "state":`))
-
-	if resp, err = (&edgraph.Server{}).State(ctx); err != nil {
-		err = errors.Errorf("%s: %s", x.Error, err.Error())
-		x.Check2(buf.Write([]byte(` null `)))
-	} else {
-		// unmarshal it back to MembershipState proto in order to map to graphql response
-		u := jsonpb.Unmarshaler{}
-		var ms pb.MembershipState
-		err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
-
-		if err != nil {
-			x.Check2(buf.Write([]byte(` null `)))
-		} else {
-			// map to graphql response
-			state := convertToGraphQLResp(ms)
-
-			// marshal it back to json
-			var b []byte
-			b, err = json.Marshal(state)
-			if err != nil {
-				x.Check2(buf.Write([]byte(` null `)))
-			} else {
-				x.Check2(buf.Write(b))
-			}
-		}
+func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
+	resp, err := (&edgraph.Server{}).State(ctx)
+	if err != nil {
+		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
-	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), err
+	// unmarshal it back to MembershipState proto in order to map to graphql response
+	u := jsonpb.Unmarshaler{}
+	var ms pb.MembershipState
+	err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
+
+	if err != nil {
+		return emptyResult(q, err)
+	}
+
+	// map to graphql response structure
+	state := convertToGraphQLResp(ms)
+	b, err := json.Marshal(state)
+	if err != nil {
+		return emptyResult(q, err)
+	}
+	var resultState map[string]interface{}
+	err = json.Unmarshal(b, &resultState)
+	if err != nil {
+		return emptyResult(q, err)
+	}
+
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{q.Name(): resultState},
+		Field: q,
+	}
 }
 
 // convertToGraphQLResp converts MembershipState proto to GraphQL layer response
