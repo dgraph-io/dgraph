@@ -47,8 +47,7 @@
         },
         {
           "id": "0x3",
-          "name": "Star Trek",
-          "director": []
+          "name": "Star Trek"
         }
       ]
     }
@@ -93,11 +92,18 @@
   resolvedresponse: |
     {
       "myFavoriteMoviesPart2": [
-        null,
+        {
+          "id": "0x1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
         {
           "id": "0x3",
-          "name": "Star Trek",
-          "director": []
+          "name": "Star Trek"
         }
       ]
     }

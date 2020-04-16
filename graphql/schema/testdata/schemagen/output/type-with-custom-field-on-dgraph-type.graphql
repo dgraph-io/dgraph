@@ -251,3 +251,14 @@ type Mutation {
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	getUser(id: ID!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+}
