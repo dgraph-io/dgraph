@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/x"
 	"sort"
 	"strconv"
 
@@ -40,9 +41,9 @@ func NewQueryRewriter() QueryRewriter {
 func (qr *queryRewriter) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	// FIXME: should come from the JWT
-	authVariables := map[string]interface{}{
-		"User": "user1",
+	authVariables, err := x.ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	switch gqlQuery.QueryType() {
