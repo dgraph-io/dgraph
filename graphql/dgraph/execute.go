@@ -19,7 +19,6 @@ package dgraph
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/golang/glog"
@@ -39,7 +38,6 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	defer stop()
 
 	queryStr := AsString(query)
-	fmt.Println(ctx.Value("value"))
 
 	if glog.V(3) {
 		glog.Infof("Executing Dgraph query: \n%s\n", queryStr)
@@ -58,7 +56,6 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
-	fmt.Println(string(resp.GetJson()))
 	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
 }
 

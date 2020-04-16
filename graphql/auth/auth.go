@@ -183,7 +183,7 @@ func (a *AuthResolver) OnMutation(query *gql.GraphQuery, mutation []*dgoapi.Muta
 		}
 	}
 
-	if query != nil {
+	if query != nil && query.Attr == "" {
 		query.Children = queries
 	}
 
