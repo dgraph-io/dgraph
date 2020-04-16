@@ -16,4 +16,67 @@
 
 package main
 
-// TODO: add cmd flag tests
+import (
+	"io/ioutil"
+	"testing"
+
+	"github.com/ChainSafe/gossamer/dot"
+	"github.com/ChainSafe/gossamer/lib/utils"
+
+	"github.com/stretchr/testify/require"
+	"github.com/urfave/cli"
+)
+
+// TestFixFlagOrder tests the FixFlagOrder method
+func TestFixFlagOrder(t *testing.T) {
+	testCfg, testConfig := dot.NewTestConfigWithFile(t)
+	genFile := dot.NewTestGenesisFile(t, testCfg)
+
+	defer utils.RemoveTestDir(t)
+
+	testApp := cli.NewApp()
+	testApp.Writer = ioutil.Discard
+
+	testcases := []struct {
+		description string
+		flags       []string
+		values      []interface{}
+	}{
+		{
+			"Test gossamer --config --genesis --verbosity --force",
+			[]string{"config", "genesis", "verbosity", "force"},
+			[]interface{}{testConfig.Name(), genFile.Name(), "trace", true},
+		},
+		{
+			"Test gossamer --config --genesis --force --verbosity",
+			[]string{"config", "genesis", "force", "verbosity"},
+			[]interface{}{testConfig.Name(), genFile.Name(), true, "trace"},
+		},
+		{
+			"Test gossamer --config --force --genesis --verbosity",
+			[]string{"config", "force", "genesis", "verbosity"},
+			[]interface{}{testConfig.Name(), true, genFile.Name(), "trace"},
+		},
+		{
+			"Test gossamer --force --config --genesis --verbosity",
+			[]string{"force", "config", "genesis", "verbosity"},
+			[]interface{}{true, testConfig.Name(), genFile.Name(), "trace"},
+		},
+	}
+
+	for _, c := range testcases {
+		c := c // bypass scopelint false positive
+		t.Run(c.description, func(t *testing.T) {
+			ctx, err := newTestContext(c.description, c.flags, c.values)
+			require.Nil(t, err)
+
+			updatedInitAction := FixFlagOrder(initAction)
+			err = updatedInitAction(ctx)
+			require.Nil(t, err)
+
+			updatedExportAction := FixFlagOrder(exportAction)
+			err = updatedExportAction(ctx)
+			require.Nil(t, err)
+		})
+	}
+}
