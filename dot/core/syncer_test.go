@@ -79,8 +79,13 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 	if cfg.Runtime == nil {
 		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 	}
+
 	if cfg.TransactionQueue == nil {
 		cfg.TransactionQueue = stateSrvc.TransactionQueue
+	}
+
+	if cfg.Verifier == nil {
+		cfg.Verifier = &mockVerifier{}
 	}
 
 	syncer, err := NewSyncer(cfg)

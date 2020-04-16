@@ -13,12 +13,10 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
-
 package core
 
 import (
 	"bytes"
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -57,8 +55,6 @@ type Service struct {
 	// Current BABE session
 	bs              *babe.Session
 	isBabeAuthority bool
-	epochNumber     uint64   // epoch number of current epoch
-	firstBlock      *big.Int // block number of first block in current epoch
 
 	// Keystore
 	keys *keystore.Keystore
@@ -89,9 +85,11 @@ type Config struct {
 	IsBabeAuthority  bool
 
 	NewBlocks chan types.Block // only used for testing purposes
-	MsgRec    <-chan network.Message
-	MsgSend   chan<- network.Message
-	SyncChan  chan *big.Int
+	Verifier  Verifier         // only used for testing purposes
+
+	MsgRec   <-chan network.Message
+	MsgSend  chan<- network.Message
+	SyncChan chan *big.Int
 }
 
 // NewService returns a new core service that connects the runtime, BABE
@@ -115,6 +113,10 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, ErrNilStorageState
 	}
 
+	if cfg.Runtime == nil {
+		return nil, ErrNilRuntime
+	}
+
 	codeHash, err := cfg.StorageState.LoadCodeHash()
 	if err != nil {
 		return nil, err
@@ -124,22 +126,10 @@ func NewService(cfg *Config) (*Service, error) {
 	respChan := make(chan *network.BlockResponseMessage, 128)
 	chanLock := &sync.Mutex{}
 
-	syncerCfg := &SyncerConfig{
-		BlockState:       cfg.BlockState,
-		BlockNumIn:       cfg.SyncChan,
-		RespIn:           respChan,
-		MsgOut:           cfg.MsgSend,
-		Lock:             syncerLock,
-		ChanLock:         chanLock,
-		TransactionQueue: cfg.TransactionQueue,
-	}
-
-	syncer, err := NewSyncer(syncerCfg)
-	if err != nil {
-		return nil, err
-	}
-
 	var srv = &Service{}
+
+	var authData []*babe.AuthorityData
+	var currentDescriptor *babe.NextEpochDescriptor
 
 	if cfg.IsBabeAuthority {
 		if cfg.Keystore.NumSr25519Keys() == 0 {
@@ -161,18 +151,15 @@ func NewService(cfg *Config) (*Service, error) {
 			transactionQueue: cfg.TransactionQueue,
 			epochDone:        epochDone,
 			babeKill:         babeKill,
-			epochNumber:      uint64(0),
-			firstBlock:       nil,
 			isBabeAuthority:  true,
 			lock:             chanLock,
 			closed:           false,
-			syncer:           syncer,
 			syncLock:         syncerLock,
 			blockNumOut:      cfg.SyncChan,
 			respOut:          respChan,
 		}
 
-		authData, err := srv.grandpaAuthorities()
+		authData, err = srv.grandpaAuthorities()
 		if err != nil {
 			return nil, err
 		}
@@ -191,8 +178,10 @@ func NewService(cfg *Config) (*Service, error) {
 			SyncLock:         syncerLock,
 		}
 
+		var bs *babe.Session
+
 		// create a new BABE session
-		bs, err := babe.NewSession(bsConfig)
+		bs, err = babe.NewSession(bsConfig)
 		if err != nil {
 			srv.isBabeAuthority = false
 			log.Error("[core] could not start babe session", "error", err)
@@ -200,6 +189,8 @@ func NewService(cfg *Config) (*Service, error) {
 		}
 
 		srv.bs = bs
+
+		currentDescriptor = bs.Descriptor()
 	} else {
 		srv = &Service{
 			rt:               cfg.Runtime,
@@ -214,12 +205,48 @@ func NewService(cfg *Config) (*Service, error) {
 			isBabeAuthority:  false,
 			lock:             chanLock,
 			closed:           false,
-			syncer:           syncer,
 			syncLock:         syncerLock,
 			blockNumOut:      cfg.SyncChan,
 			respOut:          respChan,
 		}
+
+		authData, err = srv.grandpaAuthorities()
+		if err != nil {
+			return nil, err
+		}
+
+		currentDescriptor = &babe.NextEpochDescriptor{
+			Authorities: authData,
+			Randomness:  [babe.RandomnessLength]byte{}, // TODO: will be cleaner to do once runtime functions are moved to runtime package
+		}
 	}
+
+	if cfg.Verifier == nil {
+		// TODO: load current epoch from database chain head
+		cfg.Verifier, err = babe.NewVerificationManager(cfg.BlockState, 0, currentDescriptor)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	syncerCfg := &SyncerConfig{
+		BlockState:       cfg.BlockState,
+		BlockNumIn:       cfg.SyncChan,
+		RespIn:           respChan,
+		MsgOut:           cfg.MsgSend,
+		Lock:             syncerLock,
+		ChanLock:         chanLock,
+		TransactionQueue: cfg.TransactionQueue,
+		Verifier:         cfg.Verifier,
+		Runtime:          cfg.Runtime,
+	}
+
+	syncer, err := NewSyncer(syncerCfg)
+	if err != nil {
+		return nil, err
+	}
+
+	srv.syncer = syncer
 
 	// core service
 	return srv, nil
@@ -281,40 +308,6 @@ func (s *Service) StorageRoot() (common.Hash, error) {
 	return s.storageState.StorageRoot()
 }
 
-// getBlockEpoch gets the epoch number using the provided block hash
-func (s *Service) getBlockEpoch(hash common.Hash) (epoch uint64, err error) {
-
-	// get slot number to determine epoch number
-	slot, err := s.blockState.GetSlotForBlock(hash)
-	if err != nil {
-		return epoch, fmt.Errorf("failed to get slot from block hash: %s", err)
-	}
-
-	if slot != 0 {
-		// epoch number = (slot - genesis slot) / epoch length
-		epoch = (slot - 1) / 6 // TODO: use epoch length from babe or core config
-	}
-
-	return epoch, nil
-}
-
-// blockFromCurrentEpoch verifies the provided block hash is from current epoch
-func (s *Service) blockFromCurrentEpoch(hash common.Hash) (bool, error) {
-
-	// get epoch number of block header
-	epoch, err := s.getBlockEpoch(hash)
-	if err != nil {
-		return false, fmt.Errorf("[core] failed to get epoch from block header: %s", err)
-	}
-
-	// check if block epoch number matches current epoch number
-	if epoch != s.epochNumber {
-		return false, nil
-	}
-
-	return true, nil
-}
-
 func (s *Service) safeMsgSend(msg network.Message) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -340,11 +333,7 @@ func (s *Service) handleBabeSession() {
 		// wait for BABE epoch to complete
 		<-s.epochDone
 
-		// finalize BABE session
-		err := s.finalizeBabeSession()
-		if err != nil {
-			log.Error("[core] failed to finalize BABE session", "error", err)
-		}
+		// TODO: fetch NextEpochDescriptor from verifier
 
 		// create new BABE session
 		bs, err := s.initializeBabeSession()

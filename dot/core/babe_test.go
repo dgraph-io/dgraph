@@ -22,54 +22,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// test finalizeBabeSession
-func TestFinalizeBabeSession(t *testing.T) {
-	s := newTestServiceWithFirstBlock(t)
-
-	number, err := s.blockState.BestBlockNumber()
-	require.Nil(t, err)
-
-	header, err := s.blockState.BestBlockHeader()
-	require.Nil(t, err)
-
-	err = s.handleBlockDigest(header)
-	require.Nil(t, err)
-
-	require.Equal(t, number, s.firstBlock)
-
-	err = s.finalizeBabeSession()
-	require.Nil(t, err)
-
-	require.Nil(t, s.firstBlock)
-}
-
 // test initializeBabeSession
 func TestInitializeBabeSession(t *testing.T) {
 	s := newTestServiceWithFirstBlock(t)
 
-	number, err := s.blockState.BestBlockNumber()
-	require.Nil(t, err)
-
-	header, err := s.blockState.BestBlockHeader()
-	require.Nil(t, err)
-
-	err = s.handleBlockDigest(header)
-	require.Nil(t, err)
-
-	require.Equal(t, number, s.firstBlock)
-
-	epochNumber := s.epochNumber
-
-	err = s.finalizeBabeSession()
-	require.Nil(t, err)
-
-	require.Nil(t, s.firstBlock)
-
 	bs, err := s.initializeBabeSession()
 	require.Nil(t, err)
-
-	require.Equal(t, epochNumber+1, s.epochNumber)
-	require.Nil(t, s.firstBlock)
 
 	require.NotNil(t, bs)
 }

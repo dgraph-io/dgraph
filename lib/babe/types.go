@@ -33,7 +33,7 @@ type Configuration struct {
 	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
 	C2                 uint64
 	GenesisAuthorities []*AuthorityDataRaw
-	Randomness         byte // TODO: change to [VrfOutputLength]byte when updating to new runtime
+	Randomness         byte // TODO: change to [RandomnessLength]byte when updating to new runtime
 	SecondarySlots     bool
 }
 
@@ -149,13 +149,13 @@ type Slot struct {
 // It is broadcast as part of the consensus digest in the first block of the epoch.
 type NextEpochDescriptor struct {
 	Authorities []*AuthorityData
-	Randomness  [sr25519.VrfOutputLength]byte // TODO: discrepancy between current BabeConfiguration from runtime and this
+	Randomness  [RandomnessLength]byte // TODO: update to [32]byte when runtime is updated
 }
 
 // NextEpochDescriptorRaw contains information about the next epoch.
 type NextEpochDescriptorRaw struct {
 	Authorities []*AuthorityDataRaw
-	Randomness  [sr25519.VrfOutputLength]byte
+	Randomness  [RandomnessLength]byte
 }
 
 // Encode returns the SCALE encoding of the NextEpochDescriptor.

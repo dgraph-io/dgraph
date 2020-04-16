@@ -33,6 +33,9 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
+// RandomnessLength is the length of the epoch randomness (32 bytes)
+const RandomnessLength = 32
+
 // Session contains the VRF keys for the validator, as well as BABE configuation data
 type Session struct {
 	// Storage interfaces
@@ -48,7 +51,7 @@ type Session struct {
 
 	// Epoch configuration data
 	config         *Configuration
-	randomness     [sr25519.VrfOutputLength]byte
+	randomness     [RandomnessLength]byte
 	authorityIndex uint64
 	authorityData  []*AuthorityData
 	epochThreshold *big.Int // validator threshold for this epoch
@@ -167,6 +170,14 @@ func (b *Session) stop() {
 		close(b.newBlocks)
 		close(b.done)
 		b.closed = true
+	}
+}
+
+// Descriptor returns the NextEpochDescriptor for the current session.
+func (b *Session) Descriptor() *NextEpochDescriptor {
+	return &NextEpochDescriptor{
+		Authorities: b.authorityData,
+		Randomness:  b.randomness,
 	}
 }
 

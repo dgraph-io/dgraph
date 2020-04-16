@@ -44,7 +44,7 @@ func newTestServiceWithFirstBlock(t *testing.T) *Service {
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	err = tt.Put(TestAuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
+	err = tt.Put(testAuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
 	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
@@ -60,8 +60,6 @@ func newTestServiceWithFirstBlock(t *testing.T) *Service {
 
 	preDigest, err := common.HexToBytes("0x014241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")
 	require.Nil(t, err)
-
-	s.epochNumber = uint64(2) // test preDigest item is for block in slot 17 epoch 2
 
 	nextEpochData := &babe.NextEpochDescriptor{
 		Authorities: s.bs.AuthorityData(),
@@ -101,6 +99,7 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 			Header: &types.Header{
 				ParentHash: previousHash,
 				Number:     big.NewInt(int64(i)).Add(previousNum, big.NewInt(int64(i))),
+				Digest:     [][]byte{},
 			},
 			Body: &types.Body{},
 		}
@@ -171,28 +170,4 @@ func TestAnnounceBlock(t *testing.T) {
 	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
-}
-
-// test getBlockEpoch
-func TestGetBlockEpoch(t *testing.T) {
-	s := newTestServiceWithFirstBlock(t)
-
-	blockHash := s.blockState.BestBlockHash()
-
-	epoch, err := s.getBlockEpoch(blockHash)
-	require.Nil(t, err)
-
-	require.Equal(t, s.epochNumber, epoch)
-}
-
-// test blockFromCurrentEpoch
-func TestVerifyCurrentEpoch(t *testing.T) {
-	s := newTestServiceWithFirstBlock(t)
-
-	blockHash := s.blockState.BestBlockHash()
-
-	currentEpoch, err := s.blockFromCurrentEpoch(blockHash)
-	require.Nil(t, err)
-
-	require.Equal(t, true, currentEpoch)
 }

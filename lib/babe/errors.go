@@ -23,3 +23,6 @@ var ErrBadSignature = errors.New("could not verify signature")
 
 // ErrProducerEquivocated is returned when a block producer has produced conflicting blocks
 var ErrProducerEquivocated = errors.New("block producer equivocated")
+
+// ErrNilBlockState is returned when the BlockState is nil
+var ErrNilBlockState = errors.New("cannot have nil BlockState")

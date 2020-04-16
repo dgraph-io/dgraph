@@ -24,6 +24,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
@@ -33,6 +34,16 @@ import (
 	log "github.com/ChainSafe/log15"
 	"golang.org/x/exp/rand"
 )
+
+// Verifier deals with block verification, as well as NextEpochDescriptors.
+type Verifier interface {
+	VerifyBlock(header *types.Header) (bool, error)
+
+	// IncrementEpoch is called when we have received all the blocks for an epoch.
+	IncrementEpoch() (*babe.NextEpochDescriptor, error)
+
+	EpochNumber() uint64
+}
 
 // Syncer deals with chain syncing by sending block request messages and watching for responses.
 type Syncer struct {
@@ -48,12 +59,14 @@ type Syncer struct {
 	synced           bool
 	requestStart     int64    // block number from which to begin block requests
 	highestSeenBlock *big.Int // highest block number we have seen
+	runtime          *runtime.Runtime
 
 	// Core service control
 	chanLock *sync.Mutex
 	stopped  bool
 
-	runtime *runtime.Runtime
+	// BABE verification
+	verifier Verifier
 }
 
 // SyncerConfig is the configuration for the Syncer.
@@ -66,6 +79,7 @@ type SyncerConfig struct {
 	ChanLock         *sync.Mutex
 	TransactionQueue TransactionQueue
 	Runtime          *runtime.Runtime
+	Verifier         Verifier
 }
 
 var responseTimeout = 3 * time.Second
@@ -84,6 +98,14 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		return nil, ErrNilChannel("MsgOut")
 	}
 
+	if cfg.Verifier == nil {
+		return nil, ErrNilVerifier
+	}
+
+	if cfg.Runtime == nil {
+		return nil, ErrNilRuntime
+	}
+
 	return &Syncer{
 		blockState:       cfg.BlockState,
 		blockNumIn:       cfg.BlockNumIn,
@@ -97,6 +119,7 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		highestSeenBlock: big.NewInt(0),
 		transactionQueue: cfg.TransactionQueue,
 		runtime:          cfg.Runtime,
+		verifier:         cfg.Verifier,
 	}, nil
 }
 
@@ -327,8 +350,15 @@ func (s *Syncer) handleHeader(header *types.Header) (int64, error) {
 		}
 
 		log.Info("[sync] saved block header", "hash", header.Hash(), "number", header.Number)
+	}
 
-		// TODO: handle consensus digest, if first in epoch
+	ok, err := s.verifier.VerifyBlock(header)
+	if err != nil {
+		return 0, err
+	}
+
+	if !ok {
+		return 0, ErrInvalidBlock
 	}
 
 	if header.Number.Int64() > highestInResp {
@@ -355,7 +385,7 @@ func (s *Syncer) handleBody(body *types.Body) error {
 
 // handleHeader handles blocks (header+body) included in BlockResponses
 func (s *Syncer) handleBlock(block *types.Block) error {
-	// TODO: execute block and verify authorship right
+	// TODO: re-add execute block call
 
 	err := s.blockState.AddBlock(block)
 	if err != nil {
@@ -369,6 +399,8 @@ func (s *Syncer) handleBlock(block *types.Block) error {
 	} else {
 		log.Info("[sync] imported block", "number", block.Header.Number, "hash", block.Header.Hash())
 	}
+
+	// TODO: if block is from the next epoch, increment epoch
 
 	return nil
 }

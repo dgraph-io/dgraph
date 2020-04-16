@@ -252,7 +252,7 @@ func TestService_ProcessBlockResponseMessage(t *testing.T) {
 	require.Nil(t, err)
 
 	pubkey := kp.Public().Encode()
-	err = tt.Put(TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	err = tt.Put(testAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
@@ -382,7 +382,7 @@ func TestService_ProcessTransactionMessage(t *testing.T) {
 	require.Nil(t, err)
 
 	pubkey := kp.Public().Encode()
-	err = tt.Put(TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	err = tt.Put(testAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()

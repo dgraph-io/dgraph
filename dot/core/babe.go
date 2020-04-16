@@ -26,59 +26,14 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-// finalizeBabeSession finalizes the BABE session by ensuring the first block
-// was set and first block and epoch number are reset for the next epoch
-func (s *Service) finalizeBabeSession() error {
-
-	// check if first block was set for current epoch
-	if s.firstBlock == nil {
-
-		// TODO: NextEpochDescriptor is included in first block of an epoch #662
-		// return fmt.Errorf("first block not set for current epoch")
-
-		log.Error("[core] first block not set for current epoch") // TODO: remove
-	}
-
-	// get epoch number for best block
-	bestHash := s.blockState.BestBlockHash()
-	currentEpoch, err := s.blockFromCurrentEpoch(bestHash)
-	if err != nil {
-		return fmt.Errorf("failed to check best block from current epoch: %s", err)
-	}
-
-	// verify best block is from current epoch
-	if !currentEpoch {
-		return fmt.Errorf("best block is not from current epoch")
-	}
-
-	// get best epoch number from best header
-	bestEpoch, err := s.getBlockEpoch(bestHash)
-	if err != nil {
-		return fmt.Errorf("failed to get epoch number for best block: %s", err)
-	}
-
-	// verify current epoch number matches best epoch number
-	if s.epochNumber != bestEpoch {
-		return fmt.Errorf("block epoch does not match current epoch")
-	}
-
-	// set next epoch number
-	s.epochNumber = bestEpoch + 1
-
-	// reset first block number
-	s.firstBlock = nil
-
-	return nil
-}
-
 // initializeBabeSession creates a new BABE session
 func (s *Service) initializeBabeSession() (*babe.Session, error) {
 	log.Debug(
 		"[core] initializing BABE session...",
-		"epoch", s.epochNumber,
+		"epoch", s.syncer.verifier.EpochNumber(),
 	)
 
-	// AuthorityData comes from NextEpochDescriptor within the ConsensusDigest
+	// TODO: AuthorityData comes from NextEpochDescriptor within the ConsensusDigest
 	// of the block Digest, which is included in the first block of each epoch
 	authData := s.bs.AuthorityData()
 	if len(authData) == 0 {
@@ -127,7 +82,7 @@ func (s *Service) initializeBabeSession() (*babe.Session, error) {
 
 	log.Debug(
 		"[core] BABE session initialized",
-		"epoch", s.epochNumber,
+		"epoch", s.syncer.verifier.EpochNumber(),
 	)
 
 	return bs, nil

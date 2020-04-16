@@ -23,7 +23,9 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
@@ -32,8 +34,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestAuthorityDataKey is the location of authority data in the storage trie
-var TestAuthorityDataKey, _ = common.HexToBytes("0xe3b47b6c84c0493481f97c5197d2554f")
+// testAuthorityDataKey is the location of authority data in the storage trie
+var testAuthorityDataKey, _ = common.HexToBytes("0xe3b47b6c84c0493481f97c5197d2554f")
 
 // testGenesisHeader is a test block header
 var testGenesisHeader = &types.Header{
@@ -41,18 +43,43 @@ var testGenesisHeader = &types.Header{
 	StateRoot: trie.EmptyHash,
 }
 
+// mockVerifier implements the Verifier interface
+type mockVerifier struct{}
+
+// VerifyBlock mocks verifying a block
+func (v *mockVerifier) VerifyBlock(header *types.Header) (bool, error) {
+	return true, nil
+}
+
+// IncrementEpoch mocks incrementing an epoch
+func (v *mockVerifier) IncrementEpoch() (*babe.NextEpochDescriptor, error) {
+	return &babe.NextEpochDescriptor{}, nil
+}
+
+// EpochNumber mocks an epoch number
+func (v *mockVerifier) EpochNumber() uint64 {
+	return 1
+}
+
 // NewTestService creates a new test core service
 func NewTestService(t *testing.T, cfg *Config) *Service {
 	if cfg == nil {
-		rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 		cfg = &Config{
-			Runtime:         rt,
 			IsBabeAuthority: false,
 		}
 	}
 
+	if cfg.Runtime == nil {
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+	}
+
 	if cfg.Keystore == nil {
 		cfg.Keystore = keystore.NewKeystore()
+		kp, err := sr25519.GenerateKeypair()
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg.Keystore.Insert(kp)
 	}
 
 	if cfg.NewBlocks == nil {
@@ -70,6 +97,8 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	if cfg.SyncChan == nil {
 		cfg.SyncChan = make(chan *big.Int, 10)
 	}
+
+	cfg.Verifier = &mockVerifier{}
 
 	stateSrvc := state.NewService("")
 	stateSrvc.UseMemDB()

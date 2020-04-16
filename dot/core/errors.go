@@ -23,6 +23,15 @@ var ErrServiceStopped = errors.New("service has been stopped")
 // ErrCannotValidateTx is returned if the call to runtime function TaggedTransactionQueueValidateTransaction fails
 var ErrCannotValidateTx = errors.New("could not validate transaction")
 
+// ErrInvalidBlock is returned when a block cannot be verified
+var ErrInvalidBlock = errors.New("could not verify block")
+
+// ErrNilVerifier is returned when trying to instantiate a Syncer without a Verifier
+var ErrNilVerifier = errors.New("cannot have nil Verifier")
+
+// ErrNilRuntime is returned when trying to instantiate a Service or Syncer without a runtime
+var ErrNilRuntime = errors.New("cannot have nil runtime")
+
 // ErrNilChannel is returned if a channel is nil
 func ErrNilChannel(s string) error {
 	return fmt.Errorf("cannot have nil channel %s", s)

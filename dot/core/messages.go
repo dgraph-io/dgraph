@@ -149,35 +149,8 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 func (s *Service) ProcessBlockResponseMessage(msg *network.BlockResponseMessage) error {
 	log.Debug("[core] received BlockResponseMessage")
 
-	// loop through block data in block response message
-	for _, bd := range msg.BlockData {
-		if bd.Header.Exists() {
-
-			header, err := types.NewHeader(
-				bd.Header.Value().ParentHash,
-				bd.Header.Value().Number,
-				bd.Header.Value().StateRoot,
-				bd.Header.Value().ExtrinsicsRoot,
-				bd.Header.Value().Digest,
-			)
-			if err != nil {
-				return err
-			}
-
-			// if authority, check if first block and set epoch data for next epoch
-			if s.isBabeAuthority {
-				err = s.handleBlockDigest(header)
-				if err != nil {
-					log.Trace("[core] block is not first block in epoch", "error", err)
-				}
-			}
-		}
-	}
-
 	// send block response message to syncer
 	s.respOut <- msg
-
-	// TODO: should we wait for syncer to handle message before we check for runtime changes...?
 
 	// check if we need to update the runtime
 	err := s.checkForRuntimeChanges()
@@ -206,14 +179,6 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 	)
 	if err != nil {
 		return err
-	}
-
-	// if authority, check if first block and set epoch data for next epoch
-	if s.isBabeAuthority {
-		err = s.handleBlockDigest(header)
-		if err != nil {
-			log.Trace("[core] block is not first block in epoch", "error", err)
-		}
 	}
 
 	// check if block header is stored in block state and save block header

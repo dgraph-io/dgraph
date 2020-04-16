@@ -157,7 +157,7 @@ func (bt *BlockTree) String() string {
 }
 
 // longestPath returns the path from the root to leftmost deepest leaf in BlockTree BT
-func (bt *BlockTree) longestPath() []*node {
+func (bt *BlockTree) longestPath() []*node { //nolint
 	dl := bt.deepestLeaf()
 	var path []*node
 	for curr := dl; ; curr = curr.parent {
@@ -196,7 +196,7 @@ func (bt *BlockTree) SubBlockchain(start Hash, end Hash) ([]Hash, error) {
 }
 
 // DeepestLeaf returns leftmost deepest leaf in BlockTree BT
-func (bt *BlockTree) deepestLeaf() *node {
+func (bt *BlockTree) deepestLeaf() *node { //nolint
 	return bt.leaves.deepestLeaf()
 }
 
