@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -104,27 +105,52 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	res, err := qr.rewriteAndExecute(ctx, query)
+	resolved := qr.rewriteAndExecute(ctx, query)
+	if resolved.Data == nil {
+		resolved.Data = map[string]interface{}{query.ResponseName(): nil}
+	}
 
-	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
-	return &Resolved{Data: completed, Err: err}
+	qr.resultCompleter.Complete(ctx, resolved)
+	return resolved
 }
 
-func (qr *queryResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
+func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Query) *Resolved {
+
+	emptyResult := func(err error) *Resolved {
+		return &Resolved{
+			Data:  map[string]interface{}{query.ResponseName(): nil},
+			Field: query,
+			Err:   err,
+		}
+	}
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName()))
 	}
 
 	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
-		return nil, schema.GQLWrapf(err, "Dgraph query failed")
+		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
-	return resp, nil
+	// FIXME: just to get it running for now - this should have it's own .Resolve()
+	if query.QueryType() == schema.SchemaQuery {
+		var result map[string]interface{}
+		var err2 error
+		if len(resp) > 0 {
+			err2 = json.Unmarshal(resp, &result)
+		}
+
+		return &Resolved{
+			Data:  result,
+			Field: query,
+			Err:   schema.AppendGQLErrs(err, err2),
+		}
+	}
+
+	return completeDgraphResult(ctx, query, resp, err)
 }
 
 func introspectionExecution(q schema.Query) QueryExecutionFunc {

@@ -290,3 +290,16 @@ type Mutation {
 	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getPost(postID: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID, name: String): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+}
