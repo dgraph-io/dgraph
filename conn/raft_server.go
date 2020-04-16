@@ -25,7 +25,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -280,6 +280,8 @@ func (w *RaftServer) Heartbeat(_ *api.Payload, stream pb.Raft_HeartbeatServer) e
 	if node == nil {
 		return ErrNoNode
 	}
+	// TODO(Aman): Send list of ongoing tasks as part of heartbeats.
+	// Currently, there is a cyclic dependency of imports worker -> conn -> worker.
 	info := pb.HealthInfo{
 		Instance: "alpha",
 		Address:  node.MyAddr,

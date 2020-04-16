@@ -18,8 +18,11 @@ package schema
 
 import (
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -67,7 +70,7 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-// NewHandler processes the input schema.  If there are no errors, it returns
+// NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
@@ -120,8 +123,8 @@ func NewHandler(input string) (Handler, error) {
 		}
 		defns = append(defns, defn.Name)
 		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
-			notInDgraph := defn.Directives.ForName(remoteDirective)
-			if notInDgraph != nil {
+			remoteDir := defn.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
 				continue
 			}
 		}
@@ -140,6 +143,7 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
+	headers := getAllowedHeaders(sch, defns)
 	dgSchema := genDgSchema(sch, typesToComplete)
 	completeSchema(sch, typesToComplete)
 
@@ -147,12 +151,76 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
+	ah.Lock()
+	ah.headers = headers
+	defer ah.Unlock()
+
 	return &handler{
 		input:          input,
 		dgraphSchema:   dgSchema,
 		completeSchema: sch,
 		originalDefs:   defns,
 	}, nil
+}
+
+type allowedHeaders struct {
+	headers string // comma separated list of allowed headers
+	sync.RWMutex
+}
+
+var ah = allowedHeaders{
+	headers: x.AccessControlAllowedHeaders,
+}
+
+func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+	headers := make(map[string]struct{})
+
+	setHeaders := func(dir *ast.Directive) {
+		if dir == nil {
+			return
+		}
+
+		httpArg := dir.Arguments.ForName("http")
+		if httpArg == nil {
+			return
+		}
+		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		if forwardHeaders == nil {
+			return
+		}
+		for _, h := range forwardHeaders.Children {
+			headers[h.Value.Raw] = struct{}{}
+		}
+	}
+
+	for _, defn := range definitions {
+		typ := sch.Types[defn]
+		custom := typ.Directives.ForName("custom")
+		setHeaders(custom)
+		for _, field := range typ.Fields {
+			custom := field.Directives.ForName("custom")
+			setHeaders(custom)
+		}
+	}
+
+	finalHeaders := make([]string, 0, len(headers))
+	for h := range headers {
+		finalHeaders = append(finalHeaders, h)
+	}
+
+	allowed := x.AccessControlAllowedHeaders
+	customHeaders := strings.Join(finalHeaders, ",")
+	if len(customHeaders) > 0 {
+		allowed += "," + customHeaders
+	}
+
+	return allowed
+}
+
+func AllowedHeaders() string {
+	ah.RLock()
+	defer ah.RUnlock()
+	return ah.headers
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {
@@ -179,19 +247,23 @@ func typeName(def *ast.Definition) string {
 }
 
 // fieldName returns the dgraph predicate corresponding to a field.
-// If the field had a dgraph directive, then it returns the value of the name field otherwise
+// If the field had a dgraph directive, then it returns the value of the pred arg otherwise
 // it returns typeName + "." + fieldName.
 func fieldName(def *ast.FieldDefinition, typName string) string {
-	name := typName + "." + def.Name
-	dir := def.Directives.ForName(dgraphDirective)
-	if dir == nil {
-		return name
-	}
-	predArg := dir.Arguments.ForName(dgraphPredArg)
+	predArg := getDgraphDirPredArg(def)
 	if predArg == nil {
-		return name
+		return typName + "." + def.Name
 	}
 	return predArg.Value.Raw
+}
+
+func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
+	dir := def.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return nil
+	}
+	predArg := dir.Arguments.ForName(dgraphPredArg)
+	return predArg
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
@@ -200,7 +272,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 	type dgPred struct {
 		typ     string
-		index   string
+		indexes map[string]bool
 		upsert  string
 		reverse string
 	}
@@ -220,6 +292,21 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	dgTypes := make([]dgType, 0, len(definitions))
 	dgPreds := make(map[string]dgPred)
 
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+		pred, ok := dgPreds[fname]
+		if !ok {
+			pred = dgPred{
+				typ:     typStr,
+				indexes: make(map[string]bool),
+				upsert:  upsertStr,
+			}
+		}
+		for _, index := range indexes {
+			pred.indexes[index] = true
+		}
+		return pred
+	}
+
 	for _, key := range definitions {
 		def := gqlSch.Types[key]
 		switch def.Kind {
@@ -227,9 +314,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 			typName := typeName(def)
 
 			typ := dgType{name: typName}
-			var typeDef strings.Builder
-			fmt.Fprintf(&typeDef, "type %s {\n", typName)
-			fd := getPasswordField(def)
+			pwdField := getPasswordField(def)
 
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
@@ -265,9 +350,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 							forwardPred.reverse = "@reverse "
 							dgPreds[forwardEdge] = forwardPred
 						} else {
-							edge := dgPreds[fname]
-							edge.typ = typStr
-							dgPreds[fname] = edge
+							pred := dgPreds[fname]
+							pred.typ = typStr
+							dgPreds[fname] = pred
 						}
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
@@ -277,62 +362,51 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 
-					indexStr := ""
+					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
+						indexes = append(indexes, "hash")
 					}
 
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes := getAllSearchIndexes(arg.Value)
-							indexes = addHashIfRequired(f, indexes)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
+							indexes = append(indexes, defaultSearches[f.Type.Name()])
 						}
-					} else if id != nil {
-						indexStr = fmt.Sprintf(" @index(hash)")
 					}
 
 					if parentInt == nil {
-						dgPreds[fname] = dgPred{
-							typ:    typStr,
-							index:  indexStr,
-							upsert: upsertStr,
-						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
 					typStr = fmt.Sprintf("%s%s%s", prefix, "string", suffix)
 
-					indexStr := " @index(hash)"
+					indexes := []string{"hash"}
 					search := f.Directives.ForName(searchDirective)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes := getAllSearchIndexes(arg.Value)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+							indexes = getAllSearchIndexes(arg.Value)
 						}
 					}
 					if parentInt == nil {
-						dgPreds[fname] = dgPred{
-							typ:   typStr,
-							index: indexStr,
-						}
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
 					}
 					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
 			}
-			if fd != nil {
-				parentInt := parentInterface(gqlSch, def, fd.Name)
+			if pwdField != nil {
+				parentInt := parentInterfaceForPwdField(gqlSch, def, pwdField.Name)
 				if parentInt != nil {
 					typName = typeName(parentInt)
 				}
-				fname := fieldName(fd, typName)
+				fname := fieldName(pwdField, typName)
 
 				if parentInt == nil {
 					dgPreds[fname] = dgPred{typ: "password"}
@@ -344,6 +418,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 		}
 	}
 
+	predWritten := make(map[string]bool, len(dgPreds))
 	for _, typ := range dgTypes {
 		var typeDef, preds strings.Builder
 		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
@@ -353,9 +428,19 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				continue
 			}
 			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
-			if !fld.inherited {
-				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, f.index, f.upsert,
+			if !fld.inherited && !predWritten[fld.name] {
+				indexStr := ""
+				if len(f.indexes) > 0 {
+					indexes := make([]string, 0)
+					for index := range f.indexes {
+						indexes = append(indexes, index)
+					}
+					sort.Strings(indexes)
+					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+				}
+				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
 					f.reverse)
+				predWritten[fld.name] = true
 			}
 		}
 		fmt.Fprintf(&typeDef, "}\n")

@@ -7,6 +7,11 @@ type User @remote {
 	name: String!
 }
 
+type Car {
+	id: ID!
+	name: String!
+}
+
 #######################
 # Extended Definitions
 #######################
@@ -30,8 +35,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {
@@ -105,10 +113,82 @@ input StringHashFilter {
 }
 
 #######################
+# Generated Types
+#######################
+
+type AddCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
+}
+
+type DeleteCarPayload {
+	msg: String
+	numUids: Int
+}
+
+type UpdateCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum CarOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddCarInput {
+	name: String!
+}
+
+input CarFilter {
+	id: [ID!]
+	not: CarFilter
+}
+
+input CarOrder {
+	asc: CarOrderable
+	desc: CarOrderable
+	then: CarOrder
+}
+
+input CarPatch {
+	name: String
+}
+
+input CarRef {
+	id: ID
+	name: String
+}
+
+input UpdateCarInput {
+	filter: CarFilter!
+	set: CarPatch
+	remove: CarPatch
+}
+
+#######################
 # Generated Query
 #######################
 
 type Query {
 	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 }
 
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addCar(input: [AddCarInput!]!): AddCarPayload
+	updateCar(input: UpdateCarInput!): UpdateCarPayload
+	deleteCar(filter: CarFilter!): DeleteCarPayload
+}

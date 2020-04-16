@@ -61,8 +61,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {

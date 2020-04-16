@@ -12,7 +12,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-        country: Country @dgraph(pred: "inCountry")
+	capital: String
+	country: Country @dgraph(pred: "inCountry")
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -112,13 +113,28 @@ type Starship @dgraph(type: "star.ship") {
 }
 
 type Movie {
-        id: ID!
-        name: String!
-        director: [MovieDirector] @dgraph(pred: "~directed.movies")
+	id: ID!
+	name: String!
+	director: [MovieDirector] @dgraph(pred: "~directed.movies")
 }
 
 type MovieDirector {
-        id: ID!
-        name: String!
-        directed: [Movie] @dgraph(pred: "directed.movies")
+	id: ID!
+	name: String!
+	directed: [Movie] @dgraph(pred: "directed.movies")
+}
+
+interface People {
+	id: ID!
+	xid: String! @id
+	name: String!
+}
+
+type Teacher implements People {
+	subject: String
+	teaches: [Student]
+}
+
+type Student implements People {
+	taughtBy: [Teacher]
 }

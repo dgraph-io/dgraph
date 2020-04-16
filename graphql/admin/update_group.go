@@ -2,7 +2,8 @@ package admin
 
 import (
 	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -35,7 +36,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := resolve.VariableGenerator(0)
+	varGen := resolve.NewVariableGenerator()
 	ruleType := m.MutatedType().Field("rules").Type()
 
 	if setArg != nil {
@@ -46,7 +47,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType)
+			variable := varGen.Next(ruleType, "", "")
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -92,7 +93,7 @@ func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
 				continue
 			}
 
-			variable := varGen.Next(ruleType)
+			variable := varGen.Next(ruleType, "", "")
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[

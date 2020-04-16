@@ -2,8 +2,12 @@
 # Input Schema
 #######################
 
-type User {
+type User @remote {
 	id: ID!
+	name: String!
+}
+
+input UserInput {
 	name: String!
 }
 
@@ -30,8 +34,11 @@ enum DgraphIndex {
 }
 
 enum HTTPMethod {
-	Get
-	Post
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
 }
 
 input CustomHTTP {
@@ -105,74 +112,11 @@ input StringHashFilter {
 }
 
 #######################
-# Generated Types
-#######################
-
-type AddUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	numUids: Int
-}
-
-type DeleteUserPayload {
-	msg: String
-	numUids: Int
-}
-
-type UpdateUserPayload {
-	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	numUids: Int
-}
-
-#######################
-# Generated Enums
-#######################
-
-enum UserOrderable {
-	name
-}
-
-#######################
-# Generated Inputs
-#######################
-
-input AddUserInput {
-	name: String!
-}
-
-input UpdateUserInput {
-	filter: UserFilter!
-	set: UserPatch
-	remove: UserPatch
-}
-
-input UserFilter {
-	id: [ID!]
-	not: UserFilter
-}
-
-input UserOrder {
-	asc: UserOrderable
-	desc: UserOrderable
-	then: UserOrder
-}
-
-input UserPatch {
-	name: String
-}
-
-input UserRef {
-	id: ID
-	name: String
-}
-
-#######################
 # Generated Query
 #######################
 
 type Query {
 	getMyFavoriteUsers(id: ID!): [User] @custom(http: {url:"http://my-api.com",method:"GET"})
-	getUser(id: ID!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 }
 
 #######################
@@ -180,7 +124,5 @@ type Query {
 #######################
 
 type Mutation {
-	addUser(input: [AddUserInput!]!): AddUserPayload
-	updateUser(input: UpdateUserInput!): UpdateUserPayload
-	deleteUser(filter: UserFilter!): DeleteUserPayload
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {url:"http://my-api.com",method:"POST",body:"{ data: $input }"})
 }

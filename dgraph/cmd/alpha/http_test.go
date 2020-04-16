@@ -57,7 +57,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 	*http.Response, error) {
 
 	client := &http.Client{}
-	numRetries := 3
+	numRetries := 2
 
 	var resp *http.Response
 	var err error
@@ -805,4 +805,15 @@ func TestDrainingMode(t *testing.T) {
 
 	setDrainingMode(t, false)
 	runRequests(false)
+}
+
+func TestOptionsForUiKeywords(t *testing.T) {
+	req, err := http.NewRequest(http.MethodOptions, fmt.Sprintf("%s/ui/keywords", addr), nil)
+	require.NoError(t, err)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.True(t, resp.StatusCode >= 200 && resp.StatusCode < 300)
 }
