@@ -17,21 +17,14 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 )
-
-type restoreResolver struct {
-	mutation schema.Mutation
-}
 
 type restoreInput struct {
 	Location     string
@@ -42,13 +35,11 @@ type restoreInput struct {
 	Anonymous    bool
 }
 
-func (rr *restoreResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 
-	rr.mutation = m
 	input, err := getRestoreInput(m)
 	if err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
 
 	req := pb.RestoreRequest{
@@ -60,50 +51,14 @@ func (rr *restoreResolver) Rewrite(
 		Anonymous:    input.Anonymous,
 	}
 	err = worker.ProcessRestoreRequest(context.Background(), &req)
-	return nil, nil, err
-}
-
-func (rr *restoreResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (rr *restoreResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (rr *restoreResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(rr.mutation.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range rr.mutation.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = "Success"
-		case "message":
-			val = "Restore completed."
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
+	if err != nil {
+		return emptyResult(m, err), false
 	}
-	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{m.Name(): response("Success", "Restore completed.")},
+		Field: m,
+	}, true
 }
 
 func getRestoreInput(m schema.Mutation) (*restoreInput, error) {

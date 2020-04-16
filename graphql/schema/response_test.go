@@ -39,36 +39,36 @@ func TestDataAndErrors(t *testing.T) {
 			expected: `{}`,
 		},
 		"add initial": {
-			data:     []string{`"Some": "Data"`},
+			data:     []string{`{"Some": "Data"}`},
 			errors:   nil,
 			expected: `{"data": {"Some": "Data"}}`,
 		},
 		"add nothing": {
-			data:     []string{`"Some": "Data"`, ""},
+			data:     []string{`{"Some": "Data"}`, ""},
 			errors:   nil,
 			expected: `{"data": {"Some": "Data"}}`,
 		},
 		"add more": {
-			data:     []string{`"Some": "Data"`, `"And": "More"`},
+			data:     []string{`{"Some": "Data"}`, `{"And": "More"}`},
 			errors:   nil,
 			expected: `{"data": {"Some": "Data", "And": "More"}}`,
 		},
 		"errors and data": {
-			data:   []string{`"Some": "Data"`, `"And": "More"`},
+			data:   []string{`{"Some": "Data"}`, `{"And": "More"}`},
 			errors: []error{errors.New("An Error")},
 			expected: `{
 				"errors":[{"message":"An Error"}],
 				"data": {"Some": "Data", "And": "More"}}`,
 		},
 		"many errors": {
-			data:   []string{`"Some": "Data"`},
+			data:   []string{`{"Some": "Data"}`},
 			errors: []error{errors.New("An Error"), errors.New("Another Error")},
 			expected: `{
 				"errors":[{"message":"An Error"}, {"message":"Another Error"}],
 				"data": {"Some": "Data"}}`,
 		},
 		"gql error": {
-			data: []string{`"Some": "Data"`},
+			data: []string{`{"Some": "Data"}`},
 			errors: []error{
 				&x.GqlError{Message: "An Error", Locations: []x.Location{{Line: 1, Column: 1}}}},
 			expected: `{
@@ -76,7 +76,7 @@ func TestDataAndErrors(t *testing.T) {
 				"data": {"Some": "Data"}}`,
 		},
 		"gql error with path": {
-			data: []string{`"Some": "Data"`},
+			data: []string{`{"Some": "Data"}`},
 			errors: []error{
 				&x.GqlError{
 					Message:   "An Error",
@@ -84,19 +84,19 @@ func TestDataAndErrors(t *testing.T) {
 					Path:      []interface{}{"q", 2, "n"}}},
 			expected: `{
 				"errors":[{
-					"message":"An Error", 
+					"message":"An Error",
 					"locations": [{"line":1,"column":1}],
 					"path": ["q", 2, "n"]}],
 				"data": {"Some": "Data"}}`,
 		},
 		"gql error list": {
-			data: []string{`"Some": "Data"`},
+			data: []string{`{"Some": "Data"}`},
 			errors: []error{x.GqlErrorList{
 				&x.GqlError{Message: "An Error", Locations: []x.Location{{Line: 1, Column: 1}}},
 				&x.GqlError{Message: "Another Error", Locations: []x.Location{{Line: 1, Column: 1}}}}},
 			expected: `{
 				"errors":[
-					{"message":"An Error", "locations": [{"line":1,"column":1}]}, 
+					{"message":"An Error", "locations": [{"line":1,"column":1}]},
 					{"message":"Another Error", "locations": [{"line":1,"column":1}]}],
 				"data": {"Some": "Data"}}`,
 		},
@@ -121,22 +121,9 @@ func TestDataAndErrors(t *testing.T) {
 	}
 }
 
-func TestWriteTo_BadDataWithReqID(t *testing.T) {
-	resp := &Response{}
-	resp.AddData([]byte(`"not json"`))
-
-	buf := new(bytes.Buffer)
-	resp.WriteTo(buf)
-
-	assert.JSONEq(t,
-		`{"errors":[{"message":"Internal error - failed to marshal a valid JSON response"}], 
-		"data": null}`,
-		buf.String())
-}
-
 func TestWriteTo_BadData(t *testing.T) {
 	resp := &Response{}
-	resp.AddData([]byte(`"not json"`))
+	resp.AddData([]byte(`not json`))
 
 	buf := new(bytes.Buffer)
 	resp.WriteTo(buf)

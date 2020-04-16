@@ -707,7 +707,7 @@ func addSchema(url string, schema string) error {
 	}
 	req, err := add.createGQLPost(url)
 	if err != nil {
-		return errors.Wrap(err, "error running GraphQL query")
+		return errors.Wrap(err, "error creating GraphQL query")
 	}
 
 	resp, err := runGQLRequest(req)
