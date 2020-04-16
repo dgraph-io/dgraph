@@ -48,11 +48,13 @@ type QueryType string
 type MutationType string
 
 type FieldHTTPConfig struct {
-	URL            string
-	Method         string
-	Template       *interface{}
-	Operation      string
-	ForwardHeaders http.Header
+	URL             string
+	Method          string
+	Template        *interface{}
+	Operation       string
+	ForwardHeaders  http.Header
+	Body            string
+	RemoteQueryName string
 }
 
 // Query/Mutation types and arg names
@@ -62,6 +64,7 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
+	GraphqlQuery         QueryType    = "graphql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -115,7 +118,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	CustomHTTPConfig() (FieldHTTPConfig, error)
+	CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -704,7 +707,7 @@ func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldHTTPConfig, error) {
 	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
 	tf := typeDef.Fields.ForName(f.Name())
 	custom := tf.Directives.ForName(customDirective)
@@ -717,11 +720,14 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	bodyArg := httpArg.Value.Children.ForName("body")
 	if bodyArg != nil {
 		bodyTemplate := bodyArg.Raw
-		bt, _, err := parseBodyTemplate(bodyTemplate)
-		if err != nil {
-			return fconf, err
+		if !graphql {
+			bt, _, err := parseBodyTemplate(bodyTemplate)
+			if err != nil {
+				return fconf, err
+			}
+			fconf.Template = bt
 		}
-		fconf.Template = bt
+		fconf.Body = bodyTemplate
 	}
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
@@ -733,7 +739,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 
 	// if it is a query or mutation, substitute the vars in URL and Body here itself
-	if isQueryOrMutation {
+	if isQueryOrMutation && !graphql {
 		var err error
 		argMap := f.field.ArgumentMap(f.op.vars)
 		fconf.URL, err = SubstituteVarsInURL(fconf.URL, argMap)
@@ -745,6 +751,40 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 				return fconf, errors.Wrapf(err, "while substituting vars in Body")
 			}
 		}
+	} else if graphql {
+		graphqlArg := custom.Arguments.ForName("graphql")
+		remoteQuery := graphqlArg.Value.Children.ForName("query").Raw
+		queryEndIndex := strings.Index(remoteQuery, "(")
+		fconf.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
+		argMap := f.field.ArgumentMap(f.op.vars)
+
+		for _, arg := range f.field.Definition.Arguments {
+			val, ok := argMap[arg.Name]
+			if !ok {
+				continue
+			}
+			value := ""
+			if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
+				if val == nil {
+					val = "null"
+				}
+				value = `"` + fmt.Sprintf("%+v", val) + `"`
+			}
+			remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
+		}
+		buf := &bytes.Buffer{}
+		buildGraphqlRequestFields(buf, f.field)
+		remoteQuery += buf.String()
+		// contact method and request object
+		remoteQuery = `query{` + remoteQuery + `}`
+		param := Request{
+			Query: remoteQuery,
+		}
+		remoteQueryBuf, err := json.Marshal(param)
+		if err != nil {
+			return fconf, err
+		}
+		fconf.Body = string(remoteQueryBuf)
 	} else {
 		fconf.Operation = "batch"
 		op := httpArg.Value.Children.ForName("operation")
@@ -755,8 +795,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	return fconf, nil
 }
 
-func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig(f, false)
+func (f *field) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false, graphql)
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -894,8 +934,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(q), true)
+func (q *query) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true, graphql)
 }
 
 func (q *query) QueryType() QueryType {
@@ -905,6 +945,9 @@ func (q *query) QueryType() QueryType {
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
+		if custom.Arguments.ForName("graphql") != nil {
+			return GraphqlQuery
+		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -1019,8 +1062,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(m), true)
+func (m *mutation) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true, graphql)
 }
 
 func (m *mutation) GetObjectName() string {
@@ -1523,10 +1566,12 @@ func isName(s string) bool {
 }
 
 // Given a template for a body with variables defined, this function parses the body
-// and converts it into a JSON representation and returns that.
+// and converts it into a JSON representation and returns that. It also returns a list of the field
+// names that are required by this template.
 // for e.g.
 // { author: $id, post: { id: $postID }}
-// { "author" : "$id", "post": { "id": "$postID" }}
+// would return
+// { "author" : "$id", "post": { "id": "$postID" }} and { "id": true, "postID": true}
 // If the final result is not a valid JSON, then an error is returned.
 func parseBodyTemplate(body string) (*interface{}, map[string]bool, error) {
 	var s scanner.Scanner
@@ -1689,4 +1734,36 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 	}
 
 	return ""
+}
+
+// buildGraphqlRequestFields will build graphql request body from ast.
+// for eg:
+// Hello{
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+// will return
+// {
+// 	name {
+// 		age
+// 	}
+// 	friend
+// }
+func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
+	// Add begining curly braces
+	writer.WriteString("{\n")
+	for i := 0; i < len(field.SelectionSet); i++ {
+		castedField := field.SelectionSet[i].(*ast.Field)
+		writer.WriteString(castedField.Name)
+
+		if len(castedField.SelectionSet) > 0 {
+			// recursively add fields.
+			buildGraphqlRequestFields(writer, castedField)
+		}
+		writer.WriteString("\n")
+	}
+	// Add ending curly braces
+	writer.WriteString("}")
 }

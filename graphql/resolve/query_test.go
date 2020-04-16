@@ -156,7 +156,7 @@ func TestCustomHTTPQuery(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			client := newClient(t, tcase)
-			resolver := NewHTTPQueryResolver(client, StdQueryCompletion())
+			resolver := NewHTTPQueryResolver(client, StdQueryCompletion(), false)
 			resolved := resolver.Resolve(context.Background(), gqlQuery)
 			b, err := json.Marshal(resolved.Data)
 			require.NoError(t, err)

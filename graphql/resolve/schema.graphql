@@ -144,24 +144,24 @@ type Student implements People {
 }
 
 type Comment {
-	id: ID!
-	author: String!
-	title: String
-	content: String @custom(http: {
-		url: "http://api-gateway.com/post/$ups?myId=$title",
-		method: "GET",
-		operation: "batch",
-		body: "{ myId: $id, theAuthor: $author}",
-		forwardHeaders: ["X-App-Token"]})
+    id: ID!
+    author: String!
+    title: String
+    content: String @custom(http: {
+              url: "http://api-gateway.com/post/$ups?myId=$title",
+              method: "GET",
+              operation: "batch",
+              body: "{ myId: $id, theAuthor: $author}",
+              forwardHeaders: ["X-App-Token"]})
 
-	url: String
-	ups: Int
-	downs: Int
-	relatedUsers: [User] @custom(http: {
-		url: "http://api-gateway.com/relatedPosts",
-		method: "POST",
-		operation: "single",
-		body: "{ myId: $url }"})
+    url: String! @id
+    ups: Int!
+    downs: Int
+    relatedUsers: [User] @custom(http: {
+              url: "http://api-gateway.com/relatedPosts",
+              method: "POST",
+              operation: "single",
+              body: "{ myId: $url }"})
 }
 
 type Query {
