@@ -192,24 +192,24 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	if len(jwtToken) == 0 {
 		return nil, nil
 	} else if len(jwtToken) > 1 {
-		return nil, fmt.Errorf("invalid jwt auth token.")
+		return nil, fmt.Errorf("invalid jwt auth token")
 	}
 
 	//TODO: Verify jwt tokens before parsing it.
 	tokens := strings.Split(jwtToken[0], ".")
 	if len(tokens) != 3 {
-		return nil, fmt.Errorf("invalid jwt auth token.")
+		return nil, fmt.Errorf("invalid jwt auth token")
 	}
 
 	data, err := jwt.DecodeSegment(tokens[1])
 	if err != nil {
-		return nil, fmt.Errorf("error while decoding jwt auth token: ", err)
+		return nil, fmt.Errorf("error while decoding jwt auth token: %v", err)
 	}
 
 	jsonMap := make(map[string]interface{})
 	err = json.Unmarshal([]byte(data), &jsonMap)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing jwt auth token: ", err)
+		return nil, fmt.Errorf("error while parsing jwt auth token: %v", err)
 	}
 
 	authVariables := jsonMap[CustomClaimsUrl].(map[string]interface{})
