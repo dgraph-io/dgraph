@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os/exec"
+	"strconv"
 	"testing"
 	"time"
 
@@ -38,18 +38,9 @@ var (
 	dgraphEndpoint = testutil.SockAddr
 )
 
-func checkOutput(t *testing.T, cmd *exec.Cmd, shouldFail bool) string {
-	out, err := cmd.CombinedOutput()
-	if (!shouldFail && err != nil) || (shouldFail && err == nil) {
-		t.Errorf("Error output from command:%v", string(out))
-		t.Fatal(err)
-	}
-
-	return string(out)
-}
-
 func createUser(t *testing.T, accessToken, username, password string) []byte {
-	addUser := `mutation addUser($name: String!, $pass: String!) {
+	addUser := `
+	mutation addUser($name: String!, $pass: String!) {
 		addUser(input: [{name: $name, password: $pass}]) {
 			user {
 				name
@@ -69,7 +60,8 @@ func createUser(t *testing.T, accessToken, username, password string) []byte {
 }
 
 func getCurrentUser(t *testing.T, accessToken string) []byte {
-	query := `query {
+	query := `
+	query {
 		getCurrentUser {
 			name
 		}
@@ -97,7 +89,8 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 
 func deleteUser(t *testing.T, accessToken, username string) {
 	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
-	delUser := `mutation deleteUser($name: String!) {
+	delUser := `
+	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
 			msg
 		}
@@ -115,7 +108,8 @@ func deleteUser(t *testing.T, accessToken, username string) {
 
 func deleteGroup(t *testing.T, accessToken, name string) {
 	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
-	delGroup := `mutation deleteUser($name: String!) {
+	delGroup := `
+	mutation deleteUser($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
 			msg
 		}
@@ -146,7 +140,8 @@ func TestPasswordReturn(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	query := `query {
+	query := `
+	query {
 		getCurrentUser {
 			name
 			password
@@ -155,7 +150,7 @@ func TestPasswordReturn(t *testing.T) {
 
 	l := makeRequest(t, accessJwt, testutil.GraphQLParams{Query: query})
 	require.Equal(t, string(l), `{"errors":[{"message":"Cannot query field \"password\"`+
-		` on type \"User\".","locations":[{"line":4,"column":4}]}]}`)
+		` on type \"User\".","locations":[{"line":5,"column":4}]}]}`)
 }
 
 func TestGetCurrentUser(t *testing.T) {
@@ -235,22 +230,11 @@ func resetUser(t *testing.T) {
 func TestReservedPredicates(t *testing.T) {
 	// This test uses the groot account to ensure that reserved predicates
 	// cannot be altered even if the permissions allow it.
-	ctx := context.Background()
-
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 	alterReservedPredicates(t, dg1)
-
-	dg2, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	if err := dg2.Login(ctx, x.GrootId, "password"); err != nil {
-		t.Fatalf("unable to login using the groot account:%v", err)
-	}
-	alterReservedPredicates(t, dg2)
 }
 
 func TestAuthorization(t *testing.T) {
@@ -444,7 +428,8 @@ func createAccountAndData(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func createGroup(t *testing.T, accessToken, name string) []byte {
-	addGroup := `mutation addGroup($name: String!) {
+	addGroup := `
+	mutation addGroup($name: String!) {
 		addGroup(input: [{name: $name}]) {
 			group {
 				name
@@ -464,7 +449,8 @@ func createGroup(t *testing.T, accessToken, name string) []byte {
 
 func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *group {
 	queryParams := testutil.GraphQLParams{
-		Query: `mutation addGroup($name: String!, $rules: [RuleRef]){
+		Query: `
+		mutation addGroup($name: String!, $rules: [RuleRef]){
 			addGroup(input: [
 				{
 					name: $name
@@ -506,8 +492,8 @@ func createGroupWithRules(t *testing.T, accessJwt, name string, rules []rule) *g
 func updateGroup(t *testing.T, accessJwt, name string, setRules []rule,
 	removeRules []string) *group {
 	queryParams := testutil.GraphQLParams{
-		Query: `mutation updateGroup($name: String!, $set: SetGroupPatch, 
-$remove: RemoveGroupPatch){
+		Query: `
+		mutation updateGroup($name: String!, $set: SetGroupPatch, $remove: RemoveGroupPatch){
 			updateGroup(input: {
 				filter: {
 					name: {
@@ -577,7 +563,7 @@ func checkGroupCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.Data.AddGroup.Group))
 }
 
-func addToGroup(t *testing.T, accessToken, userId, group string) {
+func addToGroup(t *testing.T, accessToken, userName, group string) {
 	addUserToGroup := `mutation updateUser($name: String!, $group: String!) {
 		updateUser(input: {
 			filter: {
@@ -603,14 +589,48 @@ func addToGroup(t *testing.T, accessToken, userId, group string) {
 	params := testutil.GraphQLParams{
 		Query: addUserToGroup,
 		Variables: map[string]interface{}{
-			"name":  userId,
+			"name":  userName,
 			"group": group,
 		},
 	}
+
+	var result struct {
+		Data struct {
+			UpdateUser struct {
+				User []struct {
+					Name   string
+					Groups []struct {
+						Name string
+					}
+				}
+				Name string
+			}
+		}
+		Errors []interface{}
+	}
+
 	b := makeRequest(t, accessToken, params)
-	expectedOutput := fmt.Sprintf(`{"data":{"updateUser":{"user":[{"name":"%s","groups":[{"name":"%s"}]}]}}}`,
-		userId, group)
-	require.JSONEq(t, expectedOutput, string(b))
+
+	err := json.Unmarshal(b, &result)
+	require.NoError(t, err)
+
+	// There shouldn't be any error.
+	require.Len(t, result.Errors, 0)
+	// There should be a user in response.
+	require.Len(t, result.Data.UpdateUser.User, 1)
+	// User's name must be <userName>
+	require.Equal(t, userName, result.Data.UpdateUser.User[0].Name)
+
+	var foundGroup bool
+	for _, usr := range result.Data.UpdateUser.User {
+		for _, grp := range usr.Groups {
+			if grp.Name == group {
+				foundGroup = true
+				break
+			}
+		}
+	}
+	require.True(t, foundGroup)
 }
 
 type rule struct {
@@ -1716,7 +1736,7 @@ func TestWrongPermission(t *testing.T) {
 		CommitNow: true,
 	})
 
-	require.Error(t, err, "Setting permission to 9 shouldn't have returned error")
+	require.Error(t, err, "Setting permission to 9 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 
 	ruleMutation = `
@@ -1732,7 +1752,7 @@ func TestWrongPermission(t *testing.T) {
 		CommitNow: true,
 	})
 
-	require.Error(t, err, "Setting permission to -1 shouldn't have returned error")
+	require.Error(t, err, "Setting permission to -1 should have returned error")
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
@@ -1877,7 +1897,7 @@ func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
 }
 
 func TestAllowUIDAccess(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
 
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
@@ -1930,4 +1950,156 @@ func TestAllowUIDAccess(t *testing.T) {
 	resp, err := userClient.NewReadOnlyTxn().Query(ctx, uidQuery)
 	require.Nil(t, err)
 	testutil.CompareJSON(t, `{"me":[{"name":"100th User", "uid": "0x64"}]}`, string(resp.GetJson()))
+}
+
+func TestAddNewPredicate(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 20*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+	resetUser(t)
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Alice doesn't have access to create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.Error(t, err, "User can't create new predicate. Alter should have returned error.")
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	addToGroup(t, accessJwt, userid, "guardians")
+	time.Sleep(6 * time.Second)
+
+	// Alice is a guardian now, it can create new predicate.
+	err = userClient.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err, "User is a guardian. Alter should have succeeded.")
+}
+
+func TestCrossGroupPermission(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 30*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `newpred: string .`,
+	})
+	require.NoError(t, err)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+
+	// TODO(@Animesh): I am Running all the operations with the same accessJwt
+	// but access token will expire after 3s. Find an idomatic way to run these.
+
+	// create groups
+	createGroup(t, accessJwt, "reader")
+	createGroup(t, accessJwt, "writer")
+	createGroup(t, accessJwt, "alterer")
+
+	// add rules to groups
+	addRulesToGroup(t, accessJwt, "reader", []rule{{Predicate: "newpred", Permission: 4}})
+	addRulesToGroup(t, accessJwt, "writer", []rule{{Predicate: "newpred", Permission: 2}})
+	addRulesToGroup(t, accessJwt, "alterer", []rule{{Predicate: "newpred", Permission: 1}})
+	// Wait for acl cache to be refreshed
+	time.Sleep(6 * time.Second)
+
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err)
+
+	// create 8 users.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		createUser(t, accessJwt, "user"+userIdx, "password"+userIdx)
+	}
+
+	// add users to groups. we create all possible combination
+	// of groups and assign a user for that combination.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		if i&1 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "alterer")
+		}
+		if i&2 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "writer")
+		}
+		if i&4 > 0 {
+			addToGroup(t, accessJwt, "user"+userIdx, "reader")
+		}
+	}
+	time.Sleep(6 * time.Second)
+
+	// operations
+	dgQuery := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		_, err := client.NewTxn().Query(ctx, `
+		{
+			me(func: has(newpred)) {
+				newpred
+			}
+		}
+		`)
+		require.True(t, (err != nil) == shouldFail,
+			"Query test Failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+	dgMutation := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		_, err := client.NewTxn().Mutate(ctx, &api.Mutation{
+			Set: []*api.NQuad{
+				{
+					Subject:     "_:a",
+					Predicate:   "newpred",
+					ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "testval"}},
+				},
+			},
+			CommitNow: true,
+		})
+		require.True(t, (err != nil) == shouldFail,
+			"Mutation test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+	dgAlter := func(client *dgo.Dgraph, shouldFail bool, user string) {
+		err := client.Alter(ctx, &api.Operation{Schema: `newpred: string @index(exact) .`})
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+
+		// set back the schema to initial value
+		err = client.Alter(ctx, &api.Operation{Schema: `newpred: string .`})
+		require.True(t, (err != nil) == shouldFail,
+			"Alter test failed for: "+user+", shouldFail: "+strconv.FormatBool(shouldFail))
+	}
+
+	// test user access.
+	for i := 0; i < 8; i++ {
+		userIdx := strconv.Itoa(i)
+		userClient, err := testutil.DgraphClient(testutil.SockAddr)
+		require.NoError(t, err, "Client creation error")
+
+		err = userClient.Login(ctx, "user"+userIdx, "password"+userIdx)
+		require.NoError(t, err, "Login error")
+
+		dgQuery(userClient, false, "user"+userIdx) // Query won't fail, will return empty result instead.
+		dgMutation(userClient, i&2 == 0, "user"+userIdx)
+		dgAlter(userClient, i&1 == 0, "user"+userIdx)
+	}
 }
