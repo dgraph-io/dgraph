@@ -481,12 +481,12 @@ docker-machine --version
 You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) to create the instances using Docker Machine.
 
 Considering that you have AWS credentials setup, you can use the below commands to start 3 AWS
-`t2-micro` instances with Docker Engine installed on them.
+`t2-medium` instances with Docker Engine installed on them.
 
 ```sh
-docker-machine create --driver amazonec2 aws01
-docker-machine create --driver amazonec2 aws02
-docker-machine create --driver amazonec2 aws03
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws01
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws02
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws03
 ```
 
 Your output should look like
@@ -501,7 +501,7 @@ Docker is up and running!
 To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
 ```
 
-The command would provision a `t2-micro` instance with a security group called `docker-machine`
+The command would provision a `t2-medium` instance with a security group called `docker-machine`
 (allowing inbound access on 2376 and 22).
 
 You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
