@@ -4,7 +4,8 @@ function debounce(func, wait, immediate) {
   var timeout;
 
   return function() {
-    var context = this, args = arguments;
+    var context = this,
+      args = arguments;
     var later = function() {
       timeout = null;
       if (!immediate) func.apply(context, args);
@@ -35,8 +36,7 @@ function readCookie(name) {
   var ca = document.cookie.split(";");
   for (var i = 0; i < ca.length; i++) {
     var c = ca[i];
-    while (c.charAt(0) == " ")
-      c = c.substring(1, c.length);
+    while (c.charAt(0) == " ") c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
   }
   return null;
@@ -86,17 +86,29 @@ function getPathAfterVersionName(location, versionName) {
   let path;
   if (location.pathname.startsWith("/docs")) {
     if (versionName === "") {
-      path = location.pathname.split("/").slice(2).join("/");
+      path = location.pathname
+        .split("/")
+        .slice(2)
+        .join("/");
     } else {
-      path = location.pathname.split("/").slice(3).join("/");
+      path = location.pathname
+        .split("/")
+        .slice(3)
+        .join("/");
     }
     return path + location.hash;
   }
 
   if (versionName === "") {
-    path = location.pathname.split("/").slice(1).join("/");
+    path = location.pathname
+      .split("/")
+      .slice(1)
+      .join("/");
   } else {
-    path = location.pathname.split("/").slice(2).join("/");
+    path = location.pathname
+      .split("/")
+      .slice(2)
+      .join("/");
   }
 
   return path + location.hash;
@@ -106,24 +118,31 @@ function getPathAfterVersionName(location, versionName) {
   // clipboard
   var clipInit = false;
   $("pre code:not(.no-copy)").each(function() {
-    var code = $(this), text = code.text();
+    var code = $(this),
+      text = code.text();
 
     if (text.length > 5) {
       if (!clipInit) {
         var text;
         var clip = new Clipboard(".copy-btn", {
           text: function(trigger) {
-            text = $(trigger).prev("code").text();
+            text = $(trigger)
+              .prev("code")
+              .text();
             return text.replace(/^\$\s/gm, "");
           }
         });
 
         clip.on("success", function(e) {
           e.clearSelection();
-          $(e.trigger).text("Copied to clipboard!").addClass("copied");
+          $(e.trigger)
+            .text("Copied to clipboard!")
+            .addClass("copied");
 
           window.setTimeout(function() {
-            $(e.trigger).text("Copy").removeClass("copied");
+            $(e.trigger)
+              .text("Copy")
+              .removeClass("copied");
           }, 2000);
         });
 
@@ -373,7 +392,7 @@ function getPathAfterVersionName(location, versionName) {
       break;
     }
   }
-  ("\ ");
+  (" ");
 
   // Add target = _blank to all external links.
   var links = document.links;
@@ -383,22 +402,6 @@ function getPathAfterVersionName(location, versionName) {
       links[i].target = "_blank";
     }
   }
-
-  // Community selector
-  $(document).on("click", ".community-cta", function(e) {
-    e.stopPropagation();
-    e.preventDefault();
-    $(this).closest(".community-cta-wrapper").toggleClass("open");
-  });
-
-  $(document).on("click", ".community-link", function(e) {
-    e.stopPropagation();
-    $(this).closest(".community-cta-wrapper").toggleClass("open");
-  });
-
-  $(document).click(function() {
-    $(".community-cta-wrapper").removeClass("open");
-  });
 
   /********** On page load **/
   updateSidebar();
