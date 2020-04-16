@@ -322,6 +322,7 @@ pre.collapsed .showmore span {
 
 #sidebar {
   background-color: #fdfdfd;
+  padding-bottom: 3rem;
   position: fixed;
   width: 280px;
   bottom: 0;
