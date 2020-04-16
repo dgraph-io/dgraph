@@ -22,9 +22,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"os"
 	"testing"
-	"time"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -33,47 +31,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var (
-	GOSSAMER_INTEGRATION_TEST_MODE = os.Getenv("GOSSAMER_INTEGRATION_TEST_MODE")
-
-	GOSSAMER_NODE_HOST = os.Getenv("GOSSAMER_NODE_HOST")
-
-	ContentTypeJSON   = "application/json"
-	dialTimeout       = 60 * time.Second
-	httpClientTimeout = 120 * time.Second
-)
-
-//TODO: json2.serverResponse should be exported and re-used instead
-type serverResponse struct {
-	// JSON-RPC Version
-	Version string `json:"jsonrpc"`
-	// Resulting values
-	Result json.RawMessage `json:"result"`
-	// Any generated errors
-	Error *Error `json:"error"`
-	// Request id
-	ID *json.RawMessage `json:"id"`
-}
-
-// ErrCode is a int type used for the rpc error codes
-type ErrCode int
-
-// Error is a struct that holds the error message and the error code for a error
-type Error struct {
-	Message   string
-	ErrorCode ErrCode
-}
-
-// Error returns the error Message string
-func (e *Error) Error() string {
-	return e.Message
-}
-
-func TestStableRPC(t *testing.T) {
+func TestStableNetworkRPC(t *testing.T) {
 	if GOSSAMER_INTEGRATION_TEST_MODE != "stable" {
 		t.Skip("Integration tests are disabled, going to skip.")
 	}
-	log.Info("Going to run tests",
+	log.Info("Going to run NetworkAPI tests",
 		"GOSSAMER_INTEGRATION_TEST_MODE", GOSSAMER_INTEGRATION_TEST_MODE,
 		"GOSSAMER_NODE_HOST", GOSSAMER_NODE_HOST)
 
@@ -90,6 +52,15 @@ func TestStableRPC(t *testing.T) {
 					Peers:           2,
 					IsSyncing:       false,
 					ShouldHavePeers: true,
+				},
+			},
+		},
+		{
+			description: "test system_network_state",
+			method:      "system_networkState",
+			expected: modules.SystemNetworkStateResponse{
+				NetworkState: common.NetworkState{
+					PeerID: "",
 				},
 			},
 		},
@@ -135,8 +106,8 @@ func TestStableRPC(t *testing.T) {
 
 			var response serverResponse
 			err = decoder.Decode(&response)
-			require.Nil(t, err)
-			log.Debug("Got payload from RPC request", "serverResponse", response)
+			require.Nil(t, err, "respBody", string(respBody))
+			log.Debug("Got payload from RPC request", "serverResponse", response, "string(respBody)", string(respBody))
 
 			require.Nil(t, response.Error)
 			require.Equal(t, response.Version, "2.0")
@@ -157,6 +128,15 @@ func TestStableRPC(t *testing.T) {
 				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, target.Health.ShouldHavePeers)
 
 				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, target.Health.Peers)
+			case "system_networkState":
+				var target modules.SystemNetworkStateResponse
+				err = decoder.Decode(&target)
+				require.Nil(t, err)
+
+				log.Debug("Will assert payload", "target", target)
+
+				require.NotNil(t, target.NetworkState)
+				require.NotNil(t, target.NetworkState.PeerID)
 			}
 
 		})

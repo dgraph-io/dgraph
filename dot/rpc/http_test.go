@@ -47,7 +47,7 @@ func TestNewHTTPServer(t *testing.T) {
 	req, err := http.NewRequest("POST", "http://localhost:8545/", buf)
 	require.Nil(t, err)
 
-	req.Header.Set("Content-Type", "application/json;")
+	req.Header.Set("Content-Type", "application/json")
 
 	res, err := client.Do(req)
 	require.Nil(t, err)

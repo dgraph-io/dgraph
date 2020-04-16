@@ -7,6 +7,7 @@ SCRIPT=$(basename ${BASH_SOURCE[0]})
 TEST=""
 QTD=1
 SLEEP_TIMEOUT=5
+TEST_QTD=3
 
 #PORT AND RPC_PORT 3 initial digits, to be concat with a suffix later when node is initialized
 PORT="700"
@@ -21,17 +22,19 @@ usage() {
   echo "Optional command line arguments"
   echo "-t <string>  -- Test to run. eg: rpc"
   echo "-q <number>  -- Quantity of nodes to run. eg: 3"
+  echo "-z <number>  -- Quantity of nodes to run tests against eg: 3"
   echo "-s <number>  -- Sleep between operations in secs. eg: 5"
   exit 1
 }
 
-while getopts "h?t:q:s:" args; do
+while getopts "h?t:q:z:s:" args; do
 case $args in
     h|\?)
       usage;
       exit;;
     t ) TEST=${OPTARG};;
     q ) QTD=${OPTARG};;
+    z ) TEST_QTD=${OPTARG};;
     s ) SLEEP_TIMEOUT=${OPTARG};;
   esac
 done
@@ -55,7 +58,7 @@ arr=()
 start_func() {
   echo "starting gossamer node $i in background ..."
   "$PWD"/bin/gossamer --port=$PORT"$i" --key=$KEY --datadir="$DATA_DIR$i" \
-    --rpc --rpchost=$IP_ADDR --rpcport=$RPC_PORT"$i" --rpcmods=system,author >"$DATA_DIR"/node"$i".log 2>&1 & disown
+    --rpc --rpchost=$IP_ADDR --rpcport=$RPC_PORT"$i" --rpcmods=system,author,chain >"$DATA_DIR"/node"$i".log 2>&1 & disown
 
   GOSSAMER_PID=$!
   echo "started gossamer node, pid=$GOSSAMER_PID"
@@ -80,7 +83,7 @@ set +e
 
 if [[ -z $TEST || $TEST == "rpc" ]]; then
 
-  for i in $(seq 1 "$QTD"); do
+  for i in $(seq 1 "$TEST_QTD"); do
     HOST_RPC=http://$IP_ADDR:$RPC_PORT"$i"
     echo "going to test gossamer node $HOST_RPC ..."
     GOSSAMER_INTEGRATION_TEST_MODE=$MODE GOSSAMER_NODE_HOST=$HOST_RPC go test ./tests/rpc/... -timeout=60s -v -count=1
