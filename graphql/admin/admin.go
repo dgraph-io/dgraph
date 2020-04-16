@@ -407,12 +407,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
-			health := &healthResolver{}
-
-			return resolve.NewQueryResolver(
-				health,
-				health,
-				resolve.StdQueryCompletion())
+			return resolve.QueryResolverFunc(resolveHealth)
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveState)
