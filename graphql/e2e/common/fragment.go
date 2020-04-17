@@ -115,22 +115,27 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	queryCharacterParams := &GraphQLParams{
 		Query: `query {
 			queryCharacter(filter: null) {
+				__typename
 				...fullCharacterFrag
 			}
 		}
 		fragment fullCharacterFrag on Character {
+			__typename
 			...commonCharacterFrag
 			...humanFrag
 			...droidFrag
 		}
 		fragment commonCharacterFrag on Character {
+			__typename
 			id
 			name
 			appearsIn
 		}
 		fragment humanFrag on Human {
+			__typename
 			starships {
 				... on Starship {
+					__typename
 					id
 					name
 					length
@@ -140,6 +145,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 			ename
 		}
 		fragment droidFrag on Droid {
+			__typename
 			primaryFunction
 		}
 		`,
@@ -152,10 +158,12 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	{
 		"queryCharacter":[
 			{
+				"__typename": "Human",
 				"id": "%s",
 				"name": "Han",
 				"appearsIn": ["EMPIRE"],
 				"starships": [{
+					"__typename": "Starship",
 					"id": "%s",
 					"name": "Millennium Falcon",
 					"length": 2
@@ -164,6 +172,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 				"ename": "Han_employee"
 			},
 			{
+				"__typename": "Droid",
 				"id": "%s",
 				"name": "R2-D2",
 				"appearsIn": ["EMPIRE"],
@@ -192,12 +201,13 @@ func fragmentInQueryOnObject(t *testing.T) {
 	queryHumanParams := &GraphQLParams{
 		Query: `query {
 			queryHuman(filter: null) {
-				ename
 				...characterFrag
 				...humanFrag
+				ename
 			}
 		}
 		fragment characterFrag on Character {
+			__typename
 			id
 			name
 			appearsIn
@@ -205,6 +215,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 		fragment humanFrag on Human {
 			starships {
 				... {
+					__typename
 					id
 					name
 					length
@@ -222,10 +233,12 @@ func fragmentInQueryOnObject(t *testing.T) {
 	{
 		"queryHuman":[
 			{
+				"__typename": "Human",
 				"id": "%s",
 				"name": "Han",
 				"appearsIn": ["EMPIRE"],
 				"starships": [{
+					"__typename": "Starship",
 					"id": "%s",
 					"name": "Millennium Falcon",
 					"length": 2
@@ -237,7 +250,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 	}`, humanID, newStarship.ID)
 
 	var expected, result struct {
-		QueryCharacter []map[string]interface{}
+		QueryHuman []map[string]interface{}
 	}
 	err := json.Unmarshal([]byte(queryCharacterExpected), &expected)
 	require.NoError(t, err)

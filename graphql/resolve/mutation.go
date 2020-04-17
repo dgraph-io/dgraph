@@ -212,7 +212,6 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	}
 
-	numUids := getNumUids(mutation, assigned, result)
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	errs := schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 
@@ -224,13 +223,20 @@ func (mr *mutationResolver) rewriteAndExecute(
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
+	numUidsField := mutation.NumUidsField()
+	numUidsFieldRespName := schema.NumUid
+	numUids := 0
+	if numUidsField != nil {
+		numUidsFieldRespName = numUidsField.ResponseName()
+		numUids = getNumUids(mutation, assigned, result)
+	}
+
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
 				mutation.ResponseName(): map[string]interface{}{
-					schema.NumUid:                        numUids,
-					schema.Typename:                      mutation.TypeName,
+					numUidsFieldRespName:                 numUids,
 					mutation.QueryField().ResponseName(): nil,
 				}},
 			Field: mutation,
@@ -243,8 +249,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 	}
 
 	dgRes := resolved.Data.(map[string]interface{})
-	dgRes[schema.NumUid] = numUids
-	dgRes[schema.Typename] = mutation.Type().Name()
+	dgRes[numUidsFieldRespName] = numUids
 	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
 
 	resolved.Field = mutation
