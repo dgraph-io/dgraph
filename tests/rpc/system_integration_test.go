@@ -64,6 +64,13 @@ func TestStableNetworkRPC(t *testing.T) {
 				},
 			},
 		},
+		{
+			description: "test system_peers",
+			method:      "system_peers",
+			expected: modules.SystemPeersResponse{
+				Peers: []common.PeerInfo{},
+			},
+		},
 	}
 
 	transport := &http.Transport{
@@ -137,6 +144,24 @@ func TestStableNetworkRPC(t *testing.T) {
 
 				require.NotNil(t, target.NetworkState)
 				require.NotNil(t, target.NetworkState.PeerID)
+			case "system_peers":
+				var target modules.SystemPeersResponse
+				err = decoder.Decode(&target)
+				require.Nil(t, err)
+
+				log.Debug("Will assert payload", "target", target)
+
+				require.NotNil(t, target.Peers)
+				require.GreaterOrEqual(t, len(target.Peers), 2)
+
+				for _, v := range target.Peers {
+					require.NotNil(t, v.PeerID)
+					require.NotNil(t, v.Roles)
+					require.NotNil(t, v.ProtocolVersion)
+					require.NotNil(t, v.BestHash)
+					require.NotNil(t, v.BestNumber)
+				}
+
 			}
 
 		})
