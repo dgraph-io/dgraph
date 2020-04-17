@@ -193,7 +193,7 @@ func rbacValidateRule(typ *ast.Definition, rule string, position *ast.Position) 
 	idx := RABCRegex.FindAllStringSubmatchIndex(rule, -1)
 	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
 		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` is not a valid auth rule", typ.Name, rule)
+			"Type %s: `%s` is not a valid auth rule.", typ.Name, rule)
 	}
 
 	query := RBACQuery{
@@ -210,7 +210,7 @@ func rbacValidateRule(typ *ast.Definition, rule string, position *ast.Position) 
 
 	if query.Operator != "eq" {
 		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` operator is not supported in this auth rule", typ.Name, query.Operator)
+			"Type %s: `%s` operator is not supported in this auth rule.", typ.Name, query.Operator)
 	}
 	return &query, nil
 }

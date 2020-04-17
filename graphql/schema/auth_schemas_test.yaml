@@ -53,7 +53,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: `xyz` operator is not supported in this auth rule",
+    {"message": "Type X: `xyz` operator is not supported in this auth rule.",
      "locations":[{"line":5, "column":28}]}
     ]
 
@@ -67,7 +67,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: `{ \"ADMIN\" }` is not a valid auth rule",
+    {"message": "Type X: `{ \"ADMIN\" }` is not a valid auth rule.",
      "locations":[{"line":5, "column":28}]}
     ]
       
