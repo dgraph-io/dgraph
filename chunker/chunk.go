@@ -28,6 +28,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -347,10 +348,11 @@ func slurpQuoted(r *bufio.Reader, out *bytes.Buffer) error {
 	}
 }
 
-// FileReader returns an open reader and file on the given file. Gzip-compressed input is detected
-// and decompressed automatically even without the gz extension. The caller is responsible for
-// calling the returned cleanup function when done with the reader.
-func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
+// FileReader returns an open reader on the given file. Gzip-compressed input is detected
+// and decompressed automatically even without the gz extension. The keyfile, if non-nil,
+// is used to decrypt the file. The caller is responsible for calling the returned cleanup
+// function when done with the reader.
+func FileReader(file string, keyfile string) (rd *bufio.Reader, cleanup func()) {
 	var f *os.File
 	var err error
 	if file == "-" {
@@ -364,7 +366,9 @@ func FileReader(file string) (rd *bufio.Reader, cleanup func()) {
 	cleanup = func() { _ = f.Close() }
 
 	if filepath.Ext(file) == ".gz" {
-		gzr, err := gzip.NewReader(f)
+		r, err := enc.GetReader(keyfile, f)
+		x.Check(err)
+		gzr, err := gzip.NewReader(r)
 		x.Check(err)
 		rd = bufio.NewReader(gzr)
 		cleanup = func() { _ = f.Close(); _ = gzr.Close() }

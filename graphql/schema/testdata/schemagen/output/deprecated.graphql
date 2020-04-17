@@ -138,3 +138,11 @@ type Query {
 type Mutation {
 	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryAtype(order: AtypeOrder, first: Int, offset: Int): [Atype]
+}

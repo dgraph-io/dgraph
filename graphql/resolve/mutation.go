@@ -18,8 +18,8 @@ package resolve
 
 import (
 	"context"
-	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -142,12 +142,12 @@ func NewMutationResolver(
 	mr MutationRewriter,
 	qe QueryExecutor,
 	me MutationExecutor,
-	mc MutationCompleter) MutationResolver {
+	rc ResultCompleter) MutationResolver {
 	return &mutationResolver{
 		mutationRewriter: mr,
 		queryExecutor:    qe,
 		mutationExecutor: me,
-		resultCompleter:  mc,
+		resultCompleter:  rc,
 	}
 }
 
@@ -156,9 +156,7 @@ type mutationResolver struct {
 	mutationRewriter MutationRewriter
 	queryExecutor    QueryExecutor
 	mutationExecutor MutationExecutor
-	resultCompleter  MutationCompleter
-
-	numUids int
+	resultCompleter  ResultCompleter
 }
 
 func (mr *mutationResolver) Resolve(
@@ -172,70 +170,98 @@ func (mr *mutationResolver) Resolve(
 			mutation.MutationType())
 	}
 
-	res, success, err := mr.rewriteAndExecute(ctx, mutation)
-
-	completed, err := mr.resultCompleter.Complete(ctx, mutation, mr.numUids, res, err)
-
-	return &Resolved{
-		Data: completed,
-		Err:  err,
-	}, success
+	resolved, success := mr.rewriteAndExecute(ctx, mutation)
+	mr.resultCompleter.Complete(ctx, resolved)
+	return resolved, success
 }
 
-func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
-	result map[string]interface{}) {
-	switch mr.mutationRewriter.(type) {
-	case *AddRewriter:
-		mr.numUids = len(assigned)
-
+func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}) int {
+	switch m.MutationType() {
+	case schema.AddMutation:
+		return len(a)
 	default:
-		mutated := extractMutated(result, mutation.ResponseName())
-		mr.numUids = len(mutated)
+		mutated := extractMutated(r, m.ResponseName())
+		return len(mutated)
 	}
 }
 
 func (mr *mutationResolver) rewriteAndExecute(
-	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
+	ctx context.Context,
+	mutation schema.Mutation) (*Resolved, bool) {
+
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
+
+	emptyResult := func(err error) *Resolved {
+		return &Resolved{
+			Data:  map[string]interface{}{mutation.ResponseName(): nil},
+			Field: mutation,
+			Err:   err,
+		}
+	}
+
 	if err != nil {
-		return nil, resolverFailed,
-			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
+			resolverFailed
 	}
 
 	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
-		return nil, resolverFailed,
-			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
+		gqlErr := schema.GQLWrapLocationf(
+			err, mutation.Location(), "mutation %s failed", mutation.Name())
+		return emptyResult(gqlErr), resolverFailed
+
 	}
 
-	mr.getNumUids(mutation, assigned, result)
-	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
-	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
-		"couldn't rewrite query for mutation %s", mutation.Name()))
+	errs := schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 
 	if dgQuery == nil && err != nil {
-		return nil, resolverFailed, errs
+		return emptyResult(errs), resolverFailed
 	}
 
 	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	return resp, resolverSucceeded, errs
+	numUidsField := mutation.NumUidsField()
+	numUidsFieldRespName := schema.NumUid
+	numUids := 0
+	if numUidsField != nil {
+		numUidsFieldRespName = numUidsField.ResponseName()
+		numUids = getNumUids(mutation, assigned, result)
+	}
+
+	resolved := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
+	if resolved.Data == nil && resolved.Err != nil {
+		return &Resolved{
+			Data: map[string]interface{}{
+				mutation.ResponseName(): map[string]interface{}{
+					numUidsFieldRespName:                 numUids,
+					mutation.QueryField().ResponseName(): nil,
+				}},
+			Field: mutation,
+			Err:   err,
+		}, resolverSucceeded
+	}
+
+	if resolved.Data == nil {
+		resolved.Data = map[string]interface{}{}
+	}
+
+	dgRes := resolved.Data.(map[string]interface{})
+	dgRes[numUidsFieldRespName] = numUids
+	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
+
+	resolved.Field = mutation
+	return resolved, resolverSucceeded
 }
 
-// deleteCompletion returns `{ "msg": "Deleted" }`
-// FIXME: after upsert mutations changes are done, it will return info about
-// the result of a deletion.
 func deleteCompletion() CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-
-		if field.Name() == "msg" {
-			return []byte(`{ "msg": "Deleted" }`), err
+	return CompletionFunc(func(ctx context.Context, resolved *Resolved) {
+		if fld, ok := resolved.Data.(map[string]interface{}); ok {
+			if rsp, ok := fld[resolved.Field.ResponseName()].(map[string]interface{}); ok {
+				rsp["msg"] = "Deleted"
+			}
 		}
-
-		return []byte(fmt.Sprintf(`{ "%s": null }`, schema.NumUid)), err
 	})
 }

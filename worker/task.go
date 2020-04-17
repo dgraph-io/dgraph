@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
@@ -38,6 +38,7 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/golang/protobuf/proto"
 	cindex "github.com/google/codesearch/index"
@@ -364,7 +365,6 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	x.AssertTrue(width > 0)
 	span.Annotatef(nil, "Width: %d. NumGo: %d", width, numGo)
 
-	errCh := make(chan error, numGo)
 	outputs := make([]*pb.Result, numGo)
 	listType := schema.State().IsList(q.Attr)
 
@@ -484,21 +484,21 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 		return nil
 	} // End of calculate function.
 
+	var g errgroup.Group
 	for i := 0; i < numGo; i++ {
 		start := i * width
 		end := start + width
 		if end > srcFn.n {
 			end = srcFn.n
 		}
-		go func(start, end int) {
-			errCh <- calculate(start, end)
-		}(start, end)
+		g.Go(func() error {
+			return calculate(start, end)
+		})
 	}
-	for i := 0; i < numGo; i++ {
-		if err := <-errCh; err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
+
 	// All goroutines are done. Now attach their results.
 	out := args.out
 	for _, chunk := range outputs {
@@ -1220,7 +1220,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 				switch lang {
 				case "":
 					if isList {
-						pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+						pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 						if err != nil {
 							filterErr = err
 							return false
@@ -1234,7 +1234,8 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						}
 						for _, sv := range svs {
 							dst, err := types.Convert(sv, typ)
-							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row]) {
+							if err == nil && types.CompareVals(arg.q.SrcFunc.Name, dst,
+								arg.srcFn.eqTokens[row]) {
 								return true
 							}
 						}
@@ -1242,7 +1243,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 						return false
 					}
 
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
@@ -1258,7 +1259,7 @@ func (qs *queryState) handleCompareFunction(ctx context.Context, arg funcArgs) e
 					return err == nil &&
 						types.CompareVals(arg.q.SrcFunc.Name, dst, arg.srcFn.eqTokens[row])
 				case ".":
-					pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+					pl, err := posting.GetNoStore(x.DataKey(attr, uid), arg.q.ReadTs)
 					if err != nil {
 						filterErr = err
 						return false
@@ -2242,6 +2243,13 @@ loop:
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return err
+		}
+
+		if pk.HasStartUid {
+			// The keys holding parts of a split key should not be accessed here because
+			// they have a different prefix. However, the check is being added to guard
+			// against future bugs.
+			continue
 		}
 
 		// The following optimization speeds up this iteration considerably, because it avoids

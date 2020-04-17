@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
@@ -65,7 +65,7 @@ var (
 
 // rollUpKey takes the given key's posting lists, rolls it up and writes back to badger
 func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
-	l, err := GetNoStore(key)
+	l, err := GetNoStore(key, math.MaxUint64)
 	if err != nil {
 		return err
 	}
@@ -332,9 +332,8 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 	return l, nil
 }
 
-// TODO: We should only create a posting list with a specific readTs.
-func getNew(key []byte, pstore *badger.DB) (*List, error) {
-	txn := pstore.NewTransactionAt(math.MaxUint64, false)
+func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
 	// When we do rollups, an older version would go to the top of the LSM tree, which can cause

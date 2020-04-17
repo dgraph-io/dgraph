@@ -19,43 +19,19 @@ package admin
 import (
 	"context"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
-type shutdownResolver struct {
-	mutation schema.Mutation
-}
-
-func (sr *shutdownResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got shutdown request through GraphQL admin API")
 
-	sr.mutation = m
 	close(worker.ShutdownCh)
-	return nil, nil, nil
-}
 
-func (sr *shutdownResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (sr *shutdownResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (sr *shutdownResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	buf := writeResponse(sr.mutation, "Success", "Server is shutting down")
-	return buf, nil
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{m.Name(): response("Success", "Server is shutting down")},
+		Field: m,
+	}, true
 }

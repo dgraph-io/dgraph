@@ -17,22 +17,14 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
-
-type loginResolver struct {
-	mutation   schema.Mutation
-	accessJwt  string
-	refreshJwt string
-}
 
 type loginInput struct {
 	UserId       string
@@ -40,69 +32,34 @@ type loginInput struct {
 	RefreshToken string
 }
 
-func (lr *loginResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got login request")
-	lr.mutation = m
-	return nil, nil, nil
-}
 
-func (lr *loginResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (lr *loginResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	input := getLoginInput(lr.mutation)
+	input := getLoginInput(m)
 	resp, err := (&edgraph.Server{}).Login(ctx, &dgoapi.LoginRequest{
 		Userid:       input.UserId,
 		Password:     input.Password,
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
+
 	jwt := &dgoapi.Jwt{}
 	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
-	lr.accessJwt = jwt.AccessJwt
-	lr.refreshJwt = jwt.RefreshJwt
-	return nil, nil, nil
-}
 
-func (lr *loginResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
+	return &resolve.Resolved{
+		Data: map[string]interface{}{
+			m.Name(): map[string]interface{}{
+				"response": map[string]interface{}{
+					"accessJWT":  jwt.AccessJwt,
+					"refreshJWT": jwt.RefreshJwt}}},
+		Field: m,
+		Err:   nil,
+	}, true
 
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(lr.mutation.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range lr.mutation.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "accessJWT":
-			val = lr.accessJwt
-		case "refreshJWT":
-			val = lr.refreshJwt
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
-	}
-	x.Check2(buf.WriteString("}]}"))
-
-	return buf.Bytes(), nil
 }
 
 func getLoginInput(m schema.Mutation) *loginInput {

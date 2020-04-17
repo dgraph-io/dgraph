@@ -18,19 +18,27 @@ package testutil
 
 import (
 	"fmt"
+	"testing"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
+
+	"github.com/stretchr/testify/require"
 )
+
+// KEYFILE is set to the path of the file containing the key. Used for testing purposes only.
+var KeyFile string
 
 func openDgraph(pdir string) (*badger.DB, error) {
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
 		// TOOD(Ibrahim): Remove compression level once badger is updated.
-		WithReadOnly(true).WithZSTDCompressionLevel(1)
+		WithReadOnly(true).WithZSTDCompressionLevel(1).
+		WithEncryptionKey(enc.ReadEncryptionKeyFile(KeyFile))
 	return badger.OpenManaged(opt)
 }
 
@@ -129,11 +137,32 @@ func readSchema(pdir string, dType dataType) ([]string, error) {
 }
 
 // GetPredicateNames returns the list of all the predicates stored in the restored pdir.
-func GetPredicateNames(pdir string, readTs uint64) ([]string, error) {
+func GetPredicateNames(pdir string) ([]string, error) {
 	return readSchema(pdir, schemaPredicate)
 }
 
 // GetTypeNames returns the list of all the types stored in the restored pdir.
-func GetTypeNames(pdir string, readTs uint64) ([]string, error) {
+func GetTypeNames(pdir string) ([]string, error) {
 	return readSchema(pdir, schemaType)
+}
+
+// CheckSchema checks the names of the predicates and types in the schema against the given names.
+func CheckSchema(t *testing.T, preds, types []string) {
+	pdirs := []string{
+		"./data/restore/p1",
+		"./data/restore/p2",
+		"./data/restore/p3",
+	}
+
+	restoredPreds := make([]string, 0)
+	for _, pdir := range pdirs {
+		groupPreds, err := GetPredicateNames(pdir)
+		require.NoError(t, err)
+		restoredPreds = append(restoredPreds, groupPreds...)
+
+		restoredTypes, err := GetTypeNames(pdir)
+		require.NoError(t, err)
+		require.ElementsMatch(t, types, restoredTypes)
+	}
+	require.ElementsMatch(t, preds, restoredPreds)
 }

@@ -105,7 +105,7 @@ func (r *reducer) run() error {
 func (r *reducer) createBadger(i int) *badger.DB {
 	if r.opt.BadgerKeyFile != "" {
 		// Need to set zero addr in WorkerConfig before checking the license.
-		x.WorkerConfig.ZeroAddr = r.opt.ZeroAddr
+		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
 
 		if !worker.EnterpriseEnabled() {
 			// Crash since the enterprise license is not enabled..
@@ -313,6 +313,9 @@ func (r *reducer) encode(entryCh chan *encodeRequest, closer *y.Closer) {
 			x.AssertTrue(len(pk.Attr) > 0)
 			kv.StreamId = r.streamIdFor(pk.Attr)
 			if pk.HasStartUid {
+				// If the key is for a split key, it cannot go into the same stream
+				// due to ordering issues. Instead, the stream ID for this keys is
+				// derived by flipping the MSB of the original stream ID.
 				kv.StreamId |= 0x80000000
 			}
 		}

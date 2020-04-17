@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -112,6 +112,12 @@ func TestBackupMinio(t *testing.T) {
 	_ = runBackup(t, 3, 1)
 	restored := runRestore(t, "", math.MaxUint64)
 
+	// Check the predicates and types in the schema are as expected.
+	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
+	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie"}
+	types := []string{"Node", "dgraph.graphql"}
+	testutil.CheckSchema(t, preds, types)
+
 	checks := []struct {
 		blank, expected string
 	}{
@@ -136,9 +142,25 @@ func TestBackupMinio(t *testing.T) {
 	t.Logf("%+v", incr1)
 	require.NoError(t, err)
 
+	// Update schema and types to make sure updates to the schema are backed up.
+	require.NoError(t, dg.Alter(ctx, &api.Operation{Schema: `
+		movie: string .
+		actor: string .
+		type Node {
+			movie
+		}
+		type NewNode {
+			actor
+		}`}))
+
 	// Perform first incremental backup.
 	_ = runBackup(t, 6, 2)
 	restored = runRestore(t, "", incr1.Txn.CommitTs)
+
+	// Check the predicates and types in the schema are as expected.
+	preds = append(preds, "actor")
+	types = append(types, "NewNode")
+	testutil.CheckSchema(t, preds, types)
 
 	checks = []struct {
 		blank, expected string
@@ -163,6 +185,7 @@ func TestBackupMinio(t *testing.T) {
 	// Perform second incremental backup.
 	_ = runBackup(t, 9, 3)
 	restored = runRestore(t, "", incr2.Txn.CommitTs)
+	testutil.CheckSchema(t, preds, types)
 
 	checks = []struct {
 		blank, expected string
@@ -187,6 +210,7 @@ func TestBackupMinio(t *testing.T) {
 	// Perform second full backup.
 	dirs := runBackupInternal(t, true, 12, 4)
 	restored = runRestore(t, "", incr3.Txn.CommitTs)
+	testutil.CheckSchema(t, preds, types)
 
 	// Check all the values were restored to their most recent value.
 	checks = []struct {
@@ -271,7 +295,8 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore"}
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
+		"--force_zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -286,18 +311,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	pdir := "./data/restore/p1"
 	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
-
-	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.type", "movie"}, restoredPreds)
-
-	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
-	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
-
-	require.NoError(t, err)
 	t.Logf("--- Restored values: %+v\n", restored)
-
 	return restored
 }
 
@@ -307,7 +321,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir)
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "")
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }
