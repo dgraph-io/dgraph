@@ -763,21 +763,21 @@ func TestForInvalidArguement(t *testing.T) {
 func TestForInvalidType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
+		getCountry(id: ID!): Country @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
 	}	
 	`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
+	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int!. But got ID!\n")
 }
 
 func TestCustomLogicGraphql(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
+		getCountry(id: ID!): Country @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
 	}	
 	`
 	res := updateSchema(t, schema)
-	require.Nil(t, res.Errors)
+	common.RequireNoGQLErrors(t, res)
 	query := `
 	query {
 		getCountry(id: "BI"){
@@ -799,7 +799,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 func TestCustomLogicGraphqlWithError(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
+		getCountry(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
 	}	
 	`
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
@@ -816,7 +816,7 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.JSONEq(t, string(result.Data), `
-	{"getCountry":{"code":"BI","name":"Burundi"}}
+	{"getCountry":[{"code":"BI","name":"Burundi"}]}
 	`)
 	require.Equal(t, "dummy error", result.Errors.Error())
 }

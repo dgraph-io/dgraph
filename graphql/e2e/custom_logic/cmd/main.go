@@ -26,7 +26,32 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
+
+type graphqlResponseObject struct {
+	Response string
+	Schema   string
+	Name     string
+}
+
+var graphqlResponses map[string]graphqlResponseObject
+
+func init() {
+	b, err := ioutil.ReadFile("graphqlresponse.yaml")
+	if err != nil {
+		panic(err)
+	}
+	resps := []graphqlResponseObject{}
+	yaml.Unmarshal(b, &resps)
+
+	graphqlResponses = make(map[string]graphqlResponseObject)
+
+	for _, resp := range resps {
+		graphqlResponses[resp.Name] = resp
+	}
+}
 
 type expectedRequest struct {
 	method    string
@@ -258,375 +283,59 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": []
-			}]
-		  }
-	   }
-	}
-	`)
+	fmt.Fprintf(w, graphqlResponses["emptyquery"].Schema)
 }
 
 func invalidArgument(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "no_code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "ID",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+	fmt.Fprintf(w, graphqlResponses["invalidargument"].Schema)
 }
 
 func invalidType(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "Int",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+	fmt.Fprintf(w, graphqlResponses["invalidtype"].Schema)
 }
 
 func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "ID",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+		fmt.Fprintf(w, graphqlResponses["validcountry"].Schema)
 		return
 	}
 
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "country": {
-			"name": "Burundi",
-			"code": "BI"
-		  }
-		}
-	  }`)
+	fmt.Fprintf(w, graphqlResponses["validcountry"].Response)
 }
 
 func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "ID",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+		fmt.Fprintf(w, graphqlResponses["graphqlerr"].Schema)
 		return
 	}
 
-	fmt.Fprintf(w, `
-	{
-	   "errors":[{
-			"message": "dummy error"
-		}]
-	  }`)
+	fmt.Fprintf(w, graphqlResponses["graphqlerr"].Response)
 }
 
 func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "ID",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+		fmt.Fprintf(w, graphqlResponses["validcountrywitherror"].Schema)
 		return
 	}
 
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "country": {
-			"name": "Burundi",
-			"code": "BI"
-		  }
-		},
-		"errors":[{
-			"message": "dummy error"
-		}]
-	  }`)
+	fmt.Fprintf(w, graphqlResponses["validcountrywitherror"].Response)
 }
 
 func validCountries(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
-	{
-	"data": {
-		"__schema": {
-		  "queryType": {
-			"name": "Query"
-		  },
-		  "mutationType": null,
-		  "subscriptionType": null,
-		  "types": [
-			{
-			  "kind": "OBJECT",
-			  "name": "Query",
-			  "fields": [
-				{
-					"name": "country",
-					"args": [
-					  {
-						"name": "code",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-							"kind": "SCALAR",
-							"name": "ID",
-							"ofType": null
-						  }
-						},
-						"defaultValue": null
-					  }
-					],
-					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
-					},
-					"isDeprecated": false,
-					"deprecationReason": null
-				  }
-			  ]
-			}]
-		  }
-	   }
-	}
-	`)
+		fmt.Fprintf(w, graphqlResponses["validcountries"].Schema)
 		return
 	}
 
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "country": [
-			{
-			  "name": "Burundi",
-			  "code": "BI"
-			}
-		  ]
-	  }
-	  }`)
+	fmt.Fprintf(w, graphqlResponses["validcountries"].Response)
 }
 
 type input struct {

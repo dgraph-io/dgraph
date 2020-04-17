@@ -1,7 +1,11 @@
-FROM golang:1.12.7-alpine3.10
+FROM golang:1.12.7
 
-COPY main.go cmd/main.go
+ADD . cmd 
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main cmd/main.go
+WORKDIR cmd 
+
+RUN go mod download
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main main.go
 
 CMD ./main

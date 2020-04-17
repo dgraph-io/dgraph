@@ -229,7 +229,6 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 			}
 		}
 	}
-	fmt.Println(endpoint.field.Type.Name())
 
 	if !queryExist {
 		return gqlerror.ErrorPosf(
@@ -242,12 +241,13 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	// check whether given arguments are present in the remote query.
 	remoteArguments := collectArgumentsFromQuery(remoteQuery)
 	argValToType := make(map[string]string)
+	argValToGqlType := make(map[string]*GqlType)
 
-	introspectedArgs, notNullArgs := collectArgsFromIntrospection(introspectedRemoteQuery)
+	remoteQueryArguments := collectArgsFromIntrospection(introspectedRemoteQuery)
 
 	for remoteArg, remoteArgVal := range remoteArguments {
 
-		argType, ok := introspectedArgs[remoteArg]
+		argType, ok := remoteQueryArguments.arguments[remoteArg]
 		if !ok {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s arg not present in the remote"+
@@ -259,11 +259,12 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 
 		argValToType[remoteArgVal] = argType
+		argValToGqlType[remoteArgVal] = remoteQueryArguments.argumentsToGqlType[remoteArg]
 	}
 
 	// We are only checking whether the required variable is exist in the
 	// local remote call.
-	for requiredArg := range notNullArgs {
+	for requiredArg := range remoteQueryArguments.notNullArgs {
 		if _, ok := remoteArguments[requiredArg]; !ok {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s;%s is a required argument in the "+
@@ -315,7 +316,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	}
 
 	// Type check for remote argument type with local query argument.
-	for variable, typeName := range argValToType {
+	for variable := range argValToType {
 
 		if variable == returnType {
 			introspectedReturnType := buildTypeStringFromGqlType(&introspectedRemoteQuery.Type)
@@ -341,14 +342,14 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				endpoint.field.Name)
 		}
 
-		if localRemoteCallArg.Type.Name() != typeName {
+		if localRemoteCallArg.Type.String() != buildTypeStringFromGqlType(argValToGqlType[variable]) {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; expected type for variable  "+
 					"%s is %s. But got %s",
 				endpoint.rootQuery.Name,
 				endpoint.field.Name,
 				variable,
-				typeName,
+				buildTypeStringFromGqlType(argValToGqlType[variable]),
 				localRemoteCallArg.Type)
 		}
 	}
@@ -412,20 +413,32 @@ func collectArgumentsFromQuery(query *ast.Field) map[string]string {
 	return arguments
 }
 
+type remoteArgParams struct {
+	notNullArgs        map[string]int
+	arguments          map[string]string
+	argumentsToGqlType map[string]*GqlType
+}
+
 // collectArgsFromIntrospection will collect all the arguments with it's type and required argument
-func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string]int) {
+func collectArgsFromIntrospection(query GqlField) *remoteArgParams {
 	notNullArgs := make(map[string]int)
 	arguments := make(map[string]string)
+	argumentsToGqlType := make(map[string]*GqlType)
 	for _, introspectedArg := range query.Args {
 
 		// Collect all the required variable to validate against provided variable.
-		if introspectedArg.Type.Kind == "NOT_NULL" {
+		if introspectedArg.Type.Kind == "NON_NULL" {
 			notNullArgs[introspectedArg.Name] = 0
 		}
 
 		arguments[introspectedArg.Name] = recursivelyFindName(&introspectedArg.Type)
+		argumentsToGqlType[introspectedArg.Name] = &introspectedArg.Type
 	}
-	return arguments, notNullArgs
+	return &remoteArgParams{
+		notNullArgs:        notNullArgs,
+		arguments:          arguments,
+		argumentsToGqlType: argumentsToGqlType,
+	}
 }
 
 func buildTypeStringFromGqlType(in *GqlType) string {
