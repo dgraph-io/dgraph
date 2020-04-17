@@ -32,8 +32,6 @@
                         "ZeroDiskIops",
                         "RatelInstanceCount",
                         "RatelInstanceType",
-                        "RatelDiskSize",
-                        "RatelDiskIops",
                         "Tag"
                     ]
                 }
@@ -80,12 +78,6 @@
                 },
                 "RatelInstanceType": {
                     "default": "AWS instance types to use for dgraph Ratel nodes"
-                },
-                "RatelDiskSize": {
-                    "default": "Disk size to use for dgraph Ratel nodes."
-                },
-                "RatelDiskIops": {
-                    "default": "Ratel node Disk IOPS"
                 },
                 "DgraphVersion": {
                     "default": "Dgraph version to deploy."
@@ -1024,7 +1016,7 @@
                     {
                         "DeviceName": "/dev/sda1",
                         "Ebs": {
-                            "VolumeSize": "20"
+                            "VolumeSize": 20
                         }
                     },
                     {
@@ -1034,7 +1026,7 @@
                             "Iops": {
                                 "Ref": "ZeroDiskIops"
                             },
-                            "DeleteOnTermination": "false",
+                            "DeleteOnTermination": false,
                             "VolumeSize": {
                                 "Ref": "ZeroDiskSize"
                             }
@@ -1043,8 +1035,8 @@
                 ],
                 "NetworkInterfaces": [
                     {
-                        "AssociatePublicIpAddress": "true",
-                        "DeleteOnTermination": "true",
+                        "AssociatePublicIpAddress": true,
+                        "DeleteOnTermination": true,
                         "DeviceIndex": "0",
                         "SubnetId": {
                             "Ref": "SubnetA"
@@ -1056,7 +1048,7 @@
                         ]
                     }
                 ],
-                "DisableApiTermination": "false",
+                "DisableApiTermination": false,
                 "InstanceType": {
                     "Ref": "ZeroInstanceType"
                 },
@@ -1151,14 +1143,14 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         },
                         {
                             "DeviceName": "/dev/sdk",
                             "Ebs": {
                                 "VolumeType": "io1",
-                                "DeleteOnTermination": "false",
+                                "DeleteOnTermination": false,
                                 "Iops": {
                                     "Ref": "ZeroDiskIops"
                                 },
@@ -1168,7 +1160,7 @@
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
                         "Fn::FindInMap": [
                             "AWSRegionArch2AMI",
@@ -1186,9 +1178,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeviceIndex": "0",
-                            "DeleteOnTermination": "true",
+                            "AssociatePublicIpAddress": true,
+                            "DeviceIndex": 0,
+                            "DeleteOnTermination": true,
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1339,7 +1331,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
@@ -1352,14 +1344,14 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         },
                         {
                             "DeviceName": "/dev/sdk",
                             "Ebs": {
                                 "VolumeType": "io1",
-                                "DeleteOnTermination": "false",
+                                "DeleteOnTermination": false,
                                 "Iops": {
                                     "Ref": "AlphaDiskIops"
                                 },
@@ -1369,7 +1361,7 @@
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
                         "Fn::FindInMap": [
                             "AWSRegionArch2AMI",
@@ -1387,9 +1379,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeviceIndex": "0",
-                            "DeleteOnTermination": "true",
+                            "AssociatePublicIpAddress": true,
+                            "DeviceIndex": 0,
+                            "DeleteOnTermination": true,
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1547,7 +1539,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
@@ -1560,11 +1552,11 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
                         "Fn::FindInMap": [
                             "AWSRegionArch2AMI",
@@ -1582,9 +1574,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeleteOnTermination": "true",
-                            "DeviceIndex": "0",
+                            "AssociatePublicIpAddress": true,
+                            "DeleteOnTermination": true,
+                            "DeviceIndex": 0,
                             "SubnetId": {
                                 "Ref": "SubnetA"
                             },
@@ -1695,7 +1687,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
