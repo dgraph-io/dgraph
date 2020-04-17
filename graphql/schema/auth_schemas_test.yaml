@@ -50,10 +50,7 @@ valid_schemas:
   - name: "GraphQL auth RBAC rule"
     input: |
       type X @auth(
-        query: {rule: """
-          query($X_User: String) {
-            queryRBAC(filter: { eq: "ADMIN" })
-          }"""
+        query: {rule: """{"$X_MyApp_Role": {"eq": "ADMIN"}}"""
         }
       ) {
         username: String! @id
