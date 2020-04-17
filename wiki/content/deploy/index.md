@@ -1484,7 +1484,8 @@ be assigned to different groups.
 
 ## Log Format
 
-Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows::
+Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows:
+
 	`Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...`
 
 Where the fields are defined as follows:
