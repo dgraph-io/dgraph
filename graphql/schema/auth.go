@@ -27,22 +27,21 @@ import (
 )
 
 const (
-	RBACPrefix    = "$X"
-	RBACQueryName = "rbacQuery"
+	RBACQueryPrefix = "{"
 )
 
-type RuleNode struct {
-	Or   []*RuleNode
-	And  []*RuleNode
-	Not  *RuleNode
-	Rule Query
+type RBACQuery struct {
+	Variable string
+	Operator string
+	Operand  string
 }
 
-func (r *RuleNode) isRBAC() bool {
-	if r.Rule != nil && r.Rule.Name() == RBACQueryName {
-		return true
-	}
-	return false
+type RuleNode struct {
+	Or       []*RuleNode
+	And      []*RuleNode
+	Not      *RuleNode
+	Rule     Query
+	RBACRule *RBACQuery
 }
 
 type AuthContainer struct {
@@ -168,7 +167,11 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if rule := val.Children.ForName("rule"); rule != nil {
 		var err error
-		result.Rule, _, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
+			result.RBACRule, err = parseRBACRule(rule.Raw, rule.Position)
+		} else {
+			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
@@ -182,85 +185,64 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	return result, errResult
 }
 
-func validateRBACRule(rule string) (Query, bool, error) {
+func parseRBACRule(rule string, position *ast.Position) (*RBACQuery, error) {
 	variableMap := make(map[string]interface{})
 	err := json.Unmarshal([]byte(rule), &variableMap)
 	if err != nil {
-		return nil, true, err
-	}
-	var variableName string
-	var operator string
-	var operandValue string
-	for key, value := range variableMap {
-		operationMap := value.(map[string]interface{})
-		variableName = key
-		for k, v := range operationMap {
-			operator = k
-			operandValue = v.(string)
-		}
-	}
-	field := &ast.Field{Name: RBACQueryName}
-	sel := &ast.Field{Name: RBACQueryName,
-		Arguments: ast.ArgumentList{{
-			Name: "filter",
-			Value: &ast.Value{
-				Children: ast.ChildValueList{{
-					Name: variableName,
-					Value: &ast.Value{
-						Children: ast.ChildValueList{{
-							Name: operator,
-							Value: &ast.Value{
-								Raw: operandValue,
-							},
-						},
-						},
-					},
-				},
-				},
-			},
-		}},
+		return nil, gqlerror.ErrorPosf(position,
+			"invalid RBAC rule %s", rule)
 	}
 
-	rbacQuery := &query{
-		field: field,
-		op: &operation{
-			query: rule,
-		},
-		sel: sel,
+	query := RBACQuery{}
+	for key, value := range variableMap {
+		operationMap := value.(map[string]interface{})
+		query.Variable = key
+		for k, v := range operationMap {
+			query.Operator = k
+			query.Operand = v.(string)
+		}
 	}
-	return rbacQuery, true, nil
+
+	if !strings.HasPrefix(query.Variable, "$") {
+		return nil, gqlerror.ErrorPosf(position,
+			"`%s` is not a GraphQL variable", query.Variable)
+	}
+	query.Variable = query.Variable[1:]
+
+	if query.Operator != "eq" {
+		return nil, gqlerror.ErrorPosf(position,
+			"`%s` operator is supported in RBAC rule", query.Operator)
+	}
+
+	return &query, nil
 }
 
 func gqlValidateRule(
 	s *ast.Schema,
 	typ *ast.Definition,
 	rule string,
-	position *ast.Position) (Query, bool, error) {
-
-	if strings.HasPrefix(rule, "{") {
-		return validateRBACRule(rule)
-	}
+	position *ast.Position) (Query, error) {
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
-		return nil, false, x.GqlErrorf(
+		return nil, x.GqlErrorf(
 			"failed to parse GraphQL rule [reason : %s]", toGqlError(gqlErr).Error()).
 			WithLocations(x.Location{Line: position.Line, Column: position.Column})
 	}
 
 	if len(doc.Operations) != 1 {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"a rule should be exactly one query, found %v GraphQL operations", len(doc.Operations))
 	}
 	op := doc.Operations[0]
 
 	if op == nil {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"a rule should be exactly one query, found an empty GraphQL operation")
 	}
 
 	if op.Operation != "query" {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"a rule should be exactly one query, found an %s", op.Name)
 	}
 
@@ -273,22 +255,22 @@ func gqlValidateRule(
 				x.GqlErrorf("failed to validate GraphQL rule [reason : %s]", toGqlError(err)).
 					WithLocations(x.Location{Line: position.Line, Column: position.Column}))
 		}
-		return nil, false, errs
+		return nil, errs
 	}
 
 	if len(op.SelectionSet) != 1 {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"a rule should be exactly one query, found %v queries", len(op.SelectionSet))
 	}
 
 	f, ok := op.SelectionSet[0].(*ast.Field)
 	if !ok {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"error couldn't generate query from rule")
 	}
 
 	if f.Name != "query"+typ.Name {
-		return nil, false, gqlerror.ErrorPosf(position,
+		return nil, gqlerror.ErrorPosf(position,
 			"on type %s expected only query%s rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 
@@ -299,5 +281,5 @@ func gqlValidateRule(
 			doc:   doc,
 			// need to fill in vars and schema at query time
 		},
-		sel: op.SelectionSet[0]}, false, nil
+		sel: op.SelectionSet[0]}, nil
 }
