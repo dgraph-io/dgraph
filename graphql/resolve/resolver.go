@@ -116,18 +116,19 @@ type ResolverFns struct {
 type dgraphExecutor struct {
 }
 
-// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// adminExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query resolution through Query method in dgraph server, and
-// it doens't require authorization. Currently it's only used for quering
+// it doesn't require authorization. Currently it's only used for querying
 // gqlschema during init.
 type adminExecutor struct {
 }
 
 // A Resolved is the result of resolving a single field - generally a query or mutation.
 type Resolved struct {
-	Data  interface{}
-	Field schema.Field
-	Err   error
+	Data       interface{}
+	Field      schema.Field
+	Err        error
+	Extensions *schema.Extensions
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -157,7 +158,8 @@ func DgraphAsMutationExecutor() MutationExecutor {
 	return &dgraphExecutor{}
 }
 
-func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Query(ctx, query)
 }
@@ -167,12 +169,14 @@ func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 func (de *adminExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
 	return dgraph.Mutate(ctx, query, mutations)
 }
 
-func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	return dgraph.Query(ctx, query)
 }
 
@@ -181,7 +185,8 @@ func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 func (de *dgraphExecutor) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	return dgraph.Mutate(ctx, query, mutations)
 }
 
@@ -274,7 +279,7 @@ func StdMutationCompletion(name string) CompletionFunc {
 	return noopCompletion
 }
 
-// StdDeleteCompletion is the completion steps that get run for add and update mutations
+// StdDeleteCompletion is the completion steps that get run for delete mutations
 func StdDeleteCompletion(name string) CompletionFunc {
 	return deleteCompletion()
 }
@@ -442,6 +447,7 @@ func addResult(resp *schema.Response, res *Resolved) {
 	resp.WithError(res.Err)
 	resp.WithError(gqlErr)
 	resp.AddData(b)
+	resp.MergeExtensions(res.Extensions)
 }
 
 // noopCompletion just passes back it's result and err arguments

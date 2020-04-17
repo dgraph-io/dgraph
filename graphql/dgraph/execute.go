@@ -31,8 +31,10 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const touchedUidsKey = "_total"
+
 // Query is the underlying dgraph implementation of QueryExecutor.
-func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, *schema.Extensions, error) {
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Query")
 	defer stop()
@@ -50,21 +52,24 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
-	return resp.GetJson(), schema.GQLWrapf(err, "Dgraph query failed")
+	ext := &schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
+
+	return resp.GetJson(), ext, schema.GQLWrapf(err, "Dgraph query failed")
 }
 
 // Mutate is the underlying dgraph implementation of MutationExecutor.
 func Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, *schema.Extensions,
+	error) {
 
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "dgraph.Mutate")
 	defer stop()
 
 	if query == nil && len(mutations) == 0 {
-		return nil, nil, nil
+		return nil, nil, nil, nil
 	}
 
 	queryStr := AsString(query)
@@ -88,15 +93,16 @@ func Mutate(
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
-		return nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
+		return nil, nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}
 
+	ext := &schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 	result := make(map[string]interface{})
 	if query != nil && len(resp.GetJson()) != 0 {
 		if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-			return nil, nil,
+			return nil, nil, ext,
 				schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 		}
 	}
-	return resp.GetUids(), result, schema.GQLWrapf(err, "Dgraph mutation failed")
+	return resp.GetUids(), result, ext, schema.GQLWrapf(err, "Dgraph mutation failed")
 }

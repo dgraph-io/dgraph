@@ -265,17 +265,19 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

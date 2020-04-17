@@ -23,6 +23,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,8 +47,17 @@ type GraphQLError struct {
 }
 
 type GraphQLResponse struct {
-	Data   json.RawMessage
-	Errors []GraphQLError
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
+	if resp == nil {
+		return
+	}
+	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
+		resp.Errors.Error())
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
@@ -60,11 +71,12 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	require.Nil(t, result.Errors)
 }
 
-func MakeGQLRequest(t *testing.T, params *GraphQLParams) []byte {
+func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
 	return MakeGQLRequestWithAccessJwt(t, params, "")
 }
 
-func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToken string) []byte {
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
+	accessToken string) *GraphQLResponse {
 	adminUrl := "http://" + SockAddrHttp + "/admin"
 
 	b, err := json.Marshal(params)
@@ -83,5 +95,10 @@ func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams, accessToke
 	defer resp.Body.Close()
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
-	return b
+
+	var gqlResp GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
 }
