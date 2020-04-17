@@ -96,4 +96,3 @@ services:
     labels:
       cluster: test
     command: minio server /data/minio --address :9001
-    
