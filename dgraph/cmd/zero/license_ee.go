@@ -130,7 +130,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	x.SetStatus(w, x.Success, "Done")
+	x.Check2(w.Write([]byte(`{"code": "Success", "message": "License applied."}`)))
 }
 
 // applyLicenseFile applies the license file stored at the given path.
