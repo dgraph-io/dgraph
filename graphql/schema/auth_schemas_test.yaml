@@ -39,7 +39,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "`X_MyApp_Role` is not a GraphQL variable",
+    {"message": "`X_MyApp_Role` is not a valid GraphQL variable",
      "locations":[{"line":5, "column":28}]}
     ]
 

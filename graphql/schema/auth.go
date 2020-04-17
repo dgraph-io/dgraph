@@ -189,8 +189,7 @@ func parseRBACRule(rule string, position *ast.Position) (*RBACQuery, error) {
 	variableMap := make(map[string]interface{})
 	err := json.Unmarshal([]byte(rule), &variableMap)
 	if err != nil {
-		return nil, gqlerror.ErrorPosf(position,
-			"invalid RBAC rule %s", rule)
+		return nil, gqlerror.ErrorPosf(position, "invalid RBAC rule %s", rule)
 	}
 
 	query := RBACQuery{}
@@ -205,7 +204,7 @@ func parseRBACRule(rule string, position *ast.Position) (*RBACQuery, error) {
 
 	if !strings.HasPrefix(query.Variable, "$") {
 		return nil, gqlerror.ErrorPosf(position,
-			"`%s` is not a GraphQL variable", query.Variable)
+			"`%s` is not a valid GraphQL variable", query.Variable)
 	}
 	query.Variable = query.Variable[1:]
 
