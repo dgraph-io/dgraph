@@ -1229,7 +1229,7 @@ func (n *node) calculateTabletSizes() {
 		if left.Attr != right.Attr {
 			// Skip all tables not fully owned by one predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(2).Info("Skipping table not owned by one predicate")
+			glog.V(3).Info("Skipping table not owned by one predicate")
 			continue
 		}
 		pred := left.Attr
