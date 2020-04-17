@@ -88,7 +88,12 @@ func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
 	if ex.failQuery == 0 {
 		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
 	}
-	return []byte(ex.resp), ex.queryExtensions, nil
+	// give out a new copy everytime
+	ext := schema.Extensions{}
+	if ex.queryExtensions != nil {
+		ext.TouchedUids = ex.queryExtensions.TouchedUids
+	}
+	return []byte(ex.resp), &ext, nil
 }
 
 func (ex *executor) Mutate(ctx context.Context,
@@ -100,7 +105,12 @@ func (ex *executor) Mutate(ctx context.Context,
 		return nil, nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
 			"Dgraph mutation failed")
 	}
-	return ex.assigned, ex.result, ex.mutateExtensions, nil
+	// give out a new copy everytime
+	ext := schema.Extensions{}
+	if ex.mutateExtensions != nil {
+		ext.TouchedUids = ex.mutateExtensions.TouchedUids
+	}
+	return ex.assigned, ex.result, &ext, nil
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
@@ -459,6 +469,7 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 	expectedExtensions := &schema.Extensions{TouchedUids: 2}
 
 	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
 	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
@@ -466,10 +477,13 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 	query := `
 	query {
-      getAuthor(id: "0x1") {
+      a: getAuthor(id: "0x1") {
         name
       }
-      getAuthor(id: "0x2") {
+      b: getAuthor(id: "0x2") {
+        name
+      }
+      c: getAuthor(id: "0x3") {
         name
       }
     }`
@@ -480,9 +494,10 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 			mutateExtensions: &schema.Extensions{TouchedUids: 5},
 		})
 
-	expectedExtensions := &schema.Extensions{TouchedUids: 4}
+	expectedExtensions := &schema.Extensions{TouchedUids: 6}
 
 	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
 	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
@@ -506,18 +521,19 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	expectedExtensions := &schema.Extensions{TouchedUids: 7}
 
 	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
 	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
 func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 	mutation := `mutation {
-		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
+		a: addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
 			post {
 				title
 			}
 		}
-		addPost(input: [{title: "A Post", author: {id: "0x2"}}]) {
+		b: addPost(input: [{title: "A Post", author: {id: "0x2"}}]) {
 			post {
 				title
 			}
@@ -534,6 +550,7 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	expectedExtensions := &schema.Extensions{TouchedUids: 14}
 
 	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
 	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
