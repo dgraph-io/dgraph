@@ -583,8 +583,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 				// before trying to
 				glog.Infof("Waiting for indexing to finish before starting the backup restore.")
 				gr.Node.waitForTask(opIndexing)
-				// Sleep for a bit to avoid hogging resources.
-				time.Sleep(time.Millisecond * 100)
 			} else {
 				break
 			}
