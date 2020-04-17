@@ -271,7 +271,9 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	t.Logf("--- Restoring from: %q", localBackupDst)
-	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore", "-k", "../../../ee/enc/enc-key"}
+	testutil.KeyFile = "../../../ee/enc/enc-key"
+	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
+		"-k", testutil.KeyFile, "--force_zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -287,11 +289,12 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
 	require.NoError(t, err)
 
-	restoredPreds, err := testutil.GetPredicateNames(pdir, commitTs)
+	restoredPreds, err := testutil.GetPredicateNames(pdir)
 	require.NoError(t, err)
-	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.type", "movie"}, restoredPreds)
+	require.ElementsMatch(t, []string{"dgraph.graphql.schema", "dgraph.graphql.xid",
+		"dgraph.type", "movie"}, restoredPreds)
 
-	restoredTypes, err := testutil.GetTypeNames(pdir, commitTs)
+	restoredTypes, err := testutil.GetTypeNames(pdir)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"Node", "dgraph.graphql"}, restoredTypes)
 

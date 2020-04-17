@@ -198,3 +198,13 @@ type Mutation {
 	updateT(input: UpdateTInput!): UpdateTPayload
 	deleteT(filter: TFilter!): DeleteTPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	queryI(order: IOrder, first: Int, offset: Int): [I]
+	getT(id: ID!): T
+	queryT(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
+}

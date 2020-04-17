@@ -34,6 +34,7 @@ var LsBackup x.SubCommand
 
 var opt struct {
 	backupId, location, pdir, zero, keyfile string
+	forceZero                               bool
 }
 
 func init() {
@@ -105,8 +106,12 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
-	flag.StringVarP(&opt.keyfile, "keyfile", "k", "",
-		"Key file to decrypt the backup")
+	flag.StringVarP(&opt.keyfile, "keyfile", "k", "", "Key file to decrypt the backup. "+
+		"The same key is also used to re-encrypt the restored data.")
+	flag.BoolVarP(&opt.forceZero, "force_zero", "", true, "If false, no connection to "+
+		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
+		"update the timestamp and max uid when you start the cluster. The correct values are "+
+		"printed near the end of this command's output.")
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -169,8 +174,11 @@ func runRestoreCmd() error {
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
-	// TODO: Remove this dependency on Zero. It complicates restore for the end
-	// user.
+	if opt.zero == "" && opt.forceZero {
+		return errors.Errorf("No Dgraph Zero address passed. Use the --force_zero option if you " +
+			"meant to do this")
+	}
+
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
 
