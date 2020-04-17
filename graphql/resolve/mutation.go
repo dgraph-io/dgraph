@@ -96,13 +96,14 @@ type MutationRewriter interface {
 // mutated map and any errors.
 type MutationExecutor interface {
 	// Mutate performs the actual mutation and returns a map of newly assigned nodes,
-	// a map of variable->[]uid from upsert mutations and any errors.  If an error
+	// a map of variable->[]uid from upsert mutations, extensions and any errors. If an error
 	// occurs, that indicates that the mutation failed in some way significant enough
-	// way as to not continue procissing this mutation or others in the same request.
+	// way as to not continue processing this mutation or others in the same request.
 	Mutate(
 		ctx context.Context,
 		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
+		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+		*schema.Extensions, error)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
@@ -114,7 +115,8 @@ type MutationResolverFunc func(ctx context.Context, mutation schema.Mutation) (*
 type MutationExecutionFunc func(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error)
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, *schema.Extensions,
+	error)
 
 // Resolve calls mr(ctx, mutation)
 func (mr MutationResolverFunc) Resolve(
@@ -128,7 +130,8 @@ func (mr MutationResolverFunc) Resolve(
 func (me MutationExecutionFunc) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string][]string, *schema.Extensions,
+	error) {
 	return me(ctx, query, mutations)
 }
 
@@ -204,7 +207,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 			resolverFailed
 	}
 
-	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
+	assigned, result, extM, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -219,7 +222,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 		return emptyResult(errs), resolverFailed
 	}
 
-	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
+	resp, extQ, err := mr.queryExecutor.Query(ctx, dgQuery)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
@@ -231,6 +234,13 @@ func (mr *mutationResolver) rewriteAndExecute(
 		numUids = getNumUids(mutation, assigned, result)
 	}
 
+	// merge the extensions we got from .Mutate() and .Query() into extM
+	if extM == nil {
+		extM = extQ
+	} else {
+		extM.Merge(extQ)
+	}
+
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), resp, errs)
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
@@ -239,8 +249,9 @@ func (mr *mutationResolver) rewriteAndExecute(
 					numUidsFieldRespName:                 numUids,
 					mutation.QueryField().ResponseName(): nil,
 				}},
-			Field: mutation,
-			Err:   err,
+			Field:      mutation,
+			Err:        err,
+			Extensions: extM,
 		}, resolverSucceeded
 	}
 
@@ -251,8 +262,9 @@ func (mr *mutationResolver) rewriteAndExecute(
 	dgRes := resolved.Data.(map[string]interface{})
 	dgRes[numUidsFieldRespName] = numUids
 	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
-
 	resolved.Field = mutation
+	resolved.Extensions = extM
+
 	return resolved, resolverSucceeded
 }
 

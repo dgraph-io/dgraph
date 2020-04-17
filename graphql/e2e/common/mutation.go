@@ -3081,3 +3081,32 @@ func ensureAliasInMutationPayload(t *testing.T) {
 	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
 	deleteState(t, filter, 1, nil)
 }
+
+func mutationsHaveExtensions(t *testing.T) {
+	mutation := &GraphQLParams{
+		Query: `mutation {
+			addCategory(input: [{ name: "cat" }]) {
+				category {
+					id
+				}
+			}
+		}`,
+	}
+
+	touchedUidskey := "touched_uids"
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+
+	// cleanup
+	var resp struct {
+		AddCategory struct {
+			Category []category
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &resp)
+	require.NoError(t, err)
+	deleteGqlType(t, "Category",
+		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
+}

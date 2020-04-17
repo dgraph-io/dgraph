@@ -265,6 +265,7 @@ func RunAll(t *testing.T) {
 	t.Run("query state by xid regex", queryStateByXidRegex)
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
+	t.Run("queries have extensions", queriesHaveExtensions)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -298,6 +299,7 @@ func RunAll(t *testing.T) {
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
 	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
+	t.Run("mutations have extensions", mutationsHaveExtensions)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
