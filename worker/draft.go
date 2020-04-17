@@ -83,6 +83,8 @@ func (id op) String() string {
 		return "opSnapshot"
 	case opIndexing:
 		return "opIndexing"
+	case opRestore:
+		return "opRestore"
 	default:
 		return "opUnknown"
 	}
@@ -92,6 +94,7 @@ const (
 	opRollup op = iota + 1
 	opSnapshot
 	opIndexing
+	opRestore
 )
 
 // startTask is used to check whether an op is already going on.
@@ -127,7 +130,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		}
 		go posting.IncrRollup.Process(closer)
 
-	case opSnapshot, opIndexing:
+	case opSnapshot, opIndexing, opRestore:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
@@ -569,6 +572,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return nil
 
 	case proposal.Restore != nil:
+		// TODO: should startTask be retried when there's an indexing going on in the
+		// background?
+		closer, err := n.startTask(opRestore)
+		if err != nil {
+			return errors.Wrapf(err, "could not start opRestore task")
+		}
+		defer closer.Done()
+
 		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
 			return err
 		}
