@@ -17,17 +17,21 @@
 package schema
 
 import (
-	"encoding/json"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
+	"regexp"
 	"strings"
 )
 
 const (
 	RBACQueryPrefix = "{"
+)
+
+var (
+	RABCRegex *regexp.Regexp
 )
 
 type RBACQuery struct {
@@ -168,7 +172,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	if rule := val.Children.ForName("rule"); rule != nil {
 		var err error
 		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
-			result.RBACRule, err = parseRBACRule(rule.Raw, rule.Position)
+			result.RBACRule, err = rbacValidateRule(typ, rule.Raw, rule.Position)
 		} else {
 			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
 		}
@@ -185,34 +189,29 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	return result, errResult
 }
 
-func parseRBACRule(rule string, position *ast.Position) (*RBACQuery, error) {
-	variableMap := make(map[string]interface{})
-	err := json.Unmarshal([]byte(rule), &variableMap)
-	if err != nil {
-		return nil, gqlerror.ErrorPosf(position, "invalid RBAC rule %s", rule)
+func rbacValidateRule(typ *ast.Definition, rule string, position *ast.Position) (*RBACQuery, error) {
+	idx := RABCRegex.FindAllStringSubmatchIndex(rule, -1)
+	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` is not a valid auth rule", typ.Name, rule)
 	}
 
-	query := RBACQuery{}
-	for key, value := range variableMap {
-		operationMap := value.(map[string]interface{})
-		query.Variable = key
-		for k, v := range operationMap {
-			query.Operator = k
-			query.Operand = v.(string)
-		}
+	query := RBACQuery{
+		Variable: rule[idx[0][2]:idx[0][3]],
+		Operator: rule[idx[0][4]:idx[0][5]],
+		Operand:  rule[idx[0][6]:idx[0][7]],
 	}
 
 	if !strings.HasPrefix(query.Variable, "$") {
 		return nil, gqlerror.ErrorPosf(position,
-			"`%s` is not a valid GraphQL variable", query.Variable)
+			"Type %s: `%s` is not a valid GraphQL variable.", typ.Name, query.Variable)
 	}
 	query.Variable = query.Variable[1:]
 
 	if query.Operator != "eq" {
 		return nil, gqlerror.ErrorPosf(position,
-			"`%s` operator is supported in RBAC rule", query.Operator)
+			"Type %s: `%s` operator is not supported in this auth rule", typ.Name, query.Operator)
 	}
-
 	return &query, nil
 }
 
@@ -281,4 +280,11 @@ func gqlValidateRule(
 			// need to fill in vars and schema at query time
 		},
 		sel: op.SelectionSet[0]}, nil
+}
+
+func init() {
+	var err error
+	RABCRegex, err =
+		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
+	x.AssertTrue(err == nil)
 }

@@ -32,42 +32,42 @@ invalid_schemas:
   - name: "RBAC rule invalid variable"
     input: |
       type X @auth(
-        query: {rule: """{"X_MyApp_Role": {"eq": "ADMIN"}}"""
+        query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}"
         }
       ) {
         username: String! @id
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "`X_MyApp_Role` is not a valid GraphQL variable",
+    {"message": "Type X: `X_MyApp_Role` is not a valid GraphQL variable.",
      "locations":[{"line":5, "column":28}]}
     ]
 
   - name: "RBAC rule invalid operator"
     input: |
       type X @auth(
-        query: {rule: """{"$X_MyApp_Role": {"xyz": "ADMIN"}}"""
+        query: {rule: "{ $X_MyApp_Role : { xyz : \"ADMIN\"}}"
         }
       ) {
         username: String! @id
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "`xyz` operator is supported in RBAC rule",
+    {"message": "Type X: `xyz` operator is not supported in this auth rule",
      "locations":[{"line":5, "column":28}]}
     ]
 
   - name: "Invalid RBAC rule"
     input: |
       type X @auth(
-        query: {rule: """{"ADMIN"}}"""
+        query: {rule: "{ \"ADMIN\" }"
         }
       ) {
         username: String! @id
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "invalid RBAC rule {\"ADMIN\"}}",
+    {"message": "Type X: `{ \"ADMIN\" }` is not a valid auth rule",
      "locations":[{"line":5, "column":28}]}
     ]
       
@@ -92,7 +92,7 @@ valid_schemas:
   - name: "GraphQL auth RBAC rule"
     input: |
       type X @auth(
-        query: {rule: """{"$X_MyApp_Role": {"eq": "ADMIN"}}"""
+        query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"
         }
       ) {
         username: String! @id
