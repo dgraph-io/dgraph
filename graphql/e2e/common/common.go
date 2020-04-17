@@ -297,6 +297,8 @@ func RunAll(t *testing.T) {
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
+	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
+	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 
 	// error tests

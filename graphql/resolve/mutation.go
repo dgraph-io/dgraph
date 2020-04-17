@@ -215,7 +215,6 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	}
 
-	numUids := getNumUids(mutation, assigned, result)
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(mutation, assigned, result)
 	errs := schema.GQLWrapf(err, "couldn't rewrite query for mutation %s", mutation.Name())
 
@@ -226,6 +225,14 @@ func (mr *mutationResolver) rewriteAndExecute(
 	resp, extQ, err := mr.queryExecutor.Query(ctx, dgQuery)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
+
+	numUidsField := mutation.NumUidsField()
+	numUidsFieldRespName := schema.NumUid
+	numUids := 0
+	if numUidsField != nil {
+		numUidsFieldRespName = numUidsField.ResponseName()
+		numUids = getNumUids(mutation, assigned, result)
+	}
 
 	// merge the extensions we got from .Mutate() and .Query() into extM
 	if extM == nil {
@@ -239,8 +246,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 		return &Resolved{
 			Data: map[string]interface{}{
 				mutation.ResponseName(): map[string]interface{}{
-					schema.NumUid:                        numUids,
-					schema.Typename:                      mutation.TypeName,
+					numUidsFieldRespName:                 numUids,
 					mutation.QueryField().ResponseName(): nil,
 				}},
 			Field:      mutation,
@@ -254,9 +260,7 @@ func (mr *mutationResolver) rewriteAndExecute(
 	}
 
 	dgRes := resolved.Data.(map[string]interface{})
-	dgRes[schema.NumUid] = numUids
-	dgRes[schema.Typename] = mutation.Type().Name()
-
+	dgRes[numUidsFieldRespName] = numUids
 	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
 	resolved.Field = mutation
 	resolved.Extensions = extM

@@ -2269,11 +2269,11 @@ When the new cluster (that uses the upgraded version of Dgraph) is up and runnin
 
 #### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
 
-1. Use [binary]({{< relref "#binary-backups">}}) backup to export data from old cluster
+1. Use [binary]({{< relref "enterprise-features/index.md#binary-backups">}}) backup to export data from old cluster
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Upgrade `dgraph` binary to `v20.03.0`
-5. [Restore]({{< relref "#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+5. [Restore]({{< relref "enterprise-features/index.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
 6. Start a new Dgraph cluster using the restored data directories
 7. Upgrade ACL data using the following command:
 
