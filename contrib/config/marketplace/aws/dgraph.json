@@ -207,11 +207,11 @@
             "AllowedValues": [
                 "m5a.large",
                 "m5a.4xlarge",
-                "m4a.4xlarge",
-                "r5a.4xlarge",
-                "r4a.4xlarge",
-                "c5a.4xlarge",
-                "c4a.4xlarge"
+                "m4.4xlarge",
+                "r5.4xlarge",
+                "r4.4xlarge",
+                "c5.4xlarge",
+                "c4.4xlarge"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type which supports autoscaling groups."
         },
@@ -249,11 +249,11 @@
             "Default": "m5a.large",
             "AllowedValues": [
                 "m5a.large",
-                "m4a.large",
-                "r5a.large",
-                "r4a.large",
-                "c5a.large",
-                "c4a.large"
+                "m4.large",
+                "r5.large",
+                "r4.large",
+                "c5.large",
+                "c4.large"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type."
         },
