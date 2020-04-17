@@ -1,4 +1,8 @@
 type User @auth(
+    query: { or : [
+        { rule: "filter: {isPublic: true}" },
+        { rule: "filter: {username: {eq: $USER }}"},
+    ]},
     add: { rule: "$ROLE: { eq: ADD-BOT }" },
     update: { or: [ 
         { rule: "$ROLE: { eq: ADMIN }" }, 
@@ -6,11 +10,8 @@ type User @auth(
     ]}
     delete: { rule: "false" }) {
   username: String! @id
-  age: Int @auth(query: { or: [
-        { rule: "filter: {isBioSecret: false}" },
-        { rule: "filter: {username: {eq: $USER }}"},
-    ]})
-  isBioSecret: Boolean
+  age: Int @auth(query: {rule: "filter: {username: {eq: $USER }}"})
+  isPublic: Boolean
   disabled: Boolean @auth(update: { rule: "$ROLE: { eq: ADMIN }" })
 }
 
@@ -24,6 +25,7 @@ type Movie @auth(
     query: { and: [
         {rule: """filter: {disabled: false}"""},
         {rule: """regionsAvailable { users ( filter: {username: {eq: $USER}})}"""},
+        {not: {rule: """regionsAvailable { users ( filter: {disabled: {eq: true}})}"""}},
     ]}
   
     add: { rule: "$ROLE: { eq: ADMIN }" }
@@ -35,6 +37,29 @@ type Movie @auth(
   regionsAvailable: [Region] 
 }
 
+type Issue @auth(
+    query: { and: [
+      {rule: "$ROLE: { eq: ADMIN }"},
+      {rule: "owner(filter: { username: { eq: $USER } })"},
+    ]}
+    add: { and: [
+      {rule: "$ROLE: { eq: ADMIN }"},
+      {rule: "owner(filter: { username: { eq: $USER } })"},
+    ]}
+    update: { and: [
+      {rule: "$ROLE: { eq: ADMIN }"},
+      {rule: "owner(filter: { username: { eq: $USER } })"},
+    ]}
+    delete: { and: [
+      {rule: "$ROLE: { eq: ADMIN }"},
+      {rule: "owner(filter: { username: { eq: $USER } })"},
+    ]}
+) {
+  id: ID!
+  msg: String
+  owner: User!
+}
+
 type Log @auth(
     query: { rule: "$ROLE: { eq: ADMIN }" }
     add: { rule: "$ROLE: { eq: ADMIN }" }
@@ -42,7 +67,6 @@ type Log @auth(
     delete: { rule: "$ROLE: { eq: ADMIN }" }
 ) {
   id: ID!
-  date: DateTime
   logs: String
 }
 
@@ -54,6 +78,7 @@ type Project @auth(
         { rule: "$ROLE: { eq: ADMIN }" }
     ]}
 
+    # Only admins can create projects
     add: { rule: "$ROLE: { eq: ADMIN }" }
 
     update: { rule: """roles(filter: { permissions: { eq: CREATE } }) { 
