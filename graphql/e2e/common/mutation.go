@@ -3058,8 +3058,8 @@ func queryTypenameInMutationPayload(t *testing.T) {
 	deleteState(t, filter, 1, nil)
 }
 
-func ensureAliasAndOrderInMutationPayload(t *testing.T) {
-	// querying __typename, numUids and state with alias, in some initial order
+func ensureAliasInMutationPayload(t *testing.T) {
+	// querying __typename, numUids and state with alias
 	addStateParams := &GraphQLParams{
 		Query: `mutation {
 			addState(input: [{xcode: "S1", name: "State1"}]) {
@@ -3078,30 +3078,6 @@ func ensureAliasAndOrderInMutationPayload(t *testing.T) {
 	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
 	require.Equal(t, addStateExpected, string(gqlResponse.Data))
 
-	// this time querying them in a different order,
-	//this ensures they are returned in the order they were asked.
-	addStateParams = &GraphQLParams{
-		Query: `mutation {
-			addState(input: [{xcode: "S2", name: "State1"}]) {
-				state {
-					xcode
-				}
-				__typename
-				numUids
-			}
-		}`,
-	}
-
-	gqlResponse = addStateParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
-
-	addStateExpected = `{"addState":{"state":[{"xcode":"S2"}],"__typename":"AddStatePayload",` +
-		`"numUids":1}}`
-	require.Equal(t, addStateExpected, string(gqlResponse.Data))
-
-	filter := map[string]interface{}{
-		"xcode": map[string]interface{}{"eq": "S1"},
-		"or":    map[string]interface{}{"xcode": map[string]interface{}{"eq": "S2"}},
-	}
-	deleteState(t, filter, 2, nil)
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, 1, nil)
 }
