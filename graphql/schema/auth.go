@@ -189,7 +189,8 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	return result, errResult
 }
 
-func rbacValidateRule(typ *ast.Definition, rule string, position *ast.Position) (*RBACQuery, error) {
+func rbacValidateRule(typ *ast.Definition, rule string,
+	position *ast.Position) (*RBACQuery, error) {
 	idx := RABCRegex.FindAllStringSubmatchIndex(rule, -1)
 	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
 		return nil, gqlerror.ErrorPosf(position,
