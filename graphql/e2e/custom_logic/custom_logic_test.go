@@ -36,7 +36,7 @@ const (
 		 name: String!
 		 directed: [Movie]
 	 }
- 
+
 	 type Movie @remote {
 		 id: ID!
 		 name: String!
@@ -47,7 +47,7 @@ const (
 		name: String
 		countries: [Country]
 	  }
-	  
+
 	  type Country @remote {
 		code: String
 		name: String
@@ -60,15 +60,15 @@ const (
 		emojiU: String
 		states: [State]
 	  }
-	  
+
 	  type Language @remote {
 		code: String
 		name: String
 		native: String
 		rtl: Int
 	  }
-	  
-	  
+
+
 	  type State @remote {
 		code: String
 		name: String
@@ -617,7 +617,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -635,7 +635,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -653,12 +653,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -684,7 +684,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -702,7 +702,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -720,12 +720,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -744,7 +744,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
@@ -754,7 +754,7 @@ func TestForInvalidArguement(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; code arg not present in the remote query country\n")
@@ -764,7 +764,7 @@ func TestForInvalidType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
@@ -774,7 +774,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Nil(t, res.Errors)
@@ -782,7 +782,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
@@ -800,14 +800,14 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	query := `
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
