@@ -31,6 +31,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const touchedUidsKey = "_total"
+
 // Query is the underlying dgraph implementation of QueryExecutor.
 func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, *schema.Extensions, error) {
 	span := trace.FromContext(ctx)
@@ -50,7 +52,7 @@ func Query(ctx context.Context, query *gql.GraphQuery) ([]byte, *schema.Extensio
 
 	ctx = context.WithValue(ctx, edgraph.IsGraphql, true)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
-	ext := schema.NewExtensions(resp)
+	ext := &schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
 	return resp.GetJson(), ext, schema.GQLWrapf(err, "Dgraph query failed")
 }
@@ -94,7 +96,7 @@ func Mutate(
 		return nil, nil, nil, schema.GQLWrapf(err, "Dgraph mutation failed")
 	}
 
-	ext := schema.NewExtensions(resp)
+	ext := &schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 	result := make(map[string]interface{})
 	if query != nil && len(resp.GetJson()) != 0 {
 		if err := json.Unmarshal(resp.GetJson(), &result); err != nil {

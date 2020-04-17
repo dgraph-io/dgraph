@@ -462,6 +462,30 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 	require.Equal(t, expectedExtensions, resp.Extensions)
 }
 
+func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	query := `
+	query {
+      getAuthor(id: "0x1") {
+        name
+      }
+      getAuthor(id: "0x2") {
+        name
+      }
+    }`
+
+	resp := resolveWithClient(gqlSchema, query, nil,
+		&executor{
+			queryExtensions:  &schema.Extensions{TouchedUids: 2},
+			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+		})
+
+	expectedExtensions := &schema.Extensions{TouchedUids: 4}
+
+	require.NotNil(t, resp)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
 func TestMutationsPropagateExtensions(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
 	mutation := `mutation {
@@ -480,6 +504,34 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 
 	// as both .Mutate() and .Query() should get called, so we should get their merged result
 	expectedExtensions := &schema.Extensions{TouchedUids: 7}
+
+	require.NotNil(t, resp)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
+func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	mutation := `mutation {
+		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
+			post {
+				title
+			}
+		}
+		addPost(input: [{title: "A Post", author: {id: "0x2"}}]) {
+			post {
+				title
+			}
+		}
+	}`
+
+	resp := resolveWithClient(gqlSchema, mutation, nil,
+		&executor{
+			queryExtensions:  &schema.Extensions{TouchedUids: 2},
+			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+		})
+
+	// as both .Mutate() and .Query() should get called, so we should get their merged result
+	expectedExtensions := &schema.Extensions{TouchedUids: 14}
 
 	require.NotNil(t, resp)
 	require.Equal(t, expectedExtensions, resp.Extensions)

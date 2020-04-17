@@ -239,61 +239,61 @@ message Mutations {
 }
 
 message Metadata {
-  // HintType represents a hint that will be passed along the mutation and used
-  // to add the predicate to the schema if it's not already there.
-  enum HintType {
-    // DEFAULT means no hint is provided and Dgraph will follow the default behavior.
-    DEFAULT = 0;
-    // SINGLE signals that the predicate should be created as a single type (e.g string, uid).
-    SINGLE = 1;
-    // LIST signals that the predicate should be created as a list (e.g [string], [uid]).
-    LIST = 2;
-  }
+	// HintType represents a hint that will be passed along the mutation and used
+	// to add the predicate to the schema if it's not already there.
+	enum HintType {
+		// DEFAULT means no hint is provided and Dgraph will follow the default behavior.
+		DEFAULT = 0;
+		// SINGLE signals that the predicate should be created as a single type (e.g string, uid).
+		SINGLE = 1;
+		// LIST signals that the predicate should be created as a list (e.g [string], [uid]).
+		LIST = 2;
+	}
 
-  // Map of predicates to their hints.
+	// Map of predicates to their hints.
 	map<string, HintType> pred_hints = 1;
 }
 
 message Snapshot {
-    RaftContext context = 1;
-    uint64 index = 2;
-    uint64 read_ts = 3;
-    // done is used to indicate that snapshot stream was a success.
-    bool done = 4;
-    // since_ts stores the ts of the last snapshot to support diff snap updates.
-    uint64 since_ts = 5;
+	RaftContext context = 1;
+	uint64 index = 2;
+	uint64 read_ts = 3;
+	// done is used to indicate that snapshot stream was a success.
+	bool done	= 4;
+	// since_ts stores the ts of the last snapshot to support diff snap updates.
+	uint64 since_ts = 5;
 }
 
 message RestoreRequest {
-    uint32 group_id = 1;
-    uint64 restore_ts = 2;
-    string location = 3;
-    string backup_id = 4;
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
 
-    // Credentials when using a minio or S3 bucket as the backup location.
-    string access_key = 5;
-    string secret_key = 6;
-    string session_token = 7;
-    bool anonymous = 8;
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
 }
 
 message Proposal {
-    Mutations mutations = 2;
-    repeated KV kv = 4;
-    MembershipState state = 5;
-    string clean_predicate = 6; // Delete the predicate which was moved to other group.
-    string key = 7;
-    OracleDelta delta = 8;
-    Snapshot snapshot = 9; // Used to tell the group when to take snapshot.
-    uint64 index = 10; // Used to store Raft index, in raft.Ready.
-    uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
-    RestoreRequest restore = 12;
+	Mutations mutations    = 2;
+	repeated KV kv         = 4;
+	MembershipState state  = 5;
+	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
+	string key             = 7;
+	OracleDelta delta      = 8;
+	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
+	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore = 12;
 }
 
 message KVS {
-    repeated pb.KV kv = 1;
-    // done used to indicate if the stream of KVS is over.
-    bool done = 2;
+	repeated pb.KV kv = 1;
+	// done used to indicate if the stream of KVS is over.
+	bool done      = 2;
 }
 
 // Posting messages.
@@ -311,7 +311,7 @@ message Posting {
 		UID = 7;
 		PASSWORD = 8;
 		STRING = 9;
-    OBJECT = 10;
+		OBJECT = 10;
 	}
 	ValType val_type = 3;
 	enum PostingType {
@@ -355,7 +355,7 @@ message PostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3; // More inclination towards smaller values.
 
-  repeated uint64 splits = 4;
+	repeated uint64 splits = 4;
 }
 
 message FacetParam {
@@ -396,7 +396,7 @@ message SchemaRequest {
 	// fields can be on of type, index, reverse or tokenizer
 	repeated string fields = 3;
 
-  repeated string types = 4;
+	repeated string types = 4;
 }
 
 message SchemaNode {
@@ -420,10 +420,10 @@ message SchemaUpdate {
 	string predicate = 1;
 	Posting.ValType value_type = 2;
 	enum Directive {
-	   NONE = 0;
-	   INDEX = 1;
-	   REVERSE = 2;
-	   DELETE = 3;
+		NONE = 0;
+		INDEX = 1;
+		REVERSE = 2;
+		DELETE = 3;
 	}
 	Directive directive = 3;
 	repeated string tokenizer = 4;
@@ -520,29 +520,18 @@ service Zero {
 }
 
 service Worker {
-    // Data serving RPCs.
-    rpc Mutate (Mutations) returns (api.TxnContext) {
-    }
-    rpc ServeTask (Query) returns (Result) {
-    }
-    rpc StreamSnapshot (stream Snapshot) returns (stream KVS) {
-    }
-    rpc Sort (SortMessage) returns (SortResult) {
-    }
-    rpc Schema (SchemaRequest) returns (SchemaResult) {
-    }
-    rpc Backup (BackupRequest) returns (Status) {
-    }
-    rpc Restore (RestoreRequest) returns (Status) {
-    }
-    rpc Export (ExportRequest) returns (Status) {
-    }
-    rpc ReceivePredicate (stream KVS) returns (api.Payload) {
-    }
-    rpc MovePredicate (MovePredicatePayload) returns (api.Payload) {
-    }
-    rpc Subscribe (SubscriptionRequest) returns (stream pb.KVList) {
-    }
+	// Data serving RPCs.
+	rpc Mutate (Mutations)                  returns (api.TxnContext) {}
+	rpc ServeTask (Query)                   returns (Result) {}
+	rpc StreamSnapshot (stream Snapshot)    returns (stream KVS) {}
+	rpc Sort (SortMessage)                  returns (SortResult) {}
+	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
+	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Restore (RestoreRequest)            returns (Status) {}
+	rpc Export (ExportRequest)              returns (Status) {}
+	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
+	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -550,7 +539,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+	pb.KVList kvs = 1;
 }
 
 message Num {
@@ -581,7 +570,7 @@ message Status {
 
 message BackupRequest {
 	uint64 read_ts = 1;
-  uint64 since_ts = 2;
+	uint64 since_ts = 2;
 	uint32 group_id = 3;
 	string unix_ts = 4;
 	string destination = 5;
@@ -589,13 +578,13 @@ message BackupRequest {
 	string secret_key = 7;
 	string session_token = 8;
 
-  // True if no credentials should be used to access the S3 or minio bucket.
-  // For example, when using a bucket with a public policy.
-  bool anonymous = 9;
+	// True if no credentials should be used to access the S3 or minio bucket.
+	// For example, when using a bucket with a public policy.
+	bool anonymous = 9;
 
-  // The predicates to backup. All other predicates present in the group (e.g
-  // stale data from a predicate move) will be ignored.
-  repeated string predicates = 10;
+	// The predicates to backup. All other predicates present in the group (e.g
+	// stale data from a predicate move) will be ignored.
+	repeated string predicates = 10;
 }
 
 message ExportRequest {
@@ -607,23 +596,23 @@ message ExportRequest {
 
 // A key stored in the format used for writing backups.
 message BackupKey {
-  enum KeyType {
-    UNKNOWN = 0;
-    DATA = 1;
-    INDEX = 2;
-    REVERSE = 3;
-    COUNT = 4;
-    COUNT_REV = 5;
-    SCHEMA = 6;
-    TYPE = 7;
-  }
+	enum KeyType {
+		UNKNOWN = 0;
+		DATA = 1;
+		INDEX = 2;
+		REVERSE = 3;
+		COUNT = 4;
+		COUNT_REV = 5;
+		SCHEMA = 6;
+		TYPE = 7;
+	}
 
-  KeyType type = 1;
-  string attr = 2;
-  uint64 uid = 3;
-  uint64 start_uid = 4;
-  string term = 5;
-  uint32 count = 6;
+	KeyType type = 1;
+	string attr = 2;
+	uint64 uid = 3;
+	uint64 start_uid = 4;
+	string term = 5;
+	uint32 count = 6;
 }
 
 // A posting list stored in the format used for writing backups.
@@ -631,7 +620,7 @@ message BackupPostingList {
 	repeated uint64 uids = 1;
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
-  repeated uint64 splits = 4;
+	repeated uint64 splits = 4;
 }
 
 // vim: noexpandtab sw=2 ts=2

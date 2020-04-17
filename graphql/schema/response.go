@@ -22,22 +22,14 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
-const TouchedUidsKey = "_total"
-
 // Extensions represents GraphQL extensions
 type Extensions struct {
 	TouchedUids uint64 `json:"touched_uids,omitempty"`
-}
-
-// NewExtensions builds GraphQL extensions from *api.Response
-func NewExtensions(resp *api.Response) *Extensions {
-	return &Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[TouchedUidsKey]}
 }
 
 // Merge merges ext with e
