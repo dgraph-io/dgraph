@@ -69,8 +69,9 @@ const adminTypes = `
 		backupId: String!
 
 		"""
-		Path to the key file needed to unencrypt the backup. This file should be accessible
-		by all alphas in the group.
+		Path to the key file needed to decrypt the backup. This file should be accessible
+		by all alphas in the group. The backup will be written using the encryption key
+		with which the cluster was started, which might be different than this key.
 		"""
 		keyFile: String!
 
