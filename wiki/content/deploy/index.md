@@ -1484,9 +1484,12 @@ be assigned to different groups.
 
 ## Log Format
 
-Log lines have this form:
-	Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...
-where the fields are defined as follows:
+Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows::
+	`Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...`
+
+Where the fields are defined as follows:
+
+```
 	L                A single character, representing the log level (eg 'I' for INFO)
 	mm               The month (zero padded; ie May is '05')
 	dd               The day (zero padded)
@@ -1495,6 +1498,7 @@ where the fields are defined as follows:
 	file             The file name
 	line             The line number
 	msg              The user-supplied message
+```
 
 ### Query Logging
 
