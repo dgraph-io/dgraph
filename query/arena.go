@@ -19,16 +19,16 @@ package query
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 	"sync"
 
 	"github.com/dgraph-io/ristretto/z"
 )
 
-const maxArenaSize = math.MaxUint32
+const maxArenaSize = int64(math.MaxUint32)
 
 var (
-	errArenaFull     = errors.New("arena is full")
 	errInvalidOffset = errors.New("arena get performed with invalid offset")
 
 	arenaPool = sync.Pool{
@@ -70,11 +70,13 @@ func (a *arena) put(b []byte) (uint32, error) {
 		return co, nil
 	}
 	// First put length of buffer(varint encoded), then put actual buffer.
-	sizeBuf := make([]byte, binary.MaxVarintLen64)
-	w := binary.PutVarint(sizeBuf, int64(len(b)))
+	var sizeBuf [binary.MaxVarintLen64]byte
+	w := binary.PutVarint(sizeBuf[:], int64(len(b)))
 	offset := len(a.buf)
-	if int64(len(a.buf)+w+len(b)) > int64(maxArenaSize) {
-		return 0, errArenaFull
+	if int64(len(a.buf)+w+len(b)) > maxArenaSize {
+		msg := fmt.Sprintf("errNotEnoughSpaceArena, curSize: %d, maxSize: %d, bufSize: %d",
+			len(a.buf), maxArenaSize, w+len(b))
+		return 0, errors.New(msg)
 	}
 
 	a.buf = append(a.buf, sizeBuf[:w]...)

@@ -145,9 +145,9 @@ const (
 	// Value with most significant bit set to 1.
 	msbBit = 0x8000000000000000
 	// Value with all bits set to 1 for bytes 7 and 6.
-	setBytes76 = 0x00FFFF0000000000
+	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
-	unsetBytes76 = 0xFF0000FFFFFFFFFF
+	unsetBytes76 = uint64(^setBytes76)
 	// Value with all bits set to 1 for bytes 4 to 1.
 	setBytes4321 = 0x00000000FFFFFFFF
 )
@@ -234,12 +234,8 @@ func (enc *encoder) getList(fj fastJsonNode) bool {
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) []fastJsonNode {
-	if attrs, ok := enc.childrenMap[fj]; ok {
-		return attrs // Not copying it for now.
-	}
-
-	// Returning nil if no attrs are found.
-	return nil
+	// Return nil if no attrs are found.
+	return enc.childrenMap[fj]
 }
 
 func (enc *encoder) AddValue(fj fastJsonNode, attr uint16, v types.Val) error {
@@ -731,8 +727,9 @@ func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 	return parentSlice, nil
 }
 
-func (enc *encoder) addGroupby(
-	fj fastJsonNode, sg *SubGraph, res *groupResults, fname string) error {
+func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
+	res *groupResults, fname string) error {
+
 	// Don't add empty groupby
 	if len(res.group) == 0 {
 		return nil
@@ -756,7 +753,7 @@ func (enc *encoder) addGroupby(
 	return nil
 }
 
-func (enc *encoder) addAggregations(fj fastJsonNode, sg *SubGraph) error {
+func (sg *SubGraph) addAggregations(enc *encoder, fj fastJsonNode) error {
 	for _, child := range sg.Children {
 		aggVal, ok := child.Params.UidToVal[0]
 		if !ok {
@@ -770,7 +767,7 @@ func (enc *encoder) addAggregations(fj fastJsonNode, sg *SubGraph) error {
 		if child.Params.Normalize && child.Params.Alias == "" {
 			continue
 		}
-		fieldName := aggWithVarFieldName(child)
+		fieldName := child.aggWithVarFieldName()
 		n1 := enc.newNodeWithAttr(enc.idForAttr(fieldName))
 		if err := enc.AddValue(n1, enc.idForAttr(fieldName), aggVal); err != nil {
 			return err
@@ -783,7 +780,7 @@ func (enc *encoder) addAggregations(fj fastJsonNode, sg *SubGraph) error {
 	return nil
 }
 
-func handleCountUIDNodes(sg *SubGraph, enc *encoder, n fastJsonNode, count int) (bool, error) {
+func (sg *SubGraph) handleCountUIDNodes(enc *encoder, n fastJsonNode, count int) (bool, error) {
 	addedNewChild := false
 	fieldName := sg.fieldName()
 	for _, child := range sg.Children {
@@ -813,7 +810,7 @@ func handleCountUIDNodes(sg *SubGraph, enc *encoder, n fastJsonNode, count int) 
 
 func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	if sg.Params.IsEmpty {
-		return enc.addAggregations(fj, sg)
+		return sg.addAggregations(enc, fj)
 	}
 
 	if sg.uidMatrix == nil {
@@ -821,7 +818,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return nil
 	}
 
-	hasChild, err := handleCountUIDNodes(sg, enc, fj, len(sg.DestUIDs.Uids))
+	hasChild, err := sg.handleCountUIDNodes(enc, fj, len(sg.DestUIDs.Uids))
 	if err != nil {
 		return err
 	}
@@ -829,7 +826,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		if len(sg.GroupbyRes) == 0 {
 			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
-		if err := enc.addGroupby(fj, sg, sg.GroupbyRes[0], sg.Params.Alias); err != nil {
+		if err := sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias); err != nil {
 			return err
 		}
 		return nil
@@ -932,15 +929,15 @@ func (sg *SubGraph) fieldName() string {
 	return fieldName
 }
 
-func addCount(pc *SubGraph, enc *encoder, count uint64, dst fastJsonNode) error {
-	if pc.Params.Normalize && pc.Params.Alias == "" {
+func (sg *SubGraph) addCount(enc *encoder, count uint64, dst fastJsonNode) error {
+	if sg.Params.Normalize && sg.Params.Alias == "" {
 		return nil
 	}
 	c := types.ValueForType(types.IntID)
 	c.Value = int64(count)
-	fieldName := pc.Params.Alias
+	fieldName := sg.Params.Alias
 	if fieldName == "" {
-		fieldName = fmt.Sprintf("count(%s)", pc.Attr)
+		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
 	if err := enc.AddValue(dst, enc.idForAttr(fieldName), c); err != nil {
 		return err
@@ -949,33 +946,33 @@ func addCount(pc *SubGraph, enc *encoder, count uint64, dst fastJsonNode) error 
 	return nil
 }
 
-func aggWithVarFieldName(pc *SubGraph) string {
-	if pc.Params.Alias != "" {
-		return pc.Params.Alias
+func (sg *SubGraph) aggWithVarFieldName() string {
+	if sg.Params.Alias != "" {
+		return sg.Params.Alias
 	}
-	fieldName := fmt.Sprintf("val(%v)", pc.Params.Var)
-	if len(pc.Params.NeedsVar) > 0 {
-		fieldName = fmt.Sprintf("val(%v)", pc.Params.NeedsVar[0].Name)
-		if pc.SrcFunc != nil {
-			fieldName = fmt.Sprintf("%s(%v)", pc.SrcFunc.Name, fieldName)
+	fieldName := fmt.Sprintf("val(%v)", sg.Params.Var)
+	if len(sg.Params.NeedsVar) > 0 {
+		fieldName = fmt.Sprintf("val(%v)", sg.Params.NeedsVar[0].Name)
+		if sg.SrcFunc != nil {
+			fieldName = fmt.Sprintf("%s(%v)", sg.SrcFunc.Name, fieldName)
 		}
 	}
 	return fieldName
 }
 
-func addInternalNode(pc *SubGraph, enc *encoder, uid uint64, dst fastJsonNode) error {
-	sv, ok := pc.Params.UidToVal[uid]
+func (sg *SubGraph) addInternalNode(enc *encoder, uid uint64, dst fastJsonNode) error {
+	sv, ok := sg.Params.UidToVal[uid]
 	if !ok || sv.Value == nil {
 		return nil
 	}
-	fieldName := aggWithVarFieldName(pc)
+	fieldName := sg.aggWithVarFieldName()
 	if err := enc.AddValue(dst, enc.idForAttr(fieldName), sv); err != nil {
 		return err
 	}
 	return nil
 }
 
-func addCheckPwd(pc *SubGraph, enc *encoder, vals []*pb.TaskValue, dst fastJsonNode) error {
+func (sg *SubGraph) addCheckPwd(enc *encoder, vals []*pb.TaskValue, dst fastJsonNode) error {
 	c := types.ValueForType(types.BoolID)
 	if len(vals) == 0 {
 		c.Value = false
@@ -983,9 +980,9 @@ func addCheckPwd(pc *SubGraph, enc *encoder, vals []*pb.TaskValue, dst fastJsonN
 		c.Value = task.ToBool(vals[0])
 	}
 
-	fieldName := pc.Params.Alias
+	fieldName := sg.Params.Alias
 	if fieldName == "" {
-		fieldName = fmt.Sprintf("checkpwd(%s)", pc.Attr)
+		fieldName = fmt.Sprintf("checkpwd(%s)", sg.Attr)
 	}
 	if err := enc.AddValue(dst, enc.idForAttr(fieldName), c); err != nil {
 		return err
@@ -1033,7 +1030,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			if pc.Params.Normalize && pc.Params.Alias == "" {
 				continue
 			}
-			if err := addInternalNode(pc, enc, uid, dst); err != nil {
+			if err := pc.addInternalNode(enc, uid, dst); err != nil {
 				return err
 			}
 			continue
@@ -1057,7 +1054,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				return errors.Errorf("Unexpected length while adding Groupby. Idx: [%v], len: [%v]",
 					idx, len(pc.GroupbyRes))
 			}
-			if err := enc.addGroupby(dst, pc, pc.GroupbyRes[idx], pc.fieldName()); err != nil {
+			if err := pc.addGroupby(enc, dst, pc.GroupbyRes[idx], pc.fieldName()); err != nil {
 				return err
 			}
 			continue
@@ -1066,12 +1063,12 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		fieldName := pc.fieldName()
 		switch {
 		case len(pc.counts) > 0:
-			if err := addCount(pc, enc, uint64(pc.counts[idx]), dst); err != nil {
+			if err := pc.addCount(enc, uint64(pc.counts[idx]), dst); err != nil {
 				return err
 			}
 
 		case pc.SrcFunc != nil && pc.SrcFunc.Name == "checkpwd":
-			if err := addCheckPwd(pc, enc, pc.valueMatrix[idx].Values, dst); err != nil {
+			if err := pc.addCheckPwd(enc, pc.valueMatrix[idx].Values, dst); err != nil {
 				return err
 			}
 
@@ -1184,7 +1181,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			}
 
 			// add value for count(uid) nodes if any.
-			if _, err := handleCountUIDNodes(pc, enc, dst, len(ul.Uids)); err != nil {
+			if _, err := pc.handleCountUIDNodes(enc, dst, len(ul.Uids)); err != nil {
 				return err
 			}
 		default:
@@ -1231,8 +1228,8 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 						fieldNameWithTag += "@" + lang
 					}
 					encodeAsList := pc.List && len(lang) == 0
-					err := enc.AddListValue(dst, enc.idForAttr(fieldNameWithTag), sv, encodeAsList)
-					if err != nil {
+					if err := enc.AddListValue(dst, enc.idForAttr(fieldNameWithTag),
+						sv, encodeAsList); err != nil {
 						return err
 					}
 					continue
