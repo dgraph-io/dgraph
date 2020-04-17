@@ -696,17 +696,19 @@ invalid_schemas:
       "locations":[{"line":1, "column":6}]},
     ]
 
-  - name: "Conflicting secret directive and field"
+  -
+    name: "Conflicting secret directive and field"
     input: |
       type X @secret(field:"f1"){
         f1: String!
       }
     errlist: [
-    {"message": "Type X; has a secret directive and field of the same name f1",
-     "locations":[{"line":1, "column":6}]},
+      {"message": "Type X; has a secret directive and field of the same name f1",
+      "locations":[{"line":1, "column":6}]},
     ]
 
-  - name: "@dgraph(pred: ...) validation"
+  -
+    name: "@dgraph(pred: ...) validation"
     input: |
       interface V {
         f1: String @dgraph(pred: "ff1")
@@ -843,7 +845,8 @@ valid_schemas:
         A
       }
 
-  - name: "dgraph directive with correct reverse field works"
+  -
+    name: "dgraph directive with correct reverse field works"
     input: |
       type X {
         f1: [Y] @dgraph(pred: "~f1")
@@ -852,7 +855,8 @@ valid_schemas:
         f1: [X] @dgraph(pred: "f1")
       }
 
-  - name: "@dgraph predicate type validation gives no errors with non-null variations"
+  -
+    name: "@dgraph predicate type validation gives no errors with non-null variations"
     input: |
       type X {
         f1: String @dgraph(pred: "f1")

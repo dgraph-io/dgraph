@@ -991,7 +991,8 @@
         }
       cond: "@if(eq(len(Movie2), 1))"
 
-- name: "Top Level Duplicate XIDs with same object Test"
+-
+  name: "Top Level Duplicate XIDs with same object Test"
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input) {
@@ -1013,7 +1014,8 @@
   error:
     message: "failed to rewrite mutation payload because duplicate XID found: S1"
 
-- name: "Top Level Duplicate XIDs with different object Test"
+-
+  name: "Top Level Duplicate XIDs with different object Test"
   gqlmutation: |
     mutation addState($input: [AddStateInput!]!) {
       addState(input: $input) {
@@ -1035,7 +1037,8 @@
   error:
     message: "failed to rewrite mutation payload because duplicate XID found: S1"
 
-- name: "Deep Mutation Duplicate XIDs with same object Test"
+-
+  name: "Deep Mutation Duplicate XIDs with same object Test"
   gqlmutation: |
     mutation addCity($input: [AddCityInput!]!) {
       addCity(input: $input) {
@@ -1167,7 +1170,8 @@
       failed to rewrite mutation payload because duplicate XID found: S1
       failed to rewrite mutation payload because duplicate XID found: S2
 
-- name: "Deep Mutation Duplicate XIDs with different object Test"
+-
+  name: "Deep Mutation Duplicate XIDs with different object Test"
   gqlmutation: |
     mutation addStudent($input: [AddStudentInput!]!) {
       addStudent(input: $input) {
@@ -1248,7 +1252,8 @@
     message: |-
       failed to rewrite mutation payload because duplicate XID found: S1
 
-- name: "Duplicate XIDs in single mutation for Interface"
+-
+  name: "Duplicate XIDs in single mutation for Interface"
   gqlmutation: |
     mutation addStudent($input: [AddStudentInput!]!) {
       addStudent(input: $input) {
