@@ -3024,3 +3024,60 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 
 	return filter
 }
+
+func queryTypenameInMutationPayload(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				state {
+					__typename
+					xcode
+					name
+				}
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"__typename": "State",
+				"xcode": "S1",
+				"name": "State1"
+			}],
+			"__typename": "AddStatePayload"
+		}
+	}`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, 1, nil)
+}
+
+func ensureAliasInMutationPayload(t *testing.T) {
+	// querying __typename, numUids and state with alias
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				type: __typename
+				count: numUids
+				op: state {
+					xcode
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
+	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, 1, nil)
+}

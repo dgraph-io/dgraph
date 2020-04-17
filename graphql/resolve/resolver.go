@@ -75,10 +75,13 @@ type ResolverFactory interface {
 // in resolving field and applies a completion step - for example, apply GraphQL
 // error propagation or massaging error paths.
 type ResultCompleter interface {
-	Complete(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+	Complete(ctx context.Context, resolved *Resolved)
 }
 
 // RequestResolver can process GraphQL requests and write GraphQL JSON responses.
+// A schema.Request may contain any number of queries or mutations (never both).
+// RequestResolver.Resolve() resolves all of them by finding the resolved answers
+// of the component queries/mutations and joining into a single schema.Response.
 type RequestResolver struct {
 	schema    schema.Schema
 	resolvers ResolverFactory
@@ -120,28 +123,20 @@ type dgraphExecutor struct {
 type adminExecutor struct {
 }
 
-// A Resolved is the result of resolving a single query or mutation.
-// A schema.Request may contain any number of queries or mutations (never both).
-// RequestResolver.Resolve() resolves all of them by finding the resolved answers
-// of the component queries/mutations and joining into a single schema.Response.
+// A Resolved is the result of resolving a single field - generally a query or mutation.
 type Resolved struct {
-	Data []byte
-	Err  error
+	Data  interface{}
+	Field schema.Field
+	Err   error
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
 // ResultCompleter from a function.  Based on the http.HandlerFunc pattern.
-type CompletionFunc func(
-	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error)
+type CompletionFunc func(ctx context.Context, resolved *Resolved)
 
-// Complete calls cf(ctx, field, result, err)
-func (cf CompletionFunc) Complete(
-	ctx context.Context,
-	field schema.Field,
-	result []byte,
-	err error) ([]byte, error) {
-
-	return cf(ctx, field, result, err)
+// Complete calls cf(ctx, resolved)
+func (cf CompletionFunc) Complete(ctx context.Context, resolved *Resolved) {
+	cf(ctx, resolved)
 }
 
 // DgraphAsQueryExecutor builds a QueryExecutor for proxying requests through dgraph.
@@ -207,7 +202,7 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		return &queryResolver{
 			queryRewriter:   NoOpQueryRewrite(),
 			queryExecutor:   introspectionExecution(q),
-			resultCompleter: removeObjectCompletion(noopCompletion),
+			resultCompleter: StdQueryCompletion(),
 		}
 	}
 
@@ -246,7 +241,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
 			return NewMutationResolver(
-				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+				fns.Drw, NoOpQueryExecution(), fns.Me, deleteCompletion())
 		})
 	}
 
@@ -271,23 +266,17 @@ func NewResolverFactory(
 
 // StdQueryCompletion is the completion steps that get run for queries
 func StdQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(completeDgraphResult)
-}
-
-// AliasQueryCompletion is the completion steps that get run for admin queries
-// those don't have the alias built in like Dgraph queries.
-func AliasQueryCompletion() CompletionFunc {
-	return removeObjectCompletion(injectAliasCompletion(completeResult))
+	return noopCompletion
 }
 
 // StdMutationCompletion is the completion steps that get run for add and update mutations
 func StdMutationCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, completeDgraphResult))
+	return noopCompletion
 }
 
 // StdDeleteCompletion is the completion steps that get run for add and update mutations
 func StdDeleteCompletion(name string) CompletionFunc {
-	return addPathCompletion(name, addRootFieldCompletion(name, deleteCompletion()))
+	return deleteCompletion()
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
@@ -369,7 +358,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				defer wg.Done()
 				defer api.PanicHandler(
 					func(err error) {
-						allResolved[storeAt] = &Resolved{Err: err}
+						allResolved[storeAt] = &Resolved{
+							Data:  nil,
+							Field: q,
+							Err:   err}
 					})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
@@ -382,8 +374,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
-			resp.WithError(res.Err)
-			resp.AddData(res.Data)
+			addResult(resp, res)
 		}
 	}
 	// A single request can contain either queries or mutations - not both.
@@ -421,8 +412,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
-			resp.WithError(res.Err)
-			resp.AddData(res.Data)
+			addResult(resp, res)
 		}
 	case op.IsSubscription():
 		resolveQueries()
@@ -431,144 +421,31 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	return resp
 }
 
+func addResult(resp *schema.Response, res *Resolved) {
+	// Errors should report the "path" into the result where the error was found.
+	//
+	// The definition of a path in a GraphQL error is here:
+	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+	// For a query like (assuming field f is of a list type and g is a scalar type):
+	// - q { f { g } }
+	// a path to the 2nd item in the f list would look like:
+	// - [ "q", "f", 2, "g" ]
+	path := make([]interface{}, 0, maxPathLength(res.Field))
+	var b []byte
+	var gqlErr x.GqlErrorList
+
+	if res.Data != nil {
+		b, gqlErr = completeObject(path, res.Field.Type(), []schema.Field{res.Field},
+			res.Data.(map[string]interface{}))
+	}
+
+	resp.WithError(res.Err)
+	resp.WithError(gqlErr)
+	resp.AddData(b)
+}
+
 // noopCompletion just passes back it's result and err arguments
-func noopCompletion(
-	ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-	return result, err
-}
-
-// removeObjectCompletion chops leading '{' and trailing '}' from a JSON object
-//
-// The final GraphQL result gets built like
-// { data:
-//    {
-//      q1: {...},
-//      q2: [ {...}, {...} ],
-//      ...
-//    }
-// }
-//
-// When we are building a single one of the q's, the result is built initially as
-// { q1: {...} }
-// so the completed result should be
-// q1: {...}
-func removeObjectCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(
-		func(ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-			res, err := cf(ctx, field, result, err)
-			if len(res) >= 2 {
-				res = res[1 : len(res)-1]
-			}
-			return res, err
-		})
-}
-
-// addRootFieldCompletion adds an extra object name to the start of a result.
-//
-// A mutation always looks like
-//   `addFoo(...) { foo { ... } }`
-// What's resolved initially is
-//   `foo { ... }`
-// So `addFoo: ...` is added.
-func addRootFieldCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-
-		res, err := cf(ctx, field, result, err)
-
-		var b bytes.Buffer
-		x.Check2(b.WriteString("\""))
-		x.Check2(b.WriteString(name))
-		x.Check2(b.WriteString(`": `))
-		if len(res) > 0 {
-			x.Check2(b.Write(res))
-		} else {
-			x.Check2(b.WriteString("null"))
-		}
-
-		return b.Bytes(), err
-	})
-}
-
-// addPathCompletion adds an extra object name to the start of every error path
-// arrising from applying cf.
-//
-// A mutation always looks like
-//   `addFoo(...) { foo { ... } }`
-// But cf's error paths begin at `foo`, so `addFoo` needs to be added to all.
-func addPathCompletion(name string, cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-
-		res, err := cf(ctx, field, result, err)
-
-		resErrs := schema.AsGQLErrors(err)
-		for _, err := range resErrs {
-			if len(err.Path) > 0 {
-				err.Path = append([]interface{}{name}, err.Path...)
-			}
-		}
-
-		return res, resErrs
-	})
-}
-
-// injectAliasCompletion takes a result with names as per the type names and swaps those for
-// any aliases specified in the query before apply cf.
-func injectAliasCompletion(cf CompletionFunc) CompletionFunc {
-	return CompletionFunc(func(
-		ctx context.Context, field schema.Field, result []byte, err error) ([]byte, error) {
-
-		if len(result) == 0 {
-			return nil, schema.AsGQLErrors(err)
-		}
-
-		var val interface{}
-		if marshErr := json.Unmarshal(result, &val); marshErr != nil {
-			return nil,
-				schema.AppendGQLErrs(marshErr,
-					schema.GQLWrapLocationf(err, field.Location(), "unable to complete result"))
-		}
-
-		var aliased interface{}
-		var resErr error
-		switch val := val.(type) {
-		case []interface{}:
-			aliased, resErr = aliasList(field, val)
-		case map[string]interface{}:
-			aliased, resErr = aliasObject([]schema.Field{field}, val)
-		case interface{}:
-			aliased, resErr = aliasValue(field, val)
-		}
-
-		res, marshErr := json.Marshal(aliased)
-		err = schema.AppendGQLErrs(err, marshErr)
-
-		return cf(ctx, field, res, schema.AppendGQLErrs(err, resErr))
-	})
-}
-
-// completeResult takes a result like {"res":{"a":...,"b":...}} and does the standard
-// object completion.  This is different to doing completion from Dgraph, because that requires
-// handling {"res":[{...}]} even if we expect a single value
-func completeResult(ctx context.Context, field schema.Field, result []byte, e error) (
-	[]byte, error) {
-
-	var val interface{}
-	if err := json.Unmarshal(result, &val); err != nil {
-		return nil, schema.GQLWrapLocationf(err, field.Location(), "unable to complete result")
-	}
-
-	path := make([]interface{}, 0, maxPathLength(field))
-
-	switch val := val.(type) {
-	case []interface{}:
-		return completeList(path, field, val)
-	case map[string]interface{}:
-		return completeObject(path, field.Type(), []schema.Field{field}, val)
-	}
-	return completeValue(path, field, val)
-}
+func noopCompletion(ctx context.Context, resolved *Resolved) {}
 
 // Once a result has been returned from Dgraph, that result needs to be worked
 // through for two main reasons:
@@ -635,8 +512,12 @@ func completeResult(ctx context.Context, field schema.Field, result []byte, e er
 //
 // Returned errors are generally lists of errors resulting from the value completion
 // algorithm that may emit multiple errors
-func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []byte, e error) (
-	[]byte, error) {
+func completeDgraphResult(
+	ctx context.Context,
+	field schema.Field,
+	dgResult []byte,
+	e error) *Resolved {
+
 	span := trace.FromContext(ctx)
 	stop := x.SpanTimer(span, "completeDgraphResult")
 	defer stop()
@@ -652,27 +533,28 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 	//
 	//    { }  --->  { "q": null }
 
-	errs := schema.AsGQLErrors(e)
-	if len(dgResult) == 0 {
-		return nil, errs
+	nullResponse := func(err error) *Resolved {
+		return &Resolved{
+			Data:  nil,
+			Field: field,
+			Err:   err,
+		}
 	}
 
-	nullResponse := func() []byte {
-		var buf bytes.Buffer
-		x.Check2(buf.WriteString(`{ "`))
-		x.Check2(buf.WriteString(field.ResponseName()))
-		x.Check2(buf.WriteString(`": null }`))
-		return buf.Bytes()
-	}
-
-	dgraphError := func() ([]byte, error) {
+	dgraphError := func() *Resolved {
 		glog.Errorf("Could not process Dgraph result : \n%s", string(dgResult))
-		return nullResponse(),
+		return nullResponse(
 			x.GqlErrorf("Couldn't process the result from Dgraph.  " +
 				"This probably indicates a bug in the Dgraph GraphQL layer.  " +
 				"Please let us know : https://github.com/dgraph-io/dgraph/issues.").
-				WithLocations(field.Location())
+				WithLocations(field.Location()))
 	}
+
+	if len(dgResult) == 0 {
+		return nullResponse(e)
+	}
+
+	errs := schema.AsGQLErrors(e)
 
 	// Dgraph should only return {} or a JSON object.  Also,
 	// GQL type checking should ensure query results are only object types
@@ -684,8 +566,8 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		glog.Errorf("%+v \n Dgraph result :\n%s\n",
 			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
-		return nullResponse(),
-			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result")
+		return nullResponse(
+			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
 	switch val := valToComplete[field.ResponseName()].(type) {
@@ -734,34 +616,12 @@ func completeDgraphResult(ctx context.Context, field schema.Field, dgResult []by
 		// case
 	}
 
-	// Errors should report the "path" into the result where the error was found.
-	//
-	// The definition of a path in a GraphQL error is here:
-	// https://graphql.github.io/graphql-spec/June2018/#sec-Errors
-	// For a query like (assuming field f is of a list type and g is a scalar type):
-	// - q { f { g } }
-	// a path to the 2nd item in the f list would look like:
-	// - [ "q", "f", 2, "g" ]
-	path := make([]interface{}, 0, maxPathLength(field))
-
-	completed, gqlErrs := completeObject(
-		path, field.Type(), []schema.Field{field}, valToComplete)
-
-	if len(completed) < 2 {
-		// This could only occur completeObject crushed the whole query, but
-		// that should never happen because the result type shouldn't be '!'.
-		// We should wrap enough testing around the schema generation that this
-		// just can't happen.
-		//
-		// This isn't really an observable GraphQL error, so no need to add anything
-		// to the payload of errors for the result.
-		glog.Errorf("Top level completeObject didn't return a result.  " +
-			"That's only possible if the query result is non-nullable.  " +
-			"There's something wrong in the GraphQL schema.")
-		return nullResponse(), append(errs, gqlErrs...)
+	return &Resolved{
+		Data:  valToComplete,
+		Field: field,
+		Err:   errs,
 	}
 
-	return completed, append(errs, gqlErrs...)
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -1051,47 +911,4 @@ func maxPathLength(f schema.Field) int {
 	}
 
 	return 1 + childMax
-}
-
-// TODO: Include this behavior into the standard algorithm above.
-// That is, allow the completion algorithms to be like a walk through the
-// result structure and then we can apply different behaviors as each point.
-// That should eliminate unpacking and packing the result multiple times and
-// allow the result processing to be really flexible.
-func aliasValue(field schema.Field, val interface{}) (interface{}, error) {
-	switch val := val.(type) {
-	case map[string]interface{}:
-		return aliasObject(field.SelectionSet(), val)
-	case []interface{}:
-		return aliasList(field, val)
-	default:
-		return val, nil
-	}
-}
-
-func aliasList(field schema.Field, values []interface{}) ([]interface{}, error) {
-	var errs error
-	var result []interface{}
-	for _, b := range values {
-		r, err := aliasValue(field, b)
-		errs = schema.AppendGQLErrs(errs, err)
-		result = append(result, r)
-	}
-	return result, errs
-}
-
-func aliasObject(
-	fields []schema.Field,
-	res map[string]interface{}) (interface{}, error) {
-
-	var errs error
-	result := make(map[string]interface{})
-
-	for _, f := range fields {
-		r, err := aliasValue(f, res[f.Name()])
-		result[f.ResponseName()] = r
-		errs = schema.AppendGQLErrs(errs, err)
-	}
-
-	return result, errs
 }

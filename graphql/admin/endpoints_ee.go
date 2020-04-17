@@ -64,6 +64,11 @@ const adminTypes = `
 		location: String!
 
 		"""
+		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		"""
+		backupId: String!
+
+		"""
 		Access key credential for the destination.
 		"""
 		accessKey: String
