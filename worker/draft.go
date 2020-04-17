@@ -572,11 +572,22 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return nil
 
 	case proposal.Restore != nil:
-		// TODO: should startTask be retried when there's an indexing going on in the
-		// background?
-		closer, err := n.startTask(opRestore)
-		if err != nil {
-			return errors.Wrapf(err, "could not start opRestore task")
+		var err error
+		var closer *y.Closer
+		for {
+			closer, err = n.startTask(opRestore)
+			if err != nil {
+				// This error happens because there's another task running. Snapshots and
+				// restores do not happen at the same time and rollups are cancelled by restores.
+				// That leaves ndexing as the only option. Wait for the indexing to complete
+				// before trying to
+				glog.Infof("Waiting for indexing to finish before starting the backup restore.")
+				gr.Node.waitForTask(opIndexing)
+				// Sleep for a bit to avoid hogging resources.
+				time.Sleep(time.Millisecond * 100)
+			} else {
+				break
+			}
 		}
 		defer closer.Done()
 
