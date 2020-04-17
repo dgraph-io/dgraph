@@ -57,7 +57,6 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 				return 0, err
 			}
 			defer db.Close()
-			fmt.Printf("Restoring groupId: %d\n", groupId)
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
