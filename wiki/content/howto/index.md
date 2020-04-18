@@ -116,9 +116,9 @@ $ dgraph debug --postings ./p --keyfile ./key_file
 {{% notice "note" %}}
 The key file contains the key used to decrypt/encrypt the db. This key should be kept secret. As a best practice, 
 
-- Do not store permanently the key in the local disk.  Delete it after using it for debug tool.
+- Do not store the key file on the disk permanently. Back it up in a safe place and delete it after using it with the debug tool.
 
-- If the above is not possible, make sure correct privileges are set on key file. Only the user who owns the dgraph process should be able to read / write the key file: `chmod 600` 
+- If the above is not possible, make sure correct privileges are set on the keyfile. Only the user who owns the dgraph process should be able to read / write the key file: `chmod 600` 
 {{% /notice %}}
 
 ### Debug Tool Output
