@@ -172,7 +172,7 @@ Encrypted backups are a Enterprise feature that are available from v20.03.1 and 
 
 A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
 
-For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all the full and incremental backups must be all encrypted or not. This flag helps with checking this restriction.
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
 
 ### AES And Chaining with Gzip
 
@@ -180,12 +180,7 @@ If encryption is turned on an alpha, then we use the configured encryption key. 
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
-
 ### Backup
-
-During **restore**: the first 16 bytes is read as the IV before decrypting the rest of the data.
-
-During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
 
@@ -193,16 +188,7 @@ Backup is an online tool, meaning it is available when alpha is running. For enc
 encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
 {{% /notice %}}
 
-For encryption during backup, we chain writers as follows:
-
-`Plaintext Data → Gzip → AES Encryption → Handler to FileSystem/Minio/AWS → encrypted backup`
-
 The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
-
-For decryption during restore, we chain readers as follows:
-
-`encrypted-backup → handler to FileSystem/Minio/AWS  → AES Decryption → GUnzip → Plaintext Data`
-
 
 ### Restore from Backup
 
