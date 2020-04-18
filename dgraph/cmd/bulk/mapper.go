@@ -231,10 +231,12 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid := m.uid(nq.GetSubject())
+	x.AssertTrue(sid != 0)
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
+		x.AssertTrue(oid != 0)
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		var err error
