@@ -495,3 +495,8 @@ func (s *Service) checkForRuntimeChanges() error {
 func (s *Service) InsertKey(kp crypto.Keypair) {
 	s.keys.Insert(kp)
 }
+
+//IsBabeAuthority returns true if node is BABE authority
+func (s *Service) IsBabeAuthority() bool {
+	return s.isBabeAuthority
+}

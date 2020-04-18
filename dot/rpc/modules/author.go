@@ -79,7 +79,7 @@ type ExtrinsicStatus struct {
 }
 
 // ExtrinsicHashResponse is used as Extrinsic hash response
-type ExtrinsicHashResponse common.Hash
+type ExtrinsicHashResponse string
 
 // NewAuthorModule creates a new Author module.
 func NewAuthorModule(coreAPI CoreAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
@@ -157,24 +157,26 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 
 	log.Trace("[rpc]", "extrinsic", extBytes)
 
-	// TODO: validate transaction before submitting to tx queue
-
 	ext := types.Extrinsic(extBytes)
-
-	// TODO: form valid transaction by decoding tx bytes
-
-	vtx := &transaction.ValidTransaction{
-		Extrinsic: ext,
-		Validity:  nil,
-	}
-
-	hash, err := cm.txQueueAPI.Push(vtx)
+	// validate the transaction
+	txv, err := cm.coreAPI.ValidateTransaction(ext)
 	if err != nil {
 		return err
 	}
 
-	*res = ExtrinsicHashResponse(hash)
-	log.Info("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
+	vtx := transaction.NewValidTransaction(ext, txv)
+
+	if cm.coreAPI.IsBabeAuthority() {
+		hash, err := cm.txQueueAPI.Push(vtx)
+		if err != nil {
+			log.Trace("[rpc] submitted extrinsic failed to push transaction to queue", "error", err)
+			return err
+		}
+
+		*res = ExtrinsicHashResponse(hash.String())
+		log.Trace("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
+	}
+
 	return nil
 }
 

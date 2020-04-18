@@ -36,13 +36,30 @@ func (s *Service) ValidateTransaction(e types.Extrinsic) (*transaction.Validity,
 	}
 
 	if ret[0] != 0 {
-		return nil, ErrCannotValidateTx
+		return nil, determineError(ret)
 	}
 
 	v := transaction.NewValidity(0, [][]byte{{}}, [][]byte{{}}, 0, false)
 	_, err = scale.Decode(ret[1:], v)
 
 	return v, err
+}
+
+func determineError(res []byte) error {
+	// confirm we have an error
+	if res[0] == 0 {
+		return nil
+	}
+
+	if res[1] == 0 {
+		// transaction is invalid
+		return ErrInvalidTransaction
+	}
+	if res[1] == 1 {
+		// transaction validity can't be determined
+		return ErrUnknownTransaction
+	}
+	return ErrCannotValidateTx
 }
 
 // TODO: this seems to be out-of-date, the call is now named Grandpa_authorities and takes a block number.
