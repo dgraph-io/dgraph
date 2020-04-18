@@ -476,6 +476,9 @@ func Parse(key []byte) (ParsedKey, error) {
 			return p, errors.Errorf("uid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
+		if p.Uid == 0 {
+			return p, errors.Errorf("Invalid UID with value 0")
+		}
 
 		if !p.HasStartUid {
 			break
