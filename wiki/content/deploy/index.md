@@ -1241,8 +1241,8 @@ These HTTP endpoints are deprecated and will be removed in the next release. Ple
 {{% /notice %}}
 
 * `/health?all` returns information about the health of all the servers in the cluster.
-* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
-* `/admin/export` initiates a data [export]({{< relref "#export">}}).
+* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown" >}}) of the Alpha.
+* `/admin/export` initiates a data [export]({{< relref "#export" >}}).
 
 By default the Alpha listens on `localhost` for admin actions (the loopback address only accessible from the same machine). The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections.
 
@@ -1304,10 +1304,10 @@ Here’s an example of JSON returned from the above query:
 - `version`: Version of Dgraph running the Alpha or Zero server.
 - `uptime`: Time in nanoseconds since the Alpha server is up and running.
 - `address`: IP_ADDRESS:PORT of the Dgraph Alpha, that other Dgraph Alphas use to talk to this instance.
-- `group`: Group assigned based on the replication factor. [Read more](https://docs.dgraph.io/deploy/#cluster-setup).
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
 - `lastEcho`: Last time in Unix epoch when the instance was contacted by another Alpha or Zero server.
 - `ongoing`: List of ongoing operations in the background.
-- `indexing`: List of predicates for which indexes are built in the background.
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
 
 The same information is available from the `/health` and `/health?all` endpoints of Alpha server.
 
