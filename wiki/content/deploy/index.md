@@ -1299,11 +1299,17 @@ Here’s an example of JSON returned from the above query:
 }
 ```
 
-- `version`: Version of Dgraph running the Alpha server.
-- `instance`: Name of the instance. Always set to `alpha`.
+- `instance`: Name of the instance. Either `alpha` or `zero`.
+- `status`: Health status of the instance. Either `healthy` or `unhealthy`.
+- `version`: Version of Dgraph running the Alpha or Zero server.
 - `uptime`: Time in nanoseconds since the Alpha server is up and running.
+- `address`: IP_ADDRESS:PORT of the Dgraph Alpha, that other Dgraph Alphas use to talk to this instance.
+- `group`: Group assigned based on the replication factor. [Read more](https://docs.dgraph.io/deploy/#cluster-setup).
+- `lastEcho`: Last time in Unix epoch when the instance was contacted by another Alpha or Zero server.
+- `ongoing`: List of ongoing operations in the background.
+- `indexing`: List of predicates for which indexes are built in the background.
 
-The same information is available from the `/health` and `/health?all` endpoints.
+The same information is available from the `/health` and `/health?all` endpoints of Alpha server.
 
 ## More about Dgraph Zero
 
