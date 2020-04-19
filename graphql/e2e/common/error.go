@@ -241,9 +241,9 @@ func panicCatcher(t *testing.T) {
 
 	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -258,24 +258,26 @@ func panicCatcher(t *testing.T) {
 					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
-			require.Nil(t, gqlResponse.Data)
+			require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
 		})
 	}
 }
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil
+	return nil, nil, nil
 }
 
 func (dg *panicClient) Mutate(
 	ctx context.Context,
 	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
+	*schema.Extensions, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil, nil
+	return nil, nil, nil, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.
@@ -283,12 +285,12 @@ func (dg *panicClient) Mutate(
 func clientInfoLogin(t *testing.T) {
 	loginQuery := &GraphQLParams{
 		Query: `mutation {
-  						login(input: {userId: "groot", password: "password"}) {
-    						response {
-      							accessJWT
-    						}
-  						}
-					}`,
+					login(userId: "groot", password: "password") {
+						response {
+							accessJWT
+						}
+					}
+				}`,
 	}
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
@@ -299,14 +301,14 @@ func clientInfoLogin(t *testing.T) {
 	mErr := resolve.MutationResolverFunc(
 		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
 			loginCtx = ctx
-			return &resolve.Resolved{Err: errFunc(mutation.ResponseName())}, false
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName()), Field: mutation}, false
 		})
 
 	resolverFactory := resolve.NewResolverFactory(nil, mErr).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()

@@ -263,17 +263,22 @@ func HttpLogin(params *LoginParams) (string, string, error) {
 		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
-	response, found := data["response"].(map[string]interface{})
+	l, found := data["login"].(map[string]interface{})
+	if !found {
+		return "", "", errors.Wrapf(err, "data entry found in the output")
+	}
+
+	response, found := l["response"].(map[string]interface{})
 	if !found {
 		return "", "", errors.Wrapf(err, "data entry found in the output")
 	}
 
 	newAccessJwt, found := response["accessJWT"].(string)
-	if !found {
+	if !found || newAccessJwt == "" {
 		return "", "", errors.Errorf("no access JWT found in the output")
 	}
 	newRefreshJwt, found := response["refreshJWT"].(string)
-	if !found {
+	if !found || newRefreshJwt == "" {
 		return "", "", errors.Errorf("no refresh JWT found in the output")
 	}
 

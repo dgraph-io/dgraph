@@ -105,6 +105,7 @@ type Mutation interface {
 	MutationType() MutationType
 	MutatedType() Type
 	QueryField() Field
+	NumUidsField() Field
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -233,7 +234,7 @@ func (o *operation) Schema() Schema {
 }
 
 func (o *operation) Queries() (qs []Query) {
-	if !o.IsQuery() {
+	if o.IsMutation() {
 		return
 	}
 
@@ -356,6 +357,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
 		if inputTyp.BuiltIn || inputTyp.Name == "Query" || inputTyp.Name == "Mutation" ||
+			inputTyp.Name == "Subscription" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
 		}
@@ -621,8 +623,14 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 }
 
 func (f *field) Type() Type {
+	var t *ast.Type
+	if f.field != nil && f.field.Definition != nil {
+		// This is strange.  There was a case with a parsed schema and query where the field
+		// had a nil Definition ... how ???
+		t = f.field.Definition.Type
+	}
 	return &astType{
-		typ:             f.field.Definition.Type,
+		typ:             t,
 		inSchema:        f.op.inSchema.schema,
 		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
@@ -855,13 +863,22 @@ func (m *mutation) SelectionSet() []Field {
 }
 
 func (m *mutation) QueryField() Field {
-	for _, i := range m.SelectionSet() {
-		if i.Name() == NumUid {
+	for _, f := range m.SelectionSet() {
+		if f.Name() == NumUid || f.Name() == Typename {
 			continue
 		}
-		return i
+		return f
 	}
 	return m.SelectionSet()[0]
+}
+
+func (m *mutation) NumUidsField() Field {
+	for _, f := range m.SelectionSet() {
+		if f.Name() == NumUid {
+			return f
+		}
+	}
+	return nil
 }
 
 func (m *mutation) Location() x.Location {
@@ -1060,7 +1077,7 @@ func (t *astType) Nullable() bool {
 }
 
 func (t *astType) ListType() Type {
-	if t.typ.Elem == nil {
+	if t.typ == nil || t.typ.Elem == nil {
 		return nil
 	}
 	return &astType{typ: t.typ.Elem}
