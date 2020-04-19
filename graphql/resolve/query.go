@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -40,7 +41,7 @@ type QueryRewriter interface {
 // A QueryExecutor can execute a gql.GraphQuery and return a result.  The result of
 // a QueryExecutor doesn't need to be valid GraphQL results.
 type QueryExecutor interface {
-	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
+	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, *schema.Extensions, error)
 }
 
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from
@@ -53,7 +54,8 @@ type QueryRewritingFunc func(ctx context.Context, q schema.Query) (*gql.GraphQue
 
 // QueryExecutionFunc is an adapter that allows us to compose query execution and
 // build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
-type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte, error)
+type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error)
 
 // Resolve calls qr(ctx, query)
 func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -66,7 +68,8 @@ func (qr QueryRewritingFunc) Rewrite(ctx context.Context, q schema.Query) (*gql.
 }
 
 // Query calls qe(ctx, query)
-func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
+	*schema.Extensions, error) {
 	return qe(ctx, query)
 }
 
@@ -80,8 +83,9 @@ func NewQueryResolver(qr QueryRewriter, qe QueryExecutor, rc ResultCompleter) Qu
 
 // NoOpQueryExecution does nothing and returns nil.
 func NoOpQueryExecution() QueryExecutionFunc {
-	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-		return nil, nil
+	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte,
+		*schema.Extensions, error) {
+		return nil, nil, nil
 	})
 }
 
@@ -104,31 +108,63 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	res, err := qr.rewriteAndExecute(ctx, query)
+	resolved := qr.rewriteAndExecute(ctx, query)
+	if resolved.Data == nil {
+		resolved.Data = map[string]interface{}{query.ResponseName(): nil}
+	}
 
-	completed, err := qr.resultCompleter.Complete(ctx, query, res, err)
-	return &Resolved{Data: completed, Err: err}
+	qr.resultCompleter.Complete(ctx, resolved)
+	return resolved
 }
 
-func (qr *queryResolver) rewriteAndExecute(
-	ctx context.Context, query schema.Query) ([]byte, error) {
+func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Query) *Resolved {
+
+	emptyResult := func(err error) *Resolved {
+		return &Resolved{
+			Data:  map[string]interface{}{query.ResponseName(): nil},
+			Field: query,
+			Err:   err,
+		}
+	}
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
+		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
+			query.ResponseName()))
 	}
 
-	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
+	resp, ext, err := qr.queryExecutor.Query(ctx, dgQuery)
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
-		return nil, schema.GQLWrapf(err, "Dgraph query failed")
+		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
-	return resp, nil
+	// FIXME: just to get it running for now - this should have it's own .Resolve()
+	if query.QueryType() == schema.SchemaQuery {
+		var result map[string]interface{}
+		var err2 error
+		if len(resp) > 0 {
+			err2 = json.Unmarshal(resp, &result)
+		}
+
+		return &Resolved{
+			Data:       result,
+			Field:      query,
+			Err:        schema.AppendGQLErrs(err, err2),
+			Extensions: ext,
+		}
+	}
+
+	resolved := completeDgraphResult(ctx, query, resp, err)
+	resolved.Extensions = ext
+
+	return resolved
 }
 
 func introspectionExecution(q schema.Query) QueryExecutionFunc {
-	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-		return schema.Introspect(q)
+	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte,
+		*schema.Extensions, error) {
+		data, err := schema.Introspect(q)
+		return data, nil, err
 	})
 }
