@@ -228,7 +228,7 @@ They also can be used to create an edge between existing nodes!
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series [here]({{< relref "tutorials/tutorial-2/index.md" >}}).
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-2/index.md" >}}).
 
 ## Need Help
 

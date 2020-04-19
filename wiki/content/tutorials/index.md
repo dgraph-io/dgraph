@@ -14,7 +14,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-1/index.md">}}">
+            <a href="{{< relref "tutorial-1/index.md">}}">
               1 - Introduction
             </a>
           </div>
@@ -26,7 +26,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-2/index.md">}}">
+            <a href="{{< relref "tutorial-2/index.md">}}">
               2 - Basic Operations
             </a>
           </div>
@@ -38,7 +38,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-3/index.md">}}">
+            <a href="{{< relref "tutorial-3/index.md">}}">
               3 - Basic Types and Operations on them
             </a>
           </div>
@@ -50,7 +50,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-4/index.md">}}">
+            <a href="{{< relref "tutorial-4/index.md">}}">
               4 - Multi-Language Strings
             </a>
           </div>
@@ -62,7 +62,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-5/index.md">}}">
+            <a href="{{< relref "tutorial-5/index.md">}}">
               5 - String Indices and Modeling Tweet Graph
             </a>
           </div>
@@ -74,7 +74,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-6/index.md">}}">
+            <a href="{{< relref "tutorial-6/index.md">}}">
               6 - Advanced Text Search on Social Graphs
             </a>
           </div>
@@ -86,7 +86,7 @@ title = "Tutorials - Get Started with Dgraph series"
       <div class="col-12 col-sm-12">
         <div class="section-item">
           <div class="section-name">
-            <a href="{{< relref "tutorials/tutorial-7/index.md">}}">
+            <a href="{{< relref "tutorial-7/index.md">}}">
               7 - Fuzzy Search on Social Graphs
             </a>
           </div>

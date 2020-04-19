@@ -4,15 +4,15 @@ title = "Get Started with Dgraph - Fuzzy Search on Social Graphs"
 
 **Welcome to the seventh tutorial of getting started with Dgraph.**
 
-In the [previous tutorial]({{< relref "tutorials/tutorial-6/index.md" >}}), we learned about
+In the [previous tutorial]({{< relref "tutorial-6/index.md" >}}), we learned about
 building advanced text searches on social graphs in Dgraph, by modeling tweets
 as an example.
 We queried the tweets using the `fulltext` and `trigram` indices and implemented
 full-text and regular expression search on the tweets.
 
 In this tutorial, we'll continue exploring Dgraph's string querying
-capabilities using the twitter model from [the fifth]({{< relref "tutorials/tutorial-5/index.md" >}})
-and [the sixth]({{< relref "tutorials/tutorial-6/index.md" >}}) tutorials. In particular,
+capabilities using the twitter model from [the fifth]({{< relref "tutorial-5/index.md" >}})
+and [the sixth]({{< relref "tutorial-6/index.md" >}}) tutorials. In particular,
 we'll implement a `twitter username` search feature using the Dgraph's
 fuzzy search function.
 
@@ -130,14 +130,14 @@ Copy the mutation below, go to the mutation tab and click Run.
 }
 ```
 
-_Note: If you're new to Dgraph, and this is the first time you're running a mutation, we highly recommend reading the [first tutorial of the series before proceeding]({{< relref "tutorials/tutorial-1/index.md" >}})._
+_Note: If you're new to Dgraph, and this is the first time you're running a mutation, we highly recommend reading the [first tutorial of the series before proceeding]({{< relref "tutorial-1/index.md" >}})._
 
 Now you should have a graph with tweets, users, and hashtags,
 and it is ready for us to explore.
 
 {{% load-img "/images/tutorials/5/x-all-tweets.png" "tweet graph" %}}
 
-_Note: If you're curious to know how we modeled the tweets in Dgraph, refer to [the fifth tutorial]({{< relref "tutorials/tutorial-5/index.md" >}})._
+_Note: If you're curious to know how we modeled the tweets in Dgraph, refer to [the fifth tutorial]({{< relref "tutorial-5/index.md" >}})._
 
 Before we show you the fuzzy search in action, let's first understand what it is and how does it work.
 

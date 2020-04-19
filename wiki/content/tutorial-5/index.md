@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - String Indices and Modeling Tweet Graph"
 
 **Welcome to the fifth tutorial of getting started with Dgraph.**
 
-In the [previous tutorial]({{< relref "tutorials/tutorial-4/index.md" >}}), we learned about using multi-language strings and operations on them using [language tags](https://www.w3schools.com/tags/ref_language_codes.asp).
+In the [previous tutorial]({{< relref "tutorial-4/index.md" >}}), we learned about using multi-language strings and operations on them using [language tags](https://www.w3schools.com/tags/ref_language_codes.asp).
 
 In this tutorial, we'll model tweets in Dgraph and, using it, we'll learn more about string indices in Dgraph.
 
@@ -241,7 +241,7 @@ Open Ratel, go to the mutate tab, paste the mutation, and click Run.
 }
 ```
 
-_Note: If you're new to Dgraph, and yet to figure out how to run the database and use Ratel, we highly recommend reading the [first article of the series]({{< relref "tutorials/tutorial-1/index.md" >}})_
+_Note: If you're new to Dgraph, and yet to figure out how to run the database and use Ratel, we highly recommend reading the [first article of the series]({{< relref "tutorial-1/index.md" >}})_
 
 Here is the graph we built.
 
@@ -265,7 +265,7 @@ Let's start our tweet exploration by querying for the twitter users in the datab
 
 {{% load-img "/images/tutorials/5/j-users.png" "tweet model" %}}
 
-_Note: If the query syntax above looks not so familiar to you, check out the [first tutorial]({{< relref "tutorials/tutorial-1/index.md" >}})._
+_Note: If the query syntax above looks not so familiar to you, check out the [first tutorial]({{< relref "tutorial-1/index.md" >}})._
 
 We have four twitter users: `@hackintoshrao`, `@francesc`, `@dgraphlabs`, and `@gopherpalooza`.
 
@@ -287,7 +287,7 @@ Now, let's find their tweets and hashtags too.
 
 {{% load-img "/images/tutorials/5/y-author-tweet.png" "tweet model" %}}
 
-_Note: If the traversal query syntax in the above query is not familiar to you, [check out the third tutorial]({{< relref "tutorials/tutorial-3/index.md" >}}) of the series._
+_Note: If the traversal query syntax in the above query is not familiar to you, [check out the third tutorial]({{< relref "tutorial-3/index.md" >}}) of the series._
 
 Before we start querying our graph, let's learn a bit about database indices using a simple analogy.
 
@@ -343,7 +343,7 @@ Go to the query tab, type in the query, and click Run.
 
 {{% load-img "/images/tutorials/5/z-exact.png" "tweet model" %}}
 
-_Note: Refer to [the third tutorial]({{< relref "tutorials/tutorial-3/index.md" >}}), if you want to know about comparator functions like `eq` in detail._
+_Note: Refer to [the third tutorial]({{< relref "tutorial-3/index.md" >}}), if you want to know about comparator functions like `eq` in detail._
 
 Let's extend the last query also to fetch the hashtags and the mentions.
 
@@ -366,7 +366,7 @@ Let's extend the last query also to fetch the hashtags and the mentions.
 
 {{% load-img "/images/tutorials/5/l-hash-query.png" "tweet model" %}}
 
-_Note: If the traversal query syntax in the above query is not familiar to you, [check out the third tutorial]({{< relref "tutorials/tutorial-3/index.md" >}}) of the series._
+_Note: If the traversal query syntax in the above query is not familiar to you, [check out the third tutorial]({{< relref "tutorial-3/index.md" >}}) of the series._
 
 Did you know that string values in Dgraph can also be compared using comparators like greater-than or less-than? 
 
@@ -374,7 +374,7 @@ In our next section, let's see how to run the comparison functions other than `e
 
 ### Exact Index
 
-We discussed in the [third tutorial]({{< relref "tutorials/tutorial-3/index.md" >}}) that there five comparator functions in Dgraph.
+We discussed in the [third tutorial]({{< relref "tutorial-3/index.md" >}}) that there five comparator functions in Dgraph.
 
 Here's a quick recap:
 
@@ -493,7 +493,7 @@ Here's the matched tweet from the query response:
 
 {{% load-img "/images/tutorials/5/s-go-graph.png" "go graph set" %}}
 
-_Note: Check out [the first tutorial]({{< relref "tutorials/tutorial-1/index.md" >}}) if the query syntax, in general, is not familiar to you_
+_Note: Check out [the first tutorial]({{< relref "tutorial-1/index.md" >}}) if the query syntax, in general, is not familiar to you_
 
 The `anyofterms` function returns tweets which have either of `Go` or `Graph` keyword.
 
@@ -575,7 +575,7 @@ In the next tutorial, we'll explore these features and learn about more powerful
 Sounds interesting?
 Then see you all soon in the next tutorial. Till then, happy Graphing!
 
-Check out our next tutorial of the getting started series [here]({{< relref "tutorials/tutorial-6/index.md" >}}).
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-6/index.md" >}}).
 
 ## Need Help
 

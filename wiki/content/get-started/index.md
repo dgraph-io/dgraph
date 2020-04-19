@@ -4,46 +4,50 @@ title = "Get Started - Quickstart Guide"
 
 {{% notice "note" %}}
 This is a quickstart guide.
-You can find the getting started tutorial series [here]({{< relref "tutorials/index.md" >}}).
+You can find the getting started tutorial series [here]({{< relref "index.md" >}}).
 {{% /notice %}}
 
 ## Dgraph
 
+**Dgraph** is an open source, scalable, distributed, highly available and fast graph database,
+designed from ground up to be run in production.
+
 Dgraph cluster consists of different nodes (Zero, Alpha & Ratel) and each node serves a different purpose.
 
-**Dgraph Zero** controls the Dgraph cluster, assigns servers to a group,
+- **Dgraph Zero** controls the Dgraph cluster, assigns servers to a group,
 and re-balances data between server groups.
 
-**Dgraph Alpha** hosts predicates and indexes.
+- **Dgraph Alpha** hosts predicates and indexes. Predicates are either the properties associated
+with a node or the relationship between two nodes. Indexes are the tokenizers that can be
+associated with the predicates to enable filtering using approriate functions.
 
-**Dgraph Ratel** serves the UI to run queries, mutations & altering schema.
+- **Ratel** serves the UI to run queries, mutations & altering schema.
 
 You need at least one Dgraph Zero and one Dgraph Alpha to get started.
 
-**Here's a two step tutorial to get you up and running.**
+**Here's a four step tutorial to get you up and running.**
 
 This is a quick-start guide to running Dgraph.
 For an interactive walk through, take the [tour](https://tour.dgraph.io).
 
-You can see the accompanying [video here](https://www.youtube.com/watch?v=QIIdSp2zLcs).
+### Step 1: Run Dgraph
 
-## Step 1: Run Dgraph
-
-Dgraph can be installed from the install scripts, or run via Docker.
-Check out the [Download page](https://dgraph.io/downloads).
+There are a several ways to install and run Dgraph, all of which
+you can find in the [Download page](https://dgraph.io/downloads)
 
 The easiest way to get Dgraph up and running is using `dgraph/standalone` docker image.
 Follow the instructions [here](https://docs.docker.com/install) to install
 Docker if you don't have it already.
 
-This standalone image is meant for quickstart purposes only.
-It is not recommended for production environments.
+_This standalone image is meant for quickstart purposes only.
+It is not recommended for production environments._
 
 ```sh
-docker run -p 8080:8080 -p 9080:9080 -p 8000:8000 --name diggy dgraph/standalone:v2.0.0-beta
+docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:v20.03.0
 ```
 
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.
+You would find the Dgraph data stored in a folder named *dgraph* of your *home directory*.
 
 {{% notice "tip" %}}
 Usually, you need to set the estimated memory Dgraph alpha can take through `lru_mb` flag.
@@ -53,22 +57,21 @@ available RAM. For the standalone setup, it is set to that by default.
 {{% /notice %}}
 
 
-## Step 2: Run Mutations and Queries
+### Step 2: Run Mutation
 
 {{% notice "tip" %}}
-Once Dgraph is running, you can access Ratel at [`http://localhost:8000`](http://localhost:8000).
+Once Dgraph is running, you can access **Ratel** at [`http://localhost:8000`](http://localhost:8000).
 It allows browser-based queries, mutations and visualizations.
 
-The mutations and queries below can either be run from the command line using
-`curl -H "Content-Type: application/rdf" localhost:8080/query -XPOST -d $'...'`
-or by pasting everything between the two `'` into the running user interface on localhost.
+You can run the mutations and queries below from either curl in the command line
+or by pasting the mutation data in the **Ratel**.
 {{% /notice %}}
 
-### Dataset
+#### Dataset
 The dataset is a movie graph, where and the graph nodes are
 entities of the type directors, actors, genres, or movies.
 
-### Storing data in the graph
+#### Storing data in the graph
 Changing the data stored in Dgraph is a mutation.
 Dgraph as of now supports mutation for two kinds of data: RDF and JSON.
 The following RDF mutation stores information about the first three releases
@@ -76,7 +79,7 @@ of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
 Running the RDF mutation, either through the curl or Ratel UI's mutate tab will store the data in Dgraph.
 
 ```sh
-curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XPOST -d $'
+curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -XPOST -d $'
 {
   set {
    _:luke <name> "Luke Skywalker" .
@@ -134,16 +137,17 @@ curl -H "Content-Type: application/rdf" localhost:8080/mutate?commitNow=true -XP
 
 
 {{% notice "tip" %}}
-To run an RDF mutation via curl, you can use the curl option
+To run an RDF mutation using a file via curl, you can use the curl option
 `--data-binary @/path/to/mutation.rdf` instead of `-d $''`.
 The `--data-binary` option skips curl's default URL-encoding.
 {{% /notice %}}
 
-### Adding indexes
+### Step 3: Alter Schema
+
 Alter the schema to add indexes on some of the data so queries can use term matching, filtering and sorting.
 
 ```sh
-curl localhost:8080/alter -XPOST -d $'
+curl "localhost:8080/alter" -XPOST -d $'
   name: string @index(term) .
   release_date: datetime @index(year) .
   revenue: float .
@@ -169,12 +173,14 @@ To submit the schema from the Ratel UI, go to Schema page,
 click on **Bulk Edit**, and paste the schema.
 {{% /notice %}}
 
-### Get all movies
+### Step 4: Run Queries
+
+#### Get all movies
 Run this query to get all the movies.
 The query lists all the movies that have a starring edge.
 
 ```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $'
 {
  me(func: has(starring)) {
    name
@@ -187,12 +193,12 @@ curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
 You can also run the GraphQL+- query from the Ratel UI's query tab.
 {{% /notice %}}
 
-### Get all movies released after "1980"
+#### Get all movies released after "1980"
 Run this query to get "Star Wars" movies released after "1980".
 Try it in the user interface to see the result as a graph.
 
 ```sh
-curl -H "Content-Type: application/graphql+-" localhost:8080/query -XPOST -d $'
+curl -H "Content-Type: application/graphql+-" "localhost:8080/query" -XPOST -d $'
 {
   me(func:allofterms(name, "Star Wars")) @filter(ge(release_date, "1980")) {
     name
@@ -265,7 +271,7 @@ Output:
 }
 ```
 
-That's it! In these two steps, we set up Dgraph, added some
+That's it! In these four steps, we set up Dgraph, added some
 data, set a schema and queried that data back.
 
 ## Where to go from here
@@ -285,12 +291,3 @@ feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues)
 if you encounter bugs or have feature requests.
 * You can also join our [Slack channel](http://slack.dgraph.io).
-
-## Troubleshooting
-
-### 1. Docker: Error response from daemon; Conflict. Container name already exists.
-
-Remove the diggy container and try the docker run command again.
-```
-docker rm diggy
-```

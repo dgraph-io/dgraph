@@ -4,7 +4,7 @@ title = "Get Started with Dgraph - Basic Types and Operations on them"
 
 **Welcome to the third tutorial of getting started with Dgraph.**
 
-In the [previous tutorial]({{< relref "tutorials/tutorial-2/index.md" >}}) of getting started,
+In the [previous tutorial]({{< relref "tutorial-2/index.md" >}}) of getting started,
 we learned about the CRUD operations using UIDs.
 We also learned about traversals and recursive traversals.
 
@@ -239,7 +239,7 @@ First, let's query for all the Authors and their ratings.
 
 {{% load-img "/images/tutorials/3/a-find-rating-2.png" "authors" %}}
 
-Refer to the [first episode]({{< relref "tutorials/tutorial-1/index.md" >}}) if you have any questions related to the structure of the query in general.
+Refer to the [first episode]({{< relref "tutorial-1/index.md" >}}) if you have any questions related to the structure of the query in general.
 
 We have 3 authors in total in our dataset.
 Now, let's find the best authors.
@@ -362,7 +362,7 @@ We need to just traverse the `published` edge starting from the `author` nodes.
 
 {{% load-img "/images/tutorials/3/e-rating-blog.png" "rating-blog-rating" %}}
 
-_Check out our [previous tutorial]{{< relref "tutorials/tutorial-2/index.md">}} if you have questions around graph traversal queries._
+_Check out our [previous tutorial]({{< relref "tutorial-2/index.md">}}) if you have questions around graph traversal queries._
 
 
 Similarly, let's extend our previous query to fetch the tags of these blog posts.
@@ -646,7 +646,7 @@ How about the geo-location querying capabilities?
 
 Sounds interesting?
 
-Check out our next tutorial of the getting started series [here]({{< relref "tutorials/tutorial-4/index.md" >}}).
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-4/index.md" >}}).
 
 ## Need Help
 
