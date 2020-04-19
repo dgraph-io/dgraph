@@ -32,13 +32,13 @@
     query {
       queryUser(func: type(User)) {
         username : User.username
-        todos : User.todos @filter(uid(Todo2)) {
+        todos : User.todos @filter(uid(Todo1)) {
           title : Todo.title
           dgraph.uid : uid
         }
         dgraph.uid : uid
       }
-      Todo2 as var(func: type(Todo)) @cascade {
+      Todo1 as var(func: type(Todo)) @cascade {
         owner : Todo.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
