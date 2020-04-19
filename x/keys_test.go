@@ -30,8 +30,7 @@ func TestDataKey(t *testing.T) {
 
 	// key with uid = 0 is invalid
 	uid = 0
-	sattr := fmt.Sprintf("attr:%d", uid)
-	key := DataKey(sattr, uid)
+	key := DataKey("bad uid", uid)
 	_, err := Parse(key)
 	require.Error(t, err)
 
@@ -258,6 +257,12 @@ func TestBadKeys(t *testing.T) {
 
 	// key of len < sz (key[1], key[2])
 	key = []byte{1, 0x00, 0x04, 1, 2}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	// key with uid = 0 is invalid
+	uid := 0
+	key = DataKey("bad uid", uint64(uid))
 	_, err = Parse(key)
 	require.Error(t, err)
 }
