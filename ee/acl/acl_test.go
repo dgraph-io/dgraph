@@ -1838,7 +1838,7 @@ func TestBackupForAcl(t *testing.T) {
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 	resp := makeRequest(t, accessJwt, params)
 	require.Equal(t, x.GqlErrorList{{
-		Message:   "mutation backup failed because you must specify a 'destination' value",
+		Message:   "resolving backup failed because you must specify a 'destination' value",
 		Locations: []x.Location{{Line: 3, Column: 5}},
 	}}, resp.Errors)
 	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
@@ -1865,7 +1865,7 @@ func TestConfigForAcl(t *testing.T) {
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 	resp := makeRequest(t, accessJwt, params)
 	require.Equal(t, x.GqlErrorList{{
-		Message:   "mutation config failed because lru_mb must be at least 1024\n",
+		Message:   "resolving config failed because lru_mb must be at least 1024\n",
 		Locations: []x.Location{{Line: 3, Column: 5}},
 	}}, resp.Errors)
 	require.JSONEq(t, `{"config": null}`, string(resp.Data))
@@ -1923,10 +1923,38 @@ func TestExportForAcl(t *testing.T) {
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 	resp := makeRequest(t, accessJwt, params)
 	require.Equal(t, x.GqlErrorList{{
-		Message:   "mutation export failed because invalid export format: invalid",
+		Message:   "resolving export failed because invalid export format: invalid",
 		Locations: []x.Location{{Line: 3, Column: 5}},
 	}}, resp.Errors)
 	require.JSONEq(t, `{"export": null}`, string(resp.Data))
+}
+
+func TestRestoreForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// we don't want to do an actual restore
+		Query: `
+		mutation {
+		  restore(input: {location: "", backupId: ""}) {
+			response {
+			  code
+			  message
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "restore", params)
+
+	// assert non-ACL error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := makeRequest(t, accessJwt, params)
+	require.Equal(t, x.GqlErrorList{{
+		Message: "resolving restore failed because failed to verify backup: while retrieving" +
+			" manifests: The path \"\" does not exist or it is inaccessible.",
+		Locations: []x.Location{{Line: 3, Column: 5}},
+	}}, resp.Errors)
+	require.JSONEq(t, `{"restore": null}`, string(resp.Data))
 }
 
 func TestShutdownForAcl(t *testing.T) {

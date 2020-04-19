@@ -735,7 +735,7 @@ func TestHealth(t *testing.T) {
 	require.True(t, info[0].Uptime > int64(time.Duration(1)))
 }
 
-func setDrainingMode(t *testing.T, enable bool, accessJwt string) {
+func setDrainingMode(t *testing.T, enable bool) {
 	drainingRequest := `mutation drain($enable: Boolean) {
 		draining(enable: $enable) {
 			response {
@@ -747,9 +747,10 @@ func setDrainingMode(t *testing.T, enable bool, accessJwt string) {
 		Query:     drainingRequest,
 		Variables: map[string]interface{}{"enable": enable},
 	}
-	b := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
-	require.JSONEq(t, `{"data":{"draining":{"response":{"code":"Success"}}}}`,
-		string(b))
+	grootJwt, _ := testutil.GrootHttpLogin(addr + "/admin")
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, grootJwt)
+	resp.RequireNoGraphQLErrors(t)
+	require.JSONEq(t, `{"draining":{"response":{"code":"Success"}}}`, string(resp.Data))
 }
 
 func TestDrainingMode(t *testing.T) {
@@ -791,12 +792,10 @@ func TestDrainingMode(t *testing.T) {
 
 	}
 
-	grootJwt, _ := testutil.GrootHttpLogin(addr + "/admin")
-
-	setDrainingMode(t, true, grootJwt)
+	setDrainingMode(t, true)
 	runRequests(true)
 
-	setDrainingMode(t, false, grootJwt)
+	setDrainingMode(t, false)
 	runRequests(false)
 }
 

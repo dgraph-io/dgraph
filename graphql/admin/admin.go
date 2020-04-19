@@ -401,13 +401,13 @@ func newAdminResolver(
 func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"backup":   resolveBackup,
-		"config":   resolveConfig,
-		"draining": resolveDraining,
-		"export":   resolveExport,
+		"backup":   resolve.CommonMutationMiddlewares.Then(resolveBackup),
+		"config":   resolve.CommonMutationMiddlewares.Then(resolveConfig),
+		"draining": resolve.CommonMutationMiddlewares.Then(resolveDraining),
+		"export":   resolve.CommonMutationMiddlewares.Then(resolveExport),
 		"login":    resolveLogin,
-		"restore":  resolveRestore,
-		"shutdown": resolveShutdown,
+		"restore":  resolve.CommonMutationMiddlewares.Then(resolveRestore),
+		"shutdown": resolve.CommonMutationMiddlewares.Then(resolveShutdown),
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
@@ -725,6 +725,6 @@ func emptyResult(f schema.Field, err error) *resolve.Resolved {
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{f.Name(): nil},
 		Field: f,
-		Err:   err,
+		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
 	}
 }
