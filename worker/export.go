@@ -448,11 +448,6 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			return false
 		}
 
-		// skip invalid UID keys
-		if pk.Uid == 0 {
-			return false
-		}
-
 		// _predicate_ is deprecated but leaving this here so that users with a
 		// binary with version >= 1.1 can export data from a version < 1.1 without
 		// this internal data showing up.
