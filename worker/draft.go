@@ -94,12 +94,11 @@ const (
 	opIndexing
 )
 
-// startTask is used to check whether an op is already going on.
-// If a rollup is going on, we cancel and wait for rollup to complete
-// before we return. If the same task is already going, we return error.
-// You should only call Done() on the returned closer. Calling other
-// functions (such as SignalAndWait) for closer could result in panics.
-// For more details, see GitHub issue #5034.
+// startTask is used to check whether an op is already running. If a rollup is running,
+// it is canceled and startTask will wait until it completes before returning.
+// If the same task is already running, this method returns an errror.
+// You should only call Done() on the returned closer. Calling other functions (such as
+// SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -110,11 +109,11 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		n.opsLock.Unlock()
 		glog.Infof("Operation completed with id: %s", id)
 
-		// If we were doing any other operation, let's restart rollups.
+		// Resume rollups if another operation is being stopped.
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
-			// If any other operation is running, this would error out. So, ignore error.
-			// Ignoring the error since stop task runs in a goruotine.
+			// If any other operation is running, this would error out. This error can
+			// be safely ignored because rollups will resume once that other task is done.
 			_, _ = n.startTask(opRollup)
 		}
 	}
