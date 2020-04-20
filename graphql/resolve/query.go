@@ -94,7 +94,8 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 
-	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery)})
+	resp, err := qr.executor.Execute(ctx,
+		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))

@@ -483,7 +483,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	}
 
 	resp, err := resolve.NewAdminExecutor().Execute(context.Background(),
-		&dgoapi.Request{Query: dgraph.AsString(qry), Mutations: mutations})
+		&dgoapi.Request{Query: dgraph.AsString(qry), Mutations: mutations, CommitNow: true})
 	if err != nil {
 		return nil, err
 	}
