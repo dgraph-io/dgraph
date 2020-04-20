@@ -23,6 +23,7 @@ import (
 	"log"
 	"net/http"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1172,6 +1173,24 @@ func introspectedSchemaForGetQuery(fieldName string) string {
 	}`, fieldName)
 }
 
+type request struct {
+	Query string
+}
+
+var userReqRegex *regexp.Regexp
+
+func init() {
+	userReqRegex = regexp.MustCompile(`query{userName\(id\: \"([a-z0-9]+)\"\)}`)
+}
+
+func verifyUserQuery(q string) string {
+	matches := userReqRegex.FindStringSubmatch(q)
+	if len(matches) == 2 {
+		return matches[1]
+	}
+	return ""
+}
+
 func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -1182,7 +1201,13 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, introspectedSchemaForGetQuery("userName"))
 		return
 	}
-	fmt.Println("body: ", string(b))
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	userId := verifyUserQuery(req.Query)
+	fmt.Println("userId: ", userId)
 }
 
 func gqlCarHandler(w http.ResponseWriter, r *http.Request) {

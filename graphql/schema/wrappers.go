@@ -628,6 +628,14 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 			rf[val[1:]] = true
 		}
 	}
+
+	graphql := custom.Arguments.ForName("graphql")
+	if graphql == nil {
+		return true, rf
+	}
+
+	query := graphql.Value.Children.ForName("query")
+	rf = parseRequiredFieldsFromGQLRequest(query.Raw)
 	return true, rf
 }
 
@@ -801,6 +809,7 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 
 func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
 	args []string) (string, error) {
+	fmt.Println("args: ", args, "argMap: ", args)
 	for _, arg := range args {
 		val, ok := argMap[arg]
 		if !ok {
@@ -1790,6 +1799,9 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 // }
 func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	// Add begining curly braces
+	if len(field.SelectionSet) == 0 {
+		return
+	}
 	writer.WriteString("{\n")
 	for i := 0; i < len(field.SelectionSet); i++ {
 		castedField := field.SelectionSet[i].(*ast.Field)
@@ -1803,4 +1815,20 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	}
 	// Add ending curly braces
 	writer.WriteString("}")
+}
+
+func parseRequiredFieldsFromGQLRequest(req string) map[string]bool {
+	// These errors should have already been checked during schema validation.
+	parsedQuery, _ := parser.ParseQuery(&ast.Source{Input: fmt.Sprintf(`query {%s}`,
+		req)})
+
+	result := make(map[string]bool)
+	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
+	for _, arg := range query.Arguments {
+		val := arg.Value.String()
+		if strings.HasPrefix(val, "$") {
+			result[val[1:]] = true
+		}
+	}
+	return result
 }

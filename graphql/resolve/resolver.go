@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -681,11 +680,13 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 		b, err := schema.SubstituteFieldsInGraphqlRequest("", f, m, args)
 		if err != nil {
-			errCh <- err
 			mu.RUnlock()
+			errCh <- err
 			return
 		}
-		body = append(body, b)
+		mu.RUnlock()
+
+		body[i] = b
 		// if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
 		// 	errCh <- err
 		// 	mu.RUnlock()
@@ -755,7 +756,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			// }
 			// mu.RUnlock()
 
-			fmt.Println("input: ", input)
 			b, err := makeRequest(nil, fconf.Method, fconf.URL, input, fconf.ForwardHeaders)
 			if err != nil {
 				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because external request"+
@@ -764,7 +764,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
-			fmt.Println(string(b))
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
 				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
