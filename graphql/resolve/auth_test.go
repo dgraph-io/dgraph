@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -43,7 +44,7 @@ type AuthQueryRewritingCase struct {
 }
 
 func TestAuthQueryRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("auth_tests.yaml")
+	b, err := ioutil.ReadFile("auth_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
 	var tests []AuthQueryRewritingCase
@@ -91,6 +92,9 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
+
+			fmt.Println(dgraph.AsString(dgQuery))
+
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
