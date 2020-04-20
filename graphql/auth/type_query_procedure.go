@@ -37,6 +37,9 @@ func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *s
 	rules.GetRBACRules(tnqp.authState)
 	if val, ok := tnqp.authState.RbacRule[rules.RuleID]; ok && val != schema.Uncertain {
 		return
+	} else if val == schema.Negative {
+		gqlQuery = nil
+		return
 	}
 
 	authFilter := rules.GetFilter(tnqp.authState)
