@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -224,8 +225,7 @@ func newXidMetadata() *xidMetadata {
 //   } ],
 //   "Author.friends":[ {"uid":"0x123"} ],
 // }
-func (mrw *AddRewriter) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*UpsertMutation, error) {
 
 	mutatedType := m.MutatedType()
 
@@ -250,13 +250,15 @@ func (mrw *AddRewriter) Rewrite(
 			return nil, nil
 		})
 
-	return queryFromFragments(mrw.frags[0]),
-		mutations,
-		schema.GQLWrapf(err, "failed to rewrite mutation payload")
+	upsert := &UpsertMutation{
+		Query:     queryFromFragments(mrw.frags[0]),
+		Mutations: mutations,
+	}
+
+	return upsert, schema.GQLWrapf(err, "failed to rewrite mutation payload")
 }
 
-func (mrw *AddRewriter) handleMultipleMutations(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
@@ -297,11 +299,17 @@ func (mrw *AddRewriter) handleMultipleMutations(
 		queries = nil
 	}
 
-	return queries, mutationsAll, errs
+	upsert := &UpsertMutation{
+		Query:     queries,
+		Mutations: mutationsAll,
+	}
+
+	return upsert, errs
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
 func (mrw *AddRewriter) FromMutationResult(
+	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -364,7 +372,8 @@ func (mrw *AddRewriter) FromMutationResult(
 //
 // See AddRewriter for how the set and remove fragments get created.
 func (urw *UpdateRewriter) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	ctx context.Context,
+	m schema.Mutation) (*UpsertMutation, error) {
 
 	mutatedType := m.MutatedType()
 
@@ -373,7 +382,7 @@ func (urw *UpdateRewriter) Rewrite(
 	delArg := inp["remove"]
 
 	if setArg == nil && delArg == nil {
-		return nil, nil, nil
+		return nil, nil
 	}
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m)
@@ -429,13 +438,18 @@ func (urw *UpdateRewriter) Rewrite(
 		queries = append(queries, q2.Children...)
 	}
 
-	return &gql.GraphQuery{Children: queries},
-		append(mutSet, mutDel...),
+	upsert := &UpsertMutation{
+		Query:     &gql.GraphQuery{Children: queries},
+		Mutations: append(mutSet, mutDel...),
+	}
+
+	return upsert,
 		schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
 func (urw *UpdateRewriter) FromMutationResult(
+	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -551,10 +565,12 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 	return dgQuery
 }
 
-func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
-	*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func (drw *deleteRewriter) Rewrite(
+	ctx context.Context,
+	m schema.Mutation) (*UpsertMutation, error) {
+
 	if m.MutationType() != schema.DeleteMutation {
-		return nil, nil, errors.Errorf(
+		return nil, errors.Errorf(
 			"(internal error) call to build delete mutation for %s mutation type",
 			m.MutationType())
 	}
@@ -600,14 +616,16 @@ func (drw *deleteRewriter) Rewrite(m schema.Mutation) (
 
 	b, err := json.Marshal(deletes)
 
-	return qry,
-		[]*dgoapi.Mutation{{
-			DeleteJson: b,
-		}},
-		err
+	upsert := &UpsertMutation{
+		Query:     qry,
+		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
+	}
+
+	return upsert, err
 }
 
 func (drw *deleteRewriter) FromMutationResult(
+	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {

@@ -1,8 +1,9 @@
 package admin
 
 import (
+	"context"
 	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -19,7 +20,9 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 // It ensures that only the last rule out of all duplicate rules in input is preserved.
 // A rule is duplicate if it has same predicate name as another rule.
 func (mrw *addGroupRewriter) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	ctx context.Context,
+	m schema.Mutation) (*resolve.UpsertMutation, error) {
+
 	addGroupInput, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	// remove rules with same predicate name for each group input
@@ -31,16 +34,17 @@ func (mrw *addGroupRewriter) Rewrite(
 
 	m.SetArgTo(schema.InputArgName, addGroupInput)
 
-	return ((*resolve.AddRewriter)(mrw)).Rewrite(m)
+	return ((*resolve.AddRewriter)(mrw)).Rewrite(ctx, m)
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
 func (mrw *addGroupRewriter) FromMutationResult(
+	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
 
-	return ((*resolve.AddRewriter)(mrw)).FromMutationResult(mutation, assigned, result)
+	return ((*resolve.AddRewriter)(mrw)).FromMutationResult(ctx, mutation, assigned, result)
 }
 
 // removeDuplicateRuleRef removes duplicate rules based on predicate value.
