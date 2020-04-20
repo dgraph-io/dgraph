@@ -657,6 +657,11 @@ func externalRequestError(err error, f schema.Field) *x.GqlError {
 		f.GetObjectName()).WithLocations(f.Location())
 }
 
+type graphqlResp struct {
+	Data   map[string]interface{} `json:"data,omitempty"`
+	Errors x.GqlErrorList         `json:"errors,omitempty"`
+}
+
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, err := f.CustomHTTPConfig()
 	if err != nil {
@@ -764,14 +769,22 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
-			var result interface{}
-			if err := json.Unmarshal(b, &result); err != nil {
-				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
-					" result: %s of external request failed with error: %s for field: %s within "+
-					"type: %s, index: %v.", b, err, f.Name(), f.GetObjectName(),
-					idx).WithLocations(f.Location())
+			resp := &graphqlResp{}
+			err = json.Unmarshal(b, resp)
+			if err != nil {
+				// resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
 				return
 			}
+			result, ok := resp.Data[fconf.RemoteGqlQueryName]
+			if !ok {
+				return
+			}
+
+			// var result interface{}
+			// if err := json.Unmarshal(b, &result); err != nil {
+			// 	// TODO - Propogate this error.
+			// 	return
+			// }
 
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})

@@ -1177,14 +1177,16 @@ type request struct {
 	Query string
 }
 
-var userReqRegex *regexp.Regexp
+var (
+	userRegex    = regexp.MustCompile(`query{userName\(id\: \"([a-z0-9]+)\"\)}`)
+	carRegex     = regexp.MustCompile(`query{car\(id\: \"([a-z0-9]+)\"\){\nname\n}}`)
+	schoolRegex  = regexp.MustCompile(`query{schoolName\(id\: \"([a-z0-9]+)\"\)}`)
+	teacherRegex = regexp.MustCompile(`query{teacherName\(id\: \"([a-z0-9]+)\"\)}`)
+	classRegex   = regexp.MustCompile(`query{class\(id\: \"([a-z0-9]+)\"\){\nname\n}}`)
+)
 
-func init() {
-	userReqRegex = regexp.MustCompile(`query{userName\(id\: \"([a-z0-9]+)\"\)}`)
-}
-
-func verifyUserQuery(q string) string {
-	matches := userReqRegex.FindStringSubmatch(q)
+func verifyQuery(reg *regexp.Regexp, q string) string {
+	matches := reg.FindStringSubmatch(q)
 	if len(matches) == 2 {
 		return matches[1]
 	}
@@ -1206,8 +1208,13 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	userId := verifyUserQuery(req.Query)
-	fmt.Println("userId: ", userId)
+	userID := verifyQuery(userRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "userName": "uname-%s"
+		}
+	}`, userID)
 }
 
 func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
@@ -1216,11 +1223,26 @@ func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// FIXME - Return type isn't validated yet.
 	if strings.Contains(string(b), "__schema") {
 		fmt.Fprintf(w, introspectedSchemaForGetQuery("car"))
 		return
 	}
-	fmt.Println("body: ", string(b))
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+
+	userID := verifyQuery(carRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  	"car": {
+				"name": "car-%s"
+			}
+		}
+	}`, userID)
 }
 
 func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
@@ -1233,7 +1255,20 @@ func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, introspectedSchemaForGetQuery("class"))
 		return
 	}
-	fmt.Println("body: ", string(b))
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	schoolID := verifyQuery(classRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "class": [{
+			  "name": "class-%s"
+		  }]
+		}
+	}`, schoolID)
 }
 
 func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -1246,7 +1281,18 @@ func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, introspectedSchemaForGetQuery("teacherName"))
 		return
 	}
-	fmt.Println("body: ", string(b))
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	teacherID := verifyQuery(teacherRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "teacherName": "tname-%s"
+		}
+	}`, teacherID)
 }
 
 func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -1259,7 +1305,18 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, introspectedSchemaForGetQuery("schoolName"))
 		return
 	}
-	fmt.Println("body: ", string(b))
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	schoolID := verifyQuery(schoolRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "schoolName": "sname-%s"
+		}
+	}`, schoolID)
 }
 
 func main() {

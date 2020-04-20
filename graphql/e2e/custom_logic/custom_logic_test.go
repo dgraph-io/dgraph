@@ -526,22 +526,22 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	queryUser := `
 	 query {
 		 queryUser(order: {asc: age}) {
-			 name
-			 age
-			 cars {
-				 name
-			 }
-			 schools(order: {asc: established}) {
-				 name
-				 established
-				 teachers(order: {desc: age}) {
-					 name
-					 age
-				 }
-				 classes {
-					 name
-				 }
-			 }
+			name
+			age
+			cars {
+				name
+			}
+			schools(order: {asc: established}) {
+				name
+				established
+				teachers(order: {desc: age}) {
+					name
+					age
+				}
+				classes {
+					name
+				}
+			}
 		 }
 	 }`
 	params := &common.GraphQLParams{
