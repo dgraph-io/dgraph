@@ -160,7 +160,12 @@ func TestAuthSchemas(t *testing.T) {
 				schHandler, errlist := NewHandler(sch.Input)
 				require.NoError(t, errlist, sch.Name)
 
-				_, authError := FromString(schHandler.GQLSchema())
+				schema := schHandler.GQLSchema()
+
+				// Remove the schema comments.
+				idx := strings.Index(schema, "#\n\n")
+				schema = schema[idx+3:]
+				_, authError := FromString(schema)
 
 				if diff := cmp.Diff(authError, sch.Errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)

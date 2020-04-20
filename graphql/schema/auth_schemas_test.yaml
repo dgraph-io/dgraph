@@ -11,7 +11,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type X: @auth query: failed to parse GraphQL rule [reason : Expected Name, found <EOF>
       (Locations: [{Line: 1, Column: 9}])]",
-      "locations":[{"line":5, "column":28}]}
+      "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "GraphQL validation errors should be reported"
@@ -26,7 +26,7 @@ invalid_schemas:
       {"message": "Type X: @auth query: failed to validate GraphQL rule
       [reason : Field \"userRle\" is not defined by type XFilter.
       Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
-      "locations":[{"line":5, "column":28}]}
+      "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "RBAC rule invalid variable"
@@ -82,7 +82,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: a rule should be exactly one query, found 0 GraphQL operations",
-     "locations":[{"line":5, "column":28}]}
+     "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "Invalid auth syntax"
@@ -96,7 +96,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":5, "column":21}]}
+     "locations":[{"line":1, "column":21}]}
     ]
 
   - name: "Single or rule"
@@ -117,7 +117,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: 'OR' should contain at least two rules",
-     "locations":[{"line":5, "column":25}]}
+     "locations":[{"line":1, "column":25}]}
     ]
 
   - name: "Multiple logical operation at same level"
@@ -157,7 +157,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":5, "column":21}]}
+     "locations":[{"line":1, "column":21}]}
     ]
 
   - name: "Same logical operation at same level"
@@ -197,7 +197,7 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":5, "column":21}]}
+     "locations":[{"line":1, "column":21}]}
     ]
 
   - name:  "Rules with null value"
@@ -210,9 +210,9 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\"", "locations":[{"line":5, "column":27}]},
+    \"not\" and \"rule\"", "locations":[{"line":1, "column":27}]},
     {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\"", "locations":[{"line":5, "column":32}]}
+    \"not\" and \"rule\"", "locations":[{"line":1, "column":32}]}
     ]
 
 valid_schemas:
