@@ -676,6 +676,11 @@ func copyTemplate(input interface{}) (interface{}, error) {
 	return result, nil
 }
 
+type graphqlResp struct {
+	Data   map[string]interface{} `json:"data,omitempty"`
+	Errors x.GqlErrorList         `json:"errors,omitempty"`
+}
+
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	// FIXME - The value of this flag should come from whether we are dealing with a GraphQL
 	// field or query/mutation. It is hardcoded to true for testing for now.
@@ -779,11 +784,22 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
-			var result interface{}
-			if err := json.Unmarshal(b, &result); err != nil {
-				// TODO - Propogate this error.
+			resp := &graphqlResp{}
+			err = json.Unmarshal(b, resp)
+			if err != nil {
+				// resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
 				return
 			}
+			result, ok := resp.Data[fconf.RemoteQueryName]
+			if !ok {
+				return
+			}
+
+			// var result interface{}
+			// if err := json.Unmarshal(b, &result); err != nil {
+			// 	// TODO - Propogate this error.
+			// 	return
+			// }
 
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
