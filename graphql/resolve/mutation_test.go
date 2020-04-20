@@ -17,6 +17,7 @@
 package resolve
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"strings"
@@ -130,7 +131,9 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 			rewriterToTest := rewriterFactory()
 
 			// -- Act --
-			q, muts, err := rewriterToTest.Rewrite(mut)
+			upsert, err := rewriterToTest.Rewrite(context.Background(), mut)
+			q := upsert.Query
+			muts := upsert.Mutations
 
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
@@ -202,12 +205,12 @@ func TestMutationQueryRewriting(t *testing.T) {
 						})
 					require.NoError(t, err)
 					gqlMutation := test.GetMutation(t, op)
-					_, _, err = rewriter.Rewrite(gqlMutation)
+					_, err = rewriter.Rewrite(context.Background(), gqlMutation)
 					require.Nil(t, err)
 
 					// -- Act --
 					dgQuery, err := rewriter.FromMutationResult(
-						gqlMutation, tt.assigned, tt.result)
+						context.Background(), gqlMutation, tt.assigned, tt.result)
 
 					// -- Assert --
 					require.Nil(t, err)

@@ -23,7 +23,9 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -38,68 +40,27 @@ type QueryRewriter interface {
 	Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
 }
 
-// A QueryExecutor can execute a gql.GraphQuery and return a result.  The result of
-// a QueryExecutor doesn't need to be valid GraphQL results.
-type QueryExecutor interface {
-	Query(ctx context.Context, query *gql.GraphQuery) ([]byte, *schema.Extensions, error)
-}
-
 // QueryResolverFunc is an adapter that allows to build a QueryResolver from
 // a function.  Based on the http.HandlerFunc pattern.
 type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
-
-// QueryRewritingFunc is an adapter that allows us to build a QueryRewriter from
-// a function.  Based on the http.HandlerFunc pattern.
-type QueryRewritingFunc func(ctx context.Context, q schema.Query) (*gql.GraphQuery, error)
-
-// QueryExecutionFunc is an adapter that allows us to compose query execution and
-// build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
-type QueryExecutionFunc func(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error)
 
 // Resolve calls qr(ctx, query)
 func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Resolved {
 	return qr(ctx, query)
 }
 
-// Rewrite calls qr(q)
-func (qr QueryRewritingFunc) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-	return qr(ctx, q)
-}
-
-// Query calls qe(ctx, query)
-func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
-	return qe(ctx, query)
-}
-
 // NewQueryResolver creates a new query resolver.  The resolver runs the pipeline:
 // 1) rewrite the query using qr (return error if failed)
 // 2) execute the rewritten query with qe (return error if failed)
 // 3) process the result with rc
-func NewQueryResolver(qr QueryRewriter, qe QueryExecutor, rc ResultCompleter) QueryResolver {
-	return &queryResolver{queryRewriter: qr, queryExecutor: qe, resultCompleter: rc}
-}
-
-// NoOpQueryExecution does nothing and returns nil.
-func NoOpQueryExecution() QueryExecutionFunc {
-	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte,
-		*schema.Extensions, error) {
-		return nil, nil, nil
-	})
-}
-
-// NoOpQueryRewrite does nothing and returns a nil rewriting.
-func NoOpQueryRewrite() QueryRewritingFunc {
-	return QueryRewritingFunc(func(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-		return nil, nil
-	})
+func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor, rc ResultCompleter) QueryResolver {
+	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: rc}
 }
 
 // a queryResolver can resolve a single GraphQL query field.
 type queryResolver struct {
 	queryRewriter   QueryRewriter
-	queryExecutor   QueryExecutor
+	executor        DgraphExecutor
 	resultCompleter ResultCompleter
 }
 
@@ -133,38 +94,32 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 
-	resp, ext, err := qr.queryExecutor.Query(ctx, dgQuery)
+	resp, err := qr.executor.Execute(ctx,
+		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
-	// FIXME: just to get it running for now - this should have it's own .Resolve()
-	if query.QueryType() == schema.SchemaQuery {
-		var result map[string]interface{}
-		var err2 error
-		if len(resp) > 0 {
-			err2 = json.Unmarshal(resp, &result)
-		}
-
-		return &Resolved{
-			Data:       result,
-			Field:      query,
-			Err:        schema.AppendGQLErrs(err, err2),
-			Extensions: ext,
-		}
-	}
-
-	resolved := completeDgraphResult(ctx, query, resp, err)
-	resolved.Extensions = ext
+	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
+	resolved.Extensions =
+		&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
 	return resolved
 }
 
-func introspectionExecution(q schema.Query) QueryExecutionFunc {
-	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte,
-		*schema.Extensions, error) {
-		data, err := schema.Introspect(q)
-		return data, nil, err
-	})
+func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
+	data, err := schema.Introspect(q)
+
+	var result map[string]interface{}
+	var err2 error
+	if len(data) > 0 {
+		err2 = json.Unmarshal(data, &result)
+	}
+
+	return &Resolved{
+		Data:  result,
+		Field: q,
+		Err:   schema.AppendGQLErrs(err, err2),
+	}
 }
