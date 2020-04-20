@@ -38,7 +38,7 @@ func (dg *DgraphEx) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.R
 	stop := x.SpanTimer(span, "dgraph.Execute")
 	defer stop()
 
-	if req.Query == "" && len(req.Mutations) == 0 {
+	if req == nil || (req.Query == "" && len(req.Mutations) == 0) {
 		return nil, nil
 	}
 
