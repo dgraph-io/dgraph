@@ -22,13 +22,26 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
+	"regexp"
+	"strings"
 )
 
+const (
+	RBACQueryPrefix = "{"
+)
+
+type RBACQuery struct {
+	Variable string
+	Operator string
+	Operand  string
+}
+
 type RuleNode struct {
-	Or   []*RuleNode
-	And  []*RuleNode
-	Not  *RuleNode
-	Rule Query
+	Or       []*RuleNode
+	And      []*RuleNode
+	Not      *RuleNode
+	Rule     Query
+	RBACRule *RBACQuery
 }
 
 type AuthContainer struct {
@@ -153,8 +166,12 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	}
 
 	if rule := val.Children.ForName("rule"); rule != nil {
-		q, err := gqlValidateRule(s, typ, rule.Raw, rule.Position)
-		result.Rule = q
+		var err error
+		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
+			result.RBACRule, err = rbacValidateRule(typ, rule.Raw, rule.Position)
+		} else {
+			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
@@ -166,6 +183,40 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	}
 
 	return result, errResult
+}
+
+func rbacValidateRule(typ *ast.Definition, rule string,
+	position *ast.Position) (*RBACQuery, error) {
+	rbacRegex, err :=
+		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
+	if err != nil {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` error while parsing auth rule.", typ.Name, err)
+	}
+
+	idx := rbacRegex.FindAllStringSubmatchIndex(rule, -1)
+	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` is not a valid auth rule.", typ.Name, rule)
+	}
+
+	query := RBACQuery{
+		Variable: rule[idx[0][2]:idx[0][3]],
+		Operator: rule[idx[0][4]:idx[0][5]],
+		Operand:  rule[idx[0][6]:idx[0][7]],
+	}
+
+	if !strings.HasPrefix(query.Variable, "$") {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` is not a valid GraphQL variable.", typ.Name, query.Variable)
+	}
+	query.Variable = query.Variable[1:]
+
+	if query.Operator != "eq" {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` operator is not supported in this auth rule.", typ.Name, query.Operator)
+	}
+	return &query, nil
 }
 
 func gqlValidateRule(
