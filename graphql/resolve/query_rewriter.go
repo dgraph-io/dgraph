@@ -32,7 +32,7 @@ type queryRewriter struct{}
 
 type authRewriter struct {
 	authVariables map[string]interface{}
-	isAuthRewrite bool
+	isWritingAuth bool
 	varGen        *VariableGenerator
 	varName       string
 }
@@ -248,12 +248,12 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 	return dgQuery
 }
 
-func rewriteAsQuery(field schema.Field, auth *authRewriter) *gql.GraphQuery {
+func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 	}
 
-	if auth != nil && auth.isAuthRewrite && auth.varName != "" {
+	if authRw != nil && authRw.isWritingAuth && authRw.varName != "" {
 		// When rewriting auth rules, they always start like
 		//   Todo2 as var(func: uid(Todo1)) @cascade {
 		// Where Todo1 is the variable generated from the filter of the field
@@ -266,7 +266,7 @@ func rewriteAsQuery(field schema.Field, auth *authRewriter) *gql.GraphQuery {
 		// the feature and getting all the testing in place, but we should improve this so
 		// that the internal auth queries start from exactly the possible nodes that the
 		// internal field is considering.
-		auth.addVariableUIDFunc(dgQuery)
+		authRw.addVariableUIDFunc(dgQuery)
 	} else if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
@@ -274,10 +274,10 @@ func rewriteAsQuery(field schema.Field, auth *authRewriter) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
-	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
+	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
 
-	dgQuery = auth.addAuthQueries(field, dgQuery)
+	dgQuery = authRw.addAuthQueries(field, dgQuery)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -290,19 +290,19 @@ func rewriteAsQuery(field schema.Field, auth *authRewriter) *gql.GraphQuery {
 // the field and builds any auth queries that are need to restrict the result to only
 // the nodes authorized to be queried, returning a new graphQuery that does the
 // original query and the auth.
-func (arw *authRewriter) addAuthQueries(
+func (authRw *authRewriter) addAuthQueries(
 	field schema.Field,
 	dgQuery *gql.GraphQuery) *gql.GraphQuery {
 
 	// There's no need to recursively inject auth queries into other auth queries, so if
 	// we are already generating an auth query, there's nothing to add.
-	if arw == nil || arw.isAuthRewrite {
+	if authRw == nil || authRw.isWritingAuth {
 		return dgQuery
 	}
 
-	arw.varName = arw.varGen.Next(field.Type(), "", "")
+	authRw.varName = authRw.varGen.Next(field.Type(), "", "")
 
-	fldAuthQueries, filter := arw.rewriteAuthQueries(field)
+	fldAuthQueries, filter := authRw.rewriteAuthQueries(field)
 	if len(fldAuthQueries) == 0 {
 		return dgQuery
 	}
@@ -312,12 +312,12 @@ func (arw *authRewriter) addAuthQueries(
 	// that has the filter from the user query in it.  This is then used as
 	// the starting point for both the user query and the auth query.
 	varQry := rewriteAsQuery(field, &authRewriter{
-		authVariables: arw.authVariables,
-		varGen:        arw.varGen,
-		isAuthRewrite: true,
+		authVariables: authRw.authVariables,
+		varGen:        authRw.varGen,
+		isWritingAuth: true,
 		varName:       "",
 	})
-	varQry.Var = arw.varName
+	varQry.Var = authRw.varName
 	varQry.Alias = ""
 	varQry.Attr = "var"
 	varQry.Children = nil
@@ -327,7 +327,7 @@ func (arw *authRewriter) addAuthQueries(
 	//   queryTodo(func: uid(Todo1)) @filter(...auth-queries...) { ... }
 	dgQuery.Func = &gql.Function{
 		Name: "uid",
-		Args: []gql.Arg{{Value: arw.varName}},
+		Args: []gql.Arg{{Value: authRw.varName}},
 	}
 	dgQuery.Filter = filter
 
@@ -340,15 +340,15 @@ func (arw *authRewriter) addAuthQueries(
 	return &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery, varQry}, fldAuthQueries...)}
 }
 
-func (arw *authRewriter) addVariableUIDFunc(q *gql.GraphQuery) {
+func (authRw *authRewriter) addVariableUIDFunc(q *gql.GraphQuery) {
 	q.Func = &gql.Function{
 		Name: "uid",
-		Args: []gql.Arg{{Value: arw.varName}},
+		Args: []gql.Arg{{Value: authRw.varName}},
 	}
 }
 
-func (arw *authRewriter) rewriteAuthQueries(f schema.Field) ([]*gql.GraphQuery, *gql.FilterTree) {
-	if arw == nil || arw.isAuthRewrite {
+func (authRw *authRewriter) rewriteAuthQueries(f schema.Field) ([]*gql.GraphQuery, *gql.FilterTree) {
+	if authRw == nil || authRw.isWritingAuth {
 		return nil, nil
 	}
 
@@ -358,14 +358,14 @@ func (arw *authRewriter) rewriteAuthQueries(f schema.Field) ([]*gql.GraphQuery, 
 	}
 
 	return (&authRewriter{
-		authVariables: arw.authVariables,
-		varGen:        arw.varGen,
-		isAuthRewrite: true,
-		varName:       arw.varName,
+		authVariables: authRw.authVariables,
+		varGen:        authRw.varGen,
+		isWritingAuth: true,
+		varName:       authRw.varName,
 	}).rewriteRuleNode(f, auth.Rules.Query)
 }
 
-func (arw *authRewriter) rewriteRuleNode(
+func (authRw *authRewriter) rewriteRuleNode(
 	field schema.Field,
 	rn *schema.RuleNode) ([]*gql.GraphQuery, *gql.FilterTree) {
 
@@ -376,7 +376,7 @@ func (arw *authRewriter) rewriteRuleNode(
 		var qrys []*gql.GraphQuery
 		var filts []*gql.FilterTree
 		for _, orRn := range rns {
-			q, f := arw.rewriteRuleNode(field, orRn)
+			q, f := authRw.rewriteRuleNode(field, orRn)
 			qrys = append(qrys, q...)
 			filts = append(filts, f)
 		}
@@ -397,19 +397,19 @@ func (arw *authRewriter) rewriteRuleNode(
 			Child: filts,
 		}
 	case rn.Not != nil:
-		qrys, filter := arw.rewriteRuleNode(field, rn.Not)
+		qrys, filter := authRw.rewriteRuleNode(field, rn.Not)
 		return qrys, &gql.FilterTree{
 			Op:    "not",
 			Child: []*gql.FilterTree{filter},
 		}
 	case rn.Rule != nil:
 		// create a copy of the auth query that's specialized for the values from the JWT
-		qry := rn.Rule.AuthFor(field, arw.authVariables)
+		qry := rn.Rule.AuthFor(field, authRw.authVariables)
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
-		varName := arw.varGen.Next(field.Type(), "", "")
-		r1 := rewriteAsQuery(qry, arw)
+		varName := authRw.varGen.Next(field.Type(), "", "")
+		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
 		r1.Cascade = true
