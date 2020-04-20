@@ -80,12 +80,6 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	query: AuthRule, 
-	add: AuthRule, 
-	update: AuthRule, 
-	delete:AuthRule) on OBJECT | FIELD_DEFINITION
-
 directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
 
 input IntFilter {

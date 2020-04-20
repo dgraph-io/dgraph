@@ -58,7 +58,7 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 		}
 
 		if i == len(path)-1 {
-			child.Var = fmt.Sprintf("%s", name)
+			child.Var = name
 		}
 
 		if query != nil {

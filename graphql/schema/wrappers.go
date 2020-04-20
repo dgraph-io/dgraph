@@ -25,7 +25,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // Wrap the github.com/vektah/gqlparser/ast defintions so that the bulk of the GraphQL
@@ -110,7 +109,6 @@ type Mutation interface {
 	MutationType() MutationType
 	MutatedType() Type
 	QueryField() Field
-	NumUidsField() Field
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -268,7 +266,7 @@ func (o *operation) Schema() Schema {
 }
 
 func (o *operation) Queries() (qs []Query) {
-	if o.IsMutation() {
+	if !o.IsQuery() {
 		return
 	}
 
@@ -391,7 +389,6 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
 		if inputTyp.BuiltIn || inputTyp.Name == "Query" || inputTyp.Name == "Mutation" ||
-			inputTyp.Name == "Subscription" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
 		}
@@ -513,24 +510,15 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
-type RuleResult int
-
 type AuthState struct {
 	AuthVariables map[string]string
 	RbacRule      map[int]RuleResult
 }
 
 type RuleRepresentation interface {
-	GetName() string
-	IsJWT() bool
-	IsFilter() bool
-	IsConstant() bool
-	IsGqlTyp() bool
-
 	GetFilters(authVariables map[string]string) *gql.FilterTree
 	BuildQueries(ruleId int, authVariables map[string]string) *gql.GraphQuery
 	EvaluateRBACRule(a *AuthState) RuleResult
-	Validate() gqlerror.List
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
@@ -677,14 +665,8 @@ func (f *field) IDArgValue() (xid *string, uid uint64, err error) {
 }
 
 func (f *field) Type() Type {
-	var t *ast.Type
-	if f.field != nil && f.field.Definition != nil {
-		// This is strange.  There was a case with a parsed schema and query where the field
-		// had a nil Definition ... how ???
-		t = f.field.Definition.Type
-	}
 	return &astType{
-		typ:             t,
+		typ:             f.field.Definition.Type,
 		inSchema:        f.op.inSchema.schema,
 		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
@@ -930,22 +912,13 @@ func (m *mutation) SelectionSet() []Field {
 }
 
 func (m *mutation) QueryField() Field {
-	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+	for _, i := range m.SelectionSet() {
+		if i.Name() == NumUid {
 			continue
 		}
-		return f
+		return i
 	}
 	return m.SelectionSet()[0]
-}
-
-func (m *mutation) NumUidsField() Field {
-	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid {
-			return f
-		}
-	}
-	return nil
 }
 
 func (m *mutation) Location() x.Location {
@@ -1144,7 +1117,7 @@ func (t *astType) Nullable() bool {
 }
 
 func (t *astType) ListType() Type {
-	if t.typ == nil || t.typ.Elem == nil {
+	if t.typ.Elem == nil {
 		return nil
 	}
 	return &astType{typ: t.typ.Elem}

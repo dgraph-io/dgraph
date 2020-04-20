@@ -1,12 +1,3 @@
-<<<<<<< HEAD
---- FAIL: TestSchemaString (0.00s)
-    --- FAIL: TestSchemaString/hasInverse.graphql (0.00s)
-        schemagen_test.go:84: 
-            	Error Trace:	schemagen_test.go:84
-            	Error:      	Received unexpected error:
-            	            	input:38: Cannot redeclare directive auth.
-            	Test:       	TestSchemaString/hasInverse.graphql
-=======
 #######################
 # Input Schema
 #######################
@@ -55,11 +46,7 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @auth(
-	query: AuthRule, 
-	add: AuthRule, 
-	update: AuthRule, 
-	delete:AuthRule) on OBJECT | FIELD_DEFINITION
+directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
 
 input IntFilter {
 	eq: Int
@@ -235,4 +222,3 @@ type Subscription {
 	getAuthor(id: ID!): Author
 	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
 }
->>>>>>> graphql/authorization

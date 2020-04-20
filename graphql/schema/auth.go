@@ -17,13 +17,16 @@
 package schema
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
+
+	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
-	"regexp"
-	"strings"
 )
 
 const (
@@ -36,13 +39,81 @@ type RBACQuery struct {
 	Operand  string
 }
 
-type RuleNode struct {
-	Or       []*RuleNode
-	And      []*RuleNode
-	Not      *RuleNode
-	Rule     Query
-	RBACRule *RBACQuery
+type AuthQuery struct {
+	query *query
+	rbac  *RBACQuery
+	name  string
+
+	isRbac bool
 }
+
+func (aq *AuthQuery) GetName() string {
+	if aq.isRbac {
+		return aq.rbac.Operand
+	}
+
+	return ""
+}
+
+func (aq *AuthQuery) GetFilters(av map[string]string) *gql.FilterTree {
+	q := RewriteAsQuery(aq.query)
+	fmt.Println("Here", q)
+	return &gql.FilterTree{}
+}
+
+func (aq *AuthQuery) IsDeepQuery() bool {
+	if aq.isRbac {
+		return false
+	}
+
+	for _, q := range aq.query.SelectionSet() {
+		if len(q.SelectionSet()) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (aq *AuthQuery) IsRBAC() bool {
+	return aq.isRbac
+}
+
+func (rc *RBACQuery) Evaluate(a *AuthState) bool {
+	if rc.Operator == "eq" {
+		return a.AuthVariables[rc.Variable] == rc.Operand
+	}
+
+	return false
+}
+
+func (aq *AuthQuery) EvaluateRBACRule(a *AuthState) RuleResult {
+	if !aq.isRbac {
+		return Uncertain
+	}
+
+	if aq.rbac.Evaluate(a) {
+		return Positive
+	}
+	return Negative
+}
+
+type RuleNode struct {
+	Or   []*RuleNode
+	And  []*RuleNode
+	Not  *RuleNode
+	Rule *AuthQuery
+
+	RuleID int
+}
+
+type RuleResult int
+
+const (
+	Uncertain RuleResult = iota
+	Positive
+	Negative
+)
 
 type AuthContainer struct {
 	Query  *RuleNode
@@ -54,6 +125,162 @@ type AuthContainer struct {
 type TypeAuth struct {
 	rules  *AuthContainer
 	fields map[string]*AuthContainer
+}
+
+func (r *RuleNode) IsRBAC() bool {
+	for _, i := range r.Or {
+		if i.IsRBAC() {
+			return true
+		}
+	}
+	for _, i := range r.And {
+		if i.IsRBAC() {
+			return true
+		}
+	}
+
+	if r.Not != nil && r.Not.IsRBAC() {
+		return true
+	}
+
+	if r.Rule != nil {
+		return r.Rule.IsRBAC()
+	}
+
+	return false
+}
+
+func (node *RuleNode) GetRuleID() int {
+	return node.RuleID
+}
+
+func (r *RuleNode) GetQueries(authState *AuthState) []*gql.GraphQuery {
+	var list []*gql.GraphQuery
+
+	for _, i := range r.Or {
+		list = append(list, i.GetQueries(authState)...)
+	}
+
+	for _, i := range r.And {
+		list = append(list, i.GetQueries(authState)...)
+	}
+
+	if r.Not != nil {
+		list = append(list, r.Not.GetQueries(authState)...)
+	}
+
+	if r.Rule != nil {
+		//if query := r.Rule.BuildQueries(r.RuleID, authState.AuthVariables); query != nil {
+		//	list = append(list, query)
+		//}
+	}
+
+	return list
+}
+
+func (node *RuleNode) GetRBACRules(a *AuthState) {
+	a.RbacRule[node.RuleID] = Uncertain
+	valid := Uncertain
+	for _, rule := range node.Or {
+		if rule.IsRBAC() {
+			rule.GetRBACRules(a)
+			if a.RbacRule[rule.RuleID] == Positive {
+				valid = Positive
+			}
+		}
+		a.RbacRule[node.RuleID] = valid
+	}
+
+	for _, rule := range node.And {
+		if rule.IsRBAC() {
+			rule.GetRBACRules(a)
+			if a.RbacRule[rule.RuleID] == Negative {
+				valid = Negative
+			}
+		}
+		a.RbacRule[node.RuleID] = valid
+	}
+
+	if node.Not != nil && node.Not.IsRBAC() {
+		node.Not.GetRBACRules(a)
+		childValue := a.RbacRule[node.Not.RuleID]
+		switch childValue {
+
+		case Uncertain:
+			a.RbacRule[node.RuleID] = Uncertain
+		case Positive:
+			a.RbacRule[node.RuleID] = Negative
+		case Negative:
+			a.RbacRule[node.RuleID] = Positive
+		}
+
+	}
+
+	if node.Rule != nil && node.Rule.IsRBAC() {
+		a.RbacRule[node.RuleID] = node.Rule.EvaluateRBACRule(a)
+	}
+}
+
+func (r *RuleNode) GetFilter(authState *AuthState) *gql.FilterTree {
+	if val, ok := authState.RbacRule[r.RuleID]; ok && val != Uncertain {
+		return nil
+	}
+
+	result := &gql.FilterTree{}
+	if len(r.Or) > 0 || len(r.And) > 0 {
+		result.Op = "or"
+		if len(r.And) > 0 {
+			result.Op = "and"
+		}
+		for _, i := range r.Or {
+			t := i.GetFilter(authState)
+			if t == nil {
+				continue
+			}
+			result.Child = append(result.Child, t)
+		}
+		for _, i := range r.And {
+			t := i.GetFilter(authState)
+			if t == nil {
+				continue
+			}
+			result.Child = append(result.Child, t)
+		}
+
+		if len(result.Child) == 0 {
+			return nil
+		}
+
+		return result
+	}
+
+	if r.Not != nil {
+		f := r.Not.GetFilter(authState)
+		if f == nil {
+			return f
+		}
+		return &gql.FilterTree{
+			Op:    "not",
+			Child: []*gql.FilterTree{f},
+		}
+	}
+
+	if r.IsRBAC() {
+		return nil
+	}
+
+	if r.Rule.IsDeepQuery() {
+		result.Func = &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{
+				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
+			}},
+		}
+
+		return result
+	}
+
+	return r.Rule.GetFilters(authState.AuthVariables)
 }
 
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
@@ -166,10 +393,13 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if rule := val.Children.ForName("rule"); rule != nil {
 		var err error
+		aq := &AuthQuery{}
 		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
-			result.RBACRule, err = rbacValidateRule(typ, rule.Raw, rule.Position)
+			aq.rbac, err = rbacValidateRule(typ, rule.Raw, rule.Position)
+			aq.isRbac = true
 		} else {
-			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+			aq.isRbac = false
+			aq.query, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
 		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
@@ -222,7 +452,7 @@ func gqlValidateRule(
 	s *ast.Schema,
 	typ *ast.Definition,
 	rule string,
-	position *ast.Position) (Query, error) {
+	position *ast.Position) (*query, error) {
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {

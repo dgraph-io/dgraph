@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -69,7 +68,7 @@ func TestDGSchemaGen(t *testing.T) {
 
 func TestSchemaString(t *testing.T) {
 	inputDir := "testdata/schemagen/input/"
-	//outputDir := "testdata/schemagen/output/"
+	outputDir := "testdata/schemagen/output/"
 
 	files, err := ioutil.ReadDir(inputDir)
 	require.NoError(t, err)
@@ -88,16 +87,14 @@ func TestSchemaString(t *testing.T) {
 			_, err = FromString(newSchemaStr)
 			require.NoError(t, err)
 
-			//outputFileName := outputDir + testFile.Name()
-			//str2, err := ioutil.ReadFile(outputFileName)
-			//require.NoError(t, err)
+			outputFileName := outputDir + testFile.Name()
+			str2, err := ioutil.ReadFile(outputFileName)
+			require.NoError(t, err)
 
-			fmt.Println(newSchemaStr)
-
-			//if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
-			//	// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
-			//	t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
-			//}
+			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
+				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
+				t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
+			}
 		})
 	}
 }

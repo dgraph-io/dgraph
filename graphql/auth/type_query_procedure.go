@@ -17,6 +17,8 @@
 package auth
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -41,6 +43,8 @@ func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *s
 		gqlQuery = nil
 		return
 	}
+
+	fmt.Println("Here")
 
 	authFilter := rules.GetFilter(tnqp.authState)
 	if gqlQuery.Filter != nil && authFilter != nil {
