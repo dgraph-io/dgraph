@@ -44,7 +44,7 @@ type updateSchemaResolver struct {
 	// The underlying executor and rewriter that persist the schema into Dgraph as
 	// GraphQL metadata
 	baseMutationRewriter resolve.MutationRewriter
-	baseMutationExecutor resolve.MutationExecutor
+	baseMutationExecutor resolve.DgraphExecutor
 }
 
 type getSchemaResolver struct {
@@ -58,18 +58,19 @@ type updateGQLSchemaInput struct {
 }
 
 func (asr *updateSchemaResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+	ctx context.Context,
+	m schema.Mutation) (*resolve.UpsertMutation, error) {
 
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	schHandler, err := schema.NewHandler(input.Set.Schema)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	asr.newDgraphSchema = schHandler.DGSchema()
 
@@ -81,10 +82,11 @@ func (asr *updateSchemaResolver) Rewrite(
 			"filter": map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}},
 			"set":    map[string]interface{}{"schema": input.Set.Schema},
 		})
-	return asr.baseMutationRewriter.Rewrite(m)
+	return asr.baseMutationRewriter.Rewrite(ctx, m)
 }
 
 func (asr *updateSchemaResolver) FromMutationResult(
+	ctx context.Context,
 	mutation schema.Mutation,
 	assigned map[string]string,
 	result map[string]interface{}) (*gql.GraphQuery, error) {
@@ -93,28 +95,29 @@ func (asr *updateSchemaResolver) FromMutationResult(
 	return nil, nil
 }
 
-func (asr *updateSchemaResolver) Mutate(
+func (asr *updateSchemaResolver) Execute(
 	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, *schema.Extensions,
-	error) {
-	assigned, result, ext, err := asr.baseMutationExecutor.Mutate(ctx, query, mutations)
+	req *dgoapi.Request) (*dgoapi.Response, error) {
+
+	if req == nil || (req.Query == "" && len(req.Mutations) == 0) {
+		// For schema updates, Execute will get called twice.  Once for the
+		// mutation and once for the following query.  This is the query case.
+		b, err := doQuery(asr.admin.schema, asr.mutation.QueryField())
+		return &dgoapi.Response{Json: b}, err
+	}
+
+	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
-		return nil, nil, ext, err
+		return nil, err
 	}
 
 	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
 	if err != nil {
-		return nil, nil, ext, schema.GQLWrapf(err,
+		return nil, schema.GQLWrapf(err,
 			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
 	}
 
-	return assigned, result, ext, nil
-}
-
-func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
-	return doQuery(asr.admin.schema, asr.mutation.QueryField())
+	return resp, nil
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
@@ -123,12 +126,15 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 	return nil, nil
 }
 
-func (gsr *getSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
-	return doQuery(gsr.admin.schema, gsr.gqlQuery)
+func (gsr *getSchemaResolver) Execute(
+	ctx context.Context,
+	req *dgoapi.Request) (*dgoapi.Response, error) {
+
+	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
+	return &dgoapi.Response{Json: b}, err
 }
 
-func doQuery(gql *gqlSchema, field schema.Field) ([]byte, *schema.Extensions, error) {
+func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
@@ -158,7 +164,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, *schema.Extensions, er
 	}
 	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil, nil
+	return buf.Bytes(), nil
 }
 
 func getSchemaInput(m schema.Mutation) (*updateGQLSchemaInput, error) {

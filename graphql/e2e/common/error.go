@@ -29,7 +29,6 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -236,8 +235,7 @@ func panicCatcher(t *testing.T) {
 		Arw: resolve.NewAddRewriter,
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
-		Qe:  &panicClient{},
-		Me:  &panicClient{}}
+		Ex:  &panicClient{}}
 
 	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
@@ -265,19 +263,9 @@ func panicCatcher(t *testing.T) {
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
+func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
 	x.Panic(errors.New(panicMsg))
-	return nil, nil, nil
-}
-
-func (dg *panicClient) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
-	*schema.Extensions, error) {
-	x.Panic(errors.New(panicMsg))
-	return nil, nil, nil, nil
+	return nil, nil
 }
 
 // clientInfoLogin check whether the client info(IP address) is propagated in the request.

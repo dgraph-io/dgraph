@@ -18,11 +18,11 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,9 +45,9 @@ type executor struct {
 	resp     string
 	assigned map[string]string
 	result   map[string]interface{}
-	// these will be returned as extensions by .Query() and .Mutate() respectively
-	queryExtensions  *schema.Extensions
-	mutateExtensions *schema.Extensions
+
+	queryTouched    uint64
+	mutationTouched uint64
 
 	// start reporting Dgraph fails at this point (0 = never fail, 1 = fail on
 	// first request, 2 = succeed once and then fail on 2nd request, etc.)
@@ -82,35 +82,38 @@ type Post {
 	author: Author!
 }`
 
-func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
-	ex.failQuery--
-	if ex.failQuery == 0 {
-		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
-	}
-	// give out a new copy everytime
-	ext := schema.Extensions{}
-	if ex.queryExtensions != nil {
-		ext.TouchedUids = ex.queryExtensions.TouchedUids
-	}
-	return []byte(ex.resp), &ext, nil
-}
+func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	if len(req.Mutations) == 0 {
+		ex.failQuery--
+		if ex.failQuery == 0 {
+			return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
+		}
 
-func (ex *executor) Mutate(ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{},
-	*schema.Extensions, error) {
+		return &dgoapi.Response{
+			Json: []byte(ex.resp),
+			Metrics: &dgoapi.Metrics{
+				NumUids: map[string]uint64{touchedUidsKey: ex.queryTouched}},
+		}, nil
+	}
+
 	ex.failMutation--
 	if ex.failMutation == 0 {
-		return nil, nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
+		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
 			"Dgraph mutation failed")
 	}
-	// give out a new copy everytime
-	ext := schema.Extensions{}
-	if ex.mutateExtensions != nil {
-		ext.TouchedUids = ex.mutateExtensions.TouchedUids
+
+	res, err := json.Marshal(ex.result)
+	if err != nil {
+		panic(err)
 	}
-	return ex.assigned, ex.result, &ext, nil
+
+	return &dgoapi.Response{
+		Json: []byte(res),
+		Uids: ex.assigned,
+		Metrics: &dgoapi.Metrics{
+			NumUids: map[string]uint64{touchedUidsKey: ex.mutationTouched}},
+	}, nil
+
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
@@ -462,8 +465,8 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, query, nil,
 		&executor{
-			queryExtensions:  &schema.Extensions{TouchedUids: 2},
-			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+			queryTouched:    2,
+			mutationTouched: 5,
 		})
 
 	expectedExtensions := &schema.Extensions{TouchedUids: 2}
@@ -490,8 +493,8 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, query, nil,
 		&executor{
-			queryExtensions:  &schema.Extensions{TouchedUids: 2},
-			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+			queryTouched:    2,
+			mutationTouched: 5,
 		})
 
 	expectedExtensions := &schema.Extensions{TouchedUids: 6}
@@ -513,8 +516,8 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			queryExtensions:  &schema.Extensions{TouchedUids: 2},
-			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+			queryTouched:    2,
+			mutationTouched: 5,
 		})
 
 	// as both .Mutate() and .Query() should get called, so we should get their merged result
@@ -542,8 +545,8 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 
 	resp := resolveWithClient(gqlSchema, mutation, nil,
 		&executor{
-			queryExtensions:  &schema.Extensions{TouchedUids: 2},
-			mutateExtensions: &schema.Extensions{TouchedUids: 5},
+			queryTouched:    2,
+			mutationTouched: 5,
 		})
 
 	// as both .Mutate() and .Query() should get called, so we should get their merged result
@@ -569,8 +572,7 @@ func resolveWithClient(
 			Qrw: NewQueryRewriter(),
 			Arw: NewAddRewriter,
 			Urw: NewUpdateRewriter,
-			Qe:  ex,
-			Me:  ex,
+			Ex:  ex,
 		}))
 
 	return resolver.Resolve(context.Background(), &schema.Request{Query: gqlQuery, Variables: vars})
