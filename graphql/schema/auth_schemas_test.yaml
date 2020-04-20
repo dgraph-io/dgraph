@@ -1,0 +1,88 @@
+invalid_schemas:
+
+  - name: "GraphQL parsing errors should be reported"
+    input: |
+      type X @auth(
+        query: { rule: "query { " }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      {"message": "failed to parse GraphQL rule 
+        [reason : Expected Name, found <EOF> (Locations: [{Line: 1, Column: 9}])]",
+      "locations":[{"line":5, "column":28}]}
+    ]
+
+  - name: "GraphQL validation errors should be reported"
+    input: |
+      type X @auth(
+        query: {rule: "query { queryX(filter: { userRle: { eq: \"ADMIN\" } }) { __typename } }"}
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+      {"message": "failed to validate GraphQL rule 
+        [reason : Field \"userRle\" is not defined by type XFilter. 
+        Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
+      "locations":[{"line":5, "column":28}]}
+    ]
+      
+
+valid_schemas:
+
+  - name: "GraphQL Should Parse"
+    input: |
+      type X @auth(
+        query: {rule: """
+          query { 
+            queryX(filter: { userRole: { eq: "ADMIN" } }) { 
+              __typename 
+            } 
+          }"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "GraphQL With Variable Should Parse"
+    input: |
+      type X @auth(
+        query: { rule: """
+          query($usr: String!) { 
+            queryX(filter: { username: { eq: $usr } }) { 
+              __typename 
+            } 
+          }"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+
+  - name: "Complex GraphQL Should Parse"
+    input: |
+      type Proj @auth(
+        update: { rule: """
+          query($usr: String!) { 
+            queryProj {
+              roles(filter: { perm: { ge: 4 }}) {
+                users(filter: { username: { eq: $usr } }) { 
+                  __typename 
+                } 
+              }
+            }
+          }""" }
+      ) {
+        projID: ID!
+        roles: [Role]
+      }
+      type Role {
+        perm: Int! @search
+        users: [User]
+      }
+      type User {
+        username: String! @id
+      }

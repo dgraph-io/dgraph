@@ -39,10 +39,11 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	bopt "github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/chunker"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/dgraph/xidmap"
@@ -56,6 +57,7 @@ type options struct {
 	dataFiles      string
 	dataFormat     string
 	schemaFile     string
+	keyfile        string
 	zero           string
 	concurrent     int
 	batchSize      int
@@ -124,7 +126,10 @@ func init() {
 	flag := Live.Cmd.Flags()
 	flag.StringP("files", "f", "", "Location of *.rdf(.gz) or *.json(.gz) file(s) to load")
 	flag.StringP("schema", "s", "", "Location of schema file")
-	flag.String("format", "", "Specify file format (rdf or json) instead of getting it from filename")
+	flag.StringP("keyfile", "k", "", "Location of the key file to decrypt the schema "+
+		"and data files")
+	flag.String("format", "", "Specify file format (rdf or json) instead of getting it "+
+		"from filename")
 	flag.StringP("alpha", "a", "127.0.0.1:9080",
 		"Comma-separated list of Dgraph alpha gRPC server addresses")
 	flag.StringP("zero", "z", "127.0.0.1:5080", "Dgraph zero gRPC server address")
@@ -167,7 +172,8 @@ func getSchema(ctx context.Context, dgraphClient *dgo.Dgraph) (*schema, error) {
 }
 
 // processSchemaFile process schema for a given gz file.
-func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgraph) error {
+func processSchemaFile(ctx context.Context, file string, keyfile string,
+	dgraphClient *dgo.Dgraph) error {
 	fmt.Printf("\nProcessing schema file %q\n", file)
 	if len(opt.authToken) > 0 {
 		md := metadata.New(nil)
@@ -179,12 +185,11 @@ func processSchemaFile(ctx context.Context, file string, dgraphClient *dgo.Dgrap
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
-	var reader io.Reader
+	reader, err := enc.GetReader(keyfile, f)
+	x.Check(err)
 	if strings.HasSuffix(strings.ToLower(file), ".gz") {
-		reader, err = gzip.NewReader(f)
+		reader, err = gzip.NewReader(reader)
 		x.Check(err)
-	} else {
-		reader = f
 	}
 
 	b, err := ioutil.ReadAll(reader)
@@ -205,7 +210,6 @@ func (l *loader) uid(val string) string {
 	// later to another node. It is up to the user to avoid this.
 	if !opt.newUids {
 		if uid, err := strconv.ParseUint(val, 0, 64); err == nil {
-			l.alloc.BumpTo(uid)
 			return fmt.Sprintf("%#x", uid)
 		}
 	}
@@ -214,11 +218,39 @@ func (l *loader) uid(val string) string {
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
+// allocateUids looks for the maximum uid value in the given NQuads and bumps the
+// maximum seen uid to that value.
+func (l *loader) allocateUids(nqs []*api.NQuad) {
+	if opt.newUids {
+		return
+	}
+
+	var maxUid uint64
+	for _, nq := range nqs {
+		sUid, err := strconv.ParseUint(nq.Subject, 0, 64)
+		if err != nil {
+			continue
+		}
+		if sUid > maxUid {
+			maxUid = sUid
+		}
+
+		oUid, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		if err != nil {
+			continue
+		}
+		if oUid > maxUid {
+			maxUid = oUid
+		}
+	}
+	l.alloc.BumpTo(maxUid)
+}
+
 // processFile forwards a file to the RDF or JSON processor as appropriate
-func (l *loader) processFile(ctx context.Context, filename string) error {
+func (l *loader) processFile(ctx context.Context, filename string, keyfile string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename)
+	rd, cleanup := chunker.FileReader(filename, keyfile)
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
@@ -281,6 +313,8 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 			if len(nqs) == 0 {
 				continue
 			}
+
+			l.allocateUids(nqs)
 			for _, nq := range nqs {
 				nq.Subject = l.uid(nq.Subject)
 				if len(nq.ObjectId) > 0 {
@@ -371,6 +405,7 @@ func run() error {
 		dataFiles:      Live.Conf.GetString("files"),
 		dataFormat:     Live.Conf.GetString("format"),
 		schemaFile:     Live.Conf.GetString("schema"),
+		keyfile:        Live.Conf.GetString("keyfile"),
 		zero:           Live.Conf.GetString("zero"),
 		concurrent:     Live.Conf.GetInt("conc"),
 		batchSize:      Live.Conf.GetInt("batch"),
@@ -404,7 +439,7 @@ func run() error {
 	defer l.zeroconn.Close()
 
 	if len(opt.schemaFile) > 0 {
-		err := processSchemaFile(ctx, opt.schemaFile, dg)
+		err := processSchemaFile(ctx, opt.schemaFile, opt.keyfile, dg)
 		if err != nil {
 			if err == context.Canceled {
 				fmt.Printf("Interrupted while processing schema file %q\n", opt.schemaFile)
@@ -439,7 +474,7 @@ func run() error {
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- l.processFile(ctx, file)
+			errCh <- l.processFile(ctx, file, opt.keyfile)
 		}(file)
 	}
 

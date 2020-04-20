@@ -29,8 +29,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -550,7 +550,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
-	runInBackground, err := parseBool(r, "run_in_background")
+	runInBackground, err := parseBool(r, "runInBackground")
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return

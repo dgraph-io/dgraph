@@ -135,6 +135,7 @@ type Type interface {
 	ListType() Type
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
+	FieldOriginatedFrom(fieldName string) string
 	fmt.Stringer
 }
 
@@ -323,6 +324,22 @@ func parentInterface(sch *ast.Schema, typDef *ast.Definition, fieldName string) 
 	return nil
 }
 
+func parentInterfaceForPwdField(sch *ast.Schema, typDef *ast.Definition,
+	fieldName string) *ast.Definition {
+	if len(typDef.Interfaces) == 0 {
+		return nil
+	}
+
+	for _, iface := range typDef.Interfaces {
+		interfaceDef := sch.Types[iface]
+		pwdField := getPasswordField(interfaceDef)
+		if pwdField != nil && fieldName == pwdField.Name {
+			return interfaceDef
+		}
+	}
+	return nil
+}
+
 func convertPasswordDirective(dir *ast.Directive) *ast.FieldDefinition {
 	if dir.Name != "secret" {
 		return nil
@@ -494,305 +511,11 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+type RuleResult int
+
 type AuthState struct {
 	AuthVariables map[string]string
 	RbacRule      map[int]RuleResult
-}
-
-// Rule Ast starts
-type AuthVariable int
-
-const (
-	Constant AuthVariable = iota
-	Op
-	JwtVar
-	GqlTyp
-	SpecialOp
-)
-
-type RuleResult int
-
-const (
-	Uncertain RuleResult = iota
-	Positive
-	Negative
-)
-
-type RuleAst struct {
-	Name  string
-	Typ   AuthVariable
-	Value *RuleAst
-
-	dgraphPredicate string
-	typInfo         *ast.Definition
-}
-
-func (r *RuleAst) checkType(op AuthVariable) bool {
-	if r == nil {
-		return false
-	}
-
-	return r.Typ == op
-}
-
-func (r *RuleAst) IsGqlTyp() bool {
-	return r.checkType(GqlTyp)
-}
-
-func (r *RuleAst) IsConstant() bool {
-	return r.checkType(Constant)
-}
-
-func (r *RuleAst) IsJWT() bool {
-	return r.checkType(JwtVar)
-}
-
-func (r *RuleAst) IsOp() bool {
-	return r.checkType(Op)
-}
-
-func (r *RuleAst) GetOperation() *RuleAst {
-	if r == nil {
-		return nil
-	}
-
-	switch r.Typ {
-	case Constant:
-		// Constant should be a leaf
-		return nil
-	case Op:
-		// Already an operation
-		return r
-	case GqlTyp, JwtVar:
-		if r.Value != nil && r.Value.IsOp() {
-			return r.Value
-		}
-	}
-
-	return nil
-}
-
-func (r *RuleAst) GetOperand() *RuleAst {
-	if r == nil && !r.IsOp() {
-		return nil
-	}
-
-	return r.Value
-}
-
-func (r *RuleAst) GetName() string {
-	if r.Typ == GqlTyp {
-		return r.dgraphPredicate
-	}
-
-	return r.Name
-}
-
-// Builds query used to get authorized nodes and their uids
-func (r *RuleAst) BuildQueries(ruleID int, AuthVariables map[string]string) *gql.GraphQuery {
-	return nil
-	operation := r.GetOperation()
-	if operation.GetName() != "filter" {
-		return nil
-	}
-
-	operand := operation.GetOperand()
-
-	dgQuery := &gql.GraphQuery{
-		Cascade: true,
-		Var:     fmt.Sprintf("rule_%s_%d", r.GetName(), ruleID),
-		Attr:    "var",
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: r.typInfo.Name}},
-		},
-		Children: []*gql.GraphQuery{
-			{Attr: "uid"},
-			{
-				Attr:     r.GetName(),
-				Children: []*gql.GraphQuery{{Attr: "uid"}},
-				Filter:   operand.GetFilters(AuthVariables),
-			},
-		},
-	}
-	return dgQuery
-}
-
-// Creates a filter() for dgraph operations, like, eq
-func (r *RuleAst) GetFilters(AuthVariables map[string]string) *gql.FilterTree {
-	operation := r.GetOperation()
-	if operation.IsFilter() {
-		return nil
-	}
-
-	return nil
-
-	var ruleValue string
-	if operation.GetOperand().IsJWT() && AuthVariables != nil {
-		ruleValue = AuthVariables[operation.GetOperand().GetName()]
-		if ruleValue == "" {
-			ruleValue = `""`
-		}
-	} else {
-		ruleValue = operation.GetOperand().GetName()
-	}
-
-	return &gql.FilterTree{
-		Func: &gql.Function{
-			Name: operation.GetName(),
-			Args: []gql.Arg{
-				{Value: r.GetName()},
-				{Value: ruleValue},
-			},
-		},
-	}
-}
-
-func (r *RuleAst) IsFilter() bool {
-	if r == nil || r.GetOperation() == nil {
-		return false
-	}
-
-	operation := r.GetOperation()
-	return operation.GetName() == "filter"
-}
-
-func (rule *RuleAst) EvaluateRBACRule(a *AuthState) RuleResult {
-	value := rule.GetOperand()
-	if value.GetName() == "eq" && value.GetOperand().GetName() == a.AuthVariables[rule.GetName()] {
-		return Positive
-	}
-	return Negative
-}
-
-func (rule *RuleAst) Validate() gqlerror.List {
-	var errs gqlerror.List
-	if rule == nil {
-		return nil
-	}
-
-	if rule.Typ == SpecialOp {
-		if rule.Value != nil {
-			errs = append(errs, gqlerror.Errorf("Special Operation %s has a child", rule.Name))
-		}
-		return errs
-	}
-
-	operation := rule.GetOperation()
-	if operation == nil {
-		errs = append(errs, gqlerror.Errorf("%s has no operation attached", rule.Name))
-		return errs
-	}
-
-	operand := operation.GetOperand()
-	if operand == nil {
-		errs = append(errs, gqlerror.Errorf("%s operation no value attached", operation.Name))
-		return errs
-	}
-
-	if !operation.IsFilter() {
-		if operand.Value != nil {
-			errs = append(errs, gqlerror.Errorf("%s rule has a child", operand.Name))
-			return errs
-		}
-		return errs
-	} else {
-		errs = append(errs, operand.Validate()...)
-		if operand.GetOperation().IsFilter() {
-			errs = append(errs, gqlerror.Errorf("%s cannot have filter as a child", operand.Name))
-			return errs
-		}
-	}
-
-	return errs
-}
-
-var operations = map[string]bool{
-	"filter": true,
-	"eq":     true,
-}
-
-var specialOps = map[string]bool{
-	"DENY": true,
-}
-
-var punctuations = map[byte]bool{
-	'{': true,
-	'}': true,
-	':': true,
-	'(': true,
-	')': true,
-	' ': true,
-}
-
-type Parser struct {
-	index int
-	str   *string
-}
-
-func (p *Parser) init(str *string) {
-	p.str = str
-	p.index = 0
-}
-
-func (p *Parser) skipPunc() {
-	for ; p.index != len(*p.str) && punctuations[(*p.str)[p.index]]; p.index++ {
-	}
-}
-
-func (p *Parser) getNextWord() string {
-	start := p.index
-	for ; p.index != len(*p.str) && !punctuations[(*p.str)[p.index]]; p.index++ {
-	}
-
-	word := (*p.str)[start:p.index]
-	p.skipPunc()
-
-	return word
-}
-
-func (p *Parser) isEmpty() bool {
-	return p.index == len(*p.str)
-}
-
-func (ap *AuthParser) buildRuleAST(rule string, dgraphPredicate map[string]map[string]string) RuleAst {
-	ast := &RuleAst{}
-	var p Parser
-
-	builder := &ast
-	typ := ap.currentTyp
-
-	p.init(&rule)
-	p.skipPunc()
-
-	for !p.isEmpty() {
-		rule := &RuleAst{}
-		word := p.getNextWord()
-
-		rule.Name = word
-		rule.typInfo = typ
-
-		if word[0] == '$' {
-			rule.Typ = JwtVar
-			rule.Name = word[1:]
-		} else if operations[word] {
-			rule.Typ = Op
-		} else if field := typ.Fields.ForName(word); field != nil {
-			name := field.Type.Name()
-			rule.Typ = GqlTyp
-			rule.dgraphPredicate = dgraphPredicate[typ.Name][field.Name]
-			typ = ap.s.Types[name]
-		} else if specialOps[word] {
-			rule.Typ = SpecialOp
-		} else {
-			rule.Typ = Constant
-		}
-
-		*builder = rule
-		builder = &rule.Value
-	}
-
-	return *ast
 }
 
 type RuleRepresentation interface {
@@ -808,302 +531,24 @@ type RuleRepresentation interface {
 	Validate() gqlerror.List
 }
 
-type RuleNode struct {
-	RuleID int
-	Or     []*RuleNode
-	And    []*RuleNode
-	Not    *RuleNode
-
-	Rule RuleRepresentation
-}
-
-func (node *RuleNode) GetRuleID() int {
-	return node.RuleID
-}
-
-func (node *RuleNode) GetRBACRules(a *AuthState) {
-	a.RbacRule[node.RuleID] = Uncertain
-	valid := Uncertain
-	for _, rule := range node.Or {
-		if rule.IsRBAC() {
-			rule.GetRBACRules(a)
-			if a.RbacRule[rule.RuleID] == Positive {
-				valid = Positive
-			}
-		}
-		a.RbacRule[node.RuleID] = valid
-	}
-
-	for _, rule := range node.And {
-		if rule.IsRBAC() {
-			rule.GetRBACRules(a)
-			if a.RbacRule[rule.RuleID] == Negative {
-				valid = Negative
-			}
-		}
-		a.RbacRule[node.RuleID] = valid
-	}
-
-	if node.Not != nil && node.Not.IsRBAC() {
-		node.Not.GetRBACRules(a)
-		childValue := a.RbacRule[node.Not.RuleID]
-		switch childValue {
-
-		case Uncertain:
-			a.RbacRule[node.RuleID] = Uncertain
-		case Positive:
-			a.RbacRule[node.RuleID] = Negative
-		case Negative:
-			a.RbacRule[node.RuleID] = Positive
-		}
-
-	}
-
-	if node.Rule != nil && node.Rule.IsJWT() {
-		a.RbacRule[node.RuleID] = node.Rule.EvaluateRBACRule(a)
-	}
-}
-
-func (r *RuleNode) GetFilter(authState *AuthState) *gql.FilterTree {
-	if val, ok := authState.RbacRule[r.RuleID]; ok && val != Uncertain {
-		return nil
-	}
-
-	result := &gql.FilterTree{}
-	if len(r.Or) > 0 || len(r.And) > 0 {
-		result.Op = "or"
-		if len(r.And) > 0 {
-			result.Op = "and"
-		}
-		for _, i := range r.Or {
-			t := i.GetFilter(authState)
-			if t == nil {
-				continue
-			}
-			result.Child = append(result.Child, t)
-		}
-
-		if len(result.Child) == 0 {
-			return nil
-		}
-
-		return result
-	}
-
-	if r.Not != nil {
-		// TODO reverse
-		return r.Not.GetFilter(authState)
-	}
-
-	if r.IsRBAC() {
-		return nil
-	}
-
-	if r.Rule.IsFilter() {
-		result.Func = &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{
-				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
-			}},
-		}
-
-		return result
-	}
-
-	return r.Rule.GetFilters(authState.AuthVariables)
-}
-
-type AuthContainer struct {
-	Query  *RuleNode
-	Add    *RuleNode
-	Update *RuleNode
-	Delete *RuleNode
-}
-
-func (r *RuleNode) GetQueries(authState *AuthState) []*gql.GraphQuery {
-	var list []*gql.GraphQuery
-
-	for _, i := range r.Or {
-		list = append(list, i.GetQueries(authState)...)
-	}
-
-	for _, i := range r.And {
-		list = append(list, i.GetQueries(authState)...)
-	}
-
-	if r.Not != nil {
-		// TODO reverse sign
-		list = append(list, r.Not.GetQueries(authState)...)
-	}
-
-	if r.Rule != nil {
-		if query := r.Rule.BuildQueries(r.RuleID, authState.AuthVariables); query != nil {
-			list = append(list, query)
-		}
-	}
-
-	return list
-}
-
-func (r *RuleNode) IsRBAC() bool {
-	for _, i := range r.Or {
-		if i.IsRBAC() {
-			return true
-		}
-	}
-	for _, i := range r.And {
-		if !i.IsRBAC() {
-			return false
-		}
-		return true
-	}
-
-	if r.Not != nil && r.Not.IsRBAC() {
-		return true
-	}
-
-	rule := r.Rule
-	if rule.IsGqlTyp() {
-		return false
-	}
-
-	return true
-}
-
-func (c *AuthContainer) isRBAC() bool {
-	if c.Query != nil && c.Query.IsRBAC() {
-		return true
-	}
-	if c.Add != nil && c.Add.IsRBAC() {
-		return true
-	}
-	if c.Update != nil && c.Update.IsRBAC() {
-		return true
-	}
-	if c.Delete != nil && c.Delete.IsRBAC() {
-		return true
-	}
-
-	return false
-}
-
-type AuthParser struct {
-	s *ast.Schema
-
-	currentTyp      *ast.Definition
-	ruleId          int
-	dgraphPredicate *map[string]map[string]string
-}
-
-func (ap *AuthParser) parseRules(rule map[string]interface{}) *RuleNode {
-	var ruleNode RuleNode
-	ruleNode.RuleID = ap.ruleId
-	ap.ruleId++
-
-	or, ok := rule["or"].([]interface{})
-	if ok {
-		for _, node := range or {
-			ruleNode.Or = append(ruleNode.Or,
-				ap.parseRules(node.(map[string]interface{})))
-		}
-	}
-
-	and, ok := rule["and"].([]interface{})
-	if ok {
-		for _, node := range and {
-			ruleNode.And = append(ruleNode.And,
-				ap.parseRules(node.(map[string]interface{})))
-		}
-	}
-
-	not, ok := rule["not"].(map[string]interface{})
-	if ok {
-		ruleNode.Not = ap.parseRules(not)
-	}
-
-	ruleString, ok := rule["rule"].(string)
-	if ok {
-		ruleAst := ap.buildRuleAST(ruleString, *ap.dgraphPredicate)
-		ruleNode.Rule = &ruleAst
-	}
-
-	return &ruleNode
-}
-
-func (ap *AuthParser) parseAuthDirective(directive map[string]interface{}) *AuthContainer {
-	var container AuthContainer
-
-	query, ok := directive["query"].(map[string]interface{})
-	if ok {
-		container.Query = ap.parseRules(query)
-	}
-
-	add, ok := directive["add"].(map[string]interface{})
-	if ok {
-		container.Add = ap.parseRules(add)
-	}
-
-	update, ok := directive["update"].(map[string]interface{})
-	if ok {
-		container.Update = ap.parseRules(update)
-	}
-
-	delete, ok := directive["delete"].(map[string]interface{})
-	if ok {
-		container.Delete = ap.parseRules(delete)
-	}
-
-	return &container
-}
-
-type TypeAuth struct {
-	rules  *AuthContainer
-	fields map[string]*AuthContainer
-}
-
-func authRules(s *ast.Schema) map[string]*TypeAuth {
-	authRules := make(map[string]*TypeAuth)
-	var emptyMap map[string]interface{}
-	var p AuthParser
-	dgraphPreds := dgraphMapping(s)
-
-	p.s = s
-	p.dgraphPredicate = &dgraphPreds
-
-	for _, typ := range s.Types {
-		name := typeName(typ)
-		auth := typ.Directives.ForName("auth")
-		p.currentTyp = typ
-		p.ruleId = 1
-		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
-
-		if auth != nil {
-			authRules[name].rules = p.parseAuthDirective(auth.ArgumentMap(emptyMap))
-
-		}
-
-		for _, field := range typ.Fields {
-			auth := field.Directives.ForName("auth")
-			if auth != nil {
-				authRules[name].fields[field.Name] =
-					p.parseAuthDirective(auth.ArgumentMap(emptyMap))
-			}
-		}
-	}
-
-	return authRules
-}
-
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
+func AsSchema(s *ast.Schema) (Schema, error) {
+
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	authRules, err := authRules(s)
+	if err != nil {
+		return nil, err
+	}
+
 	dgraphPredicate := dgraphMapping(s)
 	return &schema{
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
-		authRules:       authRules(s),
-	}
+		authRules:       authRules,
+	}, nil
 }
 
 func responseName(f *ast.Field) string {
@@ -1841,4 +1286,21 @@ func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) e
 		}
 	}
 	return nil
+}
+
+// FieldOriginatedFrom returns the name of the interface from which given field was inherited.
+// If the field wasn't inherited, but belonged to this type, this type's name is returned.
+// Otherwise, empty string is returned.
+func (t *astType) FieldOriginatedFrom(fieldName string) string {
+	for _, implements := range t.inSchema.Implements[t.Name()] {
+		if implements.Fields.ForName(fieldName) != nil {
+			return implements.Name
+		}
+	}
+
+	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+		return t.Name()
+	}
+
+	return ""
 }

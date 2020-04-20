@@ -27,6 +27,7 @@ import (
 )
 
 func init() {
+	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	defnValidations = append(defnValidations, dataTypeCheck, nameCheck)
 
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
@@ -39,81 +40,201 @@ func init() {
 
 }
 
-func validateAuthNode(node *RuleNode) gqlerror.List {
-	var result gqlerror.List
-	has := make(map[string]bool)
+func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
 
-	for _, childNode := range node.Or {
-		result = append(result, validateAuthNode(childNode)...)
-		has["or"] = true
+	type pred struct {
+		name       string
+		parentName string
+		typ        string
+		position   *ast.Position
+		isId       bool
+		isSecret   bool
 	}
 
-	for _, childNode := range node.And {
-		result = append(result, validateAuthNode(childNode)...)
-		has["and"] = true
+	preds := make(map[string]pred)
+	interfacePreds := make(map[string]map[string]bool)
+
+	secretError := func(secretPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: has the @dgraph predicate, but that conflicts with type %s "+
+				"@secret directive on the same predicate. @secret predicates are stored encrypted"+
+				" and so the same predicate can't be used as a %s.", newPred.parentName,
+			newPred.name, secretPred.parentName, newPred.typ)
 	}
 
-	if childNode := node.Not; childNode != nil {
-		result = append(result, validateAuthNode(childNode)...)
-		has["not"] = true
+	typeError := func(existingPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: has type %s, which is different to type %s; field %s, which has "+
+				"the same @dgraph directive but type %s. These fields must have either the same "+
+				"GraphQL types, or use different Dgraph predicates.", newPred.parentName,
+			newPred.name, newPred.typ, existingPred.parentName, existingPred.name,
+			existingPred.typ)
 	}
 
-	if ast := node.Rule; ast != nil {
-		has["rule"] = true
-		//result = append(result, ast.Validate()...)
+	idError := func(idPred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: doesn't have @id directive, which conflicts with type %s; field "+
+				"%s, which has the same @dgraph directive along with @id directive. Both these "+
+				"fields must either use @id directive, or use different Dgraph predicates.",
+			newPred.parentName, newPred.name, idPred.parentName, idPred.name)
 	}
 
-	if len(has) > 1 {
-		result = append(result, gqlerror.Errorf("Rule ID: %d has multiple fields true",
-			node.RuleID))
+	existingInterfaceFieldError := func(interfacePred, newPred pred) *gqlerror.Error {
+		return gqlerror.ErrorPosf(newPred.position,
+			"Type %s; Field %s: has the @dgraph directive, which conflicts with interface %s; "+
+				"field %s, that this type implements. These fields must use different Dgraph "+
+				"predicates.", newPred.parentName, newPred.name, interfacePred.parentName,
+			interfacePred.name)
 	}
 
-	return result
-}
-
-func validateAuthRule(rule *AuthContainer) gqlerror.List {
-	var result gqlerror.List
-
-	if rule.Query != nil {
-		result = append(result, validateAuthNode(rule.Query)...)
+	conflictingFieldsInImplementedInterfacesError := func(def *ast.Definition,
+		interfaces []string, pred string) *gqlerror.Error {
+		return gqlerror.ErrorPosf(def.Position,
+			"Type %s; implements interfaces %v, all of which have fields with @dgraph predicate:"+
+				" %s. These fields must use different Dgraph predicates.", def.Name, interfaces,
+			pred)
 	}
 
-	if rule.Add != nil {
-		result = append(result, validateAuthNode(rule.Add)...)
-	}
-
-	if rule.Update != nil {
-		result = append(result, validateAuthNode(rule.Update)...)
-	}
-
-	if rule.Delete != nil {
-		result = append(result, validateAuthNode(rule.Delete)...)
-	}
-
-	return result
-}
-
-func validateAuthRules(schema *ast.Schema) gqlerror.List {
-	rules := authRules(schema)
-	var result gqlerror.List
-
-	for _, rule := range rules {
-		if rule.rules != nil {
-			result = append(result, validateAuthRule(rule.rules)...)
-		}
-
-		for _, fieldRule := range rule.fields {
-			if fieldRule != nil {
-				result = append(result, validateAuthRule(fieldRule)...)
+	checkExistingInterfaceFieldError := func(def *ast.Definition, existingPred, newPred pred) {
+		for _, defName := range def.Interfaces {
+			if existingPred.parentName == defName {
+				errs = append(errs, existingInterfaceFieldError(existingPred, newPred))
 			}
 		}
 	}
 
-	if len(result) == 0 {
-		return nil
+	checkConflictingFieldsInImplementedInterfacesError := func(typ *ast.Definition) {
+		fieldsToReport := make(map[string][]string)
+		interfaces := typ.Interfaces
+
+		for i := 0; i < len(interfaces); i++ {
+			intr1 := interfaces[i]
+			interfacePreds1 := interfacePreds[intr1]
+			for j := i + 1; j < len(interfaces); j++ {
+				intr2 := interfaces[j]
+				for fname := range interfacePreds[intr2] {
+					if interfacePreds1[fname] {
+						if len(fieldsToReport[fname]) == 0 {
+							fieldsToReport[fname] = append(fieldsToReport[fname], intr1)
+						}
+						fieldsToReport[fname] = append(fieldsToReport[fname], intr2)
+					}
+				}
+			}
+		}
+
+		for fname, interfaces := range fieldsToReport {
+			errs = append(errs, conflictingFieldsInImplementedInterfacesError(typ, interfaces,
+				fname))
+		}
 	}
 
-	return result
+	// make sure all the interfaces are validated before validating any concrete types
+	// this is required when validating that a type if implements two interfaces, then none of the
+	// fields in those interfaces has the same dgraph predicate
+	var interfaces, concreteTypes []string
+	for _, def := range definitions {
+		if gqlSch.Types[def].Kind == ast.Interface {
+			interfaces = append(interfaces, def)
+		} else {
+			concreteTypes = append(concreteTypes, def)
+		}
+	}
+	definitions = append(interfaces, concreteTypes...)
+
+	for _, key := range definitions {
+		def := gqlSch.Types[key]
+		switch def.Kind {
+		case ast.Object, ast.Interface:
+			typName := typeName(def)
+			if def.Kind == ast.Interface {
+				interfacePreds[def.Name] = make(map[string]bool)
+			} else {
+				checkConflictingFieldsInImplementedInterfacesError(def)
+			}
+
+			for _, f := range def.Fields {
+				if f.Type.Name() == "ID" {
+					continue
+				}
+
+				fname := fieldName(f, typName)
+				// this field could have originally been defined in an interface that this type
+				// implements. If we get a parent interface, that means this field gets validated
+				// during the validation of that interface. So, no need to validate this field here.
+				if parentInterface(gqlSch, def, f.Name) == nil {
+					if def.Kind == ast.Interface {
+						interfacePreds[def.Name][fname] = true
+					}
+
+					var prefix, suffix string
+					if f.Type.Elem != nil {
+						prefix = "["
+						suffix = "]"
+					}
+
+					thisPred := pred{
+						name:       f.Name,
+						parentName: def.Name,
+						typ:        fmt.Sprintf("%s%s%s", prefix, f.Type.Name(), suffix),
+						position:   f.Position,
+						isId:       f.Directives.ForName(idDirective) != nil,
+						isSecret:   false,
+					}
+
+					if pred, ok := preds[fname]; ok {
+						if pred.isSecret {
+							errs = append(errs, secretError(pred, thisPred))
+						} else if thisPred.typ != pred.typ {
+							errs = append(errs, typeError(pred, thisPred))
+						}
+						if pred.isId != thisPred.isId {
+							if pred.isId {
+								errs = append(errs, idError(pred, thisPred))
+							} else {
+								errs = append(errs, idError(thisPred, pred))
+							}
+						}
+						if def.Kind == ast.Object {
+							checkExistingInterfaceFieldError(def, pred, thisPred)
+						}
+					} else {
+						preds[fname] = thisPred
+					}
+				}
+			}
+
+			pwdField := getPasswordField(def)
+			if pwdField != nil {
+				fname := fieldName(pwdField, typName)
+				if getDgraphDirPredArg(pwdField) != nil && parentInterfaceForPwdField(gqlSch, def,
+					pwdField.Name) == nil {
+					thisPred := pred{
+						name:       pwdField.Name,
+						parentName: def.Name,
+						typ:        pwdField.Type.Name(),
+						position:   pwdField.Position,
+						isId:       false,
+						isSecret:   true,
+					}
+
+					if pred, ok := preds[fname]; ok {
+						if thisPred.typ != pred.typ || !pred.isSecret {
+							errs = append(errs, secretError(thisPred, pred))
+						}
+						if def.Kind == ast.Object {
+							checkExistingInterfaceFieldError(def, pred, thisPred)
+						}
+					} else {
+						preds[fname] = thisPred
+					}
+				}
+			}
+		}
+	}
+
+	return errs
 }
 
 func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
@@ -172,7 +293,7 @@ func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	dirs := make([]string, 0)
 
 	for _, dir := range typ.Directives {
-		if dir.Name != "secret" {
+		if dir.Name != secretDirective {
 			continue
 		}
 		val := dir.Arguments.ForName("field").Value.Raw
@@ -670,17 +791,6 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 		}
 	}
 	return nil
-}
-
-func authValidation(sch *ast.Schema,
-	typ *ast.Definition,
-	field *ast.FieldDefinition,
-	dir *ast.Directive) *gqlerror.Error {
-	rules := validateAuthRules(sch)
-	if len(rules) == 0 {
-		return nil
-	}
-	return rules[0]
 }
 
 func passwordValidation(sch *ast.Schema,

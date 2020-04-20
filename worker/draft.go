@@ -49,6 +49,10 @@ import (
 )
 
 type node struct {
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	pendingSize int64
+
+	// embedded struct
 	*conn.Node
 
 	// Fields which are never changed after init.
@@ -65,8 +69,6 @@ type node struct {
 
 	canCampaign bool
 	elog        trace.EventLog
-
-	pendingSize int64
 
 	ex *executor
 }
@@ -95,6 +97,9 @@ const (
 // startTask is used to check whether an op is already going on.
 // If rollup is going on, we cancel and wait for rollup to complete
 // before we return. If the same task is already going, we return error.
+// You should only call Done() on the returned closer. Calling other
+// functions (such as SignalAndWait) for closer could result in panics.
+// For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -109,7 +114,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
 			// If any other operation is running, this would error out. So, ignore error.
-			n.startTask(opRollup)
+			// Ignoring the error since stop task runs in a goruotine.
+			_, _ = n.startTask(opRollup)
 		}
 	}
 
@@ -124,6 +130,8 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
+				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
+				n.ops[opRollup] = nil
 				otherCloser.SignalAndWait()
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
@@ -157,17 +165,31 @@ func (n *node) stopAllTasks() {
 	defer n.closer.Done() // CLOSER:1
 	<-n.closer.HasBeenClosed()
 
-	var closers []*y.Closer
 	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
 	for _, closer := range n.ops {
-		closers = append(closers, closer)
-	}
-	n.opsLock.Unlock()
-
-	for _, closer := range closers {
+		if closer == nil {
+			continue
+		}
 		closer.SignalAndWait()
 	}
 	glog.Infof("Stopped all ongoing registered tasks.")
+}
+
+// GetOngoingTasks returns the list of ongoing tasks.
+func GetOngoingTasks() []string {
+	n := groups().Node
+	if n == nil {
+		return []string{}
+	}
+
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+	var tasks []string
+	for id := range n.ops {
+		tasks = append(tasks, id.String())
+	}
+	return tasks
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -884,6 +906,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			close(done)
+			if x.WorkerConfig.LudicrousMode {
+				n.ex.closer.SignalAndWait()
+			}
 			return
 		}
 	}
@@ -1180,12 +1205,12 @@ func (n *node) calculateTabletSizes() {
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
 		if err != nil {
-			glog.V(2).Infof("Unable to parse key: %v", err)
+			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
 		right, err := x.Parse(tinfo.Right)
 		if err != nil {
-			glog.V(2).Infof("Unable to parse key: %v", err)
+			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
 		if left.Attr != right.Attr {
@@ -1207,6 +1232,7 @@ func (n *node) calculateTabletSizes() {
 		total += int64(tinfo.EstimatedSz)
 	}
 	if len(tablets) == 0 {
+		glog.V(2).Infof("No tablets found.")
 		return
 	}
 	// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
@@ -1556,7 +1582,9 @@ func (n *node) InitAndStartNode() {
 	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
-	n.startTask(opRollup)
+	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
+	// not be the right thing to do.
+	_, _ = n.startTask(opRollup)
 	go n.stopAllTasks()
 	go n.Run()
 }

@@ -25,8 +25,8 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
@@ -72,7 +72,6 @@ func MultipleBlockEval(t *testing.T, c *dgo.Dgraph) {
     `,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -237,7 +236,6 @@ func UnmatchedVarEval(t *testing.T, c *dgo.Dgraph) {
     `,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -324,7 +322,6 @@ func SchemaQueryTest(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -371,7 +368,6 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
     `,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -410,6 +406,9 @@ func SchemaQueryTestPredicate1(t *testing.T, c *dgo.Dgraph) {
 	  {
         "predicate": "dgraph.graphql.schema"
 	  },
+	  {
+        "predicate": "dgraph.graphql.xid"
+	  },
       {
         "predicate": "dgraph.user.group"
       },
@@ -435,7 +434,6 @@ func SchemaQueryTestPredicate2(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -473,7 +471,6 @@ func SchemaQueryTestPredicate3(t *testing.T, c *dgo.Dgraph) {
     `,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -513,7 +510,6 @@ func SchemaQueryTestHTTP(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(exact) .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -585,7 +581,6 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
     `,
 	}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -726,7 +721,6 @@ func QueryHashIndex(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(hash) @lang .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -837,7 +831,6 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 
 	op := &api.Operation{Schema: `name: string @index(term) @lang .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	txn := c.NewTxn()
 	_, err := txn.Mutate(ctx, &api.Mutation{
@@ -880,7 +873,6 @@ func RegexpToggleTrigramIndex(t *testing.T, c *dgo.Dgraph) {
 
 	op = &api.Operation{Schema: `name: string @index(trigram) @lang .`}
 	require.NoError(t, c.Alter(ctx, op))
-	require.NoError(t, testutil.WaitForAlter(ctx, c, op.Schema))
 
 	t.Log("testing with trigram index")
 	for _, tc := range tests {

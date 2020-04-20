@@ -33,7 +33,7 @@ import (
 	_ "net/http/pprof"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dustin/go-humanize"
 	"github.com/pkg/errors"

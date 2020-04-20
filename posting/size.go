@@ -21,7 +21,7 @@ import (
 	"reflect"
 	"unsafe"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 )
 

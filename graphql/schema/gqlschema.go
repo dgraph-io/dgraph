@@ -68,7 +68,6 @@ enum DgraphIndex {
 	hour
 }
 
-
 input AuthRule {
 	and: [AuthRule]
 	or: [AuthRule]
@@ -76,12 +75,16 @@ input AuthRule {
 	rule: String
 }
 
-
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule, 
+	add: AuthRule, 
+	update: AuthRule, 
+	delete:AuthRule) on OBJECT | FIELD_DEFINITION
 
 directive @auth(query: AuthRule, add: AuthRule, update: AuthRule, delete:AuthRule) on OBJECT
 
@@ -249,8 +252,15 @@ var directiveValidators = map[string]directiveValidator{
 	dgraphDirective:  dgraphDirectiveValidation,
 	idDirective:      idValidation,
 	secretDirective:  passwordValidation,
-	authDirective:    authValidation,
 	deprecatedDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
+	// Just go get it printed into generated schema
+	authDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
 		field *ast.FieldDefinition,
@@ -259,6 +269,7 @@ var directiveValidators = map[string]directiveValidator{
 	},
 }
 
+var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
 var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
@@ -347,7 +358,6 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // the extra rules.
 func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 	var errs []*gqlerror.Error
-	errs = append(errs, validateAuthRules(schema)...)
 
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
@@ -364,6 +374,21 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 				errs = appendIfNotNull(errs,
 					directiveValidators[dir.Name](schema, typ, field, dir))
 			}
+		}
+	}
+
+	errs = append(errs, applySchemaValidations(schema, definitions)...)
+
+	return errs
+}
+
+func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.List {
+	var errs []*gqlerror.Error
+
+	for _, rule := range schemaValidations {
+		newErrs := rule(schema, definitions)
+		for _, err := range newErrs {
+			errs = appendIfNotNull(errs, err)
 		}
 	}
 

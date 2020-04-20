@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"strings"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"

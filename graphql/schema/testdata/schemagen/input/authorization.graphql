@@ -23,7 +23,6 @@ type Todo @auth(
     owner: User @hasInverse(field: "todos")
     somethingPrivate: String @auth(
         query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
-    )
 }
 
 type User @auth(

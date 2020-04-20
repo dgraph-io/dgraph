@@ -29,8 +29,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -142,6 +142,7 @@ type state struct {
 	ID      string   `json:"id,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	Code    string   `json:"xcode,omitempty"`
+	Capital string   `json:"capital,omitempty"`
 	Country *country `json:"country,omitempty"`
 }
 
@@ -154,6 +155,21 @@ type movie struct {
 type director struct {
 	ID   string `json:"id,omitempty"`
 	Name string `json:"name,omitempty"`
+}
+
+type teacher struct {
+	ID      string     `json:"id,omitempty"`
+	Xid     string     `json:"xid,omitempty"`
+	Name    string     `json:"name,omitempty"`
+	Subject string     `json:"subject,omitempty"`
+	Teaches []*student `json:"teaches,omitempty"`
+}
+
+type student struct {
+	ID       string     `json:"id,omitempty"`
+	Xid      string     `json:"xid,omitempty"`
+	Name     string     `json:"name,omitempty"`
+	TaughtBy []*teacher `json:"taughtBy,omitempty"`
 }
 
 func BootstrapServer(schema, data []byte) {
@@ -285,6 +301,7 @@ func RunAll(t *testing.T) {
 	t.Run("numUids test", testNumUids)
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
+	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -628,7 +645,7 @@ func checkGraphQLStarted(url string) error {
 func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	schemaQry := &GraphQLParams{
-		Query: `query { getGQLSchema { id } }`,
+		Query: `query { getGQLSchema { schema } }`,
 	}
 	req, err := schemaQry.createGQLPost(url)
 	if err != nil {
@@ -652,7 +669,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 
 	var sch struct {
 		GetGQLSchema struct {
-			ID string
+			Schema string
 		}
 	}
 
@@ -661,7 +678,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 		return false, errors.Wrap(err, "error trying to unmarshal GraphQL query result")
 	}
 
-	if sch.GetGQLSchema.ID == "" {
+	if sch.GetGQLSchema.Schema == "" {
 		return false, nil
 	}
 

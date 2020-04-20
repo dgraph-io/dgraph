@@ -186,10 +186,12 @@ message HealthInfo {
 	string instance = 1;
 	string address = 2;
 	string status = 3;
-	string group = 4;  // string so group = 0 can be printed in JSON. 
+	string group = 4;  // string so group = 0 can be printed in JSON.
 	string version = 5;
 	int64 uptime = 6;
-	int64 lastEcho = 7; 
+	int64 lastEcho = 7;
+	repeated string ongoing = 8;
+	repeated string indexing = 9;
 }
 
 message Tablet {
