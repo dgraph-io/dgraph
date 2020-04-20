@@ -18,7 +18,6 @@ package resolve
 
 import (
 	"context"
-	"fmt"
 	"io/ioutil"
 	"testing"
 
@@ -92,9 +91,6 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
-
-			fmt.Println(dgraph.AsString(dgQuery))
-
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
