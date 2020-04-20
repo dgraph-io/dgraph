@@ -800,12 +800,12 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	for i := 0; i < len(body); i++ {
 		temp, err := copyMap(fconf.Template)
 		if err != nil {
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
 			return
 		}
 		mu.RLock()
 		if err := schema.SubstituteVarsInBody(temp, vals[i].(map[string]interface{})); err != nil {
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
 			mu.RUnlock()
 			return
 		}
@@ -817,28 +817,29 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		b, err := json.Marshal(body)
 		if err != nil {
 			err = errors.Wrapf(err, "while json marshaling body: %s", b)
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
 			return
 		}
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
 			err = errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
 			return
 		}
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			err = errors.Errorf("while json unmarshaling result: %s for field: %s", b, f.Name())
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			err = errors.Errorf("while json unmarshaling result from remote endpoint: %s for"+
+				" field: %s within type: %s", b, f.Name(), f.GetObjectName())
+			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
 			return
 		}
 
 		if len(result) != len(vals) {
-			err = errors.Errorf("expected result to be of size %v, got: %v for field: %s",
-				len(vals), len(result), f.Name())
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error())}
+			gqlErr := x.GqlErrorf("expected result to be of size %v, got: %v for field: %s",
+				len(vals), len(result), f.Name()).WithLocations(f.Location())
+			errCh <- x.GqlErrorList{gqlErr}
 			return
 		}
 
@@ -864,7 +865,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			b, err := json.Marshal(input)
 			if err != nil {
 				errs[idx] = x.GqlErrorf("while json marshaling input: %+v to resolve "+
-					"field: %s", input, f.Name())
+					"field: %s", input, f.Name()).WithLocations(f.Location())
 				return
 			}
 
@@ -873,7 +874,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			if err != nil {
 				mu.RUnlock()
 				errs[idx] = x.GqlErrorf("while substituting variables in URL to resolve"+
-					" field: %s, err: %s", f.Name(), err)
+					" field: %s, err: %s", f.Name(), err).WithLocations(f.Location())
 				return
 			}
 			mu.RUnlock()
@@ -881,14 +882,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errs[idx] = x.GqlErrorf("while making request to resolve field: %s, err: %s",
-					f.Name(), err)
+					f.Name(), err).WithLocations(f.Location())
 				return
 			}
 
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
-				errs[idx] = x.GqlErrorf("while json unmarshaling result: %s for field: %s",
-					b, f.Name())
+				errs[idx] = x.GqlErrorf("while json unmarshaling result from remote endpoint: %s"+
+					" for field: %s within type: %s, index: %v", b, f.Name(), f.GetObjectName(),
+					idx).WithLocations(f.Location())
 				return
 			}
 
