@@ -99,6 +99,13 @@ func (asr *updateSchemaResolver) Execute(
 	ctx context.Context,
 	req *dgoapi.Request) (*dgoapi.Response, error) {
 
+	if req == nil || (req.Query == "" && len(req.Mutations) == 0) {
+		// For schema updates, Execute will get called twice.  Once for the
+		// mutation and once for the following query.  This is the query case.
+		b, err := doQuery(asr.admin.schema, asr.mutation.QueryField())
+		return &dgoapi.Response{Json: b}, err
+	}
+
 	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
 		return nil, err
@@ -111,12 +118,6 @@ func (asr *updateSchemaResolver) Execute(
 	}
 
 	return resp, nil
-}
-
-func (asr *updateSchemaResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte,
-	*schema.Extensions, error) {
-	b, err := doQuery(asr.admin.schema, asr.mutation.QueryField())
-	return b, nil, err
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
