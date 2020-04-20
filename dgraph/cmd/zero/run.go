@@ -90,6 +90,7 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
+	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	// OpenCensus flags.
 	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
@@ -99,6 +100,7 @@ instances to achieve high-availability.
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
+	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -162,14 +164,12 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
-	x.InitSentry(enc.EeBuild)
-	defer x.FlushSentry()
-	x.ConfigureSentryScope("zero")
-	x.WrapPanics()
-
-	// Simulate a Sentry exception or panic event as shown below.
-	// x.CaptureSentryException(errors.New("zero exception"))
-	// x.Panic(errors.New("zero manual panic will send 2 events"))
+	if Zero.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("zero")
+		x.WrapPanics()
+	}
 
 	x.PrintVersion()
 	opts = options{
@@ -241,6 +241,13 @@ func run() {
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
 
+	// Apply enterprise license if one was given.
+	if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
+		if err := st.applyLicenseFile(license); err != nil {
+			glog.Warningf("Cannot apply enterprise license file %s", license)
+		}
+	}
+
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
 	http.HandleFunc("/removeNode", st.removeNode)
@@ -290,6 +297,8 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Stop Raft store.
+		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
 		st.node.trySnapshot(0)

@@ -36,7 +36,7 @@ const (
 		 name: String!
 		 directed: [Movie]
 	 }
- 
+
 	 type Movie @remote {
 		 id: ID!
 		 name: String!
@@ -47,6 +47,7 @@ const (
 		name: String!
 		countries: [Country!]!
 	  }
+<<<<<<< HEAD
 	  
 	  input ContinentFilterInput {
 		code: StringQueryOperatorInput
@@ -59,12 +60,22 @@ const (
 		phone: String!
 		continent: Continent!
 		capital: String
+=======
+
+	  type Country @remote {
+		code: String
+		name: String
+		native: String
+		phone: String
+		continent: Continent
+>>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		currency: String
 		languages: [Language!]!
 		emoji: String!
 		emojiU: String!
 		states: [State!]!
 	  }
+<<<<<<< HEAD
 	  
 	  input CountryFilterInput@remote {
 		code: StringQueryOperatorInput
@@ -74,16 +85,27 @@ const (
 	  
 	  type Language@remote {
 		code: ID!
+=======
+
+	  type Language @remote {
+		code: String
+>>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		name: String
 		native: String
 		rtl: Boolean!
 	  }
+<<<<<<< HEAD
 	  
 	  input LanguageFilterInput@remote {
 		code: StringQueryOperatorInput
 	  }
 	  
 	  type State@remote {
+=======
+
+
+	  type State @remote {
+>>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		code: String
 		name: String!
 		country: Country!
@@ -640,7 +662,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -658,7 +680,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -676,12 +698,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -707,7 +729,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -725,7 +747,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -743,12 +765,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -767,7 +789,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Contains(t, res.Errors[0].Error(), "Type Query; Field getCountry; country is not present in remote schema\n")
@@ -777,7 +799,7 @@ func TestForInvalidArguement(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
+	}
 	`
 	res := updateSchema(t, schema)
 	require.Contains(t, res.Errors[0].Error(), "Type Query; Field getCountry; code arg not present in the remote query country\n")
@@ -804,7 +826,7 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{

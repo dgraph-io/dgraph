@@ -267,11 +267,14 @@ func handleWal(db *badger.DB) error {
 			store := raftwal.Init(db, rid, gid)
 			switch {
 			case len(opt.wsetSnapshot) > 0:
-				return overwriteSnapshot(db, store)
+				err := overwriteSnapshot(db, store)
+				store.Closer.SignalAndWait()
+				return err
 
 			default:
 				printRaft(db, store)
 			}
+			store.Closer.SignalAndWait()
 		}
 	}
 	return nil

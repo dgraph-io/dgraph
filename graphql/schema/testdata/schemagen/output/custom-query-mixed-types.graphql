@@ -192,3 +192,12 @@ type Mutation {
 	updateCar(input: UpdateCarInput!): UpdateCarPayload
 	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getCar(id: ID!): Car
+	queryCar(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
+}

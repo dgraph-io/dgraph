@@ -471,6 +471,12 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		}
 	}
 
+	sch.Subscription = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Subscription",
+		Fields: make([]*ast.FieldDefinition, 0),
+	}
+
 	for _, key := range definitions {
 		if key == "Query" || key == "Mutation" {
 			continue
@@ -1035,6 +1041,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1051,6 +1058,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1089,6 +1097,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1527,6 +1536,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		"#######################\n# Extended Definitions\n#######################\n"))
 	x.Check2(sch.WriteString(schemaExtras))
 	x.Check2(sch.WriteString("\n"))
+
 	if object.Len() > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Types\n#######################\n\n"))
@@ -1552,7 +1562,13 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	if len(schema.Mutation.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Mutations\n#######################\n\n"))
-		x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+		x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
+	}
+
+	if len(schema.Subscription.Fields) > 0 {
+		x.Check2(sch.WriteString(
+			"#######################\n# Generated Subscriptions\n#######################\n\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
 	}
 
 	return sch.String()
