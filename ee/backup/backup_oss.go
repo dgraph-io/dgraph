@@ -10,7 +10,6 @@
  *     https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
  */
 
-
 package backup
 
 // BadgerKeyFile - This is a copy of worker.Config.BadgerKeyFile. Need to copy because

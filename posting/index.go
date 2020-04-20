@@ -91,9 +91,10 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
-	x.AssertTrue(uid != 0)
+	if uid == 0 {
+		return errors.New("invalid UID with value 0")
+	}
 	tokens, err := indexTokens(info)
-
 	if err != nil {
 		// This data is not indexable
 		return err
