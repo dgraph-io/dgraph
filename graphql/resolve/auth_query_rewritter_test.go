@@ -67,7 +67,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 	}
 	claims.Foo["User"] = "user1"
 
-	gqlSchema := test.LoadSchemaFromFile(t, "auth-schema.graphql")
+	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 
