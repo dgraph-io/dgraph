@@ -132,6 +132,8 @@ func getJWT(t *testing.T, user, role string) string {
 }
 
 func TestOrRBACFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryProject (order: {asc: name}) {
@@ -165,6 +167,8 @@ func TestOrRBACFilter(t *testing.T) {
 }
 
 func rootGetFilter(t *testing.T, id uint64, user string) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
 		getColumn(colID: {asc: name}) {
@@ -199,6 +203,8 @@ func rootGetFilter(t *testing.T, id uint64, user string) {
 }
 
 func TestRootFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
 		queryColumn(order: {asc: name}) {
@@ -237,6 +243,8 @@ func TestRootFilter(t *testing.T) {
 }
 
 func TestRBACFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryLog (order: {asc: logs}) {
@@ -270,6 +278,8 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestDeepFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryProject (order: {asc: name}) {
@@ -318,6 +328,8 @@ func TestDeepFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryIssue (order: {asc: msg}) {
@@ -355,6 +367,8 @@ func TestAndRBACFilter(t *testing.T) {
 }
 
 func TestAndFilter(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryMovie (order: {asc: content}) {
@@ -394,6 +408,8 @@ func TestAndFilter(t *testing.T) {
 }
 
 func TestDeepFieldFilters(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                  queryProject (order: {asc: name}) {
@@ -434,6 +450,8 @@ func TestDeepFieldFilters(t *testing.T) {
 }
 
 func TestFieldFilters(t *testing.T) {
+	t.Skip()
+
 	testCases := []TestCase{}
 	query := `
                 queryUser (order: {asc: username}) {

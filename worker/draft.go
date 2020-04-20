@@ -94,12 +94,11 @@ const (
 	opIndexing
 )
 
-// startTask is used to check whether an op is already going on.
-// If rollup is going on, we cancel and wait for rollup to complete
-// before we return. If the same task is already going, we return error.
-// You should only call Done() on the returned closer. Calling other
-// functions (such as SignalAndWait) for closer could result in panics.
-// For more details, see GitHub issue #5034.
+// startTask is used to check whether an op is already running. If a rollup is running,
+// it is canceled and startTask will wait until it completes before returning.
+// If the same task is already running, this method returns an errror.
+// You should only call Done() on the returned closer. Calling other functions (such as
+// SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -110,11 +109,11 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		n.opsLock.Unlock()
 		glog.Infof("Operation completed with id: %s", id)
 
-		// If we were doing any other operation, let's restart rollups.
+		// Resume rollups if another operation is being stopped.
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
-			// If any other operation is running, this would error out. So, ignore error.
-			// Ignoring the error since stop task runs in a goruotine.
+			// If any other operation is running, this would error out. This error can
+			// be safely ignored because rollups will resume once that other task is done.
 			_, _ = n.startTask(opRollup)
 		}
 	}
@@ -567,6 +566,19 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
+
+	case proposal.Restore != nil:
+		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+			return err
+		}
+
+		// Call commitOrAbort to update the group checksums.
+		ts := proposal.Restore.RestoreTs
+		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			Txns: []*pb.TxnStatus{
+				{StartTs: ts, CommitTs: ts},
+			},
+		})
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
@@ -1216,7 +1228,7 @@ func (n *node) calculateTabletSizes() {
 		if left.Attr != right.Attr {
 			// Skip all tables not fully owned by one predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(2).Info("Skipping table not owned by one predicate")
+			glog.V(3).Info("Skipping table not owned by one predicate")
 			continue
 		}
 		pred := left.Attr

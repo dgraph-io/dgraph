@@ -432,6 +432,12 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 		Fields: make([]*ast.FieldDefinition, 0),
 	}
 
+	sch.Subscription = &ast.Definition{
+		Kind:   ast.Object,
+		Name:   "Subscription",
+		Fields: make([]*ast.FieldDefinition, 0),
+	}
+
 	for _, key := range definitions {
 		defn := sch.Types[key]
 
@@ -987,6 +993,7 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1003,6 +1010,7 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1041,6 +1049,7 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
+	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1471,7 +1480,10 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
 	x.Check2(sch.WriteString(
 		"#######################\n# Generated Mutations\n#######################\n\n"))
-	x.Check2(sch.WriteString(generateObjectString(schema.Mutation)))
+	x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
+	x.Check2(sch.WriteString(
+		"#######################\n# Generated Subscriptions\n#######################\n\n"))
+	x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
 
 	return sch.String()
 }

@@ -22,6 +22,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +46,17 @@ type GraphQLError struct {
 }
 
 type GraphQLResponse struct {
-	Errors []GraphQLError
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
+	if resp == nil {
+		return
+	}
+	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
+		resp.Errors.Error())
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
