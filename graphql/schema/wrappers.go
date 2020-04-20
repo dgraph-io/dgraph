@@ -638,7 +638,7 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	}
 
 	query := graphql.Value.Children.ForName("query")
-	rf = parseRequiredFieldsFromGQLRequest(query.Raw)
+	rf = parseArgsFromGQLRequest(query.Raw)
 	return true, rf
 }
 
@@ -788,7 +788,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		argMap := f.field.ArgumentMap(f.op.vars)
 
 		var err error
-		fconf.Body, err = SubstituteFieldsInGraphqlRequest(remoteQuery, f, argMap,
+		fconf.Body, err = SubstituteArgsInGraphqlRequest(remoteQuery, f, argMap,
 			[]string{})
 		if err != nil {
 			return fconf, err
@@ -803,7 +803,10 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	return fconf, nil
 }
 
-func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
+// SubstituteArgsInGraphqlRequest substitutes the arguments in a graphql request by filling it up
+// from the argMap. It returns the final request body which is sent to the remote server to be
+// resolved.
+func SubstituteArgsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
 	args []string) (string, error) {
 	for _, arg := range args {
 		val, ok := argMap[arg]
@@ -811,6 +814,8 @@ func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]int
 			continue
 		}
 		value := ""
+		// TODO - Bring back the check below or it might not be needed after we support other
+		// types.
 		// if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
 		if val == nil {
 			val = "null"
@@ -1810,7 +1815,8 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	writer.WriteString("}")
 }
 
-func parseRequiredFieldsFromGQLRequest(req string) map[string]bool {
+// parseArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
+func parseArgsFromGQLRequest(req string) map[string]bool {
 	// These errors should have already been checked during schema validation.
 	parsedQuery, _ := parser.ParseQuery(&ast.Source{Input: fmt.Sprintf(`query {%s}`,
 		req)})
