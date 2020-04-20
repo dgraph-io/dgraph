@@ -1,11 +1,14 @@
 package query
 
 import (
+	"bytes"
 	"math"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/task"
+	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -56,5 +59,79 @@ func TestSubgraphToFastJSON(t *testing.T) {
 	t.Run("With invalid floating points", func(t *testing.T) {
 		assertJSON(t, `{"query":[]}`, subgraphWithSingleResultAndSingleValue(task.FromFloat(math.NaN())))
 		assertJSON(t, `{"query":[]}`, subgraphWithSingleResultAndSingleValue(task.FromFloat(math.Inf(1))))
+	})
+}
+
+func TestEncode(t *testing.T) {
+	enc := newEncoder()
+
+	t.Run("with uid list predicate", func(t *testing.T) {
+		root := enc.newNode()
+		friendNode1 := enc.newNodeWithAttr(enc.idForAttr("friend"))
+		enc.AddValue(friendNode1, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "alice"})
+		friendNode2 := enc.newNodeWithAttr(enc.idForAttr("friend"))
+		enc.AddValue(friendNode2, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "bob"})
+
+		enc.AddListChild(root, enc.idForAttr("friend"), friendNode1)
+		enc.AddListChild(root, enc.idForAttr("friend"), friendNode2)
+
+		buf := new(bytes.Buffer)
+		require.NoError(t, enc.encode(root, buf))
+		testutil.CompareJSON(t, `
+		{
+			"friend":[
+				{
+					"name":"alice"
+				},
+				{
+					"name":"bob"
+				}
+			]
+		}
+		`, buf.String())
+	})
+
+	t.Run("with value list predicate", func(t *testing.T) {
+		root := enc.newNode()
+		enc.AddValue(root, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "alice"})
+		enc.AddValue(root, enc.idForAttr("name"),
+			types.Val{Tid: types.StringID, Value: "bob"})
+
+		buf := new(bytes.Buffer)
+		require.NoError(t, enc.encode(root, buf))
+		testutil.CompareJSON(t, `
+		{
+			"name":[
+				"alice",
+				"bob"
+			]
+		}
+		`, buf.String())
+	})
+
+	t.Run("with uid predicate", func(t *testing.T) {
+		root := enc.newNode()
+
+		person := enc.newNode()
+		enc.AddValue(person, enc.idForAttr("name"), types.Val{Tid: types.StringID, Value: "alice"})
+		enc.AddValue(person, enc.idForAttr("age"), types.Val{Tid: types.IntID, Value: 25})
+
+		enc.AddListChild(root, enc.idForAttr("person"), person)
+
+		buf := new(bytes.Buffer)
+		require.NoError(t, enc.encode(root, buf))
+		testutil.CompareJSON(t, `
+		{
+			"person":[
+				{
+					"name":"alice",
+					"age":25
+				}
+			]
+		}
+		`, buf.String())
 	})
 }
