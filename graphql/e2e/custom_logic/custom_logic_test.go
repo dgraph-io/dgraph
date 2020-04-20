@@ -18,6 +18,7 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -608,70 +609,20 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	 }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+}
 
+func readFile(t *testing.T, name string) string {
+	b, err := ioutil.ReadFile(name)
+	require.NoError(t, err)
+	return string(b)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
-	// lets check batch mode first
-	schema := `type Car @remote {
-		 id: ID!
-		 name: String!
-	 }
-
-	 type User {
-		 id: ID!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/userNames",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "batch"
-					 })
-		 age: Int! @search
-		 cars: Car @custom(http: {
-						 url: "http://mock:8888/cars",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "batch"
-					 })
-		 schools: [School]
-	 }
-
-	 type School {
-		 id: ID!
-		 established: Int! @search
-		 name: String @custom(http: {
-						 url: "http://mock:8888/schoolNames",
-						 method: "POST",
-						 body: "{sid: $id}",
-						 operation: "batch"
-					   })
-		 classes: [Class] @custom(http: {
-							 url: "http://mock:8888/classes",
-							 method: "POST",
-							 body: "{sid: $id}",
-							 operation: "batch"
-						 })
-		 teachers: [Teacher]
-	 }
-
-	 type Class @remote {
-		 id: ID!
-		 name: String!
-	 }
-
-	 type Teacher {
-		 tid: ID!
-		 age: Int!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/teacherNames",
-						 method: "POST",
-						 body: "{tid: $tid}",
-						 operation: "batch"
-					 })
-	 }`
-
+	// lets check batch mode first using REST endpoints.
+	schema := readFile(t, "schemas/batch-mode-rest.graphql")
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
+	// add some data
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
 	users := addUsers(t, schools)
@@ -679,64 +630,11 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	verifyData(t, users, teachers, schools)
 
 	// lets update the schema and check single mode now
-	schema = `
-	 type Car @remote {
-		 id: ID!
-		 name: String!
-	 }
+	schema = readFile(t, "schemas/single-mode-rest.graphql")
+	verifyData(t, users, teachers, schools)
 
-	 type User {
-		 id: ID!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/userName",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "single"
-					 })
-		 age: Int! @search
-		 cars: Car @custom(http: {
-						 url: "http://mock:8888/car",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "single"
-					 })
-		 schools: [School]
-	 }
-
-	 type School {
-		 id: ID!
-		 established: Int! @search
-		 name: String @custom(http: {
-						 url: "http://mock:8888/schoolName",
-						 method: "POST",
-						 body: "{sid: $id}",
-						 operation: "single"
-					   })
-		 classes: [Class] @custom(http: {
-							 url: "http://mock:8888/class",
-							 method: "POST",
-							 body: "{sid: $id}",
-							 operation: "single"
-						 })
-		 teachers: [Teacher]
-	 }
-
-	 type Class @remote {
-		 id: ID!
-		 name: String!
-	 }
-
-	 type Teacher {
-		 tid: ID!
-		 age: Int!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/teacherName",
-						 method: "POST",
-						 body: "{tid: $tid}",
-						 operation: "single"
-					   })
-	 }`
-
+	// update schema to single mode where fields are resolved using GraphQL endpoints.
+	schema = readFile(t, "schemas/single-mode-graphql.graphql")
 	verifyData(t, users, teachers, schools)
 }
 
@@ -1242,76 +1140,4 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
       }
     }`
 	require.JSONEq(t, expected, string(result.Data))
-}
-
-func TestCustomFieldsShouldBeResolvedUsingGraphQLEndpoints(t *testing.T) {
-	// lets check single mode first
-	schema := `type Car @remote {
-		id: ID!
-		name: String!
-	}
-
-	type User {
-		id: ID!
-		name: String @custom(http: {
-						url: "http://mock:8888/gqlUserName",
-						method: "POST",
-						operation: "single"
-					},
-					graphql: { query: "userName(id: $id)"}
-				)
-		age: Int! @search
-		cars: Car @custom(http: {
-						url: "http://mock:8888/gqlCar",
-						method: "POST",
-						operation: "single"
-					},
-					graphql: { query: "car(id: $id)"})
-		schools: [School]
-	}
-
-	type School {
-		id: ID!
-		established: Int! @search
-		name: String @custom(http: {
-						url: "http://mock:8888/gqlSchoolName",
-						method: "POST",
-						operation: "single"
-					  },
-					  graphql: { query: "schoolName(id: $id)"}
-					)
-		classes: [Class] @custom(http: {
-							url: "http://mock:8888/gqlClass",
-							method: "POST",
-							operation: "single"
-						},
-						graphql: { query: "class(id: $id)"}
-					)
-		teachers: [Teacher]
-	}
-
-	type Class @remote {
-		id: ID!
-		name: String!
-	}
-
-	type Teacher {
-		tid: ID!
-		age: Int!
-		name: String @custom(http: {
-						url: "http://mock:8888/gqlTeacherName",
-						method: "POST",
-						operation: "single"
-					},
-					graphql: { query: "teacherName(id: $tid)"}
-				)
-	}`
-
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
-
-	teachers := addTeachers(t)
-	schools := addSchools(t, teachers)
-	users := addUsers(t, schools)
-
-	verifyData(t, users, teachers, schools)
 }

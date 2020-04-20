@@ -251,7 +251,6 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		}
 
 		if _, ok = graphqlScalarType[argType]; !ok {
-			fmt.Println(argType)
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
 					" argument is supported in the remote graphql call.",
@@ -279,7 +278,6 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				remoteQuery.Name)
 		}
 	}
-	fmt.Println(endpoint.field, "fname: ", endpoint.field.Name)
 
 	if endpoint.typ.Name == "Query" || endpoint.typ.Name == "Mutation" {
 		// Validate given argument type is matching with the remote query argument.

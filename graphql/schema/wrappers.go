@@ -48,14 +48,19 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+// FieldHTTPConfig contains the config needed to resolve a field using a remote HTTP endpoint
+// which could a GraphQL or a REST endpoint.
 type FieldHTTPConfig struct {
-	URL             string
-	Method          string
-	Template        *interface{}
-	Operation       string
-	ForwardHeaders  http.Header
-	Body            string
-	RemoteQueryName string
+	URL            string
+	Method         string // HTTP method
+	Template       *interface{}
+	Body           string
+	Operation      string      // can be single/batch
+	ForwardHeaders http.Header // headers to forward to the remote server
+
+	// this is GraphQL query/mutation name. It would only be filled for requests to remote
+	// GraphQL servers.
+	RemoteFieldName string
 }
 
 // Query/Mutation types and arg names
@@ -119,7 +124,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error)
+	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -716,7 +721,7 @@ func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
 	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
 	tf := typeDef.Fields.ForName(f.Name())
 	custom := tf.Directives.ForName(customDirective)
@@ -724,6 +729,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 	fconf := FieldHTTPConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	graphqlArg := custom.Arguments.ForName("graphql")
+	graphql := false
+	if graphqlArg != nil {
+		graphql = true
 	}
 
 	bodyArg := httpArg.Value.Children.ForName("body")
@@ -764,7 +775,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 		graphqlArg := custom.Arguments.ForName("graphql")
 		remoteQuery := graphqlArg.Value.Children.ForName("query").Raw
 		queryEndIndex := strings.Index(remoteQuery, "(")
-		fconf.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
+		fconf.RemoteFieldName = strings.TrimSpace(remoteQuery[:queryEndIndex])
 
 		if !isQueryOrMutation {
 			fconf.Body = remoteQuery
@@ -794,7 +805,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 
 func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
 	args []string) (string, error) {
-	fmt.Println("args: ", args, "argMap: ", args)
 	for _, arg := range args {
 		val, ok := argMap[arg]
 		if !ok {
@@ -824,8 +834,8 @@ func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]int
 	return string(remoteQueryBuf), nil
 }
 
-func (f *field) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig(f, false, graphql)
+func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false)
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -963,8 +973,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(q), true, graphql)
+func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true)
 }
 
 func (q *query) QueryType() QueryType {
@@ -1091,8 +1101,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(m), true, graphql)
+func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true)
 }
 
 func (m *mutation) GetObjectName() string {
