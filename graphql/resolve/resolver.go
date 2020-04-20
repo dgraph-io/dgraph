@@ -669,42 +669,53 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		return
 	}
 
-	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]string, len(vals))
-	for i := 0; i < len(body); i++ {
-		// temp, err := copyTemplate(*fconf.Template)
-		// if err != nil {
-		// 	errCh <- err
-		// 	return
-		// }
-		mu.RLock()
-		m := vals[i].(map[string]interface{})
-		args := make([]string, 0, len(m))
-		for k := range m {
-			args = append(args, k)
-		}
-		b, err := schema.SubstituteFieldsInGraphqlRequest("", f, m, args)
-		if err != nil {
-			mu.RUnlock()
-			errCh <- err
-			return
-		}
-		mu.RUnlock()
+	// Here we build the input for resolving the fields which is sent as the body for the request.
+	inputs := make([]interface{}, len(vals))
 
-		body[i] = b
-		// if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-		// 	errCh <- err
-		// 	mu.RUnlock()
-		// 	return
-		// }
-		// mu.RUnlock()
-		// body[i] = temp
+	graphql := fconf.RemoteGqlQueryName != ""
+	// For GraphQL requests, we substitute arguments in the GraphQL query/mutation to make to
+	// the remote endpoint using the values of other fields obtained from Dgraph.
+	if graphql {
+		for i := 0; i < len(inputs); i++ {
+			mu.RLock()
+			m := vals[i].(map[string]interface{})
+			args := make([]string, 0, len(m))
+			for k := range m {
+				args = append(args, k)
+			}
+			// TODO - See if args is required.
+			b, err := schema.SubstituteFieldsInGraphqlRequest("", f, m, args)
+			if err != nil {
+				mu.RUnlock()
+				errCh <- err
+				return
+			}
+			mu.RUnlock()
+			inputs[i] = b
+		}
+	} else {
+		for i := 0; i < len(inputs); i++ {
+			temp, err := copyTemplate(*fconf.Template)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			mu.RLock()
+			if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
+				errCh <- err
+				mu.RUnlock()
+				return
+			}
+			mu.RUnlock()
+			inputs[i] = temp
+		}
 	}
 
 	if fconf.Operation == "batch" {
-		b, err := json.Marshal(body)
+		b, err := json.Marshal(inputs)
 		if err != nil {
-			errCh <- x.GqlErrorList{jsonMarshalError(err, f, body)}
+			errCh <- x.GqlErrorList{jsonMarshalError(err, f, inputs)}
 			return
 		}
 
@@ -742,49 +753,57 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
 	var wg sync.WaitGroup
-	errs := make(x.GqlErrorList, len(body))
-	for i := 0; i < len(body); i++ {
+	for i := 0; i < len(inputs); i++ {
 		wg.Add(1)
-		go func(idx int, input string) {
+		go func(idx int, input interface{}) {
 			defer wg.Done()
-			// b, err := json.Marshal(input)
-			// if err != nil {
-			// 	// TODO - Propogate this error
-			// 	return
-			// }
 
-			// mu.RLock()
-			// fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
-			// if err != nil {
-			// 	mu.RUnlock()
-			// 	return
-			// }
-			// mu.RUnlock()
+			if !graphql {
+				b, err := json.Marshal(input)
+				if err != nil {
+					errCh <- err
+					// TODO - Propogate this error
+					return
+				}
+				input = string(b)
 
-			b, err := makeRequest(nil, fconf.Method, fconf.URL, input, fconf.ForwardHeaders)
+				// For REST requests, we'll have to substitute the variables used in the URL.
+				// TODO - Have validation to ensure that GraphQL endpoints don't use variables.
+				mu.RLock()
+				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+				if err != nil {
+					mu.RUnlock()
+					return
+				}
+				mu.RUnlock()
+			}
+
+			b, err := makeRequest(nil, fconf.Method, fconf.URL, input.(string), fconf.ForwardHeaders)
 			if err != nil {
-				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because external request"+
-					" returned an error: %s for field: %s within type: %s, index: %v.", err,
-					f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
+				// TODO - Propogate this error.
 				return
 			}
 
-			resp := &graphqlResp{}
-			err = json.Unmarshal(b, resp)
-			if err != nil {
-				// resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
-				return
+			var result interface{}
+			if graphql {
+				resp := &graphqlResp{}
+				err = json.Unmarshal(b, resp)
+				if err != nil {
+					// TODO - Propagate this error.
+					return
+				}
+				var ok bool
+				result, ok = resp.Data[fconf.RemoteGqlQueryName]
+				if !ok {
+					return
+				}
+			} else {
+				var result interface{}
+				if err := json.Unmarshal(b, &result); err != nil {
+					// TODO - Propogate this error.
+					return
+				}
 			}
-			result, ok := resp.Data[fconf.RemoteGqlQueryName]
-			if !ok {
-				return
-			}
-
-			// var result interface{}
-			// if err := json.Unmarshal(b, &result); err != nil {
-			// 	// TODO - Propogate this error.
-			// 	return
-			// }
 
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
@@ -792,10 +811,10 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				val[f.Alias()] = result
 			}
 			mu.Unlock()
-		}(i, body[i])
+		}(i, inputs[i])
 	}
 	wg.Wait()
-	errCh <- errs
+	errCh <- nil
 }
 
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their

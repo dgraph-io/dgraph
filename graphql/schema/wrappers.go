@@ -49,6 +49,8 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+// FieldHTTPConfig contains the config needed to resolve a field using a remote HTTP endpoint
+// which could a GraphQL or a REST endpoint.
 type FieldHTTPConfig struct {
 	URL    string
 	Method string
@@ -809,7 +811,6 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 
 func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
 	args []string) (string, error) {
-	fmt.Println("args: ", args, "argMap: ", args)
 	for _, arg := range args {
 		val, ok := argMap[arg]
 		if !ok {
