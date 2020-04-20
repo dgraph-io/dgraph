@@ -678,29 +678,42 @@ func copyTemplate(input interface{}) (interface{}, error) {
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	// FIXME - The value of this flag should come from whether we are dealing with a GraphQL
+	// field or query/mutation. It is hardcoded to true for testing for now.
 	fconf, err := f.CustomHTTPConfig(true)
 	if err != nil {
 		errCh <- err
 		return
 	}
-	fmt.Printf("fconf: %+v, body: %+v\n", fconf.RemoteQueryName, fconf.Body)
 
 	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]interface{}, len(vals))
+	body := make([]string, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyTemplate(*fconf.Template)
-		if err != nil {
-			errCh <- err
-			return
-		}
+		// temp, err := copyTemplate(*fconf.Template)
+		// if err != nil {
+		// 	errCh <- err
+		// 	return
+		// }
 		mu.RLock()
-		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
+		m := vals[i].(map[string]interface{})
+		args := make([]string, 0, len(m))
+		for k := range m {
+			args = append(args, k)
+		}
+		b, err := schema.SubstituteFieldsInGraphqlRequest(fconf.Body, f, m, args)
+		if err != nil {
 			errCh <- err
 			mu.RUnlock()
 			return
 		}
-		mu.RUnlock()
-		body[i] = temp
+		body = append(body, b)
+		// if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
+		// 	errCh <- err
+		// 	mu.RUnlock()
+		// 	return
+		// }
+		// mu.RUnlock()
+		// body[i] = temp
 	}
 
 	if fconf.Operation == "batch" {
@@ -743,28 +756,30 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	var wg sync.WaitGroup
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
-		go func(idx int, input interface{}) {
+		go func(idx int, input string) {
 			defer wg.Done()
-			b, err := json.Marshal(input)
-			if err != nil {
-				// TODO - Propogate this error
-				return
-			}
+			// b, err := json.Marshal(input)
+			// if err != nil {
+			// 	// TODO - Propogate this error
+			// 	return
+			// }
 
-			mu.RLock()
-			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
-			if err != nil {
-				mu.RUnlock()
-				return
-			}
-			mu.RUnlock()
+			// mu.RLock()
+			// fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+			// if err != nil {
+			// 	mu.RUnlock()
+			// 	return
+			// }
+			// mu.RUnlock()
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			fmt.Println("input: ", input)
+			b, err := makeRequest(nil, fconf.Method, fconf.URL, input, fconf.ForwardHeaders)
 			if err != nil {
 				// TODO - Propogate this error.
 				return
 			}
 
+			fmt.Println(string(b))
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
 				// TODO - Propogate this error.
