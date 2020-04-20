@@ -802,12 +802,16 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	verifyData(t, users, teachers, schools)
 
-	// lets update the schema and check single mode now
-	schema = readFile(t, "schemas/single-mode-rest.graphql")
-	verifyData(t, users, teachers, schools)
+	// // lets update the schema and check single mode now
+	// schema = readFile(t, "schemas/single-mode-rest.graphql")
+	// verifyData(t, users, teachers, schools)
+
+	// // update schema to single mode where fields are resolved using GraphQL endpoints.
+	// schema = readFile(t, "schemas/single-mode-graphql.graphql")
+	// verifyData(t, users, teachers, schools)
 
 	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	schema = readFile(t, "schemas/single-mode-graphql.graphql")
+	schema = readFile(t, "schemas/batch-mode-graphql.graphql")
 	verifyData(t, users, teachers, schools)
 }
 

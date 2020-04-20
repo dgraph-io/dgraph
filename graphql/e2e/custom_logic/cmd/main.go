@@ -1126,7 +1126,7 @@ func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
-func introspectedSchemaForGetQuery(fieldName string) string {
+func introspectedSchemaForQuery(fieldName, idsField string) string {
 	return fmt.Sprintf(`{
 		"data":{
 			"__schema":{
@@ -1144,7 +1144,7 @@ func introspectedSchemaForGetQuery(fieldName string) string {
 					"name":"%s",
 					"args":[
 						{
-						"name":"id",
+						"name":"%s",
 						"type":{
 							"kind":"NON_NULL",
 							"name":null,
@@ -1170,7 +1170,7 @@ func introspectedSchemaForGetQuery(fieldName string) string {
 			]
 			}
 		}
-	}`, fieldName)
+	}`, fieldName, idsField)
 }
 
 type request struct {
@@ -1200,7 +1200,7 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForGetQuery("userName"))
+		fmt.Fprintf(w, introspectedSchemaForQuery("userName", "id"))
 		return
 	}
 
@@ -1225,7 +1225,7 @@ func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 
 	// FIXME - Return type isn't validated yet.
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForGetQuery("car"))
+		fmt.Fprintf(w, introspectedSchemaForQuery("car", "id"))
 		return
 	}
 
@@ -1252,7 +1252,7 @@ func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForGetQuery("class"))
+		fmt.Fprintf(w, introspectedSchemaForQuery("class", "id"))
 		return
 	}
 
@@ -1278,7 +1278,7 @@ func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForGetQuery("teacherName"))
+		fmt.Fprintf(w, introspectedSchemaForQuery("teacherName", "id"))
 		return
 	}
 
@@ -1302,7 +1302,7 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForGetQuery("schoolName"))
+		fmt.Fprintf(w, introspectedSchemaForQuery("schoolName", "id"))
 		return
 	}
 
@@ -1317,6 +1317,31 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 		  "schoolName": "sname-%s"
 		}
 	}`, schoolID)
+}
+
+func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForQuery("userNames", "ids"))
+		return
+	}
+
+	fmt.Println(string(b))
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	userID := verifyQuery(userRegex, req.Query)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "userName": "uname-%s"
+		}
+	}`, userID)
 }
 
 func main() {
@@ -1365,6 +1390,9 @@ func main() {
 	http.HandleFunc("/gqlClass", gqlClassHandler)
 	http.HandleFunc("/gqlTeacherName", gqlTeacherNameHandler)
 	http.HandleFunc("/gqlSchoolName", gqlSchoolNameHandler)
+
+	// for testing in batch mode
+	http.HandleFunc("/gqlUserNames", gqlUserNamesHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
