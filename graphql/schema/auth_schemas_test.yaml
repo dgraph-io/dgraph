@@ -39,8 +39,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: `X_MyApp_Role` is not a valid GraphQL variable.",
-     "locations":[{"line":5, "column":28}]}
+    {"message": "Type X: @auth query: `X_MyApp_Role` is not a valid GraphQL variable.",
+     "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "RBAC rule invalid operator"
@@ -53,8 +53,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: `xyz` operator is not supported in this auth rule.",
-     "locations":[{"line":5, "column":28}]}
+    {"message": "Type X: @auth query: `xyz` operator is not supported in this rule.",
+     "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "Invalid RBAC rule"
@@ -67,8 +67,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: `{ \"ADMIN\" }` is not a valid auth rule.",
-     "locations":[{"line":5, "column":28}]}
+    {"message": "Type X: @auth query: `{ \"ADMIN\" }` is not a valid rule.",
+     "locations":[{"line":1, "column":28}]}
     ]
 
   - name: "Empty rule"

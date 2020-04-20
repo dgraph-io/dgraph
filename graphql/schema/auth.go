@@ -190,13 +190,13 @@ func rbacValidateRule(typ *ast.Definition, rule string,
 		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
 	if err != nil {
 		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` error while parsing auth rule.", typ.Name, err)
+			"Type %s: @auth query: `%s` error while parsing rule.", typ.Name, err)
 	}
 
 	idx := rbacRegex.FindAllStringSubmatchIndex(rule, -1)
 	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
 		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` is not a valid auth rule.", typ.Name, rule)
+			"Type %s: @auth query: `%s` is not a valid rule.", typ.Name, rule)
 	}
 
 	query := RBACQuery{
@@ -206,14 +206,14 @@ func rbacValidateRule(typ *ast.Definition, rule string,
 	}
 
 	if !strings.HasPrefix(query.Variable, "$") {
-		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` is not a valid GraphQL variable.", typ.Name, query.Variable)
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: `%s` is not a valid"+
+			" GraphQL variable.", typ.Name, query.Variable)
 	}
 	query.Variable = query.Variable[1:]
 
 	if query.Operator != "eq" {
-		return nil, gqlerror.ErrorPosf(position,
-			"Type %s: `%s` operator is not supported in this auth rule.", typ.Name, query.Operator)
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: `%s` operator is not"+
+			" supported in this rule.", typ.Name, query.Operator)
 	}
 	return &query, nil
 }
