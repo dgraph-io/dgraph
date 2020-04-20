@@ -1,41 +1,49 @@
 +++
 title = "Get Started - Quickstart Guide"
+aliases = ["/get-started-old"]
 +++
 
 {{% notice "note" %}}
-This is a quickstart guide.
+This is a quick start guide.
 You can find the getting started tutorial series [here]({{< relref "index.md" >}}).
 {{% /notice %}}
 
 ## Dgraph
 
-**Dgraph** is an open source, scalable, distributed, highly available and fast graph database,
-designed from ground up to be run in production.
+**Dgraph** is an open-source, scalable, distributed, highly available and fast graph database,
+designed from the ground up to be run in production.
 
-Dgraph cluster consists of different nodes (Zero, Alpha & Ratel) and each node serves a different purpose.
+Dgraph cluster consists of different nodes (Zero, Alpha & Ratel), and each node serves a
+different purpose.
 
 - **Dgraph Zero** controls the Dgraph cluster, assigns servers to a group,
 and re-balances data between server groups.
 
-- **Dgraph Alpha** hosts predicates and indexes. Predicates are either the properties associated
-with a node or the relationship between two nodes. Indexes are the tokenizers that can be
-associated with the predicates to enable filtering using approriate functions.
+- **Dgraph Alpha** hosts predicates and indexes. Predicates are either the properties
+associated with a node or the relationship between two nodes. Indexes are the tokenizers
+that can be associated with the predicates to enable filtering using appropriate functions.
 
 - **Ratel** serves the UI to run queries, mutations & altering schema.
 
 You need at least one Dgraph Zero and one Dgraph Alpha to get started.
 
-**Here's a four step tutorial to get you up and running.**
+{{% notice "tip" %}}
+This is guide is for the powerful query language of Dgraph, GraphQL+-.
+You can find the instructions to get started with GraphQL using Dgraph from
+[graphql.dgraph.io](https://graphql.dgraph.io).
+{{% /notice %}}
+
+**Here's a four-step tutorial to get you up and running.**
 
 This is a quick-start guide to running Dgraph.
-For an interactive walk through, take the [tour](https://tour.dgraph.io).
+For an interactive walkthrough, take the [tour](https://tour.dgraph.io).
 
 ### Step 1: Run Dgraph
 
-There are a several ways to install and run Dgraph, all of which
+There are several ways to install and run Dgraph, all of which
 you can find in the [Download page](https://dgraph.io/downloads)
 
-The easiest way to get Dgraph up and running is using `dgraph/standalone` docker image.
+The easiest way to get Dgraph up and running is using the `dgraph/standalone` docker image.
 Follow the instructions [here](https://docs.docker.com/install) to install
 Docker if you don't have it already.
 
@@ -51,9 +59,9 @@ You would find the Dgraph data stored in a folder named *dgraph* of your *home d
 
 {{% notice "tip" %}}
 Usually, you need to set the estimated memory Dgraph alpha can take through `lru_mb` flag.
-This is just a hint to the Dgraph alpha and actual usage would be higher than this.
-It is recomended to set lru_mb to the one-third of the
-available RAM. For the standalone setup, it is set to that by default.
+This is just a hint to the Dgraph alpha, and actual usage would be higher than this.
+It is recommended to set lru_mb to the one-third of the available RAM. For the standalone setup,
+it is set to that by default.
 {{% /notice %}}
 
 
@@ -72,11 +80,11 @@ The dataset is a movie graph, where and the graph nodes are
 entities of the type directors, actors, genres, or movies.
 
 #### Storing data in the graph
-Changing the data stored in Dgraph is a mutation.
-Dgraph as of now supports mutation for two kinds of data: RDF and JSON.
-The following RDF mutation stores information about the first three releases
-of the the ''Star Wars'' series and one of the ''Star Trek'' movies.
-Running the RDF mutation, either through the curl or Ratel UI's mutate tab will store the data in Dgraph.
+Changing the data stored in Dgraph is a mutation. Dgraph as of now supports
+mutation for two kinds of data: RDF and JSON. The following RDF mutation
+stores information about the first three releases of the the ''Star Wars''
+series and one of the ''Star Trek'' movies. Running the RDF mutation, either
+through the curl or Ratel UI's mutate tab will store the data in Dgraph.
 
 ```sh
 curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -XPOST -d $'
@@ -137,7 +145,7 @@ curl -H "Content-Type: application/rdf" "localhost:8080/mutate?commitNow=true" -
 
 
 {{% notice "tip" %}}
-To run an RDF mutation using a file via curl, you can use the curl option
+To run an RDF/JSON mutation using a file via curl, you can use the curl option
 `--data-binary @/path/to/mutation.rdf` instead of `-d $''`.
 The `--data-binary` option skips curl's default URL-encoding.
 {{% /notice %}}

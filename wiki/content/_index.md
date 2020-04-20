@@ -5,7 +5,7 @@ title = "Dgraph Documentation"
 
 **Welcome to the official Dgraph documentation.**
 
-Dgraph is an open source, scalable, distributed, highly available and fast graph database, designed from ground up to be run in production.
+Dgraph is an open-source, scalable, distributed, highly available and fast graph database, designed from the ground up to be run in production.
 
 ## Using Dgraph
 
@@ -147,7 +147,7 @@ Dgraph is an open source, scalable, distributed, highly available and fast graph
 
 ## Our Community
 
-**Dgraph is made better everyday by the growing community and the contributors all over the world.**
+**Dgraph is made better every day by the growing community and the contributors all over the world.**
 
 <section class="toc">
   <div class="container">
