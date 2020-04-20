@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -677,7 +678,12 @@ func copyTemplate(input interface{}) (interface{}, error) {
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
-	fconf, _ := f.CustomHTTPConfig(false)
+	fconf, err := f.CustomHTTPConfig(true)
+	if err != nil {
+		errCh <- err
+		return
+	}
+	fmt.Printf("fconf: %+v, body: %+v\n", fconf.RemoteQueryName, fconf.Body)
 
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]interface{}, len(vals))

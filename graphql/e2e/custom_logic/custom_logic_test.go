@@ -1243,3 +1243,75 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
     }`
 	require.JSONEq(t, expected, string(result.Data))
 }
+
+func TestCustomFieldsShouldBeResolvedUsingGraphQLEndpoints(t *testing.T) {
+	// lets check single mode first
+	schema := `type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/gqlUserName",
+						method: "POST",
+						operation: "single"
+					},
+					graphql: { query: "userName(id: $id)"}
+				)
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/gqlCar",
+						method: "POST",
+						operation: "single"
+					},
+					graphql: { query: "car(id: $id)"})
+		schools: [School]
+	}
+
+	type School {
+		id: ID!
+		established: Int! @search
+		name: String @custom(http: {
+						url: "http://mock:8888/gqlSchoolName",
+						method: "POST",
+						operation: "single"
+					  },
+					  graphql: { query: "schoolName(id: $id)"}
+					)
+		classes: [Class] @custom(http: {
+							url: "http://mock:8888/gqlClass",
+							method: "POST",
+							operation: "single"
+						},
+						graphql: { query: "class(id: $id)"}
+					)
+		teachers: [Teacher]
+	}
+
+	type Class @remote {
+		id: ID!
+		name: String!
+	}
+
+	type Teacher {
+		tid: ID!
+		age: Int!
+		name: String @custom(http: {
+						url: "http://mock:8888/gqlTeacherName",
+						method: "POST",
+						operation: "single"
+					},
+					graphql: { query: "teacherName(id: $tid)"}
+				)
+	}`
+
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+
+	teachers := addTeachers(t)
+	schools := addSchools(t, teachers)
+	users := addUsers(t, schools)
+
+	verifyData(t, users, teachers, schools)
+}
