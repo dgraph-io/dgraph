@@ -30,10 +30,6 @@ const (
 	RBACQueryPrefix = "{"
 )
 
-var (
-	RABCRegex *regexp.Regexp
-)
-
 type RBACQuery struct {
 	Variable string
 	Operator string
@@ -191,7 +187,14 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 func rbacValidateRule(typ *ast.Definition, rule string,
 	position *ast.Position) (*RBACQuery, error) {
-	idx := RABCRegex.FindAllStringSubmatchIndex(rule, -1)
+	rbacRegex, err :=
+		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
+	if err != nil {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` error while parsing auth rule.", typ.Name, err)
+	}
+
+	idx := rbacRegex.FindAllStringSubmatchIndex(rule, -1)
 	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
 		return nil, gqlerror.ErrorPosf(position,
 			"Type %s: `%s` is not a valid auth rule.", typ.Name, rule)
@@ -281,11 +284,4 @@ func gqlValidateRule(
 			// need to fill in vars and schema at query time
 		},
 		sel: op.SelectionSet[0]}, nil
-}
-
-func init() {
-	var err error
-	RABCRegex, err =
-		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
-	x.AssertTrue(err == nil)
 }
