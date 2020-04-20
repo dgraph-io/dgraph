@@ -1125,6 +1125,118 @@ func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
+func introspectedSchemaForGetQuery(fieldName string) string {
+	return fmt.Sprintf(`{
+		"data":{
+			"__schema":{
+			"queryType":{
+				"name":"Query"
+			},
+			"mutationType":null,
+			"subscriptionType":null,
+			"types":[
+				{
+				"kind":"OBJECT",
+				"name":"Query",
+				"fields":[
+					{
+					"name":"%s",
+					"args":[
+						{
+						"name":"id",
+						"type":{
+							"kind":"NON_NULL",
+							"name":null,
+							"ofType":{
+								"kind":"SCALAR",
+								"name":"ID",
+								"ofType":null
+							}
+						},
+						"defaultValue":null
+						}
+					],
+					"type":{
+						"kind":"SCALAR",
+						"name":"String",
+						"ofType":null
+					},
+					"isDeprecated":false,
+					"deprecationReason":null
+					}
+				]
+				}
+			]
+			}
+		}
+	}`, fieldName)
+}
+
+func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForGetQuery("userName"))
+		return
+	}
+	fmt.Println("body: ", string(b))
+}
+
+func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForGetQuery("car"))
+		return
+	}
+	fmt.Println("body: ", string(b))
+}
+
+func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForGetQuery("class"))
+		return
+	}
+	fmt.Println("body: ", string(b))
+}
+
+func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForGetQuery("teacherName"))
+		return
+	}
+	fmt.Println("body: ", string(b))
+}
+
+func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectedSchemaForGetQuery("schoolName"))
+		return
+	}
+	fmt.Println("body: ", string(b))
+}
+
 func main() {
 
 	// for queries
@@ -1148,6 +1260,7 @@ func main() {
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)
 	http.HandleFunc("/favMoviesDelete/", favMoviesDeleteHandler)
 
+	// The endpoints below are for testing custom resolution of fields within type definitions.
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
 	http.HandleFunc("/cars", carsHandler)
@@ -1161,6 +1274,15 @@ func main() {
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
+
+	// endpoints for testing custom resolution of fields within type definitions using GraphQL
+	// resolvers.
+	// for testing single mode
+	http.HandleFunc("/gqlUserName", gqlUserNameHandler)
+	http.HandleFunc("/gqlCar", gqlCarHandler)
+	http.HandleFunc("/gqlClass", gqlClassHandler)
+	http.HandleFunc("/gqlTeacherName", gqlTeacherNameHandler)
+	http.HandleFunc("/gqlSchoolName", gqlSchoolNameHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))

@@ -658,7 +658,11 @@ func externalRequestError(err error, f schema.Field) *x.GqlError {
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
-	fconf, _ := f.CustomHTTPConfig()
+	fconf, err := f.CustomHTTPConfig()
+	if err != nil {
+		errCh <- err
+		return
+	}
 
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]interface{}, len(vals))

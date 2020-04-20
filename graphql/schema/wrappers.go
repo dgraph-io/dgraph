@@ -781,6 +781,11 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 		}
 	} else {
+		if graphqlArg != nil {
+			remoteQuery := graphqlArg.Raw
+			queryEndIndex := strings.Index(remoteQuery, "(")
+			fconf.RemoteGqlQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
+		}
 		fconf.Operation = "batch"
 		op := httpArg.Value.Children.ForName("operation")
 		if op != nil {
@@ -792,6 +797,37 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 
 func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
+}
+
+func SubstituteFieldsInGraphqlRequest(req string, f *ast.Field, argMap map[string]interface{},
+	args ast.ArgumentDefinitionList) (string, error) {
+	for _, arg := range args {
+		val, ok := argMap[arg.Name]
+		if !ok {
+			continue
+		}
+		value := ""
+		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
+			if val == nil {
+				val = "null"
+			}
+			value = `"` + fmt.Sprintf("%+v", val) + `"`
+		}
+		req = strings.ReplaceAll(req, "$"+arg.Name, value)
+	}
+	buf := &bytes.Buffer{}
+	buildGraphqlRequestFields(buf, f)
+	req += buf.String()
+	// contact method and request object
+	req = `query{` + req + `}`
+	param := Request{
+		Query: req,
+	}
+	remoteQueryBuf, err := json.Marshal(param)
+	if err != nil {
+		return req, err
+	}
+	return string(remoteQueryBuf), nil
 }
 
 func (f *field) SelectionSet() (flds []Field) {
