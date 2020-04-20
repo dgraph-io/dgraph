@@ -9,8 +9,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "failed to parse GraphQL rule 
-        [reason : Expected Name, found <EOF> (Locations: [{Line: 1, Column: 9}])]",
+      {"message": "Type X: @auth query: failed to parse GraphQL rule [reason : Expected Name, found <EOF>
+      (Locations: [{Line: 1, Column: 9}])]",
       "locations":[{"line":5, "column":28}]}
     ]
 
@@ -23,9 +23,9 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "failed to validate GraphQL rule 
-        [reason : Field \"userRle\" is not defined by type XFilter. 
-        Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
+      {"message": "Type X: @auth query: failed to validate GraphQL rule
+      [reason : Field \"userRle\" is not defined by type XFilter.
+      Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
       "locations":[{"line":5, "column":28}]}
     ]
 
@@ -81,7 +81,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "a rule should be exactly one query, found 0 GraphQL operations",
+    {"message": "Type X: @auth query: a rule should be exactly one query, found 0 GraphQL operations",
      "locations":[{"line":5, "column":28}]}
     ]
 
@@ -95,7 +95,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
      "locations":[{"line":5, "column":21}]}
     ]
 
@@ -116,7 +116,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "it doesn't make sense to 'OR' less than two rules",
+    {"message": "Type X: @auth query: 'OR' should contain at least two rules",
      "locations":[{"line":5, "column":25}]}
     ]
 
@@ -156,7 +156,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
      "locations":[{"line":5, "column":21}]}
     ]
 
@@ -196,8 +196,23 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
      "locations":[{"line":5, "column":21}]}
+    ]
+
+  - name:  "Rules with null value"
+    input: |
+      type X @auth(
+        query: { and: [ null, null ] }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\"", "locations":[{"line":5, "column":27}]},
+    {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\"", "locations":[{"line":5, "column":32}]}
     ]
 
 valid_schemas:

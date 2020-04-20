@@ -119,9 +119,8 @@ func parseAuthDirective(
 func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNode, error) {
 
 	if len(val.Children) == 0 {
-		return nil,
-			gqlerror.ErrorPosf(val.Position,
-				`no arguments - there should be only one of "and", "or", "not" and "rule"`)
+		return nil, gqlerror.ErrorPosf(val.Position, "Type %s: @auth query: no arguments - "+
+			"there should be only one of \"and\", \"or\", \"not\" and \"rule\"", typ.Name)
 	}
 
 	numChildren := 0
@@ -135,9 +134,9 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 			errResult = AppendGQLErrs(errResult, err)
 		}
 		if len(result.Or) < 2 {
-			errResult = AppendGQLErrs(errResult,
-				gqlerror.ErrorPosf(ors.Position,
-					`it doesn't make sense to 'OR' less than two rules`))
+			errResult = AppendGQLErrs(errResult, gqlerror.ErrorPosf(ors.Position,
+				`Type %s: @auth query: 'OR' should contain at least two rules`,
+				typ.Name))
 		}
 		numChildren++
 	}
@@ -149,9 +148,9 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 			errResult = AppendGQLErrs(errResult, err)
 		}
 		if len(result.And) < 2 {
-			errResult = AppendGQLErrs(errResult,
-				gqlerror.ErrorPosf(ands.Position,
-					`it doesn't make sense to 'And' less than two rules`))
+			errResult = AppendGQLErrs(errResult, gqlerror.ErrorPosf(ands.Position,
+				`Type %s: @auth query: 'AND' should contain at least two rules`,
+				typ.Name))
 		}
 		numChildren++
 	}
@@ -177,9 +176,9 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	}
 
 	if numChildren != 1 || len(val.Children) > 1 {
-		errResult = AppendGQLErrs(errResult,
-			gqlerror.ErrorPosf(val.Position,
-				`there should be only one of "and", "or", "not" and "rule"`))
+		errResult = AppendGQLErrs(errResult, gqlerror.ErrorPosf(val.Position,
+			`Type %s: @auth query: there should be only one of "and", "or", "not" and "rule"`,
+			typ.Name))
 	}
 
 	return result, errResult
@@ -227,53 +226,54 @@ func gqlValidateRule(
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
-		return nil, x.GqlErrorf(
-			"failed to parse GraphQL rule [reason : %s]", toGqlError(gqlErr).Error()).
-			WithLocations(x.Location{Line: position.Line, Column: position.Column})
+		return nil, x.GqlErrorf("Type %s: @auth query: failed to parse GraphQL rule [reason : %s]",
+			typ.Name, toGqlError(gqlErr).Error()).WithLocations(x.Location{Line: position.Line,
+			Column: position.Column})
 	}
 
 	if len(doc.Operations) != 1 {
-		return nil, gqlerror.ErrorPosf(position,
-			"a rule should be exactly one query, found %v GraphQL operations", len(doc.Operations))
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: a rule should be "+
+			"exactly one query, found %v GraphQL operations", typ.Name, len(doc.Operations))
 	}
 	op := doc.Operations[0]
 
 	if op == nil {
-		return nil, gqlerror.ErrorPosf(position,
-			"a rule should be exactly one query, found an empty GraphQL operation")
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: a rule should be "+
+			"exactly one query, found an empty GraphQL operation", typ.Name)
 	}
 
 	if op.Operation != "query" {
-		return nil, gqlerror.ErrorPosf(position,
-			"a rule should be exactly one query, found an %s", op.Name)
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: a rule should be exactly"+
+			" one query, found an %s", typ.Name, op.Name)
 	}
 
 	listErr := validator.Validate(s, doc)
 	if len(listErr) != 0 {
 		var errs error
 		for _, err := range listErr {
-			errs = AppendGQLErrs(
-				errs,
-				x.GqlErrorf("failed to validate GraphQL rule [reason : %s]", toGqlError(err)).
-					WithLocations(x.Location{Line: position.Line, Column: position.Column}))
+			errs = AppendGQLErrs(errs,
+				x.GqlErrorf("Type %s: @auth query: failed to validate GraphQL rule [reason : %s]",
+					typ.Name, toGqlError(err)).WithLocations(x.Location{Line: position.Line,
+					Column: position.Column}))
 		}
 		return nil, errs
 	}
 
 	if len(op.SelectionSet) != 1 {
 		return nil, gqlerror.ErrorPosf(position,
-			"a rule should be exactly one query, found %v queries", len(op.SelectionSet))
+			"Type %s: @auth query: a rule should be exactly one query, found %v queries",
+			typ.Name, len(op.SelectionSet))
 	}
 
 	f, ok := op.SelectionSet[0].(*ast.Field)
 	if !ok {
 		return nil, gqlerror.ErrorPosf(position,
-			"error couldn't generate query from rule")
+			"Type %s: @auth query: error couldn't generate query from rule", typ.Name)
 	}
 
 	if f.Name != "query"+typ.Name {
-		return nil, gqlerror.ErrorPosf(position,
-			"on type %s expected only query%s rules,but found %s", typ.Name, typ.Name, f.Name)
+		return nil, gqlerror.ErrorPosf(position, "Type %s: @auth query: expected only query%s"+
+			" rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 
 	return &query{
