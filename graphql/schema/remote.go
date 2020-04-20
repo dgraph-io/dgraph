@@ -281,7 +281,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	}
 
 	// Add return type as well to expand. because, we need to type check the return type as well.
-	argValToType[returnType] = endpoint.field.Type.String()
+	argValToType[returnType] = endpoint.field.Type.Name()
 
 	// Now we have to expand the remote types and check with the local types.
 	expandedTypes := expandArgs(argValToType, remoteIntrospection)
@@ -303,13 +303,14 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 					field.Name, localType.Name, localType.Name,
 				)
 			}
-			if localField.Type.NamedType != recursivelyFindName(&field.Type) {
+			if localField.Type.String() != buildTypeStringFromGqlType(&field.Type) {
 				return gqlerror.ErrorPosf(
 					endpoint.field.Position,
-					"expected type for the field %s is %s but got %s",
+					"expected type for the field %s is %s but got %s in type %s",
 					field.Name,
-					recursivelyFindName(&field.Type),
-					localField.Type.NamedType,
+					buildTypeStringFromGqlType(&field.Type),
+					localField.Type.String(),
+					typeName,
 				)
 			}
 		}
@@ -380,10 +381,23 @@ func expandArgRecursively(arg string, param *expandArgParams) {
 					expandArgRecursively(recursivelyFindName(&field.Type), param)
 				}
 			}
+			// expand input fields as well.
+			param.typesToFields[inputType.Name] = append(param.typesToFields[inputType.Name],
+				inputType.InputFields...)
+			for _, field := range inputType.InputFields {
+				_, ok := graphqlScalarType[recursivelyFindName(&field.Type)]
+				if !ok {
+					// expand this field.
+					expandArgRecursively(recursivelyFindName(&field.Type), param)
+				}
+			}
 		}
 	}
 }
 
+// expandArgs will expand the nested type into flat structure. For eg. Country have a filed with
+// field of states of type State is expanded as Country and State. Scalar fields won't be expanded.
+// It also expands deep nested types.
 func expandArgs(argToVal map[string]string,
 	introspectedSchema *IntrospectedSchema) map[string][]GqlField {
 
@@ -441,6 +455,7 @@ func collectArgsFromIntrospection(query GqlField) *remoteArgParams {
 	}
 }
 
+// buildTypeStringFromGqlType returns types as string eg: [!String], !User, [User]
 func buildTypeStringFromGqlType(in *GqlType) string {
 	if in.Kind == "LIST" {
 		tmp := &GqlType{}
@@ -464,6 +479,7 @@ func buildTypeStringFromGqlType(in *GqlType) string {
 	return in.Name
 }
 
+// recursivelyFindName will returns the type name of the field. eg: [!User] will return User.
 func recursivelyFindName(in *GqlType) string {
 	if in.Name != "" {
 		return in.Name
@@ -477,11 +493,6 @@ func recursivelyFindName(in *GqlType) string {
 		mapstructure.Decode(mappedField, tmp)
 		return recursivelyFindName(tmp)
 	}
-	return ""
-}
-
-// findFieldFromType will go deep to find the type
-func recursivelyBuildTypeString(interface{}) string {
 	return ""
 }
 

@@ -42,37 +42,60 @@ const (
 		 name: String!
 		 director: [MovieDirector]
 	 }
-	 type Continent @remote {
-		code: String
-		name: String
-		countries: [Country]
+	 type Continent@remote {
+		code: ID!
+		name: String!
+		countries: [Country!]!
 	  }
 	  
-	  type Country @remote {
-		code: String
-		name: String
-		native: String
-		phone: String
-		continent: Continent
+	  input ContinentFilterInput {
+		code: StringQueryOperatorInput
+	  }
+	  
+	  type Country@remote {
+		code: ID!
+		name: String!
+		native: String!
+		phone: String!
+		continent: Continent!
+		capital: String
 		currency: String
-		languages: [Language]
-		emoji: String
-		emojiU: String
-		states: [State]
+		languages: [Language!]!
+		emoji: String!
+		emojiU: String!
+		states: [State!]!
 	  }
 	  
-	  type Language @remote {
-		code: String
+	  input CountryFilterInput@remote {
+		code: StringQueryOperatorInput
+		currency: StringQueryOperatorInput
+		continent: StringQueryOperatorInput
+	  }
+	  
+	  type Language@remote {
+		code: ID!
 		name: String
 		native: String
-		rtl: Int
+		rtl: Boolean!
 	  }
 	  
+	  input LanguageFilterInput@remote {
+		code: StringQueryOperatorInput
+	  }
 	  
-	  type State @remote {
+	  type State@remote {
 		code: String
-		name: String
-		country: Country
+		name: String!
+		country: Country!
+	  }
+	  
+	  input StringQueryOperatorInput@remote {
+		eq: String
+		ne: String
+		in: [String]
+		nin: [String]
+		regex: String
+		glob: String
 	  }
  `
 )
@@ -747,7 +770,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	}	
 	`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
+	require.Contains(t, res.Errors[0].Error(), "Type Query; Field getCountry; country is not present in remote schema\n")
 }
 
 func TestForInvalidArguement(t *testing.T) {
@@ -757,7 +780,7 @@ func TestForInvalidArguement(t *testing.T) {
 	}	
 	`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; code arg not present in the remote query country\n")
+	require.Contains(t, res.Errors[0].Error(), "Type Query; Field getCountry; code arg not present in the remote query country\n")
 }
 
 func TestForInvalidType(t *testing.T) {
@@ -767,33 +790,7 @@ func TestForInvalidType(t *testing.T) {
 	}	
 	`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int!. But got ID!\n")
-}
-
-func TestCustomLogicGraphql(t *testing.T) {
-	schema := customTypes + `
-	type Query {
-		getCountry(id: ID!): Country @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
-	`
-	res := updateSchema(t, schema)
-	common.RequireNoGQLErrors(t, res)
-	query := `
-	query {
-		getCountry(id: "BI"){
-			code
-			name 
-		}
-	}`
-	params := &common.GraphQLParams{
-		Query: query,
-	}
-
-	result := params.ExecuteAsPost(t, alphaURL)
-	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
-	{"getCountry":{"code":"BI","name":"Burundi"}}
-	`)
+	require.Contains(t, res.Errors[0].Error(), "Type Query; Field getCountry; expected type for variable  $id is Int!. But got ID!\n")
 }
 
 func TestCustomLogicGraphqlWithError(t *testing.T) {
@@ -870,6 +867,60 @@ func TestCustomLogicWithErrorResponse(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.Equal(t, "dummy error", result.Errors.Error())
+}
+func TestCustomLogicGraphqlValidInputObject(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryFilterInput): [Country!]! @custom(http: {url: "http://mock:8888/validinputobject", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "countries(filter: $yo)"}) 
+	}
+	`
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	query := `
+	query{
+		myCustom(yo:{
+    		code:{
+      			eq:"BI"
+    		}
+  			}){
+    			name
+    			code
+  			}
+		}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, ` {
+		  "myCustom": [
+			{
+			  "name": "Burundi",
+			  "code": "BI"
+			}
+		  ]
+		}
+	  `, string(result.Data))
+}
+
+func TestCustomLogicGraphqlInvalidField(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryFilterInput): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "countries(filter: $yo)"}) 
+	}
+	`
+	res := updateSchema(t, schema)
+	require.Contains(t, res.Errors[0].Error(), "expected type for the field code is String! but got ID! in type Country\n")
+}
+
+func TestCustomLogicGraphqlInvalidNestedField(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryFilterInput): [Country!]! @custom(http: {url: "http://mock:8888/invalidnestedfield", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "countries(filter: $yo)"}) 
+	}
+	`
+	res := updateSchema(t, schema)
+	require.Contains(t, res.Errors[0].Error(), "expected type for the field code is String! but got ID! in type Continent\n")
 }
 
 type episode struct {

@@ -30,10 +30,17 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+type GraphqlRequest struct {
+	Query         string                 `json:"query"`
+	OperationName string                 `json:"operationName"`
+	Variables     map[string]interface{} `json:"variables"`
+}
+
 type graphqlResponseObject struct {
 	Response string
 	Schema   string
 	Name     string
+	Request  string
 }
 
 var graphqlResponses map[string]graphqlResponseObject
@@ -338,6 +345,65 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, graphqlResponses["validcountries"].Response)
 }
 
+func validInputObject(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, graphqlResponses["validinputobject"].Schema)
+		return
+	}
+
+	req := &GraphqlRequest{}
+	json.Unmarshal(body, req)
+
+	if req.Query == strings.TrimSpace(graphqlResponses["validinputobject"].Request) {
+		fmt.Fprintf(w, graphqlResponses["validinputobject"].Response)
+		return
+	}
+	fmt.Fprintf(w, `{
+		"errors":[
+		  {
+			"message":"dummy error"
+		  }
+		]
+	  }`)
+}
+
+func invalidField(w http.ResponseWriter, r *http.Request) {
+	body, _ := ioutil.ReadAll(r.Body)
+
+	if strings.Contains(string(body), "__schema") {
+		fmt.Fprintf(w, graphqlResponses["invalidfield"].Schema)
+		return
+	}
+}
+
+func commonGraphqlYamlHandler(testname string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, _ := ioutil.ReadAll(r.Body)
+
+		if strings.Contains(string(body), "__schema") {
+			fmt.Fprintf(w, graphqlResponses[testname].Schema)
+			return
+		}
+		req := &GraphqlRequest{}
+		json.Unmarshal(body, req)
+
+		fmt.Println(req.Query)
+		if req.Query == strings.TrimSpace(graphqlResponses[testname].Request) {
+			fmt.Fprintf(w, graphqlResponses[testname].Response)
+			return
+		}
+		fmt.Fprintf(w, `{
+			"errors":[
+			  {
+				"message":"dummy error"
+			  }
+			]
+		  }`)
+	}
+}
+
 type input struct {
 	ID string `json:"uid"`
 }
@@ -568,9 +634,13 @@ func main() {
 	http.HandleFunc("/invalidargument", invalidArgument)
 	http.HandleFunc("/invalidtype", invalidType)
 	http.HandleFunc("/validcountry", validCountryResponse)
-	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
-	http.HandleFunc("/graphqlerr", graphqlErrResponse)
-	http.HandleFunc("/validcountries", validCountries)
+	http.HandleFunc("/validcountrywitherror", commonGraphqlYamlHandler("validcountrywitherror"))
+	http.HandleFunc("/graphqlerr", commonGraphqlYamlHandler("graphqlerr"))
+	http.HandleFunc("/validcountries", commonGraphqlYamlHandler("validcountries"))
+	http.HandleFunc("/validinputobject", commonGraphqlYamlHandler("validinputobject"))
+	http.HandleFunc("/invalidfield", commonGraphqlYamlHandler("invalidfield"))
+	http.HandleFunc("/invalidnestedfield", commonGraphqlYamlHandler("invalidnestedfield"))
+
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)

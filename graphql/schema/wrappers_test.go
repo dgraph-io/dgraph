@@ -17,12 +17,14 @@
 package schema
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -648,4 +650,21 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildGraphqlRequestFields(t *testing.T) {
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: `query { getUser(id: "Df") {
+		name
+		counterculture{
+			name
+			region{
+				code
+			}
+		}
+	} }`})
+	require.Nil(t, gqlErr)
+	remoteQuery := doc.Operations[0].SelectionSet[0].(*ast.Field)
+	buf := &bytes.Buffer{}
+	buildGraphqlRequestFields(buf, remoteQuery)
+	require.Equal(t, "{\nname\ncounterculture{\nname\nregion{\ncode\n}\n}\n}", buf.String())
 }
