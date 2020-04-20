@@ -206,10 +206,16 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid := m.uid(nq.GetSubject())
+	if sid == 0 {
+		panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetSubject()))
+	}
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
+		if oid == 0 {
+			panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetObjectId()))
+		}
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		var err error
