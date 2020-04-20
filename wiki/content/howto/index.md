@@ -60,6 +60,8 @@ The HTTP page `/debug/pprof/` is available at the HTTP port of a Dgraph Zero or 
 To debug a running Dgraph cluster, first copy the postings ("p") directory to
 another location. If the Dgraph cluster is not running, then you can use the
 same postings directory with the debug tool.
+
+If the “p” directory has been encrypted, then the debug tool will need to use the --keyfile <path-to-keyfile> option. This file must contain the same key that was used to encrypt the “p” directory.
 {{% /notice %}}
 
 The `dgraph debug` tool can be used to inspect Dgraph's posting list structure.
@@ -104,6 +106,20 @@ Debug the p directory, inspecting the history of a particular key:
 $ dgraph debug --postings ./p --lookup 00000b6465736372697074696f6e020866617374 --history
 ```
 
+Debug an encrypted p directory with the key in a local file at the path  ./key_file:
+
+```sh
+$ dgraph debug --postings ./p --keyfile ./key_file
+```
+
+
+{{% notice "note" %}}
+The key file contains the key used to decrypt/encrypt the db. This key should be kept secret. As a best practice, 
+
+- Do not store the key file on the disk permanently. Back it up in a safe place and delete it after using it with the debug tool.
+
+- If the above is not possible, make sure correct privileges are set on the keyfile. Only the user who owns the dgraph process should be able to read / write the key file: `chmod 600` 
+{{% /notice %}}
 
 ### Debug Tool Output
 
