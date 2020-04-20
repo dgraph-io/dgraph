@@ -49,7 +49,7 @@ func (qr *queryRewriter) Rewrite(
 
 	// FIXME: should come from the JWT
 	authVariables := map[string]interface{}{
-		"User": "user1",
+		"USER": "user1",
 	}
 
 	auth := &authRewriter{
