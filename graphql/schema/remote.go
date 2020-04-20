@@ -149,7 +149,7 @@ const introspectionQuery = `
 
 type remoteGraphqlEndpoint struct {
 	graphqlArg *ast.Argument
-	rootQuery  *ast.Definition
+	typ        *ast.Definition
 	schema     *ast.Schema
 	field      *ast.FieldDefinition
 	directive  *ast.Directive
@@ -162,7 +162,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		return gqlerror.ErrorPosf(
 			endpoint.directive.Position,
 			"Type %s; Field %s; query field inside @custom directive is mandatory.",
-			endpoint.rootQuery.Name,
+			endpoint.typ.Name,
 			endpoint.field.Name)
 	}
 	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: fmt.Sprintf(`query {%s}`,
@@ -177,7 +177,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 			"Type %s; Field %s; only one query is possible inside query argument. For eg:"+
 				" valid input: @custom(..., graphql:{ query: \"getUser(id: $id)\"})"+"invalid input:"+
 				"@custom(..., graphql:{query: \"getUser(id: $id) getAuthor(id: $id)\"})",
-			endpoint.rootQuery.Name,
+			endpoint.typ.Name,
 			endpoint.field.Name)
 	}
 
@@ -192,7 +192,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 		return gqlerror.ErrorPosf(
 			endpoint.directive.Position, "Type %s; Field %s;Remote query %s should not contain"+
 				" any selection statement. eg: Remote query should be like this %s(...) and not"+
-				" like %s(..){...}", endpoint.rootQuery.Name,
+				" like %s(..){...}", endpoint.typ.Name,
 			endpoint.field.Name,
 			remoteQuery.Name,
 			remoteQuery.Name,
@@ -204,7 +204,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	if err != nil {
 		return gqlerror.ErrorPosf(
 			endpoint.directive.Position, "Type %s; Field %s; unable to introspect remote schema"+
-				" for the url %s", endpoint.rootQuery.Name,
+				" for the url %s", endpoint.typ.Name,
 			endpoint.field.Name,
 			endpoint.url)
 	}
@@ -226,7 +226,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 	if !queryExist {
 		return gqlerror.ErrorPosf(
 			endpoint.directive.Position, "Type %s; Field %s; %s is not present in remote schema",
-			endpoint.rootQuery.Name,
+			endpoint.typ.Name,
 			endpoint.field.Name,
 			remoteQuery.Name)
 	}
@@ -244,7 +244,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s arg not present in the remote"+
 					" query %s",
-				endpoint.rootQuery.Name,
+				endpoint.typ.Name,
 				endpoint.field.Name,
 				remoteArg,
 				remoteQuery.Name)
@@ -255,7 +255,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
 					" argument is supported in the remote graphql call.",
-				endpoint.rootQuery.Name,
+				endpoint.typ.Name,
 				endpoint.field.Name,
 				remoteArg)
 		}
@@ -270,7 +270,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				endpoint.directive.Position, "Type %s; Field %s;%s is a required argument in the "+
 					"remote query %s. But, the %s is not present in the custom logic call for %s. "+
 					"Please provide the required arg in the remote query %s",
-				endpoint.rootQuery.Name,
+				endpoint.typ.Name,
 				endpoint.field.Name,
 				requiredArg,
 				remoteQuery.Name,
@@ -279,25 +279,54 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error 
 				remoteQuery.Name)
 		}
 	}
+	fmt.Println(endpoint.field, "fname: ", endpoint.field.Name)
 
-	// Validate given argument type is matching with the remote query argument.
+	if endpoint.typ.Name == "Query" || endpoint.typ.Name == "Mutation" {
+		// Validate given argument type is matching with the remote query argument.
+		for variable, typeName := range argValToType {
+			localRemoteCallArg := endpoint.field.Arguments.ForName(variable[1:])
+			if localRemoteCallArg == nil {
+				return gqlerror.ErrorPosf(
+					endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in
+				  %s`,
+					endpoint.typ.Name,
+					endpoint.field.Name,
+					variable,
+					endpoint.field.Name)
+			}
+
+			if localRemoteCallArg.Type.Name() != typeName {
+				return gqlerror.ErrorPosf(
+					endpoint.directive.Position, "Type %s; Field %s; expected type for variable  "+
+						"%s is %s. But got %s",
+					endpoint.typ.Name,
+					endpoint.field.Name,
+					variable,
+					typeName,
+					localRemoteCallArg.Type)
+			}
+		}
+		return nil
+	}
+
+	// Else, we check that the argument should be a field in the type definition.
 	for variable, typeName := range argValToType {
-		localRemoteCallArg := endpoint.field.Arguments.ForName(variable[1:])
+		localRemoteCallArg := endpoint.typ.Fields.ForName(variable[1:])
 		if localRemoteCallArg == nil {
 			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in 
-				  %s`,
-				endpoint.rootQuery.Name,
+				endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in
+			  the type definition for %s`,
+				endpoint.typ.Name,
 				endpoint.field.Name,
 				variable,
-				endpoint.field.Name)
+				endpoint.typ.Name)
 		}
 
 		if localRemoteCallArg.Type.Name() != typeName {
 			return gqlerror.ErrorPosf(
 				endpoint.directive.Position, "Type %s; Field %s; expected type for variable  "+
 					"%s is %s. But got %s",
-				endpoint.rootQuery.Name,
+				endpoint.typ.Name,
 				endpoint.field.Name,
 				variable,
 				typeName,

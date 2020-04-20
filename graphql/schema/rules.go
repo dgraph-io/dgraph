@@ -1093,8 +1093,8 @@ func customDirectiveValidation(sch *ast.Schema,
 			graphqlArg: graphqlArg,
 			schema:     sch,
 			field:      field,
+			typ:        defn,
 			directive:  dir,
-			rootQuery:  typ,
 			url:        u.Raw,
 		})
 	}
