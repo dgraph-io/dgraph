@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -665,27 +666,33 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	// Here we build the array of objects which is sent as the body for the request.
-	body := make([]interface{}, len(vals))
+	body := make([]string, len(vals))
 	for i := 0; i < len(body); i++ {
-		temp, err := copyTemplate(*fconf.Template)
-		if err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because of internal "+
-				"processing error: %s for field: %s within type: %s.", err, f.Name(),
-				f.GetObjectName()).WithLocations(f.Location())
-			errCh <- x.GqlErrorList{gqlErr}
-			return
-		}
+		// temp, err := copyTemplate(*fconf.Template)
+		// if err != nil {
+		// 	errCh <- err
+		// 	return
+		// }
 		mu.RLock()
-		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because of internal "+
-				"processing error: %s during processing of body for field: %s within type: %s.",
-				err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-			errCh <- x.GqlErrorList{gqlErr}
+		m := vals[i].(map[string]interface{})
+		args := make([]string, 0, len(m))
+		for k := range m {
+			args = append(args, k)
+		}
+		b, err := schema.SubstituteFieldsInGraphqlRequest("", f, m, args)
+		if err != nil {
+			errCh <- err
 			mu.RUnlock()
 			return
 		}
-		mu.RUnlock()
-		body[i] = temp
+		body = append(body, b)
+		// if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
+		// 	errCh <- err
+		// 	mu.RUnlock()
+		// 	return
+		// }
+		// mu.RUnlock()
+		// body[i] = temp
 	}
 
 	if fconf.Operation == "batch" {
@@ -732,28 +739,24 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	errs := make(x.GqlErrorList, len(body))
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
-		go func(idx int, input interface{}) {
+		go func(idx int, input string) {
 			defer wg.Done()
-			b, err := json.Marshal(input)
-			if err != nil {
-				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json "+
-					"marshaling input: %+v returned an error: %s for field: %s within type: %s,"+
-					" index: %v.", input, err, f.Name(), f.GetObjectName(), idx)
-				return
-			}
+			// b, err := json.Marshal(input)
+			// if err != nil {
+			// 	// TODO - Propogate this error
+			// 	return
+			// }
 
-			mu.RLock()
-			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
-			if err != nil {
-				mu.RUnlock()
-				errs[idx] = x.GqlErrorf("Evaluation of custom field failed while substituting "+
-					"variables in URL with an error: %s for field: %s within type: %s, index: %v.",
-					err, f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
-				return
-			}
-			mu.RUnlock()
+			// mu.RLock()
+			// fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+			// if err != nil {
+			// 	mu.RUnlock()
+			// 	return
+			// }
+			// mu.RUnlock()
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			fmt.Println("input: ", input)
+			b, err := makeRequest(nil, fconf.Method, fconf.URL, input, fconf.ForwardHeaders)
 			if err != nil {
 				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because external request"+
 					" returned an error: %s for field: %s within type: %s, index: %v.", err,
@@ -761,6 +764,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
+			fmt.Println(string(b))
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
 				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+

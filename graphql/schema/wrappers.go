@@ -799,24 +799,24 @@ func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
 }
 
-func SubstituteFieldsInGraphqlRequest(req string, f *ast.Field, argMap map[string]interface{},
-	args ast.ArgumentDefinitionList) (string, error) {
+func SubstituteFieldsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
+	args []string) (string, error) {
 	for _, arg := range args {
-		val, ok := argMap[arg.Name]
+		val, ok := argMap[arg]
 		if !ok {
 			continue
 		}
 		value := ""
-		if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
-			if val == nil {
-				val = "null"
-			}
-			value = `"` + fmt.Sprintf("%+v", val) + `"`
+		// if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
+		if val == nil {
+			val = "null"
 		}
-		req = strings.ReplaceAll(req, "$"+arg.Name, value)
+		value = `"` + fmt.Sprintf("%+v", val) + `"`
+		// }
+		req = strings.ReplaceAll(req, "$"+arg, value)
 	}
 	buf := &bytes.Buffer{}
-	buildGraphqlRequestFields(buf, f)
+	buildGraphqlRequestFields(buf, f.(*field).field)
 	req += buf.String()
 	// contact method and request object
 	req = `query{` + req + `}`
