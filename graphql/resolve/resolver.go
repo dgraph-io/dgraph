@@ -684,7 +684,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				args = append(args, k)
 			}
 			// TODO - See if args is required.
-			b, err := schema.SubstituteFieldsInGraphqlRequest("", f, m, args)
+			b, err := schema.SubstituteArgsInGraphqlRequest("", f, m, args)
 			if err != nil {
 				mu.RUnlock()
 				errCh <- err
