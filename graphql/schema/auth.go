@@ -225,24 +225,6 @@ func gqlValidateRule(
 			"on type %s expected only query%s rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 
-	// Tweak the query so that it has an extra argument that includes a
-	// variable that we'll use to add in a `uid(...)`` filter or function
-	// so the auth query starts from exactly the same set of uids as
-	// the actual user query starts from.
-	//
-	// We know this argument and variable name is unique and not in the auth query
-	// somewhere because it has a `.` in it, and that's not allowed in GraphQL - it
-	// wouldn't pass the validation above.
-
-	f.Arguments = append(f.Arguments,
-		&ast.Argument{
-			Name: "dgraph.uid",
-			Value: &ast.Value{
-				Raw:  "dgraph.uid",
-				Kind: ast.Variable,
-			},
-		})
-
 	return &query{
 		field: f,
 		op: &operation{op: op,
