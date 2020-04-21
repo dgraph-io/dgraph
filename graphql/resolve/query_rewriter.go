@@ -176,7 +176,6 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
-	addTypeFilter(dgQuery, field.Type())
 	return dgQuery
 }
 
@@ -192,8 +191,12 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 }
 
 func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
+	var dgQuery *gql.GraphQuery
+
 	if xid == nil {
-		return rewriteAsQueryByIds(field, []uint64{uid})
+		dgQuery = rewriteAsQueryByIds(field, []uint64{uid})
+		addTypeFilter(dgQuery, field.Type())
+		return dgQuery
 	}
 
 	xidArgName := field.XIDArg()
@@ -205,7 +208,6 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 		},
 	}
 
-	var dgQuery *gql.GraphQuery
 	if uid > 0 {
 		dgQuery = &gql.GraphQuery{
 			Attr: field.ResponseName(),
