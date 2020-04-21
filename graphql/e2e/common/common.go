@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -201,7 +200,6 @@ func BootstrapServer(schema, data []byte) {
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
-		fmt.Println("Here", err)
 		x.Panic(err)
 	}
 
@@ -442,12 +440,10 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 		require.NoError(t, err)
 		require.Contains(t, req.Header.Get("Accept-Encoding"), "gzip")
 	}
-
 	err = json.Unmarshal(res, &result)
 	require.NoError(t, err)
 
 	return result
-
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
