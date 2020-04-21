@@ -1224,49 +1224,6 @@ func maxPathLength(f schema.Field) int {
 	return 1 + childMax
 }
 
-// TODO: Include this behavior into the standard algorithm above.
-// That is, allow the completion algorithms to be like a walk through the
-// result structure and then we can apply different behaviors as each point.
-// That should eliminate unpacking and packing the result multiple times and
-// allow the result processing to be really flexible.
-func aliasValue(field schema.Field, val interface{}) (interface{}, error) {
-	switch val := val.(type) {
-	case map[string]interface{}:
-		return aliasObject(field.SelectionSet(), val)
-	case []interface{}:
-		return aliasList(field, val)
-	default:
-		return val, nil
-	}
-}
-
-func aliasList(field schema.Field, values []interface{}) ([]interface{}, error) {
-	var errs error
-	var result []interface{}
-	for _, b := range values {
-		r, err := aliasValue(field, b)
-		errs = schema.AppendGQLErrs(errs, err)
-		result = append(result, r)
-	}
-	return result, errs
-}
-
-func aliasObject(
-	fields []schema.Field,
-	res map[string]interface{}) (interface{}, error) {
-
-	var errs error
-	result := make(map[string]interface{})
-
-	for _, f := range fields {
-		r, err := aliasValue(f, res[f.Name()])
-		result[f.ResponseName()] = r
-		errs = schema.AppendGQLErrs(errs, err)
-	}
-
-	return result, errs
-}
-
 // a httpResolver can resolve a single GraphQL field from an HTTP endpoint
 type httpResolver struct {
 	*http.Client
