@@ -10,11 +10,6 @@ type User @auth(
     ]}
     delete: { rule: "false" }) {
   username: String! @id
-  age: Int @auth(query: { or: [
-        { rule: "filter: {isBioSecret: false}" },
-        { rule: "filter: {username: {eq: $USER }}"},
-    ]})
-  isBioSecret: Boolean
   age: Int @auth(query: {rule: "filter: {username: {eq: $USER }}"})
   isPublic: Boolean
   disabled: Boolean @auth(update: { rule: "$ROLE: { eq: ADMIN }" })
@@ -82,6 +77,8 @@ type Project @auth(
                     }""" },
         { rule: "$ROLE: { eq: ADMIN }" }
     ]}
+
+    # Only admins can create projects
     add: { rule: "$ROLE: { eq: ADMIN }" }
 
     update: { rule: """roles(filter: { permissions: { eq: CREATE } }) { 

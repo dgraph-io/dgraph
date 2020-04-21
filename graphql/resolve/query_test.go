@@ -46,11 +46,13 @@ func TestQueryRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
 	testRewriter := NewQueryRewriter()
 
-	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query:     tcase.GQLQuery,
@@ -59,9 +61,7 @@ func TestQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			ctx := context.Background()
-
-			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
+			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})

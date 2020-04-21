@@ -239,8 +239,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
-	var numUidsField schema.Field
-	//numUidsField := mutation.NumUidsField()
+	numUidsField := mutation.NumUidsField()
 	numUidsFieldRespName := schema.NumUid
 	numUids := 0
 	if numUidsField != nil {
