@@ -27,16 +27,36 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Extensions represents GraphQL extensions
+type Extensions struct {
+	TouchedUids uint64 `json:"touched_uids,omitempty"`
+}
+
+// Merge merges ext with e
+func (e *Extensions) Merge(ext *Extensions) {
+	if e == nil || ext == nil {
+		return
+	}
+
+	e.TouchedUids += ext.TouchedUids
+}
+
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 
 // GraphQL spec on errors is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Errors
 
+// GraphQL spec on extensions says just this:
+// The response map may also contain an entry with key extensions. This entry, if set, must have a
+// map as its value. This entry is reserved for implementors to extend the protocol however they
+// see fit, and hence there are no additional restrictions on its contents.
+
 // Response represents a GraphQL response
 type Response struct {
-	Errors x.GqlErrorList
-	Data   bytes.Buffer
+	Errors     x.GqlErrorList
+	Data       bytes.Buffer
+	Extensions *Extensions
 }
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
@@ -63,37 +83,39 @@ func (r *Response) AddData(p []byte) {
 		return
 	}
 
-	if r.Data.Len() > 0 {
-		// The end of the buffer is always the closing `}`
-		r.Data.Truncate(r.Data.Len() - 1)
-		x.Check2(r.Data.WriteRune(','))
-	}
-
 	if r.Data.Len() == 0 {
-		x.Check2(r.Data.WriteRune('{'))
+		x.Check2(r.Data.Write(p))
+		return
 	}
 
-	x.Check2(r.Data.Write(p))
+	// The end of the buffer is always the closing `}`
+	r.Data.Truncate(r.Data.Len() - 1)
+	x.Check2(r.Data.WriteRune(','))
+
+	x.Check2(r.Data.Write(p[1 : len(p)-1]))
 	x.Check2(r.Data.WriteRune('}'))
+}
+
+// MergeExtensions merges the extensions given in ext to r.
+// If r.Extensions is nil before the call, then r.Extensions becomes ext.
+// Otherwise, r.Extensions gets merged with ext.
+func (r *Response) MergeExtensions(ext *Extensions) {
+	if r == nil {
+		return
+	}
+
+	if r.Extensions == nil {
+		r.Extensions = ext
+		return
+	}
+
+	r.Extensions.Merge(ext)
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
 // and returns the number of bytes written and error, if any.
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
-	if r == nil {
-		i, err := w.Write([]byte(
-			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
-				` "data": null }`))
-		return int64(i), err
-	}
-
-	js, err := json.Marshal(struct {
-		Errors []*x.GqlError   `json:"errors,omitempty"`
-		Data   json.RawMessage `json:"data,omitempty"`
-	}{
-		Errors: r.Errors,
-		Data:   r.Data.Bytes(),
-	})
+	js, err := json.Marshal(r.Output())
 
 	if err != nil {
 		msg := "Internal error - failed to marshal a valid JSON response"
@@ -104,4 +126,26 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 	i, err := w.Write(js)
 	return int64(i), err
+}
+
+// Output returns json interface of the response
+func (r *Response) Output() interface{} {
+	if r == nil {
+		return struct {
+			Errors json.RawMessage `json:"errors,omitempty"`
+			Data   json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
+			Data:   []byte("null"),
+		}
+	}
+	return struct {
+		Errors     []*x.GqlError   `json:"errors,omitempty"`
+		Data       json.RawMessage `json:"data,omitempty"`
+		Extensions *Extensions     `json:"extensions,omitempty"`
+	}{
+		Errors:     r.Errors,
+		Data:       r.Data.Bytes(),
+		Extensions: r.Extensions,
+	}
 }

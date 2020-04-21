@@ -18,8 +18,6 @@ package resolve
 
 import (
 	"context"
-	"github.com/dgraph-io/dgraph/x"
-	"google.golang.org/grpc/metadata"
 	"io/ioutil"
 	"testing"
 
@@ -64,51 +62,6 @@ func TestQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			dgQuery, err := testRewriter.Rewrite(context.Background(), gqlQuery)
-			require.Nil(t, err)
-			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
-		})
-	}
-}
-
-func TestAuthRewriting(t *testing.T) {
-	b, err := ioutil.ReadFile("auth_query_test.yaml")
-	require.NoError(t, err, "Unable to read test file")
-
-	var tests []QueryRewritingCase
-	err = yaml.Unmarshal(b, &tests)
-	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
-
-	testRewriter := NewQueryRewriter()
-	gqlSchema := test.LoadSchemaFromFile(t, "auth-schema.graphql")
-
-	// Pass auth variables in jwt token.
-	authorizationJwt := "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9." +
-		"eyJodHRwczovL2RncmFwaC5pby9qd3QvY2xhaW1zIjp7IlVzZXIiOiJ1c2VyMSJ9fQ." +
-		"mEeoeSpiRhV_WROInAy4Lxc1empkAK55DNSgjS1llmw"
-	// JWT Payload:
-	//	{
-	//		"https://dgraph.io/jwt/claims": {
-	//		"User": "user1"
-	//		}
-	//	}
-	md := metadata.New(nil)
-	md.Append(x.AuthJwtCtxKey, authorizationJwt)
-
-	for _, tcase := range tests {
-		t.Run(tcase.Name, func(t *testing.T) {
-
-			op, err := gqlSchema.Operation(
-				&schema.Request{
-					Query:     tcase.GQLQuery,
-					Variables: tcase.Variables,
-				})
-			require.NoError(t, err)
-			gqlQuery := test.GetQuery(t, op)
-
-			ctx := context.Background()
-			ctx = metadata.NewIncomingContext(ctx, md)
-
-			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})

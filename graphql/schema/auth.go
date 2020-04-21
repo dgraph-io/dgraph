@@ -22,13 +22,26 @@ import (
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
+	"regexp"
+	"strings"
 )
 
+const (
+	RBACQueryPrefix = "{"
+)
+
+type RBACQuery struct {
+	Variable string
+	Operator string
+	Operand  string
+}
+
 type RuleNode struct {
-	Or   []*RuleNode
-	And  []*RuleNode
-	Not  *RuleNode
-	Rule Query
+	Or       []*RuleNode
+	And      []*RuleNode
+	Not      *RuleNode
+	Rule     Query
+	RBACRule *RBACQuery
 }
 
 type AuthContainer struct {
@@ -132,7 +145,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	if ands := val.Children.ForName("and"); ands != nil && len(ands.Children) > 0 {
 		for _, and := range ands.Children {
 			rn, err := parseAuthNode(s, typ, and.Value)
-			result.Or = append(result.Or, rn)
+			result.And = append(result.And, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
 		if len(result.And) < 2 {
@@ -147,25 +160,63 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		len(not.Children) == 1 && not.Children[0] != nil {
 
 		var err error
-		result.Not, err = parseAuthNode(s, typ, not.Children[0].Value)
+		result.Not, err = parseAuthNode(s, typ, not)
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
 
 	if rule := val.Children.ForName("rule"); rule != nil {
-		q, err := gqlValidateRule(s, typ, rule.Raw, rule.Position)
-		result.Rule = q
+		var err error
+		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
+			result.RBACRule, err = rbacValidateRule(typ, rule.Raw, rule.Position)
+		} else {
+			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
 
-	if numChildren != 1 {
+	if numChildren != 1 || len(val.Children) > 1 {
 		errResult = AppendGQLErrs(errResult,
 			gqlerror.ErrorPosf(val.Position,
 				`there should be only one of "and", "or", "not" and "rule"`))
 	}
 
 	return result, errResult
+}
+
+func rbacValidateRule(typ *ast.Definition, rule string,
+	position *ast.Position) (*RBACQuery, error) {
+	rbacRegex, err :=
+		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
+	if err != nil {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` error while parsing auth rule.", typ.Name, err)
+	}
+
+	idx := rbacRegex.FindAllStringSubmatchIndex(rule, -1)
+	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` is not a valid auth rule.", typ.Name, rule)
+	}
+
+	query := RBACQuery{
+		Variable: rule[idx[0][2]:idx[0][3]],
+		Operator: rule[idx[0][4]:idx[0][5]],
+		Operand:  rule[idx[0][6]:idx[0][7]],
+	}
+
+	if !strings.HasPrefix(query.Variable, "$") {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` is not a valid GraphQL variable.", typ.Name, query.Variable)
+	}
+	query.Variable = query.Variable[1:]
+
+	if query.Operator != "eq" {
+		return nil, gqlerror.ErrorPosf(position,
+			"Type %s: `%s` operator is not supported in this auth rule.", typ.Name, query.Operator)
+	}
+	return &query, nil
 }
 
 func gqlValidateRule(
@@ -224,24 +275,6 @@ func gqlValidateRule(
 		return nil, gqlerror.ErrorPosf(position,
 			"on type %s expected only query%s rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
-
-	// Tweak the query so that it has an extra argument that includes a
-	// variable that we'll use to add in a `uid(...)`` filter or function
-	// so the auth query starts from exactly the same set of uids as
-	// the actual user query starts from.
-	//
-	// We know this argument and variable name is unique and not in the auth query
-	// somewhere because it has a `.` in it, and that's not allowed in GraphQL - it
-	// wouldn't pass the validation above.
-
-	f.Arguments = append(f.Arguments,
-		&ast.Argument{
-			Name: "dgraph.uid",
-			Value: &ast.Value{
-				Raw:  "dgraph.uid",
-				Kind: ast.Variable,
-			},
-		})
 
 	return &query{
 		field: f,

@@ -175,9 +175,6 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	defer stopIndexing(closer)
 
 	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
-		// in case background indexing is running, we should call it here again.
-		defer stopIndexing(closer)
-
 		wrtCtx := schema.GetWriteContext(context.Background())
 		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
 			return err
@@ -196,6 +193,9 @@ func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs 
 	wg.Add(1)
 	defer wg.Done()
 	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+		// In case background indexing is running, we should call it here again.
+		defer stopIndexing(closer)
+
 		// We should only start building indexes once this function has returned.
 		// This is in order to ensure that we do not call DropPrefix for one predicate
 		// and write indexes for another predicate simultaneously. because that could

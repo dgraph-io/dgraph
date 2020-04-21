@@ -216,6 +216,26 @@ type Function struct {
 
 // SubGraph is the way to represent data. It contains both the request parameters and the response.
 // Once generated, this can then be encoded to other client convenient formats, like GraphQL / JSON.
+// SubGraphs are recursively nested. Each SubGraph contain the following:
+// * SrcUIDS: A list of UIDs that were sent to this query. If this subgraph is a child graph, then the
+//            DestUIDs of the parent must match the SrcUIDs of the children.
+// * DestUIDs: A list of UIDs for which there can be output found in the Children field
+// * Children: A list of child results for this query
+// * valueMatrix: A list of values, against a single attribute, such as name (for a scalar subgraph).
+//                This must be the same length as the SrcUIDs
+// * uidMatrix: A list of outgoing edges. This must be same length as the SrcUIDs list.
+// Example, say we are creating a SubGraph for a query "users", which returns one user with name 'Foo', you may get
+// SubGraph
+//   Params: { Alias: "users" }
+//   SrcUIDs: [1]
+//   DestUIDs: [1]
+//   uidMatrix: [[1]]
+//   Children:
+//     SubGraph:
+//       Attr: "name"
+//       SrcUIDs: [1]
+//       uidMatrix: [[]]
+//       valueMatrix: [["Foo"]]
 type SubGraph struct {
 	ReadTs      uint64
 	Cache       int
