@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 
@@ -108,8 +109,7 @@ type RuleNode struct {
 	Not  *RuleNode
 	Rule *AuthQuery
 
-	RuleID   int
-	RuleName string
+	RuleID string
 }
 
 type RuleResult int
@@ -155,10 +155,6 @@ func (r *RuleNode) IsRBAC() bool {
 	}
 
 	return false
-}
-
-func (node *RuleNode) GetRuleID() int {
-	return node.RuleID
 }
 
 func (node *RuleNode) GetRBACRules(a *AuthState) {
@@ -283,7 +279,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value,
 	numChildren := 0
 	var errResult error
 	currRule++
-	result := &RuleNode{RuleID: currRule, RuleName: typ.Name}
+	result := &RuleNode{RuleID: fmt.Sprintf("%s_%d", typ.Name, currRule)}
 
 	if ors := val.Children.ForName("or"); ors != nil && len(ors.Children) > 0 {
 		for _, or := range ors.Children {
