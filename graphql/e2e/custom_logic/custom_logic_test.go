@@ -286,7 +286,9 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 	require.JSONEq(t, `{ "myFavoriteMovies": [] }`, string(result.Data))
 	require.Equal(t, x.GqlErrorList{
 		{
-			Message:   "couldn't unmarshal result because invalid character 'p' after top-level value",
+			Message: "Evaluation of custom field failed because json unmarshaling result: 404" +
+				" page not found\n of external request failed with error: invalid character" +
+				" 'p' after top-level value for field: myFavoriteMovies within type: Query.",
 			Locations: []x.Location{{3, 3}},
 		},
 	}, result.Errors)
