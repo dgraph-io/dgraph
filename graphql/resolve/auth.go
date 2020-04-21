@@ -161,6 +161,9 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 			return nil
 		}
 
+		if len(result.Child) == 1 {
+			return result.Child[0]
+		}
 		return result
 	}
 

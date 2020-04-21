@@ -35,10 +35,10 @@ func NewTypeNodeQueryProcedure(re RuleExtractor) *TypeNodeQueryProcedure {
 
 func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *schema.RuleNode) {
 	rules.GetRBACRules(tnqp.authState)
-	if val, ok := tnqp.authState.RbacRule[rules.RuleID]; ok && val != schema.Uncertain {
+	if val, ok := tnqp.authState.RbacRule[rules.RuleID]; ok && val == schema.Negative {
+		*gqlQuery = gql.GraphQuery{}
 		return
-	} else if val == schema.Negative {
-		gqlQuery = nil
+	} else if val != schema.Uncertain {
 		return
 	}
 

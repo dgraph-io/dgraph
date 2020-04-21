@@ -29,23 +29,28 @@ type Movie @auth(
 }
 
 type Issue @auth(
-    query: {rule: "query($User: String!) { queryIssue { owner(filter: { username: { eq: $User } }) {username} }} "}
+    query: {and: [
+      {rule: "query($User: String!) { queryIssue { owner(filter: { username: { eq: $User } }) {username} }} "},
+      {rule: "{$Role: { eq: \"ADMIN\" }}"}
+    ]}
 ) {
   id: ID!
   msg: String
   owner: User!
 }
 
-type Log {
+type Log @auth(query: { rule: "{ $Role: { eq: \"ADMIN\" }}" }) {
   id: ID!
   logs: String
 }
 
 type Project @auth(
-    query: 
+    query: { or : [ 
         { rule: """query($User: String!) { queryProject { roles(filter: { permissions: { eq: [VIEW] } }) { 
                         assignedTo(filter: { username: { eq: $User } }) {username}
-                    }}}""" }
+                    }}}""" },
+        { rule: "{ $Role: { eq: \"ADMIN\" }}"}
+      ]}
 ) {
   projID: ID!
   name: String! @search(by: [hash])
