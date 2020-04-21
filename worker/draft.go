@@ -570,6 +570,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return nil
 
 	case proposal.Restore != nil:
+		// Enable draining mode for the duration of the restore processing.
+		x.UpdateDrainingMode(true)
+		defer x.UpdateDrainingMode(false)
+
 		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
 			return err
 		}
