@@ -1,33 +1,73 @@
 type Todo @auth(
     query: {
         or: [
-            { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
-            { rule: "sharedWith (filter: { username: { eq: $X-MyApp-User }})" },
-            { rule: "isPublic {eq: true}" },
-            { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+            { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo { 
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+            { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    sharedWith (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+            { rule: """
+            query { 
+                queryTodo(filter: { isPublic: true }) {
+                    id
+                }
+            }""" },
         ]
     },
-    add: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
-    update: { rule: "owner (filter: { username: { eq: $X-MyApp-User }})" },
-    delete: { rule: "$X-MyApp-Role: {eq: ADMIN}" }
+    add: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
+    update: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" },
 ) {
     id: ID!
     title: String
     text: String
-    isPublic: Boolean
-    dateCompleted: String @auth(
-        add: { rule: "DENY" },
-        update: { rule: "filter: { dateCompleted: { eq: null } })" }
-    )
+    isPublic: Boolean @search
+    dateCompleted: String @search 
     sharedWith: [User]
     owner: User @hasInverse(field: "todos")
     somethingPrivate: String @auth(
-        query: { rule: "owner (filter: { username: { eq: $X-MyApp-User } })" }
+        query: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryTodo {
+                    owner (filter: { username: { eq: $X_MyApp_User }}) {
+                        username
+                    }
+                }
+            }""" }
+    )
 }
 
 type User @auth(
-    add: { rule: "$X-MyApp-Role: { eq: ADD-BOT }" },
-    update: { rule: "filter: { username: { eq: $X-MyApp-User } }" }
+    update: { rule: """
+            query($X_MyApp_User: String!) { 
+                queryUser(filter: { username: { eq: $X_MyApp_User }}) {
+                    username
+                }
+            }""" }
 ){
     username: String! @id
     todos: [Todo]

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
@@ -129,7 +130,7 @@ func (a *AuthResolver) AddMutaionProcedure(m MutationProcedure) {
 func GetFilters(aq *schema.AuthQuery, av map[string]string) *gql.FilterTree {
 	// TODO
 	q := rewriteAsQuery(aq.GetQuery())
-	fmt.Println("Here", q)
+	fmt.Println(dgraph.AsString(q))
 	return &gql.FilterTree{}
 }
 
@@ -197,6 +198,8 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 
 func BuildQuery(aq *schema.AuthQuery, id int, av map[string]string) *gql.GraphQuery {
 	// TODO
+	q := rewriteAsQuery(aq.GetQuery())
+	fmt.Println(dgraph.AsString(q))
 	return &gql.GraphQuery{}
 }
 
