@@ -38,6 +38,12 @@ type expectedRequest struct {
 	headers map[string][]string
 }
 
+type expectedGraphqlRequest struct {
+	urlSuffix string
+	// Send body as empty string to make sure that only introspection queries are expected
+	body string
+}
+
 func check2(v interface{}, err error) {
 	if err != nil {
 		log.Fatal(err)
@@ -93,6 +99,35 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 	}
 
 	return nil
+}
+
+// bool parameter in return signifies whether it is an introspection query or not:
+//
+// true -> introspection query
+//
+// false -> not an introspection query
+func verifyGraphqlRequest(r *http.Request, expectedRequest expectedGraphqlRequest) (bool, error) {
+	if r.Method != http.MethodPost {
+		return false, getError("Invalid HTTP method", r.Method)
+	}
+
+	if !strings.HasSuffix(r.URL.String(), expectedRequest.urlSuffix) {
+		return false, getError("Invalid URL", r.URL.String())
+	}
+
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return false, getError("Unable to read request body", err.Error())
+	}
+	actualBody := string(b)
+	if strings.Contains(actualBody, "__schema") {
+		return true, nil
+	}
+	if actualBody != expectedRequest.body {
+		return false, getError("Unexpected value for request body", actualBody)
+	}
+
+	return false, nil
 }
 
 func getDefaultResponse(resKey string) []byte {
@@ -258,6 +293,13 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
+	if _, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/noquery",
+		body:      ``,
+	}); err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 	check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -280,6 +322,13 @@ func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func invalidArgument(w http.ResponseWriter, r *http.Request) {
+	if _, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/invalidargument",
+		body:      ``,
+	}); err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 	check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -332,6 +381,14 @@ func invalidArgument(w http.ResponseWriter, r *http.Request) {
 }
 
 func invalidType(w http.ResponseWriter, r *http.Request) {
+	if _, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/invalidtype",
+		body:      ``,
+	}); err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
 	check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -384,9 +441,16 @@ func invalidType(w http.ResponseWriter, r *http.Request) {
 }
 
 func validCountryResponse(w http.ResponseWriter, r *http.Request) {
-	body, _ := ioutil.ReadAll(r.Body)
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/validcountry",
+		body:      `{"query":"query { country(code: $id) {\ncode\nname\n}}","variables":{"id":"BI"}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 
-	if strings.Contains(string(body), "__schema") {
+	if isIntrospection {
 		check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -436,10 +500,8 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 	   }
 	}
 	`))
-		return
-	}
-
-	check2(fmt.Fprintf(w, `
+	} else {
+		check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": {
@@ -448,12 +510,20 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 		  }
 		}
 	  }`))
+	}
 }
 
 func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
-	body, _ := ioutil.ReadAll(r.Body)
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/graphqlerr",
+		body:      `{"query":"query { country(code: $id) {\ncode\nname\n}}","variables":{"id":"BI"}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 
-	if strings.Contains(string(body), "__schema") {
+	if isIntrospection {
 		check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -503,21 +573,27 @@ func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 	   }
 	}
 	`))
-		return
-	}
-
-	check2(fmt.Fprintf(w, `
+	} else {
+		check2(fmt.Fprintf(w, `
 	{
 	   "errors":[{
 			"message": "dummy error"
 		}]
 	  }`))
+	}
 }
 
 func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
-	body, _ := ioutil.ReadAll(r.Body)
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/validcountrywitherror",
+		body:      `{"query":"query { country(code: $id) {\ncode\nname\n}}","variables":{"id":"BI"}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 
-	if strings.Contains(string(body), "__schema") {
+	if isIntrospection {
 		check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -567,10 +643,8 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 	   }
 	}
 	`))
-		return
-	}
-
-	check2(fmt.Fprintf(w, `
+	} else {
+		check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": {
@@ -582,12 +656,20 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 			"message": "dummy error"
 		}]
 	  }`))
+	}
 }
 
 func validCountries(w http.ResponseWriter, r *http.Request) {
-	body, _ := ioutil.ReadAll(r.Body)
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/validcountries",
+		body:      `{"query":"query { country(code: $id) {\ncode\nname\n}}","variables":{"id":"BI"}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
 
-	if strings.Contains(string(body), "__schema") {
+	if isIntrospection {
 		check2(fmt.Fprintf(w, `
 	{
 	"data": {
@@ -637,10 +719,8 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 	   }
 	}
 	`))
-		return
-	}
-
-	check2(fmt.Fprintf(w, `
+	} else {
+		check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": [
@@ -651,6 +731,89 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 		  ]
 	  }
 	  }`))
+	}
+}
+
+func setCountry(w http.ResponseWriter, r *http.Request) {
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/setCountry",
+		body:      `{"query":"mutation { setCountry(country: $input) {\ncode\nname\nstates{\ncode\nname\n}\n}}","variables":{"input":{"code":"IN","name":"India","states":[{"code":"RJ","name":"Rajasthan"},{"code":"KA","name":"Karnataka"}]}}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	if isIntrospection {
+		check2(fmt.Fprintf(w, `
+		{
+		"data": {
+			"__schema": {
+			  "queryType": null,
+			  "mutationType":  {
+				"name": "MyMutations"
+			  },
+			  "subscriptionType": null,
+			  "types": [
+				{
+				  "kind": "OBJECT",
+				  "name": "MyMutations",
+				  "fields": [
+					{
+						"name": "setCountry",
+						"args": [
+						  {
+							"name": "country",
+							"type": {
+							  "kind": "NON_NULL",
+							  "name": null,
+							  "ofType": {
+								"kind": "OBJECT",
+								"name": "CountryInput",
+								"ofType": null
+							  }
+							},
+							"defaultValue": null
+						  }
+						],
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "OBJECT",
+							"name": "Country",
+							"ofType": null
+						  }
+						},
+						"isDeprecated": false,
+						"deprecationReason": null
+					  }
+				  ]
+				}]
+			  }
+		   }
+		}`))
+	} else {
+		check2(fmt.Fprintf(w, `
+		{
+			"data": {
+				"setCountry": {
+					"code": "IN",
+					"name": "India",
+					"states": [
+						{
+							"code": "RJ",
+							"name": "Rajasthan"
+						},
+						{
+							"code": "KA",
+							"name": "Karnataka"
+						}
+					]
+				}
+			}
+		}`))
+	}
 }
 
 type input struct {
@@ -886,6 +1049,7 @@ func main() {
 	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
 	http.HandleFunc("/graphqlerr", graphqlErrResponse)
 	http.HandleFunc("/validcountries", validCountries)
+	http.HandleFunc("/setCountry", setCountry)
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)

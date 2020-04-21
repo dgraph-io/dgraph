@@ -203,7 +203,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 	expectedReturnType := introspectedRemoteQuery.Type.String()
 	gotReturnType := endpoint.parentField.Type.String()
 	if expectedReturnType != gotReturnType {
-		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s",
+		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s.",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
 	}
 
@@ -226,7 +226,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 		gotArgType := givenArgDef.Type.String()
 		if expectedArgType != gotArgType {
 			return errors.Errorf("given %s: %s: type mismatch for variable %s; expected: %s, "+
-				"got: %s", operationType, givenQuery.Name, givenQryArgVals[givenArgName],
+				"got: %s.", operationType, givenQuery.Name, givenQryArgVals[givenArgName],
 				expectedArgType, gotArgType)
 		}
 	}
