@@ -7,9 +7,10 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	database "github.com/ChainSafe/chaindb"
 )
 
 func TestTrie_StoreAndLoadFromDB(t *testing.T) {

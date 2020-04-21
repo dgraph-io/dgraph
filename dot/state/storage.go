@@ -21,8 +21,9 @@ import (
 	"sync"
 
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	database "github.com/ChainSafe/chaindb"
 )
 
 var storagePrefix = []byte("storage")

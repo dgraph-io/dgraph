@@ -27,7 +27,8 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
+
+	database "github.com/ChainSafe/chaindb"
 )
 
 var blockPrefix = []byte("block")

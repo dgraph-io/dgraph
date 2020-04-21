@@ -20,10 +20,11 @@ import (
 	"fmt"
 
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	database "github.com/ChainSafe/chaindb"
 )
 
 // StoreBestBlockHash stores the hash at the BestBlockHashKey

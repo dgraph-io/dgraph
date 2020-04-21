@@ -23,9 +23,9 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
+	database "github.com/ChainSafe/chaindb"
 	"github.com/stretchr/testify/require"
 )
 

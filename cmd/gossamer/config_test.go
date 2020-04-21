@@ -22,10 +22,10 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
-	"github.com/ChainSafe/gossamer/lib/database"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
+	database "github.com/ChainSafe/chaindb"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli"
 )
