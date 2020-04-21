@@ -258,7 +258,7 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -276,11 +276,11 @@ func emptyQuerySchema(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 }
 
 func invalidArgument(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -312,9 +312,13 @@ func invalidArgument(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -324,11 +328,11 @@ func invalidArgument(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 }
 
 func invalidType(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -360,9 +364,13 @@ func invalidType(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -372,14 +380,14 @@ func invalidType(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 }
 
 func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
+		check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -411,9 +419,13 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -423,11 +435,11 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 		return
 	}
 
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": {
@@ -435,14 +447,14 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 			"code": "BI"
 		  }
 		}
-	  }`)
+	  }`))
 }
 
 func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
+		check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -474,9 +486,13 @@ func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "LIST",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -486,23 +502,23 @@ func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 		return
 	}
 
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 	   "errors":[{
 			"message": "dummy error"
 		}]
-	  }`)
+	  }`))
 }
 
 func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
+		check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -534,9 +550,13 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -546,11 +566,11 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 		return
 	}
 
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": {
@@ -561,14 +581,14 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 		"errors":[{
 			"message": "dummy error"
 		}]
-	  }`)
+	  }`))
 }
 
 func validCountries(w http.ResponseWriter, r *http.Request) {
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if strings.Contains(string(body), "__schema") {
-		fmt.Fprintf(w, `
+		check2(fmt.Fprintf(w, `
 	{
 	"data": {
 		"__schema": {
@@ -600,9 +620,13 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 					  }
 					],
 					"type": {
-					  "kind": "OBJECT",
-					  "name": "Country",
-					  "ofType": null
+					  "kind": "LIST",
+					  "name": null,
+					  "ofType": {
+						"kind": "OBJECT",
+					    "name": "Country",
+						"ofType": null
+					  }
 					},
 					"isDeprecated": false,
 					"deprecationReason": null
@@ -612,11 +636,11 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 		  }
 	   }
 	}
-	`)
+	`))
 		return
 	}
 
-	fmt.Fprintf(w, `
+	check2(fmt.Fprintf(w, `
 	{
 		"data": {
 		  "country": [
@@ -626,7 +650,7 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 			}
 		  ]
 	  }
-	  }`)
+	  }`))
 }
 
 type input struct {
@@ -862,6 +886,7 @@ func main() {
 	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
 	http.HandleFunc("/graphqlerr", graphqlErrResponse)
 	http.HandleFunc("/validcountries", validCountries)
+
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
 	http.HandleFunc("/favMoviesUpdate/", favMoviesUpdateHandler)

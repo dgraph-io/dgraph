@@ -200,8 +200,8 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 
 	// check whether the return type of remote query is same as the required return type
 	// TODO: need to check whether same will work for @custom on fields which have batch operation
-	expectedReturnType := endpoint.parentField.Type.String()
-	gotReturnType := introspectedRemoteQuery.Type.String()
+	expectedReturnType := introspectedRemoteQuery.Type.String()
+	gotReturnType := endpoint.parentField.Type.String()
 	if expectedReturnType != gotReturnType {
 		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
@@ -222,8 +222,8 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 			return errors.Errorf("given %s: %s: variable %s is missing in given context.",
 				operationType, givenQuery.Name, givenQryArgVals[givenArgName])
 		}
-		expectedArgType := givenArgDef.Type.String()
-		gotArgType := remoteArgDef.Type.String()
+		expectedArgType := remoteArgDef.Type.String()
+		gotArgType := givenArgDef.Type.String()
 		if expectedArgType != gotArgType {
 			return errors.Errorf("given %s: %s: type mismatch for variable %s; expected: %s, "+
 				"got: %s", operationType, givenQuery.Name, givenQryArgVals[givenArgName],
@@ -254,8 +254,9 @@ func getGivenQueryArgsAsMap(givenQuery *ast.Field, parentField *ast.FieldDefinit
 	if parentType.Name == "Query" || parentType.Name == "Mutation" {
 		parentFieldArgMap := getFieldArgDefsAsMap(parentField)
 		for _, arg := range givenQuery.Arguments {
-			argDefMap[arg.Name] = parentFieldArgMap[arg.Value.Raw[1:]]
-			argValMap[arg.Name] = arg.Value.Raw
+			varName := arg.Value.String()
+			argDefMap[arg.Name] = parentFieldArgMap[varName[1:]]
+			argValMap[arg.Name] = varName
 		}
 	} else {
 		// TODO: handle @custom graphql validation for fields here

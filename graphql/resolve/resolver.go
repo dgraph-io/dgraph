@@ -1323,7 +1323,7 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	}
 
 	// this means it had body and not graphql, so just unmarshal it and return
-	if hrc.RemoteGqlQueryName != "" {
+	if hrc.RemoteGqlQueryName == "" {
 		var result map[string]interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
 			return emptyResult(err)
