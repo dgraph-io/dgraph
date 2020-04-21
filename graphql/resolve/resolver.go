@@ -564,16 +564,14 @@ func completeDgraphResult(
 	// GQL type checking should ensure query results are only object types
 	// https://graphql.github.io/graphql-spec/June2018/#sec-Query
 	// So we are only building object results.
-	// Update - This function is also called by HTTP resolver for resolving custom logic queries
-	// hence the comment above doesn't hold right now.
 	var valToComplete map[string]interface{}
 	err := json.Unmarshal(dgResult, &valToComplete)
 	if err != nil {
-		glog.Errorf("%+v \n result :\n%s\n",
-			errors.Wrap(err, "failed to unmarshal query result"),
+		glog.Errorf("%+v \n Dgraph result :\n%s\n",
+			errors.Wrap(err, "failed to unmarshal Dgraph query result"),
 			string(dgResult))
-		return nullResponse(schema.GQLWrapLocationf(err, field.Location(),
-			"couldn't unmarshal Dgraph result"))
+		return nullResponse(
+			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
 	switch val := valToComplete[field.ResponseName()].(type) {
@@ -649,6 +647,25 @@ func copyTemplate(input interface{}) (interface{}, error) {
 	return result, nil
 }
 
+func jsonMarshalError(err error, f schema.Field, input interface{}) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
+		"input: %+v returned an error: %s for field: %s within type: %s.", input, err,
+		f.Name(), f.GetObjectName()).WithLocations(f.Location())
+}
+
+func jsonUnmarshalError(err error, f schema.Field, b []byte) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+		" result: %s of external request failed with error: %s for field: %s within "+
+		"type: %s.", b, err, f.Name(), f.GetObjectName()).WithLocations(
+		f.Location())
+}
+
+func externalRequestError(err error, f schema.Field) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because external request"+
+		" returned an error: %s for field: %s within type: %s.", err, f.Name(),
+		f.GetObjectName()).WithLocations(f.Location())
+}
+
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig(false)
 
@@ -679,28 +696,19 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	if fconf.Operation == "batch" {
 		b, err := json.Marshal(body)
 		if err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
-				"input: %s returned an error: %s for field: %s within type: %s.", b, err, f.Name(),
-				f.GetObjectName())
-			errCh <- x.GqlErrorList{gqlErr.WithLocations(f.Location())}
+			errCh <- x.GqlErrorList{jsonMarshalError(err, f, body)}
 			return
 		}
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because external request"+
-				" returned an error: %s for field: %s within type: %s.", err, f.Name(),
-				f.GetObjectName()).WithLocations(f.Location())
-			errCh <- x.GqlErrorList{gqlErr}
+			errCh <- x.GqlErrorList{externalRequestError(err, f)}
 			return
 		}
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
-				" result: %s of external request failed with error: %s for field: %s within "+
-				"type: %s.", b, err, f.Name(), f.GetObjectName())
-			errCh <- x.GqlErrorList{gqlErr.WithLocations(f.Location())}
+			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f, b)}
 			return
 		}
 
@@ -734,8 +742,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			b, err := json.Marshal(input)
 			if err != nil {
 				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json "+
-					"marshaling input: %s returned an error: %s for field: %s within type: %s,"+
-					" index: %v.", b, err, f.Name(), f.GetObjectName(), idx)
+					"marshaling input: %+v returned an error: %s for field: %s within type: %s,"+
+					" index: %v.", input, err, f.Name(), f.GetObjectName(), idx)
 				return
 			}
 
@@ -1330,29 +1338,18 @@ func (hr *httpResolver) rewriteAndExecute(
 		if hrc.Template != nil {
 			b, err := json.Marshal(*hrc.Template)
 			if err != nil {
-				gqlErr := x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
-					"input: %+v returned an error: %s for field: %s within type: %s.",
-					*hrc.Template, err, field.Name(), field.GetObjectName()).WithLocations(
-					field.Location())
-				return emptyResult(gqlErr)
+				return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 			}
 			body = string(b)
 		}
 		res, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 		if err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because external request"+
-				" returned an error: %s for field: %s within type: %s.", err, field.Name(),
-				field.GetObjectName()).WithLocations(field.Location())
-			return emptyResult(gqlErr)
+			return emptyResult(externalRequestError(err, field))
 		}
 
 		var result map[string]interface{}
 		if err := json.Unmarshal(res, &result); err != nil {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
-				" result: %s of external request failed with error: %s for field: %s within "+
-				"type: %s.", res, err, field.Name(), field.GetObjectName()).WithLocations(
-				field.Location())
-			return emptyResult(gqlErr)
+			return emptyResult(jsonUnmarshalError(err, field, res))
 		}
 		return &Resolved{
 			Data:  result,
@@ -1362,10 +1359,7 @@ func (hr *httpResolver) rewriteAndExecute(
 
 	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
 	if err != nil {
-		gqlErr := x.GqlErrorf("Evaluation of custom field failed because external request"+
-			" returned an error: %s for field: %s within type: %s.", err, field.Name(),
-			field.GetObjectName()).WithLocations(field.Location())
-		return emptyResult(gqlErr)
+		return emptyResult(externalRequestError(err, field))
 	}
 
 	type graphqlResp struct {
@@ -1376,10 +1370,7 @@ func (hr *httpResolver) rewriteAndExecute(
 	resp := &graphqlResp{}
 	err = json.Unmarshal(b, resp)
 	if err != nil {
-		gqlErr := x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
-			" result: %s of external request failed with error: %s for field: %s within "+
-			"type: %s.", b, err, field.Name(), field.GetObjectName()).WithLocations(
-			field.Location())
+		gqlErr := jsonUnmarshalError(err, field, b)
 		resp.Errors = append(resp.Errors, schema.AsGQLErrors(gqlErr)...)
 		return emptyResult(resp.Errors)
 	}
