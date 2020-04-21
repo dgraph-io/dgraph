@@ -146,22 +146,30 @@ const introspectionQuery = `
 	}
   `
 
-type remoteGraphqlEndpoint struct {
-	parentType   *ast.Definition
-	parentField  *ast.FieldDefinition
+// remoteGraphqlMetadata represents the minimal set of data that is required to validate the graphql
+// given in @custom->http->graphql with the remote server
+type remoteGraphqlMetadata struct {
+	// parentType is the type which contains the field on which @custom is applied
+	parentType *ast.Definition
+	// parentField refers to the field on which @custom is applied
+	parentField *ast.FieldDefinition
+	// graphqlOpDef is the Operation Definition for the operation given in @custom->http->graphql
+	// The operation can only be a query or mutation
 	graphqlOpDef *ast.OperationDefinition
-	url          string
+	// url is the url of remote graphql endpoint
+	url string
 }
 
-// Check whether the given argument and query is present in the remote schema by introspecting.
-func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
-	remoteIntrospection, err := introspectRemoteSchema(endpoint.url)
+// validates the graphql given in @custom->http->graphql by introspecting remote schema.
+// It assumes that the graphql syntax is correct, only remote validation is needed.
+func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
+	remoteIntrospection, err := introspectRemoteSchema(metadata.url)
 	if err != nil {
 		return err
 	}
 
 	var remoteQueryTypename string
-	operationType := endpoint.graphqlOpDef.Operation
+	operationType := metadata.graphqlOpDef.Operation
 	switch operationType {
 	case "query":
 		remoteQueryTypename = remoteIntrospection.Data.Schema.QueryType.Name
@@ -170,29 +178,28 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 	default:
 		// this case is not possible as we are validating the operation to be query/mutation in
 		// @custom directive validation
+		return errors.Errorf("found %s operation, it can only have query/mutation.", operationType)
 	}
 
-	var introspectedRemoteQuery GqlField
-	remoteQueryExists := false
-	givenQuery := endpoint.graphqlOpDef.SelectionSet[0].(*ast.Field)
+	var introspectedRemoteQuery *GqlField
+	givenQuery := metadata.graphqlOpDef.SelectionSet[0].(*ast.Field)
 	for _, typ := range remoteIntrospection.Data.Schema.Types {
 		if typ.Name != remoteQueryTypename {
 			continue
 		}
 		for _, remoteQuery := range typ.Fields {
 			if remoteQuery.Name == givenQuery.Name {
-				remoteQueryExists = true
-				introspectedRemoteQuery = remoteQuery
+				introspectedRemoteQuery = &remoteQuery
 				break
 			}
 		}
-		if remoteQueryExists {
+		if introspectedRemoteQuery != nil {
 			break
 		}
 	}
 
 	// check whether given query/mutation is present in remote schema
-	if !remoteQueryExists {
+	if introspectedRemoteQuery == nil {
 		return errors.Errorf("given %s: %s is not present in remote schema.",
 			operationType, givenQuery.Name)
 	}
@@ -200,14 +207,14 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 	// check whether the return type of remote query is same as the required return type
 	// TODO: need to check whether same will work for @custom on fields which have batch operation
 	expectedReturnType := introspectedRemoteQuery.Type.String()
-	gotReturnType := endpoint.parentField.Type.String()
+	gotReturnType := metadata.parentField.Type.String()
 	if expectedReturnType != gotReturnType {
 		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s.",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
 	}
 
-	givenQryArgDefs, givenQryArgVals := getGivenQueryArgsAsMap(givenQuery, endpoint.parentField,
-		endpoint.parentType)
+	givenQryArgDefs, givenQryArgVals := getGivenQueryArgsAsMap(givenQuery, metadata.parentField,
+		metadata.parentType)
 	remoteQryArgDefs, remoteQryRequiredArgs := getRemoteQueryArgsAsMap(introspectedRemoteQuery)
 
 	// check whether args of given query/mutation match the args of remote query/mutation
@@ -274,7 +281,7 @@ func getFieldArgDefsAsMap(fieldDef *ast.FieldDefinition) map[string]*ast.Argumen
 // getRemoteQueryArgsAsMap returns following things:
 // 1. map of arg name -> Argument Definition in Gql introspection response format
 // 2. list of arg name for NON_NULL args
-func getRemoteQueryArgsAsMap(remoteQuery GqlField) (map[string]Args, []string) {
+func getRemoteQueryArgsAsMap(remoteQuery *GqlField) (map[string]Args, []string) {
 	argDefMap := make(map[string]Args)
 	requiredArgs := make([]string, 0)
 

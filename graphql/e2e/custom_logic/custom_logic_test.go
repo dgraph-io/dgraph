@@ -52,6 +52,7 @@ const (
 		code: String
 		name: String
 		native: String
+		std: Int
 		phone: String
 		continent: Continent
 		currency: String
@@ -768,7 +769,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
 		"; Field getCountry: @custom directive: graphql; given query: country is not present in"+
 		" remote schema.\n", res.Errors[0].Error())
 }
@@ -786,7 +787,7 @@ func TestForInvalidArgument(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
 		"; Field getCountry: @custom directive: graphql; given query: country: arg code not"+
 		" present in remote query.\n", res.Errors[0].Error())
 }
@@ -804,7 +805,7 @@ func TestForInvalidType(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
 		"; Field getCountry: @custom directive: graphql; given query: country: type mismatch for"+
 		" variable $id; expected: Int!, got: ID!.\n", res.Errors[0].Error())
 }
@@ -1298,7 +1299,7 @@ func TestCustomGraphqlMissingMutation(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
 		"; Field addCountry: @custom directive: graphql; given mutation: putCountry is not"+
 		" present in remote schema.\n", res.Errors[0].Error())
 }
@@ -1315,7 +1316,7 @@ func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
 		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: return type"+
 		" mismatch; expected: Country!, got: Movie!.\n", res.Errors[0].Error())
 }
@@ -1332,12 +1333,13 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
 		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: required arg"+
 		" country is missing.\n", res.Errors[0].Error())
 }
 
-func TestCustomGraphqlMutation(t *testing.T) {
+// this one accepts an object and returns an object
+func TestCustomGraphqlMutation1(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
 		addCountry(input: CountryInput!): Country! @custom(http: {
@@ -1397,6 +1399,51 @@ func TestCustomGraphqlMutation(t *testing.T) {
 				}
 			]
 		}
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
+// this one accepts multiple scalars and returns a list of objects
+func TestCustomGraphqlMutation2(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+		updateCountries(name: String, std: Int): [Country!]! @custom(http: {
+								url: "http://mock:8888/updateCountries",
+								method: "POST",
+								graphql: "mutation { updateCountries(name: $name, std: $std) }"
+							})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation updateCountries($name: String, $std: Int) {
+			updateCountries(name: $name, std: $std) {
+				name
+				std
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"name": "Australia",
+			"std":  91,
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	expected := `
+	{
+		"updateCountries": [
+			{
+				"name": "India",
+				"std": 91
+			},
+			{
+				"name": "Australia",
+				"std": 61
+			}
+		]
     }`
 	require.JSONEq(t, expected, string(result.Data))
 }

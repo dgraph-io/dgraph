@@ -50,11 +50,13 @@ type QueryType string
 type MutationType string
 
 type FieldHTTPConfig struct {
-	URL                string
-	Method             string
-	Template           *interface{}
-	Operation          string
-	ForwardHeaders     http.Header
+	URL    string
+	Method string
+	// would be nil if there is no http body
+	Template       *interface{}
+	Operation      string
+	ForwardHeaders http.Header
+	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
 }
 
@@ -727,6 +729,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	} else if graphqlArg != nil {
 		bodyTemplate = `{ query: $query, variables: $variables }`
 	}
+	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
 		bt, _, err := parseBodyTemplate(bodyTemplate)
 		if err != nil {

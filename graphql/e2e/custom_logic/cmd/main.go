@@ -816,6 +816,97 @@ func setCountry(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func updateCountries(w http.ResponseWriter, r *http.Request) {
+	isIntrospection, err := verifyGraphqlRequest(r, expectedGraphqlRequest{
+		urlSuffix: "/updateCountries",
+		body:      `{"query":"mutation { updateCountries(name: $name, std: $std) {\nname\nstd\n}}","variables":{"name":"Australia","std":91}}`,
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+
+	if isIntrospection {
+		check2(fmt.Fprintf(w, `
+		{
+		"data": {
+			"__schema": {
+			  "queryType": null,
+			  "mutationType":  {
+				"name": "Mutation"
+			  },
+			  "subscriptionType": null,
+			  "types": [
+				{
+				  "kind": "OBJECT",
+				  "name": "Mutation",
+				  "fields": [
+					{
+						"name": "updateCountries",
+						"args": [
+						  {
+							"name": "name",
+							"type": {
+							  "kind": "SCALAR",
+							  "name": "String",
+							  "ofType": null
+							},
+							"defaultValue": null
+						  },
+						  {
+							"name": "std",
+							"type": {
+							  "kind": "SCALAR",
+							  "name": "Int",
+							  "ofType": null
+							},
+							"defaultValue": null
+						  }
+						],
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+							"kind": "LIST",
+							"name": null,
+							"ofType": {
+							  "kind": "NON_NULL",
+							  "name": null,
+							  "ofType": {
+								"kind": "OBJECT",
+								"name": "Country",
+								"ofType": null
+							  }
+							}
+						  }
+						},
+						"isDeprecated": false,
+						"deprecationReason": null
+					  }
+				  ]
+				}]
+			  }
+		   }
+		}`))
+	} else {
+		check2(fmt.Fprintf(w, `
+		{
+			"data": {
+				"updateCountries": [
+					{
+						"name": "India",
+						"std": 91
+					},
+					{
+						"name": "Australia",
+						"std": 61
+					}
+				]
+			}
+		}`))
+	}
+}
+
 type input struct {
 	ID string `json:"uid"`
 }
@@ -1050,6 +1141,7 @@ func main() {
 	http.HandleFunc("/graphqlerr", graphqlErrResponse)
 	http.HandleFunc("/validcountries", validCountries)
 	http.HandleFunc("/setCountry", setCountry)
+	http.HandleFunc("/updateCountries", updateCountries)
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)

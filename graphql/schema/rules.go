@@ -1252,7 +1252,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			}
 		}
 		// finally validate the given operation on remote server
-		if err := validateRemoteGraphqlCall(&remoteGraphqlEndpoint{
+		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
 			parentField:  field,
 			graphqlOpDef: opZero,
