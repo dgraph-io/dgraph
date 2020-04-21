@@ -950,6 +950,25 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive with invalid graphql"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getAuthor(id: $id) } garbage"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor: @custom directive: graphql; unable to parse input: 30: Unexpected Name \"garbage\"",
+     "locations":[{"line":9, "column":15}]},
+    ]
+
+  -
     name: "@custom directive with multiple operations in graphql"
     input: |
       type Author {
@@ -986,7 +1005,6 @@ invalid_schemas:
     {"message": "Type Query; Field getAuthor: @custom directive: graphql; found subscription operation, it can only have query/mutation.",
      "locations":[{"line":9, "column":15}]},
     ]
-
 
   -
     name: "@custom directive with operation name in graphql"
