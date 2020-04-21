@@ -292,9 +292,6 @@ func (h *s3Handler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, er
 		return nil, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(paths)
-	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, paths)
-	}
 
 	// Read and filter the manifests to get the list of manifests to consider
 	// for this restore operation.
@@ -343,9 +340,6 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 	var maxUid uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
-			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %#v\n", manifest)
-			}
 			continue
 		}
 
@@ -366,7 +360,6 @@ func (h *s3Handler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult {
 				return LoadResult{0, 0,
 					errors.Errorf("Remote object is empty or inaccessible: %s", object)}
 			}
-			fmt.Printf("Downloading %q, %d bytes\n", object, st.Size)
 
 			// Only restore the predicates that were assigned to this group at the time
 			// of the last backup.
@@ -423,9 +416,6 @@ func (h *s3Handler) ListManifests(uri *url.URL) ([]string, error) {
 		return nil, errors.Errorf("No manifests found at: %s", uri.String())
 	}
 	sort.Strings(manifests)
-	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s) %s: %v\n", uri.Scheme, manifests)
-	}
 	return manifests, nil
 }
 

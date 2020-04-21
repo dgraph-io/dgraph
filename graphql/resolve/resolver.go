@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -107,27 +106,29 @@ type ResolverFns struct {
 	Arw func() MutationRewriter
 	Urw func() MutationRewriter
 	Drw MutationRewriter
-	Qe  QueryExecutor
-	Me  MutationExecutor
+	Ex  DgraphExecutor
 }
 
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query/mutation resolution through Query method in dgraph server.
 type dgraphExecutor struct {
+	dg *dgraph.DgraphEx
 }
 
-// adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
+// adminExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query resolution through Query method in dgraph server, and
-// it doens't require authorization. Currently it's only used for quering
+// it doesn't require authorization. Currently it's only used for querying
 // gqlschema during init.
 type adminExecutor struct {
+	dg *dgraph.DgraphEx
 }
 
 // A Resolved is the result of resolving a single field - generally a query or mutation.
 type Resolved struct {
-	Data  interface{}
-	Field schema.Field
-	Err   error
+	Data       interface{}
+	Field      schema.Field
+	Err        error
+	Extensions *schema.Extensions
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -139,50 +140,29 @@ func (cf CompletionFunc) Complete(ctx context.Context, resolved *Resolved) {
 	cf(ctx, resolved)
 }
 
-// DgraphAsQueryExecutor builds a QueryExecutor for proxying requests through dgraph.
-func DgraphAsQueryExecutor() QueryExecutor {
-	return &dgraphExecutor{}
+// NewDgraphExecutor builds a DgraphExecutor for proxying requests through dgraph.
+func NewDgraphExecutor() DgraphExecutor {
+	return newDgraphExecutor(&dgraph.DgraphEx{})
 }
 
-func AdminQueryExecutor() QueryExecutor {
-	return &adminExecutor{}
+func newDgraphExecutor(dg *dgraph.DgraphEx) DgraphExecutor {
+	return &dgraphExecutor{dg: dg}
 }
 
-func AdminMutationExecutor() MutationExecutor {
-	return &adminExecutor{}
+// NewAdminExecutor builds a DgraphExecutor for proxying requests through dgraph.
+func NewAdminExecutor() DgraphExecutor {
+	return &adminExecutor{dg: &dgraph.DgraphEx{}}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor.
-func DgraphAsMutationExecutor() MutationExecutor {
-	return &dgraphExecutor{}
-}
-
-func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+	*dgoapi.Response, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
-	return dgraph.Query(ctx, query)
+	return aex.dg.Execute(ctx, req)
 }
 
-// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
-// performed queries/mutations
-func (de *adminExecutor) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	ctx = context.WithValue(ctx, edgraph.Authorize, false)
-	return dgraph.Mutate(ctx, query, mutations)
-}
-
-func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return dgraph.Query(ctx, query)
-}
-
-// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
-// performed queries/mutations
-func (de *dgraphExecutor) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	return dgraph.Mutate(ctx, query, mutations)
+func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+	*dgoapi.Response, error) {
+	return de.dg.Execute(ctx, req)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
@@ -198,18 +178,15 @@ func (rf *resolverFactory) WithMutationResolver(
 }
 
 func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
-	introspect := func(q schema.Query) QueryResolver {
-		return &queryResolver{
-			queryRewriter:   NoOpQueryRewrite(),
-			queryExecutor:   introspectionExecution(q),
-			resultCompleter: StdQueryCompletion(),
-		}
-	}
-
-	rf.WithQueryResolver("__schema", introspect)
-	rf.WithQueryResolver("__type", introspect)
-
-	return rf
+	return rf.
+		WithQueryResolver("__schema",
+			func(q schema.Query) QueryResolver {
+				return QueryResolverFunc(resolveIntrospection)
+			}).
+		WithQueryResolver("__type",
+			func(q schema.Query) QueryResolver {
+				return QueryResolverFunc(resolveIntrospection)
+			})
 }
 
 func (rf *resolverFactory) WithConventionResolvers(
@@ -219,29 +196,25 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe,
-				StdQueryCompletion())
+			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
 		})
 	}
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Arw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Urw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Drw, NoOpQueryExecution(), fns.Me, deleteCompletion())
+			return NewDgraphResolver(fns.Drw, fns.Ex, deleteCompletion())
 		})
 	}
 
@@ -274,7 +247,7 @@ func StdMutationCompletion(name string) CompletionFunc {
 	return noopCompletion
 }
 
-// StdDeleteCompletion is the completion steps that get run for add and update mutations
+// StdDeleteCompletion is the completion steps that get run for delete mutations
 func StdDeleteCompletion(name string) CompletionFunc {
 	return deleteCompletion()
 }
@@ -442,6 +415,7 @@ func addResult(resp *schema.Response, res *Resolved) {
 	resp.WithError(res.Err)
 	resp.WithError(gqlErr)
 	resp.AddData(b)
+	resp.MergeExtensions(res.Extensions)
 }
 
 // noopCompletion just passes back it's result and err arguments
@@ -594,7 +568,7 @@ func completeDgraphResult(
 				//
 				// We'll continue and just try the first item to return some data.
 
-				glog.Error("Got a list of length %v from Dgraph when expecting a "+
+				glog.Errorf("Got a list of length %v from Dgraph when expecting a "+
 					"one-item list.\n", len(val))
 
 				errs = append(errs,

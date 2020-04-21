@@ -1241,8 +1241,9 @@ These HTTP endpoints are deprecated and will be removed in the next release. Ple
 {{% /notice %}}
 
 * `/health?all` returns information about the health of all the servers in the cluster.
-* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
-* `/admin/export` initiates a data [export]({{< relref "#export">}}).
+* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown" >}}) of the Alpha.
+* `/admin/export` initiates a data [export]({{< relref "#export" >}}). The exported data will be
+encrypted if the alpha instance was configured with an encryption key file.
 
 By default the Alpha listens on `localhost` for admin actions (the loopback address only accessible from the same machine). The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections.
 
@@ -1299,11 +1300,17 @@ Here’s an example of JSON returned from the above query:
 }
 ```
 
-- `version`: Version of Dgraph running the Alpha server.
-- `instance`: Name of the instance. Always set to `alpha`.
-- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+- `instance`: Name of the instance. Either `alpha` or `zero`.
+- `status`: Health status of the instance. Either `healthy` or `unhealthy`.
+- `version`: Version of Dgraph running the Alpha or Zero server.
+- `uptime`: Time in nanoseconds since the Alpha or Zero server is up and running.
+- `address`: IP_ADDRESS:PORT of the instance.
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
+- `lastEcho`: Last time, in Unix epoch, when the instance was contacted by another Alpha or Zero server.
+- `ongoing`: List of ongoing operations in the background.
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
 
-The same information is available from the `/health` and `/health?all` endpoints.
+The same information (except `ongoing` and `indexing`) is available from the `/health` and `/health?all` endpoints of Alpha server.
 
 ## More about Dgraph Zero
 
@@ -1481,6 +1488,29 @@ Here’s the information the above JSON document provides:
 improve data scalability is to shard a predicate into separate tablets that could
 be assigned to different groups.
 {{% /notice %}}
+
+## Log Format
+
+Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows:
+
+	`Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...`
+
+Where the fields are defined as follows:
+
+```
+	L                A single character, representing the log level (eg 'I' for INFO)
+	mm               The month (zero padded; ie May is '05')
+	dd               The day (zero padded)
+	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
+	threadid         The space-padded thread ID as returned by GetTID()
+	file             The file name
+	line             The line number
+	msg              The user-supplied message
+```
+
+### Query Logging
+
+To enable query logging, you must set `-v=3` which will enable verbose logging for everything. Alternatively, you can set `--vmodule=server=3` for only the dgraph/server.go file which would only enable query/mutation logging.
 
 ## TLS configuration
 

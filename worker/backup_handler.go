@@ -255,8 +255,6 @@ func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error
 		// backupId. If it's empty, do not skip any manifests as the default behavior is
 		// to restore the latest series of backups.
 		if len(backupId) > 0 && manifests[i].BackupId != backupId {
-			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
-				manifests[i].Path, backupId)
 			continue
 		}
 
