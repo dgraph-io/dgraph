@@ -295,10 +295,11 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	require.Equal(t, 2, len(result.Errors))
 
 	expectedErrors := x.GqlErrorList{
-		x.GqlErrorf("while json unmarshaling result from remote endpoint: 404 page not found\n " +
-			"for field: cars within type: Person (Locations: [{Line: 6, Column: 4}])"),
-		x.GqlErrorf("while json unmarshaling result from remote endpoint: 404 page not found\n " +
-			"for field: bikes within type: Person, index: 0 (Locations: [{Line: 9, Column: 4}])"),
+		&x.GqlError{Message: "while json unmarshaling result from remote endpoint: 404 page not" +
+			" found\n for field: bikes within type: Person, index: 0",
+			Locations: []x.Location{{9, 4}}},
+		&x.GqlError{Message: "while json unmarshaling result from remote endpoint: 404 page not" +
+			" found\n for field: cars within type: Person", Locations: []x.Location{{6, 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
 	require.Contains(t, result.Errors, expectedErrors[1])
