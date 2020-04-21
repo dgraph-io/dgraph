@@ -44,7 +44,7 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	rbacRule := make(map[int]schema.RuleResult)
+	rbacRule := make(map[string]schema.RuleResult)
 	a := schema.AuthState{AuthVariables: authVariables, RbacRule: rbacRule}
 	sch := gqlQuery.Operation().Schema()
 

@@ -42,7 +42,6 @@ func (fqp *FieldQueryProcedure) OnQueryRoot(gqlQuery *gql.GraphQuery, typ schema
 
 func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 	rule *schema.RuleNode) {
-
 	filterPut := false
 	var query *gql.GraphQuery
 	name := path[0].Attr + "."
@@ -51,6 +50,7 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 		name += toks[len(toks)-1]
 	}
 
+	filter := GetFilter(rule, fqp.authState)
 	for i := len(path) - 1; i >= 1; i-- {
 		f := *path[i]
 		child := &gql.GraphQuery{
@@ -67,7 +67,7 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 			}, query}
 
 			if !filterPut {
-				child.Filter = GetFilter(rule, fqp.authState)
+				child.Filter = filter
 				filterPut = true
 			}
 		}
@@ -88,7 +88,7 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 	}
 
 	if !filterPut {
-		last.Filter = GetFilter(rule, fqp.authState)
+		last.Filter = filter
 	}
 
 	path[len(path)-1].Attr = fmt.Sprintf("val(%s)", name)

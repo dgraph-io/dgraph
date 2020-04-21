@@ -262,7 +262,7 @@
         name : Project.name
         roles : Project.roles {
           permissions : Role.permissions
-          assignedTo : Role.assignedTo @filter(eq(User.isPublic, true)) {
+          assignedTo : Role.assignedTo @filter((eq(User.isPublic, true) OR eq(User.username, "user1"))) {
             username : User.username
             age : val(getProject.rolesassignedToage)
             disabled : User.disabled
@@ -529,7 +529,7 @@
         name : Project.name
         roles : Project.roles {
           permissions : Role.permissions
-          assignedTo : Role.assignedTo @filter(eq(User.isPublic, true)) {
+          assignedTo : Role.assignedTo @filter((eq(User.isPublic, true) OR eq(User.username, "user1"))) {
             username : User.username
             age : val(getProject.rolesassignedToage)
             disabled : User.disabled
