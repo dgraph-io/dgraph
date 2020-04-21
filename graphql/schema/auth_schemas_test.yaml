@@ -9,9 +9,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "Type X: @auth query: failed to parse GraphQL rule [reason : Expected Name, found <EOF>
-      (Locations: [{Line: 1, Column: 9}])]",
-      "locations":[{"line":1, "column":28}]}
+      {"message": "Type X: @auth query: failed to parse GraphQL rule
+      [reason : Expected Name, found <EOF>]"}
     ]
 
   - name: "GraphQL validation errors should be reported"
@@ -25,8 +24,7 @@ invalid_schemas:
     errlist: [
       {"message": "Type X: @auth query: failed to validate GraphQL rule
       [reason : Field \"userRle\" is not defined by type XFilter.
-      Did you mean userRole or username? (Locations: [{Line: 1, Column: 26}])]",
-      "locations":[{"line":1, "column":28}]}
+      Did you mean userRole or username?]"}
     ]
 
   - name: "RBAC rule invalid variable"
@@ -38,10 +36,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth query: `X_MyApp_Role` is not a valid GraphQL variable.",
-     "locations":[{"line":1, "column":28}]}
-    ]
+    errlist: [{"message": "Type X: @auth query: `X_MyApp_Role` is not a valid GraphQL variable."}]
 
   - name: "RBAC rule invalid operator"
     input: |
@@ -52,10 +47,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth query: `xyz` operator is not supported in this rule.",
-     "locations":[{"line":1, "column":28}]}
-    ]
+    errlist: [{"message": "Type X: @auth query: `xyz` operator is not supported in this rule."}]
 
   - name: "Invalid RBAC rule"
     input: |
@@ -66,10 +58,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth query: `{ \"ADMIN\" }` is not a valid rule.",
-     "locations":[{"line":1, "column":28}]}
-    ]
+    errlist: [{"message": "Type X: @auth query: `{ \"ADMIN\" }` is not a valid rule."}]
 
   - name: "Empty rule"
     input: |
@@ -81,8 +70,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: a rule should be exactly one query, found 0 GraphQL operations",
-     "locations":[{"line":1, "column":28}]}
+      {"message": "Type X: @auth query: a rule should be exactly one query,
+      found 0 GraphQL operations"}
     ]
 
   - name: "Invalid auth syntax"
@@ -95,8 +84,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":1, "column":21}]}
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
     ]
 
   - name: "Single or rule"
@@ -115,10 +104,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [
-    {"message": "Type X: @auth query: 'OR' should contain at least two rules",
-     "locations":[{"line":1, "column":25}]}
-    ]
+    errlist: [{"message": "Type X: @auth query: 'OR' should contain at least two rules"}]
 
   - name: "Multiple logical operation at same level"
     input: |
@@ -156,8 +142,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":1, "column":21}]}
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
     ]
 
   - name: "Same logical operation at same level"
@@ -196,8 +182,8 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\", \"not\" and \"rule\"",
-     "locations":[{"line":1, "column":21}]}
+    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    \"not\" and \"rule\""}
     ]
 
   - name:  "Rules with null value"
@@ -210,9 +196,9 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\"", "locations":[{"line":1, "column":27}]},
+    \"not\" and \"rule\""},
     {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
-    \"not\" and \"rule\"", "locations":[{"line":1, "column":32}]}
+    \"not\" and \"rule\""}
     ]
 
 valid_schemas:
