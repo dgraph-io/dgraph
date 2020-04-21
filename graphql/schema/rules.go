@@ -1229,6 +1229,29 @@ func customDirectiveValidation(sch *ast.Schema,
 				typ.Name, field.Name, opZero.Operation, query.Name,
 			)
 		}
+		if len(query.Arguments) > 0 {
+			argCountMap := make(map[string]int)
+			for _, arg := range query.Arguments {
+				argCountMap[arg.Name] = argCountMap[arg.Name] + 1
+			}
+			repeatingArgs := strings.Builder{}
+			repeatingArgs.WriteRune('[')
+			for argName, count := range argCountMap {
+				if count > 1 {
+					repeatingArgs.WriteString(argName)
+					repeatingArgs.WriteString(" ")
+				}
+			}
+			repeatingArgs.WriteRune(']')
+			repeatingArgsStr := repeatingArgs.String()
+			if repeatingArgsStr != "[]" {
+				return gqlerror.ErrorPosf(graphql.Position,
+					"Type %s; Field %s: @custom directive: graphql; given %s: %s: arguments %s"+
+						" appear more than once, each argument can appear only once.",
+					typ.Name, field.Name, opZero.Operation, query.Name, repeatingArgsStr,
+				)
+			}
+		}
 		// finally validate the given operation on remote server
 		if err := validateRemoteGraphqlCall(&remoteGraphqlEndpoint{
 			parentType:   typ,

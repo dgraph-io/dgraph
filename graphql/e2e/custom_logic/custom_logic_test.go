@@ -756,7 +756,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 		" remote schema.\n", res.Errors[0].Error())
 }
 
-func TestForInvalidArguement(t *testing.T) {
+func TestForInvalidArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
 		getCountry(id: ID!): Country! @custom(http: {

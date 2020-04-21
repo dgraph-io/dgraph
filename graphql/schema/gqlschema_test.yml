@@ -1121,7 +1121,6 @@ invalid_schemas:
      "locations":[{"line":9, "column":15}]},
     ]
 
-
   -
     name: "@custom directive with selection set on field in operation in graphql"
     input: |
@@ -1138,6 +1137,25 @@ invalid_schemas:
       }
     errlist: [
     {"message": "Type Query; Field getAuthor: @custom directive: graphql; found query getAuthor with a selection set, it can't have any selection set.",
+     "locations":[{"line":9, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with repeating arguments for field in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getAuthor(id: $id, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor: @custom directive: graphql; given query: getAuthor: arguments [id ] appear more than once, each argument can appear only once.",
      "locations":[{"line":9, "column":15}]},
     ]
 
