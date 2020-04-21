@@ -20,6 +20,7 @@ import (
 	"context"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -52,20 +53,15 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	testRewriter := NewQueryRewriter()
 
-	type MyCustomClaims struct {
-		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
-		jwt.StandardClaims
-	}
-
 	// Create the Claims
-	claims := MyCustomClaims{
+	claims := CustomClaims{
 		map[string]interface{}{},
 		jwt.StandardClaims{
-			ExpiresAt: 15000,
+			ExpiresAt: time.Now().Add(time.Minute).Unix(),
 			Issuer:    "test",
 		},
 	}
-	claims.Foo["User"] = "user1"
+	claims.AuthVariables["USER"] = "user1"
 
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	for _, tcase := range tests {
@@ -80,9 +76,9 @@ func TestAuthQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			ctx := context.Background()
-			claims.Foo["Role"] = tcase.Role
+			claims.AuthVariables["ROLE"] = tcase.Role
 			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			ss, err := token.SignedString([]byte("Secret"))
+			ss, err := token.SignedString([]byte(AuthHmacSecret))
 			require.NoError(t, err)
 
 			md := metadata.New(nil)

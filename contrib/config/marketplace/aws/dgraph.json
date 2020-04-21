@@ -32,8 +32,6 @@
                         "ZeroDiskIops",
                         "RatelInstanceCount",
                         "RatelInstanceType",
-                        "RatelDiskSize",
-                        "RatelDiskIops",
                         "Tag"
                     ]
                 }
@@ -81,12 +79,6 @@
                 "RatelInstanceType": {
                     "default": "AWS instance types to use for dgraph Ratel nodes"
                 },
-                "RatelDiskSize": {
-                    "default": "Disk size to use for dgraph Ratel nodes."
-                },
-                "RatelDiskIops": {
-                    "default": "Ratel node Disk IOPS"
-                },
                 "DgraphVersion": {
                     "default": "Dgraph version to deploy."
                 },
@@ -94,6 +86,58 @@
                     "default": "Common tag for all the deployed resources by template"
                 }
             }
+        }
+    },
+    "Mappings": {
+        "AWSRegionArch2AMI": {
+          "eu-north-1": {
+            "64": "ami-050981837962d44ac"
+          },
+          "ap-south-1": {
+            "64": "ami-0b44050b2d893d5f7"
+          },
+          "eu-west-3": {
+            "64": "ami-08c757228751c5335"
+          },
+          "eu-west-2": {
+            "64": "ami-0eb89db7593b5d434"
+          },
+          "eu-west-1": {
+            "64": "ami-0701e7be9b2a77600"
+          },
+          "ap-northeast-2": {
+            "64": "ami-00edfb46b107f643c"
+          },
+          "ap-northeast-1": {
+            "64": "ami-0278fe6949f6b1a06"
+          },
+          "sa-east-1": {
+            "64": "ami-077d5d3682940b34a"
+          },
+          "ca-central-1": {
+            "64": "ami-0edd51cc29813e254"
+          },
+          "ap-southeast-1": {
+            "64": "ami-0f7719e8b7ba25c61"
+          },
+          "ap-southeast-2": {
+            "64": "ami-04fcc97b5f6edcd89"
+          },
+          "eu-central-1": {
+            "64": "ami-0e342d72b12109f91"
+          },
+          "us-east-1": {
+            "64": "ami-085925f297f89fce1"
+          },
+          "us-east-2": {
+            "64": "ami-07c1207a9d40bc3bd"
+          },
+          "us-west-1": {
+            "64": "ami-0f56279347d2fa43e"
+          },
+          "us-west-2": {
+            "64": "ami-003634241a8fcdec0"
+          }
         }
     },
     "Parameters": {
@@ -155,11 +199,11 @@
             "AllowedValues": [
                 "m5a.large",
                 "m5a.4xlarge",
-                "m4a.4xlarge",
-                "r5a.4xlarge",
-                "r4a.4xlarge",
-                "c5a.4xlarge",
-                "c4a.4xlarge"
+                "m4.4xlarge",
+                "r5.4xlarge",
+                "r4.4xlarge",
+                "c5.4xlarge",
+                "c4.4xlarge"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type which supports autoscaling groups."
         },
@@ -197,11 +241,11 @@
             "Default": "m5a.large",
             "AllowedValues": [
                 "m5a.large",
-                "m4a.large",
-                "r5a.large",
-                "r4a.large",
-                "c5a.large",
-                "c4a.large"
+                "m4.large",
+                "r5.large",
+                "r4.large",
+                "c5.large",
+                "c4.large"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type."
         },
@@ -236,14 +280,11 @@
         "RatelInstanceType": {
             "Description": "Instance type for dgraph Ratel nodes",
             "Type": "String",
-            "Default": "m5a.large",
+            "Default": "t3a.small",
             "AllowedValues": [
-                "m5a.large",
-                "m4a.large",
-                "r5a.large",
-                "r4a.large",
-                "c5a.large",
-                "c4a.large"
+                "t3a.small",
+                "t3a.medium",
+                "t3a.large"
             ],
             "ConstraintDescription": "must be a valid EC2 instance type."
         },
@@ -255,17 +296,17 @@
         "DgraphVersion": {
             "Description": "Dgraph version to deploy.",
             "Type": "String",
-            "Default": "v1.1.1"
+            "Default": "v20.03.0",
+            "AllowedValues": [
+                "v20.03.0",
+                "v1.2.2",
+                "v1.1.1"
+            ],
         },
         "Tag": {
             "Description": "Common tag to use for all the deployments.",
             "Type": "String",
             "Default": "dgraph.io"
-        },
-        "InstanceAMI": {
-            "Description": "AWS AMI to use for the instance.",
-            "Default": "ami-0c55b159cbfafe1f0",
-            "Type": "String"
         }
     },
     "Conditions": {
@@ -283,6 +324,18 @@
                     "Ref": "AllowPublicAccess"
                 },
                 "true"
+            ]
+        },
+        "AllowThirdSubnet": {
+            "Fn::Not" : [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "us-west-1"
+                    ]
+                }
             ]
         }
     },
@@ -439,6 +492,7 @@
         },
         "SubnetC": {
             "Type": "AWS::EC2::Subnet",
+            "Condition": "AllowThirdSubnet",
             "Properties": {
                 "VpcId": {
                     "Ref": "VPC"
@@ -467,6 +521,7 @@
         },
         "SubnetCRouteTableAssociation": {
             "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Condition": "AllowThirdSubnet",
             "Properties": {
                 "SubnetId": {
                     "Ref": "SubnetC"
@@ -484,17 +539,32 @@
                         "Ref": "DgraphALBSecurityGroup"
                     }
                 ],
-                "Subnets": [
+                "Subnets":
                     {
-                        "Ref": "SubnetA"
-                    },
-                    {
-                        "Ref": "SubnetB"
-                    },
-                    {
-                        "Ref": "SubnetC"
+                        "Fn::If": [
+                            "AllowThirdSubnet",
+                            [
+                                {
+                                    "Ref": "SubnetA"
+                                },
+                                {
+                                    "Ref": "SubnetB"
+                                },
+                                {
+                                    "Ref": "SubnetC"
+                                }
+                            ],
+                            [
+                                {
+                                    "Ref": "SubnetA"
+                                },
+                                {
+                                    "Ref": "SubnetB"
+                                }
+                            ]
+                        ]
                     }
-                ],
+                ,
                 "Tags": [
                     {
                         "Key": "context",
@@ -931,7 +1001,13 @@
             "Type": "AWS::EC2::Instance",
             "Properties": {
                 "ImageId": {
-                    "Ref": "InstanceAMI"
+                    "Fn::FindInMap": [
+                        "AWSRegionArch2AMI",
+                        {
+                            "Ref": "AWS::Region"
+                        },
+                        "64"
+                    ]
                 },
                 "KeyName": {
                     "Ref": "KeyName"
@@ -940,7 +1016,7 @@
                     {
                         "DeviceName": "/dev/sda1",
                         "Ebs": {
-                            "VolumeSize": "20"
+                            "VolumeSize": 20
                         }
                     },
                     {
@@ -950,7 +1026,7 @@
                             "Iops": {
                                 "Ref": "ZeroDiskIops"
                             },
-                            "DeleteOnTermination": "false",
+                            "DeleteOnTermination": false,
                             "VolumeSize": {
                                 "Ref": "ZeroDiskSize"
                             }
@@ -959,8 +1035,8 @@
                 ],
                 "NetworkInterfaces": [
                     {
-                        "AssociatePublicIpAddress": "true",
-                        "DeleteOnTermination": "true",
+                        "AssociatePublicIpAddress": true,
+                        "DeleteOnTermination": true,
                         "DeviceIndex": "0",
                         "SubnetId": {
                             "Ref": "SubnetA"
@@ -972,7 +1048,7 @@
                         ]
                     }
                 ],
-                "DisableApiTermination": "false",
+                "DisableApiTermination": false,
                 "InstanceType": {
                     "Ref": "ZeroInstanceType"
                 },
@@ -1030,12 +1106,11 @@
                                 "EOT\n",
                                 "\n\n",
                                 "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                 {
                                     "Ref": "DgraphVersion"
                                 },
-                                "/dgraph-linux-amd64.tar.gz\n",
-                                "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                " bash\n",
                                 "systemctl daemon-reload\n",
                                 "systemctl enable --now dgraph-zero.service\n"
                             ]
@@ -1068,14 +1143,14 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         },
                         {
                             "DeviceName": "/dev/sdk",
                             "Ebs": {
                                 "VolumeType": "io1",
-                                "DeleteOnTermination": "false",
+                                "DeleteOnTermination": false,
                                 "Iops": {
                                     "Ref": "ZeroDiskIops"
                                 },
@@ -1085,9 +1160,15 @@
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
-                        "Ref": "InstanceAMI"
+                        "Fn::FindInMap": [
+                            "AWSRegionArch2AMI",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "64"
+                        ]
                     },
                     "InstanceType": {
                         "Ref": "ZeroInstanceType"
@@ -1097,12 +1178,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeviceIndex": "0",
-                            "DeleteOnTermination": "true",
-                            "SubnetId": {
-                                "Ref": "SubnetA"
-                            },
+                            "AssociatePublicIpAddress": true,
+                            "DeviceIndex": 0,
+                            "DeleteOnTermination": true,
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1177,12 +1255,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-zero.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-zero.service"
                                 ]
@@ -1196,11 +1273,30 @@
         "ZeroAutoscalingGroup": {
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetA"
-                    }
-                ],
+                "VPCZoneIdentifier": {
+                    "Fn::If": [
+                        "AllowThirdSubnet",
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            },
+                            {
+                                "Ref": "SubnetC"
+                            }
+                        ],
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            }
+                        ]
+                    ]
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "ZeroLaunchTemplate"
@@ -1235,7 +1331,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
@@ -1248,14 +1344,14 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         },
                         {
                             "DeviceName": "/dev/sdk",
                             "Ebs": {
                                 "VolumeType": "io1",
-                                "DeleteOnTermination": "false",
+                                "DeleteOnTermination": false,
                                 "Iops": {
                                     "Ref": "AlphaDiskIops"
                                 },
@@ -1265,9 +1361,15 @@
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
-                        "Ref": "InstanceAMI"
+                        "Fn::FindInMap": [
+                            "AWSRegionArch2AMI",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "64"
+                        ]
                     },
                     "InstanceType": {
                         "Ref": "AlphaInstanceType"
@@ -1277,12 +1379,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeviceIndex": "0",
-                            "DeleteOnTermination": "true",
-                            "SubnetId": {
-                                "Ref": "SubnetA"
-                            },
+                            "AssociatePublicIpAddress": true,
+                            "DeviceIndex": 0,
+                            "DeleteOnTermination": true,
                             "Groups": [
                                 {
                                     "Ref": "DgraphSecurityGroup"
@@ -1356,12 +1455,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-alpha.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-alpha.service"
                                 ]
@@ -1378,11 +1476,30 @@
                 "ZeroAutoscalingGroup"
             ],
             "Properties": {
-                "VPCZoneIdentifier": [
-                    {
-                        "Ref": "SubnetA"
-                    }
-                ],
+                "VPCZoneIdentifier":  {
+                    "Fn::If": [
+                        "AllowThirdSubnet",
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            },
+                            {
+                                "Ref": "SubnetC"
+                            }
+                        ],
+                        [
+                            {
+                                "Ref": "SubnetA"
+                            },
+                            {
+                                "Ref": "SubnetB"
+                            }
+                        ]
+                    ]
+                },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
                         "Ref": "AlphaLaunchTemplate"
@@ -1422,7 +1539,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }
@@ -1435,13 +1552,19 @@
                         {
                             "DeviceName": "/dev/sda1",
                             "Ebs": {
-                                "VolumeSize": "20"
+                                "VolumeSize": 20
                             }
                         }
                     ],
-                    "DisableApiTermination": "false",
+                    "DisableApiTermination": false,
                     "ImageId": {
-                        "Ref": "InstanceAMI"
+                        "Fn::FindInMap": [
+                            "AWSRegionArch2AMI",
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "64"
+                        ]
                     },
                     "InstanceType": {
                         "Ref": "RatelInstanceType"
@@ -1451,9 +1574,9 @@
                     },
                     "NetworkInterfaces": [
                         {
-                            "AssociatePublicIpAddress": "true",
-                            "DeleteOnTermination": "true",
-                            "DeviceIndex": "0",
+                            "AssociatePublicIpAddress": true,
+                            "DeleteOnTermination": true,
+                            "DeviceIndex": 0,
                             "SubnetId": {
                                 "Ref": "SubnetA"
                             },
@@ -1499,12 +1622,11 @@
                                     "EOT\n",
                                     "\n\n",
                                     "chmod +x /etc/systemd/system/dgraph-ratel.service\n",
-                                    "wget https://github.com/dgraph-io/dgraph/releases/download/",
+                                    "curl -sSf https://get.dgraph.io | ACCEPT_LICENSE=y VERSION=",
                                     {
                                         "Ref": "DgraphVersion"
                                     },
-                                    "/dgraph-linux-amd64.tar.gz\n",
-                                    "tar -C /usr/local/bin -xzf dgraph-linux-amd64.tar.gz\n",
+                                    " bash\n",
                                     "systemctl daemon-reload\n",
                                     "systemctl enable --now dgraph-ratel.service"
                                 ]
@@ -1565,7 +1687,7 @@
                                 ]
                             ]
                         },
-                        "PropagateAtLaunch": "true"
+                        "PropagateAtLaunch": true
                     }
                 ]
             }

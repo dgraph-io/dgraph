@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -257,6 +258,7 @@ func detectPendingTxns(attr string) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
 			return false
 		}
 		return pk.Attr == attr

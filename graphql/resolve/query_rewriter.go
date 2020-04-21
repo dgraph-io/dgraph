@@ -48,9 +48,9 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	// FIXME: should come from the JWT
-	authVariables := map[string]interface{}{
-		"USER": "user1",
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	authRw := &authRewriter{
