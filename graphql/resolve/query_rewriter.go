@@ -57,8 +57,6 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		}
 
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
-		addTypeFilter(dgQuery, gqlQuery.Type())
-
 		return dgQuery, nil
 
 	case schema.FilterQuery:
@@ -178,6 +176,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	}
 
 	addArgumentsToField(dgQuery, field)
+	addTypeFilter(dgQuery, field.Type())
 	return dgQuery
 }
 
@@ -227,6 +226,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 	}
 	addSelectionSetFrom(dgQuery, field)
 	addUID(dgQuery)
+	addTypeFilter(dgQuery, field.Type())
 	return dgQuery
 }
 
