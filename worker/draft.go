@@ -99,7 +99,9 @@ const (
 
 // startTask is used to check whether an op is already going on.
 // If a rollup is going on, we cancel and wait for rollup to complete
-// before we return. If the same task is already going, we return error.
+// before we return. If another operation is going on, the function returns
+// an error, except in the case of restores, which are fiven preference and
+// cancel all other operations.
 // You should only call Done() on the returned closer. Calling other
 // functions (such as SignalAndWait) for closer could result in panics.
 // For more details, see GitHub issue #5034.
@@ -129,8 +131,19 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
-
-	case opSnapshot, opIndexing, opRestore:
+	case opRestore:
+		// Restores cancel all other operations, except for other restores since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId != opRestore {
+				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
+				n.ops[otherId] = nil
+				otherCloser.SignalAndWait()
+			} else {
+				return nil, errors.Errorf("another restore operation is already running", otherId)
+			}
+		}
+	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
 				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
@@ -574,18 +587,9 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 	case proposal.Restore != nil:
 		var err error
 		var closer *y.Closer
-		for {
-			closer, err = n.startTask(opRestore)
-			if err != nil {
-				// This error happens because there's another task running. Snapshots and
-				// restores do not happen at the same time and rollups are cancelled by restores.
-				// That leaves ndexing as the only option. Wait for the indexing to complete
-				// before trying to
-				glog.Infof("Waiting for indexing to finish before starting the backup restore.")
-				gr.Node.waitForTask(opIndexing)
-			} else {
-				break
-			}
+		closer, err = n.startTask(opRestore)
+		if err != nil {
+			return errors.Wrapf(err, "cannot start restore task")
 		}
 		defer closer.Done()
 
