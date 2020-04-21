@@ -346,9 +346,9 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	// FIXME: should come from the JWT
-	authVariables := map[string]interface{}{
-		"USER": "user1",
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
 	}
 	authRw := &authRewriter{
 		authVariables: authVariables,
@@ -488,9 +488,9 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	// FIXME: should come from the JWT
-	authVariables := map[string]interface{}{
-		"USER": "user1",
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
 	}
 	authRw := &authRewriter{
 		authVariables: authVariables,
