@@ -195,9 +195,10 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 }
 
 func BuildQuery(aq *schema.AuthQuery, id int, av map[string]interface{}) *gql.GraphQuery {
-	// TODO
 	q := rewriteAsQuery(aq.GetQuery(av))
-	fmt.Println(dgraph.AsString(q))
+	q.Cascade = true
+	q.Var = fmt.Sprintf("rule_%s_%d", aq.GetName(), id)
+	fmt.Println("Query", dgraph.AsString(q))
 	return q
 }
 
@@ -216,7 +217,7 @@ func GetQueries(r *schema.RuleNode, authState *schema.AuthState) []*gql.GraphQue
 		list = append(list, GetQueries(r.Not, authState)...)
 	}
 
-	if r.Rule != nil {
+	if r.Rule != nil && r.Rule.IsDeepQuery() {
 		if query := BuildQuery(r.Rule, r.RuleID, authState.AuthVariables); query != nil {
 			list = append(list, query)
 		}

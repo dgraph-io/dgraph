@@ -1,5 +1,5 @@
 -
-  name: "Type Authorization OR (dgquery, dgquery) filter at root node, rbac rules false"
+  name: "Type Authorization OR dgquery, dgquery filter at root node, rbac rules false"
   gqlquery: |
     query {
       queryUser(filter: {username: {eq: "user1"}}, order: {asc: username}) {
@@ -13,7 +13,7 @@
     }
 
 -
-  name: "Type Authorization OR (dgquery, rbac) filter at root node, rbac rules false"
+  name: "Type Authorization OR dgquery, rbac filter at root node, rbac rules false"
   gqlquery: |
     query {
       getProject(projID: "0x1") {
@@ -27,7 +27,7 @@
 
 
 -
-  name: "Type Authorization AND (dgquery, rbac) filter at root node, rbac rules false"
+  name: "Type Authorization AND dgquery, rbac filter at root node, rbac rules false"
   gqlquery: |
     query {
       getIssue(id: "0x1") {
@@ -40,7 +40,7 @@
     }
 
 -
-  name: "Type Authorization AND (dgquery, dgquery) filter at root node, rbac rules false"
+  name: "Type Authorization AND dgquery, dgquery filter at root node, rbac rules false"
   gqlquery: |
     query {
       getMovie(id: "0x1") {
@@ -136,7 +136,7 @@
     }
 
 -
-  name: "Type Authorization OR (dgquery, rbac) filter at root node, rbac rules true"
+  name: "Type Authorization OR dgquery, rbac filter at root node, rbac rules true"
   gqlquery: |
     query {
       getProject(projID: "0x1") {
@@ -150,7 +150,7 @@
 
 
 -
-  name: "Type Authorization AND (dgquery, rbac) filter at root node, rbac rules true"
+  name: "Type Authorization AND dgquery, rbac filter at root node, rbac rules true"
   gqlquery: |
     query {
       getIssue(id: "0x1") {
