@@ -23,7 +23,7 @@ require (
 	github.com/dgryski/go-farm v0.0.0-20191112170834-c2139c5d712b
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/dustin/go-humanize v1.0.0
-	github.com/getsentry/sentry-go v0.5.1
+	github.com/getsentry/sentry-go v0.6.0
 	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.1
