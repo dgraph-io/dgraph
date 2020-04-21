@@ -53,8 +53,17 @@ func (aq *AuthQuery) GetName() string {
 	return ""
 }
 
-func (aq *AuthQuery) GetQuery() *query {
-	return aq.query
+func (aq *AuthQuery) GetQuery(av map[string]interface{}) *query {
+	q := aq.query
+	return &query{
+		field: (*field)(q).field,
+		op: &operation{op: q.op.op,
+			query:    q.op.query,
+			doc:      q.op.doc,
+			inSchema: q.op.inSchema,
+			vars:     av,
+		},
+		sel: q.sel}
 }
 
 func (aq *AuthQuery) IsDeepQuery() bool {
@@ -193,7 +202,9 @@ func (node *RuleNode) GetRBACRules(a *AuthState) {
 	}
 }
 
-func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
+func authRules(s *ast.Schema, dgraphPredicate map[string]map[string]string,
+	typeNameAst map[string][]*ast.Definition) (map[string]*TypeAuth, error) {
+
 	var errResult, err error
 	authRules := make(map[string]*TypeAuth)
 
@@ -202,14 +213,16 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
 		auth := typ.Directives.ForName(authDirective)
 		if auth != nil {
-			authRules[name].rules, err = parseAuthDirective(s, typ, auth)
+			authRules[name].rules, err = parseAuthDirective(s, typ, auth,
+				dgraphPredicate, typeNameAst)
 			errResult = AppendGQLErrs(errResult, err)
 		}
 
 		for _, field := range typ.Fields {
 			auth := field.Directives.ForName(authDirective)
 			if auth != nil {
-				authRules[name].fields[field.Name], err = parseAuthDirective(s, typ, auth)
+				authRules[name].fields[field.Name], err = parseAuthDirective(s,
+					typ, auth, dgraphPredicate, typeNameAst)
 				errResult = AppendGQLErrs(errResult, err)
 			}
 		}
@@ -221,7 +234,9 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 func parseAuthDirective(
 	s *ast.Schema,
 	typ *ast.Definition,
-	dir *ast.Directive) (*AuthContainer, error) {
+	dir *ast.Directive,
+	dgraphPredicate map[string]map[string]string,
+	typeNameAst map[string][]*ast.Definition) (*AuthContainer, error) {
 
 	if dir == nil || len(dir.Arguments) == 0 {
 		return nil, nil
@@ -231,29 +246,31 @@ func parseAuthDirective(
 	result := &AuthContainer{}
 
 	if qry := dir.Arguments.ForName("query"); qry != nil && qry.Value != nil {
-		result.Query, err = parseAuthNode(s, typ, qry.Value)
+		result.Query, err = parseAuthNode(s, typ, qry.Value, dgraphPredicate, typeNameAst)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if add := dir.Arguments.ForName("add"); add != nil && add.Value != nil {
-		result.Add, err = parseAuthNode(s, typ, add.Value)
+		result.Add, err = parseAuthNode(s, typ, add.Value, dgraphPredicate, typeNameAst)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if upd := dir.Arguments.ForName("update"); upd != nil && upd.Value != nil {
-		result.Update, err = parseAuthNode(s, typ, upd.Value)
+		result.Update, err = parseAuthNode(s, typ, upd.Value, dgraphPredicate, typeNameAst)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	if del := dir.Arguments.ForName("delete"); del != nil && del.Value != nil {
-		result.Delete, err = parseAuthNode(s, typ, del.Value)
+		result.Delete, err = parseAuthNode(s, typ, del.Value, dgraphPredicate, typeNameAst)
 		errResult = AppendGQLErrs(errResult, err)
 	}
 
 	return result, errResult
 }
 
-func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNode, error) {
+func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value,
+	dgraphPredicate map[string]map[string]string,
+	typeNameAst map[string][]*ast.Definition) (*RuleNode, error) {
 	if len(val.Children) == 0 {
 		return nil,
 			gqlerror.ErrorPosf(val.Position,
@@ -266,7 +283,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if ors := val.Children.ForName("or"); ors != nil && len(ors.Children) > 0 {
 		for _, or := range ors.Children {
-			rn, err := parseAuthNode(s, typ, or.Value)
+			rn, err := parseAuthNode(s, typ, or.Value, dgraphPredicate, typeNameAst)
 			result.Or = append(result.Or, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
@@ -280,7 +297,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 
 	if ands := val.Children.ForName("and"); ands != nil && len(ands.Children) > 0 {
 		for _, and := range ands.Children {
-			rn, err := parseAuthNode(s, typ, and.Value)
+			rn, err := parseAuthNode(s, typ, and.Value, dgraphPredicate, typeNameAst)
 			result.And = append(result.And, rn)
 			errResult = AppendGQLErrs(errResult, err)
 		}
@@ -296,7 +313,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		len(not.Children) == 1 && not.Children[0] != nil {
 
 		var err error
-		result.Not, err = parseAuthNode(s, typ, not)
+		result.Not, err = parseAuthNode(s, typ, not, dgraphPredicate, typeNameAst)
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
@@ -309,8 +326,10 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 			aq.isRbac = true
 		} else {
 			aq.isRbac = false
-			aq.query, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+			aq.query, err = gqlValidateRule(s, typ, rule.Raw, rule.Position,
+				dgraphPredicate, typeNameAst)
 		}
+		result.Rule = aq
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
 	}
@@ -362,7 +381,9 @@ func gqlValidateRule(
 	s *ast.Schema,
 	typ *ast.Definition,
 	rule string,
-	position *ast.Position) (*query, error) {
+	position *ast.Position,
+	dgraphPredicate map[string]map[string]string,
+	typeNameAst map[string][]*ast.Definition) (*query, error) {
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
@@ -420,7 +441,11 @@ func gqlValidateRule(
 		op: &operation{op: op,
 			query: rule,
 			doc:   doc,
-			// need to fill in vars and schema at query time
+			inSchema: &schema{schema: s,
+				dgraphPredicate: dgraphPredicate,
+				typeNameAst:     typeNameAst,
+			},
+			// need to fill in vars at query time
 		},
 		sel: op.SelectionSet[0]}, nil
 }

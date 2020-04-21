@@ -513,7 +513,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 }
 
 type AuthState struct {
-	AuthVariables map[string]string
+	AuthVariables map[string]interface{}
 	RbacRule      map[int]RuleResult
 }
 
@@ -525,21 +525,22 @@ type RuleRepresentation interface {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
+	dgraphPredicate := dgraphMapping(s)
+	typeNameAst := typeMappings(s)
 
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
-	authRules, err := authRules(s)
+	authRules, err := authRules(s, dgraphPredicate, typeNameAst)
 	if err != nil {
 		return nil, err
 	}
 
-	dgraphPredicate := dgraphMapping(s)
 	return &schema{
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
 		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
-		typeNameAst:     typeMappings(s),
 		authRules:       authRules,
+		typeNameAst:     typeNameAst,
 	}, nil
 }
 

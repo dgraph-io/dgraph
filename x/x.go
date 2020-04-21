@@ -270,7 +270,7 @@ func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Contex
 	return ctx
 }
 
-func ExtractAuthVariables(ctx context.Context) (map[string]string, error) {
+func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	// Extract the jwt and unmarshal the jwt to get the auth variables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -301,7 +301,7 @@ func ExtractAuthVariables(ctx context.Context) (map[string]string, error) {
 		return nil, errors.Errorf("Error while parsing jwt auth token: ", err)
 	}
 
-	authVariables := make(map[string]string)
+	authVariables := make(map[string]interface{})
 	customClaims, ok := jsonMap["https://dgraph.io/jwt/claims"].(map[string]interface{})
 	if !ok {
 		return authVariables, nil

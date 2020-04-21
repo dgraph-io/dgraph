@@ -127,11 +127,9 @@ func (a *AuthResolver) AddMutaionProcedure(m MutationProcedure) {
 	a.mutationProcedures = append(a.mutationProcedures, m)
 }
 
-func GetFilters(aq *schema.AuthQuery, av map[string]string) *gql.FilterTree {
-	// TODO
-	q := rewriteAsQuery(aq.GetQuery())
-	fmt.Println(dgraph.AsString(q))
-	return &gql.FilterTree{}
+func GetFilters(aq *schema.AuthQuery, av map[string]interface{}) *gql.FilterTree {
+	q := rewriteAsQuery(aq.GetQuery(av))
+	return q.Filter
 }
 
 func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree {
@@ -196,11 +194,11 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 	return GetFilters(r.Rule, authState.AuthVariables)
 }
 
-func BuildQuery(aq *schema.AuthQuery, id int, av map[string]string) *gql.GraphQuery {
+func BuildQuery(aq *schema.AuthQuery, id int, av map[string]interface{}) *gql.GraphQuery {
 	// TODO
-	q := rewriteAsQuery(aq.GetQuery())
+	q := rewriteAsQuery(aq.GetQuery(av))
 	fmt.Println(dgraph.AsString(q))
-	return &gql.GraphQuery{}
+	return q
 }
 
 func GetQueries(r *schema.RuleNode, authState *schema.AuthState) []*gql.GraphQuery {
