@@ -1382,17 +1382,6 @@ func (hr *httpResolver) rewriteAndExecute(
 		return emptyResult(resp.Errors)
 	}
 
-	// We need array response for the completer to complete the response. So, if get an array
-	// response we just simply return otherwise, we'll make it as array.
-	// we need to change the query field name as well. for eg, remote query name can be RemoteHello
-	// and our local query name is LocalQuery,so we need to change the RemoteHello to LocalQuery.
-	castedData := make(map[string]interface{})
-	if _, ok := data2.([]interface{}); ok {
-		castedData[field.Name()] = data2
-	} else {
-		castedData[field.Name()] = []interface{}{data2}
-	}
-
 	return &Resolved{
 		Data:  map[string]interface{}{field.Name(): data2},
 		Field: field,
