@@ -757,22 +757,19 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 		remoteQuery := graphqlArg.Value.Children.ForName("query").Raw
 		queryEndIndex := strings.Index(remoteQuery, "(")
 		fconf.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
-		argMap := f.field.ArgumentMap(f.op.vars)
 
 		for _, arg := range f.field.Definition.Arguments {
-			val, ok := argMap[arg.Name]
-			if !ok {
-				continue
-			}
+			val := f.field.Arguments.ForName(arg.Name)
 			value := ""
-			if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
-				if val == nil {
-					val = "null"
-				}
-				value = `"` + fmt.Sprintf("%+v", val) + `"`
+			if val == nil {
+				value = `"null"`
+			} else {
+				value = fmt.Sprintf("%+v", val.Value)
 			}
-			remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
+			remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name,
+				value)
 		}
+
 		buf := &bytes.Buffer{}
 		buildGraphqlRequestFields(buf, f.field)
 		remoteQuery += buf.String()

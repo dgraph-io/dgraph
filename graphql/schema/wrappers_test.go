@@ -17,67 +17,69 @@
 package schema
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
 	schemaStr := `
-type Author {
-        id: ID!
-
-        name: String! @search(by: [hash, trigram])
-        dob: DateTime @search
-        reputation: Float @search
-        posts: [Post!] @hasInverse(field: author)
-}
-
-type Post {
-        postID: ID!
-        postType: PostType @search
-        author: Author! @hasInverse(field: posts)
-}
-
-enum PostType {
-        Fact
-        Question
-        Opinion
-}
-
-interface Employee {
-        ename: String!
-}
-
-interface Character {
-        id: ID!
-        name: String! @search(by: [exact])
-        appearsIn: [Episode!] @search
-}
-
-type Human implements Character & Employee {
-        starships: [Starship]
-        totalCredits: Float
-}
-
-type Droid implements Character {
-        primaryFunction: String
-}
-
-enum Episode {
-        NEWHOPE
-        EMPIRE
-        JEDI
-}
-
-type Starship {
-        id: ID!
-        name: String! @search(by: [term])
-        length: Float
-}`
+ type Author {
+		 id: ID!
+ 
+		 name: String! @search(by: [hash, trigram])
+		 dob: DateTime @search
+		 reputation: Float @search
+		 posts: [Post!] @hasInverse(field: author)
+ }
+ 
+ type Post {
+		 postID: ID!
+		 postType: PostType @search
+		 author: Author! @hasInverse(field: posts)
+ }
+ 
+ enum PostType {
+		 Fact
+		 Question
+		 Opinion
+ }
+ 
+ interface Employee {
+		 ename: String!
+ }
+ 
+ interface Character {
+		 id: ID!
+		 name: String! @search(by: [exact])
+		 appearsIn: [Episode!] @search
+ }
+ 
+ type Human implements Character & Employee {
+		 starships: [Starship]
+		 totalCredits: Float
+ }
+ 
+ type Droid implements Character {
+		 primaryFunction: String
+ }
+ 
+ enum Episode {
+		 NEWHOPE
+		 EMPIRE
+		 JEDI
+ }
+ 
+ type Starship {
+		 id: ID!
+		 name: String! @search(by: [term])
+		 length: Float
+ }`
 
 	schHandler, errs := NewHandler(schemaStr)
 	require.NoError(t, errs)
@@ -149,57 +151,57 @@ type Starship {
 
 func TestDgraphMapping_WithDirectives(t *testing.T) {
 	schemaStr := `
-	type Author @dgraph(type: "dgraph.author") {
-			id: ID!
-
-			name: String! @search(by: [hash, trigram])
-			dob: DateTime @search
-			reputation: Float @search
-			posts: [Post!] @hasInverse(field: author)
-	}
-
-	type Post @dgraph(type: "dgraph.Post") {
-			postID: ID!
-			postType: PostType @search @dgraph(pred: "dgraph.post_type")
-			author: Author! @hasInverse(field: posts) @dgraph(pred: "dgraph.post_author")
-	}
-
-	enum PostType {
-			Fact
-			Question
-			Opinion
-	}
-
-	interface Employee @dgraph(type: "dgraph.employee.en") {
-			ename: String!
-	}
-
-	interface Character @dgraph(type: "performance.character") {
-			id: ID!
-			name: String! @search(by: [exact])
-			appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
-	}
-
-	type Human implements Character & Employee {
-			starships: [Starship]
-			totalCredits: Float @dgraph(pred: "credits")
-	}
-
-	type Droid implements Character @dgraph(type: "roboDroid") {
-			primaryFunction: String
-	}
-
-	enum Episode {
-			NEWHOPE
-			EMPIRE
-			JEDI
-	}
-
-	type Starship @dgraph(type: "star.ship") {
-			id: ID!
-			name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
-			length: Float
-	}`
+	 type Author @dgraph(type: "dgraph.author") {
+			 id: ID!
+ 
+			 name: String! @search(by: [hash, trigram])
+			 dob: DateTime @search
+			 reputation: Float @search
+			 posts: [Post!] @hasInverse(field: author)
+	 }
+ 
+	 type Post @dgraph(type: "dgraph.Post") {
+			 postID: ID!
+			 postType: PostType @search @dgraph(pred: "dgraph.post_type")
+			 author: Author! @hasInverse(field: posts) @dgraph(pred: "dgraph.post_author")
+	 }
+ 
+	 enum PostType {
+			 Fact
+			 Question
+			 Opinion
+	 }
+ 
+	 interface Employee @dgraph(type: "dgraph.employee.en") {
+			 ename: String!
+	 }
+ 
+	 interface Character @dgraph(type: "performance.character") {
+			 id: ID!
+			 name: String! @search(by: [exact])
+			 appearsIn: [Episode!] @search @dgraph(pred: "appears_in")
+	 }
+ 
+	 type Human implements Character & Employee {
+			 starships: [Starship]
+			 totalCredits: Float @dgraph(pred: "credits")
+	 }
+ 
+	 type Droid implements Character @dgraph(type: "roboDroid") {
+			 primaryFunction: String
+	 }
+ 
+	 enum Episode {
+			 NEWHOPE
+			 EMPIRE
+			 JEDI
+	 }
+ 
+	 type Starship @dgraph(type: "star.ship") {
+			 id: ID!
+			 name: String! @search(by: [term]) @dgraph(pred: "star.ship.name")
+			 length: Float
+	 }`
 
 	schHandler, errs := NewHandler(schemaStr)
 	require.NoError(t, errs)
@@ -272,11 +274,11 @@ func TestDgraphMapping_WithDirectives(t *testing.T) {
 func TestCheckNonNulls(t *testing.T) {
 
 	gqlSchema, err := FromString(`
-	type T {
-		req: String!
-		notReq: String
-		alsoReq: String!
-	}`)
+	 type T {
+		 req: String!
+		 notReq: String
+		 alsoReq: String!
+	 }`)
 	require.NoError(t, err)
 
 	tcases := map[string]struct {
@@ -478,7 +480,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		{
 			"parses body template with an array correctly",
 			`{ author: $id, admin: $admin, post: { id: $postID, comments: [$text] },
-			   age: $age}`,
+				age: $age}`,
 			map[string]interface{}{"author": "$id", "admin": "$admin",
 				"post": map[string]interface{}{"id": "$postID",
 					"comments": []interface{}{"$text"}}, "age": "$age"},
@@ -488,7 +490,7 @@ func TestParseBodyTemplate(t *testing.T) {
 		{
 			"parses body template with an array of object correctly",
 			`{ author: $id, admin: $admin, post: { id: $postID, comments: [{ text: $text }] },
-			   age: $age}`,
+				age: $age}`,
 			map[string]interface{}{"author": "$id", "admin": "$admin",
 				"post": map[string]interface{}{"id": "$postID",
 					"comments": []interface{}{map[string]interface{}{"text": "$text"}}}, "age": "$age"},
@@ -648,4 +650,21 @@ func TestSubstituteVarsInURL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBuildGraphqlRequestFields(t *testing.T) {
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: `query { getUser(id: "Df") {
+		 name
+		 counterculture{
+			 name
+			 region{
+				 code
+			 }
+		 }
+	 } }`})
+	require.Nil(t, gqlErr)
+	remoteQuery := doc.Operations[0].SelectionSet[0].(*ast.Field)
+	buf := &bytes.Buffer{}
+	buildGraphqlRequestFields(buf, remoteQuery)
+	require.Equal(t, "{\nname\ncounterculture{\nname\nregion{\ncode\n}\n}\n}", buf.String())
 }
