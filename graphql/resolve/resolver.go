@@ -673,29 +673,35 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	if fconf.Operation == "batch" {
 		b, err := json.Marshal(body)
 		if err != nil {
-			err = errors.Wrapf(err, "while json marshaling body: %s", b)
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
+				"input: %s returned an error: %s for field: %s within type: %s.", b, err, f.Name(),
+				f.GetObjectName())
+			errCh <- x.GqlErrorList{gqlErr.WithLocations(f.Location())}
 			return
 		}
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
-			err = errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because external request"+
+				" returned an error: %s for field: %s within type: %s.", err, f.Name(),
+				f.GetObjectName())
+			errCh <- x.GqlErrorList{gqlErr.WithLocations(f.Location())}
 			return
 		}
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			err = errors.Errorf("while json unmarshaling result from remote endpoint: %s for"+
-				" field: %s within type: %s", b, f.Name(), f.GetObjectName())
-			errCh <- x.GqlErrorList{x.GqlErrorf(err.Error()).WithLocations(f.Location())}
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+				" result: %s of external request failed with error: %s for field: %s within "+
+				"type: %s.", b, err, f.Name(), f.GetObjectName())
+			errCh <- x.GqlErrorList{gqlErr.WithLocations(f.Location())}
 			return
 		}
 
 		if len(result) != len(vals) {
-			gqlErr := x.GqlErrorf("expected result to be of size %v, got: %v for field: %s",
-				len(vals), len(result), f.Name()).WithLocations(f.Location())
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of"+
+				"external request to be of size %v, got: %v for field: %s within type: %s.",
+				len(vals), len(result), f.Name(), f.GetObjectName()).WithLocations(f.Location())
 			errCh <- x.GqlErrorList{gqlErr}
 			return
 		}
@@ -721,8 +727,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
-				errs[idx] = x.GqlErrorf("while json marshaling input: %+v to resolve "+
-					"field: %s", input, f.Name()).WithLocations(f.Location())
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json "+
+					"marshaling input: %s returned an error: %s for field: %s within type: %s,"+
+					" index: %v.", b, err, f.Name(), f.GetObjectName(), idx)
 				return
 			}
 
@@ -730,23 +737,26 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
 			if err != nil {
 				mu.RUnlock()
-				errs[idx] = x.GqlErrorf("while substituting variables in URL to resolve"+
-					" field: %s, err: %s", f.Name(), err).WithLocations(f.Location())
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed while substituting "+
+					"variables in URL with an error: %s for field: %s within type: %s, index: %v.",
+					err, f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
 				return
 			}
 			mu.RUnlock()
 
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
-				errs[idx] = x.GqlErrorf("while making request to resolve field: %s, err: %s",
-					f.Name(), err).WithLocations(f.Location())
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because external request"+
+					" returned an error: %s for field: %s within type: %s, index: %v.", err,
+					f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
 				return
 			}
 
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
-				errs[idx] = x.GqlErrorf("while json unmarshaling result from remote endpoint: %s"+
-					" for field: %s within type: %s, index: %v", b, f.Name(), f.GetObjectName(),
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+					" result: %s of external request failed with error: %s for field: %s within "+
+					"type: %s, index: %v.", b, err, f.Name(), f.GetObjectName(),
 					idx).WithLocations(f.Location())
 				return
 			}
