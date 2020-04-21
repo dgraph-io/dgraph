@@ -67,12 +67,22 @@ const (
 		native: String
 		rtl: Int
 	  }
-	  
-	  
+
 	  type State @remote {
 		code: String
 		name: String
 		country: Country
+	  }
+
+	  input CountryInput {
+		code: String!
+		name: String!
+		states: [StateInput]
+	  }
+
+	  input StateInput {
+		code: String!
+		name: String!
 	  }
  `
 )
@@ -91,6 +101,11 @@ func updateSchema(t *testing.T, sch string) *common.GraphQLResponse {
 	return add.ExecuteAsPost(t, alphaAdminURL)
 }
 
+func updateSchemaRequireNoGQLErrors(t *testing.T, sch string) {
+	resp := updateSchema(t, sch)
+	common.RequireNoGQLErrors(t, resp)
+}
+
 func TestCustomGetQuery(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
@@ -99,7 +114,7 @@ func TestCustomGetQuery(t *testing.T) {
 				 method: "GET"
 		 })
 	 }`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	query := `
 	 query {
@@ -131,7 +146,7 @@ func TestCustomPostQuery(t *testing.T) {
 				 method: "POST"
 		 })
 	 }`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	query := `
 	 query {
@@ -164,7 +179,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 forwardHeaders: ["X-App-Token", "X-User-Id"]
 		 })
 	 }`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	query := `
 	 query {
@@ -216,7 +231,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 		})
 	}`
 
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	req, err := http.NewRequest(http.MethodOptions, alphaURL, nil)
 	require.NoError(t, err)
@@ -246,7 +261,7 @@ func addTeachers(t *testing.T) []*teacher {
 	}
 
 	result := addTeacherParams.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddTeacher struct {
@@ -291,7 +306,7 @@ func addSchools(t *testing.T, teachers []*teacher) []*school {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddSchool struct {
@@ -334,7 +349,7 @@ func addUsers(t *testing.T, schools []*school) []*user {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nilf(t, result.Errors, "%+v", result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddUser struct {
@@ -379,7 +394,7 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{
 		 "queryUser": [
@@ -555,7 +570,7 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	}
 
 	result = params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected = `{
 		 "getUser": {
@@ -670,7 +685,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 	 }`
 
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
@@ -743,46 +758,73 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 func TestForInvalidCustomQuery(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/noquery", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
-	`
+		getCountry(id: ID!): Country! @custom(http: {
+										url: "http://mock:8888/noquery",
+										method: "POST",
+										forwardHeaders: ["Content-Type"],
+										graphql: "query { country(code: $id) }"
+									})
+	}`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; country is not present in remote schema\n")
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+		"; Field getCountry: @custom directive: graphql; given query: country is not present in"+
+		" remote schema.\n", res.Errors[0].Error())
 }
 
-func TestForInvalidArguement(t *testing.T) {
+func TestForInvalidArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidargument", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
-	`
+		getCountry(id: ID!): Country! @custom(http: {
+										url: "http://mock:8888/invalidargument",
+										method: "POST",
+										forwardHeaders: ["Content-Type"],
+										graphql: "query { country(code: $id) }"
+									})
+	}`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; code arg not present in the remote query country\n")
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+		"; Field getCountry: @custom directive: graphql; given query: country: arg code not"+
+		" present in remote query.\n", res.Errors[0].Error())
 }
 
 func TestForInvalidType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/invalidtype", method: "POST",forwardHeaders: ["Content-Type"]}, graphql: {query: "country(code: $id)"})
-	}	
-	`
+		getCountry(id: ID!): Country! @custom(http: {
+										url: "http://mock:8888/invalidtype",
+										method: "POST",
+										forwardHeaders: ["Content-Type"],
+										graphql: "query { country(code: $id) }"
+									})
+	}`
 	res := updateSchema(t, schema)
-	require.Equal(t, res.Errors[0].Error(), "couldn't rewrite mutation updateGQLSchema because input:46: Type Query; Field getCountry; expected type for variable  $id is Int. But got ID!\n")
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
+		"; Field getCountry: @custom directive: graphql; given query: country: type mismatch for"+
+		" variable $id; expected: Int!, got: ID!.\n", res.Errors[0].Error())
 }
 
 func TestCustomLogicGraphql(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountry", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
-	`
-	res := updateSchema(t, schema)
-	require.Nil(t, res.Errors)
+		getCountry(id: ID!): Country! @custom(http: {
+										url: "http://mock:8888/validcountry",
+										method: "POST",
+										forwardHeaders: ["Content-Type"],
+										graphql: "query { country(code: $id) }"
+									})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
 	query := `
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
@@ -791,23 +833,24 @@ func TestCustomLogicGraphql(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `
-	{"getCountry":{"code":"BI","name":"Burundi"}}
-	`)
+	require.JSONEq(t, string(result.Data), `{"getCountry":{"code":"BI","name":"Burundi"}}`)
 }
 
 func TestCustomLogicGraphqlWithError(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {url: "http://mock:8888/validcountrywitherror", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}	
-	`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		getCountry(id: ID!): Country! @custom(http: {
+										url: "http://mock:8888/validcountrywitherror",
+										method: "POST",
+										graphql: "query { country(code: $id) }"
+									})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
 	query := `
 	query {
 		getCountry(id: "BI"){
 			code
-			name 
+			name
 		}
 	}`
 	params := &common.GraphQLParams{
@@ -815,19 +858,20 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.JSONEq(t, string(result.Data), `
-	{"getCountry":{"code":"BI","name":"Burundi"}}
-	`)
+	require.JSONEq(t, string(result.Data), `{"getCountry":{"code":"BI","name":"Burundi"}}`)
 	require.Equal(t, "dummy error", result.Errors.Error())
 }
 
 func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/validcountries", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}
-	`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		getCountries(id: ID!): [Country] @custom(http: {
+										url: "http://mock:8888/validcountries",
+										method: "POST",
+										graphql: "query { country(code: $id) }"
+									})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
 	query := `
 	query {
 		getCountries(id: "BI"){
@@ -840,23 +884,20 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.JSONEq(t, string(result.Data), `
-	{"getCountries":[
-		{
-		  "name": "Burundi",
-		  "code": "BI"
-		}
-	  ]}
-	`)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, string(result.Data), `{"getCountries":[{"name":"Burundi","code":"BI"}]}`)
 }
 
 func TestCustomLogicWithErrorResponse(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountries(id: ID!): [Country] @custom(http: {url: "http://mock:8888/graphqlerr", method: "POST"}, graphql: {query: "country(code: $id)"})
-	}
-	`
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		getCountries(id: ID!): [Country] @custom(http: {
+										url: "http://mock:8888/graphqlerr",
+										method: "POST",
+										graphql: "query { country(code: $id) }"
+									})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
 	query := `
 	query {
 		getCountries(id: "BI"){
@@ -869,6 +910,7 @@ func TestCustomLogicWithErrorResponse(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
+	require.Equal(t, `{"getCountries":[]}`, string(result.Data))
 	require.Equal(t, "dummy error", result.Errors.Error())
 }
 
@@ -891,7 +933,7 @@ func addEpisode(t *testing.T, name string) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddEpisode struct {
@@ -927,7 +969,7 @@ func addCharacter(t *testing.T, name string, episodes interface{}) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	var res struct {
 		AddCharacter struct {
@@ -962,7 +1004,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					})
 		episodes: [Episode]
 	}`
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	ep1 := "episode-1"
 	ep2 := "episode-2"
@@ -992,7 +1034,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `{
 		"queryCharacter": [
@@ -1068,10 +1110,10 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					})
 		episodes: [Episode]
 	}`
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	result = params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 	testutil.CompareJSON(t, expected, string(result.Data))
 
 }
@@ -1095,7 +1137,7 @@ func TestCustomPostMutation(t *testing.T) {
 			body: "{ movies: $input}"
         })
 	}`
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1120,7 +1162,7 @@ func TestCustomPostMutation(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `
 	{
@@ -1164,7 +1206,7 @@ func TestCustomPatchMutation(t *testing.T) {
 			body: "$input"
         })
 	}`
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1187,7 +1229,7 @@ func TestCustomPatchMutation(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `
 	{
@@ -1214,7 +1256,7 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
 			forwardHeaders: ["X-App-Token", "X-User-Id"]
         })
 	}`
-	updateSchema(t, schema)
+	updateSchemaRequireNoGQLErrors(t, schema)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1232,7 +1274,7 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	common.RequireNoGQLErrors(t, result)
 
 	expected := `
 	{
@@ -1240,6 +1282,121 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
         "id": "0x1",
         "name": "Mov1"
       }
+    }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
+func TestCustomGraphqlMissingMutation(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+		addCountry(input: CountryInput!): Country! @custom(http: {
+										url: "http://mock:8888/setCountry",
+										method: "POST",
+										graphql: "mutation { putCountry(country: $input) }"
+									})
+	}`
+	res := updateSchema(t, schema)
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+		"; Field addCountry: @custom directive: graphql; given mutation: putCountry is not"+
+		" present in remote schema.\n", res.Errors[0].Error())
+}
+
+func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+		addCountry(input: CountryInput!): Movie! @custom(http: {
+										url: "http://mock:8888/setCountry",
+										method: "POST",
+										graphql: "mutation { setCountry(country: $input) }"
+									})
+	}`
+	res := updateSchema(t, schema)
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: return type"+
+		" mismatch; expected: Country!, got: Movie!.\n", res.Errors[0].Error())
+}
+
+func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+		addCountry(input: CountryInput!): Country! @custom(http: {
+										url: "http://mock:8888/setCountry",
+										method: "POST",
+										graphql: "mutation { setCountry() }"
+									})
+	}`
+	res := updateSchema(t, schema)
+	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
+	require.Len(t, res.Errors, 1)
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:59: Type Mutation"+
+		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: required arg"+
+		" country is missing.\n", res.Errors[0].Error())
+}
+
+func TestCustomGraphqlMutation(t *testing.T) {
+	schema := customTypes + `
+	type Mutation {
+		addCountry(input: CountryInput!): Country! @custom(http: {
+										url: "http://mock:8888/setCountry",
+										method: "POST",
+										graphql: "mutation { setCountry(country: $input) }"
+									})
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation addCountry($input: CountryInput!) {
+			addCountry(input: $input) {
+				code
+				name
+				states {
+					code
+					name
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"input": map[string]interface{}{
+				"code": "IN",
+				"name": "India",
+				"states": []interface{}{
+					map[string]interface{}{
+						"code": "RJ",
+						"name": "Rajasthan",
+					},
+					map[string]interface{}{
+						"code": "KA",
+						"name": "Karnataka",
+					},
+				},
+			},
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	expected := `
+	{
+		"addCountry": {
+			"code": "IN",
+			"name": "India",
+			"states": [
+				{
+					"code": "RJ",
+					"name": "Rajasthan"
+				},
+				{
+					"code": "KA",
+					"name": "Karnataka"
+				}
+			]
+		}
     }`
 	require.JSONEq(t, expected, string(result.Data))
 }

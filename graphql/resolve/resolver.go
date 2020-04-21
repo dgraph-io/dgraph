@@ -208,16 +208,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 			return NewHTTPQueryResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, StdQueryCompletion(), false)
-		})
-	}
-
-	for _, q := range s.Queries(schema.GraphqlQuery) {
-		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPQueryResolver(&http.Client{
-				// TODO - This can be part of a config later.
-				Timeout: time.Minute,
-			}, StdQueryCompletion(), true)
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -244,7 +235,7 @@ func (rf *resolverFactory) WithConventionResolvers(
 			return NewHTTPMutationResolver(&http.Client{
 				// TODO - This can be part of a config later.
 				Timeout: time.Minute,
-			}, StdQueryCompletion(), false)
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -651,7 +642,7 @@ func copyTemplate(input interface{}) (interface{}, error) {
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
-	fconf, _ := f.CustomHTTPConfig(false)
+	fconf, _ := f.CustomHTTPConfig()
 
 	// Here we build the array of objects which is sent as the body for the request.
 	body := make([]interface{}, len(vals))
@@ -1228,20 +1219,19 @@ func maxPathLength(f schema.Field) int {
 type httpResolver struct {
 	*http.Client
 	resultCompleter ResultCompleter
-	graphql         bool
 }
 
 type httpQueryResolver httpResolver
 type httpMutationResolver httpResolver
 
 // NewHTTPQueryResolver creates a resolver that can resolve GraphQL query from an HTTP endpoint
-func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter, graphql bool) QueryResolver {
-	return &httpQueryResolver{hc, rc, graphql}
+func NewHTTPQueryResolver(hc *http.Client, rc ResultCompleter) QueryResolver {
+	return &httpQueryResolver{hc, rc}
 }
 
 // NewHTTPMutationResolver creates a resolver that resolves GraphQL mutation from an HTTP endpoint
-func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter, graphql bool) MutationResolver {
-	return &httpMutationResolver{hc, rc, graphql}
+func NewHTTPMutationResolver(hc *http.Client, rc ResultCompleter) MutationResolver {
+	return &httpMutationResolver{hc, rc}
 }
 
 func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolved {
@@ -1279,37 +1269,37 @@ func makeRequest(client *http.Client, method, url, body string,
 	return b, err
 }
 
-func (hr *httpResolver) rewriteAndExecute(
-	ctx context.Context, field schema.Field) *Resolved {
+func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Field) *Resolved {
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
 			Data:  map[string]interface{}{field.Name(): nil},
 			Field: field,
-			Err:   err,
+			Err:   schema.AsGQLErrors(err),
 		}
 	}
 
-	hrc, err := field.CustomHTTPConfig(hr.graphql)
+	hrc, err := field.CustomHTTPConfig()
 	if err != nil {
 		return emptyResult(err)
 	}
 
-	if !hr.graphql {
-		var body string
-		if hrc.Template != nil {
-			b, err := json.Marshal(*hrc.Template)
-			if err != nil {
-				return emptyResult(err)
-			}
-			body = string(b)
-		}
-		res, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+	var body string
+	if hrc.Template != nil {
+		b, err := json.Marshal(*hrc.Template)
 		if err != nil {
 			return emptyResult(err)
 		}
+		body = string(b)
+	}
+	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
+	if err != nil {
+		return emptyResult(err)
+	}
 
+	// this means it had body and not graphql, so just unmarshal it and return
+	if hrc.RemoteGqlQueryName == "" {
 		var result map[string]interface{}
-		if err := json.Unmarshal(res, &result); err != nil {
+		if err := json.Unmarshal(b, &result); err != nil {
 			return emptyResult(err)
 		}
 		return &Resolved{
@@ -1318,29 +1308,22 @@ func (hr *httpResolver) rewriteAndExecute(
 		}
 	}
 
-	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, hrc.Body, hrc.ForwardHeaders)
-	if err != nil {
-		return emptyResult(err)
-	}
-
-	type graphqlResp struct {
+	// we will reach here if it was a graphql request
+	var resp struct {
 		Data   map[string]interface{} `json:"data,omitempty"`
 		Errors x.GqlErrorList         `json:"errors,omitempty"`
 	}
-
-	resp := &graphqlResp{}
-	err = json.Unmarshal(b, resp)
+	err = json.Unmarshal(b, &resp)
 	if err != nil {
-		resp.Errors = append(resp.Errors, schema.AsGQLErrors(err)...)
-		return emptyResult(resp.Errors)
+		return emptyResult(err)
 	}
-	data2, ok := resp.Data[hrc.RemoteQueryName]
+	data, ok := resp.Data[hrc.RemoteGqlQueryName]
 	if !ok {
 		return emptyResult(resp.Errors)
 	}
 
 	return &Resolved{
-		Data:  map[string]interface{}{field.Name(): data2},
+		Data:  map[string]interface{}{field.Name(): data},
 		Field: field,
 		Err:   resp.Errors,
 	}

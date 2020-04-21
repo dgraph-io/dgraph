@@ -255,15 +255,6 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
-// graphqlScalarType holds all the scalar types supported by the graphql spec.
-var graphqlScalarType = map[string]bool{
-	"Int":     true,
-	"Float":   true,
-	"String":  true,
-	"Boolean": true,
-	"ID":      true,
-}
-
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
@@ -302,6 +293,8 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	return dst
 }
 
+// expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
+// implementing types
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {
