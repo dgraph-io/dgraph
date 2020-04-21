@@ -147,8 +147,8 @@ func TestOrRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -167,8 +167,6 @@ func TestOrRBACFilter(t *testing.T) {
 }
 
 func rootGetFilter(t *testing.T, id uint64, user string) {
-	t.Skip()
-
 	testCases := []TestCase{}
 	query := `
 		getColumn(colID: {asc: name}) {
@@ -182,8 +180,8 @@ func rootGetFilter(t *testing.T, id uint64, user string) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -219,8 +217,8 @@ func TestRootFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role),  // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -258,8 +256,8 @@ func TestRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -308,8 +306,8 @@ func TestDeepFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -346,8 +344,8 @@ func TestAndRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -388,8 +386,8 @@ func TestAndFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -430,8 +428,8 @@ func TestDeepFieldFilters(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -467,8 +465,8 @@ func TestFieldFilters(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Authorization: getJWT(t, tcase.user, tcase.role),
-			Query:         query,
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
