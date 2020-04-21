@@ -624,9 +624,9 @@ func completeDgraphResult(
 		// case
 	}
 
-	gqlErr := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
-	if gqlErr != nil {
-		errs = append(errs, schema.AsGQLErrors(gqlErr)...)
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	if err != nil {
+		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
 
 	return &Resolved{
