@@ -10,6 +10,11 @@
   role: "USER"
   dgquery: |-
     query {
+      queryUser(func: type(User), orderasc: User.username) @filter(((eq(User.isPublic, true) OR eq(User.username, "user1")) AND eq(User.username, "user1"))) {
+        username : User.username
+        isPublic : User.isPublic
+        dgraph.uid : uid
+      }
     }
 
 -
@@ -23,6 +28,20 @@
   role: "USER"
   dgquery: |-
     query {
+      getProject(func: uid(0x1)) @filter((uid(rule_Project_1) AND type(Project))) {
+        name : Project.name
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
 
 
@@ -37,7 +56,19 @@
   role: "USER"
   dgquery: |-
     query {
+      getIssue(func: uid(0x1)) @filter((uid(rule_Issue_1) AND type(Issue))) {
+        msg : Issue.msg
+        dgraph.uid : uid
+      }
+      rule_Issue_1 as queryIssue(func: type(Issue)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1")) {
+          username : User.username
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Type Authorization AND dgquery, dgquery filter at root node, rbac rules false"
@@ -50,7 +81,24 @@
   role: "USER"
   dgquery: |-
     query {
+      getMovie(func: uid(0x1)) @filter(((eq(Movie.disabled, false) AND uid(rule_Movie_3)) AND type(Movie))) {
+        name : Movie.name
+        dgraph.uid : uid
+      }
+      rule_Movie_3 as queryMovie(func: type(Movie)) @cascade @filter(eq(Movie.disabled, false)) {
+        regionsAvailable : Movie.regionsAvailable {
+          users : Region.users @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
+
+
 
 -
   name: "Type Authorization filter at root node, rbac rules false"
@@ -63,7 +111,30 @@
   role: "USER"
   dgquery: |-
     query {
+      getTicket(func: uid(0x1)) @filter((uid(rule_Ticket_1) AND type(Ticket))) {
+        title : Ticket.title
+        dgraph.uid : uid
+      }
+      rule_Ticket_1 as queryTicket(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+                username : User.username
+                dgraph.uid : uid
+              }
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
+
+
 
 -
   name: "Type Authorization RBAC filter at root node, rbac rules false"
@@ -76,7 +147,12 @@
   role: "USER"
   dgquery: |-
     query {
+      getLog(func: uid(0x1)) @filter(type(Log)) {
+        logs : Log.logs
+        dgraph.uid : uid
+      }
     }
+
 
 
 -
@@ -85,9 +161,9 @@
     query {
       queryProject(filter: {name: {eq: "Project1"}}, order: {asc: name}) {
         name
-        columns(filter: {name: {eq: "Column1"}, order: {asc: name})
+        columns(filter: {name: {eq: "Column1"}}, order: {asc: name}) {
           name
-          tickets(filter: {name: {eq: "Ticket1", order: {asc: title}) {
+          tickets(filter: {title: {eq: "Ticket1"}}, order: {asc: title}) {
             id
             title
           }
@@ -97,7 +173,60 @@
   role: "USER"
   dgquery: |-
     query {
+      queryProject(func: type(Project), orderasc: Project.name) @filter((uid(rule_Project_1) AND eq(Project.name, "Project1"))) {
+        name : Project.name
+        columns : Project.columns @filter((uid(rule_Column_1) AND eq(Column.name, "Column1"))) (orderasc: Column.name) {
+          name : Column.name
+          tickets : Column.tickets @filter((uid(rule_Ticket_1) AND eq(Ticket.title, "Ticket1"))) (orderasc: Ticket.title) {
+            id : uid
+            title : Ticket.title
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Column_1 as queryColumn(func: type(Column)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+              username : User.username
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Ticket_1 as queryTicket(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+                username : User.username
+                dgraph.uid : uid
+              }
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Field authorization filters at root node, rbac rules false"
@@ -112,7 +241,18 @@
   role: "USER"
   dgquery: |-
     query {
+      getUser(func: eq(User.username, "user1")) @filter(((eq(User.isPublic, true) OR eq(User.username, "user1")) AND type(User))) {
+        username : User.username
+        age : val(getUser.age)
+        disabled : User.disabled
+        dgraph.uid : uid
+      }
+      getUser.age(func: type(User)) @cascade @filter(eq(User.username, "user1")) {
+        uid
+        getUser.age as User.age
+      }
     }
+
 
 -
   name: "Field authorization filters at deep node, rbac rules false"
@@ -122,7 +262,7 @@
         name
         roles {
           permissions
-          assingedTo {
+          assignedTo {
             username 
             age 
             disabled
@@ -133,7 +273,42 @@
   role: "USER"
   dgquery: |-
     query {
+      getProject(func: uid(0x1)) @filter((uid(rule_Project_1) AND type(Project))) {
+        name : Project.name
+        roles : Project.roles {
+          permissions : Role.permissions
+          assignedTo : Role.assignedTo @filter((eq(User.isPublic, true) OR eq(User.username, "user1"))) {
+            username : User.username
+            age : val(getProject.rolesassignedToage)
+            disabled : User.disabled
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      getProject.rolesassignedToage(func: type(Project)) @cascade {
+        uid
+        Project.roles {
+          uid
+          Role.assignedTo @filter(eq(User.username, "user1")) {
+            uid
+            getProject.rolesassignedToage as User.age
+          }
+        }
+      }
     }
+
 
 -
   name: "Type Authorization OR dgquery, rbac filter at root node, rbac rules true"
@@ -146,7 +321,22 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getProject(func: uid(0x1)) @filter((uid(rule_Project_1) AND type(Project))) {
+        name : Project.name
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 
 -
@@ -160,7 +350,19 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getIssue(func: uid(0x1)) @filter((uid(rule_Issue_1) AND type(Issue))) {
+        msg : Issue.msg
+        dgraph.uid : uid
+      }
+      rule_Issue_1 as queryIssue(func: type(Issue)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1")) {
+          username : User.username
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Type Authorization AND filter at root node, rbac rules true"
@@ -173,7 +375,22 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getMovie(func: uid(0x1)) @filter(((eq(Movie.disabled, false) AND uid(rule_Movie_3)) AND type(Movie))) {
+        name : Movie.name
+        dgraph.uid : uid
+      }
+      rule_Movie_3 as queryMovie(func: type(Movie)) @cascade @filter(eq(Movie.disabled, false)) {
+        regionsAvailable : Movie.regionsAvailable {
+          users : Region.users @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Type Authorization filter at root node, rbac rules true"
@@ -186,7 +403,28 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getTicket(func: uid(0x1)) @filter((uid(rule_Ticket_1) AND type(Ticket))) {
+        title : Ticket.title
+        dgraph.uid : uid
+      }
+      rule_Ticket_1 as queryTicket(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+                username : User.username
+                dgraph.uid : uid
+              }
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Type Authorization RBAC filter at root node, rbac rules true"
@@ -199,6 +437,10 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getLog(func: uid(0x1)) @filter(type(Log)) {
+        logs : Log.logs
+        dgraph.uid : uid
+      }
     }
 
 
@@ -208,9 +450,9 @@
     query {
       queryProject(filter: {name: {eq: "Project1"}}, order: {asc: name}) {
         name
-        columns(filter: {name: {eq: "Column1"}, order: {asc: name})
+        columns(filter: {name: {eq: "Column1"}}, order: {asc: name}) {
           name
-          tickets(filter: {name: {eq: "Ticket1", order: {asc: title}) {
+          tickets(filter: {title: {eq: "Ticket1"}}, order: {asc: title}) {
             id
             title
           }
@@ -220,7 +462,60 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      queryProject(func: type(Project), orderasc: Project.name) @filter((uid(rule_Project_1) AND eq(Project.name, "Project1"))) {
+        name : Project.name
+        columns : Project.columns @filter((uid(rule_Column_1) AND eq(Column.name, "Column1"))) (orderasc: Column.name) {
+          name : Column.name
+          tickets : Column.tickets @filter((uid(rule_Ticket_1) AND eq(Ticket.title, "Ticket1"))) (orderasc: Ticket.title) {
+            id : uid
+            title : Ticket.title
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Column_1 as queryColumn(func: type(Column)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+              username : User.username
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Ticket_1 as queryTicket(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+                username : User.username
+                dgraph.uid : uid
+              }
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
+
 
 -
   name: "Field authorization filters at root node, rbac rules true"
@@ -235,7 +530,18 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getUser(func: eq(User.username, "user1")) @filter(((eq(User.isPublic, true) OR eq(User.username, "user1")) AND type(User))) {
+        username : User.username
+        age : val(getUser.age)
+        disabled : User.disabled
+        dgraph.uid : uid
+      }
+      getUser.age(func: type(User)) @cascade @filter(eq(User.username, "user1")) {
+        uid
+        getUser.age as User.age
+      }
     }
+
 
 -
   name: "Field authorization filters at deep node, rbac rules true"
@@ -245,7 +551,7 @@
         name
         roles {
           permissions
-          assingedTo {
+          assignedTo {
             username 
             age 
             disabled
@@ -256,5 +562,40 @@
   role: "ADMIN"
   dgquery: |-
     query {
+      getProject(func: uid(0x1)) @filter((uid(rule_Project_1) AND type(Project))) {
+        name : Project.name
+        roles : Project.roles {
+          permissions : Role.permissions
+          assignedTo : Role.assignedTo @filter((eq(User.isPublic, true) OR eq(User.username, "user1"))) {
+            username : User.username
+            age : val(getProject.rolesassignedToage)
+            disabled : User.disabled
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      rule_Project_1 as queryProject(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permissions, [VIEW])) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1")) {
+            username : User.username
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      getProject.rolesassignedToage(func: type(Project)) @cascade {
+        uid
+        Project.roles {
+          uid
+          Role.assignedTo @filter(eq(User.username, "user1")) {
+            uid
+            getProject.rolesassignedToage as User.age
+          }
+        }
+      }
     }
+
 

@@ -76,7 +76,6 @@ func (aq *AuthQuery) IsDeepQuery() bool {
 			return true
 		}
 	}
-
 	return false
 }
 
@@ -109,7 +108,8 @@ type RuleNode struct {
 	Not  *RuleNode
 	Rule *AuthQuery
 
-	RuleID int
+	RuleID   int
+	RuleName string
 }
 
 type RuleResult int
@@ -131,6 +131,8 @@ type TypeAuth struct {
 	rules  *AuthContainer
 	fields map[string]*AuthContainer
 }
+
+var currRule = 0
 
 func (r *RuleNode) IsRBAC() bool {
 	for _, i := range r.Or {
@@ -209,6 +211,7 @@ func authRules(s *ast.Schema, dgraphPredicate map[string]map[string]string,
 	authRules := make(map[string]*TypeAuth)
 
 	for _, typ := range s.Types {
+		currRule = 0
 		name := typeName(typ)
 		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
 		auth := typ.Directives.ForName(authDirective)
@@ -279,7 +282,8 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value,
 
 	numChildren := 0
 	var errResult error
-	result := &RuleNode{}
+	currRule++
+	result := &RuleNode{RuleID: currRule, RuleName: typ.Name}
 
 	if ors := val.Children.ForName("or"); ors != nil && len(ors.Children) > 0 {
 		for _, or := range ors.Children {

@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
@@ -184,7 +183,7 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 		result.Func = &gql.Function{
 			Name: "uid",
 			Args: []gql.Arg{{
-				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
+				Value: fmt.Sprintf("rule_%s_%d", r.RuleName, r.RuleID),
 			}},
 		}
 
@@ -194,11 +193,11 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 	return GetFilters(r.Rule, authState.AuthVariables)
 }
 
-func BuildQuery(aq *schema.AuthQuery, id int, av map[string]interface{}) *gql.GraphQuery {
+func BuildQuery(aq *schema.AuthQuery, id int, typName string,
+	av map[string]interface{}) *gql.GraphQuery {
 	q := rewriteAsQuery(aq.GetQuery(av))
 	q.Cascade = true
-	q.Var = fmt.Sprintf("rule_%s_%d", aq.GetName(), id)
-	fmt.Println("Query", dgraph.AsString(q))
+	q.Var = fmt.Sprintf("rule_%s_%d", typName, id)
 	return q
 }
 
@@ -218,7 +217,8 @@ func GetQueries(r *schema.RuleNode, authState *schema.AuthState) []*gql.GraphQue
 	}
 
 	if r.Rule != nil && r.Rule.IsDeepQuery() {
-		if query := BuildQuery(r.Rule, r.RuleID, authState.AuthVariables); query != nil {
+		if query := BuildQuery(r.Rule, r.RuleID, r.RuleName,
+			authState.AuthVariables); query != nil {
 			list = append(list, query)
 		}
 	}
