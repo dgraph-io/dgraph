@@ -220,10 +220,10 @@
   response: |
     {
       "data":{
-        "country":{
+        "country":[{
           "name":"Burundi",
           "code":"BI"
-        }
+        }]
       },
       "errors":[
         {

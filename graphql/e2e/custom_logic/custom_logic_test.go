@@ -47,7 +47,6 @@ const (
 		name: String!
 		countries: [Country!]!
 	  }
-<<<<<<< HEAD
 	  
 	  input ContinentFilterInput {
 		code: StringQueryOperatorInput
@@ -60,22 +59,12 @@ const (
 		phone: String!
 		continent: Continent!
 		capital: String
-=======
-
-	  type Country @remote {
-		code: String
-		name: String
-		native: String
-		phone: String
-		continent: Continent
->>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		currency: String
 		languages: [Language!]!
 		emoji: String!
 		emojiU: String!
 		states: [State!]!
 	  }
-<<<<<<< HEAD
 	  
 	  input CountryFilterInput@remote {
 		code: StringQueryOperatorInput
@@ -85,27 +74,16 @@ const (
 	  
 	  type Language@remote {
 		code: ID!
-=======
-
-	  type Language @remote {
-		code: String
->>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		name: String
 		native: String
 		rtl: Boolean!
 	  }
-<<<<<<< HEAD
 	  
 	  input LanguageFilterInput@remote {
 		code: StringQueryOperatorInput
 	  }
 	  
 	  type State@remote {
-=======
-
-
-	  type State @remote {
->>>>>>> f52d89379aa642801b67d1453e214b2e9018ffc8
 		code: String
 		name: String!
 		country: Country!
