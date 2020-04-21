@@ -514,7 +514,7 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 
 type AuthState struct {
 	AuthVariables map[string]interface{}
-	RbacRule      map[int]RuleResult
+	RbacRule      map[string]RuleResult
 }
 
 type RuleRepresentation interface {
