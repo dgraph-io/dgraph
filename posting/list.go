@@ -982,16 +982,6 @@ func (l *List) Uids(opt ListOptions) (*pb.List, error) {
 	// Use approximate length for initial capacity.
 	res := make([]uint64, 0, len(l.mutationMap)+codec.ApproxLen(l.plist.Pack))
 	out := &pb.List{}
-	if len(l.mutationMap) == 0 && opt.Intersect != nil && len(l.plist.Splits) == 0 {
-		if opt.ReadTs < l.minTs {
-			l.RUnlock()
-			return out, ErrTsTooOld
-		}
-		algo.IntersectCompressedWith(l.plist.Pack, opt.AfterUid, opt.Intersect, out)
-		l.RUnlock()
-		return out, nil
-	}
-
 	err := l.iterate(opt.ReadTs, opt.AfterUid, func(p *pb.Posting) error {
 		if p.PostingType == pb.Posting_REF {
 			res = append(res, p.Uid)
