@@ -2047,8 +2047,8 @@ The disk metrics let you track the disk activity of the Dgraph process. Dgraph d
 directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
 read from and write to disk.
 
- Metrics                          | Description
- -------                          | -----------
+ Metrics                          	 | Description
+ -------                          	 | -----------
  `badger_v2_disk_reads_total`        | Total count of disk reads in Badger.
  `badger_v2_disk_writes_total`       | Total count of disk writes in Badger.
  `badger_v2_gets_total`              | Total count of calls to Badger's `get`.
