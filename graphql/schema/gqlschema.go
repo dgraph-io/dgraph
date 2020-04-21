@@ -302,6 +302,8 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	return dst
 }
 
+// expandSchema adds schemaExtras to the doc and adds any fields inherited from interfaces into
+// implementing types
 func expandSchema(doc *ast.SchemaDocument) {
 	docExtras, gqlErr := parser.ParseSchema(&ast.Source{Input: schemaExtras})
 	if gqlErr != nil {

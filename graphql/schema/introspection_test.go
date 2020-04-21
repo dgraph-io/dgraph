@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -254,4 +255,34 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")
 	require.NoError(t, err)
 	testutil.CompareJSON(t, string(expectedBuf), string(resp))
+}
+
+func Test(t *testing.T) {
+	queryDoc, err := parser.ParseQuery(&ast.Source{Input: `mutation team(
+$postID: Int){relatedUsers(id:$postID,id:$postID)@test}query{test()}`})
+	fmt.Println(err)
+	fmt.Println("**********Operations************")
+	fmt.Println(queryDoc.Operations)
+	fmt.Println(queryDoc.Operations[0].Name)
+	fmt.Println(queryDoc.Operations[0].Directives)
+	fmt.Println(queryDoc.Operations[0].Operation)
+	fmt.Println(queryDoc.Operations[0].VariableDefinitions)
+	fmt.Println(queryDoc.Operations[0].VariableDefinitions[0].Variable)
+	fmt.Println()
+	fmt.Println(queryDoc.Operations[1].Name)
+	fmt.Println(queryDoc.Operations[1].Directives)
+	fmt.Println(queryDoc.Operations[1].Operation)
+	fmt.Println(queryDoc.Operations[1].VariableDefinitions)
+	query := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
+	fmt.Println("**********Query************")
+	fmt.Println(query)
+	fmt.Println(query.Alias)
+	fmt.Println(query.SelectionSet)
+	fmt.Println(query.Arguments)
+	fmt.Println(query.Name)
+	fmt.Println(query.Definition)
+	fmt.Println(query.ObjectDefinition)
+	fmt.Println(query.Directives)
+	fmt.Println("**********Args************")
+	fmt.Println(query.Arguments[0].Name, query.Arguments[0].Value)
 }
