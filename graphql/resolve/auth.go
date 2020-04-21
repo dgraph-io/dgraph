@@ -126,7 +126,7 @@ func (a *AuthResolver) AddMutaionProcedure(m MutationProcedure) {
 	a.mutationProcedures = append(a.mutationProcedures, m)
 }
 
-func GetFilters(aq *schema.AuthQuery, av map[string]interface{}) *gql.FilterTree {
+func getQueryFilter(aq *schema.AuthQuery, av map[string]interface{}) *gql.FilterTree {
 	q := rewriteAsQuery(aq.GetQuery(av))
 	return q.Filter
 }
@@ -137,34 +137,23 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 	}
 
 	result := &gql.FilterTree{}
-	if len(r.Or) > 0 || len(r.And) > 0 {
-		result.Op = "or"
-		if len(r.And) > 0 {
-			result.Op = "and"
-		}
-		for _, i := range r.Or {
-			t := GetFilter(i, authState)
-			if t == nil {
-				continue
-			}
-			result.Child = append(result.Child, t)
-		}
-		for _, i := range r.And {
-			t := GetFilter(i, authState)
-			if t == nil {
-				continue
-			}
-			result.Child = append(result.Child, t)
-		}
-
-		if len(result.Child) == 0 {
+	if r.Rule != nil {
+		if r.IsRBAC() {
 			return nil
 		}
 
-		if len(result.Child) == 1 {
-			return result.Child[0]
+		if r.Rule.IsDeepQuery() {
+			result.Func = &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{
+					Value: fmt.Sprintf("rule_%s", r.RuleID),
+				}},
+			}
+
+			return result
 		}
-		return result
+
+		return getQueryFilter(r.Rule, authState.AuthVariables)
 	}
 
 	if r.Not != nil {
@@ -178,25 +167,36 @@ func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree 
 		}
 	}
 
-	if r.IsRBAC() {
+	result.Op = "or"
+	if len(r.And) > 0 {
+		result.Op = "and"
+	}
+
+	applyOnList := func(list []*schema.RuleNode) {
+		for _, i := range list {
+			t := GetFilter(i, authState)
+			if t == nil {
+				continue
+			}
+			result.Child = append(result.Child, t)
+		}
+	}
+
+	applyOnList(r.Or)
+	applyOnList(r.And)
+
+	if len(result.Child) == 0 {
 		return nil
 	}
 
-	if r.Rule.IsDeepQuery() {
-		result.Func = &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{
-				Value: fmt.Sprintf("rule_%s", r.RuleID),
-			}},
-		}
-
-		return result
+	if len(result.Child) == 1 {
+		return result.Child[0]
 	}
+	return result
 
-	return GetFilters(r.Rule, authState.AuthVariables)
 }
 
-func BuildQuery(aq *schema.AuthQuery, id string, av map[string]interface{}) *gql.GraphQuery {
+func buildQuery(aq *schema.AuthQuery, id string, av map[string]interface{}) *gql.GraphQuery {
 	q := rewriteAsQuery(aq.GetQuery(av))
 	q.Cascade = true
 	q.Var = fmt.Sprintf("rule_%s", id)
@@ -219,8 +219,7 @@ func GetQueries(r *schema.RuleNode, authState *schema.AuthState) []*gql.GraphQue
 	}
 
 	if r.Rule != nil && r.Rule.IsDeepQuery() {
-		if query := BuildQuery(r.Rule, r.RuleID,
-			authState.AuthVariables); query != nil {
+		if query := buildQuery(r.Rule, r.RuleID, authState.AuthVariables); query != nil {
 			list = append(list, query)
 		}
 	}
