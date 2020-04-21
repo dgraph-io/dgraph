@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-package auth
+package resolve
 
 import (
-	"fmt"
-
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -44,9 +42,7 @@ func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *s
 		return
 	}
 
-	fmt.Println("Here")
-
-	authFilter := rules.GetFilter(tnqp.authState)
+	authFilter := GetFilter(rules, tnqp.authState)
 	if gqlQuery.Filter != nil && authFilter != nil {
 		gqlQuery.Filter = &gql.FilterTree{
 			Op: "and",
@@ -59,7 +55,7 @@ func (tnqp *TypeNodeQueryProcedure) applyRule(gqlQuery *gql.GraphQuery, rules *s
 		gqlQuery.Filter = authFilter
 	}
 
-	tnqp.queries = append(tnqp.queries, rules.GetQueries(tnqp.authState)...)
+	tnqp.queries = append(tnqp.queries, GetQueries(rules, tnqp.authState)...)
 }
 
 func (tnqp *TypeNodeQueryProcedure) OnQueryRoot(gqlQuery *gql.GraphQuery, typ schema.Type) {

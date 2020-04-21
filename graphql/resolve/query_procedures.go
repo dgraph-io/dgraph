@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package resolve
 
 import (
 	"github.com/dgraph-io/dgraph/gql"

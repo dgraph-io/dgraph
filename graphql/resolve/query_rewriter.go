@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/auth"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -49,10 +48,10 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 	a := schema.AuthState{AuthVariables: authVariables, RbacRule: rbacRule}
 	sch := gqlQuery.Operation().Schema()
 
-	authResolver := auth.AuthResolver{}
+	authResolver := AuthResolver{}
 	authResolver.Init(&sch, &a)
-	authResolver.AddQueryProcedure(auth.NewTypeNodeQueryProcedure(auth.QueryRuleExtractor))
-	authResolver.AddQueryProcedure(auth.NewFieldQueryProcedure(auth.QueryRuleExtractor))
+	authResolver.AddQueryProcedure(NewTypeNodeQueryProcedure(QueryRuleExtractor))
+	authResolver.AddQueryProcedure(NewFieldQueryProcedure(QueryRuleExtractor))
 
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:

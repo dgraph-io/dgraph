@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package auth
+package resolve
 
 import (
 	"fmt"
@@ -67,7 +67,7 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 			}, query}
 
 			if !filterPut {
-				child.Filter = rule.GetFilter(fqp.authState)
+				child.Filter = GetFilter(rule, fqp.authState)
 				filterPut = true
 			}
 		}
@@ -88,12 +88,12 @@ func (fqp *FieldQueryProcedure) CreateQueryFromPath(path []*gql.GraphQuery,
 	}
 
 	if !filterPut {
-		last.Filter = rule.GetFilter(fqp.authState)
+		last.Filter = GetFilter(rule, fqp.authState)
 	}
 
 	path[len(path)-1].Attr = fmt.Sprintf("val(%s)", name)
 	fqp.queries = append(fqp.queries, last)
-	fqp.queries = append(fqp.queries, rule.GetQueries(fqp.authState)...)
+	fqp.queries = append(fqp.queries, GetQueries(rule, fqp.authState)...)
 }
 
 func (fqp *FieldQueryProcedure) OnField(path []*gql.GraphQuery, typ schema.Type,

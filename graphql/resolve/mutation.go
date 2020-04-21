@@ -206,17 +206,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Mutations: upsert.Mutations,
 	}
 
-<<<<<<< HEAD
-func performAuth(mutations []*dgoapi.Mutation) {
-
-}
-
-func (mr *mutationResolver) rewriteAndExecute(
-	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
-	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
-=======
 	mutResp, err := mr.executor.Execute(ctx, req)
->>>>>>> graphql/authorization
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -224,14 +214,6 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	}
 
-<<<<<<< HEAD
-	fmt.Println(mutations)
-
-	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
-	if err != nil {
-		return nil, resolverFailed,
-			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
-=======
 	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 	result := make(map[string]interface{})
 	if req.Query != "" && len(mutResp.GetJson()) != 0 {
@@ -240,7 +222,6 @@ func (mr *mutationResolver) rewriteAndExecute(
 					schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")),
 				resolverFailed
 		}
->>>>>>> graphql/authorization
 	}
 
 	var errs error
@@ -258,7 +239,8 @@ func (mr *mutationResolver) rewriteAndExecute(
 
 	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
-	numUidsField := mutation.NumUidsField()
+	var numUidsField schema.Field
+	//numUidsField := mutation.NumUidsField()
 	numUidsFieldRespName := schema.NumUid
 	numUids := 0
 	if numUidsField != nil {

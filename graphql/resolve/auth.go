@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
-package auth
+package resolve
 
 import (
+	"fmt"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -122,4 +124,102 @@ func (a *AuthResolver) AddQueryProcedure(q QueryProcedure) {
 
 func (a *AuthResolver) AddMutaionProcedure(m MutationProcedure) {
 	a.mutationProcedures = append(a.mutationProcedures, m)
+}
+
+func GetFilters(aq *schema.AuthQuery, av map[string]string) *gql.FilterTree {
+	// TODO
+	q := rewriteAsQuery(aq.GetQuery())
+	fmt.Println("Here", q)
+	return &gql.FilterTree{}
+}
+
+func GetFilter(r *schema.RuleNode, authState *schema.AuthState) *gql.FilterTree {
+	if val, ok := authState.RbacRule[r.RuleID]; ok && val != schema.Uncertain {
+		return nil
+	}
+
+	result := &gql.FilterTree{}
+	if len(r.Or) > 0 || len(r.And) > 0 {
+		result.Op = "or"
+		if len(r.And) > 0 {
+			result.Op = "and"
+		}
+		for _, i := range r.Or {
+			t := GetFilter(i, authState)
+			if t == nil {
+				continue
+			}
+			result.Child = append(result.Child, t)
+		}
+		for _, i := range r.And {
+			t := GetFilter(i, authState)
+			if t == nil {
+				continue
+			}
+			result.Child = append(result.Child, t)
+		}
+
+		if len(result.Child) == 0 {
+			return nil
+		}
+
+		return result
+	}
+
+	if r.Not != nil {
+		f := GetFilter(r.Not, authState)
+		if f == nil {
+			return f
+		}
+		return &gql.FilterTree{
+			Op:    "not",
+			Child: []*gql.FilterTree{f},
+		}
+	}
+
+	if r.IsRBAC() {
+		return nil
+	}
+
+	if r.Rule.IsDeepQuery() {
+		result.Func = &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{
+				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
+			}},
+		}
+
+		return result
+	}
+
+	return GetFilters(r.Rule, authState.AuthVariables)
+}
+
+func BuildQuery(aq *schema.AuthQuery, id int, av map[string]string) *gql.GraphQuery {
+	// TODO
+	return &gql.GraphQuery{}
+}
+
+func GetQueries(r *schema.RuleNode, authState *schema.AuthState) []*gql.GraphQuery {
+	var list []*gql.GraphQuery
+
+	for _, i := range r.Or {
+		list = append(list, GetQueries(i, authState)...)
+	}
+
+	for _, i := range r.And {
+		list = append(list, GetQueries(i, authState)...)
+	}
+
+	if r.Not != nil {
+		list = append(list, GetQueries(r.Not, authState)...)
+	}
+
+	if r.Rule != nil {
+		if query := BuildQuery(r.Rule, r.RuleID, authState.AuthVariables); query != nil {
+			list = append(list, query)
+		}
+	}
+
+	return list
 }

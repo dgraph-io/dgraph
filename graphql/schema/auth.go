@@ -17,11 +17,9 @@
 package schema
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -55,10 +53,8 @@ func (aq *AuthQuery) GetName() string {
 	return ""
 }
 
-func (aq *AuthQuery) GetFilters(av map[string]string) *gql.FilterTree {
-	q := RewriteAsQuery(aq.query)
-	fmt.Println("Here", q)
-	return &gql.FilterTree{}
+func (aq *AuthQuery) GetQuery() *query {
+	return aq.query
 }
 
 func (aq *AuthQuery) IsDeepQuery() bool {
@@ -154,30 +150,6 @@ func (node *RuleNode) GetRuleID() int {
 	return node.RuleID
 }
 
-func (r *RuleNode) GetQueries(authState *AuthState) []*gql.GraphQuery {
-	var list []*gql.GraphQuery
-
-	for _, i := range r.Or {
-		list = append(list, i.GetQueries(authState)...)
-	}
-
-	for _, i := range r.And {
-		list = append(list, i.GetQueries(authState)...)
-	}
-
-	if r.Not != nil {
-		list = append(list, r.Not.GetQueries(authState)...)
-	}
-
-	if r.Rule != nil {
-		//if query := r.Rule.BuildQueries(r.RuleID, authState.AuthVariables); query != nil {
-		//	list = append(list, query)
-		//}
-	}
-
-	return list
-}
-
 func (node *RuleNode) GetRBACRules(a *AuthState) {
 	a.RbacRule[node.RuleID] = Uncertain
 	valid := Uncertain
@@ -219,68 +191,6 @@ func (node *RuleNode) GetRBACRules(a *AuthState) {
 	if node.Rule != nil && node.Rule.IsRBAC() {
 		a.RbacRule[node.RuleID] = node.Rule.EvaluateRBACRule(a)
 	}
-}
-
-func (r *RuleNode) GetFilter(authState *AuthState) *gql.FilterTree {
-	if val, ok := authState.RbacRule[r.RuleID]; ok && val != Uncertain {
-		return nil
-	}
-
-	result := &gql.FilterTree{}
-	if len(r.Or) > 0 || len(r.And) > 0 {
-		result.Op = "or"
-		if len(r.And) > 0 {
-			result.Op = "and"
-		}
-		for _, i := range r.Or {
-			t := i.GetFilter(authState)
-			if t == nil {
-				continue
-			}
-			result.Child = append(result.Child, t)
-		}
-		for _, i := range r.And {
-			t := i.GetFilter(authState)
-			if t == nil {
-				continue
-			}
-			result.Child = append(result.Child, t)
-		}
-
-		if len(result.Child) == 0 {
-			return nil
-		}
-
-		return result
-	}
-
-	if r.Not != nil {
-		f := r.Not.GetFilter(authState)
-		if f == nil {
-			return f
-		}
-		return &gql.FilterTree{
-			Op:    "not",
-			Child: []*gql.FilterTree{f},
-		}
-	}
-
-	if r.IsRBAC() {
-		return nil
-	}
-
-	if r.Rule.IsDeepQuery() {
-		result.Func = &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{
-				Value: fmt.Sprintf("rule_%s_%d", r.Rule.GetName(), r.RuleID),
-			}},
-		}
-
-		return result
-	}
-
-	return r.Rule.GetFilters(authState.AuthVariables)
 }
 
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
