@@ -24,7 +24,6 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
 	"io"
 	"math"
 	"math/rand"
@@ -140,9 +139,6 @@ const (
 {"predicate":"dgraph.graphql.schema", "type": "string"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
-
-	CustomClaimsUrl = "https://dgraph.io/jwt/claims"
-	AuthJwtCtxKey   = "authorizationJwt"
 )
 
 var (
@@ -162,58 +158,6 @@ func ShouldCrash(err error) bool {
 		strings.Contains(errStr, "REUSE_ADDR") ||
 		strings.Contains(errStr, "NO_ADDR") ||
 		strings.Contains(errStr, "ENTERPRISE_LIMIT_REACHED")
-}
-
-// AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
-func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
-	authorizationJwt := r.Header.Get("X-Dgraph-AuthorizationToken")
-	if authorizationJwt == "" {
-		return ctx
-	}
-
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
-
-	md.Append(AuthJwtCtxKey, authorizationJwt)
-	ctx = metadata.NewIncomingContext(ctx, md)
-	return ctx
-}
-
-func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
-	// Extract the jwt and unmarshal the jwt to get the auth variables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, nil
-	}
-
-	jwtToken := md.Get(AuthJwtCtxKey)
-	if len(jwtToken) == 0 {
-		return nil, nil
-	} else if len(jwtToken) > 1 {
-		return nil, fmt.Errorf("invalid jwt auth token")
-	}
-
-	//TODO: Verify jwt tokens before parsing it.
-	tokens := strings.Split(jwtToken[0], ".")
-	if len(tokens) != 3 {
-		return nil, fmt.Errorf("invalid jwt auth token")
-	}
-
-	data, err := jwt.DecodeSegment(tokens[1])
-	if err != nil {
-		return nil, fmt.Errorf("error while decoding jwt auth token: %v", err)
-	}
-
-	jsonMap := make(map[string]interface{})
-	err = json.Unmarshal([]byte(data), &jsonMap)
-	if err != nil {
-		return nil, fmt.Errorf("error while parsing jwt auth token: %v", err)
-	}
-
-	authVariables := jsonMap[CustomClaimsUrl].(map[string]interface{})
-	return authVariables, nil
 }
 
 // WhiteSpace Replacer removes spaces and tabs from a string.
