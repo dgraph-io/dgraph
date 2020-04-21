@@ -625,8 +625,8 @@ func completeDgraphResult(
 	}
 
 	gqlErr := resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
-	if len(gqlErr) != 0 {
-		errs = append(errs, gqlErr...)
+	if gqlErr != nil {
+		errs = append(errs, schema.AsGQLErrors(gqlErr)...)
 	}
 
 	return &Resolved{
@@ -649,7 +649,7 @@ func copyTemplate(input interface{}) (interface{}, error) {
 	return result, nil
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan x.GqlErrorList) {
+func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig(false)
 
 	// Here we build the array of objects which is sent as the body for the request.
@@ -774,7 +774,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // }
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan x.GqlErrorList) {
+func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan error) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {
@@ -901,7 +902,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}) x.GqlErrorList {
+func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	if data == nil {
 		return nil
 	}
@@ -921,7 +922,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) x.GqlErrorList
 	// This mutex protects access to vals as it is concurrently read and written to by multiple
 	// goroutines.
 	mu := &sync.RWMutex{}
-	errCh := make(chan x.GqlErrorList, len(fields))
+	errCh := make(chan error, len(fields))
 	numRoutines := 0
 
 	for _, f := range fields {
@@ -938,11 +939,12 @@ func resolveCustomFields(fields []schema.Field, data interface{}) x.GqlErrorList
 		}
 	}
 
-	var errs x.GqlErrorList
-
+	var errs error
 	for i := 0; i < numRoutines; i++ {
 		if err := <-errCh; err != nil {
-			errs = append(errs, &x.GqlError{Message: err.Error()})
+			for _, e := range schema.AsGQLErrors(err) {
+				errs = schema.AppendGQLErrs(errs, e)
+			}
 		}
 	}
 
