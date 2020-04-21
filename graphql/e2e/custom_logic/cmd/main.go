@@ -316,7 +316,7 @@ func invalidArgument(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},
@@ -368,7 +368,7 @@ func invalidType(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},
@@ -423,7 +423,7 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},
@@ -490,7 +490,7 @@ func graphqlErrResponse(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},
@@ -554,7 +554,7 @@ func validCountryWithErrorResponse(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},
@@ -624,7 +624,7 @@ func validCountries(w http.ResponseWriter, r *http.Request) {
 					  "name": null,
 					  "ofType": {
 						"kind": "OBJECT",
-					    "name": "Country",
+						"name": "Country",
 						"ofType": null
 					  }
 					},

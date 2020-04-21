@@ -232,7 +232,7 @@ func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) error {
 	}
 
 	// check all non-null args required by remote query/mutation are present in given query/mutation
-	for remoteArgName, _ := range remoteQryRequiredArgs {
+	for _, remoteArgName := range remoteQryRequiredArgs {
 		_, ok := givenQryArgVals[remoteArgName]
 		if !ok {
 			return errors.Errorf("given %s: %s: required arg %s is missing.", operationType,
@@ -272,20 +272,20 @@ func getFieldArgDefsAsMap(fieldDef *ast.FieldDefinition) map[string]*ast.Argumen
 	return argMap
 }
 
-// getRemoteQueryArgsAsMap returns following maps:
-// 1. arg name -> Argument Definition in Gql introspection response format
-// 2. arg name -> bool, existence of key indicates that arg is NON_NULL
-func getRemoteQueryArgsAsMap(remoteQuery GqlField) (map[string]Args, map[string]bool) {
+// getRemoteQueryArgsAsMap returns following things:
+// 1. map of arg name -> Argument Definition in Gql introspection response format
+// 2. list of arg name for NON_NULL args
+func getRemoteQueryArgsAsMap(remoteQuery GqlField) (map[string]Args, []string) {
 	argDefMap := make(map[string]Args)
-	requiredArgMap := make(map[string]bool)
+	requiredArgs := make([]string, 0)
 
 	for _, arg := range remoteQuery.Args {
 		argDefMap[arg.Name] = arg
 		if arg.Type.Kind == "NON_NULL" {
-			requiredArgMap[arg.Name] = true
+			requiredArgs = append(requiredArgs, arg.Name)
 		}
 	}
-	return argDefMap, requiredArgMap
+	return argDefMap, requiredArgs
 }
 
 type IntrospectedSchema struct {
