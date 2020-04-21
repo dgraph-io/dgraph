@@ -119,7 +119,7 @@ func parseAuthDirective(
 func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNode, error) {
 
 	if len(val.Children) == 0 {
-		return nil, gqlerror.Errorf("Type %s: @auth query: no arguments - "+
+		return nil, gqlerror.Errorf("Type %s: @auth: no arguments - "+
 			"there should be only one of \"and\", \"or\", \"not\" and \"rule\"", typ.Name)
 	}
 
@@ -135,7 +135,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		}
 		if len(result.Or) < 2 {
 			errResult = AppendGQLErrs(errResult, gqlerror.Errorf(
-				`Type %s: @auth query: 'OR' should contain at least two rules`, typ.Name))
+				`Type %s: @auth: 'OR' should contain at least two rules`, typ.Name))
 		}
 		numChildren++
 	}
@@ -148,7 +148,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		}
 		if len(result.And) < 2 {
 			errResult = AppendGQLErrs(errResult, gqlerror.Errorf(
-				`Type %s: @auth query: 'AND' should contain at least two rules`, typ.Name))
+				`Type %s: @auth: 'AND' should contain at least two rules`, typ.Name))
 		}
 		numChildren++
 	}
@@ -174,7 +174,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	}
 
 	if numChildren != 1 || len(val.Children) > 1 {
-		errResult = AppendGQLErrs(errResult, gqlerror.Errorf("Type %s: @auth query: there "+
+		errResult = AppendGQLErrs(errResult, gqlerror.Errorf("Type %s: @auth: there "+
 			"should be only one of \"and\", \"or\", \"not\" and \"rule\"", typ.Name))
 	}
 
@@ -186,13 +186,13 @@ func rbacValidateRule(typ *ast.Definition, rule string,
 	rbacRegex, err :=
 		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
 	if err != nil {
-		return nil, gqlerror.Errorf("Type %s: @auth query: `%s` error while parsing rule.",
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` error while parsing rule.",
 			typ.Name, err)
 	}
 
 	idx := rbacRegex.FindAllStringSubmatchIndex(rule, -1)
 	if len(idx) != 1 || len(idx[0]) != 8 || rule != rule[idx[0][0]:idx[0][1]] {
-		return nil, gqlerror.Errorf("Type %s: @auth query: `%s` is not a valid rule.",
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid rule.",
 			typ.Name, rule)
 	}
 
@@ -203,13 +203,13 @@ func rbacValidateRule(typ *ast.Definition, rule string,
 	}
 
 	if !strings.HasPrefix(query.Variable, "$") {
-		return nil, gqlerror.Errorf("Type %s: @auth query: `%s` is not a valid GraphQL variable.",
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` is not a valid GraphQL variable.",
 			typ.Name, query.Variable)
 	}
 	query.Variable = query.Variable[1:]
 
 	if query.Operator != "eq" {
-		return nil, gqlerror.Errorf("Type %s: @auth query: `%s` operator is not supported in "+
+		return nil, gqlerror.Errorf("Type %s: @auth: `%s` operator is not supported in "+
 			"this rule.", typ.Name, query.Operator)
 	}
 	return &query, nil
@@ -223,23 +223,23 @@ func gqlValidateRule(
 
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
-		return nil, gqlerror.Errorf("Type %s: @auth query: failed to parse GraphQL rule "+
+		return nil, gqlerror.Errorf("Type %s: @auth: failed to parse GraphQL rule "+
 			"[reason : %s]", typ.Name, gqlErr.Message)
 	}
 
 	if len(doc.Operations) != 1 {
-		return nil, gqlerror.Errorf("Type %s: @auth query: a rule should be "+
+		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be "+
 			"exactly one query, found %v GraphQL operations", typ.Name, len(doc.Operations))
 	}
 	op := doc.Operations[0]
 
 	if op == nil {
-		return nil, gqlerror.Errorf("Type %s: @auth query: a rule should be "+
+		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be "+
 			"exactly one query, found an empty GraphQL operation", typ.Name)
 	}
 
 	if op.Operation != "query" {
-		return nil, gqlerror.Errorf("Type %s: @auth query: a rule should be exactly"+
+		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be exactly"+
 			" one query, found an %s", typ.Name, op.Name)
 	}
 
@@ -247,25 +247,25 @@ func gqlValidateRule(
 	if len(listErr) != 0 {
 		var errs error
 		for _, err := range listErr {
-			errs = AppendGQLErrs(errs, gqlerror.Errorf("Type %s: @auth query: failed to "+
+			errs = AppendGQLErrs(errs, gqlerror.Errorf("Type %s: @auth: failed to "+
 				"validate GraphQL rule [reason : %s]", typ.Name, err.Message))
 		}
 		return nil, errs
 	}
 
 	if len(op.SelectionSet) != 1 {
-		return nil, gqlerror.Errorf("Type %s: @auth query: a rule should be exactly one "+
+		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be exactly one "+
 			"query, found %v queries", typ.Name, len(op.SelectionSet))
 	}
 
 	f, ok := op.SelectionSet[0].(*ast.Field)
 	if !ok {
-		return nil, gqlerror.Errorf("Type %s: @auth query: error couldn't generate query from rule",
+		return nil, gqlerror.Errorf("Type %s: @auth: error couldn't generate query from rule",
 			typ.Name)
 	}
 
 	if f.Name != "query"+typ.Name {
-		return nil, gqlerror.Errorf("Type %s: @auth query: expected only query%s "+
+		return nil, gqlerror.Errorf("Type %s: @auth: expected only query%s "+
 			"rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 

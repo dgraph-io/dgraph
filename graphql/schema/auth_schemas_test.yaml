@@ -9,7 +9,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "Type X: @auth query: failed to parse GraphQL rule
+      {"message": "Type X: @auth: failed to parse GraphQL rule
       [reason : Expected Name, found <EOF>]"}
     ]
 
@@ -22,7 +22,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "Type X: @auth query: failed to validate GraphQL rule
+      {"message": "Type X: @auth: failed to validate GraphQL rule
       [reason : Field \"userRle\" is not defined by type XFilter.
       Did you mean userRole or username?]"}
     ]
@@ -36,7 +36,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth query: `X_MyApp_Role` is not a valid GraphQL variable."}]
+    errlist: [{"message": "Type X: @auth: `X_MyApp_Role` is not a valid GraphQL variable."}]
 
   - name: "RBAC rule invalid operator"
     input: |
@@ -47,7 +47,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth query: `xyz` operator is not supported in this rule."}]
+    errlist: [{"message": "Type X: @auth: `xyz` operator is not supported in this rule."}]
 
   - name: "Invalid RBAC rule"
     input: |
@@ -58,7 +58,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth query: `{ \"ADMIN\" }` is not a valid rule."}]
+    errlist: [{"message": "Type X: @auth: `{ \"ADMIN\" }` is not a valid rule."}]
 
   - name: "Empty rule"
     input: |
@@ -70,7 +70,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-      {"message": "Type X: @auth query: a rule should be exactly one query,
+      {"message": "Type X: @auth: a rule should be exactly one query,
       found 0 GraphQL operations"}
     ]
 
@@ -84,7 +84,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
     \"not\" and \"rule\""}
     ]
 
@@ -104,7 +104,7 @@ invalid_schemas:
         username: String! @id
         userRole: String @search(by: [hash])
       }
-    errlist: [{"message": "Type X: @auth query: 'OR' should contain at least two rules"}]
+    errlist: [{"message": "Type X: @auth: 'OR' should contain at least two rules"}]
 
   - name: "Multiple logical operation at same level"
     input: |
@@ -142,7 +142,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
     \"not\" and \"rule\""}
     ]
 
@@ -182,7 +182,7 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: there should be only one of \"and\", \"or\",
+    {"message": "Type X: @auth: there should be only one of \"and\", \"or\",
     \"not\" and \"rule\""}
     ]
 
@@ -195,9 +195,9 @@ invalid_schemas:
         userRole: String @search(by: [hash])
       }
     errlist: [
-    {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
+    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
     \"not\" and \"rule\""},
-    {"message": "Type X: @auth query: no arguments - there should be only one of \"and\", \"or\",
+    {"message": "Type X: @auth: no arguments - there should be only one of \"and\", \"or\",
     \"not\" and \"rule\""}
     ]
 
