@@ -305,7 +305,9 @@ can leave that flag empty, and Zero would auto-assign an id to the Alpha. This
 id would get persisted in the write-ahead log, so be careful not to delete it.
 
 The new Alphas will automatically detect each other by communicating with
-Dgraph zero and establish connections to each other.
+Dgraph zero and establish connections to each other. You can provide a list of
+zero addresses to alpha using the `--zero` flag. Alpha will try to connect with
+one of the zeros starting from the first zero address in the list.
 
 Typically, Zero would first attempt to replicate a group, by assigning a new
 Dgraph alpha to run the same group as assigned to another. Once the group has
