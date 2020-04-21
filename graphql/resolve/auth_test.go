@@ -61,7 +61,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 			Issuer:    "test",
 		},
 	}
-	claims.AuthVariables["$User"] = "user1"
+	claims.AuthVariables["USER"] = "user1"
 
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	for _, tcase := range tests {
@@ -76,7 +76,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 			gqlQuery := test.GetQuery(t, op)
 
 			ctx := context.Background()
-			claims.AuthVariables["$Role"] = tcase.Role
+			claims.AuthVariables["ROLE"] = tcase.Role
 			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 			ss, err := token.SignedString([]byte(AuthHmacSecret))
 			require.NoError(t, err)
