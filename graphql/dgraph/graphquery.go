@@ -69,6 +69,10 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 		x.Check2(b.WriteRune(')'))
 	}
 
+	if query.Cascade {
+		x.Check2(b.WriteString(" @cascade"))
+	}
+
 	switch {
 	case len(query.Children) > 0:
 		prefixAdd := ""

@@ -269,3 +269,14 @@ type Mutation {
 	updateUser(input: UpdateUserInput!): UpdateUserPayload
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getTodo(id: ID!): Todo
+	queryTodo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
+	getUser(username: String!): User
+	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
+}

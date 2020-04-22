@@ -51,8 +51,8 @@ type AuthContainer struct {
 }
 
 type TypeAuth struct {
-	rules  *AuthContainer
-	fields map[string]*AuthContainer
+	Rules  *AuthContainer
+	Fields map[string]*AuthContainer
 }
 
 func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
@@ -62,17 +62,17 @@ func authRules(s *ast.Schema) (map[string]*TypeAuth, error) {
 
 	for _, typ := range s.Types {
 		name := typeName(typ)
-		authRules[name] = &TypeAuth{fields: make(map[string]*AuthContainer)}
+		authRules[name] = &TypeAuth{Fields: make(map[string]*AuthContainer)}
 		auth := typ.Directives.ForName(authDirective)
 		if auth != nil {
-			authRules[name].rules, err = parseAuthDirective(s, typ, auth)
+			authRules[name].Rules, err = parseAuthDirective(s, typ, auth)
 			errResult = AppendGQLErrs(errResult, err)
 		}
 
 		for _, field := range typ.Fields {
 			auth := field.Directives.ForName(authDirective)
 			if auth != nil {
-				authRules[name].fields[field.Name], err = parseAuthDirective(s, typ, auth)
+				authRules[name].Fields[field.Name], err = parseAuthDirective(s, typ, auth)
 				errResult = AppendGQLErrs(errResult, err)
 			}
 		}
