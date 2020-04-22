@@ -72,10 +72,14 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 	// Do not load bloom filters on DB open.
 	opt.LoadBloomsOnOpen = false
 
-	opt.Compression = options.ZSTD
 	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
-	// TODO (ibrahim): What does compressionlevel=0 do?
-	opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+	// Default value of badgerCompressionLevel is 3 so compression will always
+	// be enabled, unless it is explicitly disabled by setting the value to 0.
+	if Config.BadgerCompressionLevel != 0 {
+		// By default, compression is disabled in badger.
+		opt.Compression = options.ZSTD
+		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
