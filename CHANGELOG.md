@@ -73,6 +73,14 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
+- Support comma separated list of zero addresses in alpha (#5116) (#5258)
+- Optimization: Optimize snapshot creation. (#4901)
+- Optimization: Remove isChild from fastJsonNode. (#5184)
+- Optimization: Memory improvements in fastJsonNode. (#5088)
+- Update Badger to commit cddf7c03451c33. (#5216) (#5273)
+  - Compression/encryption runs in the background (which means faster writes)
+  - Separate cache for bloom filters which limits the amount of memory used by bloom filters
+- Avoid crashing live loader in case the network is interrupted. (#5268)
 - Enterprise features
   - Backup/restore: Force users to explicitly tell restore command to run without zero. ([#5206][])
 
@@ -80,9 +88,13 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
 - Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
-- Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][])
+- Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
 - Enterprise features
   - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
+- Set correct posting list type while creating it in live loader. (#5012)
+- Add support for tinyint in migrate tool. Fixes #4674. (#4842)
+- Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
+
   
 ### Added
 
@@ -99,6 +111,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5152]: https://github.com/dgraph-io/dgraph/issues/5152
 [#5252]: https://github.com/dgraph-io/dgraph/issues/5252
 [#5199]: https://github.com/dgraph-io/dgraph/issues/5199
+[#5163]: https://github.com/dgraph-io/dgraph/issues/5163
 [#5158]: https://github.com/dgraph-io/dgraph/issues/5158
 [#5213]: https://github.com/dgraph-io/dgraph/issues/5213
 [#5144]: https://github.com/dgraph-io/dgraph/issues/5144
@@ -124,6 +137,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Set version when rollup is called with no splits. ([#4945][])
 - Use a different stream writer id for split keys. ([#4875][])
 - Split posting lists recursively. ([#4867][])
+- Add support for tinyint in migrate tool. Fixes #4674. (#4842)
 - Enterprise features
   - **Breaking changes**
     - [BREAKING] Underlying schema for ACL has changed. Use the upgrade tool to migrate to the new data format. ([#4725][])
