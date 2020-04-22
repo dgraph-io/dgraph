@@ -26,8 +26,10 @@ import (
 	"time"
 )
 
+type ctxKey string
+
 const (
-	AuthJwtCtxKey = "authorizationJwt"
+	AuthJwtCtxKey = ctxKey("authorizationJwt")
 )
 
 var (
@@ -47,7 +49,7 @@ func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Contex
 		md = metadata.New(nil)
 	}
 
-	md.Append(AuthJwtCtxKey, authorizationJwt)
+	md.Append(string(AuthJwtCtxKey), authorizationJwt)
 	ctx = metadata.NewIncomingContext(ctx, md)
 	return ctx
 }
@@ -64,7 +66,7 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 		return nil, nil
 	}
 
-	jwtToken := md.Get(AuthJwtCtxKey)
+	jwtToken := md.Get(string(AuthJwtCtxKey))
 	if len(jwtToken) == 0 {
 		return nil, nil
 	} else if len(jwtToken) > 1 {
