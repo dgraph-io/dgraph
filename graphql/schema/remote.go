@@ -265,7 +265,12 @@ func getGivenQueryArgsAsMap(givenQuery *ast.Field, parentField *ast.FieldDefinit
 			argValMap[arg.Name] = varName
 		}
 	} else {
-		// TODO: handle @custom graphql validation for fields here
+		for _, arg := range givenQuery.Arguments {
+			varName := arg.Value.String()
+			argValMap[arg.Name] = varName
+		}
+		// TODO: Handle other checks as above here.
+		// TODO: handle batch/single mode properly here.
 	}
 	return argDefMap, argValMap
 }

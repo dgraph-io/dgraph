@@ -676,22 +676,26 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	// For GraphQL requests, we substitute arguments in the GraphQL query/mutation to make to
 	// the remote endpoint using the values of other fields obtained from Dgraph.
 	if graphql {
+		requiredArgs := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery)
 		for i := 0; i < len(inputs); i++ {
+			vars := make(map[string]interface{})
 			mu.RLock()
 			m := vals[i].(map[string]interface{})
-			args := make([]string, 0, len(m))
-			for k := range m {
-				args = append(args, k)
-			}
-			// TODO - See if args is required.
-			b, err := schema.SubstituteArgsInGraphqlRequest("", f, m, args)
-			if err != nil {
-				mu.RUnlock()
-				errCh <- err
-				return
+			for k, v := range m {
+				// TODO - Have a validation that fields can only require scalar args from the type
+				// definition.
+				if _, ok := requiredArgs[k]; ok {
+					vars[k] = v
+				}
 			}
 			mu.RUnlock()
-			inputs[i] = b
+
+			body := make(map[string]interface{})
+			body["query"] = fconf.RemoteGqlQuery
+			// TODO - Check not all the values in the map should be sent, but only those that are
+			// required for resolution.
+			body["variables"] = vars
+			inputs[i] = body
 		}
 	} else {
 		for i := 0; i < len(inputs); i++ {
@@ -758,15 +762,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		go func(idx int, input interface{}) {
 			defer wg.Done()
 
-			if !graphql {
-				b, err := json.Marshal(input)
-				if err != nil {
-					errCh <- err
-					// TODO - Propogate this error
-					return
-				}
-				input = string(b)
+			b, err := json.Marshal(input)
+			if err != nil {
+				errCh <- err
+				// TODO - Propogate this error
+				return
+			}
+			input = string(b)
 
+			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				// TODO - Have validation to ensure that GraphQL endpoints don't use variables.
 				mu.RLock()
@@ -778,7 +782,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err := makeRequest(nil, fconf.Method, fconf.URL, input.(string), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, input.(string), fconf.ForwardHeaders)
 			if err != nil {
 				// TODO - Propogate this error.
 				return
@@ -800,7 +804,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			} else {
 				var result interface{}
 				if err := json.Unmarshal(b, &result); err != nil {
-					// TODO - Propogate this error.
+					// TODO - Propogate this error. Also wrap them like you do for other others.
 					return
 				}
 			}

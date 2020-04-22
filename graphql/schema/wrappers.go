@@ -60,6 +60,8 @@ type FieldHTTPConfig struct {
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
+	// TODO - See if we need both this and the field above.
+	RemoteGqlQuery string
 }
 
 // Query/Mutation types and arg names
@@ -631,13 +633,12 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 		}
 	}
 
-	graphql := custom.Arguments.ForName("graphql")
-	if graphql == nil {
+	graphqlArg := httpArg.Value.Children.ForName("graphql")
+	if graphqlArg == nil {
 		return true, rf
 	}
 
-	query := graphql.Value.Children.ForName("query")
-	rf = parseArgsFromGQLRequest(query.Raw)
+	rf = ParseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	return true, rf
 }
 
@@ -757,6 +758,21 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.ForwardHeaders = headers
 	}
 
+	if graphqlArg != nil {
+		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
+		if gqlErr != nil {
+			return fconf, gqlErr
+		}
+		// queryDoc will always have only one operation with only one field
+		fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
+		buf := &bytes.Buffer{}
+		buildGraphqlRequestFields(buf, f.field)
+		remoteQuery := graphqlArg.Raw
+		remoteQuery = remoteQuery[:strings.LastIndex(remoteQuery, "}")]
+		remoteQuery = fmt.Sprintf("%s%s}", remoteQuery, buf.String())
+		fconf.RemoteGqlQuery = remoteQuery
+	}
+
 	// if it is a query or mutation, substitute the vars in URL and Body here itself
 	if isQueryOrMutation {
 		var err error
@@ -770,19 +786,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 			bodyVars = argMap
 		} else {
-			queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
-			if gqlErr != nil {
-				return fconf, err
-			}
-			// queryDoc will always have only one operation with only one field
-			fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
-			buf := &bytes.Buffer{}
-			buildGraphqlRequestFields(buf, f.field)
-			remoteQuery := graphqlArg.Raw
-			remoteQuery = remoteQuery[:strings.LastIndex(remoteQuery, "}")]
-			remoteQuery = fmt.Sprintf("%s%s}", remoteQuery, buf.String())
 			bodyVars = make(map[string]interface{})
-			bodyVars["query"] = remoteQuery
+			bodyVars["query"] = fconf.RemoteGqlQuery
 			bodyVars["variables"] = argMap
 		}
 		if fconf.Template != nil {
@@ -791,11 +796,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 		}
 	} else {
-		if graphqlArg != nil {
-			remoteQuery := graphqlArg.Raw
-			queryEndIndex := strings.Index(remoteQuery, "(")
-			fconf.RemoteGqlQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
-		}
 		fconf.Operation = "batch"
 		op := httpArg.Value.Children.ForName("operation")
 		if op != nil {
@@ -807,42 +807,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 
 func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
-}
-
-// SubstituteArgsInGraphqlRequest substitutes the arguments in a graphql request by filling it up
-// from the argMap. It returns the final request body which is sent to the remote server to be
-// resolved.
-func SubstituteArgsInGraphqlRequest(req string, f Field, argMap map[string]interface{},
-	args []string) (string, error) {
-	for _, arg := range args {
-		val, ok := argMap[arg]
-		if !ok {
-			continue
-		}
-		value := ""
-		// TODO - Bring back the check below or it might not be needed after we support other
-		// types.
-		// if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
-		if val == nil {
-			val = "null"
-		}
-		value = `"` + fmt.Sprintf("%+v", val) + `"`
-		// }
-		req = strings.ReplaceAll(req, "$"+arg, value)
-	}
-	buf := &bytes.Buffer{}
-	buildGraphqlRequestFields(buf, f.(*field).field)
-	req += buf.String()
-	// contact method and request object
-	req = `query{` + req + `}`
-	param := Request{
-		Query: req,
-	}
-	remoteQueryBuf, err := json.Marshal(param)
-	if err != nil {
-		return req, err
-	}
-	return string(remoteQueryBuf), nil
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -1804,7 +1768,7 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 // 	friend
 // }
 func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
-	// Add begining curly braces
+	// Add beginning curly braces
 	if len(field.SelectionSet) == 0 {
 		return
 	}
@@ -1823,11 +1787,14 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	writer.WriteString("}")
 }
 
-// parseArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
-func parseArgsFromGQLRequest(req string) map[string]bool {
+// ParseRequiredArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
+func ParseRequiredArgsFromGQLRequest(req string) map[string]bool {
 	// These errors should have already been checked during schema validation.
-	parsedQuery, _ := parser.ParseQuery(&ast.Source{Input: fmt.Sprintf(`query {%s}`,
-		req)})
+	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: req})
+	if gqlErr != nil {
+		// TODO - See if we should return an error here.
+		return nil
+	}
 
 	result := make(map[string]bool)
 	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)

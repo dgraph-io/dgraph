@@ -23,7 +23,6 @@ import (
 	"log"
 	"net/http"
 	"reflect"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -1174,23 +1173,8 @@ func introspectedSchemaForQuery(fieldName, idsField string) string {
 }
 
 type request struct {
-	Query string
-}
-
-var (
-	userRegex    = regexp.MustCompile(`query{userName\(id\: \"([a-z0-9]+)\"\)}`)
-	carRegex     = regexp.MustCompile(`query{car\(id\: \"([a-z0-9]+)\"\){\nname\n}}`)
-	schoolRegex  = regexp.MustCompile(`query{schoolName\(id\: \"([a-z0-9]+)\"\)}`)
-	teacherRegex = regexp.MustCompile(`query{teacherName\(id\: \"([a-z0-9]+)\"\)}`)
-	classRegex   = regexp.MustCompile(`query{class\(id\: \"([a-z0-9]+)\"\){\nname\n}}`)
-)
-
-func verifyQuery(reg *regexp.Regexp, q string) string {
-	matches := reg.FindStringSubmatch(q)
-	if len(matches) == 2 {
-		return matches[1]
-	}
-	return ""
+	Query     string
+	Variables map[string]interface{}
 }
 
 func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
@@ -1208,7 +1192,9 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	userID := verifyQuery(userRegex, req.Query)
+	// TODO - Have tests in place either here or as part of unit tests to verify the queries
+	// that are finally sent.
+	userID := req.Variables["id"].(string)
 	fmt.Fprintf(w, `
 	{
 		"data": {
@@ -1225,7 +1211,50 @@ func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 
 	// FIXME - Return type isn't validated yet.
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("car", "id"))
+		fmt.Fprintf(w, `{
+			"data":{
+				"__schema":{
+				"queryType":{
+					"name":"Query"
+				},
+				"mutationType":null,
+				"subscriptionType":null,
+				"types":[
+					{
+					"kind":"OBJECT",
+					"name":"Query",
+					"fields":[
+						{
+						"name": "car",
+						"args":[
+							{
+							"name":"id",
+							"type":{
+								"kind":"NON_NULL",
+								"name":null,
+								"ofType":{
+									"kind":"SCALAR",
+									"name":"ID",
+									"ofType":null
+								}
+							},
+							"defaultValue":null
+							}
+						],
+						"type":{
+							"kind": "OBJECT",
+							"name": "Car",
+							"ofType": null
+						},
+						"isDeprecated":false,
+						"deprecationReason":null
+						}
+					]
+					}
+				]
+				}
+			}
+		}`)
 		return
 	}
 
@@ -1234,7 +1263,7 @@ func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	userID := verifyQuery(carRegex, req.Query)
+	userID := req.Variables["id"]
 	fmt.Fprintf(w, `
 	{
 		"data": {
@@ -1252,7 +1281,54 @@ func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("class", "id"))
+		fmt.Fprintf(w, `{
+			"data":{
+				"__schema":{
+				"queryType":{
+					"name":"Query"
+				},
+				"mutationType":null,
+				"subscriptionType":null,
+				"types":[
+					{
+					"kind":"OBJECT",
+					"name":"Query",
+					"fields":[
+						{
+						"name": "class",
+						"args":[
+							{
+							"name":"id",
+							"type":{
+								"kind":"NON_NULL",
+								"name":null,
+								"ofType":{
+									"kind":"SCALAR",
+									"name":"ID",
+									"ofType":null
+								}
+							},
+							"defaultValue":null
+							}
+						],
+						"type":{
+							"kind": "LIST",
+							"name": null,
+							"ofType": {
+								"kind": "OBJECT",
+								"name": "Class",
+								"ofType": null
+							}
+						},
+						"isDeprecated":false,
+						"deprecationReason":null
+						}
+					]
+					}
+				]
+				}
+			}
+		}`)
 		return
 	}
 
@@ -1260,7 +1336,7 @@ func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	schoolID := verifyQuery(classRegex, req.Query)
+	schoolID := req.Variables["id"]
 	fmt.Fprintf(w, `
 	{
 		"data": {
@@ -1286,7 +1362,7 @@ func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	teacherID := verifyQuery(teacherRegex, req.Query)
+	teacherID := req.Variables["tid"]
 	fmt.Fprintf(w, `
 	{
 		"data": {
@@ -1310,7 +1386,7 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	schoolID := verifyQuery(schoolRegex, req.Query)
+	schoolID := req.Variables["id"]
 	fmt.Fprintf(w, `
 	{
 		"data": {
@@ -1335,7 +1411,7 @@ func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	userID := verifyQuery(userRegex, req.Query)
+	userID := req.Variables["id"]
 	fmt.Fprintf(w, `
 	{
 		"data": {
