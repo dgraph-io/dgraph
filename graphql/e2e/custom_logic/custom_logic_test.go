@@ -52,7 +52,7 @@ const (
 		 code: StringQueryOperatorInput
 	   }
 	   
-	   type Country@remote {
+	   type Country @remote {
 		 code: ID!
 		 name: String!
 		 native: String!
@@ -66,20 +66,20 @@ const (
 		 states: [State!]!
 	   }
 	   
-	   input CountryFilterInput@remote {
+	   input CountryFilterInput @remote {
 		 code: StringQueryOperatorInput
 		 currency: StringQueryOperatorInput
 		 continent: StringQueryOperatorInput
 	   }
 	   
-	   type Language@remote {
+	   type Language @remote {
 		 code: ID!
 		 name: String
 		 native: String
 		 rtl: Boolean!
 	   }
 	   
-	   input LanguageFilterInput@remote {
+	   input LanguageFilterInput @remote {
 		 code: StringQueryOperatorInput
 	   }
 	   
@@ -89,7 +89,7 @@ const (
 		 country: Country!
 	   }
 	   
-	   input StringQueryOperatorInput@remote {
+	   input StringQueryOperatorInput @remote {
 		 eq: String
 		 ne: String
 		 in: [String]

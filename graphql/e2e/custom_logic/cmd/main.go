@@ -314,20 +314,28 @@ func validCountryResponse(w http.ResponseWriter, r *http.Request) {
 
 func commonGraphqlYamlHandler(testname string) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		body, _ := ioutil.ReadAll(r.Body)
+		body, err := ioutil.ReadAll(r.Body)
+
+		if err != nil {
+			log.Fatal(err)
+		}
 
 		if strings.Contains(string(body), "__schema") {
 			fmt.Fprintf(w, graphqlResponses[testname].Schema)
 			return
 		}
 		req := &GraphqlRequest{}
-		json.Unmarshal(body, req)
+		err = json.Unmarshal(body, req)
 
-		fmt.Println(req.Query)
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		if req.Query == strings.TrimSpace(graphqlResponses[testname].Request) {
 			fmt.Fprintf(w, graphqlResponses[testname].Response)
 			return
 		}
+
 		fmt.Fprintf(w, `{
 			 "errors":[
 			   {
