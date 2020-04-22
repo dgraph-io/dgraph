@@ -101,6 +101,59 @@ mutation {
 }
 ```
 
+
+#### Backup to Minio
+
+#### Backup to Google Cloud Storage via Minio Gateway
+
+1. [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for GCS and get the Credentials File
+2. Run MinIO GCS Gateway Using Docker
+```
+docker run -p 9000:9000 --name gcs-s3 \
+ -v /path/to/credentials.json:/credentials.json \
+ -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
+ -e "MINIO_ACCESS_KEY=minioaccountname" \
+ -e "MINIO_SECRET_KEY=minioaccountkey" \
+ minio/minio gateway gcs yourprojectid
+```
+3. Run MinIO GCS Gateway Using the MinIO Binary
+```
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+export MINIO_ACCESS_KEY=minioaccesskey
+export MINIO_SECRET_KEY=miniosecretkey
+minio gateway gcs yourprojectid
+```
+#### Test Using MinIO Browser
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+![](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
+
+#### Test Using MinIO Client
+
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+1. Configure the Gateway using MinIO Client
+
+Use the following command to configure the gateway:
+```
+mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+```
+
+2. List Containers on GCS
+
+Use the following command to list the containers on GCS:
+
+```
+mc ls mygcs
+```
+A response similar to this one should be displayed:
+
+```
+[2017-02-22 01:50:43 PST]     0B ferenginar/
+[2017-02-26 21:43:51 PST]     0B my-container/
+[2017-02-26 22:10:11 PST]     0B test-container1/
+```
+
 #### Disabling HTTPS for S3 and Minio backups
 
 By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
@@ -167,6 +220,32 @@ mutation {
 }
 ```
 
+### Encrypted Backups
+
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+
+{{% notice "note" %}}
+encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
+
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
@@ -232,7 +311,6 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}

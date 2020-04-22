@@ -122,9 +122,6 @@ func (h *fileHandler) GetManifests(uri *url.URL, backupId string) ([]*Manifest, 
 		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(paths)
-	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s): %v\n", paths)
-	}
 
 	// Read and filter the files to get the list of files to consider for this restore operation.
 
@@ -160,9 +157,6 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 	var maxUid uint64
 	for i, manifest := range manifests {
 		if manifest.Since == 0 || len(manifest.Groups) == 0 {
-			if glog.V(2) {
-				fmt.Printf("Restore: skip backup: %#v\n", manifest)
-			}
 			continue
 		}
 
@@ -222,9 +216,6 @@ func (h *fileHandler) ListManifests(uri *url.URL) ([]string, error) {
 		return nil, errors.Errorf("No manifests found at path: %s", uri.Path)
 	}
 	sort.Strings(manifests)
-	if glog.V(3) {
-		fmt.Printf("Found backup manifest(s): %v\n", manifests)
-	}
 	return manifests, nil
 }
 

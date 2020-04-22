@@ -105,6 +105,7 @@ type Mutation interface {
 	MutationType() MutationType
 	MutatedType() Type
 	QueryField() Field
+	NumUidsField() Field
 }
 
 // A Query is a field (from the schema's Query type) from an Operation
@@ -852,12 +853,21 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid {
+		if f.Name() == NumUid || f.Name() == Typename {
 			continue
 		}
 		return f
 	}
 	return m.SelectionSet()[0]
+}
+
+func (m *mutation) NumUidsField() Field {
+	for _, f := range m.SelectionSet() {
+		if f.Name() == NumUid {
+			return f
+		}
+	}
+	return nil
 }
 
 func (m *mutation) Location() x.Location {
