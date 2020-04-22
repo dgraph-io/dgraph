@@ -430,7 +430,7 @@ func findMutationVars(qc *queryContext) []string {
 // Assumption is that Subject can contain UID, whereas Object can contain Val
 // If val(variable) exists in a query, but the values are not there for the variable,
 // it will ignore the mutation silently.
-func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
+func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api.NQuad {
 	getNewVals := func(s string) (map[uint64]types.Val, bool) {
 		if strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
@@ -469,18 +469,24 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 		// to *api.Value before applying the mutation. For that, first
 		// we convert key to uint64 and get the UID to Value map from
 		// the result of the query.
-		if nq.Subject[0] == '_' {
-			// UID is of format "_:uid(u)". Ignore silently
+		var key uint64
+		var err error
+		switch {
+		case nq.Subject[0] == '_' && isSet:
+			// in case aggregate val(var) is there, that should work with blank node.
+			key = 0
+		case nq.Subject[0] == '_' && !isSet:
+			// UID is of format "_:uid(u)". Ignore the delete silently
 			continue
-		}
-
-		key, err := strconv.ParseUint(nq.Subject, 0, 64)
-		if err != nil {
-			// Key conversion failed, ignoring the nquad. Ideally,
-			// it shouldn't happen as this is the result of a query.
-			glog.Errorf("Conversion of subject %s failed. Error: %s",
-				nq.Subject, err.Error())
-			continue
+		default:
+			key, err = strconv.ParseUint(nq.Subject, 0, 64)
+			if err != nil {
+				// Key conversion failed, ignoring the nquad. Ideally,
+				// it shouldn't happen as this is the result of a query.
+				glog.Errorf("Conversion of subject %s failed. Error: %s",
+					nq.Subject, err.Error())
+				continue
+			}
 		}
 
 		// Get the value to the corresponding UID(key) from the query result
@@ -508,8 +514,8 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 // updateValInMuations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
-	gmu.Del = updateValInNQuads(gmu.Del, qc)
-	gmu.Set = updateValInNQuads(gmu.Set, qc)
+	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
+	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 }
 
 // updateUIDInMutations does following transformations:
