@@ -40,9 +40,9 @@ func TestMetrics(t *testing.T) {
 		"go_memstats_heap_idle_bytes", "go_memstats_heap_inuse_bytes", "dgraph_latency_bucket",
 
 		// Badger Metrics
-		"badger_disk_reads_total", "badger_disk_writes_total", "badger_gets_total",
-		"badger_memtable_gets_total", "badger_puts_total", "badger_read_bytes",
-		"badger_written_bytes",
+		"badger_v2_disk_reads_total", "badger_v2_disk_writes_total", "badger_v2_gets_total",
+		"badger_v2_memtable_gets_total", "badger_v2_puts_total", "badger_v2_read_bytes",
+		"badger_v2_written_bytes",
 
 		// Dgraph Memory Metrics
 		"dgraph_memory_idle_bytes", "dgraph_memory_inuse_bytes", "dgraph_memory_proc_bytes",
