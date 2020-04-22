@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -84,7 +85,7 @@ func addClaimsToContext(
 	t *testing.T,
 	authVars map[string]interface{}) context.Context {
 
-	claims := CustomClaims{
+	claims := authorization.CustomClaims{
 		authVars,
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute).Unix(),
@@ -93,7 +94,7 @@ func addClaimsToContext(
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte(AuthHmacSecret))
+	ss, err := token.SignedString([]byte(authorization.AuthHmacSecret))
 	require.NoError(t, err)
 
 	md := metadata.New(nil)

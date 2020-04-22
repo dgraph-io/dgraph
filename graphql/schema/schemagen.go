@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"sort"
 	"strings"
 
@@ -68,12 +69,26 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
+func parseAuthMeta(schema string) {
+	lastComment := schema[strings.LastIndex(schema, "#"):]
+	authMeta := strings.Split(lastComment, " ")
+	if len(authMeta) != 4 {
+		return
+	}
+	if authMeta[1] == "Authorization" {
+		authorization.AuthHeader = authMeta[2]
+		authorization.AuthHmacSecret = authMeta[3]
+	}
+}
+
 // NewHandler processes the input schema.  If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
+
+	parseAuthMeta(input)
 
 	// The input schema contains just what's required to describe the types,
 	// relationships and searchability - but that's not enough to define a

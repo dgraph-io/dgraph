@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package resolve
+package authorization
 
 import (
 	"context"
@@ -26,15 +26,18 @@ import (
 	"time"
 )
 
-//TODO: Get the secret key dynamically.
 const (
-	AuthJwtCtxKey  = "authorizationJwt"
-	AuthHmacSecret = "Secretkey"
+	AuthJwtCtxKey = "authorizationJwt"
+)
+
+var (
+	AuthHmacSecret string
+	AuthHeader     string
 )
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
 func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
-	authorizationJwt := r.Header.Get("X-Dgraph-AuthorizationToken")
+	authorizationJwt := r.Header.Get(AuthHeader)
 	if authorizationJwt == "" {
 		return ctx
 	}
@@ -72,6 +75,9 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {
+	if AuthHmacSecret == "" {
+		return nil, fmt.Errorf(" jwt token cannot be validated because secret key is empty")
+	}
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
