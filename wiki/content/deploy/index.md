@@ -1241,8 +1241,9 @@ These HTTP endpoints are deprecated and will be removed in the next release. Ple
 {{% /notice %}}
 
 * `/health?all` returns information about the health of all the servers in the cluster.
-* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
-* `/admin/export` initiates a data [export]({{< relref "#export">}}).
+* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown" >}}) of the Alpha.
+* `/admin/export` initiates a data [export]({{< relref "#export" >}}). The exported data will be
+encrypted if the alpha instance was configured with an encryption key file.
 
 By default the Alpha listens on `localhost` for admin actions (the loopback address only accessible from the same machine). The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections.
 
@@ -1299,11 +1300,17 @@ Here’s an example of JSON returned from the above query:
 }
 ```
 
-- `version`: Version of Dgraph running the Alpha server.
-- `instance`: Name of the instance. Always set to `alpha`.
-- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+- `instance`: Name of the instance. Either `alpha` or `zero`.
+- `status`: Health status of the instance. Either `healthy` or `unhealthy`.
+- `version`: Version of Dgraph running the Alpha or Zero server.
+- `uptime`: Time in nanoseconds since the Alpha or Zero server is up and running.
+- `address`: IP_ADDRESS:PORT of the instance.
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
+- `lastEcho`: Last time, in Unix epoch, when the instance was contacted by another Alpha or Zero server.
+- `ongoing`: List of ongoing operations in the background.
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
 
-The same information is available from the `/health` and `/health?all` endpoints.
+The same information (except `ongoing` and `indexing`) is available from the `/health` and `/health?all` endpoints of Alpha server.
 
 ## More about Dgraph Zero
 
@@ -2040,15 +2047,15 @@ The disk metrics let you track the disk activity of the Dgraph process. Dgraph d
 directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
 read from and write to disk.
 
- Metrics                          | Description
- -------                          | -----------
- `badger_disk_reads_total`        | Total count of disk reads in Badger.
- `badger_disk_writes_total`       | Total count of disk writes in Badger.
- `badger_gets_total`              | Total count of calls to Badger's `get`.
- `badger_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
- `badger_puts_total`              | Total count of calls to Badger's `put`.
- `badger_read_bytes`              | Total bytes read from Badger.
- `badger_written_bytes`           | Total bytes written to Badger.
+ Metrics                          	 | Description
+ -------                          	 | -----------
+ `badger_v2_disk_reads_total`        | Total count of disk reads in Badger.
+ `badger_v2_disk_writes_total`       | Total count of disk writes in Badger.
+ `badger_v2_gets_total`              | Total count of calls to Badger's `get`.
+ `badger_v2_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
+ `badger_v2_puts_total`              | Total count of calls to Badger's `put`.
+ `badger_v2_read_bytes`              | Total bytes read from Badger.
+ `badger_v2_written_bytes`           | Total bytes written to Badger.
 
 ### Memory Metrics
 

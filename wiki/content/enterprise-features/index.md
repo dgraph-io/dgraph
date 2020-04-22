@@ -220,6 +220,32 @@ mutation {
 }
 ```
 
+### Encrypted Backups
+
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+
+{{% notice "note" %}}
+encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
+
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
@@ -285,7 +311,6 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}

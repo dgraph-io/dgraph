@@ -1,0 +1,6 @@
+# secret keys
+*.pub
+*.pem
+taskcat_outputs/
+.taskcat_overrides.yml
+dgraph.json
