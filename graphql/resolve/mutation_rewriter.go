@@ -346,7 +346,16 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	return rewriteAsQueryByIds(mutation.QueryField(), uids), errs
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	authRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      queryAuthSelector,
+	}
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
 // Rewrite rewrites set and remove update patches into GraphQL+- upsert mutations.
@@ -479,7 +488,16 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	return rewriteAsQueryByIds(mutation.QueryField(), uids), nil
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	authRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      queryAuthSelector,
+	}
+	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
 func extractMutated(result map[string]interface{}, mutatedField string) []string {
