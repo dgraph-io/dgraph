@@ -556,7 +556,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
 
