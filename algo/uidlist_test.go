@@ -500,6 +500,7 @@ func TestIntersectCompressedWithBinMissingSize(t *testing.T) {
 			// Intersection of blockNums and otherNums is commonNums.
 			commonNums, blockNums, otherNums := fillNums(N1, N2)
 
+			// Set the block size to 0 to verify that the method still works in this case.
 			enc := codec.Encoder{BlockSize: 0}
 			for _, num := range blockNums {
 				enc.Add(num)
