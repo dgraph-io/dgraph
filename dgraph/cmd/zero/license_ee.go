@@ -131,8 +131,7 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if _, err := w.Write([]byte(`{"code": "Success", "message": "License applied."}`)); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		glog.Errorf("Unable to send http response. Err: %v\n", err)
 	}
 }
 
