@@ -104,6 +104,11 @@ func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*Bloc
 		return nil, err
 	}
 
+	err = bs.db.Put(headerHashKey(header.Number.Uint64()), header.Hash().ToBytes())
+	if err != nil {
+		return nil, err
+	}
+
 	err = bs.SetBlockBody(header.Hash(), types.NewBody([]byte{}))
 
 	if err != nil {
