@@ -59,7 +59,7 @@ func TestMetrics(t *testing.T) {
 
 func extractMetrics(metrics string) (map[string]interface{}, error) {
 	lines := strings.Split(metrics, "\n")
-	metricRegex, err := regexp.Compile("(^[a-z_]+)")
+	metricRegex, err := regexp.Compile("(^[a-z0-9_]+)")
 	if err != nil {
 		return nil, err
 	}
