@@ -18,6 +18,8 @@ package rpc
 
 import (
 	"encoding/json"
+	"net"
+	"net/http"
 	"os"
 	"time"
 )
@@ -28,12 +30,25 @@ var (
 
 	GOSSAMER_NODE_HOST = os.Getenv("GOSSAMER_NODE_HOST")
 
+	NETWORK_SIZE_STR = os.Getenv("NETWORK_SIZE")
+
 	ContentTypeJSON   = "application/json"
 	dialTimeout       = 60 * time.Second
 	httpClientTimeout = 120 * time.Second
+
+	transport = &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout: dialTimeout,
+		}).Dial,
+	}
+	httpClient = &http.Client{
+		Transport: transport,
+		Timeout:   httpClientTimeout,
+	}
 )
 
-type serverResponse struct {
+// ServerResponse wraps the RPC response
+type ServerResponse struct {
 	// JSON-RPC Version
 	Version string `json:"jsonrpc"`
 	// Resulting values
@@ -49,8 +64,9 @@ type ErrCode int
 
 // Error is a struct that holds the error message and the error code for a error
 type Error struct {
-	Message   string
-	ErrorCode ErrCode
+	Message   string                 `json:"message"`
+	ErrorCode ErrCode                `json:"code"`
+	Data      map[string]interface{} `json:"data"`
 }
 
 // Error returns the error Message string

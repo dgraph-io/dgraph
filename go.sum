@@ -623,8 +623,6 @@ github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyC
 github.com/valyala/fasthttp v1.2.0/go.mod h1:4vX61m6KN+xDduDNwXrhIAVZaZaZiQ1luJk8LWSxF3s=
 github.com/valyala/quicktemplate v1.2.0/go.mod h1:EH+4AkTd43SvgIbQHYu59/cJyxDoOVRUAfrukLPuGJ4=
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
-github.com/wasmerio/go-ext-wasm v0.0.0-20191206132826-225d01fcd22c h1:iJG6MdQ3UPiZTMlGI6+dVw3XJXKecjacOZTRajrTEXA=
-github.com/wasmerio/go-ext-wasm v0.0.0-20191206132826-225d01fcd22c/go.mod h1:B0C/D0a2vNos7Y3IxQhMpGOY9PCuCKfLvfry33a1cKA=
 github.com/wasmerio/go-ext-wasm v0.3.2-0.20200326095750-0a32be6068ec h1:VElCeVyfCWNmCv6UisKQrr+P2/JRG0uf4/FIdCB4pL0=
 github.com/wasmerio/go-ext-wasm v0.3.2-0.20200326095750-0a32be6068ec/go.mod h1:VGyarTzasuS7k5KhSIGpM3tciSZlkP31Mp9VJTHMMeI=
 github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 h1:EKhdznlJHPMoKr0XTrX+IlJs1LH3lyx2nfr1dOlZ79k=

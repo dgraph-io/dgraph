@@ -17,11 +17,6 @@
 package rpc
 
 import (
-	"bytes"
-	"encoding/json"
-	"io/ioutil"
-	"net"
-	"net/http"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
@@ -73,93 +68,39 @@ func TestStableNetworkRPC(t *testing.T) {
 		},
 	}
 
-	transport := &http.Transport{
-		Dial: (&net.Dialer{
-			Timeout: dialTimeout,
-		}).Dial,
-	}
-	httpClient := &http.Client{
-		Transport: transport,
-		Timeout:   httpClientTimeout,
-	}
-
 	for _, test := range testsCases {
 		t.Run(test.description, func(t *testing.T) {
 
-			data := []byte(`{"jsonrpc":"2.0","method":"` + test.method + `","params":{},"id":1}`)
-			buf := &bytes.Buffer{}
-			_, err := buf.Write(data)
+			respBody, err := PostRPC(t, test.method, GOSSAMER_NODE_HOST, "{}")
 			require.Nil(t, err)
 
-			r, err := http.NewRequest("POST", GOSSAMER_NODE_HOST, buf)
-			require.Nil(t, err)
+			target := DecodeRPC(t, respBody, test.method)
 
-			r.Header.Set("Content-Type", ContentTypeJSON)
-			r.Header.Set("Accept", ContentTypeJSON)
+			log.Debug("Will assert payload", "target", target)
+			switch v := target.(type) {
 
-			resp, err := httpClient.Do(r)
-			require.Nil(t, err)
-			require.Equal(t, resp.StatusCode, http.StatusOK)
+			case modules.SystemHealthResponse:
 
-			defer func() {
-				_ = resp.Body.Close()
-			}()
+				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.IsSyncing, v.Health.IsSyncing)
+				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, v.Health.ShouldHavePeers)
+				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, v.Health.Peers)
 
-			respBody, err := ioutil.ReadAll(resp.Body)
-			require.Nil(t, err)
+			case modules.SystemNetworkStateResponse:
 
-			decoder := json.NewDecoder(bytes.NewReader(respBody))
-			decoder.DisallowUnknownFields()
+				require.NotNil(t, v.NetworkState)
+				require.NotNil(t, v.NetworkState.PeerID)
 
-			var response serverResponse
-			err = decoder.Decode(&response)
-			require.Nil(t, err, "respBody", string(respBody))
-			log.Debug("Got payload from RPC request", "serverResponse", response, "string(respBody)", string(respBody))
+			case modules.SystemPeersResponse:
 
-			require.Nil(t, response.Error)
-			require.Equal(t, response.Version, "2.0")
+				require.NotNil(t, v.Peers)
+				require.GreaterOrEqual(t, len(v.Peers), 2)
 
-			decoder = json.NewDecoder(bytes.NewReader(response.Result))
-			decoder.DisallowUnknownFields()
-
-			switch test.method {
-
-			case "system_health":
-				var target modules.SystemHealthResponse
-				err = decoder.Decode(&target)
-				require.Nil(t, err)
-
-				log.Debug("Will assert payload", "target", target)
-
-				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.IsSyncing, target.Health.IsSyncing)
-				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, target.Health.ShouldHavePeers)
-
-				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, target.Health.Peers)
-			case "system_networkState":
-				var target modules.SystemNetworkStateResponse
-				err = decoder.Decode(&target)
-				require.Nil(t, err)
-
-				log.Debug("Will assert payload", "target", target)
-
-				require.NotNil(t, target.NetworkState)
-				require.NotNil(t, target.NetworkState.PeerID)
-			case "system_peers":
-				var target modules.SystemPeersResponse
-				err = decoder.Decode(&target)
-				require.Nil(t, err)
-
-				log.Debug("Will assert payload", "target", target)
-
-				require.NotNil(t, target.Peers)
-				require.GreaterOrEqual(t, len(target.Peers), 2)
-
-				for _, v := range target.Peers {
-					require.NotNil(t, v.PeerID)
-					require.NotNil(t, v.Roles)
-					require.NotNil(t, v.ProtocolVersion)
-					require.NotNil(t, v.BestHash)
-					require.NotNil(t, v.BestNumber)
+				for _, vv := range v.Peers {
+					require.NotNil(t, vv.PeerID)
+					require.NotNil(t, vv.Roles)
+					require.NotNil(t, vv.ProtocolVersion)
+					require.NotNil(t, vv.BestHash)
+					require.NotNil(t, vv.BestNumber)
 				}
 
 			}

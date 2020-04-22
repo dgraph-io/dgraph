@@ -20,12 +20,14 @@ require (
 	github.com/gorilla/rpc v1.2.0
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/ipfs/go-datastore v0.3.1
+	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect
 	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/libp2p/go-libp2p v0.5.1
 	github.com/libp2p/go-libp2p-core v0.3.0
 	github.com/libp2p/go-libp2p-kad-dht v0.5.0
 	github.com/mattn/go-isatty v0.0.11 // indirect
 	github.com/multiformats/go-multiaddr v0.2.0
+	github.com/nanobox-io/golang-scribble v0.0.0-20190309225732-aa3e7c118975
 	github.com/naoina/go-stringutil v0.1.0 // indirect
 	github.com/naoina/toml v0.1.1
 	github.com/opentracing/opentracing-go v1.1.0 // indirect
