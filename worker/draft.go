@@ -1319,7 +1319,7 @@ func (n *node) abortOldTransactions() {
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
