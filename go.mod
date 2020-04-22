@@ -18,6 +18,7 @@ require (
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200421062606-cddf7c03451c
 	github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6
+	github.com/dgraph-io/ristretto v0.0.2-0.20200115201040-8f368f2f2ab3
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
@@ -41,6 +42,7 @@ require (
 	github.com/prometheus/client_model v0.0.0-20190129233127-fd36f4220a90 // indirect
 	github.com/prometheus/common v0.4.1 // indirect
 	github.com/prometheus/procfs v0.0.0-20190517135640-51af30a78b0e // indirect
+	github.com/sergi/go-diff v1.1.0 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/spf13/cast v1.3.0
 	github.com/spf13/cobra v0.0.5
@@ -61,5 +63,5 @@ require (
 	google.golang.org/grpc v1.23.0
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
-	gopkg.in/yaml.v2 v2.2.2
+	gopkg.in/yaml.v2 v2.2.4
 )

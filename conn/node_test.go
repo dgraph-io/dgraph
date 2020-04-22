@@ -68,6 +68,7 @@ func TestProposal(t *testing.T) {
 	db, err := badger.Open(badger.DefaultOptions(dir))
 	require.NoError(t, err)
 	store := raftwal.Init(db, 0, 0)
+	defer store.Closer.SignalAndWait()
 
 	rc := &pb.RaftContext{Id: 1}
 	n := NewNode(rc, store)
