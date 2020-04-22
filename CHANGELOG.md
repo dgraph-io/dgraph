@@ -73,14 +73,14 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- Support comma separated list of zero addresses in alpha (#5116) (#5258)
-- Optimization: Optimize snapshot creation. (#4901)
-- Optimization: Remove isChild from fastJsonNode. (#5184)
-- Optimization: Memory improvements in fastJsonNode. (#5088)
-- Update Badger to commit cddf7c03451c33. (#5216) (#5273)
+- Support comma separated list of zero addresses in alpha ([#5116][]) ([#5258][])
+- Optimization: Optimize snapshot creation. ([#4901][])
+- Optimization: Remove isChild from fastJsonNode. ([#5184][])
+- Optimization: Memory improvements in fastJsonNode. ([#5088][])
+- Update Badger to commit cddf7c03451c33. ([#5216][]) ([#5273][])
   - Compression/encryption runs in the background (which means faster writes)
   - Separate cache for bloom filters which limits the amount of memory used by bloom filters
-- Avoid crashing live loader in case the network is interrupted. (#5268)
+- Avoid crashing live loader in case the network is interrupted. ([#5268][])
 - Enterprise features
   - Backup/restore: Force users to explicitly tell restore command to run without zero. ([#5206][])
 
@@ -91,11 +91,10 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
 - Enterprise features
   - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
-- Set correct posting list type while creating it in live loader. (#5012)
-- Add support for tinyint in migrate tool. Fixes #4674. (#4842)
+- Set correct posting list type while creating it in live loader. ([#5012][])
+- Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
 
-  
 ### Added
 
 - Enterprise features
@@ -119,6 +118,17 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5103]: https://github.com/dgraph-io/dgraph/issues/5103
 [#5155]: https://github.com/dgraph-io/dgraph/issues/5155
 [#5238]: https://github.com/dgraph-io/dgraph/issues/5238
+[#5012]: https://github.com/dgraph-io/dgraph/issues/5012
+[#4674]: https://github.com/dgraph-io/dgraph/issues/4674
+[#4842]: https://github.com/dgraph-io/dgraph/issues/4842
+[#5116]: https://github.com/dgraph-io/dgraph/issues/5116
+[#5258]: https://github.com/dgraph-io/dgraph/issues/5258
+[#4901]: https://github.com/dgraph-io/dgraph/issues/4901
+[#5184]: https://github.com/dgraph-io/dgraph/issues/5184
+[#5088]: https://github.com/dgraph-io/dgraph/issues/5088
+[#5273]: https://github.com/dgraph-io/dgraph/issues/5273
+[#5216]: https://github.com/dgraph-io/dgraph/issues/5216
+[#5268]: https://github.com/dgraph-io/dgraph/issues/5268
 
 ## [20.03.0] - 2020-03-30
 [20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
@@ -137,7 +147,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Set version when rollup is called with no splits. ([#4945][])
 - Use a different stream writer id for split keys. ([#4875][])
 - Split posting lists recursively. ([#4867][])
-- Add support for tinyint in migrate tool. Fixes #4674. (#4842)
+- Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Enterprise features
   - **Breaking changes**
     - [BREAKING] Underlying schema for ACL has changed. Use the upgrade tool to migrate to the new data format. ([#4725][])
