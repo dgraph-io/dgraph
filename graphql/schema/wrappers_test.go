@@ -354,6 +354,13 @@ func TestSubstituteVarsInBody(t *testing.T) {
 			nil,
 		},
 		{
+			"substitutes nil variables correctly",
+			map[string]interface{}{"id": nil},
+			map[string]interface{}{"author": "$id"},
+			map[string]interface{}{"author": nil},
+			nil,
+		},
+		{
 			"substitutes variables with an array in template correctly",
 			map[string]interface{}{"id": "0x3", "admin": false, "postID": "0x9",
 				"text": "Random comment", "age": 28},

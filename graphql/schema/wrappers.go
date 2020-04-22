@@ -28,6 +28,8 @@ import (
 	"strings"
 	"text/scanner"
 
+	"github.com/vektah/gqlparser/v2/parser"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -48,13 +50,14 @@ type QueryType string
 type MutationType string
 
 type FieldHTTPConfig struct {
-	URL             string
-	Method          string
-	Template        *interface{}
-	Operation       string
-	ForwardHeaders  http.Header
-	Body            string
-	RemoteQueryName string
+	URL    string
+	Method string
+	// would be nil if there is no http body
+	Template       *interface{}
+	Operation      string
+	ForwardHeaders http.Header
+	// would be empty for non-GraphQL requests
+	RemoteGqlQueryName string
 }
 
 // Query/Mutation types and arg names
@@ -64,7 +67,6 @@ const (
 	SchemaQuery          QueryType    = "schema"
 	PasswordQuery        QueryType    = "checkPassword"
 	HTTPQuery            QueryType    = "http"
-	GraphqlQuery         QueryType    = "graphql"
 	NotSupportedQuery    QueryType    = "notsupported"
 	AddMutation          MutationType = "add"
 	UpdateMutation       MutationType = "update"
@@ -118,7 +120,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
-	CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error)
+	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -708,7 +710,7 @@ func (f *field) GetObjectName() string {
 	return f.field.ObjectDefinition.Name
 }
 
-func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldHTTPConfig, error) {
+func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
 	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
 	tf := typeDef.Fields.ForName(f.Name())
 	custom := tf.Directives.ForName(customDirective)
@@ -718,18 +720,24 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 
+	// both body and graphql can't be present together
 	bodyArg := httpArg.Value.Children.ForName("body")
+	graphqlArg := httpArg.Value.Children.ForName("graphql")
+	var bodyTemplate string
 	if bodyArg != nil {
-		bodyTemplate := bodyArg.Raw
-		if !graphql {
-			bt, _, err := parseBodyTemplate(bodyTemplate)
-			if err != nil {
-				return fconf, err
-			}
-			fconf.Template = bt
-		}
-		fconf.Body = bodyTemplate
+		bodyTemplate = bodyArg.Raw
+	} else if graphqlArg != nil {
+		bodyTemplate = `{ query: $query, variables: $variables }`
 	}
+	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
+	if bodyTemplate != "" {
+		bt, _, err := parseBodyTemplate(bodyTemplate)
+		if err != nil {
+			return fconf, err
+		}
+		fconf.Template = bt
+	}
+
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		headers := http.Header{}
@@ -740,52 +748,38 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 	}
 
 	// if it is a query or mutation, substitute the vars in URL and Body here itself
-	if isQueryOrMutation && !graphql {
+	if isQueryOrMutation {
 		var err error
 		argMap := f.field.ArgumentMap(f.op.vars)
-		fconf.URL, err = SubstituteVarsInURL(fconf.URL, argMap)
-		if err != nil {
-			return fconf, errors.Wrapf(err, "while substituting vars in URL")
+		var bodyVars map[string]interface{}
+		// url params can exist only with body, and not with graphql
+		if graphqlArg == nil {
+			fconf.URL, err = SubstituteVarsInURL(fconf.URL, argMap)
+			if err != nil {
+				return fconf, errors.Wrapf(err, "while substituting vars in URL")
+			}
+			bodyVars = argMap
+		} else {
+			queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
+			if gqlErr != nil {
+				return fconf, err
+			}
+			// queryDoc will always have only one operation with only one field
+			fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
+			buf := &bytes.Buffer{}
+			buildGraphqlRequestFields(buf, f.field)
+			remoteQuery := graphqlArg.Raw
+			remoteQuery = remoteQuery[:strings.LastIndex(remoteQuery, "}")]
+			remoteQuery = fmt.Sprintf("%s%s}", remoteQuery, buf.String())
+			bodyVars = make(map[string]interface{})
+			bodyVars["query"] = remoteQuery
+			bodyVars["variables"] = argMap
 		}
 		if fconf.Template != nil {
-			if err = SubstituteVarsInBody(fconf.Template, argMap); err != nil {
+			if err = SubstituteVarsInBody(fconf.Template, bodyVars); err != nil {
 				return fconf, errors.Wrapf(err, "while substituting vars in Body")
 			}
 		}
-	} else if graphql {
-		graphqlArg := custom.Arguments.ForName("graphql")
-		remoteQuery := graphqlArg.Value.Children.ForName("query").Raw
-		queryEndIndex := strings.Index(remoteQuery, "(")
-		fconf.RemoteQueryName = strings.TrimSpace(remoteQuery[:queryEndIndex])
-		argMap := f.field.ArgumentMap(f.op.vars)
-
-		for _, arg := range f.field.Definition.Arguments {
-			val, ok := argMap[arg.Name]
-			if !ok {
-				continue
-			}
-			value := ""
-			if arg.Type.Name() == "String" || arg.Type.Name() == "ID" || val == nil {
-				if val == nil {
-					val = "null"
-				}
-				value = `"` + fmt.Sprintf("%+v", val) + `"`
-			}
-			remoteQuery = strings.ReplaceAll(remoteQuery, "$"+arg.Name, value)
-		}
-		buf := &bytes.Buffer{}
-		buildGraphqlRequestFields(buf, f.field)
-		remoteQuery += buf.String()
-		// contact method and request object
-		remoteQuery = `query{` + remoteQuery + `}`
-		param := Request{
-			Query: remoteQuery,
-		}
-		remoteQueryBuf, err := json.Marshal(param)
-		if err != nil {
-			return fconf, err
-		}
-		fconf.Body = string(remoteQueryBuf)
 	} else {
 		fconf.Operation = "batch"
 		op := httpArg.Value.Children.ForName("operation")
@@ -796,8 +790,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool, graphql bool) (FieldH
 	return fconf, nil
 }
 
-func (f *field) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig(f, false, graphql)
+func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig(f, false)
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -935,8 +929,8 @@ func (q *query) GetObjectName() string {
 	return q.field.ObjectDefinition.Name
 }
 
-func (q *query) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(q), true, graphql)
+func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(q), true)
 }
 
 func (q *query) QueryType() QueryType {
@@ -946,9 +940,6 @@ func (q *query) QueryType() QueryType {
 func queryType(name string, custom *ast.Directive) QueryType {
 	switch {
 	case custom != nil:
-		if custom.Arguments.ForName("graphql") != nil {
-			return GraphqlQuery
-		}
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
@@ -1072,8 +1063,8 @@ func (m *mutation) MutatedType() Type {
 	return m.op.inSchema.mutatedType[m.Name()]
 }
 
-func (m *mutation) CustomHTTPConfig(graphql bool) (FieldHTTPConfig, error) {
-	return getCustomHTTPConfig((*field)(m), true, graphql)
+func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
+	return getCustomHTTPConfig((*field)(m), true)
 }
 
 func (m *mutation) GetObjectName() string {

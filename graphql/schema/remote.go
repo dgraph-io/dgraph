@@ -24,9 +24,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/gqlerror"
-	"github.com/vektah/gqlparser/v2/parser"
 )
 
 // introspectRemoteSchema introspectes remote schema
@@ -41,7 +40,7 @@ func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(body))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
@@ -147,190 +146,152 @@ const introspectionQuery = `
 	}
   `
 
-type remoteGraphqlEndpoint struct {
-	graphqlArg *ast.Argument
-	rootQuery  *ast.Definition
-	schema     *ast.Schema
-	field      *ast.FieldDefinition
-	directive  *ast.Directive
-	url        string
+// remoteGraphqlMetadata represents the minimal set of data that is required to validate the graphql
+// given in @custom->http->graphql with the remote server
+type remoteGraphqlMetadata struct {
+	// parentType is the type which contains the field on which @custom is applied
+	parentType *ast.Definition
+	// parentField refers to the field on which @custom is applied
+	parentField *ast.FieldDefinition
+	// graphqlOpDef is the Operation Definition for the operation given in @custom->http->graphql
+	// The operation can only be a query or mutation
+	graphqlOpDef *ast.OperationDefinition
+	// url is the url of remote graphql endpoint
+	url string
 }
 
-func validateRemoteGraphqlCall(endpoint *remoteGraphqlEndpoint) *gqlerror.Error {
-	query := endpoint.graphqlArg.Value.Children.ForName("query")
-	if query == nil {
-		return gqlerror.ErrorPosf(
-			endpoint.directive.Position,
-			"Type %s; Field %s; query field inside @custom directive is mandatory.",
-			endpoint.rootQuery.Name,
-			endpoint.field.Name)
-	}
-	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: fmt.Sprintf(`query {%s}`,
-		query.Raw)})
-	if gqlErr != nil {
-		return gqlErr
-	}
-
-	if len(parsedQuery.Operations[0].SelectionSet) > 1 {
-		return gqlerror.ErrorPosf(
-			endpoint.directive.Position,
-			"Type %s; Field %s; only one query is possible inside query argument. For eg:"+
-				" valid input: @custom(..., graphql:{ query: \"getUser(id: $id)\"})"+"invalid input:"+
-				"@custom(..., graphql:{query: \"getUser(id: $id) getAuthor(id: $id)\"})",
-			endpoint.rootQuery.Name,
-			endpoint.field.Name)
-	}
-
-	// Validate given remote query is present in the remote schema or not.
-	remoteQuery := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
-
-	// remoteQuery should not contain any selection set.
-	// for eg: bla(..){
-	// 	..
-	// }
-	if len(remoteQuery.SelectionSet) != 0 {
-		return gqlerror.ErrorPosf(
-			endpoint.directive.Position, "Type %s; Field %s;Remote query %s should not contain"+
-				" any selection statement. eg: Remote query should be like this %s(...) and not"+
-				" like %s(..){...}", endpoint.rootQuery.Name,
-			endpoint.field.Name,
-			remoteQuery.Name,
-			remoteQuery.Name,
-			remoteQuery.Name)
-	}
-
-	// Check whether the given argument and query is present in the remote schema by introspecting.
-	remoteIntrospection, err := introspectRemoteSchema(endpoint.url)
+// validates the graphql given in @custom->http->graphql by introspecting remote schema.
+// It assumes that the graphql syntax is correct, only remote validation is needed.
+func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
+	remoteIntrospection, err := introspectRemoteSchema(metadata.url)
 	if err != nil {
-		return gqlerror.ErrorPosf(
-			endpoint.directive.Position, "Type %s; Field %s; unable to introspect remote schema"+
-				" for the url %s", endpoint.rootQuery.Name,
-			endpoint.field.Name,
-			endpoint.url)
+		return err
 	}
 
-	var introspectedRemoteQuery GqlField
-	queryExist := false
-	for _, types := range remoteIntrospection.Data.Schema.Types {
-		if types.Name != "Query" {
+	var remoteQueryTypename string
+	operationType := metadata.graphqlOpDef.Operation
+	switch operationType {
+	case "query":
+		remoteQueryTypename = remoteIntrospection.Data.Schema.QueryType.Name
+	case "mutation":
+		remoteQueryTypename = remoteIntrospection.Data.Schema.MutationType.Name
+	default:
+		// this case is not possible as we are validating the operation to be query/mutation in
+		// @custom directive validation
+		return errors.Errorf("found %s operation, it can only have query/mutation.", operationType)
+	}
+
+	var introspectedRemoteQuery *GqlField
+	givenQuery := metadata.graphqlOpDef.SelectionSet[0].(*ast.Field)
+	for _, typ := range remoteIntrospection.Data.Schema.Types {
+		if typ.Name != remoteQueryTypename {
 			continue
 		}
-		for _, queryType := range types.Fields {
-			if queryType.Name == remoteQuery.Name {
-				queryExist = true
-				introspectedRemoteQuery = queryType
+		for _, remoteQuery := range typ.Fields {
+			if remoteQuery.Name == givenQuery.Name {
+				introspectedRemoteQuery = &remoteQuery
+				break
 			}
 		}
+		if introspectedRemoteQuery != nil {
+			break
+		}
 	}
 
-	if !queryExist {
-		return gqlerror.ErrorPosf(
-			endpoint.directive.Position, "Type %s; Field %s; %s is not present in remote schema",
-			endpoint.rootQuery.Name,
-			endpoint.field.Name,
-			remoteQuery.Name)
+	// check whether given query/mutation is present in remote schema
+	if introspectedRemoteQuery == nil {
+		return errors.Errorf("given %s: %s is not present in remote schema.",
+			operationType, givenQuery.Name)
 	}
 
-	// check whether given arguments are present in the remote query.
-	remoteArguments := collectArgumentsFromQuery(remoteQuery)
-	argValToType := make(map[string]string)
+	// check whether the return type of remote query is same as the required return type
+	// TODO: need to check whether same will work for @custom on fields which have batch operation
+	expectedReturnType := introspectedRemoteQuery.Type.String()
+	gotReturnType := metadata.parentField.Type.String()
+	if expectedReturnType != gotReturnType {
+		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s.",
+			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
+	}
 
-	introspectedArgs, notNullArgs := collectArgsFromIntrospection(introspectedRemoteQuery)
+	givenQryArgDefs, givenQryArgVals := getGivenQueryArgsAsMap(givenQuery, metadata.parentField,
+		metadata.parentType)
+	remoteQryArgDefs, remoteQryRequiredArgs := getRemoteQueryArgsAsMap(introspectedRemoteQuery)
 
-	for remoteArg, remoteArgVal := range remoteArguments {
-
-		argType, ok := introspectedArgs[remoteArg]
+	// check whether args of given query/mutation match the args of remote query/mutation
+	for givenArgName, givenArgDef := range givenQryArgDefs {
+		remoteArgDef, ok := remoteQryArgDefs[givenArgName]
 		if !ok {
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s; %s arg not present in the remote"+
-					" query %s",
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				remoteArg,
-				remoteQuery.Name)
+			return errors.Errorf("given %s: %s: arg %s not present in remote %s.", operationType,
+				givenQuery.Name, givenArgName, operationType)
 		}
-
-		if _, ok = graphqlScalarType[argType]; !ok {
-			fmt.Println(argType)
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s; %s is not scalar. only scalar"+
-					" argument is supported in the remote graphql call.",
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				remoteArg)
+		if givenArgDef == nil {
+			return errors.Errorf("given %s: %s: variable %s is missing in given context.",
+				operationType, givenQuery.Name, givenQryArgVals[givenArgName])
 		}
-		argValToType[remoteArgVal] = argType
-	}
-
-	// We are only checking whether the required variable is exist in the
-	// local remote call.
-	for requiredArg := range notNullArgs {
-		if _, ok := remoteArguments[requiredArg]; !ok {
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s;%s is a required argument in the "+
-					"remote query %s. But, the %s is not present in the custom logic call for %s. "+
-					"Please provide the required arg in the remote query %s",
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				requiredArg,
-				remoteQuery.Name,
-				requiredArg,
-				remoteQuery.Name,
-				remoteQuery.Name)
+		expectedArgType := remoteArgDef.Type.String()
+		gotArgType := givenArgDef.Type.String()
+		if expectedArgType != gotArgType {
+			return errors.Errorf("given %s: %s: type mismatch for variable %s; expected: %s, "+
+				"got: %s.", operationType, givenQuery.Name, givenQryArgVals[givenArgName],
+				expectedArgType, gotArgType)
 		}
 	}
 
-	// Validate given argument type is matching with the remote query argument.
-	for variable, typeName := range argValToType {
-		localRemoteCallArg := endpoint.field.Arguments.ForName(variable[1:])
-		if localRemoteCallArg == nil {
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, `Type %s; Field %s; unable to find the variable %s in 
-				  %s`,
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				variable,
-				endpoint.field.Name)
-		}
-
-		if localRemoteCallArg.Type.Name() != typeName {
-			return gqlerror.ErrorPosf(
-				endpoint.directive.Position, "Type %s; Field %s; expected type for variable  "+
-					"%s is %s. But got %s",
-				endpoint.rootQuery.Name,
-				endpoint.field.Name,
-				variable,
-				typeName,
-				localRemoteCallArg.Type)
+	// check all non-null args required by remote query/mutation are present in given query/mutation
+	for _, remoteArgName := range remoteQryRequiredArgs {
+		_, ok := givenQryArgVals[remoteArgName]
+		if !ok {
+			return errors.Errorf("given %s: %s: required arg %s is missing.", operationType,
+				givenQuery.Name, remoteArgName)
 		}
 	}
+
 	return nil
 }
 
-// collectArgumentsFromQuery will collect all the arguments and values from the query.
-func collectArgumentsFromQuery(query *ast.Field) map[string]string {
-	arguments := make(map[string]string)
-	for _, arg := range query.Arguments {
-		val := arg.Value.String()
-		arguments[arg.Name] = val
+// getGivenQueryArgsAsMap returns following maps:
+// 1. arg name -> *ast.ArgumentDefinition
+// 2. arg name -> argument value (i.e., variable like $id)
+func getGivenQueryArgsAsMap(givenQuery *ast.Field, parentField *ast.FieldDefinition,
+	parentType *ast.Definition) (map[string]*ast.ArgumentDefinition, map[string]string) {
+	argDefMap := make(map[string]*ast.ArgumentDefinition)
+	argValMap := make(map[string]string)
+
+	if parentType.Name == "Query" || parentType.Name == "Mutation" {
+		parentFieldArgMap := getFieldArgDefsAsMap(parentField)
+		for _, arg := range givenQuery.Arguments {
+			varName := arg.Value.String()
+			argDefMap[arg.Name] = parentFieldArgMap[varName[1:]]
+			argValMap[arg.Name] = varName
+		}
+	} else {
+		// TODO: handle @custom graphql validation for fields here
 	}
-	return arguments
+	return argDefMap, argValMap
 }
 
-// collectArgsFromIntrospection will collect all the arguments with it's type and required argument
-func collectArgsFromIntrospection(query GqlField) (map[string]string, map[string]int) {
-	notNullArgs := make(map[string]int)
-	arguments := make(map[string]string)
-	for _, introspectedArg := range query.Args {
-
-		// Collect all the required variable to validate against provided variable.
-		if introspectedArg.Type.Kind == "NOT_NULL" {
-			notNullArgs[introspectedArg.Name] = 0
-		}
-
-		arguments[introspectedArg.Name] = introspectedArg.Type.OfType.Name
+func getFieldArgDefsAsMap(fieldDef *ast.FieldDefinition) map[string]*ast.ArgumentDefinition {
+	argMap := make(map[string]*ast.ArgumentDefinition)
+	for _, v := range fieldDef.Arguments {
+		argMap[v.Name] = v
 	}
-	return arguments, notNullArgs
+	return argMap
+}
+
+// getRemoteQueryArgsAsMap returns following things:
+// 1. map of arg name -> Argument Definition in Gql introspection response format
+// 2. list of arg name for NON_NULL args
+func getRemoteQueryArgsAsMap(remoteQuery *GqlField) (map[string]Args, []string) {
+	argDefMap := make(map[string]Args)
+	requiredArgs := make([]string, 0)
+
+	for _, arg := range remoteQuery.Args {
+		argDefMap[arg.Name] = arg
+		if arg.Type.Kind == "NON_NULL" {
+			requiredArgs = append(requiredArgs, arg.Name)
+		}
+	}
+	return argDefMap, requiredArgs
 }
 
 type IntrospectedSchema struct {
@@ -339,20 +300,15 @@ type IntrospectedSchema struct {
 type IntrospectionQueryType struct {
 	Name string `json:"name"`
 }
-type OfType struct {
-	Kind   string      `json:"kind"`
-	Name   string      `json:"name"`
-	OfType interface{} `json:"ofType"`
-}
 type GqlType struct {
-	Kind   string `json:"kind"`
-	Name   string `json:"name"`
-	OfType OfType `json:"ofType"`
+	Kind   string   `json:"kind"`
+	Name   string   `json:"name"`
+	OfType *GqlType `json:"ofType"`
 }
 type GqlField struct {
 	Name              string      `json:"name"`
 	Args              []Args      `json:"args"`
-	Type              GqlType     `json:"type"`
+	Type              *GqlType    `json:"type"`
 	IsDeprecated      bool        `json:"isDeprecated"`
 	DeprecationReason interface{} `json:"deprecationReason"`
 }
@@ -367,7 +323,7 @@ type Types struct {
 }
 type Args struct {
 	Name         string      `json:"name"`
-	Type         GqlType     `json:"type"`
+	Type         *GqlType    `json:"type"`
 	DefaultValue interface{} `json:"defaultValue"`
 }
 type Directives struct {
@@ -377,11 +333,28 @@ type Directives struct {
 }
 type IntrospectionSchema struct {
 	QueryType        IntrospectionQueryType `json:"queryType"`
-	MutationType     interface{}            `json:"mutationType"`
-	SubscriptionType interface{}            `json:"subscriptionType"`
+	MutationType     IntrospectionQueryType `json:"mutationType"`
+	SubscriptionType IntrospectionQueryType `json:"subscriptionType"`
 	Types            []Types                `json:"types"`
 	Directives       []Directives           `json:"directives"`
 }
 type Data struct {
 	Schema IntrospectionSchema `json:"__schema"`
+}
+
+func (t *GqlType) String() string {
+	if t == nil {
+		return ""
+	}
+	// refer http://spec.graphql.org/June2018/#sec-Type-Kinds
+	// it confirms, if type kind is LIST or NON_NULL all other fields except ofType will be
+	// null, so there won't be any name at that level.
+	switch t.Kind {
+	case "LIST":
+		return fmt.Sprintf("[%s]", t.OfType.String())
+	case "NON_NULL":
+		return fmt.Sprintf("%s!", t.OfType.String())
+	default:
+		return t.Name
+	}
 }
