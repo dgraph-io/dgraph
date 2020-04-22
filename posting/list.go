@@ -888,9 +888,9 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	}
 
 	var plist *pb.PostingList
-	var enc codec.Encoder
 	var startUid, endUid uint64
 	var splitIdx int
+	enc := codec.Encoder{BlockSize: blockSize}
 
 	// Method to properly initialize the variables above
 	// when a multi-part list boundary is crossed.
@@ -934,6 +934,8 @@ func (l *List) rollup(readTs uint64, split bool) (*rollupOutput, error) {
 	// Finish  writing the last part of the list (or the whole list if not a multi-part list).
 	x.Check(err)
 	plist.Pack = enc.Done()
+	x.AssertTrue(plist.Pack.BlockSize == uint32(blockSize))
+
 	if len(l.plist.Splits) > 0 {
 		out.parts[startUid] = plist
 	}
