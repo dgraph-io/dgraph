@@ -102,6 +102,7 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 		// do nothing as expected.
 		return
 	}
+
 	// Pick the shorter list and do binary search
 	if ld < lq {
 		uids := dec.Uids()
