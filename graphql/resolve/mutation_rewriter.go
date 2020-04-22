@@ -607,7 +607,13 @@ func (drw *deleteRewriter) Rewrite(
 		selector:      deleteAuthSelector,
 	}
 
-	qry := RewriteUpsertQueryFromMutation(m, authRw)
+	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
+	qry := dgQry
+	if qry.Attr == "" {
+		// Auth queries must have been added to the query, first query is the actual delete
+		qry = dgQry.Children[0]
+	}
+
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 
 	// we need to delete this node with ^^ and then any reference we know about
@@ -648,7 +654,7 @@ func (drw *deleteRewriter) Rewrite(
 	b, err := json.Marshal(deletes)
 
 	upsert := &UpsertMutation{
-		Query:     qry,
+		Query:     dgQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
