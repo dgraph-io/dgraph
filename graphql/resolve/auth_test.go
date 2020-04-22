@@ -53,16 +53,6 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	testRewriter := NewQueryRewriter()
 
-	// Create the Claims
-	claims := CustomClaims{
-		map[string]interface{}{},
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute).Unix(),
-			Issuer:    "test",
-		},
-	}
-	claims.AuthVariables["USER"] = "user1"
-
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -75,21 +65,40 @@ func TestAuthQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			ctx := context.Background()
-			claims.AuthVariables["ROLE"] = tcase.Role
-			token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			ss, err := token.SignedString([]byte(AuthHmacSecret))
-			require.NoError(t, err)
+			authVars := map[string]interface{}{
+				"USER": "user1",
+				"ROLE": tcase.Role,
+			}
 
-			md := metadata.New(nil)
-			md.Append("authorizationJwt", ss)
-			ctx = metadata.NewIncomingContext(ctx, md)
+			ctx := addClaimsToContext(context.Background(), t, authVars)
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
+}
+
+func addClaimsToContext(
+	ctx context.Context,
+	t *testing.T,
+	authVars map[string]interface{}) context.Context {
+
+	claims := CustomClaims{
+		authVars,
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute).Unix(),
+			Issuer:    "test",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString([]byte(AuthHmacSecret))
+	require.NoError(t, err)
+
+	md := metadata.New(nil)
+	md.Append("authorizationJwt", ss)
+	return metadata.NewIncomingContext(ctx, md)
 }
 
 // Tests that the queries that run after a mutation get auth correctly added in.
@@ -197,12 +206,16 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			op, err := gqlSchema.Operation(&schema.Request{Query: tt.gqlMut})
 			require.NoError(t, err)
 			gqlMutation := test.GetMutation(t, op)
-			_, err = rewriter.Rewrite(context.Background(), gqlMutation)
+			authVars := map[string]interface{}{
+				"USER": "user1",
+			}
+			ctx := addClaimsToContext(context.Background(), t, authVars)
+			_, err = rewriter.Rewrite(ctx, gqlMutation)
 			require.Nil(t, err)
 
 			// -- Act --
 			dgQuery, err := rewriter.FromMutationResult(
-				context.Background(), gqlMutation, tt.assigned, tt.result)
+				ctx, gqlMutation, tt.assigned, tt.result)
 
 			// -- Assert --
 			require.Nil(t, err)
