@@ -305,7 +305,10 @@ can leave that flag empty, and Zero would auto-assign an id to the Alpha. This
 id would get persisted in the write-ahead log, so be careful not to delete it.
 
 The new Alphas will automatically detect each other by communicating with
-Dgraph zero and establish connections to each other.
+Dgraph zero and establish connections to each other. You can provide a list of
+zero addresses to alpha using the `--zero` flag. Alpha will try to connect to
+one of the zeros starting from the first zero address in the list. For example:
+`--zero=zero1,zero2,zero3` where zero1 is the `host:port` of a zero instance.
 
 Typically, Zero would first attempt to replicate a group, by assigning a new
 Dgraph alpha to run the same group as assigned to another. Once the group has
@@ -481,12 +484,12 @@ docker-machine --version
 You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) to create the instances using Docker Machine.
 
 Considering that you have AWS credentials setup, you can use the below commands to start 3 AWS
-`t2-micro` instances with Docker Engine installed on them.
+`t2-medium` instances with Docker Engine installed on them.
 
 ```sh
-docker-machine create --driver amazonec2 aws01
-docker-machine create --driver amazonec2 aws02
-docker-machine create --driver amazonec2 aws03
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws01
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws02
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws03
 ```
 
 Your output should look like
@@ -501,7 +504,7 @@ Docker is up and running!
 To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
 ```
 
-The command would provision a `t2-micro` instance with a security group called `docker-machine`
+The command would provision a `t2-medium` instance with a security group called `docker-machine`
 (allowing inbound access on 2376 and 22).
 
 You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
@@ -1241,8 +1244,9 @@ These HTTP endpoints are deprecated and will be removed in the next release. Ple
 {{% /notice %}}
 
 * `/health?all` returns information about the health of all the servers in the cluster.
-* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
-* `/admin/export` initiates a data [export]({{< relref "#export">}}).
+* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown" >}}) of the Alpha.
+* `/admin/export` initiates a data [export]({{< relref "#export" >}}). The exported data will be
+encrypted if the alpha instance was configured with an encryption key file.
 
 By default the Alpha listens on `localhost` for admin actions (the loopback address only accessible from the same machine). The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections.
 
@@ -1299,11 +1303,17 @@ Here’s an example of JSON returned from the above query:
 }
 ```
 
-- `version`: Version of Dgraph running the Alpha server.
-- `instance`: Name of the instance. Always set to `alpha`.
-- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+- `instance`: Name of the instance. Either `alpha` or `zero`.
+- `status`: Health status of the instance. Either `healthy` or `unhealthy`.
+- `version`: Version of Dgraph running the Alpha or Zero server.
+- `uptime`: Time in nanoseconds since the Alpha or Zero server is up and running.
+- `address`: IP_ADDRESS:PORT of the instance.
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
+- `lastEcho`: Last time, in Unix epoch, when the instance was contacted by another Alpha or Zero server.
+- `ongoing`: List of ongoing operations in the background.
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
 
-The same information is available from the `/health` and `/health?all` endpoints.
+The same information (except `ongoing` and `indexing`) is available from the `/health` and `/health?all` endpoints of Alpha server.
 
 ## More about Dgraph Zero
 
@@ -1481,6 +1491,29 @@ Here’s the information the above JSON document provides:
 improve data scalability is to shard a predicate into separate tablets that could
 be assigned to different groups.
 {{% /notice %}}
+
+## Log Format
+
+Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows:
+
+	`Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...`
+
+Where the fields are defined as follows:
+
+```
+	L                A single character, representing the log level (eg 'I' for INFO)
+	mm               The month (zero padded; ie May is '05')
+	dd               The day (zero padded)
+	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
+	threadid         The space-padded thread ID as returned by GetTID()
+	file             The file name
+	line             The line number
+	msg              The user-supplied message
+```
+
+### Query Logging
+
+To enable query logging, you must set `-v=3` which will enable verbose logging for everything. Alternatively, you can set `--vmodule=server=3` for only the dgraph/server.go file which would only enable query/mutation logging.
 
 ## TLS configuration
 
@@ -1739,7 +1772,7 @@ Dgraph Live Loader (run with `dgraph live`) is a small helper program which read
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
-{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `-x` flag, which can reused
+{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `--xidmap` flag, which can reused
 given that live loader completed successfully in the previous run.{{% /notice %}}
 
 ```sh
@@ -1783,6 +1816,8 @@ Do not confuse with `-C`.
 Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
+
+`-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
 ### Bulk Loader
 
@@ -1933,6 +1968,10 @@ ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 `--format`: Specify file format (rdf or json) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
 
+`--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna use [External IDs](/mutations#external-ids).
+
+`--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
+
 #### Tuning & monitoring
 
 ##### Performance Tuning
@@ -1980,6 +2019,7 @@ Dgraph alpha instances more evenly.
 
 ## Monitoring
 Dgraph exposes metrics via the `/debug/vars` endpoint in json format and the `/debug/prometheus_metrics` endpoint in Prometheus's text-based format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your Dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
+
 ```sh
 scrape_configs:
   - job_name: "dgraph"
@@ -1987,8 +2027,8 @@ scrape_configs:
     scrape_interval: "2s"
     static_configs:
     - targets:
-      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing metrics.
-      - 172.31.15.230:8080
+      - 172.31.9.133:6080     # For Dgraph zero, 6080 is the http endpoint exposing metrics.
+      - 172.31.15.230:8080    # For Dgraph alpha, 8080 is the http endpoint exposing metrics.
       - 172.31.0.170:8080
       - 172.31.8.118:8080
 ```
@@ -2010,15 +2050,15 @@ The disk metrics let you track the disk activity of the Dgraph process. Dgraph d
 directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
 read from and write to disk.
 
- Metrics                          | Description
- -------                          | -----------
- `badger_disk_reads_total`        | Total count of disk reads in Badger.
- `badger_disk_writes_total`       | Total count of disk writes in Badger.
- `badger_gets_total`              | Total count of calls to Badger's `get`.
- `badger_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
- `badger_puts_total`              | Total count of calls to Badger's `put`.
- `badger_read_bytes`              | Total bytes read from Badger.
- `badger_written_bytes`           | Total bytes written to Badger.
+ Metrics                          	 | Description
+ -------                          	 | -----------
+ `badger_v2_disk_reads_total`        | Total count of disk reads in Badger.
+ `badger_v2_disk_writes_total`       | Total count of disk writes in Badger.
+ `badger_v2_gets_total`              | Total count of calls to Badger's `get`.
+ `badger_v2_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
+ `badger_v2_puts_total`              | Total count of calls to Badger's `put`.
+ `badger_v2_read_bytes`              | Total bytes read from Badger.
+ `badger_v2_written_bytes`           | Total bytes written to Badger.
 
 ### Memory Metrics
 
@@ -2039,13 +2079,14 @@ operating system and how much is actively in use.
 
 The activity metrics let you track the mutations, queries, and proposals of an Dgraph instance.
 
- Metrics                          | Description
- -------                          | -----------
- `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
- `dgraph_active_mutations_total`  | Total number of mutations currently running.
- `dgraph_pending_proposals_total` | Total pending Raft proposals.
- `dgraph_pending_queries_total`   | Total number of queries in progress.
- `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
+ Metrics                                            | Description
+ -------                                            | -----------
+ `go_goroutines`                                    | Total number of Goroutines currently running in Dgraph.
+ `dgraph_active_mutations_total`                    | Total number of mutations currently running.
+ `dgraph_pending_proposals_total`                   | Total pending Raft proposals.
+ `dgraph_pending_queries_total`                     | Total number of queries in progress.
+ `dgraph_num_queries_total{method="Server.Mutate"}` | Total number of mutations run in Dgraph.
+ `dgraph_num_queries_total{method="Server.Query"}`  | Total number of queries run in Dgraph.
 
 ### Health Metrics
 
@@ -2261,11 +2302,11 @@ When the new cluster (that uses the upgraded version of Dgraph) is up and runnin
 
 #### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
 
-1. Use [binary]({{< relref "#binary-backups">}}) backup to export data from old cluster
+1. Use [binary]({{< relref "enterprise-features/index.md#binary-backups">}}) backup to export data from old cluster
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Upgrade `dgraph` binary to `v20.03.0`
-5. [Restore]({{< relref "#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+5. [Restore]({{< relref "enterprise-features/index.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
 6. Start a new Dgraph cluster using the restored data directories
 7. Upgrade ACL data using the following command:
 

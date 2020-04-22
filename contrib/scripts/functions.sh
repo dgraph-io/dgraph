@@ -27,7 +27,7 @@ function restartCluster {
     docker_compose_gopath=`pwd`/../osx-docker-gopath
 
     # FIXME: read the go version from a constant
-    docker run -it --rm \
+    docker run --rm \
       -v dgraph_gopath:/go \
       -v dgraph_gocache:/root/.cache/go-build \
       -v `pwd`/..:/app \

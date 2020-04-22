@@ -264,20 +264,37 @@ message Snapshot {
 	uint64 since_ts = 5;
 }
 
+message RestoreRequest {
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
+
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
+
+	// Info needed to process encrypted backups.
+	string key_file = 9;
+}
+
 message Proposal {
-	Mutations mutations    = 2;
-	repeated KV kv         = 4;
-	MembershipState state  = 5;
-	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
-	string key             = 7;
-	OracleDelta delta      = 8;
-	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
-	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
-	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
+	Mutations mutations    		= 2;
+	repeated badgerpb2.KV kv  = 4;
+	MembershipState state  		= 5;
+	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
+	string key             		= 7;
+	OracleDelta delta      		= 8;
+	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
+	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore 		= 12;
 }
 
 message KVS {
- repeated pb.KV kv = 1;
+ repeated badgerpb2.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
 }
@@ -513,10 +530,11 @@ service Worker {
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Restore (RestoreRequest)            returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -524,7 +542,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+    badgerpb2.KVList kvs = 1;
 }
 
 message Num {

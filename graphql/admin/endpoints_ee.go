@@ -56,6 +56,50 @@ const adminTypes = `
 		response: Response
 	}
 
+	input RestoreInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		"""
+		backupId: String!
+
+		"""
+		Path to the key file needed to decrypt the backup. This file should be accessible
+		by all alphas in the group. The backup will be written using the encryption key
+		with which the cluster was started, which might be different than this key.
+		"""
+		keyFile: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+	}
+
+	type RestorePayload {
+		response: Response
+	}
+
 	type LoginResponse {
 
 		"""
@@ -250,6 +294,12 @@ const adminMutations = `
 	Start a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
 	"""
 	backup(input: BackupInput!) : BackupPayload
+
+	"""
+	Start restoring a binary backup.  See :
+		https://docs.dgraph.io/enterprise-features/#binary-backups
+	"""
+	restore(input: RestoreInput!) : RestorePayload
 
 	"""
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.

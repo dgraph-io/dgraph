@@ -86,7 +86,7 @@ func upgradeACLRules() error {
 
 	groups, ok := data["rules"]
 	if !ok {
-		return fmt.Errorf("Unable to parse ACLs: %v", string(resp.Json))
+		return fmt.Errorf("unable to parse ACLs: %v", string(resp.Json))
 	}
 
 	counter := 1
@@ -98,32 +98,30 @@ func upgradeACLRules() error {
 
 		var rs rules
 		if err := json.Unmarshal([]byte(group.ACL), &rs); err != nil {
-			return fmt.Errorf("Unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
+			return fmt.Errorf("unable to unmarshal ACL: %v :: %w", string(group.ACL), err)
 		}
 
 		for _, r := range rs {
 			newRuleStr := fmt.Sprintf("_:newrule%d", counter)
-			nquads = append(nquads, &api.NQuad{
+			nquads = append(nquads, []*api.NQuad{{
 				Subject:   newRuleStr,
 				Predicate: "dgraph.rule.predicate",
 				ObjectValue: &api.Value{
 					Val: &api.Value_StrVal{StrVal: r.Predicate},
 				},
-			})
-
-			nquads = append(nquads, &api.NQuad{
-				Subject:   newRuleStr,
-				Predicate: "dgraph.rule.permission",
-				ObjectValue: &api.Value{
-					Val: &api.Value_IntVal{IntVal: int64(r.Permission)},
+			},
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.rule.permission",
+					ObjectValue: &api.Value{
+						Val: &api.Value_IntVal{IntVal: int64(r.Permission)},
+					},
 				},
-			})
-
-			nquads = append(nquads, &api.NQuad{
-				Subject:   group.UID,
-				Predicate: "dgraph.acl.rule",
-				ObjectId:  newRuleStr,
-			})
+				{
+					Subject:   group.UID,
+					Predicate: "dgraph.acl.rule",
+					ObjectId:  newRuleStr,
+				}}...)
 
 			counter++
 		}

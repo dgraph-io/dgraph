@@ -121,10 +121,12 @@ const (
 `
 
 	InitialTypes = `
-	"types": [{"fields": [{"name": "dgraph.graphql.schema"}],"name": "dgraph.graphql"},
+"types": [
+{"fields":[{"name":"dgraph.graphql.schema"},{"name":"dgraph.graphql.xid"}],"name":"dgraph.graphql"},
 {"fields": [{"name": "dgraph.password"},{"name": "dgraph.xid"},{"name": "dgraph.user.group"}],"name": "User"},
 {"fields": [{"name": "dgraph.acl.rule"},{"name": "dgraph.xid"}],"name": "Group"},
-{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}]`
+{"fields": [{"name": "dgraph.rule.predicate"},{"name": "dgraph.rule.permission"}],"name": "Rule"}
+]`
 
 	// GroupIdFileName is the name of the file storing the ID of the group to which
 	// the data in a postings directory belongs. This ID is used to join the proper
@@ -133,7 +135,10 @@ const (
 	GroupIdFileName = "group_id"
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
-	GraphqlPredicates = `{"predicate":"dgraph.graphql.schema", "type": "string"}`
+	GraphqlPredicates = `
+{"predicate":"dgraph.graphql.schema", "type": "string"},
+{"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
+`
 )
 
 var (

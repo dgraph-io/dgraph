@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -37,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -358,9 +360,12 @@ func (writer *fileWriter) open(fpath string) error {
 	if err != nil {
 		return err
 	}
-
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	writer.gw, err = gzip.NewWriterLevel(writer.bw, gzip.BestCompression)
+	w, err := enc.GetWriter(Config.BadgerKeyFile, writer.bw)
+	if err != nil {
+		return err
+	}
+	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestCompression)
 	return err
 }
 
@@ -435,6 +440,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream.ChooseKey = func(item *badger.Item) bool {
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -465,6 +471,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
 			return nil, err
 		}
 		e := &exporter{

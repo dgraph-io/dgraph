@@ -28,6 +28,7 @@ import (
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
@@ -77,6 +78,8 @@ type Manifest struct {
 	// Path is the path to the manifest file. This field is only used during
 	// processing and is not written to disk.
 	Path string `json:"-"`
+	// Encrypted indicates whether this backup was encrypted or not.
+	Encrypted bool `json:"encrypted"`
 }
 
 func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
@@ -125,13 +128,20 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	}
 
 	var maxVersion uint64
-	gzWriter := gzip.NewWriter(handler)
+
+	newhandler, err := enc.GetWriter(Config.BadgerKeyFile, handler)
+	if err != nil {
+		return &emptyRes, err
+	}
+	gzWriter := gzip.NewWriter(newhandler)
+
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.KeyToList = pr.toBackupList
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -174,6 +184,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 		glog.Errorf("While closing gzipped writer: %v", err)
 		return &emptyRes, err
 	}
+
 	if err = handler.Close(); err != nil {
 		glog.Errorf("While closing handler: %v", err)
 		return &emptyRes, err
@@ -215,16 +226,20 @@ func (pr *BackupProcessor) CompleteBackup(ctx context.Context, manifest *Manifes
 
 // GoString implements the GoStringer interface for Manifest.
 func (m *Manifest) GoString() string {
-	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v}`, m.Since, m.Groups)
+	return fmt.Sprintf(`Manifest{Since: %d, Groups: %v, Encrypted: %v}`,
+		m.Since, m.Groups, m.Encrypted)
 }
 
 func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
 	item := itr.Item()
-	if item.Version() < pr.Request.SinceTs || item.IsDeletedOrExpired() {
+	if item.UserMeta() != posting.BitSchemaPosting && (item.Version() < pr.Request.SinceTs ||
+		item.IsDeletedOrExpired()) {
 		// Ignore versions less than given timestamp, or skip older versions of
 		// the given key by returning an empty list.
+		// Do not do this for schema and type keys. Those keys always have a
+		// version of one so they would be incorrectly rejected by above check.
 		return list, nil
 	}
 

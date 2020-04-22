@@ -11,10 +11,13 @@ forum](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code. The license can
-be applied to the cluster by including it as the body of a POST request and calling
-`/enterpriseLicense` HTTP endpoint on any Zero server.
+continue enjoying the enterprise features released in the proprietary code.
 
+The license can be applied to the cluster by including it as the body of a POST
+request and calling `/enterpriseLicense` HTTP endpoint on any Zero server. It
+can also be applied by passing the path to the enterprise license file (using
+the flag `--enterprise_license`) to the `dgraph zero` command used to start the
+server. The second option is useful when the process needs to be automated.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
@@ -98,6 +101,59 @@ mutation {
 }
 ```
 
+
+#### Backup to Minio
+
+#### Backup to Google Cloud Storage via Minio Gateway
+
+1. [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for GCS and get the Credentials File
+2. Run MinIO GCS Gateway Using Docker
+```
+docker run -p 9000:9000 --name gcs-s3 \
+ -v /path/to/credentials.json:/credentials.json \
+ -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
+ -e "MINIO_ACCESS_KEY=minioaccountname" \
+ -e "MINIO_SECRET_KEY=minioaccountkey" \
+ minio/minio gateway gcs yourprojectid
+```
+3. Run MinIO GCS Gateway Using the MinIO Binary
+```
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+export MINIO_ACCESS_KEY=minioaccesskey
+export MINIO_SECRET_KEY=miniosecretkey
+minio gateway gcs yourprojectid
+```
+#### Test Using MinIO Browser
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+![](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
+
+#### Test Using MinIO Client
+
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+1. Configure the Gateway using MinIO Client
+
+Use the following command to configure the gateway:
+```
+mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+```
+
+2. List Containers on GCS
+
+Use the following command to list the containers on GCS:
+
+```
+mc ls mygcs
+```
+A response similar to this one should be displayed:
+
+```
+[2017-02-22 01:50:43 PST]     0B ferenginar/
+[2017-02-26 21:43:51 PST]     0B my-container/
+[2017-02-26 22:10:11 PST]     0B test-container1/
+```
+
 #### Disabling HTTPS for S3 and Minio backups
 
 By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
@@ -164,6 +220,32 @@ mutation {
 }
 ```
 
+### Encrypted Backups
+
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+
+{{% notice "note" %}}
+encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
+
 ### Restore from Backup
 
 The `dgraph restore` command restores the postings directory from a previously
@@ -178,9 +260,12 @@ The `--postings` (`-p`) flag sets the directory to which the restored posting
 directories will be saved. This directory will contain a posting directory for
 each group in the restored backup.
 
-The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
-start timestamp using the restored version. Otherwise, the timestamp must be
-manually updated through Zero's HTTP 'assign' endpoint.
+The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
+timestamp and UID lease using the restored version. If no zero address is
+passed, the command will complain unless you set the value of the
+`--force_zero` flag to false. If do not pass a zero value to this command,
+the timestamp and UID lease must be manually updated through Zero's HTTP
+'assign' endpoint using the values printed near the end of the command's output.
 
 The `--backup_id` optional flag specifies the ID of the backup series to
 restore. A backup series consists of a full backup and all the incremental
@@ -226,7 +311,6 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}
@@ -674,7 +758,7 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-You can use the following command to create the encryption key file (set _count_ equals to the
+You can use the following command to create the encryption key file (set _count_ to the
 desired key size):
 
 ```
@@ -683,15 +767,47 @@ dd if=/dev/random bs=1 count=32 of=enc_key_file
 
 ### Turn on Encryption
 
-Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
+Here is an example that starts one Zero server and one Alpha server with the encryption feature turned on:
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
 
-If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
-each of the alphas.
+If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
+each of the Alphas.
+
+Once an Alpha has encryption enabled, the encryption key must be provided in order to start the Alpha server.
+If the Alpha server restarts, the `--encryption_key_file` option must be set along with the key in order to
+restart successfully.
+
+### Turn off Encryption
+
+If you wish to turn off encryption from an existing Alpha, then you can export your data and import it
+into a new Dgraph instance without encryption enabled.
+
+### Change Encryption Key
+
+The master encryption key set by the `--encryption_key_file` option does not change automatically. The master
+encryption key encrypts underlying *data keys* which are changed on a regular basis automatically (more info
+about this is covered on the encryption-at-rest [blog][encblog] post).
+
+[encblog]: https://dgraph.io/blog/post/encryption-at-rest-dgraph-badger#one-key-to-rule-them-all-many-keys-to-find-them
+
+Changing the existing key to a new one is called key rotation. You can rotate the master encryption key by
+using the `badger rotate` command on both p and w directories for each Alpha. To maintain availability in HA
+cluster configurations, you can do this rotate the key one Alpha at a time in a rolling manner.
+
+You'll need both the current key and the new key in two different files. Specify the directory you
+rotate ("p" or "w") for the `--dir` flag, the old key for the `--old-key-path` flag, and the new key with the
+`--new-key-path` flag.
+
+```
+badger rotate --dir p --old-key-path enc_key_file --new-key-path new_enc_key_file
+badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_file
+```
+
+Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
 
 ### Bulk loader with Encryption
 
@@ -701,5 +817,5 @@ Later we can point the generated `p` directory to a new alpha server.
 Here's an example to run bulk loader with a key used to write encrypted data:
 
 ```bash
-dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
 ```
