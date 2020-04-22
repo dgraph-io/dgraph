@@ -12,6 +12,101 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
+## [20.03.1] - Unreleased
+[20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
+
+### Changed
+
+- Force users to explicitly tell restore command to run without zero. ([#5206][])
+
+### Fixed
+
+- Check uid list is empty when filling shortest path vars. ([#5152][])
+- Invalid UID checks. Fixes [#5238][]. ([#5252][]) 
+- Skipping floats that cannot be marshalled. ([#5199][])
+- Fix panic in Task FrameWork. Fixes [#5034][]. ([#5081][]) 
+- graphql: @dgraph(pred: "...") with @search. ([#5019][]) 
+- graphql: ensure @id uniqueness within a mutation. ([#4959][]) 
+- Optimize uid allocation in live loader. ([#5132][]) 
+- Shutdown executor goroutines. ([#5150][])
+- Update RAFT checkpoint when doing a clean shutdown. ([#5097][])
+- Enterprise features
+  - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
+  
+### Added
+
+- Flag to turn on/off sending Sentry events, default is on. ([#5169][])
+- Concurrent Mutations. ([#4892][]) 
+- Enterprise features
+  - Re-encrypt restore from encrypted backups. ([#5144][])
+  - Add option "--encryption_key_file"/"-k" to debug tool for encryption support. ([#5146][])
+  - Support for encrypted backups/restore. Older backups without encryption will be incompatible with this Dgraph version.     Solution is to force a full backup. ([#5103][])
+  - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
+  - Add option to apply enterprise license at zero's startup. ([#5170][])
+  
+
+[#5097]: https://github.com/dgraph-io/dgraph/issues/5097
+[#5150]: https://github.com/dgraph-io/dgraph/issues/5150
+[#5132]: https://github.com/dgraph-io/dgraph/issues/5132
+[#4959]: https://github.com/dgraph-io/dgraph/issues/4959
+[#5019]: https://github.com/dgraph-io/dgraph/issues/5019
+[#5081]: https://github.com/dgraph-io/dgraph/issues/5081
+[#5034]: https://github.com/dgraph-io/dgraph/issues/5034
+[#5169]: https://github.com/dgraph-io/dgraph/issues/5169
+[#5170]: https://github.com/dgraph-io/dgraph/issues/5170
+[#4892]: https://github.com/dgraph-io/dgraph/issues/4892
+[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
+[#5206]: https://github.com/dgraph-io/dgraph/issues/5206
+[#5152]: https://github.com/dgraph-io/dgraph/issues/5152
+[#5252]: https://github.com/dgraph-io/dgraph/issues/5252
+[#5199]: https://github.com/dgraph-io/dgraph/issues/5199
+[#5158]: https://github.com/dgraph-io/dgraph/issues/5158
+[#5213]: https://github.com/dgraph-io/dgraph/issues/5213
+[#5144]: https://github.com/dgraph-io/dgraph/issues/5144
+[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
+[#5103]: https://github.com/dgraph-io/dgraph/issues/5103
+[#5155]: https://github.com/dgraph-io/dgraph/issues/5155
+[#5238]: https://github.com/dgraph-io/dgraph/issues/5238
+
+## [1.2.3] - Unreleased
+[1.2.3]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v1.2.3
+
+### Changed
+
+- Force users to explicitly tell restore command to run without zero. ([#5206][])
+
+### Fixed
+
+- Check uid list is empty when filling shortest path vars. ([#5152][])
+- Invalid UID checks. Fixes [#5238][]. ([#5252][]) 
+- Skipping floats that cannot be marshalled. ([#5199][])
+- Enterprise features
+  - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
+  
+### Added
+
+- Enterprise features
+  - **Breaking changes**
+    - Support bulk loader use-case to import unencrypted export and encrypt. ([#5213][])
+  - Re-encrypt restore from encrypted backups. ([#5144][])
+  - Add option "--encryption_key_file"/"-k" to debug tool for encryption support. ([#5146][])
+  - Support for encrypted backups/restore. Older backups without encryption will be incompatible with this Dgraph version.     Solution is to force a full backup. ([#5103][])
+  - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
+
+
+[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
+[#5206]: https://github.com/dgraph-io/dgraph/issues/5206
+[#5152]: https://github.com/dgraph-io/dgraph/issues/5152
+[#5252]: https://github.com/dgraph-io/dgraph/issues/5252
+[#5199]: https://github.com/dgraph-io/dgraph/issues/5199
+[#5158]: https://github.com/dgraph-io/dgraph/issues/5158
+[#5213]: https://github.com/dgraph-io/dgraph/issues/5213
+[#5144]: https://github.com/dgraph-io/dgraph/issues/5144
+[#5146]: https://github.com/dgraph-io/dgraph/issues/5146
+[#5103]: https://github.com/dgraph-io/dgraph/issues/5103
+[#5155]: https://github.com/dgraph-io/dgraph/issues/5155
+[#5238]: https://github.com/dgraph-io/dgraph/issues/5238
+
 ## [20.03.0] - 2020-03-30
 [20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
 ** Note: This release requires you to export and re-import data prior to upgrading or rolling back. The underlying data format has been changed. **
