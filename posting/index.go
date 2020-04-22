@@ -530,7 +530,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithSyncWrites(false).
 		WithNumVersionsToKeep(math.MaxInt64).
 		WithCompression(options.None).
-		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithMaxCacheSize(50) // TODO(Aman): Disable cache altogether
 
