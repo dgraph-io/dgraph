@@ -18,11 +18,8 @@ package custom_logic
 
 import (
 	"encoding/json"
-<<<<<<< HEAD
 	"fmt"
-=======
 	"io/ioutil"
->>>>>>> 0f4d42401... Fix up the tests and also the code so that it works for single mode across graphql/REST
 	"net/http"
 	"sort"
 	"strings"
@@ -802,17 +799,19 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	verifyData(t, users, teachers, schools)
 
-	// // lets update the schema and check single mode now
-	// schema = readFile(t, "schemas/single-mode-rest.graphql")
-	// verifyData(t, users, teachers, schools)
-
-	// // update schema to single mode where fields are resolved using GraphQL endpoints.
-	// schema = readFile(t, "schemas/single-mode-graphql.graphql")
-	// verifyData(t, users, teachers, schools)
+	// lets update the schema and check single mode now
+	schema = readFile(t, "schemas/single-mode-rest.graphql")
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	verifyData(t, users, teachers, schools)
 
 	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	schema = readFile(t, "schemas/batch-mode-graphql.graphql")
+	schema = readFile(t, "schemas/single-mode-graphql.graphql")
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	verifyData(t, users, teachers, schools)
+
+	// update schema to single mode where fields are resolved using GraphQL endpoints.
+	// schema = readFile(t, "schemas/batch-mode-graphql.graphql")
+	// verifyData(t, users, teachers, schools)
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {
