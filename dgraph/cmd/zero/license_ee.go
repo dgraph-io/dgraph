@@ -15,7 +15,6 @@ package zero
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -131,10 +130,10 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
 		return
 	}
-	n, err := w.Write([]byte(`{"code": "Success", "message": "License applied."}`))
-	fmt.Println(n)
-	fmt.Println(err)
-	x.Check2(w.Write([]byte(`{"code": "Success", "message": "License applied."}`)))
+	if _, err := w.Write([]byte(`{"code": "Success", "message": "License applied."}`)); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+	}
 }
 
 // applyLicenseFile applies the license file stored at the given path.
