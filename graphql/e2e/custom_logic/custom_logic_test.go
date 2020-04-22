@@ -42,7 +42,7 @@ const (
 		  name: String!
 		  director: [MovieDirector]
 	  }
-	  type Continent@remote {
+	  type Continent @remote {
 		 code: ID!
 		 name: String!
 		 countries: [Country!]!
