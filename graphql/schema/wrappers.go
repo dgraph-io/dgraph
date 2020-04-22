@@ -114,7 +114,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
-	AuthFor(f Field, jwtVars map[string]interface{}) Query
+	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -729,21 +729,14 @@ func (q *query) IsAuthQuery() bool {
 	return (*field)(q).field.Arguments.ForName("dgraph.uid") != nil
 }
 
-func (q *query) AuthFor(f Field, jwtVars map[string]interface{}) Query {
+func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
 	// copy the template, so that multiple queries can run rewriting for the rule.
-	var sch *schema
-	if fld, ok := f.(*field); ok {
-		sch = fld.op.inSchema
-	} else {
-		sch = f.(*query).op.inSchema
-	}
-
 	return &query{
 		field: (*field)(q).field,
 		op: &operation{op: q.op.op,
 			query:    q.op.query,
 			doc:      q.op.doc,
-			inSchema: sch,
+			inSchema: typ.(*astType).inSchema,
 			vars:     jwtVars,
 		},
 		sel: q.sel}
