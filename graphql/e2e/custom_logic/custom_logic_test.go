@@ -18,6 +18,7 @@ package custom_logic
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,7 +38,7 @@ const (
 		 name: String!
 		 directed: [Movie]
 	 }
- 
+
 	 type Movie @remote {
 		 id: ID!
 		 name: String!
@@ -47,7 +49,7 @@ const (
 		name: String
 		countries: [Country]
 	  }
-	  
+
 	  type Country @remote {
 		code: String
 		name: String
@@ -61,7 +63,7 @@ const (
 		emojiU: String
 		states: [State]
 	  }
-	  
+
 	  type Language @remote {
 		code: String
 		name: String
@@ -242,6 +244,158 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 
 	headers := strings.Split(resp.Header.Get("Access-Control-Allow-Headers"), ",")
 	require.Subset(t, headers, []string{"X-App-Token", "X-User-Id", "User-Id", "X-App-User", "X-Group-Id"})
+}
+
+func addPerson(t *testing.T) *user {
+	addTeacherParams := &common.GraphQLParams{
+		Query: `mutation addPerson {
+			addPerson(input: [{ age: 28 }]) {
+				person {
+					id
+					age
+				}
+			}
+		}`,
+	}
+
+	result := addTeacherParams.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+
+	var res struct {
+		AddPerson struct {
+			Person []*user
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddPerson.Person), 1)
+	return res.AddPerson.Person[0]
+}
+
+func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+        myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+                url: "http://mock:8888/nonExistentURL/$id?name=$name&num=$num",
+                method: "GET"
+        })
+	}`
+	updateSchema(t, schema)
+
+	query := `
+	query {
+		myFavoriteMovies(id: "0x123", name: "Author", num: 10) {
+			id
+			name
+			director {
+				id
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.JSONEq(t, `{ "myFavoriteMovies": [] }`, string(result.Data))
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "Evaluation of custom field failed because external request returned an " +
+				"error: unexpected status code: 404 for field: myFavoriteMovies within" +
+				" type: Query.",
+			Locations: []x.Location{{3, 3}},
+		},
+	}, result.Errors)
+}
+
+func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
+	schema := `
+	type Car {
+		id: ID!
+		name: String!
+	}
+
+	type MotorBike {
+		id: ID!
+		name: String!
+	}
+
+	type School {
+		id: ID!
+		name: String!
+	}
+
+	type Person {
+		id: ID!
+		name: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		age: Int! @search
+		cars: Car @custom(http: {
+						url: "http://mock:8888/carsWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "batch"
+					})
+		bikes: MotorBike @custom(http: {
+						url: "http://mock:8888/bikesWrongURL",
+						method: "GET",
+						body: "{uid: $id}",
+						operation: "single"
+					})
+	}`
+
+	updateSchema(t, schema)
+	p := addPerson(t)
+
+	queryPerson := `
+	query {
+		queryPerson {
+			name
+			age
+			cars {
+				name
+			}
+			bikes {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryPerson,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	expected := fmt.Sprintf(`
+	{
+		"queryPerson": [
+			{
+				"name": "uname-%s",
+				"age": 28,
+				"cars": null,
+				"bikes": null
+			}
+		]
+	}`, p.ID)
+	require.JSONEq(t, expected, string(result.Data))
+	require.Equal(t, 2, len(result.Errors))
+
+	expectedErrors := x.GqlErrorList{
+		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
+			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
+			Locations: []x.Location{{6, 4}}},
+		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
+			" an error: unexpected status code: 404 for field: bikes within type: Person," +
+			" index: 0.",
+			Locations: []x.Location{{9, 4}}},
+	}
+	require.Contains(t, result.Errors, expectedErrors[0])
+	require.Contains(t, result.Errors, expectedErrors[1])
 }
 
 type teacher struct {
@@ -633,7 +787,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -651,7 +805,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -669,12 +823,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!
@@ -700,7 +854,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type User {
 		 id: ID!
 		 name: String @custom(http: {
@@ -718,7 +872,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 					 })
 		 schools: [School]
 	 }
- 
+
 	 type School {
 		 id: ID!
 		 established: Int! @search
@@ -736,12 +890,12 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 						 })
 		 teachers: [Teacher]
 	 }
- 
+
 	 type Class @remote {
 		 id: ID!
 		 name: String!
 	 }
- 
+
 	 type Teacher {
 		 tid: ID!
 		 age: Int!

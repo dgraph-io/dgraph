@@ -615,10 +615,7 @@ func completeDgraphResult(
 
 	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
 	if err != nil {
-		errs = append(errs, x.GqlErrorf(err.Error()))
-		// TODO
-		// 1. All errors received from downstream remote servers should be propogated to the
-		// client.
+		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
 
 	return &Resolved{
@@ -641,6 +638,25 @@ func copyTemplate(input interface{}) (interface{}, error) {
 	return result, nil
 }
 
+func jsonMarshalError(err error, f schema.Field, input interface{}) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
+		"(of: %+v) returned an error: %s for field: %s within type: %s.", input, err,
+		f.Name(), f.GetObjectName()).WithLocations(f.Location())
+}
+
+func jsonUnmarshalError(err error, f schema.Field) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+		" result of external request failed (with error: %s) for field: %s within "+
+		"type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(
+		f.Location())
+}
+
+func externalRequestError(err error, f schema.Field) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because external request"+
+		" returned an error: %s for field: %s within type: %s.", err, f.Name(),
+		f.GetObjectName()).WithLocations(f.Location())
+}
+
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, _ := f.CustomHTTPConfig()
 
@@ -649,12 +665,18 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	for i := 0; i < len(body); i++ {
 		temp, err := copyTemplate(*fconf.Template)
 		if err != nil {
-			errCh <- err
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because of internal "+
+				"processing error: %s for field: %s within type: %s.", err, f.Name(),
+				f.GetObjectName()).WithLocations(f.Location())
+			errCh <- x.GqlErrorList{gqlErr}
 			return
 		}
 		mu.RLock()
 		if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-			errCh <- err
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because of internal "+
+				"processing error: %s during processing of body for field: %s within type: %s.",
+				err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
+			errCh <- x.GqlErrorList{gqlErr}
 			mu.RUnlock()
 			return
 		}
@@ -665,24 +687,27 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	if fconf.Operation == "batch" {
 		b, err := json.Marshal(body)
 		if err != nil {
-			errCh <- errors.Wrapf(err, "while json marshaling body: %s", b)
+			errCh <- x.GqlErrorList{jsonMarshalError(err, f, body)}
 			return
 		}
 
 		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
-			errCh <- errors.Wrapf(err, "while making request to fetch data for field: %s", f.Name())
+			errCh <- x.GqlErrorList{externalRequestError(err, f)}
 			return
 		}
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- errors.Wrapf(err, "while json unmarshaling result: %s", b)
+			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 			return
 		}
 
 		if len(result) != len(vals) {
-			errCh <- nil
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of"+
+				"external request to be of size %v, got: %v for field: %s within type: %s.",
+				len(vals), len(result), f.Name(), f.GetObjectName()).WithLocations(f.Location())
+			errCh <- x.GqlErrorList{gqlErr}
 			return
 		}
 
@@ -700,13 +725,16 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
 	var wg sync.WaitGroup
+	errs := make(x.GqlErrorList, len(body))
 	for i := 0; i < len(body); i++ {
 		wg.Add(1)
 		go func(idx int, input interface{}) {
 			defer wg.Done()
 			b, err := json.Marshal(input)
 			if err != nil {
-				// TODO - Propogate this error
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json "+
+					"marshaling input: %+v returned an error: %s for field: %s within type: %s,"+
+					" index: %v.", input, err, f.Name(), f.GetObjectName(), idx)
 				return
 			}
 
@@ -714,19 +742,27 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
 			if err != nil {
 				mu.RUnlock()
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed while substituting "+
+					"variables in URL with an error: %s for field: %s within type: %s, index: %v.",
+					err, f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
 				return
 			}
 			mu.RUnlock()
 
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
-				// TODO - Propogate this error.
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because external request"+
+					" returned an error: %s for field: %s within type: %s, index: %v.", err,
+					f.Name(), f.GetObjectName(), idx).WithLocations(f.Location())
 				return
 			}
 
 			var result interface{}
 			if err := json.Unmarshal(b, &result); err != nil {
-				// TODO - Propogate this error.
+				errs[idx] = x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
+					" result: %s of external request failed with error: %s for field: %s within "+
+					"type: %s, index: %v.", b, err, f.Name(), f.GetObjectName(),
+					idx).WithLocations(f.Location())
 				return
 			}
 
@@ -739,7 +775,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}(i, body[i])
 	}
 	wg.Wait()
-	errCh <- nil
+	errCh <- errs
 }
 
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their
@@ -753,7 +789,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // }
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
-func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
+	errCh chan error) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {
@@ -818,7 +855,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex, e
 	mu.RUnlock()
 
 	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
-		errCh <- nil
+		errCh <- err
 		return
 	}
 
@@ -917,14 +954,14 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 		}
 	}
 
-	var finalErr error
+	var errs error
 	for i := 0; i < numRoutines; i++ {
 		if err := <-errCh; err != nil {
-			finalErr = err
+			errs = schema.AppendGQLErrs(errs, err)
 		}
 	}
 
-	return finalErr
+	return errs
 }
 
 // completeObject builds a json GraphQL result object for the current query level.
@@ -1262,6 +1299,10 @@ func makeRequest(client *http.Client, method, url, body string,
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, errors.Errorf("unexpected status code: %v", resp.StatusCode)
+	}
+
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
@@ -1287,20 +1328,20 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	if hrc.Template != nil {
 		b, err := json.Marshal(*hrc.Template)
 		if err != nil {
-			return emptyResult(err)
+			return emptyResult(jsonMarshalError(err, field, *hrc.Template))
 		}
 		body = string(b)
 	}
 	b, err := makeRequest(hr.Client, hrc.Method, hrc.URL, body, hrc.ForwardHeaders)
 	if err != nil {
-		return emptyResult(err)
+		return emptyResult(externalRequestError(err, field))
 	}
 
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
 		var result map[string]interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			return emptyResult(err)
+			return emptyResult(jsonUnmarshalError(err, field))
 		}
 		return &Resolved{
 			Data:  result,
@@ -1315,7 +1356,9 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 	}
 	err = json.Unmarshal(b, &resp)
 	if err != nil {
-		return emptyResult(err)
+		gqlErr := jsonUnmarshalError(err, field)
+		resp.Errors = append(resp.Errors, schema.AsGQLErrors(gqlErr)...)
+		return emptyResult(resp.Errors)
 	}
 	data, ok := resp.Data[hrc.RemoteGqlQueryName]
 	if !ok {
