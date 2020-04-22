@@ -649,14 +649,14 @@ func copyTemplate(input interface{}) (interface{}, error) {
 
 func jsonMarshalError(err error, f schema.Field, input interface{}) *x.GqlError {
 	return x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
-		"input: %+v returned an error: %s for field: %s within type: %s.", input, err,
+		"(of: %+v) returned an error: %s for field: %s within type: %s.", input, err,
 		f.Name(), f.GetObjectName()).WithLocations(f.Location())
 }
 
-func jsonUnmarshalError(err error, f schema.Field, b []byte) *x.GqlError {
+func jsonUnmarshalError(err error, f schema.Field) *x.GqlError {
 	return x.GqlErrorf("Evaluation of custom field failed because json unmarshaling"+
-		" result: %s of external request failed with error: %s for field: %s within "+
-		"type: %s.", b, err, f.Name(), f.GetObjectName()).WithLocations(
+		" result of external request failed (with error: %s) for field: %s within "+
+		"type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(
 		f.Location())
 }
 
@@ -708,7 +708,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 		var result []interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f, b)}
+			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 			return
 		}
 
@@ -966,9 +966,7 @@ func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	var errs error
 	for i := 0; i < numRoutines; i++ {
 		if err := <-errCh; err != nil {
-			for _, e := range schema.AsGQLErrors(err) {
-				errs = schema.AppendGQLErrs(errs, e)
-			}
+			errs = schema.AppendGQLErrs(errs, err)
 		}
 	}
 
@@ -1311,6 +1309,10 @@ func makeRequest(client *http.Client, method, url, body string,
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		return nil, errors.Errorf("unexpected status code: %v", resp.StatusCode)
+	}
+
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
@@ -1349,7 +1351,7 @@ func (hr *httpResolver) rewriteAndExecute(
 
 		var result map[string]interface{}
 		if err := json.Unmarshal(res, &result); err != nil {
-			return emptyResult(jsonUnmarshalError(err, field, res))
+			return emptyResult(jsonUnmarshalError(err, field))
 		}
 		return &Resolved{
 			Data:  result,
@@ -1370,7 +1372,7 @@ func (hr *httpResolver) rewriteAndExecute(
 	resp := &graphqlResp{}
 	err = json.Unmarshal(b, resp)
 	if err != nil {
-		gqlErr := jsonUnmarshalError(err, field, b)
+		gqlErr := jsonUnmarshalError(err, field)
 		resp.Errors = append(resp.Errors, schema.AsGQLErrors(gqlErr)...)
 		return emptyResult(resp.Errors)
 	}
