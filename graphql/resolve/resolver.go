@@ -795,13 +795,13 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errChan <- jsonMarshalError(err, f, requestInput)
 				return
 			}
-			input = string(b)
 
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
 				// TODO - Have validation to ensure that GraphQL endpoints don't use variables.
 				mu.RLock()
-				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
+				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
+					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
 					// TODO - Fix this.
@@ -811,7 +811,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(nil, fconf.Method, fconf.URL, input.(string), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- externalRequestError(err, f)
 				return
@@ -857,6 +857,10 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	}
 
+	if len(errs) == 0 {
+		errCh <- nil
+		return
+	}
 	errCh <- errs
 }
 

@@ -529,6 +529,9 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 		 queryUser(order: {asc: age}) {
 			name
 			age
+			cars {
+				name
+			}
 			schools(order: {asc: established}) {
 				name
 				established
@@ -786,34 +789,36 @@ func readFile(t *testing.T, name string) string {
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// lets check batch mode first using REST endpoints.
-	// schema := readFile(t, "schemas/batch-mode-rest.graphql")
-	// common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	schema := readFile(t, "schemas/batch-mode-rest.graphql")
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 
 	// add some data
-	// teachers := addTeachers(t)
-	// schools := addSchools(t, teachers)
-	// users := addUsers(t, schools)
-
-	// verifyData(t, users, teachers, schools)
-
-	// lets update the schema and check single mode now
-	// schema = readFile(t, "schemas/single-mode-rest.graphql")
-	// common.RequireNoGQLErrors(t, updateSchema(t, schema))
-	// verifyData(t, users, teachers, schools)
-
-	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	// schema := readFile(t, "schemas/single-mode-graphql.graphql")
-	// common.RequireNoGQLErrors(t, updateSchema(t, schema))
-
-	// verifyData(t, users, teachers, schools)
-
-	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	schema := readFile(t, "schemas/batch-mode-graphql.graphql")
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
 	users := addUsers(t, schools)
+
 	verifyData(t, users, teachers, schools)
+
+	t.Run("rest single operation mode", func(t *testing.T) {
+		// lets update the schema and check single mode now
+		schema = readFile(t, "schemas/single-mode-rest.graphql")
+		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		verifyData(t, users, teachers, schools)
+	})
+
+	t.Run("graphql single operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema = readFile(t, "schemas/single-mode-graphql.graphql")
+		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		verifyData(t, users, teachers, schools)
+	})
+
+	t.Run("graphql batch operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema = readFile(t, "schemas/batch-mode-graphql.graphql")
+		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		verifyData(t, users, teachers, schools)
+	})
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {
