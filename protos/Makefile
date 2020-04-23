@@ -31,20 +31,13 @@ clean:
 check:
 	@./depcheck.sh && \
 		(echo "Upgrading proto libraries before regenerating." ; \
-		GO111MODULE=off go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		GO111MODULE=off go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+		go get -u github.com/golang/protobuf/protoc-gen-go ; \
+		go get -u github.com/gogo/protobuf/protoc-gen-gofast)
 
 .PHONY: regenerate
 regenerate: check clean
-#	These sed replacements are necessary to use Badger v2 via Go modules.
-#	The protoc tool doesn't recognize Go module import paths, so we need to
-#	specify the filesystem-level import path (without "v2") to generate the
-#	protos and then set "v2" in the generated code (pb/pb.pb.go).
-	@sed -i'' -e 's;github.com/dgraph-io/badger/v2/pb/pb.proto;github.com/dgraph-io/badger/pb/pb.proto;' pb.proto
 	@protoc \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v200/protos/api:pb \
 		pb.proto
-	@sed -i'' -e 's;github.com/dgraph-io/badger/pb/pb.proto;github.com/dgraph-io/badger/v2/pb/pb.proto;' pb.proto
-	@sed -i'' -e 's;github.com/dgraph-io/badger/pb;github.com/dgraph-io/badger/v2/pb;' pb/pb.pb.go
 	@echo Done.
