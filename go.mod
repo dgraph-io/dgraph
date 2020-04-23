@@ -63,12 +63,8 @@ require (
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
-<<<<<<< HEAD
-	golang.org/x/sys v0.0.0-20200408040146-ea54a3c99b9b
-=======
 	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
->>>>>>> master
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0
