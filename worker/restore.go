@@ -58,22 +58,7 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 					"Unable to read the backup. Ensure encryption key is correct.")
 			}
 			// The badger DB should be opened only after creating the backup
-			// file reader. The following sequence of events can occur if
-			// badger is opened before creating a reader -
-			// 1. Backup is created without encryption (alpha running without encryption)
-			// 2. Restore is called on an unencrypted backup with encryption set.
-			//		dgraph restore --encryption_key=xxx
-			//		If badger was opened before enc.GetReader() then the new
-			//		badger DB would have encryption set. Eventually
-			//		enc.GetReader() would crash because of invalid key but
-			//		encryption would be set in badger.
-			// 3. Re-attempt restore with encryption key not set.
-			//		dgraph restore
-			//		This command would fail with "encryption key
-			//		mismatch" because the badger DB initialized by the previous
-			//		restore command has encryption set and the current call
-			//		doesn't have the encryption key set.
-			//
+			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
