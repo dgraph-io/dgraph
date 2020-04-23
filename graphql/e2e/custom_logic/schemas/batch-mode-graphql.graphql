@@ -11,8 +11,8 @@ type User {
         url: "http://mock:8888/gqlUserNames"
         method: "POST"
         operation: "batch"
+        graphql: "query { userNames(input: [{ id: $id, age: $age}]) }"
       }
-      graphql: { query: "userNames(ids: $id)" }
     )
   age: Int! @search
   cars: Car
@@ -21,8 +21,8 @@ type User {
         url: "http://mock:8888/gqlCars"
         method: "POST"
         operation: "batch"
+        graphql: "query { cars(input: [{ id: $id}]) }"
       }
-      graphql: { query: "cars(ids: $id)" }
     )
   schools: [School]
 }
@@ -36,8 +36,8 @@ type School {
         url: "http://mock:8888/gqlSchoolNames"
         method: "POST"
         operation: "batch"
+        graphql: "query { schoolNames(input: [{ id: $id}]) }"
       }
-      graphql: { query: "schoolNames(ids: $id)" }
     )
   classes: [Class]
     @custom(
@@ -45,8 +45,8 @@ type School {
         url: "http://mock:8888/gqlClasses"
         method: "POST"
         operation: "batch"
+        graphql: "query { classes(input: [{ id: $id}]) }"
       }
-      graphql: { query: "classes(ids: $id)" }
     )
   teachers: [Teacher]
 }
@@ -65,7 +65,7 @@ type Teacher {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
         operation: "batch"
+        graphql: "query { teacherNames(input: [{ xid: $tid}]) }"
       }
-      graphql: { query: "teacherNames(ids: $tid)" }
     )
 }

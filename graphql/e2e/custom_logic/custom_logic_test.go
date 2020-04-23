@@ -529,9 +529,6 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 		 queryUser(order: {asc: age}) {
 			name
 			age
-			cars {
-				name
-			}
 			schools(order: {asc: established}) {
 				name
 				established
@@ -805,16 +802,18 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// verifyData(t, users, teachers, schools)
 
 	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	schema := readFile(t, "schemas/single-mode-graphql.graphql")
+	// schema := readFile(t, "schemas/single-mode-graphql.graphql")
+	// common.RequireNoGQLErrors(t, updateSchema(t, schema))
+
+	// verifyData(t, users, teachers, schools)
+
+	// update schema to single mode where fields are resolved using GraphQL endpoints.
+	schema := readFile(t, "schemas/batch-mode-graphql.graphql")
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
 	users := addUsers(t, schools)
 	verifyData(t, users, teachers, schools)
-
-	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	// schema = readFile(t, "schemas/batch-mode-graphql.graphql")
-	// verifyData(t, users, teachers, schools)
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {

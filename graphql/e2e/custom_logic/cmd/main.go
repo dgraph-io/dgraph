@@ -1395,6 +1395,83 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	}`, schoolID)
 }
 
+func introspectionResult(name string) string {
+	return fmt.Sprintf(`{
+		"data":{
+			"__schema":{
+			"queryType":{
+				"name":"Query"
+			},
+			"mutationType":null,
+			"subscriptionType":null,
+			"types":[
+				{
+				"kind":"OBJECT",
+				"name":"Query",
+				"fields":[
+					{
+					"name":"%s",
+					"args":[
+						{
+						"name":"input",
+						"type":{
+							"kind":"LIST",
+							"name":null,
+							"ofType": {
+								"kind": "OBJECT",
+								"name": "UserInput",
+								"ofType": null
+							}
+						},
+						"defaultValue":null
+						}
+					],
+					"type":{
+						"kind": "LIST",
+						"name": null,
+						"ofType": {
+							"kind":"SCALAR",
+							"name":"String",
+							"ofType":null
+						}
+					},
+					"isDeprecated":false,
+					"deprecationReason":null
+					}
+				]
+				}
+			]
+			}
+		}
+	}`, name)
+}
+
+func makeResponse(b []byte, id, key, prefix string) (string, error) {
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return "", err
+	}
+	input := req.Variables["input"]
+	output := []string{}
+	for _, i := range input.([]interface{}) {
+		im := i.(map[string]interface{})
+		id := im[id].(string)
+		output = append(output, prefix+id)
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			key: output,
+		},
+	}
+
+	b, err := json.Marshal(response)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
 func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -1402,22 +1479,227 @@ func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("userNames", "ids"))
+		fmt.Fprintf(w, introspectionResult("userNames"))
 		return
 	}
 
-	fmt.Println(string(b))
+	res, err := makeResponse(b, "id", "userNames", "uname-")
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, res)
+}
+
+func gqlTeacherNamesHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectionResult("teacherNames"))
+		return
+	}
+
+	res, err := makeResponse(b, "tid", "teacherNames", "tname-")
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, res)
+}
+
+func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, introspectionResult("schoolNames"))
+		return
+	}
+
+	res, err := makeResponse(b, "id", "schoolNames", "sname-")
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, res)
+}
+
+func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, `{
+			"data":{
+				"__schema":{
+				"queryType":{
+					"name":"Query"
+				},
+				"mutationType":null,
+				"subscriptionType":null,
+				"types":[
+					{
+					"kind":"OBJECT",
+					"name":"Query",
+					"fields":[
+						{
+						"name":"cars",
+						"args":[
+							{
+							"name":"input",
+							"type":{
+								"kind":"LIST",
+								"name":null,
+								"ofType": {
+									"kind": "OBJECT",
+									"name": "UserInput",
+									"ofType": null
+								}
+							},
+							"defaultValue":null
+							}
+						],
+						"type":{
+							"kind": "LIST",
+							"name": null,
+							"ofType": {
+								"kind":"OBJECT",
+								"name":"Car",
+								"ofType":null
+							}
+						},
+						"isDeprecated":false,
+						"deprecationReason":null
+						}
+					]
+					}
+				]
+				}
+			}
+		}`)
+		return
+	}
+
 	var req request
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
 	}
-	userID := req.Variables["id"]
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "userName": "uname-%s"
-		}
-	}`, userID)
+	input := req.Variables["input"]
+	output := []interface{}{}
+	for _, i := range input.([]interface{}) {
+		im := i.(map[string]interface{})
+		id := im["id"].(string)
+		output = append(output, map[string]interface{}{
+			"name": "car-" + id,
+		})
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"cars": output,
+		},
+	}
+
+	b, err = json.Marshal(response)
+	if err != nil {
+		return
+	}
+	check2(fmt.Fprint(w, string(b)))
+}
+
+func gqlClassesHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, `{
+			"data":{
+				"__schema":{
+				"queryType":{
+					"name":"Query"
+				},
+				"mutationType":null,
+				"subscriptionType":null,
+				"types":[
+					{
+					"kind":"OBJECT",
+					"name":"Query",
+					"fields":[
+						{
+						"name":"classes",
+						"args":[
+							{
+							"name":"input",
+							"type":{
+								"kind":"LIST",
+								"name":null,
+								"ofType": {
+									"kind": "OBJECT",
+									"name": "UserInput",
+									"ofType": null
+								}
+							},
+							"defaultValue":null
+							}
+						],
+						"type":{
+							"kind": "LIST",
+							"name": null,
+							"ofType": {
+								"kind": "LIST",
+								"name": null,
+								"ofType": {
+									"kind":"OBJECT",
+									"name":"Class",
+									"ofType":null
+								}
+							}
+						},
+						"isDeprecated":false,
+						"deprecationReason":null
+						}
+					]
+					}
+				]
+				}
+			}
+		}`)
+		return
+	}
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	input := req.Variables["input"]
+	output := []interface{}{}
+	for _, i := range input.([]interface{}) {
+		im := i.(map[string]interface{})
+		id := im["id"].(string)
+		output = append(output, []map[string]interface{}{
+			{
+				"name": "class-" + id,
+			},
+		})
+	}
+
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"classes": output,
+		},
+	}
+
+	b, err = json.Marshal(response)
+	if err != nil {
+		return
+	}
+	check2(fmt.Fprint(w, string(b)))
 }
 
 func main() {
@@ -1469,6 +1751,10 @@ func main() {
 
 	// for testing in batch mode
 	http.HandleFunc("/gqlUserNames", gqlUserNamesHandler)
+	http.HandleFunc("/gqlCars", gqlCarsHandler)
+	http.HandleFunc("/gqlClasses", gqlClassesHandler)
+	http.HandleFunc("/gqlTeacherNames", gqlTeacherNamesHandler)
+	http.HandleFunc("/gqlSchoolNames", gqlSchoolNamesHandler)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))

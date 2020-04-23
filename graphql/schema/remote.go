@@ -157,7 +157,8 @@ type remoteGraphqlMetadata struct {
 	// The operation can only be a query or mutation
 	graphqlOpDef *ast.OperationDefinition
 	// url is the url of remote graphql endpoint
-	url string
+	url       string
+	operation string
 }
 
 // validates the graphql given in @custom->http->graphql by introspecting remote schema.
@@ -208,6 +209,9 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 	// TODO: need to check whether same will work for @custom on fields which have batch operation
 	expectedReturnType := introspectedRemoteQuery.Type.String()
 	gotReturnType := metadata.parentField.Type.String()
+	if metadata.operation == "batch" {
+		gotReturnType = "[" + gotReturnType + "]"
+	}
 	if expectedReturnType != gotReturnType {
 		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s.",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)

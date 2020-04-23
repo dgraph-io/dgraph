@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -676,26 +677,23 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	// For GraphQL requests, we substitute arguments in the GraphQL query/mutation to make to
 	// the remote endpoint using the values of other fields obtained from Dgraph.
 	if graphql {
-		requiredArgs := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery)
+		requiredArgs, err := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery,
+			fconf.Operation)
+		if err != nil {
+			errCh <- err
+			return
+		}
 		for i := 0; i < len(inputs); i++ {
 			vars := make(map[string]interface{})
 			mu.RLock()
 			m := vals[i].(map[string]interface{})
 			for k, v := range m {
-				// TODO - Have a validation that fields can only require scalar args from the type
-				// definition.
 				if _, ok := requiredArgs[k]; ok {
 					vars[k] = v
 				}
 			}
 			mu.RUnlock()
-
-			body := make(map[string]interface{})
-			body["query"] = fconf.RemoteGqlQuery
-			// TODO - Check not all the values in the map should be sent, but only those that are
-			// required for resolution.
-			body["variables"] = vars
-			inputs[i] = body
+			inputs[i] = vars
 		}
 	} else {
 		for i := 0; i < len(inputs); i++ {
@@ -717,7 +715,18 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	if fconf.Operation == "batch" {
-		b, err := json.Marshal(inputs)
+		var requestInput interface{}
+		requestInput = inputs
+
+		if graphql {
+			body := make(map[string]interface{})
+			body["query"] = fconf.RemoteGqlQuery
+			// For batch mode, the argument name is input which is a list of maps.
+			body["variables"] = map[string]interface{}{"input": requestInput}
+			requestInput = body
+		}
+
+		b, err := json.Marshal(requestInput)
 		if err != nil {
 			errCh <- x.GqlErrorList{jsonMarshalError(err, f, inputs)}
 			return
@@ -730,9 +739,26 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 
 		var result []interface{}
-		if err := json.Unmarshal(b, &result); err != nil {
-			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-			return
+		if graphql {
+			resp := &graphqlResp{}
+			err = json.Unmarshal(b, resp)
+			if err != nil {
+				// TODO - Propagate this error.
+				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				return
+			}
+			var ok bool
+			result, ok = resp.Data[fconf.RemoteGqlQueryName].([]interface{})
+			if !ok {
+				fmt.Printf("%+v, %T\n", resp.Data[fconf.RemoteGqlQueryName], resp.Data[fconf.RemoteGqlQueryName])
+				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				return
+			}
+		} else {
+			if err := json.Unmarshal(b, &result); err != nil {
+				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				return
+			}
 		}
 
 		if len(result) != len(vals) {
@@ -762,7 +788,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		go func(idx int, input interface{}) {
 			defer wg.Done()
 
-			b, err := json.Marshal(input)
+			requestInput := input
+			if graphql {
+				body := make(map[string]interface{})
+				body["query"] = fconf.RemoteGqlQuery
+				body["variables"] = input
+				requestInput = body
+			}
+
+			b, err := json.Marshal(requestInput)
 			if err != nil {
 				errCh <- err
 				// TODO - Propogate this error

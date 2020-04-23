@@ -637,8 +637,13 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	if graphqlArg == nil {
 		return true, rf
 	}
+	op := ""
+	operation := httpArg.Value.Children.ForName("operation")
+	if operation != nil {
+		op = operation.Raw
+	}
 
-	rf = ParseRequiredArgsFromGQLRequest(graphqlArg.Raw)
+	rf, _ = ParseRequiredArgsFromGQLRequest(graphqlArg.Raw, op)
 	return true, rf
 }
 
@@ -1788,21 +1793,33 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 }
 
 // ParseRequiredArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
-func ParseRequiredArgsFromGQLRequest(req string) map[string]bool {
+func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]bool, error) {
 	// These errors should have already been checked during schema validation.
 	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: req})
 	if gqlErr != nil {
-		// TODO - See if we should return an error here.
-		return nil
+		return nil, gqlErr
 	}
 
 	result := make(map[string]bool)
 	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
+
+	if operation == "batch" {
+		input := query.Arguments.ForName("input")
+		if input.Value.Kind != ast.ListValue {
+			return nil, errors.Errorf("Expected list value for input argument, got: %v",
+				input.Value.Kind)
+		}
+		// TODO - Make sure we are validating the format during schema update so that accessing
+		// the children is safe here.
+		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
+		return rf, err
+	}
+
 	for _, arg := range query.Arguments {
 		val := arg.Value.String()
 		if strings.HasPrefix(val, "$") {
 			result[val[1:]] = true
 		}
 	}
-	return result
+	return result, nil
 }
