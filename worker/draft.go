@@ -135,7 +135,7 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		// only one restore operation should be active any given moment.
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRestore {
-				return nil, errors.Errorf("another restore operation is already running", otherId)
+				return nil, errors.Errorf("another restore operation is already running")
 			}
 			// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
 			n.ops[otherId] = nil
