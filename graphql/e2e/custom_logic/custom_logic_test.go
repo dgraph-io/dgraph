@@ -787,6 +787,13 @@ func readFile(t *testing.T, name string) string {
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
+	// This test adds data, modifies the schema multiple times and fetches the data.
+	// It has the following modes.
+	// 1. Batch operation mode along with REST.
+	// 2. Single operation mode along with REST.
+	// 3. Batch operation mode along with GraphQL.
+	// 4. Single operation mode along with GraphQL.
+
 	// lets check batch mode first using REST endpoints.
 	schema := readFile(t, "schemas/batch-mode-rest.graphql")
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))

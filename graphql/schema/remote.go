@@ -273,8 +273,6 @@ func getGivenQueryArgsAsMap(givenQuery *ast.Field, parentField *ast.FieldDefinit
 			varName := arg.Value.String()
 			argValMap[arg.Name] = varName
 		}
-		// TODO: Handle other checks as above here.
-		// TODO: handle batch/single mode properly here.
 	}
 	return argDefMap, argValMap
 }

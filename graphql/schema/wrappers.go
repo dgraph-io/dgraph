@@ -60,8 +60,7 @@ type FieldHTTPConfig struct {
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
-	// TODO - See if we need both this and the field above.
-	RemoteGqlQuery string
+	RemoteGqlQuery     string
 }
 
 // Query/Mutation types and arg names
@@ -1809,8 +1808,7 @@ func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]b
 			return nil, errors.Errorf("Expected list value for input argument, got: %v",
 				input.Value.Kind)
 		}
-		// TODO - Make sure we are validating the format during schema update so that accessing
-		// the children is safe here.
+		// We are validating the format during schema update so accessing the children is safe here.
 		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
 		return rf, err
 	}

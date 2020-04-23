@@ -638,6 +638,13 @@ func copyTemplate(input interface{}) (interface{}, error) {
 	return result, nil
 }
 
+func keyNotFoundError(f schema.Field, key string) *x.GqlError {
+	return x.GqlErrorf("Evaluation of custom field failed because key: %s "+
+		"could not be found in the JSON response returned by external request "+
+		"for field: %s within type: %s.", key, f.Name(),
+		f.GetObjectName()).WithLocations(f.Location())
+}
+
 func jsonMarshalError(err error, f schema.Field, input interface{}) *x.GqlError {
 	return x.GqlErrorf("Evaluation of custom field failed because json marshaling "+
 		"(of: %+v) returned an error: %s for field: %s within type: %s.", input, err,
@@ -679,11 +686,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		requiredArgs, err := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery,
 			fconf.Operation)
 		if err != nil {
-			errCh <- err
+			errCh <- x.GqlErrorf("Evaluation of custom field failed while parsing required "+
+				"args from remote GraphQL query with an error: %s for field: %s within type: %s.",
+				err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
 			return
 		}
 		for i := 0; i < len(inputs); i++ {
 			vars := make(map[string]interface{})
+			// vals[i] has all the values fetched for this type from Dgraph, lets copy over the
+			// values required to process the remote GraphQL for the field into a new map.
 			mu.RLock()
 			m := vals[i].(map[string]interface{})
 			for k, v := range m {
@@ -704,7 +715,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 			mu.RLock()
 			if err := schema.SubstituteVarsInBody(&temp, vals[i].(map[string]interface{})); err != nil {
-				errCh <- err
+				errCh <- x.GqlErrorf("Evaluation of custom field failed while substituting "+
+					"variables into body for remote endpoint with an error: %s for field: %s "+
+					"within type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
 				mu.RUnlock()
 				return
 			}
@@ -748,7 +761,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			var ok bool
 			result, ok = resp.Data[fconf.RemoteGqlQueryName].([]interface{})
 			if !ok {
-				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				errCh <- x.GqlErrorList{keyNotFoundError(f, fconf.RemoteGqlQueryName)}
 				return
 			}
 		} else {
@@ -798,14 +811,15 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 			if !graphql {
 				// For REST requests, we'll have to substitute the variables used in the URL.
-				// TODO - Have validation to ensure that GraphQL endpoints don't use variables.
 				mu.RLock()
 				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL,
 					vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
-					// TODO - Fix this.
-					errChan <- externalRequestError(err, f)
+					errChan <- x.GqlErrorf("Evaluation of custom field failed while substituting "+
+						"variables into URL for remote endpoint with an error: %s for field: %s "+
+						"within type: %s.", err, f.Name(),
+						f.GetObjectName()).WithLocations(f.Location())
 					return
 				}
 				mu.RUnlock()
@@ -828,8 +842,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				var ok bool
 				result, ok = resp.Data[fconf.RemoteGqlQueryName]
 				if !ok {
-					// TODO - Have better error message here.
-					errChan <- jsonUnmarshalError(err, f)
+					errChan <- keyNotFoundError(f, fconf.RemoteGqlQueryName)
 					return
 				}
 			} else {
@@ -849,6 +862,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}(i, inputs[i])
 	}
 
+	// Some of the errors can be null, so lets collect the non-null errors here.
 	var errs x.GqlErrorList
 	for i := 0; i < len(inputs); i++ {
 		e := <-errChan
