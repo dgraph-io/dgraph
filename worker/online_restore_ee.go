@@ -191,7 +191,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Update the membership state to re-compute the group checksums.
-	return UpdateMembershipState(ctx)
+	if err := UpdateMembershipState(ctx); err != nil {
+		return errors.Wrapf(err, "cannot update membership state after restore")
+	}
+	return nil
 }
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
