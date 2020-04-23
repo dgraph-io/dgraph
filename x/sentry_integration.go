@@ -19,6 +19,7 @@ package x
 import (
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/getsentry/sentry-go"
@@ -28,10 +29,20 @@ import (
 
 var env string
 
+// API KEY for dgraph-gh project (production/release builds)
+const dsnProd = "https://58a035f0d85a4c1c80aee0a3e72f3899@o318308.ingest.sentry.io/1805390"
+
+// API KEY for dgraph-devtest-playground project (dev builds)
+const dsnDevtest = "https://84c2ad450005436fa27d97ef72b52425@o318308.ingest.sentry.io/5208688"
+
+var dsn string
+
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
 	env = "prod-"
+	dsn = dsnProd
 	if DevVersion() {
+		dsn = dsnDevtest
 		env = "dev-"
 	}
 	if ee {
@@ -44,12 +55,29 @@ func InitSentry(ee bool) {
 
 func initSentry() {
 	if err := sentry.Init(sentry.ClientOptions{
-		Dsn:              "https://58a035f0d85a4c1c80aee0a3e72f3899@sentry.io/1805390",
+		Dsn:              dsn,
 		Debug:            true,
 		AttachStacktrace: true,
 		ServerName:       WorkerConfig.MyAddr,
 		Environment:      env,
 		Release:          Version(),
+		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
+			// Modify the event here before sending it to sentry server.
+			if len(event.Exception) > 0 {
+				// Filter out the stacktrace since it is of no use.
+				event.Exception[0].RawStacktrace = nil
+				event.Exception[0].Stacktrace = nil
+
+				// sSet exception type to the panic message.
+				if strings.HasPrefix(event.Exception[0].Value, "panic") {
+					indexofNewline := strings.IndexByte(event.Exception[0].Value, '\n')
+					if indexofNewline != -1 {
+						event.Exception[0].Type = event.Exception[0].Value[:indexofNewline]
+					}
+				}
+			}
+			return event
+		},
 	}); err != nil {
 		glog.Fatalf("Sentry init failed: %v", err)
 	}
