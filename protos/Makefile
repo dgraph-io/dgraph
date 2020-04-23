@@ -39,5 +39,5 @@ regenerate: check clean
 	@protoc \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v200/protos/api:pb \
-		pb.proto
+		dgraphpb.proto
 	@echo Done.
