@@ -27,15 +27,18 @@ import (
 	"github.com/mitchellh/panicwrap"
 )
 
-var env string
+var (
+	env string
+	dsn string // API KEY to use
+)
 
-// API KEY for dgraph-gh project (production/release builds)
-const dsnProd = "https://58a035f0d85a4c1c80aee0a3e72f3899@o318308.ingest.sentry.io/1805390"
-
-// API KEY for dgraph-devtest-playground project (dev builds)
-const dsnDevtest = "https://84c2ad450005436fa27d97ef72b52425@o318308.ingest.sentry.io/5208688"
-
-var dsn string
+// Sentry API KEYs to use.
+const (
+	// dgraph-gh project (production/release builds).
+	dsnProd = "https://58a035f0d85a4c1c80aee0a3e72f3899@o318308.ingest.sentry.io/1805390"
+	// dgraph-devtest-playground project (dev builds).
+	dsnDevtest = "https://84c2ad450005436fa27d97ef72b52425@o318308.ingest.sentry.io/5208688"
+)
 
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
@@ -69,7 +72,7 @@ func initSentry() {
 				ex.RawStacktrace = nil
 				ex.Stacktrace = nil
 
-				// sSet exception type to the panic message.
+				// Set exception type to the panic message.
 				if strings.HasPrefix(event.Exception[0].Value, "panic") {
 					indexofNewline := strings.IndexByte(event.Exception[0].Value, '\n')
 					if indexofNewline != -1 {
