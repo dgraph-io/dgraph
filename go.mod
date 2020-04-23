@@ -16,24 +16,30 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
+<<<<<<< HEAD
 	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200408093502-e82473ba28e7
+=======
+	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200421062606-cddf7c03451c
+>>>>>>> master
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
 	github.com/dgraph-io/ristretto v0.0.2
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/dgryski/go-farm v0.0.0-20200201041132-a6ae2369ad13
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/dustin/go-humanize v1.0.0
-	github.com/getsentry/sentry-go v0.5.1
+	github.com/getsentry/sentry-go v0.6.0
 	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
-	github.com/golang/protobuf v1.3.5
+	github.com/golang/protobuf v1.4.0
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.0.0
+	github.com/gorilla/websocket v1.4.1
+	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
@@ -57,7 +63,12 @@ require (
 	go.opencensus.io v0.21.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e
+<<<<<<< HEAD
 	golang.org/x/sys v0.0.0-20200408040146-ea54a3c99b9b
+=======
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
+	golang.org/x/sys v0.0.0-20200420163511-1957bb5e6d1f
+>>>>>>> master
 	golang.org/x/text v0.3.2
 	google.golang.org/genproto v0.0.0-20190516172635-bb713bdc0e52 // indirect
 	google.golang.org/grpc v1.23.0

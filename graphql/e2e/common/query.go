@@ -1045,6 +1045,29 @@ func enumFilter(t *testing.T) {
 	}
 }
 
+func queryApplicationGraphQl(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPostApplicationGraphql(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryCountry": [
+          { "name": "Angola"},
+          { "name": "Bangladesh"},
+          { "name": "Mozambique"}
+        ]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+}
+
 func queryTypename(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query queryCountry {
@@ -1400,4 +1423,20 @@ func queryPostWithAuthor(t *testing.T) {
 	testutil.CompareJSON(t,
 		`{"queryPost":[{"title":"Introducing GraphQL in Dgraph","author":{"name":"Ann Author"}}]}`,
 		string(gqlResponse.Data))
+}
+
+func queriesHaveExtensions(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+			queryPost {
+				title
+			}
+		}`,
+	}
+
+	touchedUidskey := "touched_uids"
+	gqlResponse := query.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 }

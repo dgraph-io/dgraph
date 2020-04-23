@@ -256,3 +256,14 @@ type Mutation {
 	updatePost(input: UpdatePostInput!): UpdatePostPayload
 	deletePost(filter: PostFilter!): DeletePostPayload
 }
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(postID: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+}

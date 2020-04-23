@@ -59,6 +59,10 @@ type UriHandler interface {
 	// These function calls are used by both Create and Load.
 	io.WriteCloser
 
+	// GetManfiest returns the list of manfiests for the given backup series ID
+	// at the specified location.
+	GetManifests(*url.URL, string) ([]*Manifest, error)
+
 	// GetLatestManifest reads the manifests at the given URL and returns the
 	// latest manifest.
 	GetLatestManifest(*url.URL) (*Manifest, error)
@@ -76,6 +80,11 @@ type UriHandler interface {
 	// and loading the data into a DB. The restore CLI command uses this call.
 	Load(*url.URL, string, loadFn) LoadResult
 
+	// Verify checks that the specified backup can be restored to a cluster with the
+	// given groups. The last manifest of that backup should have the same number of
+	// groups as given list of groups.
+	Verify(*url.URL, string, []uint32) error
+
 	// ListManifests will scan the provided URI and return the paths to the manifests stored
 	// in that location.
 	ListManifests(*url.URL) ([]string, error)
@@ -88,33 +97,33 @@ type UriHandler interface {
 // Credentials holds the credentials needed to perform a backup operation.
 // If these credentials are missing the default credentials will be used.
 type Credentials struct {
-	accessKey    string
-	secretKey    string
-	sessionToken string
-	anonymous    bool
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Anonymous    bool
 }
 
 func (creds *Credentials) hasCredentials() bool {
 	if creds == nil {
 		return false
 	}
-	return creds.accessKey != "" || creds.secretKey != "" || creds.sessionToken != ""
+	return creds.AccessKey != "" || creds.SecretKey != "" || creds.SessionToken != ""
 }
 
 func (creds *Credentials) isAnonymous() bool {
 	if creds == nil {
 		return false
 	}
-	return creds.anonymous
+	return creds.Anonymous
 }
 
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{
-		accessKey:    req.GetAccessKey(),
-		secretKey:    req.GetSecretKey(),
-		sessionToken: req.GetSessionToken(),
-		anonymous:    req.GetAnonymous(),
+		AccessKey:    req.GetAccessKey(),
+		SecretKey:    req.GetSecretKey(),
+		SessionToken: req.GetSessionToken(),
+		Anonymous:    req.GetAnonymous(),
 	}
 }
 
@@ -190,6 +199,22 @@ func LoadBackup(location, backupId string, fn loadFn) LoadResult {
 	return h.Load(uri, backupId, fn)
 }
 
+// VerifyBackup will access the backup location and verify that the specified backup can
+// be restored to the cluster.
+func VerifyBackup(location, backupId string, creds *Credentials, currentGroups []uint32) error {
+	uri, err := url.Parse(location)
+	if err != nil {
+		return err
+	}
+
+	h := getHandler(uri.Scheme, creds)
+	if h == nil {
+		return errors.Errorf("Unsupported URI: %v", uri)
+	}
+
+	return h.Verify(uri, backupId, currentGroups)
+}
+
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
 func ListBackupManifests(l string) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
@@ -230,8 +255,6 @@ func filterManifests(manifests []*Manifest, backupId string) ([]*Manifest, error
 		// backupId. If it's empty, do not skip any manifests as the default behavior is
 		// to restore the latest series of backups.
 		if len(backupId) > 0 && manifests[i].BackupId != backupId {
-			fmt.Printf("Restore: skip manifest %s as it's not part of the series with uid %s.\n",
-				manifests[i].Path, backupId)
 			continue
 		}
 
@@ -284,4 +307,28 @@ func verifyManifests(manifests []*Manifest) error {
 
 func backupName(since uint64, groupId uint32) string {
 	return fmt.Sprintf(backupNameFmt, since, groupId)
+}
+
+// verifyGroupsInBackup checks that the groups in the last manifest match the groups in
+// the current cluster.  If they don't match, the backup cannot be restored to the cluster.
+func verifyGroupsInBackup(manifests []*Manifest, currentGroups []uint32) error {
+	var maxBackupNum uint64
+	var lastManifest *Manifest
+	for _, manifest := range manifests {
+		if manifest.BackupNum > maxBackupNum {
+			lastManifest = manifest
+			maxBackupNum = manifest.BackupNum
+		}
+	}
+
+	if len(currentGroups) != len(lastManifest.Groups) {
+		return errors.Errorf("groups in cluster and latest backup manifest differ")
+	}
+
+	for _, group := range currentGroups {
+		if _, ok := lastManifest.Groups[group]; !ok {
+			return errors.Errorf("groups in cluster and latest backup manifest differ")
+		}
+	}
+	return nil
 }

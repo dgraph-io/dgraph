@@ -141,6 +141,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during backup. Skip.", err, hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -233,9 +234,12 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.
 	list := &bpb.KVList{}
 
 	item := itr.Item()
-	if item.Version() < pr.Request.SinceTs || item.IsDeletedOrExpired() {
+	if item.UserMeta() != posting.BitSchemaPosting && (item.Version() < pr.Request.SinceTs ||
+		item.IsDeletedOrExpired()) {
 		// Ignore versions less than given timestamp, or skip older versions of
 		// the given key by returning an empty list.
+		// Do not do this for schema and type keys. Those keys always have a
+		// version of one so they would be incorrectly rejected by above check.
 		return list, nil
 	}
 
