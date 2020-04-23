@@ -391,8 +391,7 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{6, 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
-			" an error: unexpected status code: 404 for field: bikes within type: Person," +
-			" index: 0.",
+			" an error: unexpected status code: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{9, 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
