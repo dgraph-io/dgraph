@@ -1,4 +1,21 @@
-type User {
+type User @auth(
+    delete: { or: [
+        { rule: """
+        query($USER: String!) {
+            queryUser(filter: { username: { eq: $USER } }) {
+                __typename
+            }
+        }
+        """ },
+        { rule: """
+        query($USER: String!) {
+            queryUser(filter: { username: { eq: $USER } }) {
+                __typename
+            }
+        }
+        """}]
+    }
+){
 # @auth(
 #     add: { rule: "$ROLE: { eq: ADD-BOT }" },
 #     update: { or: [ 
