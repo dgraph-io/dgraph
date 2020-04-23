@@ -94,6 +94,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Set correct posting list type while creating it in live loader. ([#5012][])
 - Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
+- Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][]).
 
 ### Added
 
@@ -129,6 +130,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5273]: https://github.com/dgraph-io/dgraph/issues/5273
 [#5216]: https://github.com/dgraph-io/dgraph/issues/5216
 [#5268]: https://github.com/dgraph-io/dgraph/issues/5268
+[#5102]: https://github.com/dgraph-io/dgraph/issues/5102
+[#5255]: https://github.com/dgraph-io/dgraph/issues/5255
 
 ## [20.03.0] - 2020-03-30
 [20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
