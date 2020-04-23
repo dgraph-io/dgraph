@@ -94,7 +94,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Set correct posting list type while creating it in live loader. ([#5012][])
 - Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
-- Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][]).
+- Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][])
 
 ### Added
 
@@ -104,7 +104,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Add option "--encryption_key_file"/"-k" to debug tool for encryption support. ([#5146][])
   - Support for encrypted backups/restore. **Note**: Older backups without encryption will be incompatible with this Dgraph version. Solution is to force a full backup before creating further incremental backups. ([#5103][])
   - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
-
+- Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
 
 [#5146]: https://github.com/dgraph-io/dgraph/issues/5146
 [#5206]: https://github.com/dgraph-io/dgraph/issues/5206
@@ -132,6 +132,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5268]: https://github.com/dgraph-io/dgraph/issues/5268
 [#5102]: https://github.com/dgraph-io/dgraph/issues/5102
 [#5255]: https://github.com/dgraph-io/dgraph/issues/5255
+[#4772]: https://github.com/dgraph-io/dgraph/issues/4772
+[#5094]: https://github.com/dgraph-io/dgraph/issues/5094
 
 ## [20.03.0] - 2020-03-30
 [20.03.0]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v20.03.0
