@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 	"unicode"
@@ -72,6 +73,9 @@ func (c *DotUpCodecRequest) Method() (string, error) {
 	m, err := c.CodecRequest.Method()
 	if len(m) > 1 && err == nil {
 		parts := strings.Split(m, "_")
+		if len(parts) < 2 {
+			return "", fmt.Errorf("rpc error method %s not found", m)
+		}
 		service, method := parts[0], parts[1]
 		r, n := utf8.DecodeRuneInString(method) // get the first rune, and it's length
 		if unicode.IsLower(r) {

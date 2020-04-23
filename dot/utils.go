@@ -28,7 +28,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/utils"
-
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,6 +63,7 @@ func NewTestConfig(t *testing.T) *Config {
 			Host:    string("localhost"),
 			Port:    uint32(8545),
 			Modules: []string{"system", "author", "chain"},
+			WSPort:  uint32(8546),
 		},
 	}
 }

@@ -68,4 +68,6 @@ var (
 	DefaultRPCHTTPPort = uint32(8545)
 	// DefaultRPCModules rpc modules
 	DefaultRPCModules = []string{"system"}
+	// DefaultRPCWSPort rpc websocket port
+	DefaultRPCWSPort = uint32(8546)
 )

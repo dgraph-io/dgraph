@@ -18,6 +18,7 @@ require (
 	github.com/google/go-cmp v0.3.1 // indirect
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/rpc v1.2.0
+	github.com/gorilla/websocket v1.4.1
 	github.com/gtank/merlin v0.1.1 // indirect
 	github.com/ipfs/go-datastore v0.3.1
 	github.com/jcelliott/lumber v0.0.0-20160324203708-dd349441af25 // indirect

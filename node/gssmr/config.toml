@@ -26,3 +26,4 @@ enabled = false
 port = 8545
 host = "localhost"
 modules = ["system", "author", "chain"]
+ws-port = 8546

@@ -80,6 +80,7 @@ type RPCConfig struct {
 	Port    uint32   `toml:"port"`
 	Host    string   `toml:"host"`
 	Modules []string `toml:"modules"`
+	WSPort  uint32   `toml:"ws-port"`
 }
 
 // String will return the json representation for a Config
@@ -128,6 +129,7 @@ func GssmrConfig() *Config {
 			Port:    gssmr.DefaultRPCHTTPPort,
 			Host:    gssmr.DefaultRPCHTTPHost,
 			Modules: gssmr.DefaultRPCModules,
+			WSPort:  gssmr.DefaultRPCWSPort,
 		},
 	}
 }
@@ -162,6 +164,7 @@ func KsmccConfig() *Config {
 			Port:    ksmcc.DefaultRPCHTTPPort,
 			Host:    ksmcc.DefaultRPCHTTPHost,
 			Modules: ksmcc.DefaultRPCModules,
+			WSPort:  ksmcc.DefaultRPCWSPort,
 		},
 	}
 }
