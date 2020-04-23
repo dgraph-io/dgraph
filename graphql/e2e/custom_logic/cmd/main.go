@@ -1184,7 +1184,7 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("userName", "id"))
+		fmt.Fprint(w, introspectedSchemaForQuery("userName", "id"))
 		return
 	}
 
@@ -1354,7 +1354,7 @@ func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("teacherName", "id"))
+		fmt.Fprint(w, introspectedSchemaForQuery("teacherName", "id"))
 		return
 	}
 
@@ -1378,7 +1378,7 @@ func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectedSchemaForQuery("schoolName", "id"))
+		fmt.Fprint(w, introspectedSchemaForQuery("schoolName", "id"))
 		return
 	}
 
@@ -1479,7 +1479,7 @@ func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectionResult("userNames"))
+		fmt.Fprint(w, introspectionResult("userNames"))
 		return
 	}
 
@@ -1487,7 +1487,7 @@ func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(w, res)
+	fmt.Fprint(w, res)
 }
 
 func gqlTeacherNamesHandler(w http.ResponseWriter, r *http.Request) {
@@ -1497,7 +1497,7 @@ func gqlTeacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectionResult("teacherNames"))
+		fmt.Fprint(w, introspectionResult("teacherNames"))
 		return
 	}
 
@@ -1505,7 +1505,7 @@ func gqlTeacherNamesHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(w, res)
+	fmt.Fprint(w, res)
 }
 
 func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
@@ -1515,7 +1515,7 @@ func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, introspectionResult("schoolNames"))
+		fmt.Fprint(w, introspectionResult("schoolNames"))
 		return
 	}
 
@@ -1523,7 +1523,7 @@ func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		return
 	}
-	fmt.Fprintf(w, res)
+	fmt.Fprint(w, res)
 }
 
 func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
