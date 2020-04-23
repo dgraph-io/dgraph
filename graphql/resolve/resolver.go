@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -743,14 +742,12 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			resp := &graphqlResp{}
 			err = json.Unmarshal(b, resp)
 			if err != nil {
-				// TODO - Propagate this error.
 				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 				return
 			}
 			var ok bool
 			result, ok = resp.Data[fconf.RemoteGqlQueryName].([]interface{})
 			if !ok {
-				fmt.Printf("%+v, %T\n", resp.Data[fconf.RemoteGqlQueryName], resp.Data[fconf.RemoteGqlQueryName])
 				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
 				return
 			}
@@ -782,12 +779,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
-	var wg sync.WaitGroup
+	errChan := make(chan *x.GqlError, len(inputs))
 	for i := 0; i < len(inputs); i++ {
-		wg.Add(1)
 		go func(idx int, input interface{}) {
-			defer wg.Done()
-
 			requestInput := input
 			if graphql {
 				body := make(map[string]interface{})
@@ -798,8 +792,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 			b, err := json.Marshal(requestInput)
 			if err != nil {
-				errCh <- err
-				// TODO - Propogate this error
+				errChan <- jsonMarshalError(err, f, requestInput)
 				return
 			}
 			input = string(b)
@@ -811,6 +804,8 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				fconf.URL, err = schema.SubstituteVarsInURL(fconf.URL, vals[idx].(map[string]interface{}))
 				if err != nil {
 					mu.RUnlock()
+					// TODO - Fix this.
+					errChan <- externalRequestError(err, f)
 					return
 				}
 				mu.RUnlock()
@@ -818,7 +813,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 
 			b, err = makeRequest(nil, fconf.Method, fconf.URL, input.(string), fconf.ForwardHeaders)
 			if err != nil {
-				// TODO - Propogate this error.
+				errChan <- externalRequestError(err, f)
 				return
 			}
 
@@ -827,18 +822,19 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				resp := &graphqlResp{}
 				err = json.Unmarshal(b, resp)
 				if err != nil {
-					// TODO - Propagate this error.
+					errChan <- jsonUnmarshalError(err, f)
 					return
 				}
 				var ok bool
 				result, ok = resp.Data[fconf.RemoteGqlQueryName]
 				if !ok {
+					// TODO - Have better error message here.
+					errChan <- jsonUnmarshalError(err, f)
 					return
 				}
 			} else {
-				var result interface{}
 				if err := json.Unmarshal(b, &result); err != nil {
-					// TODO - Propogate this error. Also wrap them like you do for other others.
+					errChan <- jsonUnmarshalError(err, f)
 					return
 				}
 			}
@@ -849,10 +845,19 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				val[f.Alias()] = result
 			}
 			mu.Unlock()
+			errChan <- nil
 		}(i, inputs[i])
 	}
-	wg.Wait()
-	errCh <- nil
+
+	var errs x.GqlErrorList
+	for i := 0; i < len(inputs); i++ {
+		e := <-errChan
+		if e != nil {
+			errs = append(errs, e)
+		}
+	}
+
+	errCh <- errs
 }
 
 // resolveNestedFields resolves fields which themselves don't have the @custom directive but their
