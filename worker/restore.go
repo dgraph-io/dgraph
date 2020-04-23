@@ -47,6 +47,22 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
+			r, err := enc.GetReader(keyfile, r)
+			if err != nil {
+				return 0, err
+			}
+
+			gzReader, err := gzip.NewReader(r)
+			if err != nil {
+				if len(keyfile) != 0 {
+					err = errors.Wrap(err,
+						"Unable to read the backup. Ensure the encryption key is correct.")
+				}
+				return 0, err
+
+			}
+			// The badger DB should be opened only after creating the backup
+			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
@@ -59,14 +75,6 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			defer db.Close()
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
-			}
-			r, err = enc.GetReader(keyfile, r)
-			if err != nil {
-				return 0, err
-			}
-			gzReader, err := gzip.NewReader(r)
-			if err != nil {
-				return 0, err
 			}
 			maxUid, err := loadFromBackup(db, gzReader, 0, preds)
 			if err != nil {
