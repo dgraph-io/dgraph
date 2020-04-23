@@ -116,7 +116,6 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 // TODO(DGRAPH-1220): Online restores support passing the backup id.
 // TODO(DGRAPH-1230): Track restore operations.
-// TODO(DGRAPH-1231): Use draining mode during restores.
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {

@@ -585,6 +585,10 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return nil
 
 	case proposal.Restore != nil:
+		// Enable draining mode for the duration of the restore processing.
+		x.UpdateDrainingMode(true)
+		defer x.UpdateDrainingMode(false)
+
 		var err error
 		var closer *y.Closer
 		closer, err = n.startTask(opRestore)
@@ -1342,7 +1346,7 @@ func (n *node) abortOldTransactions() {
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
