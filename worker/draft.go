@@ -101,7 +101,7 @@ const (
 // startTask is used to check whether an op is already running. If a rollup is running,
 // it is canceled and startTask will wait until it completes before returning.
 // If the same task is already running, this method returns an errror.
-// Restore operations have preference and cancel all other operations, not just rollups. 
+// Restore operations have preference and cancel all other operations, not just rollups.
 // You should only call Done() on the returned closer. Calling other functions (such as
 // SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
@@ -134,13 +134,12 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		// Restores cancel all other operations, except for other restores since
 		// only one restore operation should be active any given moment.
 		for otherId, otherCloser := range n.ops {
-			if otherId != opRestore {
-				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
-				n.ops[otherId] = nil
-				otherCloser.SignalAndWait()
-			} else {
+			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running", otherId)
 			}
+			// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
+			n.ops[otherId] = nil
+			otherCloser.SignalAndWait()
 		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
