@@ -579,7 +579,7 @@ func missingTypeForBatchedFieldInput(w http.ResponseWriter, r *http.Request) {
 							  "kind": "LIST",
 							  "name": null,
 							  "ofType": {
-								"kind": "OBJECT",
+								"kind": "INPUT_OBJECT",
 								"name": "PostFilterInput",
 								"ofType": null
 							  }
@@ -1110,7 +1110,7 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 							  "kind": "LIST",
 							  "name": null,
 							  "ofType": {
-								"kind": "OBJECT",
+								"kind": "INPUT_OBJECT",
 								"name": "PostFilterInput",
 								"ofType": null
 							  }
@@ -1137,7 +1137,7 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 				  ]
 				},
 				{
-				  "kind": "OBJECT",
+				  "kind": "INPUT_OBJECT",
 				  "name": "PostFilterInput",
 				  "fields": [
 					{

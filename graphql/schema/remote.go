@@ -230,9 +230,10 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 
 	// correctly set remoteQryArgDefs and remoteQryRequiredArgs for batch operations
 	if metadata.isBatch {
+		// TODO: make sure if it is [{}] or [{}!] or [{}]! or [{}!]!
 		input, ok := remoteQryArgDefs["input"]
 		if !ok || input.Type.Kind != "LIST" || input.Type.OfType == nil || input.Type.OfType.
-			Kind != "OBJECT" {
+			Kind != "INPUT_OBJECT" {
 			return errors.Errorf("given %s: %s: arg `input` is not of the form `[{param1: $var1, "+
 				"param2: $var2, ...}]` in remote %s.",
 				operationType, givenQuery.Name, operationType)
@@ -241,6 +242,9 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		typ, ok := remoteTypes[inputTypName]
 		if !ok {
 			return errors.Errorf("remote schema doesn't have any type named %s.", inputTypName)
+		}
+		if typ.Kind != "INPUT_OBJECT" {
+			return errors.Errorf("type %s in remote schema is not an INPUT_OBJECT.", inputTypName)
 		}
 		remoteQryArgDefs = make(map[string]*Args)
 		remoteQryRequiredArgs = make([]string, 0)
