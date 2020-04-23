@@ -1158,7 +1158,48 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive with repeating arguments for field in operation in graphql"
+    name: "@custom directive with batch mode on field and invalid input format for query in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String!
+      }
+      type Post {
+        id: ID!
+        author: Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          operation: "batch"
+          graphql: "query { getAuthor(postId: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Post; Field author: @custom directive: graphql; for batch operations query `getAuthor` can have only one argument named `input` with value formatted as `[{param1: $var1, param2: $var2, ...}]`.",
+     "locations":[{"line":11, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with batch mode on field and repeating arguments for query in graphql"
+    input: |
+      type Author {
+        id: ID!
+      }
+      type Post {
+        id: ID!
+        author: Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          operation: "batch"
+          graphql: "query { getAuthor(input: [{id: $id, id: $id}]) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Post; Field author: @custom directive: graphql; given query: getAuthor: arguments [id ] appear more than once, each argument can appear only once.",
+     "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive with repeating arguments for query in graphql"
     input: |
       type Author {
         id: ID!
@@ -1176,20 +1217,35 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive on field where body uses undefined field"
+    name: "@custom directive not allowed on field of type ID!"
     input: |
       type Author {
-        id: ID!
-        name: String! @custom(http: {
+        id: ID! @custom(http: {
           url: "http://google.com",
           method: "GET",
-          body: "{ abc: $abc }"
+          body: "{ abc: $foo }"
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, body template must use fields
-       defined within the type, found: abc.",
-      "locations":[{"line":6, "column":12}]},
+    {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
+      field with @id directive.",
+     "locations":[{"line":2, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive not allowed on field with @id directive"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or field with @id directive.",
+     "locations":[{"line":3, "column":22}]},
     ]
 
   -
@@ -1204,8 +1260,134 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
-       "locations":[{"line":6, "column":12}]},
+    {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
+     "locations":[{"line":6, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses undefined field"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $abc }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found: abc.",
+      "locations":[{"line":6, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where body doesn't use scalar field"
+    input: |
+      type Note {
+        test: String!
+      }
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: Note
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          body: "{ id: $id, abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field of type: Note.",
+     "locations":[{"line":11, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive in body"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "GET",
+          body: "{ abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+     "locations":[{"line":8, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql required itself"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $name, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; @custom directive, graphql can't require itself.",
+     "locations":[{"line":6, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses undefined field"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $abc, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found: abc.",
+     "locations":[{"line":6, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql doesn't use scalar field"
+    input: |
+      type Note {
+        test: String!
+      }
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: Note
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $foo, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field of type: Note.",
+     "locations":[{"line":11, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field doesn't use field with ID! type or @id directive in graphql"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $foo) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+     "locations":[{"line":8, "column":15}]},
     ]
 
   -
@@ -1223,58 +1405,6 @@ invalid_schemas:
       {"message": "Type Author; Field name; @custom directive is only allowed on fields where the type
        definition has a field with type ID! or a field with @id directive.",
       "locations":[{"line":3, "column":18}]},
-    ]
-
-  -
-    name: "@custom directive on field doesn't use field with ID! type or @id directive"
-    input: |
-      type Author {
-        id: ID!
-        name: String! @id
-        foo: String
-        yo: String! @custom(http: {
-          url: "http://google.com",
-          method: "GET",
-          body: "{ abc: $foo }"
-        })
-      }
-    errlist: [
-      {"message": "Type Author; Field yo: @custom directive, body template must use a field with type
-      ID! or a field with @id directive.",
-      "locations":[{"line":8, "column":12}]},
-    ]
-
-  -
-    name: "@custom directive not allowed on field of type ID!"
-    input: |
-      type Author {
-        id: ID! @custom(http: {
-          url: "http://google.com",
-          method: "GET",
-          body: "{ abc: $foo }"
-        })
-      }
-    errlist: [
-      {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
-      field with @id directive.",
-      "locations":[{"line":2, "column":12}]},
-    ]
-
-  -
-    name: "@custom directive not allowed on field with @id directive"
-    input: |
-      type Author {
-        id: ID!
-        name: String! @id @custom(http: {
-          url: "http://google.com",
-          method: "GET",
-          body: "{ id: $id }"
-        })
-      }
-    errlist: [
-      {"message": "Type Author; Field name; custom directive not allowed on field of type ID! or
-      field with @id directive.",
-      "locations":[{"line":3, "column":22}]},
     ]
 
   -

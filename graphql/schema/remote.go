@@ -156,6 +156,8 @@ type remoteGraphqlMetadata struct {
 	// graphqlOpDef is the Operation Definition for the operation given in @custom->http->graphql
 	// The operation can only be a query or mutation
 	graphqlOpDef *ast.OperationDefinition
+	// isBatch tells whether it is single/batch operation for resolving custom fields
+	isBatch bool
 	// url is the url of remote graphql endpoint
 	url string
 }
@@ -172,8 +174,14 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 	operationType := metadata.graphqlOpDef.Operation
 	switch operationType {
 	case "query":
+		if remoteIntrospection.Data.Schema.QueryType == nil {
+			return errors.Errorf("remote schema doesn't have any queries.")
+		}
 		remoteQueryTypename = remoteIntrospection.Data.Schema.QueryType.Name
 	case "mutation":
+		if remoteIntrospection.Data.Schema.MutationType == nil {
+			return errors.Errorf("remote schema doesn't have any mutations.")
+		}
 		remoteQueryTypename = remoteIntrospection.Data.Schema.MutationType.Name
 	default:
 		// this case is not possible as we are validating the operation to be query/mutation in
@@ -181,41 +189,68 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		return errors.Errorf("found %s operation, it can only have query/mutation.", operationType)
 	}
 
-	var introspectedRemoteQuery *GqlField
-	givenQuery := metadata.graphqlOpDef.SelectionSet[0].(*ast.Field)
+	remoteTypes := make(map[string]*Types)
 	for _, typ := range remoteIntrospection.Data.Schema.Types {
-		if typ.Name != remoteQueryTypename {
-			continue
-		}
-		for _, remoteQuery := range typ.Fields {
-			if remoteQuery.Name == givenQuery.Name {
-				introspectedRemoteQuery = &remoteQuery
-				break
-			}
-		}
-		if introspectedRemoteQuery != nil {
-			break
-		}
+		remoteTypes[typ.Name] = typ
+	}
+
+	remoteQryType, ok := remoteTypes[remoteQueryTypename]
+	if !ok {
+		return errors.Errorf("remote schema doesn't have any type named %s.", remoteQueryTypename)
 	}
 
 	// check whether given query/mutation is present in remote schema
+	var introspectedRemoteQuery *GqlField
+	givenQuery := metadata.graphqlOpDef.SelectionSet[0].(*ast.Field)
+	for _, remoteQuery := range remoteQryType.Fields {
+		if remoteQuery.Name == givenQuery.Name {
+			introspectedRemoteQuery = remoteQuery
+			break
+		}
+	}
 	if introspectedRemoteQuery == nil {
 		return errors.Errorf("given %s: %s is not present in remote schema.",
 			operationType, givenQuery.Name)
 	}
 
 	// check whether the return type of remote query is same as the required return type
-	// TODO: need to check whether same will work for @custom on fields which have batch operation
-	expectedReturnType := introspectedRemoteQuery.Type.String()
-	gotReturnType := metadata.parentField.Type.String()
+	expectedReturnType := metadata.parentField.Type.String()
+	gotReturnType := introspectedRemoteQuery.Type.String()
+	if metadata.isBatch {
+		expectedReturnType = fmt.Sprintf("[%s]", expectedReturnType)
+	}
 	if expectedReturnType != gotReturnType {
 		return errors.Errorf("given %s: %s: return type mismatch; expected: %s, got: %s.",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
 	}
 
-	givenQryArgDefs, givenQryArgVals := getGivenQueryArgsAsMap(givenQuery, metadata.parentField,
-		metadata.parentType)
+	givenQryArgDefs, givenQryArgVals := getGivenQueryArgsAsMap(givenQuery, metadata.isBatch,
+		metadata.parentField, metadata.parentType)
 	remoteQryArgDefs, remoteQryRequiredArgs := getRemoteQueryArgsAsMap(introspectedRemoteQuery)
+
+	// correctly set remoteQryArgDefs and remoteQryRequiredArgs for batch operations
+	if metadata.isBatch {
+		input, ok := remoteQryArgDefs["input"]
+		if !ok || input.Type.Kind != "LIST" || input.Type.OfType == nil || input.Type.OfType.
+			Kind != "OBJECT" {
+			return errors.Errorf("given %s: %s: arg `input` is not of the form `[{param1: $var1, "+
+				"param2: $var2, ...}]` in remote %s.",
+				operationType, givenQuery.Name, operationType)
+		}
+		inputTypName := input.Type.OfType.Name
+		typ, ok := remoteTypes[inputTypName]
+		if !ok {
+			return errors.Errorf("remote schema doesn't have any type named %s.", inputTypName)
+		}
+		remoteQryArgDefs = make(map[string]*Args)
+		remoteQryRequiredArgs = make([]string, 0)
+		for _, field := range typ.Fields {
+			remoteQryArgDefs[field.Name] = &Args{Type: field.Type}
+			if field.Type.Kind == "NON_NULL" {
+				remoteQryRequiredArgs = append(remoteQryRequiredArgs, field.Name)
+			}
+		}
+	}
 
 	// check whether args of given query/mutation match the args of remote query/mutation
 	for givenArgName, givenArgDef := range givenQryArgDefs {
@@ -228,8 +263,8 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 			return errors.Errorf("given %s: %s: variable %s is missing in given context.",
 				operationType, givenQuery.Name, givenQryArgVals[givenArgName])
 		}
-		expectedArgType := remoteArgDef.Type.String()
-		gotArgType := givenArgDef.Type.String()
+		expectedArgType := givenArgDef.Type.String()
+		gotArgType := remoteArgDef.Type.String()
 		if expectedArgType != gotArgType {
 			return errors.Errorf("given %s: %s: type mismatch for variable %s; expected: %s, "+
 				"got: %s.", operationType, givenQuery.Name, givenQryArgVals[givenArgName],
@@ -250,22 +285,38 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 }
 
 // getGivenQueryArgsAsMap returns following maps:
-// 1. arg name -> *ast.ArgumentDefinition
+// 1. arg name -> *ast.ArgumentDefinition (Currently, we only need to use the Type field from this)
 // 2. arg name -> argument value (i.e., variable like $id)
-func getGivenQueryArgsAsMap(givenQuery *ast.Field, parentField *ast.FieldDefinition,
+// It takes care of the special format for batch mode operations
+func getGivenQueryArgsAsMap(givenQuery *ast.Field, isBatch bool, parentField *ast.FieldDefinition,
 	parentType *ast.Definition) (map[string]*ast.ArgumentDefinition, map[string]string) {
 	argDefMap := make(map[string]*ast.ArgumentDefinition)
 	argValMap := make(map[string]string)
+	givenQueryArgs := givenQuery.Arguments
 
-	if parentType.Name == "Query" || parentType.Name == "Mutation" {
-		parentFieldArgMap := getFieldArgDefsAsMap(parentField)
-		for _, arg := range givenQuery.Arguments {
-			varName := arg.Value.String()
-			argDefMap[arg.Name] = parentFieldArgMap[varName[1:]]
-			argValMap[arg.Name] = varName
-		}
+	var inputArgDefsMap map[string]*ast.ArgumentDefinition
+	if isQueryOrMutationType(parentType) {
+		// this is the case of @custom on some Query or Mutation
+		inputArgDefsMap = getFieldArgDefsAsMap(parentField)
 	} else {
-		// TODO: handle @custom graphql validation for fields here
+		// this is the case of @custom on fields inside some user defined type
+		inputArgDefsMap = getTypeFieldsAsArgDefsMap(parentType)
+		if isBatch {
+			givenQueryArgs = make([]*ast.Argument, 0)
+			for _, arg := range givenQuery.Arguments[0].Value.Children[0].Value.Children {
+				givenQueryArgs = append(givenQueryArgs, &ast.Argument{
+					Name:     arg.Name,
+					Value:    arg.Value,
+					Position: arg.Position,
+				})
+			}
+		}
+	}
+
+	for _, arg := range givenQueryArgs {
+		varName := arg.Value.String()
+		argDefMap[arg.Name] = inputArgDefsMap[varName[1:]]
+		argValMap[arg.Name] = varName
 	}
 	return argDefMap, argValMap
 }
@@ -278,11 +329,19 @@ func getFieldArgDefsAsMap(fieldDef *ast.FieldDefinition) map[string]*ast.Argumen
 	return argMap
 }
 
+func getTypeFieldsAsArgDefsMap(typ *ast.Definition) map[string]*ast.ArgumentDefinition {
+	argMap := make(map[string]*ast.ArgumentDefinition)
+	for _, v := range typ.Fields {
+		argMap[v.Name] = &ast.ArgumentDefinition{Type: v.Type}
+	}
+	return argMap
+}
+
 // getRemoteQueryArgsAsMap returns following things:
 // 1. map of arg name -> Argument Definition in Gql introspection response format
 // 2. list of arg name for NON_NULL args
-func getRemoteQueryArgsAsMap(remoteQuery *GqlField) (map[string]Args, []string) {
-	argDefMap := make(map[string]Args)
+func getRemoteQueryArgsAsMap(remoteQuery *GqlField) (map[string]*Args, []string) {
+	argDefMap := make(map[string]*Args)
 	requiredArgs := make([]string, 0)
 
 	for _, arg := range remoteQuery.Args {
@@ -307,7 +366,7 @@ type GqlType struct {
 }
 type GqlField struct {
 	Name              string      `json:"name"`
-	Args              []Args      `json:"args"`
+	Args              []*Args     `json:"args"`
 	Type              *GqlType    `json:"type"`
 	IsDeprecated      bool        `json:"isDeprecated"`
 	DeprecationReason interface{} `json:"deprecationReason"`
@@ -315,8 +374,8 @@ type GqlField struct {
 type Types struct {
 	Kind          string        `json:"kind"`
 	Name          string        `json:"name"`
-	Fields        []GqlField    `json:"fields"`
-	InputFields   []GqlField    `json:"inputFields"`
+	Fields        []*GqlField   `json:"fields"`
+	InputFields   []*GqlField   `json:"inputFields"`
 	Interfaces    []interface{} `json:"interfaces"`
 	EnumValues    interface{}   `json:"enumValues"`
 	PossibleTypes interface{}   `json:"possibleTypes"`
@@ -329,14 +388,14 @@ type Args struct {
 type Directives struct {
 	Name      string   `json:"name"`
 	Locations []string `json:"locations"`
-	Args      []Args   `json:"args"`
+	Args      []*Args  `json:"args"`
 }
 type IntrospectionSchema struct {
-	QueryType        IntrospectionQueryType `json:"queryType"`
-	MutationType     IntrospectionQueryType `json:"mutationType"`
-	SubscriptionType IntrospectionQueryType `json:"subscriptionType"`
-	Types            []Types                `json:"types"`
-	Directives       []Directives           `json:"directives"`
+	QueryType        *IntrospectionQueryType `json:"queryType"`
+	MutationType     *IntrospectionQueryType `json:"mutationType"`
+	SubscriptionType *IntrospectionQueryType `json:"subscriptionType"`
+	Types            []*Types                `json:"types"`
+	Directives       []*Directives           `json:"directives"`
 }
 type Data struct {
 	Schema IntrospectionSchema `json:"__schema"`
