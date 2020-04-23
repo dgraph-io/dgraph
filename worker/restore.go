@@ -55,7 +55,7 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
 				return 0, errors.Wrap(err,
-					"Unable to read backup. Ensure encryption key is correctly set")
+					"Unable to read the backup. Ensure encryption key is correct.")
 			}
 			// The badger DB should be opened only after creating the backup
 			// file reader. The following sequence of events can occur if
