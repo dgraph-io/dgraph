@@ -64,15 +64,16 @@ func initSentry() {
 		BeforeSend: func(event *sentry.Event, hint *sentry.EventHint) *sentry.Event {
 			// Modify the event here before sending it to sentry server.
 			if len(event.Exception) > 0 {
+				ex := &event.Exception[0]
 				// Filter out the stacktrace since it is of no use.
-				event.Exception[0].RawStacktrace = nil
-				event.Exception[0].Stacktrace = nil
+				ex.RawStacktrace = nil
+				ex.Stacktrace = nil
 
 				// sSet exception type to the panic message.
 				if strings.HasPrefix(event.Exception[0].Value, "panic") {
 					indexofNewline := strings.IndexByte(event.Exception[0].Value, '\n')
 					if indexofNewline != -1 {
-						event.Exception[0].Type = event.Exception[0].Value[:indexofNewline]
+						ex.Type = ex.Value[:indexofNewline]
 					}
 				}
 			}
