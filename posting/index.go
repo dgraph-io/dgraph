@@ -24,7 +24,6 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -36,7 +35,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -561,7 +559,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithCompression(options.None).
 		WithLogRotatesToFlush(10).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
-
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")
@@ -576,8 +573,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// We set it to 1 in case there are no keys found and NewStreamAt is called with ts=0.
 	var counter uint64 = 1
 
-	// tmpWriter := NewTxnWriter(tmpDB)
-	//tmpBatchWriter := pstore.NewWriteBatchAt(counter)
+	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
+	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
+	// could be replaced with WriteBatch in the code
+	tmpWriter := NewTxnWriter(tmpDB)
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
@@ -625,44 +624,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 		return &bpb.KVList{Kv: kvs}, nil
 	}
-	var wg sync.WaitGroup
 	stream.Send = func(kvList *bpb.KVList) error {
-		var entries []*badger.Entry
-		for _, kv := range kvList.Kv {
-			var meta byte
-			var entry *badger.Entry
-			if len(kv.UserMeta) > 0 {
-				meta = kv.UserMeta[0]
-			}
-			switch meta {
-			case BitCompletePosting, BitEmptyPosting:
-				entry = (&badger.Entry{
-					Key:      kv.Key,
-					Value:    kv.Value,
-					UserMeta: meta,
-				}).WithDiscard()
-			default:
-				entry = &badger.Entry{
-					Key:      kv.Key,
-					Value:    kv.Value,
-					UserMeta: meta,
-				}
-			}
-			entry.Key = y.KeyWithTs(entry.Key, kv.Version)
-			entries = append(entries, entry)
+		if err := tmpWriter.Write(kvList); err != nil {
+			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
-		wg.Add(1)
-		if err := tmpDB.BatchSetAsync(entries, func(err error) {
-			defer wg.Done()
-			if err != nil {
-				// TODO: Handle error
-				glog.Error(err)
-				return
-			}
-		}); err != nil {
-			return err
-		}
 		return nil
 	}
 
@@ -670,8 +636,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	if err := stream.Orchestrate(ctx); err != nil {
 		return err
 	}
-
-	wg.Wait()
+	if err := tmpWriter.Flush(); err != nil {
+		return err
+	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
 
@@ -683,6 +650,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
+	writer := NewTxnWriter(pstore)
 	tmpStream := tmpDB.NewStreamAt(counter)
 	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -701,40 +669,26 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
-		var entries []*badger.Entry
-		var entry *badger.Entry
 		for _, kv := range kvList.Kv {
 			if len(kv.Value) == 0 {
 				continue
 			}
-			entry = (&badger.Entry{
-				Key:      kv.Key,
-				Value:    kv.Value,
-				UserMeta: BitCompletePosting,
-			}).WithDiscard()
-			entry.Key = y.KeyWithTs(entry.Key, r.startTs)
-			entries = append(entries, entry)
+
+			// We choose to write the PL at r.startTs, so it won't be read by txns,
+			// which occurred before this schema mutation.
+			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+				return errors.Wrap(err, "error in writing index to pstore")
+			}
 		}
 
-		wg.Add(1)
-		if err := pstore.BatchSetAsync(entries, func(err error) {
-			defer wg.Done()
-			// TODO: Handle error
-			if err != nil {
-				glog.Error(err)
-			}
-		}); err != nil {
-			return err
-		}
 		return nil
 	}
 
 	if err := tmpStream.Orchestrate(ctx); err != nil {
 		return err
 	}
-	wg.Wait()
 	glog.V(1).Infof("Rebuilding index for predicate %s: Flushing all writes.\n", r.attr)
-	return nil
+	return writer.Flush()
 }
 
 // IndexRebuild holds the info needed to initiate a rebuilt of the indices.
