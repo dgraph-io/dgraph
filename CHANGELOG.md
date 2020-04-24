@@ -33,7 +33,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Implement json.Marshal just for strings. ([#4979][]) 
 - Change error message in case of successful license application. Fixes [#4965][]. ([#5230][]) 
-- Add OPTIONS support for /ui/keywords. Fixes [#4946][].([#4992][]) 
+- Add OPTIONS support for /ui/keywords. Fixes [#4946][]. ([#4992][]) 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
 - Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
@@ -131,13 +131,13 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Added
 
+- Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
 - Enterprise features
     - Support bulk loader use-case to import unencrypted export and encrypt. ([#5213][])
   - Create encrypted restore directory from encrypted backups. ([#5144][])
   - Add option "--encryption_key_file"/"-k" to debug tool for encryption support. ([#5146][])
   - Support for encrypted backups/restore. **Note**: Older backups without encryption will be incompatible with this Dgraph version. Solution is to force a full backup before creating further incremental backups. ([#5103][])
   - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
-- Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
 
 [#5146]: https://github.com/dgraph-io/dgraph/issues/5146
 [#5206]: https://github.com/dgraph-io/dgraph/issues/5206
