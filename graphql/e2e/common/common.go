@@ -21,6 +21,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -86,6 +87,7 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 	acceptGzip    bool
 	gzipEncoding  bool
+	Authorization string
 }
 
 type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
@@ -192,6 +194,12 @@ func BootstrapServer(schema, data []byte) {
 		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	err = client.Alter(ctx, &api.Operation{DropAll: true})
+	if err != nil {
+		x.Panic(err)
+	}
+
+	fmt.Println(string(schema))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
@@ -422,6 +430,10 @@ func getQueryEmptyVariable(t *testing.T) {
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+	if params.Authorization != "" {
+		req.Header.Add("X-Dgraph-AuthorizationToken", params.Authorization)
+	}
+
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
@@ -435,7 +447,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	require.NoError(t, err)
 
 	return result
-
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
@@ -733,6 +744,13 @@ func addSchema(url string, schema string) error {
 	if err != nil {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
 	}
+
+	//s := addResult.Data.UpdateGQLSchema.GQLSchema.Schema
+	//var m map[string]interface{}
+	//json.Unmarshal([]byte(s), &m)
+	//res, err := json.MarshalIndent(m, "", "    ")
+	//fmt.Println("here", string(res), s)
+	//fmt.Println("here1", schema)
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
 		return errors.New("GraphQL schema mutation failed")

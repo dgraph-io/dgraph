@@ -18,9 +18,11 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgrijalva/jwt-go"
@@ -64,17 +66,9 @@ type Log struct {
 	Logs string
 }
 
-type Permission int
-
-const (
-	VIEW Permission = iota
-	EDIT
-	ADMIN
-)
-
 type Role struct {
 	Id          uint64
-	Permissions []Permission
+	Permissions []string
 	AssignedTo  []User
 }
 
@@ -96,11 +90,10 @@ type Project struct {
 	ProjID  uint64
 	Name    string
 	Roles   []Role
-	columns []Column
+	Columns []Column
 }
 
 type TestCase struct {
-	name   string
 	user   string
 	role   string
 	result string
@@ -116,29 +109,57 @@ func getJWT(t *testing.T, user, role string) string {
 	claims := MyCustomClaims{
 		map[string]interface{}{},
 		jwt.StandardClaims{
-			ExpiresAt: 15000,
+			ExpiresAt: time.Now().Add(time.Minute * 1000).Unix(),
 			Issuer:    "test",
 		},
 	}
 
-	claims.Foo["User"] = user
-	claims.Foo["Role"] = role
+	claims.Foo["USER"] = user
+	claims.Foo["ROLE"] = role
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte("Secret"))
+	ss, err := token.SignedString([]byte("Secretkey"))
 	require.NoError(t, err)
+
+	fmt.Println(ss)
 
 	return ss
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              },
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user4",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              },
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}}
 	query := `
-                 queryProject (order: {asc: name}) {
+            query {
+                queryProject (order: {asc: name}) {
 			name
 		}
+	    }
 	`
 
 	var result, data struct {
@@ -147,11 +168,12 @@ func TestOrRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Authorization: getJWT(t, tcase.user, tcase.role),
+			Query:         query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		fmt.Println(gqlResponse.Errors)
 		require.Nil(t, gqlResponse.Errors)
 
 		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
@@ -289,7 +311,7 @@ func TestDeepFilter(t *testing.T) {
 				}
 			}
 			columns {
-				name 
+				name
 				tickets {
 					title
 					assignedTo  {
