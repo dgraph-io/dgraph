@@ -68,8 +68,18 @@ func InitServerState() {
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
-	// TODO(ibrahim): Remove this once badger is updated in dgraph.
-	opt.ZSTDCompressionLevel = 1
+
+	// Do not load bloom filters on DB open.
+	opt.LoadBloomsOnOpen = false
+
+	glog.Infof("Setting Badger Compression Level: %d", Config.BadgerCompressionLevel)
+	// Default value of badgerCompressionLevel is 3 so compression will always
+	// be enabled, unless it is explicitly disabled by setting the value to 0.
+	if Config.BadgerCompressionLevel != 0 {
+		// By default, compression is disabled in badger.
+		opt.Compression = options.ZSTD
+		opt.ZSTDCompressionLevel = Config.BadgerCompressionLevel
+	}
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
@@ -131,10 +141,6 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening write-ahead log BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
-		opt.ZSTDCompressionLevel = 3
-		opt.Compression = options.ZSTD
-		opt.LoadBloomsOnOpen = false
-
 		s.WALstore, err = badger.Open(opt)
 		x.Checkf(err, "Error while creating badger KV WAL store")
 	}
@@ -153,10 +159,6 @@ func (s *ServerState) initStorage() {
 		opt.EncryptionKey = nil
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
-
-		opt.Compression = options.ZSTD
-		opt.ZSTDCompressionLevel = 3
-		opt.LoadBloomsOnOpen = false
 
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
