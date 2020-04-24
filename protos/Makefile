@@ -42,7 +42,7 @@ regenerate: check clean
 #	protos and then set "v2" in the generated code (pb/pb.pb.go).
 	@sed -i'' -e 's;github.com/dgraph-io/badger/v2/pb/pb.proto;github.com/dgraph-io/badger/pb/pb.proto;' pb.proto
 	@protoc \
-                --proto_path=/usr/local/include \
+		--proto_path=/usr/local/include \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v200/protos/api:pb \
 		pb.proto
