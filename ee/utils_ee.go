@@ -36,7 +36,7 @@ func GetEEFeaturesList() []string {
 	if !worker.EnterpriseEnabled() {
 		return nil
 	}
-	ee := make([]string, 0)
+	var ee []string
 	if len(worker.Config.HmacSecret) > 0 {
 		ee = append(ee, acl)
 	}
