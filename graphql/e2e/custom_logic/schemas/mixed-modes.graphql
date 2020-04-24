@@ -31,12 +31,12 @@ type School {
   id: ID!
   established: Int! @search
   name: String
-    @custom(
+     @custom(
       http: {
-        url: "http://mock:8888/gqlSchoolNames"
+        url: "http://mock:8888/gqlSchoolName"
         method: "POST"
         operation: "single"
-        graphql: "query { schoolNames(input: [{ id: $id}]) }"
+        graphql: "query { schoolName(id: $id) }"
       }
     )
   classes: [Class]
