@@ -12,21 +12,35 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-## [20.03.1] - Unreleased
+## [20.03.1] - 2020-04-23
 [20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
 
 ### Changed
 
-- Force users to explicitly tell restore command to run without zero. ([#5206][])
+- Support comma separated list of zero addresses in alpha ([#5258][])
+- Optimization: Optimize snapshot creation ([#4901][])
+- Optimization: Remove isChild from fastJsonNode. ([#5184][])
+- Optimization: Memory improvements in fastJsonNode. ([#5088][])
+- Update badger to commit cddf7c03451c. ([#5272][])
+  - Compression/encryption runs in the background (which means faster writes)
+  - Separate cache for bloom filters which limits the amount of memory used by bloom filters
+- Avoid crashing live loader in case the network is interrupted. ([#5268][])
+- Enterprise features
+  - Backup/restore: Force users to explicitly tell restore command to run without zero. ([#5206][])
+  - Alpha: Expose compression_level option. ([#5280][])
 
 ### Fixed
 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
-- Invalid UID checks. Fixes [#5238][]. ([#5252][]) 
-- Skipping floats that cannot be marshalled. ([#5199][])
+- Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
+- Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
 - Fix panic in Task FrameWork. Fixes [#5034][]. ([#5081][]) 
 - graphql: @dgraph(pred: "...") with @search. ([#5019][]) 
 - graphql: ensure @id uniqueness within a mutation. ([#4959][]) 
+- Set correct posting list type while creating it in live loader. ([#5012][])
+- Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
+- Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
+- Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][])
 - Optimize uid allocation in live loader. ([#5132][]) 
 - Shutdown executor goroutines. ([#5150][])
 - Update RAFT checkpoint when doing a clean shutdown. ([#5097][])
@@ -35,16 +49,20 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   
 ### Added
 
+
 - Flag to turn on/off sending Sentry events, default is on. ([#5169][])
 - Concurrent Mutations. ([#4892][]) 
 - Enterprise features
-  - Re-encrypt restore from encrypted backups. ([#5144][])
+  - Support bulk loader use-case to import unencrypted export and encrypt. ([#5213][])
+  - Create encrypted restore directory from encrypted backups. ([#5144][])
   - Add option "--encryption_key_file"/"-k" to debug tool for encryption support. ([#5146][])
-  - Support for encrypted backups/restore. Older backups without encryption will be incompatible with this Dgraph version.     Solution is to force a full backup. ([#5103][])
+  - Support for encrypted backups/restore. **Note**: Older backups without encryption will be incompatible with this Dgraph version. Solution is to force a full backup before creating further incremental backups. ([#5103][])
   - Add encryption support for export and import (via bulk, live loaders). ([#5155][])
+  - Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
   - Add option to apply enterprise license at zero's startup. ([#5170][])
-  
 
+
+[#5280]: https://github.com/dgraph-io/dgraph/issues/5280
 [#5097]: https://github.com/dgraph-io/dgraph/issues/5097
 [#5150]: https://github.com/dgraph-io/dgraph/issues/5150
 [#5132]: https://github.com/dgraph-io/dgraph/issues/5132
@@ -67,17 +85,18 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5103]: https://github.com/dgraph-io/dgraph/issues/5103
 [#5155]: https://github.com/dgraph-io/dgraph/issues/5155
 [#5238]: https://github.com/dgraph-io/dgraph/issues/5238
+[#5272]: https://github.com/dgraph-io/dgraph/issues/5272
 
-## [1.2.3] - 2020-04-22
+## [1.2.3] - 2020-04-23
 [1.2.3]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v1.2.3
 
 ### Changed
 
-- Support comma separated list of zero addresses in alpha ([#5116][]) ([#5258][])
+- Support comma separated list of zero addresses in alpha. ([#5258][])
 - Optimization: Optimize snapshot creation. ([#4901][])
 - Optimization: Remove isChild from fastJsonNode. ([#5184][])
 - Optimization: Memory improvements in fastJsonNode. ([#5088][])
-- Update Badger to commit cddf7c03451c33. ([#5216][]) ([#5273][])
+- Update Badger to commit cddf7c03451c33. ([#5273][])
   - Compression/encryption runs in the background (which means faster writes)
   - Separate cache for bloom filters which limits the amount of memory used by bloom filters
 - Avoid crashing live loader in case the network is interrupted. ([#5268][])
@@ -89,12 +108,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Check uid list is empty when filling shortest path vars. ([#5152][])
 - Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
-- Enterprise features
-  - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
 - Set correct posting list type while creating it in live loader. ([#5012][])
 - Add support for tinyint in migrate tool. Fixes [#4674][]. ([#4842][])
 - Fix bug, aggregate value var works with blank node in upsert. Fixes [#4712][]. ([#4767][])
 - Always set BlockSize in encoder. Fixes [#5102][]. ([#5255][])
+- Enterprise features
+  - Backup schema keys in incremental backups. Before, the schema was only stored in the full backup. ([#5158][])
 
 ### Added
 
