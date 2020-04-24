@@ -1639,7 +1639,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
 	case aggregatorFn:
-
 		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
@@ -1651,7 +1650,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case compareAttrFn:
-
 		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
@@ -1712,7 +1710,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			fc.n = len(fc.tokens)
 		}
 	case compareScalarFn:
-
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
@@ -1735,7 +1732,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case standardFn, fullTextSearchFn:
-
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
@@ -1751,7 +1747,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case matchFn:
-
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1774,7 +1769,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case customIndexFn:
-
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1823,9 +1817,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		checkRoot(q, fc)
 	case uidInFn:
 		//TODO (Anurag) Implement an argsCount for min 1 argument
-		// if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
-		// 	return nil, err
-		// }
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {
