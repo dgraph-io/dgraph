@@ -1154,17 +1154,17 @@
   name: "Password query"
   gqlquery: |
     query {
-      checkUserPassword(name: "0x1", pwd: "Password") {
+      checkUserPassword(name: "user1", pwd: "Password") {
         name
       }
     }
   dgquery: |-
     query {
-      checkUserPassword(func: eq(User.name, "0x1")) @filter((eq(val(pwd), 1))) {
+      checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
         name : User.name
         dgraph.uid : uid
       }
-      checkPwd(func: eq(User.name, "0x1")) {
+      checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
         pwd as checkpwd(User.pwd, "Password")
       }
     }
