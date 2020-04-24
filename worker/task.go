@@ -903,6 +903,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	span := otrace.FromContext(ctx)
 	out := new(pb.Result)
 	attr := q.Attr
+
 	srcFn, err := parseSrcFn(ctx, q)
 	if err != nil {
 		return nil, err
@@ -1635,6 +1636,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	if err == nil && fnType != notAFunction && t.Name() == types.StringID.Name() {
 		fc.isStringFn = true
 	}
+
 	switch fnType {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
@@ -1828,7 +1830,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			}
 			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
 		}
-
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
