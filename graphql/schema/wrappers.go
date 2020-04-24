@@ -388,8 +388,7 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	for _, inputTyp := range sch.Types {
 		// We only want to consider input types (object and interface) defined by the user as part
 		// of the schema hence we ignore BuiltIn, query and mutation types.
-		if inputTyp.BuiltIn || inputTyp.Name == "Query" || inputTyp.Name == "Mutation" ||
-			inputTyp.Name == "Subscription" ||
+		if inputTyp.BuiltIn || isQueryOrMutationType(inputTyp) || inputTyp.Name == "Subscription" ||
 			(inputTyp.Kind != ast.Object && inputTyp.Kind != ast.Interface) {
 			continue
 		}
@@ -1802,7 +1801,7 @@ func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]b
 	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
 
 	if operation == "batch" {
-		input := query.Arguments.ForName("input")
+		input := query.Arguments[0]
 		// We are validating the format during schema update so accessing the children is safe here.
 		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
 		return rf, err

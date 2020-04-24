@@ -25,7 +25,7 @@ import (
 func TestGqlType_String(t *testing.T) {
 	tcases := []struct {
 		name            string
-		gqlType         *GqlType
+		gqlType         *gqlType
 		expectedTypeStr string
 	}{
 		{
@@ -35,7 +35,7 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Scalar type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind:   "SCALAR",
 				Name:   "Int",
 				OfType: nil,
@@ -44,10 +44,10 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Non-null Scalar type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "NON_NULL",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind:   "SCALAR",
 					Name:   "String",
 					OfType: nil,
@@ -57,7 +57,7 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind:   "OBJECT",
 				Name:   "Author",
 				OfType: nil,
@@ -66,10 +66,10 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Non-null Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "NON_NULL",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind:   "OBJECT",
 					Name:   "Author",
 					OfType: nil,
@@ -79,26 +79,26 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "List of Scalar type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "LIST",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind:   "SCALAR",
 					Name:   "ID",
 					OfType: nil,
 				},
 			},
-			expectedTypeStr: "[ID]",
+			expectedTypeStr: "[ID]", // TODO: interpret ID as String
 		},
 		{
 			name: "List of Non-null Scalar type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "LIST",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind: "NON_NULL",
 					Name: "",
-					OfType: &GqlType{
+					OfType: &gqlType{
 						Kind:   "SCALAR",
 						Name:   "Float",
 						OfType: nil,
@@ -109,16 +109,16 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Non-null List of Non-null Scalar type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "NON_NULL",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind: "LIST",
 					Name: "",
-					OfType: &GqlType{
+					OfType: &gqlType{
 						Kind: "NON_NULL",
 						Name: "",
-						OfType: &GqlType{
+						OfType: &gqlType{
 							Kind:   "SCALAR",
 							Name:   "Boolean",
 							OfType: nil,
@@ -130,10 +130,10 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "List of Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "LIST",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind:   "OBJECT",
 					Name:   "Author",
 					OfType: nil,
@@ -143,13 +143,13 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "List of Non-null Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "LIST",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind: "NON_NULL",
 					Name: "",
-					OfType: &GqlType{
+					OfType: &gqlType{
 						Kind:   "OBJECT",
 						Name:   "Author",
 						OfType: nil,
@@ -160,16 +160,16 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Non-null List of Non-null Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "NON_NULL",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind: "LIST",
 					Name: "",
-					OfType: &GqlType{
+					OfType: &gqlType{
 						Kind: "NON_NULL",
 						Name: "",
-						OfType: &GqlType{
+						OfType: &gqlType{
 							Kind:   "OBJECT",
 							Name:   "Author",
 							OfType: nil,
@@ -181,22 +181,22 @@ func TestGqlType_String(t *testing.T) {
 		},
 		{
 			name: "Non-null List of List of List of Non-Null Object type",
-			gqlType: &GqlType{
+			gqlType: &gqlType{
 				Kind: "NON_NULL",
 				Name: "",
-				OfType: &GqlType{
+				OfType: &gqlType{
 					Kind: "LIST",
 					Name: "",
-					OfType: &GqlType{
+					OfType: &gqlType{
 						Kind: "LIST",
 						Name: "",
-						OfType: &GqlType{
+						OfType: &gqlType{
 							Kind: "LIST",
 							Name: "",
-							OfType: &GqlType{
+							OfType: &gqlType{
 								Kind: "NON_NULL",
 								Name: "",
-								OfType: &GqlType{
+								OfType: &gqlType{
 									Kind:   "OBJECT",
 									Name:   "Author",
 									OfType: nil,

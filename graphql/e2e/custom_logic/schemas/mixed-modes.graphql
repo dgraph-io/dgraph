@@ -65,7 +65,7 @@ type Teacher {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
         operation: "batch"
-        graphql: "query { teacherNames(input: [{ xid: $tid}]) }"
+        graphql: "query { teacherNames(input: [{ id: $tid, age: $age}]) }"
       }
     )
 }

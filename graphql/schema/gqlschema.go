@@ -471,7 +471,7 @@ func completeSchema(sch *ast.Schema, definitions []string) {
 	}
 
 	for _, key := range definitions {
-		if key == "Query" || key == "Mutation" {
+		if isQueryOrMutation(key) {
 			continue
 		}
 		defn := sch.Types[key]
@@ -1459,7 +1459,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// original defs can only be types and enums, print those in the same order
 	// as the original schema.
 	for _, typName := range originalTypes {
-		if typName == "Query" || typName == "Mutation" {
+		if isQueryOrMutation(typName) {
 			// These would be printed later in schema.Query and schema.Mutation
 			continue
 		}
@@ -1494,7 +1494,7 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	// left to be printed.
 	typeNames := make([]string, 0, len(schema.Types)-len(printed))
 	for typName, typDef := range schema.Types {
-		if typName == "Query" || typName == "Mutation" {
+		if isQueryOrMutation(typName) {
 			// These would be printed later in schema.Query and schema.Mutation
 			continue
 		}
