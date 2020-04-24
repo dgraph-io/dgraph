@@ -1418,7 +1418,7 @@ func introspectionResult(name string) string {
 							"kind":"LIST",
 							"name":null,
 							"ofType": {
-								"kind": "OBJECT",
+								"kind": "INPUT_OBJECT",
 								"name": "UserInput",
 								"ofType": null
 							}
@@ -1555,7 +1555,7 @@ func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
 								"kind":"LIST",
 								"name":null,
 								"ofType": {
-									"kind": "OBJECT",
+									"kind": "INPUT_OBJECT",
 									"name": "UserInput",
 									"ofType": null
 								}
@@ -1640,7 +1640,7 @@ func gqlClassesHandler(w http.ResponseWriter, r *http.Request) {
 								"kind":"LIST",
 								"name":null,
 								"ofType": {
-									"kind": "OBJECT",
+									"kind": "INPUT_OBJECT",
 									"name": "UserInput",
 									"ofType": null
 								}

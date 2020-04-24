@@ -794,19 +794,16 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// 3. Batch operation mode along with GraphQL.
 	// 4. Single operation mode along with GraphQL.
 
-	var teachers []*teacher
-	var schools []*school
-	var users []*user
+	schema := readFile(t, "schemas/batch-mode-rest.graphql")
+	updateSchemaRequireNoGQLErrors(t, schema)
+
+	// add some data
+	teachers := addTeachers(t)
+	schools := addSchools(t, teachers)
+	users := addUsers(t, schools)
+
 	// lets check batch mode first using REST endpoints.
 	t.Run("rest batch operation mode", func(t *testing.T) {
-		schema := readFile(t, "schemas/batch-mode-rest.graphql")
-		updateSchemaRequireNoGQLErrors(t, schema)
-
-		// add some data
-		teachers = addTeachers(t)
-		schools = addSchools(t, teachers)
-		users = addUsers(t, schools)
-
 		verifyData(t, users, teachers, schools)
 	})
 
@@ -827,6 +824,14 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	t.Run("graphql batch operation mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
 		schema := readFile(t, "schemas/batch-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
+
+	// Fields are fetched through a combination of REST/GraphQL and single/batch mode.
+	t.Run("mixed mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/mixed-modes.graphql")
 		updateSchemaRequireNoGQLErrors(t, schema)
 		verifyData(t, users, teachers, schools)
 	})

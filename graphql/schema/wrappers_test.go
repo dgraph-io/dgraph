@@ -664,7 +664,18 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 		operation    string
 		requiredArgs map[string]bool
 	}{
-		// TODO - Add tests for single mode.
+		{
+			"parse required args for single request",
+			"query { userNames(id: $id, age: $age) }",
+			"single",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required nested args for single request",
+			"query { userNames(id: $id, car: {age: $age}) }",
+			"single",
+			map[string]bool{"id": true, "age": true},
+		},
 		{
 			"parse required args for batch request",
 			"query { userNames(input: [{ id: $id, age: $age}]) }",
@@ -674,6 +685,12 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 		{
 			"parse required nested args for batch request",
 			"query { userNames(input: [{ id: $id, car: { age: $age}}]) }",
+			"batch",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required nested array args for batch request",
+			"query { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
 			"batch",
 			map[string]bool{"id": true, "age": true},
 		},

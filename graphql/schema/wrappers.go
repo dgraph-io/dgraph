@@ -800,7 +800,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 		}
 	} else {
-		fconf.Operation = "batch"
+		fconf.Operation = "single"
 		op := httpArg.Value.Children.ForName("operation")
 		if op != nil {
 			fconf.Operation = op.Raw
@@ -1799,25 +1799,18 @@ func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]b
 		return nil, gqlErr
 	}
 
-	result := make(map[string]bool)
 	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
 
 	if operation == "batch" {
 		input := query.Arguments.ForName("input")
-		if input.Value.Kind != ast.ListValue {
-			return nil, errors.Errorf("Expected list value for input argument, got: %v",
-				input.Value.Kind)
-		}
 		// We are validating the format during schema update so accessing the children is safe here.
 		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
 		return rf, err
 	}
 
-	for _, arg := range query.Arguments {
-		val := arg.Value.String()
-		if strings.HasPrefix(val, "$") {
-			result[val[1:]] = true
-		}
-	}
-	return result, nil
+	// The request can contain nested arguments/variables as well, so we get the args here and
+	// then wrap them with { } to pass to parseBodyTemplate to get the required fields.
+	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
+	_, rf, err := parseBodyTemplate("{" + args + "}")
+	return rf, err
 }
