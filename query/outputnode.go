@@ -32,6 +32,7 @@ import (
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/algo"
@@ -783,12 +784,13 @@ func (sg *SubGraph) handleCountUIDNodes(enc *encoder, n fastJsonNode, count int)
 }
 
 func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
+	attrID := enc.idForAttr(sg.Params.Alias)
 	if sg.Params.IsEmpty {
 		return sg.addAggregations(enc, fj)
 	}
 
 	if sg.uidMatrix == nil {
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newNode())
+		enc.AddListChild(fj, attrID, enc.newNode())
 		return nil
 	}
 
@@ -807,47 +809,87 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 	}
 
 	lenList := len(sg.uidMatrix[0].Uids)
-	for i := 0; i < lenList; i++ {
-		uid := sg.uidMatrix[0].Uids[i]
-		if algo.IndexOf(sg.DestUIDs, uid) < 0 {
-			// This UID was filtered. So Ignore it.
-			continue
-		}
+	// numGo, width := x.DivideAndRule(lenList)
+	numGo, width := 1, lenList
+	resultNodes := make([][]fastJsonNode, numGo)
+	hasChilds := make([]bool, numGo)
 
-		n1 := enc.newNodeWithAttr(enc.idForAttr(sg.Params.Alias))
-		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
-		if err := sg.preTraverse(enc, uid, n1); err != nil {
-			if err.Error() == "_INV_" {
+	calculate := func(start, end int) error {
+		nodes := make([]fastJsonNode, 0, end-start)
+		hasChildLocal := false
+		for i := start; i < end; i++ {
+			uid := sg.uidMatrix[0].Uids[i]
+			if algo.IndexOf(sg.DestUIDs, uid) < 0 {
+				// This UID was filtered. So Ignore it.
 				continue
 			}
-			return err
-		}
 
-		if enc.IsEmpty(n1) {
+			n1 := enc.newNodeWithAttr(attrID)
+			if err := sg.preTraverse(enc, uid, n1); err != nil {
+				if err.Error() == "_INV_" {
+					continue
+				}
+				return err
+			}
+
+			if enc.IsEmpty(n1) {
+				continue
+			}
+
+			hasChildLocal = true
+			if !sg.Params.Normalize {
+				nodes = append(nodes, n1)
+				continue
+			}
+
+			// Lets normalize the response now.
+			normalized, err := enc.normalize(n1)
+			if err != nil {
+				return err
+			}
+			for _, c := range normalized {
+				node := enc.newNode()
+				enc.appendAttrs(node, c...)
+				nodes = append(nodes, node)
+			}
+		}
+		resultNodes[start/width] = nodes
+		hasChilds[start/width] = hasChildLocal
+		return nil
+	}
+
+	var g errgroup.Group
+	for i := 0; i < numGo; i++ {
+		start := i * width
+		end := start + width
+		if end > lenList {
+			end = lenList
+		}
+		if start >= end { // start == end can be possible when width is 0.
 			continue
 		}
 
-		hasChild = true
-		if !sg.Params.Normalize {
-			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), n1)
-			continue
-		}
+		g.Go(func() error {
+			return calculate(start, end)
+		})
+	}
 
-		// Lets normalize the response now.
-		normalized, err := enc.normalize(n1)
-		if err != nil {
-			return err
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	for i := 0; i < numGo; i++ {
+		if hasChilds[i] {
+			hasChild = true
 		}
-		for _, c := range normalized {
-			node := enc.newNode()
-			enc.appendAttrs(node, c...)
-			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), node)
+		for j := 0; j < len(resultNodes[i]); j++ {
+			enc.AddListChild(fj, attrID, resultNodes[i][j])
 		}
 	}
 
 	if !hasChild {
 		// So that we return an empty key if the root didn't have any children.
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newNode())
+		enc.AddListChild(fj, attrID, enc.newNode())
 	}
 	return nil
 }
