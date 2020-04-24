@@ -74,8 +74,8 @@ func TestEncode(t *testing.T) {
 		enc.AddValue(friendNode2, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "bob"})
 
-		enc.AddListChild(root, enc.idForAttr("friend"), friendNode1)
-		enc.AddListChild(root, enc.idForAttr("friend"), friendNode2)
+		enc.AddListChild(root, friendNode1)
+		enc.AddListChild(root, friendNode2)
 
 		buf := new(bytes.Buffer)
 		require.NoError(t, enc.encode(root, buf))
@@ -115,11 +115,11 @@ func TestEncode(t *testing.T) {
 	t.Run("with uid predicate", func(t *testing.T) {
 		root := enc.newNode()
 
-		person := enc.newNode()
+		person := enc.newNodeWithAttr(enc.idForAttr("person"))
 		enc.AddValue(person, enc.idForAttr("name"), types.Val{Tid: types.StringID, Value: "alice"})
 		enc.AddValue(person, enc.idForAttr("age"), types.Val{Tid: types.IntID, Value: 25})
 
-		enc.AddListChild(root, enc.idForAttr("person"), person)
+		enc.AddListChild(root, person)
 
 		buf := new(bytes.Buffer)
 		require.NoError(t, enc.encode(root, buf))
