@@ -100,6 +100,28 @@ const adminTypes = `
 		response: Response
 	}
 
+	type ListBackupsInput {
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+	}
+
+	type Group {
+		groupId: Int!
+		predicates: [String!]
+	}
+
+	type Manifest {
+		type: String!
+		since: Int!
+		backupNum: Int!
+		groups: [Group!]
+		backupId: String!
+		backupNum: Int!
+		encrypted: Bool!
+	}
+	
 	type LoginResponse {
 
 		"""
@@ -348,4 +370,10 @@ const adminQueries = `
 	getCurrentUser: User
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`
+	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+
+	"""
+	Get the information about the backups at a given location.
+	"""
+	listBackups(location: String!) : [Manifest]`
+

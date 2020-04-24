@@ -189,3 +189,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	bp := &BackupProcessor{Request: req}
 	return bp.CompleteBackup(ctx, &m)
 }
+
+func ProcessListBackups(ctx context.Context, location string) ([]*Manifest, error) {
+	return nil, nil
+}
