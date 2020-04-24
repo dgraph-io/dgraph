@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -720,7 +721,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 		LastEcho:   time.Now().Unix(),
 		Ongoing:    worker.GetOngoingTasks(),
 		Indexing:   schema.GetIndexingPredicates(),
-		EeFeatures: worker.GetEEFeaturesList(),
+		EeFeatures: ee.GetEEFeaturesList(),
 	})
 
 	var err error
