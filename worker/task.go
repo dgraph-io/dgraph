@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -701,6 +702,7 @@ func (qs *queryState) handleUidPostings(
 			}
 			var key []byte
 			switch srcFn.fnType {
+			//Check with pawan/ashish if this needs any changes
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
 					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
@@ -757,11 +759,12 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
+			//Check with Pawan/Ashish what this function do? I suppose itreturns the relevant posting/uid list to append to uid matrix
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
-					span.Annotate(nil, "UidInFn")
+					span.Annotate(nil, "UidInFn") //Check with Pawan/Ashish what does this do?
 				}
-				reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
+				reqList := &pb.List{Uids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
@@ -901,7 +904,7 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	span := otrace.FromContext(ctx)
 	out := new(pb.Result)
 	attr := q.Attr
-
+	fmt.Println("Attr: ", attr)
 	srcFn, err := parseSrcFn(ctx, q)
 	if err != nil {
 		return nil, err
@@ -1583,7 +1586,7 @@ type functionContext struct {
 	ineqValueToken string
 	n              int
 	threshold      int64
-	uidPresent     uint64
+	uidsPresent    []uint64
 	fname          string
 	fnType         FuncType
 	regex          *cregexp.Regexp
@@ -1634,11 +1637,18 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 	if err == nil && fnType != notAFunction && t.Name() == types.StringID.Name() {
 		fc.isStringFn = true
 	}
-
+	fmt.Println("fnType: ", fnType)
+	fmt.Println("fnName: ", f)
 	switch fnType {
 	case notAFunction:
+		fmt.Println("Not a function")
 		fc.n = len(q.UidList.Uids)
+		fmt.Println("fc: ", fc)
+		fmt.Println("fc.n: ", fc.n)
+		fmt.Println("q.UidList.Uid: ", q.UidList.Uids)
 	case aggregatorFn:
+		fmt.Println("Aggregator function")
+
 		// confirm aggregator could apply on the attributes
 		typ, err := schema.State().TypeOf(attr)
 		if err != nil {
@@ -1650,6 +1660,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case compareAttrFn:
+		fmt.Println("compareAttr function")
+
 		args := q.SrcFunc.Args
 		// Only eq can have multiple args. It should have atleast one.
 		if fc.fname == eq {
@@ -1710,6 +1722,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			fc.n = len(fc.tokens)
 		}
 	case compareScalarFn:
+		fmt.Println("compare Scalar function")
+
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
 			return nil, err
 		}
@@ -1732,6 +1746,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		fc.n = len(q.UidList.Uids)
 	case standardFn, fullTextSearchFn:
+		fmt.Println("Standard or fullTextSearch function")
+
 		// srcfunc 0th val is func name and and [2:] are args.
 		// we tokenize the arguments of the query.
 		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
@@ -1747,6 +1763,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.intersectDest = needsIntersect(f)
 		fc.n = len(fc.tokens)
 	case matchFn:
+		fmt.Println("match function")
+
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1769,6 +1787,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.tokens = q.SrcFunc.Args
 		fc.n = len(fc.tokens)
 	case customIndexFn:
+		fmt.Println("customIndex function")
+
 		if err = ensureArgsCount(q.SrcFunc, 2); err != nil {
 			return nil, err
 		}
@@ -1816,17 +1836,31 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
-		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
-			return nil, err
-		}
-		fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64)
-		if err != nil {
-			if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
-				return nil, errors.Errorf("Value %q in %s is not a number",
-					q.SrcFunc.Args[0], q.SrcFunc.Name)
+		fmt.Println("uidIn function")
+		fmt.Println("Q.SrcFunc: ", q.SrcFunc)
+		fmt.Println("Q.SrcFunc.Args: ", q.SrcFunc.Args)
+		//if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
+		//	return nil, err
+		//}
+		for _, arg := range q.SrcFunc.Args {
+			uidParsed, err := strconv.ParseUint(arg, 0, 64)
+			if err != nil {
+				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+					return nil, errors.Errorf("Value %q in %s is not a number",
+						arg, q.SrcFunc.Name)
+				}
+				return nil, err
 			}
-			return nil, err
+			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
 		}
+		//fc.uidsPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64)
+		// if err != nil {
+		// 	if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+		// 		return nil, errors.Errorf("Value %q in %s is not a number",
+		// 			q.SrcFunc.Args[0], q.SrcFunc.Name)
+		// 	}
+		// 	return nil, err
+		// }
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
