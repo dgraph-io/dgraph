@@ -30,9 +30,9 @@ clean:
 .PHONY: check
 check:
 	@./depcheck.sh && \
-		(echo "Upgrading proto libraries before regenerating." ; \
-		GO111MODULE=off go get -u github.com/golang/protobuf/protoc-gen-go ; \
-		GO111MODULE=off go get -u github.com/gogo/protobuf/protoc-gen-gofast)
+		(echo "Setting proto libraries to versions in go.mod." ; \
+		go get github.com/golang/protobuf/protoc-gen-go ; \
+		go get github.com/gogo/protobuf/protoc-gen-gofast)
 
 .PHONY: regenerate
 regenerate: check clean
@@ -42,6 +42,7 @@ regenerate: check clean
 #	protos and then set "v2" in the generated code (pb/pb.pb.go).
 	@sed -i'' -e 's;github.com/dgraph-io/badger/v2/pb/pb.proto;github.com/dgraph-io/badger/pb/pb.proto;' pb.proto
 	@protoc \
+                --proto_path=/usr/local/include \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=github.com/dgraph-io/dgo/v200/protos/api:pb \
 		pb.proto
