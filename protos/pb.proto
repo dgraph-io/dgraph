@@ -177,31 +177,31 @@ message MembershipState {
 }
 
 message ConnectionState {
-	Member member = 1;
-	MembershipState state = 2;
-	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+    Member member = 1;
+    MembershipState state = 2;
+    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
 message HealthInfo {
-	string instance = 1;
-	string address = 2;
-	string status = 3;
-	string group = 4;  // string so group = 0 can be printed in JSON.
-	string version = 5;
-	int64 uptime = 6;
-	int64 lastEcho = 7;
-	repeated string ongoing = 8;
-	repeated string indexing = 9;
+    string instance = 1;
+    string address = 2;
+    string status = 3;
+    string group = 4; // string so group = 0 can be printed in JSON.
+    string version = 5;
+    int64 uptime = 6;
+    int64 lastEcho = 7;
+    repeated string ongoing = 8;
+    repeated string indexing = 9;
 }
 
 message Tablet {
-	uint32 group_id  = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
-	string predicate = 2;
-	bool force       = 3; // Used while moving predicate.
-	int64 space      = 7;
-	bool remove      = 8;
-	bool read_only   = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-	uint64 move_ts   = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+    string predicate = 2;
+    bool force = 3; // Used while moving predicate.
+    int64 space = 7;
+    bool remove = 8;
+    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
+    uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
 }
 
 message DirectedEdge {

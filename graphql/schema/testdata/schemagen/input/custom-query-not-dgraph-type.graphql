@@ -1,0 +1,23 @@
+type User @remote {
+	id: ID!
+	name: String!
+}
+
+input UserInput {
+	name: String!
+}
+
+type Query {
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "GET"
+	})
+}
+
+type Mutation {
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "POST",
+		body: "{ data: $input }"
+	})
+}

@@ -57,8 +57,6 @@ func (qr *queryRewriter) Rewrite(ctx context.Context,
 		}
 
 		dgQuery := rewriteAsGet(gqlQuery, uid, xid)
-		addTypeFilter(dgQuery, gqlQuery.Type())
-
 		return dgQuery, nil
 
 	case schema.FilterQuery:
@@ -153,10 +151,18 @@ func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
 		return
 	}
+	hasUid := false
 	for _, c := range dgQuery.Children {
+		if c.Attr == "uid" {
+			hasUid = true
+		}
 		addUID(c)
 	}
 
+	// If uid was already requested by the user then we don't need to add it again.
+	if hasUid {
+		return
+	}
 	uidChild := &gql.GraphQuery{
 		Attr:  "uid",
 		Alias: "dgraph.uid",
@@ -193,8 +199,12 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 }
 
 func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
+	var dgQuery *gql.GraphQuery
+
 	if xid == nil {
-		return rewriteAsQueryByIds(field, []uint64{uid})
+		dgQuery = rewriteAsQueryByIds(field, []uint64{uid})
+		addTypeFilter(dgQuery, field.Type())
+		return dgQuery
 	}
 
 	xidArgName := field.XIDArg()
@@ -206,7 +216,6 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 		},
 	}
 
-	var dgQuery *gql.GraphQuery
 	if uid > 0 {
 		dgQuery = &gql.GraphQuery{
 			Attr: field.ResponseName(),
@@ -227,6 +236,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 	}
 	addSelectionSetFrom(dgQuery, field)
 	addUID(dgQuery)
+	addTypeFilter(dgQuery, field.Type())
 	return dgQuery
 }
 
@@ -287,7 +297,22 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 			Attr: "dgraph.type",
 		})
 	}
+
+	// These fields might not have been requested by the user directly as part of the query but
+	// are required in the body template for other fields requested within the query. We must
+	// fetch them from Dgraph.
+	requiredFields := make(map[string]bool)
+	addedFields := make(map[string]bool)
 	for _, f := range field.SelectionSet() {
+		hasCustom, rf := f.HasCustomDirective()
+		if hasCustom {
+			for k := range rf {
+				requiredFields[k] = true
+			}
+			// This field is resolved through a custom directive so its selection set doesn't need
+			// to be part of query rewriting.
+			continue
+		}
 		// We skip typename because we can generate the information from schema or
 		// dgraph.type depending upon if the type is interface or not. For interface type
 		// we always query dgraph.type and can pick up the value from there.
@@ -316,7 +341,33 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		addSelectionSetFrom(child, f)
 
+		addedFields[f.Name()] = true
 		q.Children = append(q.Children, child)
+	}
+
+	// Sort the required fields before adding them to q.Children so that the query produced after
+	// rewriting has a predictable order.
+	rfset := make([]string, 0, len(requiredFields))
+	for fname := range requiredFields {
+		rfset = append(rfset, fname)
+	}
+	sort.Strings(rfset)
+
+	// Add fields required by other custom fields which haven't already been added as a
+	// child to be fetched from Dgraph.
+	for _, fname := range rfset {
+		if _, ok := addedFields[fname]; !ok {
+			f := field.Type().Field(fname)
+			child := &gql.GraphQuery{}
+			child.Alias = f.Name()
+
+			if f.Type().Name() == schema.IDType {
+				child.Attr = "uid"
+			} else {
+				child.Attr = field.Type().DgraphPredicate(fname)
+			}
+			q.Children = append(q.Children, child)
+		}
 	}
 }
 
