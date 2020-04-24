@@ -576,7 +576,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	// TODO(Aman): Replace TxnWriter with WriteBatch. While we do that we should ensure that
 	// WriteBatch has a mechanism for throttling. Also, find other places where TxnWriter
 	// could be replaced with WriteBatch in the code
-	tmpWriter := NewTxnWriter(tmpDB)
+	//tmpWriter := NewTxnWriter(tmpDB)
+	tmpWriter := tmpDB.NewManagedWriteBatch()
 	stream := pstore.NewStreamAt(r.startTs)
 	stream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (1/2):", r.attr)
 	stream.Prefix = r.prefix
@@ -625,9 +626,14 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		if err := tmpWriter.Write(kvList); err != nil {
-			return errors.Wrap(err, "error setting entries in temp badger")
+		for _, kv := range kvList.Kv {
+			if err := tmpWriter.SetEntryAt((&badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: kv.UserMeta[0]}).WithDiscard(), kv.Version); err != nil {
+				return errors.Wrap(err, "error setting entries in temp badger")
+			}
 		}
+		// if err := tmpWriter.Write(kvList); err != nil {
+		// 	return errors.Wrap(err, "error setting entries in temp badger")
+		// }
 
 		return nil
 	}
@@ -650,7 +656,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			r.attr, time.Since(start))
 	}()
 
-	writer := NewTxnWriter(pstore)
+	//writer := NewTxnWriter(pstore)
+	writer := pstore.NewManagedWriteBatch()
 	tmpStream := tmpDB.NewStreamAt(counter)
 	tmpStream.LogPrefix = fmt.Sprintf("Rebuilding index for predicate %s (2/2):", r.attr)
 	tmpStream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
@@ -676,7 +683,9 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			if err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs); err != nil {
+			//err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs)
+
+			if err := writer.SetEntryAt((&badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}).WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
 		}

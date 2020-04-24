@@ -20,13 +20,10 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
-	"github.com/dgraph-io/badger/v2/y"
-	"github.com/golang/glog"
 	"github.com/stretchr/testify/require"
 )
 
@@ -91,56 +88,56 @@ func BenchmarkWriter(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			var entries []*badger.Entry
-			// 	batch := db.NewWriteBatchAt(1)
-			// 	for _, typ := range KVList {
-			// 		k := typ.key
-			// 		v := typ.value
-			// 		batch.Set(k, v)
+			// var wg sync.WaitGroup
+			// var entries []*badger.Entry
+			// // 	batch := db.NewWriteBatchAt(1)
+			// // 	for _, typ := range KVList {
+			// // 		k := typ.key
+			// // 		v := typ.value
+			// // 		batch.Set(k, v)
+			// // 	}
+			// // 	require.NoError(b, batch.Flush())
+			// for _, kv := range KVList {
+			// 	// var meta byte
+			// 	// var entry *badger.Entry
+			// 	// if len(kv.UserMeta) > 0 {
+			// 	// 	meta = kv.UserMeta[0]
+			// 	// }
+			// 	// switch meta {
+			// 	// case BitCompletePosting, BitEmptyPosting:
+			// 	// 	entry = (&badger.Entry{
+			// 	// 		Key:      kv.Key,
+			// 	// 		Value:    kv.Value,
+			// 	// 		UserMeta: meta,
+			// 	// 	}).WithDiscard()
+			// 	// default:
+			// 	k := kv.key
+			// 	v := kv.value
+			// 	var meta byte
+			// 	var entry *badger.Entry
+
+			// 	entry = &badger.Entry{
+			// 		Key:      k,
+			// 		Value:    v,
+			// 		UserMeta: meta,
 			// 	}
-			// 	require.NoError(b, batch.Flush())
-			for _, kv := range KVList {
-				// var meta byte
-				// var entry *badger.Entry
-				// if len(kv.UserMeta) > 0 {
-				// 	meta = kv.UserMeta[0]
-				// }
-				// switch meta {
-				// case BitCompletePosting, BitEmptyPosting:
-				// 	entry = (&badger.Entry{
-				// 		Key:      kv.Key,
-				// 		Value:    kv.Value,
-				// 		UserMeta: meta,
-				// 	}).WithDiscard()
-				// default:
-				k := kv.key
-				v := kv.value
-				var meta byte
-				var entry *badger.Entry
+			// 	// UserMeta: meta,
+			// 	// }
+			// 	entry.Key = y.KeyWithTs(entry.Key, 1) //Same version for each key
+			// 	entries = append(entries, entry)
+			// }
 
-				entry = &badger.Entry{
-					Key:      k,
-					Value:    v,
-					UserMeta: meta,
-				}
-				// UserMeta: meta,
-				// }
-				entry.Key = y.KeyWithTs(entry.Key, 1) //Same version for each key
-				entries = append(entries, entry)
-			}
-
-			wg.Add(1)
-			err := db.BatchSetAsync(entries, func(err error) {
-				defer wg.Done()
-				if err != nil {
-					// TODO: Handle error
-					glog.Error(err)
-					return
-				}
-			})
+			// wg.Add(1)
+			// err := db.BatchSetAsync(entries, func(err error) {
+			// 	defer wg.Done()
+			// 	if err != nil {
+			// 		// TODO: Handle error
+			// 		glog.Error(err)
+			// 		return
+			// 	}
+			// })
 			require.NoError(b, err)
-			wg.Wait()
+			// wg.Wait()
 
 		}
 	})
