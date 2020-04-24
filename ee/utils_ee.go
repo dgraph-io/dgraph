@@ -41,9 +41,7 @@ func GetEEFeaturesList() []string {
 		ee = append(ee, acl)
 	}
 	if worker.Config.BadgerKeyFile != "" {
-		ee = append(ee, encAtRest)
-		ee = append(ee, encBackupRestore)
-		ee = append(ee, encExport)
+		ee = append(ee, encAtRest, encBackupRestore, encExport)
 	} else {
 		ee = append(ee, backupRestore)
 	}
