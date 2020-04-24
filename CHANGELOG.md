@@ -12,12 +12,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-## [20.03.1] - 2020-04-23
+## [20.03.1] - 2020-04-24
 [20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
 
 ### Changed
 
-- Support comma separated list of zero addresses in alpha ([#5258][])
+- Support comma separated list of zero addresses in alpha. ([#5258][])
 - Optimization: Optimize snapshot creation ([#4901][])
 - Optimization: Remove isChild from fastJsonNode. ([#5184][])
 - Optimization: Memory improvements in fastJsonNode. ([#5088][])
@@ -87,7 +87,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5238]: https://github.com/dgraph-io/dgraph/issues/5238
 [#5272]: https://github.com/dgraph-io/dgraph/issues/5272
 
-## [1.2.3] - 2020-04-23
+## [1.2.3] - 2020-04-24
 [1.2.3]: https://github.com/dgraph-io/dgraph/compare/v1.2.2...v1.2.3
 
 ### Changed
