@@ -4,7 +4,7 @@ set -e
 
 readonly PROTOCMINVER="3.6.1"
 
-which protoc &>/dev/null || (echo "Error: protoc not found" ; exit 1)
+which protoc &>/dev/null || (echo "Error: protoc not found" >&2; exit 1)
 
 PROTOCVER=`protoc --version | awk '{printf $2}'`
 
@@ -14,11 +14,12 @@ function CompareSemVer() {
 	local minver=(${1//./ })
 	local curver=(${2//./ })
 
-	echo "Checking for semantic version $1 or newer"
+	echo -n "Checking protoc for semantic version $1 or newer... "
 
 	for i in 0 1 2; do
 		if [ ${minver[$i]} -gt ${curver[$i]} ]; then
-			echo "Error: version $2 is lower than the required version $1"
+                        echo >&2
+			echo "Error: version $2 is lower than the required version $1" >&2
 			exit 1
 		elif [ ${curver[$i]} -gt ${minver[$i]} ]; then
 			break
@@ -27,8 +28,6 @@ function CompareSemVer() {
 }
 
 CompareSemVer $PROTOCMINVER $PROTOCVER
-
-# TODO: check proto api versions
 
 echo "OK"
 
