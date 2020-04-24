@@ -1011,6 +1011,25 @@ func (g *groupi) processOracleDeltaStream() {
 	}
 }
 
+// GetEEFeaturesList returns a list Enterprise Features that are available.
+func GetEEFeaturesList() []string {
+	if !EnterpriseEnabled() {
+		return nil
+	}
+	ee := make([]string, 0)
+	if len(Config.HmacSecret) > 0 {
+		ee = append(ee, "acl")
+	}
+	if Config.BadgerKeyFile != "" {
+		ee = append(ee, "encryption_at_rest")
+		ee = append(ee, "encrypted_backup_and_restore")
+		ee = append(ee, "encryption_export")
+	} else {
+		ee = append(ee, "backup_and_restore")
+	}
+	return ee
+}
+
 // EnterpriseEnabled returns whether enterprise features can be used or not.
 func EnterpriseEnabled() bool {
 	if !enc.EeBuild {
