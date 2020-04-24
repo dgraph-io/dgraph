@@ -1103,77 +1103,64 @@ func customDirectiveValidation(sch *ast.Schema,
 		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphql.Raw})
 		if gqlErr != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; unable to parse input: %d: %s",
-				typ.Name, field.Name, gqlErr.Locations[0].Column, gqlErr.Message)
+				"Type %s; Field %s: unable to parse graphql in @custom directive because: %s",
+				typ.Name, field.Name, gqlErr.Message)
 		}
 		opCount := len(queryDoc.Operations)
 		if opCount == 0 || opCount > 1 {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %d operations, "+
-					"it can have exactly one operation.",
-				typ.Name, field.Name, opCount,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found %d operations, "+
+					"it can have exactly one operation.", typ.Name, field.Name, opCount)
 		}
 		graphqlOpDef = queryDoc.Operations[0]
 		if graphqlOpDef.Operation != "query" && graphqlOpDef.Operation != "mutation" {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %s operation, "+
-					"it can only have query/mutation.",
-				typ.Name, field.Name, graphqlOpDef.Operation,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found `%s` operation, "+
+					"it can only have query/mutation.", typ.Name, field.Name,
+				graphqlOpDef.Operation)
 		}
 		if graphqlOpDef.Name != "" {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found operation with name %s,"+
-					" it can't have a name.",
-				typ.Name, field.Name, graphqlOpDef.Name,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
+					"name `%s`, it can't have a name.", typ.Name, field.Name, graphqlOpDef.Name)
 		}
 		if graphqlOpDef.VariableDefinitions != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found operation with variables,"+
-					" it can't have any variable definitions.",
-				typ.Name, field.Name,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
+					"variables, it can't have any variable definitions.", typ.Name, field.Name)
 		}
 		if graphqlOpDef.Directives != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found operation with directives, "+
-					"it can't have any directives.",
-				typ.Name, field.Name,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
+					"directives, it can't have any directives.", typ.Name, field.Name)
 		}
 		opSelSetCount := len(graphqlOpDef.SelectionSet)
 		if opSelSetCount == 0 || opSelSetCount > 1 {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %d fields inside operation"+
-					" %s, it can have exactly one field.",
-				typ.Name, field.Name, opSelSetCount, graphqlOpDef.Operation,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found %d fields inside "+
+					"operation `%s`, it can have exactly one field.", typ.Name, field.Name,
+				opSelSetCount, graphqlOpDef.Operation)
 		}
 		query := graphqlOpDef.SelectionSet[0].(*ast.Field)
 		if query.Alias != query.Name {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %s %s with alias %s, "+
-					"it can't have any alias.",
-				typ.Name, field.Name, graphqlOpDef.Operation, query.Name, query.Alias,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found %s `%s` with alias"+
+					" `%s`, it can't have any alias.",
+				typ.Name, field.Name, graphqlOpDef.Operation, query.Name, query.Alias)
 		}
 		// There can't be any ObjectDefinition as it is a query document; if there were, parser
 		// would have given error. So not checking that query.ObjectDefinition is nil
 		if query.Directives != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %s %s with directives, "+
-					"it can't have any directives.",
-				typ.Name, field.Name, graphqlOpDef.Operation, query.Name,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found %s `%s` with "+
+					"directives, it can't have any directives.",
+				typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 		}
 		if len(query.SelectionSet) != 0 {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; found %s %s with a selection set,"+
-					" it can't have any selection set.",
-				typ.Name, field.Name, graphqlOpDef.Operation, query.Name,
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, found %s `%s` with a "+
+					"selection set, it can't have any selection set.",
+				typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 		}
 		if len(query.Arguments) > 0 {
 			argCountMap := make(map[string]int)
@@ -1181,16 +1168,14 @@ func customDirectiveValidation(sch *ast.Schema,
 			// validate the specific input requirements for batch mode
 			if isBatchOperation {
 				if len(query.Arguments) != 1 ||
-					query.Arguments[0].Name != "input" ||
 					query.Arguments[0].Value.Kind != ast.ListValue ||
 					len(query.Arguments[0].Value.Children) != 1 ||
 					query.Arguments[0].Value.Children[0].Value.Kind != ast.ObjectValue {
 					return gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s: @custom directive: graphql; for batch operations %s `%s`"+
-							" can have only one argument named `input` with value formatted as "+
-							"`[{param1: $var1, param2: $var2, ...}]`.",
-						typ.Name, field.Name, graphqlOpDef.Operation, query.Name,
-					)
+						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
+							"operations, %s `%s` can have only one argument with value formatted "+
+							"as `[{param1: $var1, param2: $var2, ...}]`.",
+						typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 				}
 				for _, arg := range query.Arguments[0].Value.Children[0].Value.Children {
 					argCountMap[arg.Name] = argCountMap[arg.Name] + 1
@@ -1202,6 +1187,11 @@ func customDirectiveValidation(sch *ast.Schema,
 					requiredFields[arg.Value.String()[1:]] = true
 				}
 			}
+			// TODO: make this recursive, so deep level args also gets validated for unique names
+			// right now if someone gives multiple args with same name at deep level,
+			// the query will be sent as is to their server, which if they are able to handle,
+			// we won't have any problem handling it. As we deal with only variables,
+			// and not argument names to generate the request.
 			repeatingArgs := strings.Builder{}
 			repeatingArgs.WriteRune('[')
 			for argName, count := range argCountMap {
@@ -1214,10 +1204,9 @@ func customDirectiveValidation(sch *ast.Schema,
 			repeatingArgsStr := repeatingArgs.String()
 			if repeatingArgsStr != "[]" {
 				return gqlerror.ErrorPosf(graphql.Position,
-					"Type %s; Field %s: @custom directive: graphql; given %s: %s: arguments %s"+
-						" appear more than once, each argument can appear only once.",
-					typ.Name, field.Name, graphqlOpDef.Operation, query.Name, repeatingArgsStr,
-				)
+					"Type %s; Field %s: inside graphql in @custom directive, %s `%s` has arguments"+
+						" %s which appear more than once, each argument can appear only once.",
+					typ.Name, field.Name, graphqlOpDef.Operation, query.Name, repeatingArgsStr)
 			}
 
 		}
@@ -1234,11 +1223,9 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 
 		if field.Name == idField || field.Name == xidField {
-			return gqlerror.ErrorPosf(
-				dir.Position,
+			return gqlerror.ErrorPosf(dir.Position,
 				"Type %s; Field %s; custom directive not allowed on field of type ID! or field "+
-					"with @id directive.", typ.Name, field.Name,
-			)
+					"with @id directive.", typ.Name, field.Name)
 		}
 
 		// TODO - We also need to have point no. 2 validation for custom queries/mutation.
@@ -1271,31 +1258,23 @@ func customDirectiveValidation(sch *ast.Schema,
 			requiresID := false
 			for fname := range requiredFields {
 				if fname == field.Name {
-					return gqlerror.ErrorPosf(
-						errPos,
+					return gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; @custom directive, %s can't require itself.",
-						typ.Name, field.Name, errIn,
-					)
+						typ.Name, field.Name, errIn)
 				}
 
 				fd := typ.Fields.ForName(fname)
 				if fd == nil {
-					return gqlerror.ErrorPosf(
-						errPos,
+					return gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; @custom directive, %s must use fields defined "+
-							"within the type, found: %s.",
-						typ.Name, field.Name, errIn, fname,
-					)
+							"within the type, found `%s`.", typ.Name, field.Name, errIn, fname)
 				}
 
 				typName := fd.Type.Name()
 				if !isScalar(typName) {
-					return gqlerror.ErrorPosf(
-						errPos,
+					return gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; @custom directive, %s must use scalar fields, "+
-							"found field of type: %s.",
-						typ.Name, field.Name, errIn, typName,
-					)
+							"found field of type `%s`.", typ.Name, field.Name, errIn, typName)
 				}
 
 				if fname == idField || fname == xidField {
@@ -1303,12 +1282,9 @@ func customDirectiveValidation(sch *ast.Schema,
 				}
 			}
 			if !requiresID {
-				return gqlerror.ErrorPosf(
-					errPos,
+				return gqlerror.ErrorPosf(errPos,
 					"Type %s; Field %s: @custom directive, %s must use a field with type "+
-						"ID! or a field with @id directive.",
-					typ.Name, field.Name, errIn,
-				)
+						"ID! or a field with @id directive.", typ.Name, field.Name, errIn)
 			}
 		}
 	}
@@ -1324,9 +1300,8 @@ func customDirectiveValidation(sch *ast.Schema,
 			url:          u.Raw,
 		}); err != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: @custom directive: graphql; %s",
-				typ.Name, field.Name, err.Error(),
-			)
+				"Type %s; Field %s: inside graphql in @custom directive, %s",
+				typ.Name, field.Name, err.Error())
 		}
 	}
 

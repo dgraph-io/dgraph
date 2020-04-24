@@ -945,7 +945,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found 0 operations, it can have exactly one operation.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 0 operations, it can have exactly one operation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -963,7 +963,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; unable to parse input: 30: Unexpected Name \"garbage\"",
+    {"message": "Type Query; Field getAuthor: unable to parse graphql in @custom directive because: Unexpected Name \"garbage\"",
      "locations":[{"line":8, "column":15}]},
     ]
 
@@ -982,7 +982,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found 2 operations, it can have exactly one operation.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 2 operations, it can have exactly one operation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1001,7 +1001,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found subscription operation, it can only have query/mutation.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found `subscription` operation, it can only have query/mutation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1020,7 +1020,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found operation with name opName, it can't have a name.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1039,7 +1039,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found operation with variables, it can't have any variable definitions.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with variables, it can't have any variable definitions.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1058,7 +1058,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found operation with directives, it can't have any directives.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1077,7 +1077,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found 2 fields inside operation query, it can have exactly one field.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1096,7 +1096,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found mutation getAuthor with alias authors, it can't have any alias.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1115,7 +1115,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; unable to parse input: 27: Expected Name, found :",
+    {"message": "Type Query; Field getAuthor: unable to parse graphql in @custom directive because: Expected Name, found :",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1134,7 +1134,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found query getAuthor with directives, it can't have any directives.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1153,7 +1153,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; found query getAuthor with a selection set, it can't have any selection set.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1174,7 +1174,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Post; Field author: @custom directive: graphql; for batch operations query `getAuthor` can have only one argument named `input` with value formatted as `[{param1: $var1, param2: $var2, ...}]`.",
+    {"message": "Type Post; Field author: inside graphql in @custom directive, for batch operations, query `getAuthor` can have only one argument with value formatted as `[{param1: $var1, param2: $var2, ...}]`.",
      "locations":[{"line":11, "column":15}]},
     ]
 
@@ -1194,7 +1194,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Post; Field author: @custom directive: graphql; given query: getAuthor: arguments [id ] appear more than once, each argument can appear only once.",
+    {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
      "locations":[{"line":10, "column":15}]},
     ]
 
@@ -1212,7 +1212,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: @custom directive: graphql; given query: getAuthor: arguments [id ] appear more than once, each argument can appear only once.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
      "locations":[{"line":8, "column":15}]},
     ]
 
@@ -1276,7 +1276,7 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found: abc.",
+      {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
       "locations":[{"line":6, "column":12}]},
     ]
 
@@ -1297,7 +1297,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field of type: Note.",
+    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field of type `Note`.",
      "locations":[{"line":11, "column":12}]},
     ]
 
@@ -1347,7 +1347,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found: abc.",
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
      "locations":[{"line":6, "column":15}]},
     ]
 
@@ -1368,7 +1368,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field of type: Note.",
+    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field of type `Note`.",
      "locations":[{"line":11, "column":15}]},
     ]
 

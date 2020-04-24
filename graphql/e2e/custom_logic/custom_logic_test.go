@@ -924,8 +924,8 @@ func TestForInvalidCustomQuery(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
-		"; Field getCountry: @custom directive: graphql; given query: country is not present in"+
-		" remote schema.\n", res.Errors[0].Error())
+		"; Field getCountry: inside graphql in @custom directive, query `country` is not present"+
+		" in remote schema.\n", res.Errors[0].Error())
 }
 
 func TestForInvalidArgument(t *testing.T) {
@@ -942,8 +942,8 @@ func TestForInvalidArgument(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
-		"; Field getCountry: @custom directive: graphql; given query: country: arg code not"+
-		" present in remote query.\n", res.Errors[0].Error())
+		"; Field getCountry: inside graphql in @custom directive, argument `code` is not present"+
+		" in remote query `country`.\n", res.Errors[0].Error())
 }
 
 func TestForInvalidType(t *testing.T) {
@@ -960,8 +960,8 @@ func TestForInvalidType(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
-		"; Field getCountry: @custom directive: graphql; given query: country: type mismatch for"+
-		" variable $id; expected: ID!, got: Int!.\n", res.Errors[0].Error())
+		"; Field getCountry: inside graphql in @custom directive, found type mismatch for "+
+		"variable `$id` in query `country`, expected `String!`, got `Int!`.\n", res.Errors[0].Error())
 }
 
 func TestCustomLogicGraphql(t *testing.T) {
@@ -1454,8 +1454,8 @@ func TestCustomGraphqlNullQueryType(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
-		"; Field getCountry: @custom directive: graphql; remote schema doesn't have any queries.\n",
-		res.Errors[0].Error())
+		"; Field getCountry: inside graphql in @custom directive, remote schema doesn't have any"+
+		" queries.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlNullMutationType(t *testing.T) {
@@ -1471,8 +1471,8 @@ func TestCustomGraphqlNullMutationType(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
-		"; Field addCountry: @custom directive: graphql; remote schema doesn't have any mutations."+
-		"\n", res.Errors[0].Error())
+		"; Field addCountry: inside graphql in @custom directive, remote schema doesn't have any"+
+		" mutations.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingQueryType(t *testing.T) {
@@ -1488,8 +1488,8 @@ func TestCustomGraphqlMissingQueryType(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Query"+
-		"; Field getCountry: @custom directive: graphql; remote schema doesn't have any type"+
-		" named Query.\n", res.Errors[0].Error())
+		"; Field getCountry: inside graphql in @custom directive, remote schema doesn't have any "+
+		"type named Query.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingMutationType(t *testing.T) {
@@ -1505,8 +1505,8 @@ func TestCustomGraphqlMissingMutationType(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
-		"; Field addCountry: @custom directive: graphql; remote schema doesn't have any type"+
-		" named Mutation.\n", res.Errors[0].Error())
+		"; Field addCountry: inside graphql in @custom directive, remote schema doesn't have any"+
+		" type named Mutation.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingMutation(t *testing.T) {
@@ -1522,7 +1522,7 @@ func TestCustomGraphqlMissingMutation(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
-		"; Field addCountry: @custom directive: graphql; given mutation: putCountry is not"+
+		"; Field addCountry: inside graphql in @custom directive, mutation `putCountry` is not"+
 		" present in remote schema.\n", res.Errors[0].Error())
 }
 
@@ -1539,8 +1539,8 @@ func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
-		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: return type"+
-		" mismatch; expected: Movie!, got: Country!.\n", res.Errors[0].Error())
+		"; Field addCountry: inside graphql in @custom directive, found return type mismatch for"+
+		" mutation `setCountry`, expected `Movie!`, got `Country!`.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
@@ -1564,8 +1564,8 @@ func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:13: Type Post"+
-		"; Field author: @custom directive: graphql; given query: getPosts: return type"+
-		" mismatch; expected: [Author!], got: [Post!].\n", res.Errors[0].Error())
+		"; Field author: inside graphql in @custom directive, found return type mismatch for "+
+		"query `getPosts`, expected `[Author!]`, got `[Post!]`.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
@@ -1585,9 +1585,9 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: @custom directive: graphql; given query: getPosts: arg `input` is not"+
-		" of the form `[{param1: $var1, param2: $var2, ...}]` in remote query.\n",
-		res.Errors[0].Error())
+		"; Field comments: inside graphql in @custom directive, argument `input` for given query"+
+		" `getPosts` must be of the form `[{param1: $var1, param2: $var2, ...}]` for batch "+
+		"operations in remote query.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
@@ -1607,8 +1607,8 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: @custom directive: graphql; remote schema doesn't have any type named"+
-		" PostFilterInput.\n", res.Errors[0].Error())
+		"; Field comments: inside graphql in @custom directive, remote schema doesn't have any "+
+		"type named PostFilterInput.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
@@ -1628,29 +1628,30 @@ func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: @custom directive: graphql; given query: getPosts: arg name not"+
-		" present in remote query.\n", res.Errors[0].Error())
+		"; Field comments: inside graphql in @custom directive, argument `name` is not present "+
+		"in remote query `getPosts`.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
 	schema := `
 	type Post {
 		id: ID!
+		likes: Int
 		text: String
 		comments: Post! @custom(http: {
 							url: "http://mock:8888/getPosts",
 							method: "POST",
 							operation: "batch"
-							graphql: "query { getPosts(input: [{id: $id, text: $id}]) }"
+							graphql: "query { getPosts(input: [{id: $id, text: $likes}]) }"
 						})
 	}
 	`
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: @custom directive: graphql; given query: getPosts: type mismatch for"+
-		" variable $id; expected: ID!, got: String!.\n", res.Errors[0].Error())
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:10: Type Post"+
+		"; Field comments: inside graphql in @custom directive, found type mismatch for variable"+
+		" `$likes` in query `getPosts`, expected `Int`, got `String!`.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
@@ -1666,8 +1667,8 @@ func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:60: Type Mutation"+
-		"; Field addCountry: @custom directive: graphql; given mutation: setCountry: required arg"+
-		" country is missing.\n", res.Errors[0].Error())
+		"; Field addCountry: inside graphql in @custom directive, argument `country` in mutation"+
+		" `setCountry` is missing, it is required by remote mutation.\n", res.Errors[0].Error())
 }
 
 func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
@@ -1687,8 +1688,8 @@ func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: @custom directive: graphql; given query: getPosts: required arg text"+
-		" is missing.\n", res.Errors[0].Error())
+		"; Field comments: inside graphql in @custom directive, argument `text` in query "+
+		"`getPosts` is missing, it is required by remote query.\n", res.Errors[0].Error())
 }
 
 // this one accepts an object and returns an object
