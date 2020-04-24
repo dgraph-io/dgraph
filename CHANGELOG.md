@@ -31,6 +31,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
+- Implement json.Marshal just for strings. ([#4979][]) 
+- Change error message in case of successful license application. Fixes [#4965][]. ([#5230][]) 
+- Add OPTIONS support for /ui/keywords. Fixes [##4946][].([#4992][]) 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
 - Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
@@ -49,7 +52,10 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   
 ### Added
 
-
+- Return list of ongoing tasks in /health endpoint. ([#4961][])
+- Propose snapshot once indexing is complete. ([#5005][])
+- Add query/mutation logging in glog V=3. ([#5024][]) 
+- Include the total number of touched nodes in the query metrics. ([#5073][]) 
 - Flag to turn on/off sending Sentry events, default is on. ([#5169][])
 - Concurrent Mutations. ([#4892][]) 
 - Enterprise features
@@ -61,7 +67,15 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Add Badger expvar metrics to Prometheus metrics. Fixes [#4772][]. ([#5094][])
   - Add option to apply enterprise license at zero's startup. ([#5170][])
 
-
+[#4979]: https://github.com/dgraph-io/dgraph/issues/4979
+[#5230]: https://github.com/dgraph-io/dgraph/issues/5230
+[#4965]: https://github.com/dgraph-io/dgraph/issues/4965
+[#4992]: https://github.com/dgraph-io/dgraph/issues/4992
+[#4946]: https://github.com/dgraph-io/dgraph/issues/4946
+[#4961]: https://github.com/dgraph-io/dgraph/issues/4961
+[#5005]: https://github.com/dgraph-io/dgraph/issues/5005
+[#5024]: https://github.com/dgraph-io/dgraph/issues/5024
+[#5073]: https://github.com/dgraph-io/dgraph/issues/5073
 [#5280]: https://github.com/dgraph-io/dgraph/issues/5280
 [#5097]: https://github.com/dgraph-io/dgraph/issues/5097
 [#5150]: https://github.com/dgraph-io/dgraph/issues/5150
