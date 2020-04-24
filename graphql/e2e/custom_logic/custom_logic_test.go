@@ -794,35 +794,40 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// 3. Batch operation mode along with GraphQL.
 	// 4. Single operation mode along with GraphQL.
 
+	var teachers []*teacher
+	var schools []*school
+	var users []*user
 	// lets check batch mode first using REST endpoints.
-	schema := readFile(t, "schemas/batch-mode-rest.graphql")
-	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	t.Run("rest batch operation mode", func(t *testing.T) {
+		schema := readFile(t, "schemas/batch-mode-rest.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
 
-	// add some data
-	teachers := addTeachers(t)
-	schools := addSchools(t, teachers)
-	users := addUsers(t, schools)
+		// add some data
+		teachers = addTeachers(t)
+		schools = addSchools(t, teachers)
+		users = addUsers(t, schools)
 
-	verifyData(t, users, teachers, schools)
+		verifyData(t, users, teachers, schools)
+	})
 
 	t.Run("rest single operation mode", func(t *testing.T) {
 		// lets update the schema and check single mode now
-		schema = readFile(t, "schemas/single-mode-rest.graphql")
-		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		schema := readFile(t, "schemas/single-mode-rest.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 
 	t.Run("graphql single operation mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
-		schema = readFile(t, "schemas/single-mode-graphql.graphql")
-		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		schema := readFile(t, "schemas/single-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 
 	t.Run("graphql batch operation mode", func(t *testing.T) {
 		// update schema to single mode where fields are resolved using GraphQL endpoints.
-		schema = readFile(t, "schemas/batch-mode-graphql.graphql")
-		common.RequireNoGQLErrors(t, updateSchema(t, schema))
+		schema := readFile(t, "schemas/batch-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
 }
