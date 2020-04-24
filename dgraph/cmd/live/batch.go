@@ -114,7 +114,12 @@ func handleError(err error, isRetry bool) {
 	s := status.Convert(err)
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
-		x.Fatalf(s.Message())
+		// Let us not crash live loader due to this. Instead, we should infinitely retry to
+		// reconnect and retry the request.
+		dur := time.Duration(1+rand.Intn(60)) * time.Second
+		fmt.Printf("Connection has been possibly interrupted. Got error: %v."+
+			" Will retry after %s.\n", err, dur.Round(time.Second))
+		time.Sleep(dur)
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
