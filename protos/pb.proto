@@ -25,7 +25,7 @@ syntax = "proto3";
 package pb;
 
 import "api.proto";
-import "github.com/dgraph-io/badger/pb/pb.proto";
+import "github.com/dgraph-io/badger/v2/pb/pb.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
