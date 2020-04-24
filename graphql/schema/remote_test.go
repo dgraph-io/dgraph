@@ -88,7 +88,7 @@ func TestGqlType_String(t *testing.T) {
 					OfType: nil,
 				},
 			},
-			expectedTypeStr: "[String]", // we interpret ID as String
+			expectedTypeStr: "[ID]", // TODO: interpret ID as String
 		},
 		{
 			name: "List of Non-null Scalar type",

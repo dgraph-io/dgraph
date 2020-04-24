@@ -888,7 +888,7 @@ func TestForInvalidType(t *testing.T) {
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:61: Type Query"+
 		"; Field getCountry: inside graphql in @custom directive, found type mismatch for "+
-		"variable `$id` in query `country`, expected `String!`, got `Int!`.\n", res.Errors[0].Error())
+		"variable `$id` in query `country`, expected `ID!`, got `Int!`.\n", res.Errors[0].Error())
 }
 
 func TestCustomLogicGraphql(t *testing.T) {

@@ -308,14 +308,14 @@ func matchArgSignature(md *argMatchingMetadata) error {
 			if !ok {
 				return errors.Errorf("variable $%s is missing in given context.", givenArgVal.Raw)
 			}
-			// we will consider ID as String for the purpose of type matching
-			rootType := givenArgTyp
-			for rootType.NamedType == "" {
-				rootType = rootType.Elem
-			}
-			if rootType.NamedType == "ID" {
-				rootType.NamedType = "String"
-			}
+			// TODO: we will consider ID as String for the purpose of type matching
+			//rootType := givenArgTyp
+			//for rootType.NamedType == "" {
+			//	rootType = rootType.Elem
+			//}
+			//if rootType.NamedType == "ID" {
+			//	rootType.NamedType = "String"
+			//}
 			expectedArgType := givenArgTyp.String()
 			gotArgType := remoteArgTyp.String()
 			if expectedArgType != gotArgType {
@@ -535,12 +535,12 @@ func (t *gqlType) String() string {
 		return fmt.Sprintf("[%s]", t.OfType.String())
 	case "NON_NULL":
 		return fmt.Sprintf("%s!", t.OfType.String())
-	case "SCALAR":
-		// we will consider ID as String for the purpose of type matching
-		if t.Name == "ID" {
-			return "String"
-		}
-		return t.Name
+	// TODO: we will consider ID as String for the purpose of type matching
+	//case "SCALAR":
+	//	if t.Name == "ID" {
+	//		return "String"
+	//	}
+	//	return t.Name
 	default:
 		return t.Name
 	}
