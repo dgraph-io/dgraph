@@ -33,7 +33,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - Implement json.Marshal just for strings. ([#4979][]) 
 - Change error message in case of successful license application. Fixes [#4965][]. ([#5230][]) 
-- Add OPTIONS support for /ui/keywords. Fixes [##4946][].([#4992][]) 
+- Add OPTIONS support for /ui/keywords. Fixes [#4946][].([#4992][]) 
 - Check uid list is empty when filling shortest path vars. ([#5152][])
 - Return error for invalid UID 0x0. Fixes [#5238][]. ([#5252][]) 
 - Skipping floats that cannot be marshalled (+Inf, -Inf, NaN). ([#5199][], [#5163][])
