@@ -1707,6 +1707,40 @@ func introspectionResult(name string) string {
 					"deprecationReason":null
 					}
 				]
+				},
+				{
+				  "kind": "INPUT_OBJECT",
+				  "name": "UserInput",
+				  "fields": [
+					{
+						"name": "id",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+						 	"kind": "SCALAR",
+						 	"name": "ID",
+							"ofType": null
+						  }
+						},
+						"isDeprecated": false,
+						"deprecationReason": null
+					},
+					{
+						"name": "age",
+						"type": {
+						  "kind": "NON_NULL",
+						  "name": null,
+						  "ofType": {
+						 	"kind": "SCALAR",
+						 	"name": "Int",
+							"ofType": null
+						  }
+						},
+						"isDeprecated": false,
+						"deprecationReason": null
+					}
+				  ]
 				}
 			]
 			}
