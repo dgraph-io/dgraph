@@ -19,6 +19,7 @@ package custom_logic
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"sort"
 	"strings"
@@ -390,8 +391,7 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
 			Locations: []x.Location{{6, 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
-			" an error: unexpected status code: 404 for field: bikes within type: Person," +
-			" index: 0.",
+			" an error: unexpected status code: 404 for field: bikes within type: Person.",
 			Locations: []x.Location{{9, 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
@@ -526,22 +526,22 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	queryUser := `
 	 query {
 		 queryUser(order: {asc: age}) {
-			 name
-			 age
-			 cars {
-				 name
-			 }
-			 schools(order: {asc: established}) {
-				 name
-				 established
-				 teachers(order: {desc: age}) {
-					 name
-					 age
-				 }
-				 classes {
-					 name
-				 }
-			 }
+			name
+			age
+			cars {
+				name
+			}
+			schools(order: {asc: established}) {
+				name
+				established
+				teachers(order: {desc: age}) {
+					name
+					age
+				}
+				classes {
+					name
+				}
+			}
 		 }
 	 }`
 	params := &common.GraphQLParams{
@@ -778,136 +778,63 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	 }`
 
 	testutil.CompareJSON(t, expected, string(result.Data))
+}
 
+func readFile(t *testing.T, name string) string {
+	b, err := ioutil.ReadFile(name)
+	require.NoError(t, err)
+	return string(b)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
-	// lets check batch mode first
-	schema := `type Car @remote {
-		 id: ID!
-		 name: String!
-	 }
+	// This test adds data, modifies the schema multiple times and fetches the data.
+	// It has the following modes.
+	// 1. Batch operation mode along with REST.
+	// 2. Single operation mode along with REST.
+	// 3. Batch operation mode along with GraphQL.
+	// 4. Single operation mode along with GraphQL.
 
-	 type User {
-		 id: ID!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/userNames",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "batch"
-					 })
-		 age: Int! @search
-		 cars: Car @custom(http: {
-						 url: "http://mock:8888/cars",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "batch"
-					 })
-		 schools: [School]
-	 }
-
-	 type School {
-		 id: ID!
-		 established: Int! @search
-		 name: String @custom(http: {
-						 url: "http://mock:8888/schoolNames",
-						 method: "POST",
-						 body: "{sid: $id}",
-						 operation: "batch"
-					   })
-		 classes: [Class] @custom(http: {
-							 url: "http://mock:8888/classes",
-							 method: "POST",
-							 body: "{sid: $id}",
-							 operation: "batch"
-						 })
-		 teachers: [Teacher]
-	 }
-
-	 type Class @remote {
-		 id: ID!
-		 name: String!
-	 }
-
-	 type Teacher {
-		 tid: ID!
-		 age: Int!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/teacherNames",
-						 method: "POST",
-						 body: "{tid: $tid}",
-						 operation: "batch"
-					 })
-	 }`
-
+	schema := readFile(t, "schemas/batch-mode-rest.graphql")
 	updateSchemaRequireNoGQLErrors(t, schema)
 
+	// add some data
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
 	users := addUsers(t, schools)
 
-	verifyData(t, users, teachers, schools)
+	// lets check batch mode first using REST endpoints.
+	t.Run("rest batch operation mode", func(t *testing.T) {
+		verifyData(t, users, teachers, schools)
+	})
 
-	// lets update the schema and check single mode now
-	schema = `
-	 type Car @remote {
-		 id: ID!
-		 name: String!
-	 }
+	t.Run("rest single operation mode", func(t *testing.T) {
+		// lets update the schema and check single mode now
+		schema := readFile(t, "schemas/single-mode-rest.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 
-	 type User {
-		 id: ID!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/userName",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "single"
-					 })
-		 age: Int! @search
-		 cars: Car @custom(http: {
-						 url: "http://mock:8888/car",
-						 method: "GET",
-						 body: "{uid: $id}",
-						 operation: "single"
-					 })
-		 schools: [School]
-	 }
+	t.Run("graphql single operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/single-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 
-	 type School {
-		 id: ID!
-		 established: Int! @search
-		 name: String @custom(http: {
-						 url: "http://mock:8888/schoolName",
-						 method: "POST",
-						 body: "{sid: $id}",
-						 operation: "single"
-					   })
-		 classes: [Class] @custom(http: {
-							 url: "http://mock:8888/class",
-							 method: "POST",
-							 body: "{sid: $id}",
-							 operation: "single"
-						 })
-		 teachers: [Teacher]
-	 }
+	t.Run("graphql batch operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/batch-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 
-	 type Class @remote {
-		 id: ID!
-		 name: String!
-	 }
-
-	 type Teacher {
-		 tid: ID!
-		 age: Int!
-		 name: String @custom(http: {
-						 url: "http://mock:8888/teacherName",
-						 method: "POST",
-						 body: "{tid: $tid}",
-						 operation: "single"
-					   })
-	 }`
-
-	verifyData(t, users, teachers, schools)
+	// Fields are fetched through a combination of REST/GraphQL and single/batch mode.
+	t.Run("mixed mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/mixed-modes.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {

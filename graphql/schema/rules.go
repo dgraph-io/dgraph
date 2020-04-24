@@ -1251,12 +1251,18 @@ func customDirectiveValidation(sch *ast.Schema,
 				)
 			}
 		}
+
+		op := ""
+		if operation != nil {
+			op = operation.Raw
+		}
 		// finally validate the given operation on remote server
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
 			parentField:  field,
 			graphqlOpDef: opZero,
 			url:          u.Raw,
+			operation:    op,
 		}); err != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
 				"Type %s; Field %s: @custom directive: graphql; %s",

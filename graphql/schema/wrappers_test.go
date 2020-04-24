@@ -656,3 +656,51 @@ func TestSubstituteVarsInURL(t *testing.T) {
 		})
 	}
 }
+
+func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
+	tcases := []struct {
+		name         string
+		req          string
+		operation    string
+		requiredArgs map[string]bool
+	}{
+		{
+			"parse required args for single request",
+			"query { userNames(id: $id, age: $age) }",
+			"single",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required nested args for single request",
+			"query { userNames(id: $id, car: {age: $age}) }",
+			"single",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required args for batch request",
+			"query { userNames(input: [{ id: $id, age: $age}]) }",
+			"batch",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required nested args for batch request",
+			"query { userNames(input: [{ id: $id, car: { age: $age}}]) }",
+			"batch",
+			map[string]bool{"id": true, "age": true},
+		},
+		{
+			"parse required nested array args for batch request",
+			"query { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
+			"batch",
+			map[string]bool{"id": true, "age": true},
+		},
+	}
+
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			args, err := ParseRequiredArgsFromGQLRequest(test.req, test.operation)
+			require.NoError(t, err)
+			require.Equal(t, test.requiredArgs, args)
+		})
+	}
+}

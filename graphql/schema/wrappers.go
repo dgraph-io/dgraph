@@ -49,6 +49,8 @@ type QueryType string
 // MutationType is currently supported mutations
 type MutationType string
 
+// FieldHTTPConfig contains the config needed to resolve a field using a remote HTTP endpoint
+// which could a GraphQL or a REST endpoint.
 type FieldHTTPConfig struct {
 	URL    string
 	Method string
@@ -58,6 +60,7 @@ type FieldHTTPConfig struct {
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
+	RemoteGqlQuery     string
 }
 
 // Query/Mutation types and arg names
@@ -628,6 +631,18 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 			rf[val[1:]] = true
 		}
 	}
+
+	graphqlArg := httpArg.Value.Children.ForName("graphql")
+	if graphqlArg == nil {
+		return true, rf
+	}
+	op := ""
+	operation := httpArg.Value.Children.ForName("operation")
+	if operation != nil {
+		op = operation.Raw
+	}
+
+	rf, _ = ParseRequiredArgsFromGQLRequest(graphqlArg.Raw, op)
 	return true, rf
 }
 
@@ -747,6 +762,21 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.ForwardHeaders = headers
 	}
 
+	if graphqlArg != nil {
+		queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
+		if gqlErr != nil {
+			return fconf, gqlErr
+		}
+		// queryDoc will always have only one operation with only one field
+		fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
+		buf := &bytes.Buffer{}
+		buildGraphqlRequestFields(buf, f.field)
+		remoteQuery := graphqlArg.Raw
+		remoteQuery = remoteQuery[:strings.LastIndex(remoteQuery, "}")]
+		remoteQuery = fmt.Sprintf("%s%s}", remoteQuery, buf.String())
+		fconf.RemoteGqlQuery = remoteQuery
+	}
+
 	// if it is a query or mutation, substitute the vars in URL and Body here itself
 	if isQueryOrMutation {
 		var err error
@@ -760,19 +790,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 			bodyVars = argMap
 		} else {
-			queryDoc, gqlErr := parser.ParseQuery(&ast.Source{Input: graphqlArg.Raw})
-			if gqlErr != nil {
-				return fconf, err
-			}
-			// queryDoc will always have only one operation with only one field
-			fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
-			buf := &bytes.Buffer{}
-			buildGraphqlRequestFields(buf, f.field)
-			remoteQuery := graphqlArg.Raw
-			remoteQuery = remoteQuery[:strings.LastIndex(remoteQuery, "}")]
-			remoteQuery = fmt.Sprintf("%s%s}", remoteQuery, buf.String())
 			bodyVars = make(map[string]interface{})
-			bodyVars["query"] = remoteQuery
+			bodyVars["query"] = fconf.RemoteGqlQuery
 			bodyVars["variables"] = argMap
 		}
 		if fconf.Template != nil {
@@ -781,7 +800,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			}
 		}
 	} else {
-		fconf.Operation = "batch"
+		fconf.Operation = "single"
 		op := httpArg.Value.Children.ForName("operation")
 		if op != nil {
 			fconf.Operation = op.Raw
@@ -1753,7 +1772,10 @@ func (t *astType) FieldOriginatedFrom(fieldName string) string {
 // 	friend
 // }
 func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
-	// Add begining curly braces
+	// Add beginning curly braces
+	if len(field.SelectionSet) == 0 {
+		return
+	}
 	writer.WriteString("{\n")
 	for i := 0; i < len(field.SelectionSet); i++ {
 		castedField := field.SelectionSet[i].(*ast.Field)
@@ -1767,4 +1789,28 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	}
 	// Add ending curly braces
 	writer.WriteString("}")
+}
+
+// ParseRequiredArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
+func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]bool, error) {
+	// These errors should have already been checked during schema validation.
+	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: req})
+	if gqlErr != nil {
+		return nil, gqlErr
+	}
+
+	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
+
+	if operation == "batch" {
+		input := query.Arguments.ForName("input")
+		// We are validating the format during schema update so accessing the children is safe here.
+		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
+		return rf, err
+	}
+
+	// The request can contain nested arguments/variables as well, so we get the args here and
+	// then wrap them with { } to pass to parseBodyTemplate to get the required fields.
+	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
+	_, rf, err := parseBodyTemplate("{" + args + "}")
+	return rf, err
 }
