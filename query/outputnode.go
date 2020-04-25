@@ -59,6 +59,7 @@ func ToJson(l *Latency, sgl []*SubGraph) ([]byte, error) {
 }
 
 type encoder struct {
+	sync.RWMutex
 	// attrMap has mapping of string predicates to uint16 ids.
 	// For each predicate one unique id is assigned to save space.
 	attrMap map[string]uint16
@@ -106,6 +107,16 @@ func newEncoder() *encoder {
 }
 
 func (enc *encoder) idForAttr(attr string) uint16 {
+	enc.RLock()
+	if id, ok := enc.attrMap[attr]; ok {
+		enc.RUnlock()
+		return id
+	}
+	enc.RUnlock()
+
+	enc.Lock()
+	defer enc.Unlock()
+	// check again for existance.
 	if id, ok := enc.attrMap[attr]; ok {
 		return id
 	}
@@ -118,6 +129,8 @@ func (enc *encoder) idForAttr(attr string) uint16 {
 }
 
 func (enc *encoder) attrForID(id uint16) string {
+	enc.RLock()
+	defer enc.RUnlock()
 	// For now we are not returning error from here.
 	if id == 0 || id > enc.seqNo {
 		return ""
@@ -170,6 +183,8 @@ type fastJsonNode uint32
 
 // newNode returns a fastJsonNode with its meta set to 0.
 func (enc *encoder) newNode() fastJsonNode {
+	enc.Lock()
+	defer enc.Unlock()
 	// TODO(Ashish): check if are exceeding math.MaxUint32 here.
 	enc.metaSlice = append(enc.metaSlice, 0)
 	return fastJsonNode(len(enc.metaSlice) - 1)
@@ -184,6 +199,8 @@ func (enc *encoder) newNodeWithAttr(attr uint16) fastJsonNode {
 }
 
 func (enc *encoder) setAttr(fj fastJsonNode, attr uint16) {
+	enc.Lock()
+	defer enc.Unlock()
 	meta := enc.metaSlice[fj]
 	// There can be some cases where we change name of attr for fastJsoNode and
 	// hence first clear the existing attr, then store new one.
@@ -194,6 +211,8 @@ func (enc *encoder) setAttr(fj fastJsonNode, attr uint16) {
 }
 
 func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
+	enc.Lock()
+	defer enc.Unlock()
 	offset, err := enc.arena.put(sv)
 	if err != nil {
 		return err
@@ -204,12 +223,16 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 
 func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	if list {
+		enc.Lock()
+		defer enc.Unlock()
 		enc.metaSlice[fj] |= msbBit
 	}
 }
 
 // appendAttrs appends attrs to existing fj's attrs.
 func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
+	enc.Lock()
+	defer enc.Unlock()
 	cs, ok := enc.childrenMap[fj]
 	if !ok {
 		cs = make([]fastJsonNode, 0, len(attrs))
@@ -219,21 +242,29 @@ func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 }
 
 func (enc *encoder) getAttr(fj fastJsonNode) uint16 {
+	enc.RLock()
+	defer enc.RUnlock()
 	meta := enc.metaSlice[fj]
 	return uint16((meta & setBytes76) >> 40)
 }
 
 func (enc *encoder) getScalarVal(fj fastJsonNode) ([]byte, error) {
+	enc.RLock()
+	defer enc.RUnlock()
 	meta := enc.metaSlice[fj]
 	offset := uint32(meta & setBytes4321)
 	return enc.arena.get(offset)
 }
 
 func (enc *encoder) getList(fj fastJsonNode) bool {
+	enc.RLock()
+	defer enc.RUnlock()
 	return ((enc.metaSlice[fj] & msbBit) > 0)
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) []fastJsonNode {
+	enc.RLock()
+	defer enc.RUnlock()
 	// Return nil if no attrs are found.
 	return enc.childrenMap[fj]
 }
@@ -257,8 +288,9 @@ func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list
 
 func (enc *encoder) AddMapChild(fj fastJsonNode, val fastJsonNode) {
 	var childNode fastJsonNode
+	valAttr := enc.getAttr(val)
 	for _, c := range enc.getAttrs(fj) {
-		if enc.getAttr(c) == enc.getAttr(val) {
+		if enc.getAttr(c) == valAttr {
 			childNode = c
 			break
 		}
