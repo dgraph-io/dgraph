@@ -21,7 +21,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -198,8 +197,6 @@ func BootstrapServer(schema, data []byte) {
 	if err != nil {
 		x.Panic(err)
 	}
-
-	fmt.Println(string(schema))
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
@@ -744,13 +741,6 @@ func addSchema(url string, schema string) error {
 	if err != nil {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
 	}
-
-	//s := addResult.Data.UpdateGQLSchema.GQLSchema.Schema
-	//var m map[string]interface{}
-	//json.Unmarshal([]byte(s), &m)
-	//res, err := json.MarshalIndent(m, "", "    ")
-	//fmt.Println("here", string(res), s)
-	//fmt.Println("here1", schema)
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
 		return errors.New("GraphQL schema mutation failed")

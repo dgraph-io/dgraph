@@ -1,15 +1,8 @@
 type User {
-# @auth(
-#     add: { rule: "$ROLE: { eq: ADD-BOT }" },
-#     update: { or: [
-#         { rule: "$ROLE: { eq: ADMIN }" },
-#         { rule: "(filter: { username: { eq: $USER } })"}
-#     ]}
-#     delete: { rule: "false" }) {
   username: String! @id
-  age: Int # @auth(query: {rule: "filter: {username: {eq: $USER }}"})
+  age: Int
   isPublic: Boolean
-  disabled: Boolean # @auth(update: { rule: "$ROLE: { eq: ADMIN }" })
+  disabled: Boolean
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
 }
@@ -35,10 +28,6 @@ type Region {
 }
 
 type Movie @auth(
-    # You can query a movie if
-    # - it's not hidden
-    #  AND
-    # - you are in a region it's available OR it's globally available
     query: { and: [
         { not: { rule: """
             query {
@@ -68,9 +57,6 @@ type Movie @auth(
             }
         ]}
     ]}
-#     add: { rule: "$ROLE: { eq: ADMIN }" }
-#     update: { rule: "$ROLE: { eq: ADMIN }" }
-#     delete: { rule: "$ROLE: { eq: ADMIN }" }
 ) {
   content: String
   hidden: Boolean @search
@@ -88,20 +74,6 @@ type Issue @auth(
                       }
                 }"""}
      ]}){
-
-#     add: { and: [
-#       {rule: "$ROLE: { eq: ADMIN }"},
-#       {rule: "owner(filter: { username: { eq: $USER } })"},
-#     ]}
-#     update: { and: [
-#       {rule: "$ROLE: { eq: ADMIN }"},
-#       {rule: "owner(filter: { username: { eq: $USER } })"},
-#     ]}
-#     delete: { and: [
-#       {rule: "$ROLE: { eq: ADMIN }"},
-#       {rule: "owner(filter: { username: { eq: $USER } })"},
-#     ]}
-# ) {
   id: ID!
   msg: String
   owner: User!
@@ -109,9 +81,6 @@ type Issue @auth(
 
 type Log @auth(
      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
-#     add: { rule: "$ROLE: { eq: ADMIN }" }
-#     update: { rule: "$ROLE: { eq: ADMIN }" }
-#     delete: { rule: "$ROLE: { eq: ADMIN }" }
 ) {
   id: ID!
   logs: String
@@ -119,31 +88,22 @@ type Log @auth(
 
 type Project @auth(
      query: { or: [
-         { rule: """query ($USER: String!) {
+         { rule: """query($USER: String!) {
                       queryProject {
-                        roles(filter: { permissions: { eq: VIEW } }) {
+                        roles(filter: { permission: { eq: VIEW } }) {
                          assignedTo(filter: { username: { eq: $USER } }) {
                           __typename
                          }
                         }
                       }
                   }""" },
-         { rule: "{$ROLE: { eq: ADMIN }}" }
+         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
      ]}
-
-#     # Only admins can create projects
-#     add: { rule: "$ROLE: { eq: ADMIN }" }
-
-#     update: { rule: """roles(filter: { permissions: { eq: CREATE } }) {
-#                         assignedTo(filter: { username: { eq: $USER } })
-#                     }""" }
-
-#     delete: { rule: "false" }
 ) {
   projID: ID!
   name: String!
   roles: [Role]
-  columns: [Column] @hasInverse(field: inProject) # @auth(add: {rule: "DENY"})
+  columns: [Column] @hasInverse(field: inProject)
 }
 
 type Role {
@@ -170,20 +130,9 @@ type Column @auth(
                           }
                           }
                           }"""},
-#     add: { rule: """inProject {
-#                         role(filter: { permission: { eq: ADMIN } } ) {
-#                             users(filter: { username: { eq: $USER } })
-#                         }
-#                     }"""},
-#     update: { rule: """inProject {
-#                     role(filter: { permission: { eq: EDIT } } ) {
-#                         users(filter: { username: { eq: $USER } })
-#                     }
-#                 }"""},
-#     delete: { rule: "false" }
  ) {
   colID: ID!
-  inProject: Project! # @auth(update: { rule: "DENY" })
+  inProject: Project!
   name: String!
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
@@ -203,27 +152,6 @@ type Ticket @auth(
                 }
             }
         }"""}
-    # add: { rule: """onColumn {
-    #                     inProject {
-    #                         role(filter: { permission: { eq: WRITE } } ) {
-    #                             users(filter: { username: { eq: $USER } })
-    #                         }
-    #                     }
-    #                 }"""},
-    # update: { rule: """onColumn {
-    #                     inProject {
-    #                         role(filter: { permission: { eq: WRITE } } ) {
-    #                             users(filter: { username: { eq: $USER } })
-    #                         }
-    #                     }
-    #                 }"""},
-    # delete: { rule: """onColumn {
-    #                     inProject {
-    #                         role(filter: { permission: { eq: WRITE } } ) {
-    #                             users(filter: { username: { eq: $USER } })
-    #                         }
-    #                     }
-    #                 }"""}
 ){
     id: ID!
     onColumn: Column!
