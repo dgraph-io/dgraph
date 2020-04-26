@@ -627,7 +627,25 @@
 
     type Post {
       id: ID!
+      text: String
+      comments: Post!
+    }
+
+    type Query{
+      getPosts(input: [PostFilterInput]): [Post!]
+    }
+- name: getPostswithLike
+  schema: |
+    input PostFilterInput{
+      id: ID!
       text: String!
+      likes: Int
+    }
+
+    type Post {
+      id: ID!
+      text: String
+      comments: Post!
     }
 
     type Query{
@@ -662,3 +680,99 @@
      id: ID!
      name: String!
     }
+- name: invalidargument
+  schema: |
+     type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      type Query{
+        country(no_code: ID!): Country!
+        }
+- name: invalidtype
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      type Query{
+        country(code: Int!): Country!
+      }
+- name: invalidinputbatchedfield
+  schema: |
+    type Post {
+      id: ID!
+      text: String,
+      comments: Post!
+    }
+    type Query{
+      getPosts(input: [Int]): [Post!]
+    }
+- name: invalidtypebatchfield
+  schema: |
+    type Post {
+        id: ID!
+        text: String,
+        comments: Post!
+      }
+      type Query{
+        getPosts(input: PostFilterInput): [Post!]
+      }

@@ -248,7 +248,6 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 	if err != nil {
 		return err
 	}
-
 	err = matchRemoteTypes(expandedTypes, metadata.schema)
 	if err != nil {
 		return err
@@ -488,7 +487,9 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 	for _, inputType := range param.introspection.Data.Schema.Types {
 		if inputType.Name == arg {
 			typeFound = true
-			param.typesToFields[inputType.Name] = inputType.Fields
+			param.typesToFields[inputType.Name] = make([]*gqlField, 0, len(inputType.Fields))
+			param.typesToFields[inputType.Name] = append(param.typesToFields[inputType.Name],
+				inputType.Fields...)
 			// Expand the non scalar types.
 			for _, field := range inputType.Fields {
 				_, ok := graphqlScalarType[field.Type.Name]
@@ -560,8 +561,13 @@ func getRemoteTypeFieldsMetadata(remoteTyp *types) *remoteArgMetadata {
 		typMap:       make(map[string]*gqlType),
 		requiredArgs: make([]string, 0),
 	}
-
 	for _, field := range remoteTyp.Fields {
+		md.typMap[field.Name] = field.Type
+		if field.Type.Kind == "NON_NULL" {
+			md.requiredArgs = append(md.requiredArgs, field.Name)
+		}
+	}
+	for _, field := range remoteTyp.InputFields {
 		md.typMap[field.Name] = field.Type
 		if field.Type.Kind == "NON_NULL" {
 			md.requiredArgs = append(md.requiredArgs, field.Name)
