@@ -565,7 +565,7 @@ func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,
 	vars map[string]interface{},
-	ex *executor) *schema.Response {
+	ex DgraphExecutor) *schema.Response {
 	resolver := New(
 		gqlSchema,
 		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{
