@@ -60,8 +60,9 @@ type mutationFragment struct {
 	queries    []*gql.GraphQuery
 	conditions []string
 	fragment   interface{}
-	deletes    []interface{} // TODO: functionality for next PR
+	deletes    []interface{}
 	check      resultChecker
+	newNodes   map[string]schema.Type
 	err        error
 }
 
@@ -250,9 +251,15 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 			return nil, nil
 		})
 
+	newNodes := make(map[string]schema.Type)
+	for _, f := range mrw.frags {
+		copyTypeMap(f[0].newNodes, newNodes)
+	}
+
 	upsert := &UpsertMutation{
 		Query:     queryFromFragments(mrw.frags[0]),
 		Mutations: mutations,
+		NewNodes:  newNodes,
 	}
 
 	return upsert, schema.GQLWrapf(err, "failed to rewrite mutation payload")
@@ -299,9 +306,15 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutat
 		queries = nil
 	}
 
+	newNodes := make(map[string]schema.Type)
+	for _, f := range mrw.frags {
+		copyTypeMap(f[0].newNodes, newNodes)
+	}
+
 	upsert := &UpsertMutation{
 		Query:     queries,
 		Mutations: mutationsAll,
+		NewNodes:  newNodes,
 	}
 
 	return upsert, errs
@@ -394,13 +407,24 @@ func (urw *UpdateRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := RewriteUpsertQueryFromMutation(m, nil)
+	varGen := NewVariableGenerator()
+
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	authRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        varGen,
+		selector:      updateAuthSelector,
+	}
+
+	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
 	srcUID := MutationQueryVarUID
 
 	xidMd := newXidMetadata()
 	var errSet, errDel error
 	var mutSet, mutDel []*dgoapi.Mutation
-	varGen := NewVariableGenerator()
 
 	if setArg != nil {
 		urw.setFrags =
@@ -450,6 +474,7 @@ func (urw *UpdateRewriter) Rewrite(
 	upsert := &UpsertMutation{
 		Query:     &gql.GraphQuery{Children: queries},
 		Mutations: append(mutSet, mutDel...),
+		NewNodes:  urw.setFrags[0].newNodes,
 	}
 
 	return upsert,
@@ -686,6 +711,24 @@ func asUID(val interface{}) (uint64, error) {
 	return uid, nil
 }
 
+func addAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.Add
+}
+
+func updateAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.Update
+}
+
 func deleteAuthSelector(t schema.Type) *schema.RuleNode {
 	auth := t.AuthRules()
 	if auth == nil || auth.Rules == nil {
@@ -896,6 +939,7 @@ func rewriteObject(
 
 	frag := newFragment(newObj)
 	results := []*mutationFragment{frag}
+	frag.newNodes[variable] = typ
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
@@ -1212,6 +1256,7 @@ func addDelete(frag *mutationFragment,
 				delFldName: []interface{}{map[string]interface{}{"uid": del}}})
 	}
 
+	// FIXME: additional deletes auth checking here
 }
 
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
@@ -1278,6 +1323,7 @@ func newFragment(f interface{}) *mutationFragment {
 	return &mutationFragment{
 		fragment: f,
 		check:    func(m map[string]interface{}) error { return nil },
+		newNodes: make(map[string]schema.Type),
 	}
 }
 
@@ -1408,8 +1454,8 @@ func squashFragments(
 		}
 	}
 
-	// queries don't need copying, they just need to be all collected at the end, so
-	// accumulate them all into one of the result fragments
+	// queries and node types don't need copying, they just need to be all collected
+	// at the end, so accumulate them all into one of the result fragments
 	var queries []*gql.GraphQuery
 	for _, l := range left {
 		queries = append(queries, l.queries...)
@@ -1419,5 +1465,20 @@ func squashFragments(
 	}
 	result[0].queries = queries
 
+	newNodes := make(map[string]schema.Type)
+	for _, l := range left {
+		copyTypeMap(l.newNodes, newNodes)
+	}
+	for _, r := range right {
+		copyTypeMap(r.newNodes, newNodes)
+	}
+	result[0].newNodes = newNodes
+
 	return result
+}
+
+func copyTypeMap(from, to map[string]schema.Type) {
+	for name, typ := range from {
+		to[name] = typ
+	}
 }
