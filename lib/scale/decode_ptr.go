@@ -65,9 +65,11 @@ func (sd *Decoder) DecodeCustom(t interface{}) (interface{}, error) {
 		meth := reflect.ValueOf(t).MethodByName("Decode")
 		inVal := []reflect.Value{reflect.ValueOf(sd.Reader)}
 		res := meth.Call(inVal)
-		err := res[1].Interface()
-		if err != nil {
-			return nil, err.(error)
+		if len(res) > 1 {
+			err := res[1].Interface()
+			if err != nil {
+				return nil, err.(error)
+			}
 		}
 		t = res[0].Interface()
 		return t, nil

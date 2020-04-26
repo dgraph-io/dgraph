@@ -17,14 +17,11 @@
 package runtime
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/ChainSafe/gossamer/lib/keystore"
-	"github.com/ChainSafe/gossamer/lib/scale"
-
 	log "github.com/ChainSafe/log15"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
@@ -167,16 +164,4 @@ func (r *Runtime) malloc(size uint32) (uint32, error) {
 
 func (r *Runtime) free(ptr uint32) error {
 	return r.allocator.Deallocate(ptr)
-}
-
-func decodeToInterface(in []byte, t interface{}) (interface{}, error) {
-	buf := &bytes.Buffer{}
-	sd := scale.Decoder{Reader: buf}
-	_, err := buf.Write(in)
-	if err != nil {
-		return nil, err
-	}
-
-	output, err := sd.Decode(t)
-	return output, err
 }

@@ -17,9 +17,11 @@
 package modules
 
 import (
+	"encoding/hex"
 	"net/http"
 
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/runtime"
 )
 
 // StateCallRequest holds json fields
@@ -104,19 +106,28 @@ type KeyValueOption struct {
 type StorageKey []byte
 
 // StateRuntimeVersionResponse is the runtime version response
-type StateRuntimeVersionResponse string
+type StateRuntimeVersionResponse struct {
+	SpecName         string        `json:"specName"`
+	ImplName         string        `json:"implName"`
+	AuthoringVersion int32         `json:"authoringVersion"`
+	SpecVersion      int32         `json:"specVersion"`
+	ImplVersion      int32         `json:"implVersion"`
+	Apis             []interface{} `json:"apis"`
+}
 
 // StateModule is an RPC module providing access to storage API points.
 type StateModule struct {
 	networkAPI NetworkAPI
 	storageAPI StorageAPI
+	coreAPI    CoreAPI
 }
 
 // NewStateModule creates a new State module.
-func NewStateModule(net NetworkAPI, storage StorageAPI) *StateModule {
+func NewStateModule(net NetworkAPI, storage StorageAPI, core CoreAPI) *StateModule {
 	return &StateModule{
 		networkAPI: net,
 		storageAPI: storage,
+		coreAPI:    core,
 	}
 }
 
@@ -150,8 +161,19 @@ func (sm *StateModule) GetKeys(r *http.Request, req *StateStorageKeyRequest, res
 func (sm *StateModule) GetMetadata(r *http.Request, req *StateRuntimeMetadataQuery, res *StateMetadataResponse) {
 }
 
-// GetRuntimeVersion isn't implemented properly yet.
-func (sm *StateModule) GetRuntimeVersion(r *http.Request, req *StateBlockHashQuery, res *StateRuntimeVersionResponse) {
+// GetRuntimeVersion Get the runtime version at a given block.
+//  If no block hash is provided, the latest version gets returned.
+// TODO currently only returns latest version, add functionality to lookup runtime by block hash
+func (sm *StateModule) GetRuntimeVersion(r *http.Request, req *StateBlockHashQuery, res *StateRuntimeVersionResponse) error {
+	rtVersion, err := sm.coreAPI.GetRuntimeVersion()
+	res.SpecName = string(rtVersion.RuntimeVersion.Spec_name)
+	res.ImplName = string(rtVersion.RuntimeVersion.Impl_name)
+	res.AuthoringVersion = rtVersion.RuntimeVersion.Authoring_version
+	res.SpecVersion = rtVersion.RuntimeVersion.Spec_version
+	res.ImplVersion = rtVersion.RuntimeVersion.Impl_version
+	res.Apis = convertAPIs(rtVersion.API)
+
+	return err
 }
 
 // GetStorage isn't implemented properly yet.
@@ -171,9 +193,20 @@ func (sm *StateModule) QueryStorage(r *http.Request, req *StateStorageQueryRange
 }
 
 // SubscribeRuntimeVersion isn't implemented properly yet.
-func (sm *StateModule) SubscribeRuntimeVersion(r *http.Request, req *StateStorageQueryRangeRequest, res *StateRuntimeVersionResponse) {
+// TODO make this actually a subscription that pushes data
+func (sm *StateModule) SubscribeRuntimeVersion(r *http.Request, req *StateStorageQueryRangeRequest, res *StateRuntimeVersionResponse) error {
+	return sm.GetRuntimeVersion(r, nil, res)
 }
 
 // SubscribeStorage isn't implemented properly yet.
 func (sm *StateModule) SubscribeStorage(r *http.Request, req *StateStorageQueryRangeRequest, res *StorageChangeSetResponse) {
+}
+
+func convertAPIs(in []*runtime.API_Item) []interface{} {
+	ret := make([]interface{}, 0)
+	for _, item := range in {
+		encStr := hex.EncodeToString(item.Name)
+		ret = append(ret, []interface{}{"0x" + encStr, item.Ver})
+	}
+	return ret
 }

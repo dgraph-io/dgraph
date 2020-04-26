@@ -496,6 +496,26 @@ func (s *Service) InsertKey(kp crypto.Keypair) {
 	s.keys.Insert(kp)
 }
 
+// GetRuntimeVersion gets the current RuntimeVersion
+func (s *Service) GetRuntimeVersion() (*runtime.VersionAPI, error) {
+	//TODO ed, change this so that it can lookup runtime by block hash
+	version := &runtime.VersionAPI{
+		RuntimeVersion: &runtime.Version{},
+		API:            nil,
+	}
+
+	ret, err := s.rt.Exec(runtime.CoreVersion, []byte{})
+	if err != nil {
+		return nil, err
+	}
+	err = version.Decode(ret)
+	if err != nil {
+		return nil, err
+	}
+
+	return version, nil
+}
+
 //IsBabeAuthority returns true if node is BABE authority
 func (s *Service) IsBabeAuthority() bool {
 	return s.isBabeAuthority

@@ -202,7 +202,7 @@ func TestAuthorModule_InsertKey_UnknownKeyType(t *testing.T) {
 
 }
 
-func setupAuthModule(t *testing.T, txq *state.TransactionQueue) *AuthorModule {
+func newCoreService(t *testing.T) *core.Service {
 	// setup service
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
@@ -226,6 +226,10 @@ func setupAuthModule(t *testing.T, txq *state.TransactionQueue) *AuthorModule {
 		IsBabeAuthority:  true,
 	}
 
-	cs := core.NewTestService(t, cfg)
+	return core.NewTestService(t, cfg)
+}
+
+func setupAuthModule(t *testing.T, txq *state.TransactionQueue) *AuthorModule {
+	cs := newCoreService(t)
 	return NewAuthorModule(cs, txq)
 }
