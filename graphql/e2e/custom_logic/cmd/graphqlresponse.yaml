@@ -1,0 +1,588 @@
+- name: "validinpputfield"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        countries(filter: CountryInput!): [Country!]!
+      }
+  request: |
+    query{countries(filter: $yo){
+    name
+    code
+    }}
+  response: |
+    {
+      "data":{
+        "countries":[
+          {
+            "name":"Burundi",
+            "code":"BI"
+          }
+        ]
+      }
+    }
+  variables: |
+    {"yo":{"code":"BI","name":"sd"}}
+- name: "invalidfield"
+  schema: |
+      type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: Int!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        countries(filter: CountryInput!): [Country!]!
+      }
+- name: "nestedinvalid"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: Int!
+      }
+
+      type Query{
+        countries(filter: CountryInput!): [Country!]!
+      }
+- name: "validcountry"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        country(code: ID!): Country!
+      }
+  request: |
+    query { country(code: $id) {
+    code
+    name
+    }}
+  response: |
+    {
+      "data":{
+        "country": {
+            "name":"Burundi",
+            "code":"BI"
+          }
+      }
+    }
+  variables: |
+    {"id":"BI"}
+- name: "validcountrywitherror"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        country(code: ID!): Country!
+      }
+  request: |
+    query { country(code: $id) {
+    code
+    name
+    }}
+  response: |
+    {
+      "data":{
+        "country":{
+          "name":"Burundi",
+          "code":"BI"
+        }
+      },
+      "errors":[
+        {
+          "message":"dummy error"
+        }
+      ]
+    }
+  variables: |
+    {"id":"BI"}
+- name: "validcountries"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        country(code: ID!): [Country]
+      }
+  request: |
+    query { country(code: $id) {
+    code
+    name
+    }}
+  response: |
+    {
+      "data":{
+        "country":[{
+          "name":"Burundi",
+          "code":"BI"
+        }]
+      }
+    }
+  variables: |
+    {"id":"BI"}
+- name: "graphqlerr"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Query{
+        country(code: ID!): [Country]
+      }
+  request: |
+    query { country(code: $id) {
+    code
+    name
+    }}
+  response: |
+    {
+      "errors":[
+        {
+          "message":"dummy error"
+        }
+      ]
+    }
+  variables: |
+    {"id":"BI"}
+- name: "setcountry"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Mutation{
+        setCountry(country: CountryInput!): Country!
+      }
+
+      type Query{
+        country(code: ID!): [Country]
+      }
+  request: |
+    mutation { setCountry(country: $input) {
+    code
+    name
+    states{
+    code
+    name
+    }
+    }}
+  response: |
+    {
+      "data":{
+        "setCountry":{
+          "code":"IN",
+          "name":"India",
+          "states":[
+            {
+              "code":"RJ",
+              "name":"Rajasthan"
+            },
+            {
+              "code":"KA",
+              "name":"Karnataka"
+            }
+          ]
+        }
+      }
+    }
+  variables: |
+    {"input":{"code":"IN","name":"India","states":[{"code":"RJ","name":"Rajasthan"},{"code":"KA","name":"Karnataka"}]}}
+- name: "updatecountries"
+  schema: |
+    type Continent @remote {
+      code: String
+      name: String
+      countries: [Country]
+      }
+
+      type Country @remote {
+      code: String
+      name: String
+      native: String
+      std: Int
+      phone: String
+      continent: Continent
+      currency: String
+      languages: [Language]
+      emoji: String
+      emojiU: String
+      states: [State]
+      }
+
+      type Language @remote {
+      code: String
+      name: String
+      native: String
+      rtl: Int
+      }
+
+      type State @remote {
+      code: String
+      name: String
+      country: Country
+      }
+
+      input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+      }
+
+      input StateInput {
+      code: String!
+      name: String!
+      }
+
+      type Mutation{
+        updateCountries(name: String, std: Int): [Country!]!
+      }
+
+      type Query{
+        country(code: ID!): [Country]
+      }
+  request: |
+    mutation { updateCountries(name: $name, std: $std) {
+    name
+    std
+    }}
+  response: |
+    {
+      "data":{
+        "updateCountries":[
+          {
+            "name":"India",
+            "std":91
+          },
+          {
+            "name":"Australia",
+            "std":61
+          }
+        ]
+      }
+    }
+  variables: |
+    {"name":"Australia","std":91}
+ 

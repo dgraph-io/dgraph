@@ -24,9 +24,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
 )
+
+// returnType is const key to represent graphql return. This key can't be used by user because,
+// TypeKey uses restricted delimiter to form the key.
+var returnType = string(x.TypeKey("graphql-return"))
 
 // introspectRemoteSchema introspectes remote schema
 func introspectRemoteSchema(url string) (*IntrospectedSchema, error) {
@@ -158,6 +163,8 @@ type remoteGraphqlMetadata struct {
 	graphqlOpDef *ast.OperationDefinition
 	// url is the url of remote graphql endpoint
 	url string
+	// schema is the parsed schema given by the user
+	schema *ast.Schema
 }
 
 // validates the graphql given in @custom->http->graphql by introspecting remote schema.
@@ -246,7 +253,118 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		}
 	}
 
+	// Add the return type to the remoteQryArgDefs to further expand the nested
+	// types to validate against the local schema.
+	remoteQryArgDefs[returnType] = Args{Type: introspectedRemoteQuery.Type}
+	expandedRemoteTypes, err := expandArgs(remoteQryArgDefs, remoteIntrospection)
+	if err != nil {
+		return err
+	}
+	// Type check the expanded local type with the local schema.
+	for typeName, fields := range expandedRemoteTypes {
+		localType, ok := metadata.schema.Types[typeName]
+		if !ok {
+			return errors.Errorf(
+				"Unable to find remote type %s in the local schema",
+				typeName,
+			)
+		}
+		for _, field := range fields {
+			localField := localType.Fields.ForName(field.Name)
+			if localField == nil {
+				return errors.Errorf(
+					"%s field for the remote type %s is not present in the local type %s",
+					field.Name, localType.Name, localType.Name,
+				)
+			}
+			if localField.Type.String() != field.Type.String() {
+				return errors.Errorf(
+					"expected type for the field %s is %s but got %s in type %s",
+					field.Name,
+					field.Type.String(),
+					localField.Type.String(),
+					typeName,
+				)
+			}
+		}
+	}
+
 	return nil
+}
+
+type expandArgParams struct {
+	expandedTypes      map[string]struct{}
+	introspectedSchema *IntrospectedSchema
+	typesToFields      map[string][]GqlField
+}
+
+func expandArgRecursively(arg string, param *expandArgParams) error {
+	_, alreadyExpanded := param.expandedTypes[arg]
+	if alreadyExpanded {
+		return nil
+	}
+	// We're marking this to avoid recursive expansion.
+	param.expandedTypes[arg] = struct{}{}
+	typeFound := false
+	for _, inputType := range param.introspectedSchema.Data.Schema.Types {
+		if inputType.Name == arg {
+			typeFound = true
+			param.typesToFields[inputType.Name] = inputType.Fields
+			// Expand the non scalar types.
+			for _, field := range inputType.Fields {
+				_, ok := graphqlScalarType[field.Type.Name]
+				if !ok {
+					// expand this field.
+					err := expandArgRecursively(field.Type.NamedType(), param)
+					if err != nil {
+						return err
+					}
+				}
+			}
+			// expand input fields as well.
+			param.typesToFields[inputType.Name] = append(param.typesToFields[inputType.Name],
+				inputType.InputFields...)
+			for _, field := range inputType.InputFields {
+				_, ok := graphqlScalarType[field.Type.NamedType()]
+				if !ok {
+					// expand this field.
+					err := expandArgRecursively(field.Type.NamedType(), param)
+					if err != nil {
+						return err
+					}
+				}
+			}
+		}
+	}
+	if !typeFound {
+		return errors.Errorf("Unable to find the type %s on the remote schema", arg)
+	}
+	return nil
+}
+
+// expandArgs will expand the nested type into flat structure. For eg. Country have a filed with
+// field of states of type State is expanded as Country and State. Scalar fields won't be expanded.
+// It also expands deep nested types.
+func expandArgs(argToVal map[string]Args,
+	introspectedSchema *IntrospectedSchema) (map[string][]GqlField, error) {
+
+	param := &expandArgParams{
+		expandedTypes:      make(map[string]struct{}, 0),
+		typesToFields:      make(map[string][]GqlField),
+		introspectedSchema: introspectedSchema,
+	}
+	// Expand the types that are required to do a query.
+	for _, typeTobeExpanded := range argToVal {
+		_, ok := graphqlScalarType[typeTobeExpanded.Type.NamedType()]
+		if ok {
+			continue
+		}
+		err := expandArgRecursively(typeTobeExpanded.Type.NamedType(), param)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return param.typesToFields, nil
 }
 
 // getGivenQueryArgsAsMap returns following maps:
@@ -357,4 +475,11 @@ func (t *GqlType) String() string {
 	default:
 		return t.Name
 	}
+}
+
+func (t *GqlType) NamedType() string {
+	if t.Name != "" {
+		return t.Name
+	}
+	return t.OfType.NamedType()
 }

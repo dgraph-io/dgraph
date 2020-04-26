@@ -1601,3 +1601,56 @@ func TestCustomGraphqlMutation2(t *testing.T) {
     }`
 	require.JSONEq(t, expected, string(result.Data))
 }
+
+func TestForValidInputArgument(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+    }
+	 `
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+
+	params := &common.GraphQLParams{
+		Query: `
+		query {
+			myCustom(yo:{code:"BI",name:"sd"}){
+		 	  name
+		  	  code
+		 	}
+		}`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	expected := `
+	{
+		"myCustom": [
+		  {
+			"name": "Burundi",
+			"code": "BI"
+		  }
+		]
+	  }`
+	require.JSONEq(t, expected, string(result.Data))
+}
+
+func TestForInvalidInputObject(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+    }
+	 `
+	res := updateSchema(t, schema)
+	require.Contains(t, res.Errors.Error(), "expected type for the field code is Int! but got String! in type CountryInput")
+}
+
+func TestForNestedInvalidInputObject(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/nestedinvalid", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+    }
+	 `
+	res := updateSchema(t, schema)
+	require.Contains(t, res.Errors.Error(), "expected type for the field name is Int! but got String! in type StateInput")
+}

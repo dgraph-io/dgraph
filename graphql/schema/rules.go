@@ -1257,6 +1257,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			parentField:  field,
 			graphqlOpDef: opZero,
 			url:          u.Raw,
+			schema:       sch,
 		}); err != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
 				"Type %s; Field %s: @custom directive: graphql; %s",

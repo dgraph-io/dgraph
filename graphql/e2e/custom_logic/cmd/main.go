@@ -22,11 +22,20 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os/exec"
 	"reflect"
 	"sort"
 	"strconv"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
+
+type GraphqlRequest struct {
+	Query         string          `json:"query"`
+	OperationName string          `json:"operationName"`
+	Variables     json.RawMessage `json:"variables"`
+}
 
 type expectedRequest struct {
 	method    string
@@ -42,6 +51,35 @@ type expectedGraphqlRequest struct {
 	urlSuffix string
 	// Send body as empty string to make sure that only introspection queries are expected
 	body string
+}
+
+type graphqlResponseObject struct {
+	Response  string
+	Schema    string
+	Name      string
+	Request   string
+	Variables string
+}
+
+var graphqlResponses map[string]graphqlResponseObject
+
+func init() {
+	b, err := ioutil.ReadFile("graphqlresponse.yaml")
+	if err != nil {
+		panic(err)
+	}
+	resps := []graphqlResponseObject{}
+
+	err = yaml.Unmarshal(b, &resps)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	graphqlResponses = make(map[string]graphqlResponseObject)
+
+	for _, resp := range resps {
+		graphqlResponses[resp.Name] = resp
+	}
 }
 
 func check2(v interface{}, err error) {
@@ -1125,6 +1163,43 @@ func schoolNameHandler(w http.ResponseWriter, r *http.Request) {
 	nameHandler(w, r, &inputBody)
 }
 
+func commonGraphqlHandler(handlerName string) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// return introspection json if it's introspection request.
+		if strings.Contains(string(body), "__schema") {
+			cmd := exec.Command("node", "index.js", graphqlResponses[handlerName].Schema)
+			stdout, err := cmd.StdoutPipe()
+			if err != nil {
+				log.Fatal(err)
+			}
+			if err := cmd.Start(); err != nil {
+				log.Fatal(err)
+			}
+			b, err := ioutil.ReadAll(stdout)
+			if err != nil {
+				log.Fatal(err)
+			}
+			check2(fmt.Fprint(w, string(b)))
+			return
+		}
+		// Parse the given graphql request.
+		req := &GraphqlRequest{}
+		err = json.Unmarshal(body, req)
+		if err != nil {
+			log.Fatal(err)
+		}
+		if req.Query == strings.TrimSpace(graphqlResponses[handlerName].Request) && string(req.Variables) == strings.TrimSpace(graphqlResponses[handlerName].Variables) {
+			fmt.Fprintf(w, graphqlResponses[handlerName].Response)
+			return
+		}
+	}
+}
+
 func main() {
 
 	// for queries
@@ -1136,12 +1211,15 @@ func main() {
 	http.HandleFunc("/noquery", emptyQuerySchema)
 	http.HandleFunc("/invalidargument", invalidArgument)
 	http.HandleFunc("/invalidtype", invalidType)
-	http.HandleFunc("/validcountry", validCountryResponse)
-	http.HandleFunc("/validcountrywitherror", validCountryWithErrorResponse)
-	http.HandleFunc("/graphqlerr", graphqlErrResponse)
-	http.HandleFunc("/validcountries", validCountries)
-	http.HandleFunc("/setCountry", setCountry)
-	http.HandleFunc("/updateCountries", updateCountries)
+	http.HandleFunc("/validcountry", commonGraphqlHandler("validcountry"))
+	http.HandleFunc("/validcountrywitherror", commonGraphqlHandler("validcountrywitherror"))
+	http.HandleFunc("/graphqlerr", commonGraphqlHandler("graphqlerr"))
+	http.HandleFunc("/validcountries", commonGraphqlHandler("validcountries"))
+	http.HandleFunc("/setCountry", commonGraphqlHandler("setcountry"))
+	http.HandleFunc("/updateCountries", commonGraphqlHandler("updatecountries"))
+	http.HandleFunc("/validinpputfield", commonGraphqlHandler("validinpputfield"))
+	http.HandleFunc("/invalidfield", commonGraphqlHandler("invalidfield"))
+	http.HandleFunc("/nestedinvalid", commonGraphqlHandler("nestedinvalid"))
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
@@ -1161,7 +1239,6 @@ func main() {
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
 	http.HandleFunc("/schoolName", schoolNameHandler)
-
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
 }
