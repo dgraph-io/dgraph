@@ -22,15 +22,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 )
 
-// List all Enterprise Features here.
-const (
-	acl              = "acl"
-	backupRestore    = "backup_restore"
-	encAtRest        = "encryption_at_rest"
-	encBackupRestore = "encrypted_backup_restore"
-	encExport        = "encrypted_export"
-)
-
 // GetEEFeaturesList returns a list of Enterprise Features that are available.
 func GetEEFeaturesList() []string {
 	if !worker.EnterpriseEnabled() {
@@ -38,12 +29,12 @@ func GetEEFeaturesList() []string {
 	}
 	var ee []string
 	if len(worker.Config.HmacSecret) > 0 {
-		ee = append(ee, acl)
+		ee = append(ee, "acl")
 	}
 	if worker.Config.BadgerKeyFile != "" {
-		ee = append(ee, encAtRest, encBackupRestore, encExport)
+		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
 	} else {
-		ee = append(ee, backupRestore)
+		ee = append(ee, "backup_restore")
 	}
 	return ee
 }
