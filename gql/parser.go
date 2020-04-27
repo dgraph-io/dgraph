@@ -1669,7 +1669,6 @@ L:
 				attrItemsAgo++
 			}
 			var val string
-
 			switch itemInFunc.Typ {
 			case itemRightRound:
 				break L
