@@ -923,8 +923,7 @@
       }
     }
 
--
-  name: "Deep Mutation Duplicate XIDs with same object Test"
+- name: "Deep Mutation Duplicate XIDs with same object Test"
   gqlmutation: |
     mutation updateStudent($input: UpdateStudentInput!) {
       updateStudent(input: $input) {
@@ -1099,8 +1098,7 @@
       failed to rewrite mutation payload because duplicate XID found: T1
       failed to rewrite mutation payload because duplicate XID found: T1
 
--
-  name: "Duplicate XIDs in single mutation for Interface"
+- name: "Duplicate XIDs in single mutation for Interface"
   gqlmutation: |
     mutation updateStudent($input: UpdateStudentInput!) {
       updateStudent(input: $input) {

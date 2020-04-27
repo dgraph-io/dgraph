@@ -23,6 +23,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
+
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -218,5 +220,48 @@ func TestMutationQueryRewriting(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+func TestCustomHTTPMutation(t *testing.T) {
+	b, err := ioutil.ReadFile("custom_mutation_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []HTTPRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			var vars map[string]interface{}
+			if tcase.Variables != "" {
+				err := json.Unmarshal([]byte(tcase.Variables), &vars)
+				require.NoError(t, err)
+			}
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query:     tcase.GQLQuery,
+					Variables: vars,
+					Header: map[string][]string{
+						"bogus":       []string{"header"},
+						"X-App-Token": []string{"val"},
+						"Auth0-Token": []string{"tok"},
+					},
+				})
+			require.NoError(t, err)
+			gqlMutation := test.GetMutation(t, op)
+
+			client := newClient(t, tcase)
+			resolver := NewHTTPMutationResolver(client, StdQueryCompletion())
+			resolved, isResolved := resolver.Resolve(context.Background(), gqlMutation)
+			require.True(t, isResolved)
+
+			b, err := json.Marshal(resolved.Data)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tcase.ResolvedResponse, string(b))
+		})
 	}
 }
