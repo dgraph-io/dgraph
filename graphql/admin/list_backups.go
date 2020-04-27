@@ -11,8 +11,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-type listBackupsInput struct {
-	location string
+type lsBackupInput struct {
+	Location     string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Anonymous    bool
+	ForceFull    bool
 }
 
 type group struct {
@@ -31,12 +36,18 @@ type manifest struct {
 }
 
 func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
-	location, ok := q.ArgValue("location").(string)
-	if !ok {
-		return emptyResult(q, errors.Errorf("%s: %s", x.Error, "cannot parse location argument"))
+	input, err := getLsBackupInput(q)
+	if err != nil {
+		return emptyResult(q, err)
 	}
 
-	manifests, err := worker.ProcessListBackups(ctx, location)
+	creds := &worker.Credentials{
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	}
+	manifests, err := worker.ProcessListBackups(ctx, input.Location, creds)
 	if err != nil {
 		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
@@ -60,6 +71,18 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 		Data:  map[string]interface{}{q.Name(): results},
 		Field: q,
 	}
+}
+
+func getLsBackupInput(q schema.Query) (*lsBackupInput, error) {
+	inputArg := q.ArgValue(schema.InputArgName)
+	inputByts, err := json.Marshal(inputArg)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "couldn't get input argument")
+	}
+
+	var input lsBackupInput
+	err = json.Unmarshal(inputByts, &input)
+	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }
 
 func convertManifests(manifests []*worker.Manifest) []*manifest {

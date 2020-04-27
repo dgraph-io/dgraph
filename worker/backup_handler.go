@@ -1,5 +1,3 @@
-// +build !oss
-
 /*
  * Copyright 2018 Dgraph Labs, Inc. and Contributors
  *
@@ -216,7 +214,7 @@ func VerifyBackup(location, backupId string, creds *Credentials, currentGroups [
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string) (map[string]*Manifest, error) {
+func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err

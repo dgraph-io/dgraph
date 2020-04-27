@@ -164,7 +164,7 @@ func TestInvalidBackupId(t *testing.T) {
 
 func TestListBackups(t *testing.T) {
 	query := `query backup() {
-		listBackups(location: "/data/backup") {
+		listBackups(input: {location: "/data/backup"}) {
 			backupId
 			backupNum
 			encrypted

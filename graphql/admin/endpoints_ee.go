@@ -100,11 +100,32 @@ const adminTypes = `
 		response: Response
 	}
 
-	type ListBackupsInput {
+	input ListBackupsInput {
 		"""
 		Destination for the backup: e.g. Minio or S3 bucket.
 		"""
 		location: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""
+		sessionToken: String
+
+		"""
+		Whether the destination doesn't require credentials (e.g. S3 public bucket).
+		"""
+		anonymous: Boolean
+
 	}
 
 	type BackupGroup {
@@ -410,4 +431,4 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(location: String!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]`

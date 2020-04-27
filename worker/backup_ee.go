@@ -191,8 +191,10 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	return bp.CompleteBackup(ctx, &m)
 }
 
-func ProcessListBackups(ctx context.Context, location string) ([]*Manifest, error) {
-	manifests, err := ListBackupManifests(location)
+func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+	[]*Manifest, error) {
+
+	manifests, err := ListBackupManifests(location, creds)
 	if err != nil {
 		return nil, errors.Wrapf(err, "cannot read manfiests at location %s", location)
 	}
