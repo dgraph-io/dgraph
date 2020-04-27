@@ -17,6 +17,8 @@
 package schema
 
 import (
+	"net/http"
+
 	"github.com/pkg/errors"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -30,6 +32,8 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+
+	Header http.Header
 }
 
 // Operation finds the operation in req, if it is a valid request for GraphQL
@@ -70,6 +74,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	operation := &operation{op: op,
 		vars:     vars,
 		query:    req.Query,
+		header:   req.Header,
 		doc:      doc,
 		inSchema: s,
 	}

@@ -378,7 +378,7 @@ func introspect(t *testing.T, expected string) {
 	}
 
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
@@ -399,7 +399,7 @@ func health(t *testing.T) {
       }`,
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		Health []pb.HealthInfo
@@ -489,7 +489,7 @@ func adminState(t *testing.T) {
 		}`,
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		State struct {
