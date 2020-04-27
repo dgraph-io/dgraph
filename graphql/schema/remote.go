@@ -484,14 +484,14 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 	// We're marking this to avoid recursive expansion.
 	param.expandedTypes[arg] = struct{}{}
 	typeFound := false
-	for _, inputType := range param.introspection.Data.Schema.Types {
-		if inputType.Name == arg {
+	for _, typ := range param.introspection.Data.Schema.Types {
+		if typ.Name == arg {
 			typeFound = true
-			param.typesToFields[inputType.Name] = make([]*gqlField, 0, len(inputType.Fields))
-			param.typesToFields[inputType.Name] = append(param.typesToFields[inputType.Name],
-				inputType.Fields...)
+			param.typesToFields[typ.Name] = make([]*gqlField, 0, len(typ.Fields))
+			param.typesToFields[typ.Name] = append(param.typesToFields[typ.Name],
+				typ.Fields...)
 			// Expand the non scalar types.
-			for _, field := range inputType.Fields {
+			for _, field := range typ.Fields {
 				_, ok := graphqlScalarType[field.Type.Name]
 				if !ok {
 					// expand this field.
@@ -502,9 +502,9 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 				}
 			}
 			// expand input fields as well.
-			param.typesToFields[inputType.Name] = append(param.typesToFields[inputType.Name],
-				inputType.InputFields...)
-			for _, field := range inputType.InputFields {
+			param.typesToFields[typ.Name] = append(param.typesToFields[typ.Name],
+				typ.InputFields...)
+			for _, field := range typ.InputFields {
 				_, ok := graphqlScalarType[field.Type.NamedType()]
 				if !ok {
 					// expand this field.
@@ -523,8 +523,8 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 
 }
 
-// expandArg will expand the nested type into flat structure. For eg. Country have a filed with
-// field of states of type State is expanded as Country and State. Scalar fields won't be expanded.
+// expandArg will expand the nested type into flat structure. For eg. Country having a filed called
+// states of type State is expanded as Country and State. Scalar fields won't be expanded.
 // It also expands deep nested types.
 func expandArg(typeToBeExpanded *gqlType,
 	introspectedSchema *introspectedSchema) (map[string][]*gqlField, error) {
@@ -561,13 +561,11 @@ func getRemoteTypeFieldsMetadata(remoteTyp *types) *remoteArgMetadata {
 		typMap:       make(map[string]*gqlType),
 		requiredArgs: make([]string, 0),
 	}
-	for _, field := range remoteTyp.Fields {
-		md.typMap[field.Name] = field.Type
-		if field.Type.Kind == "NON_NULL" {
-			md.requiredArgs = append(md.requiredArgs, field.Name)
-		}
-	}
-	for _, field := range remoteTyp.InputFields {
+	fields := make([]*gqlField, 0, len(remoteTyp.Fields)+len(remoteTyp.InputFields))
+	fields = append(fields, remoteTyp.Fields...)
+	fields = append(fields, remoteTyp.InputFields...)
+
+	for _, field := range fields {
 		md.typMap[field.Name] = field.Type
 		if field.Type.Kind == "NON_NULL" {
 			md.requiredArgs = append(md.requiredArgs, field.Name)
