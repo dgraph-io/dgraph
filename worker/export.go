@@ -484,6 +484,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		// considered data keys.
 		switch {
 		case pk.IsSchema():
+			// Do not add dropped predicates to schema.
+			if item.IsDeletedOrExpired() {
+				return nil, nil
+			}
 			var update pb.SchemaUpdate
 			err := item.Value(func(val []byte) error {
 				return update.Unmarshal(val)
@@ -567,6 +571,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				// prepended
 				hasDataBefore = true
 			}
+
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
