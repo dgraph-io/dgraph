@@ -395,6 +395,7 @@ func health(t *testing.T) {
           version
           uptime
           lastEcho
+          ee_features
         }
       }`,
 	}
