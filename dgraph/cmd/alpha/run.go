@@ -108,6 +108,8 @@ they form a Raft group and provide synchronous replication.
 	flag.String("badger.vlog", "mmap",
 		"[mmap, disk] Specifies how Badger Value log is stored."+
 			" mmap consumes more RAM, but provides better performance.")
+	flag.Int("badger.compression_level", 3,
+		"The compression level for Badger. A higher value uses more resources.")
 	flag.String("encryption_key_file", "",
 		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
@@ -535,9 +537,10 @@ func run() {
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
-		BadgerTables:  Alpha.Conf.GetString("badger.tables"),
-		BadgerVlog:    Alpha.Conf.GetString("badger.vlog"),
-		BadgerKeyFile: Alpha.Conf.GetString("encryption_key_file"),
+		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
+		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
+		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
+		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
 		WALDir:     Alpha.Conf.GetString("wal"),

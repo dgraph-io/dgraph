@@ -28,7 +28,6 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         id : uid
         uid : Author.name
-        dgraph.uid : uid
       }
     }
 
@@ -95,7 +94,6 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         id : uid
         name : Author.name
-        dgraph.uid : uid
       }
     }
 
@@ -175,7 +173,6 @@
           author : Post.author {
             authorID : uid
             name : Author.name
-            dgraph.uid : uid
           }
           dgraph.uid : uid
         }
@@ -719,7 +716,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -743,7 +739,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -765,7 +760,6 @@
         name : Character.name
         ename : Employee.ename
         dob : Human.dob
-        dgraph.uid : uid
       }
     }
 
@@ -790,7 +784,6 @@
         name : Character.name
         female : Human.female
         ename : Employee.ename
-        dgraph.uid : uid
       }
     }
 
@@ -819,7 +812,6 @@
         female : Human.female
         ename : Employee.ename
         movies : Director.movies
-        dgraph.uid : uid
       }
     }
 
@@ -1154,17 +1146,123 @@
   name: "Password query"
   gqlquery: |
     query {
-      checkUserPassword(name: "0x1", pwd: "Password") {
+      checkUserPassword(name: "user1", pwd: "Password") {
         name
       }
     }
   dgquery: |-
     query {
-      checkUserPassword(func: eq(User.name, "0x1")) @filter((eq(val(pwd), 1))) {
+      checkUserPassword(func: eq(User.name, "user1")) @filter((eq(val(pwd), 1) AND type(User))) {
         name : User.name
         dgraph.uid : uid
       }
-      checkPwd(func: eq(User.name, "0x1")) {
+      checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
         pwd as checkpwd(User.pwd, "Password")
+      }
+    }
+
+
+- name: "Rewrite without custom fields"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        id
+        author
+        title
+        content
+        ups
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        id : uid
+        author : Comment.author
+        title : Comment.title
+        ups : Comment.ups
+        url : Comment.url
+      }
+    }
+- name: "Include fields needed by custom directive"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        content
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        author : Comment.author
+        id : uid
+        title : Comment.title
+        ups : Comment.ups
+        url : Comment.url
+      }
+    }
+- name: "Rewrite without custom fields deep"
+  gqlquery: |-
+    query {
+      getPost(postID: "0x1") {
+        postID
+        comments {
+          id
+          author
+          title
+          content
+          ups
+          url
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        postID : uid
+        comments : Post.comments {
+          id : uid
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          url : Comment.url
+        }
+      }
+    }
+- name: "Include fields needed by custom directive deep"
+  gqlquery: |-
+    query {
+      getPost(postID: "0x1") {
+        postID
+        comments {
+          author
+          title
+          content
+          ups
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        postID : uid
+        comments : Post.comments {
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          id : uid
+          url : Comment.url
+        }
       }
     }

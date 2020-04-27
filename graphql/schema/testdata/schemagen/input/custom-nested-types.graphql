@@ -1,0 +1,39 @@
+type Car @remote {
+    id: ID!
+    name: String!
+}
+
+interface Person @remote {
+	age: Int!
+}
+
+type User implements Person @remote {
+	id: ID!
+	name: String!
+	cars: [Car]
+}
+
+input UserInput {
+	name: String!
+	age: Int!
+	cars: [CarInput]
+}
+
+input CarInput {
+	name: String!
+}
+
+type Query {
+	getMyFavoriteUsers(id: ID!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "GET"
+	})
+}
+
+type Mutation {
+	createMyFavouriteUsers(input: [UserInput!]!): [User] @custom(http: {
+		url: "http://my-api.com",
+		method: "POST",
+		body: "$input"
+	})
+}
