@@ -231,13 +231,13 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 	mutatedType := m.MutatedType()
 
 	if m.IsArgListType(schema.InputArgName) {
-		return mrw.handleMultipleMutations(m)
+		return mrw.handleMultipleMutations(ctx, m)
 	}
 
 	varGen := NewVariableGenerator()
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	xidMd := newXidMetadata()
-	mrw.frags = [][]*mutationFragment{rewriteObject(mutatedType, nil, "", varGen, true, val,
+	mrw.frags = [][]*mutationFragment{rewriteObject(ctx, mutatedType, nil, "", varGen, true, val,
 		xidMd)}
 	mutations, err := mutationsFromFragments(
 		mrw.frags[0],
@@ -265,7 +265,10 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 	return upsert, schema.GQLWrapf(err, "failed to rewrite mutation payload")
 }
 
-func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutation, error) {
+func (mrw *AddRewriter) handleMultipleMutations(
+	ctx context.Context,
+	m schema.Mutation) (*UpsertMutation, error) {
+
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
@@ -277,7 +280,7 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutat
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
+		frag := rewriteObject(ctx, mutatedType, nil, "", varGen, true, obj, xidMd)
 		mrw.frags = append(mrw.frags, frag)
 
 		mutations, err := mutationsFromFragments(
@@ -428,7 +431,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		urw.setFrags =
-			rewriteObject(mutatedType, nil, srcUID, varGen, true,
+			rewriteObject(ctx, mutatedType, nil, srcUID, varGen, true,
 				setArg.(map[string]interface{}), xidMd)
 		addUpdateCondition(urw.setFrags)
 		mutSet, errSet = mutationsFromFragments(
@@ -446,7 +449,7 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if delArg != nil {
 		urw.delFrags =
-			rewriteObject(mutatedType, nil, srcUID, varGen, false,
+			rewriteObject(ctx, mutatedType, nil, srcUID, varGen, false,
 				delArg.(map[string]interface{}), xidMd)
 		addUpdateCondition(urw.delFrags)
 		mutDel, errDel = mutationsFromFragments(
@@ -471,10 +474,18 @@ func (urw *UpdateRewriter) Rewrite(
 		queries = append(queries, q2.Children...)
 	}
 
+	newNodes := make(map[string]schema.Type)
+	if urw.setFrags != nil {
+		copyTypeMap(urw.setFrags[0].newNodes, newNodes)
+	}
+	if urw.delFrags != nil {
+		copyTypeMap(urw.delFrags[0].newNodes, newNodes)
+	}
+
 	upsert := &UpsertMutation{
 		Query:     &gql.GraphQuery{Children: queries},
 		Mutations: append(mutSet, mutDel...),
-		NewNodes:  urw.setFrags[0].newNodes,
+		NewNodes:  newNodes,
 	}
 
 	return upsert,
@@ -812,6 +823,7 @@ func queryFromFragments(frags []*mutationFragment) *gql.GraphQuery {
 // (That might actually be helpful if you want to run one mutation to remove something
 // and then another to correct it.)
 func rewriteObject(
+	ctx context.Context,
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
@@ -830,7 +842,8 @@ func rewriteObject(
 		if idVal, ok := obj[id.Name()]; ok {
 			if idVal != nil {
 				return []*mutationFragment{
-					asIDReference(idVal, srcField, srcUID, variable, withAdditionalDeletes, varGen)}
+					asIDReference(ctx, idVal, srcField, srcUID, variable,
+						withAdditionalDeletes, varGen)}
 			}
 			delete(obj, id.Name())
 		}
@@ -884,7 +897,7 @@ func rewriteObject(
 
 	if !atTopLevel { // top level is never a reference - it's adding/updating
 		if xid != nil && xidString != "" {
-			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
+			xidFrag = asXIDReference(ctx, srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
@@ -976,8 +989,8 @@ func rewriteObject(
 				// { "title": "...", "author": { "username": "new user", "dob": "...", ... }
 				//          like here ^^
 				frags =
-					rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes,
-						val, xidMetadata)
+					rewriteObject(ctx, fieldDef.Type(), fieldDef, myUID, varGen,
+						withAdditionalDeletes, val, xidMetadata)
 			case []interface{}:
 				// This field is either:
 				// 1) A list of objects: e.g. if the schema said `categories: [Categories]`
@@ -991,8 +1004,8 @@ func rewriteObject(
 				//   { "title": "...", "scores": [10.5, 9.3, ... ]
 				//            like here ^^
 				frags =
-					rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val,
-						xidMetadata)
+					rewriteList(ctx, fieldDef.Type(), fieldDef, myUID, varGen,
+						withAdditionalDeletes, val, xidMetadata)
 			default:
 				// This field is either:
 				// 1) a scalar value: e.g.
@@ -1063,6 +1076,7 @@ func checkQueryResult(qry string, yes, no error) resultChecker {
 // asIDReference builds the fragment
 // { "id": "0x123", "posts": [ { "uid": "XYZ" } ] }
 func asIDReference(
+	ctx context.Context,
 	val interface{},
 	srcField schema.FieldDefinition,
 	srcUID string,
@@ -1100,7 +1114,7 @@ func asIDReference(
 			errors.Errorf("ID \"%#x\" isn't a %s", uid, srcField.Type().Name()))
 
 	if withAdditionalDeletes {
-		addAdditionalDeletes(frag, varGen, srcField, srcUID, variable)
+		addAdditionalDeletes(ctx, frag, varGen, srcField, srcUID, variable)
 	}
 
 	return frag
@@ -1125,6 +1139,7 @@ func asIDReference(
 // where asXIDReference builds the fragment
 // { "id": "uid(Author1)", "posts": [ { "uid": "XYZ" } ] }
 func asXIDReference(
+	ctx context.Context,
 	srcField schema.FieldDefinition,
 	srcUID string,
 	typ schema.Type,
@@ -1152,7 +1167,7 @@ func asXIDReference(
 		errors.Errorf("ID \"%s\" isn't a %s", xidString, srcField.Type().Name()))
 
 	if withAdditionalDeletes {
-		addAdditionalDeletes(frag, varGen, srcField, srcUID, xidVariable)
+		addAdditionalDeletes(ctx, frag, varGen, srcField, srcUID, xidVariable)
 	}
 
 	return frag
@@ -1175,6 +1190,7 @@ func asXIDReference(
 // done when we add a new post to an author; that just adds new edges and doesn't
 // leave an edge.
 func addAdditionalDeletes(
+	ctx context.Context,
 	frag *mutationFragment,
 	varGen *VariableGenerator,
 	srcField schema.FieldDefinition, srcUID, variable string) {
@@ -1188,11 +1204,13 @@ func addAdditionalDeletes(
 		return
 	}
 
-	addDelete(frag, varGen, variable, srcUID, invField, srcField)
-	addDelete(frag, varGen, srcUID, variable, srcField, invField)
+	addDelete(ctx, frag, varGen, variable, srcUID, invField, srcField)
+	addDelete(ctx, frag, varGen, srcUID, variable, srcField, invField)
 }
 
-func addDelete(frag *mutationFragment,
+func addDelete(
+	ctx context.Context,
+	frag *mutationFragment,
 	varGen *VariableGenerator,
 	qryVar, excludeVar string,
 	qryFld, delFld schema.FieldDefinition) {
@@ -1256,7 +1274,87 @@ func addDelete(frag *mutationFragment,
 				delFldName: []interface{}{map[string]interface{}{"uid": del}}})
 	}
 
-	// FIXME: additional deletes auth checking here
+	// If the type that we are adding the edge removal for has auth on it, we need to check
+	// that we have permission to update it.  E.G. (see example at top)
+	// if we end up needing to remove edge
+	//  Author1 --- posts --> Post1
+	// then we need update permission on Author1
+
+	// grab the auth for Author1
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		frag.check =
+			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))
+		return
+	}
+	newRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        varGen,
+		varName:       targetVar,
+		selector:      updateAuthSelector,
+	}
+
+	authQueries, authFilter := newRw.rewriteAuthQueries(qryFld.Type())
+	if len(authQueries) == 0 {
+		// there's no auth to add for this type
+		return
+	}
+
+	// There's already a query block like this added above
+	// var(func: uid(Post3)) {
+	//   Author4 as Post.author
+	// }
+	//
+	// We'll bring out Author4 to a query so we can check it's length against the auth query.
+	//
+	// Author4(func: uid(Auth4))
+	// Author4.auth(func: uid(Auth4)) @filter(...auth filter...)
+	// Author5, Author6, etc. ... auth queries...
+
+	frag.queries = append(frag.queries, &gql.GraphQuery{
+		Attr: targetVar,
+		Func: &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: targetVar}}}})
+
+	frag.queries = append(frag.queries, &gql.GraphQuery{
+		Attr: targetVar + ".auth",
+		Func: &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: targetVar}}},
+		Filter: authFilter})
+
+	frag.queries = append(frag.queries, authQueries...)
+
+	frag.check = authCheck(frag.check, targetVar)
+}
+
+func authCheck(chk resultChecker, qry string) resultChecker {
+	return func(m map[string]interface{}) error {
+
+		if val, exists := m[qry]; exists && val != nil {
+			if data, ok := val.([]interface{}); ok && len(data) > 0 {
+				// There was an existing node ... did it pass auth?
+
+				authVal, authExists := m[qry+".auth"]
+				if !authExists || authVal == nil {
+					return x.GqlErrorf("authorization failed")
+				}
+
+				if authData, ok := authVal.([]interface{}); ok && len(authData) != len(data) {
+					return x.GqlErrorf("authorization failed")
+				}
+
+				// auth passed, but still need to check the existing conditions
+
+				return chk(m)
+			}
+		}
+
+		// There was no existing node, so auth wasn't needed, but still need to
+		// apply the existing check function
+		return chk(m)
+	}
 }
 
 func addInverseLink(obj map[string]interface{}, srcField schema.FieldDefinition, srcUID string) {
@@ -1292,6 +1390,7 @@ func xidQuery(xidVariable, xidString, xidPredicate string, typ schema.Type) *gql
 }
 
 func rewriteList(
+	ctx context.Context,
 	typ schema.Type,
 	srcField schema.FieldDefinition,
 	srcUID string,
@@ -1306,7 +1405,7 @@ func rewriteList(
 		switch obj := obj.(type) {
 		case map[string]interface{}:
 			frags = squashFragments(squashIntoList, frags,
-				rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, xidMetadata))
+				rewriteObject(ctx, typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, xidMetadata))
 		default:
 			// All objects in the list must be of the same type.  GraphQL validation makes sure
 			// of that. So this must be a list of scalar values (lists of lists aren't allowed).
