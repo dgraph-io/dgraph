@@ -41,7 +41,7 @@
           },
           {
             "uid":"uid(User4)",
-            "User.tickets": [ { "uid":"uid(x)" } ]            
+            "User.tickets": [ { "uid":"uid(x)" } ]
           }
         ]
   dgquery: |-
