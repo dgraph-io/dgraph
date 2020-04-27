@@ -16,7 +16,7 @@ type listBackupsInput struct {
 }
 
 type group struct {
-	GroupId    string   `json:"groupId,omitempty"`
+	GroupId    uint32   `json:"groupId,omitempty"`
 	Predicates []string `json:"predicates,omitempty"`
 }
 
@@ -26,6 +26,7 @@ type manifest struct {
 	Groups    []*group `json:"groups,omitempty"`
 	BackupId  string   `json:"backupId,omitempty"`
 	BackupNum uint64   `json:"backupNum,omitempty"`
+	Path      string   `json:"path,omitempty"`
 	Encrypted bool     `json:"encrypted,omitempty"`
 }
 
@@ -62,5 +63,24 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 }
 
 func convertManifests(manifests []*worker.Manifest) []*manifest {
-	return nil
+	res := make([]*manifest, len(manifests))
+	for i, m := range manifests {
+		res[i] = &manifest{
+			Type:      m.Type,
+			Since:     m.Since,
+			BackupId:  m.BackupId,
+			BackupNum: m.BackupNum,
+			Path:      m.Path,
+			Encrypted: m.Encrypted,
+		}
+
+		res[i].Groups = make([]*group, 0)
+		for gid, preds := range m.Groups {
+			res[i].Groups = append(res[i].Groups, &group{
+				GroupId:    gid,
+				Predicates: preds,
+			})
+		}
+	}
+	return res
 }

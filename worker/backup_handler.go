@@ -239,6 +239,7 @@ func ListBackupManifests(l string) (map[string]*Manifest, error) {
 		if err := h.ReadManifest(path, &m); err != nil {
 			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
+		m.Path = path
 		listedManifests[path] = &m
 	}
 

@@ -446,7 +446,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 
 	// Add admin query endpoints.
 	rf = rf.WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
-		return resolve.QueryResolverFunc(resolveState)
+		return resolve.QueryResolverFunc(resolveListBackups)
 	})
 
 	return rf.WithSchemaIntrospection()

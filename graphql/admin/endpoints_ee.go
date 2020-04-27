@@ -107,19 +107,19 @@ const adminTypes = `
 		location: String!
 	}
 
-	type Group {
-		groupId: Int!
-		predicates: [String!]
+	type BackupGroup {
+		groupId: Int
+		predicates: [String]
 	}
 
 	type Manifest {
-		type: String!
-		since: Int!
-		backupNum: Int!
-		groups: [Group!]
-		backupId: String!
-		backupNum: Int!
-		encrypted: Bool!
+		path: String
+		type: String
+		since: Int
+		groups: [BackupGroup]
+		backupId: String
+		backupNum: Int
+		encrypted: Boolean
 	}
 	
 	type LoginResponse {
@@ -376,4 +376,3 @@ const adminQueries = `
 	Get the information about the backups at a given location.
 	"""
 	listBackups(location: String!) : [Manifest]`
-
