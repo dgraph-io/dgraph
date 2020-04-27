@@ -163,9 +163,17 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	return aex.dg.Execute(ctx, req)
 }
 
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return aex.dg.CommitOrAbort(ctx, tc)
+}
+
 func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	*dgoapi.Response, error) {
 	return de.dg.Execute(ctx, req)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return de.dg.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(

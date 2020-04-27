@@ -125,6 +125,10 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 	panic("test failed")
 }
 
+func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
 func TestAuthQueryRewriting(t *testing.T) {

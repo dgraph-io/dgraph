@@ -105,6 +105,7 @@ type DgraphExecutor interface {
 	// occurs, that indicates that the execution failed in some way significant enough
 	// way as to not continue processing this mutation or others in the same request.
 	Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
 }
 
 // An UpsertMutation is the query and mutations needed for a Dgraph upsert.
@@ -212,7 +213,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
 		return emptyResult(gqlErr), resolverFailed
-
 	}
 
 	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
@@ -238,10 +238,17 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(errs), resolverFailed
 	}
 
+	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	if err != nil {
+		return emptyResult(
+				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
+			resolverFailed
+	}
+
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery),
-			CommitNow: true,
-			StartTs:   mutResp.Txn.GetStartTs(),
+			ReadOnly: true,
+			StartTs:  mutResp.Txn.GetStartTs(),
 		})
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
