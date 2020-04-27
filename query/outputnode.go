@@ -61,10 +61,8 @@ type encoder struct {
 	// attrMap has mapping of string predicates to uint16 ids.
 	// For each predicate one unique id is assigned to save space.
 	attrMap map[string]uint16
-	// idMap contains mapping from predicate id to predicate.
-	idMap map[uint16]string
-	// seqNo is used to assign id to predicate.
-	seqNo uint16
+	// idSlice contains mapping from predicate id to predicate.
+	idSlice []string
 	// arena is used to store scalarVal for fastJsonNodes. Offset of scalarVal inside arena buffer
 	// is stored in fastJsonNode meta.
 	arena *arena
@@ -88,18 +86,20 @@ type encoder struct {
 }
 
 func newEncoder() *encoder {
-	ms := make([]uint64, 0)
+	var metaSlice []uint64
+	var idSlice []string
 	// Append dummy entry, to avoid getting meta for a fastJsonNode with default value(0).
-	ms = append(ms, 0)
+	metaSlice = append(metaSlice, 0)
+	idSlice = append(idSlice, "")
+
 	a := (arenaPool.Get()).(*arena)
 	a.reset()
 
 	return &encoder{
 		attrMap:     make(map[string]uint16),
-		idMap:       make(map[uint16]string),
-		seqNo:       uint16(0),
+		idSlice:     idSlice,
 		arena:       a,
-		metaSlice:   ms,
+		metaSlice:   metaSlice,
 		childrenMap: make(map[fastJsonNode][]fastJsonNode),
 	}
 }
@@ -109,24 +109,18 @@ func (enc *encoder) idForAttr(attr string) uint16 {
 		return id
 	}
 
-	// TODO(Ashish): check for overflow.
-	enc.seqNo++
-	enc.attrMap[attr] = enc.seqNo
-	enc.idMap[enc.seqNo] = attr
-	return enc.seqNo
+	enc.idSlice = append(enc.idSlice, attr)
+	enc.attrMap[attr] = uint16(len(enc.idSlice) - 1) // TODO(Ashish): check for overflow.
+	return uint16(len(enc.idSlice) - 1)
 }
 
 func (enc *encoder) attrForID(id uint16) string {
 	// For now we are not returning error from here.
-	if id == 0 || id > enc.seqNo {
+	if id == 0 || id > uint16(len(enc.idSlice)) {
 		return ""
 	}
 
-	if attr, ok := enc.idMap[id]; ok {
-		return attr
-	}
-
-	return ""
+	return enc.idSlice[id]
 }
 
 // makeScalarNode returns a fastJsonNode with all of its meta data, scalarVal populated.
