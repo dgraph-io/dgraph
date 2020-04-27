@@ -216,9 +216,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
     onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   Ticket2 as var(func: uid(0x4))
   Ticket3 as var(func: uid(Ticket2)) @cascade {
@@ -269,9 +267,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
     onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   Ticket2 as var(func: uid(0x4))
   Ticket3 as var(func: uid(Ticket2)) @cascade {
