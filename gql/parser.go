@@ -1660,7 +1660,9 @@ L:
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
-
+		// fmt.Println("Function name: ", function.Name)
+		// fmt.Println("Item type: ", item.Typ)
+		// fmt.Println("Item : ", item)
 		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
@@ -1669,6 +1671,9 @@ L:
 				attrItemsAgo++
 			}
 			var val string
+			// fmt.Println("IteminFunc type: ", itemInFunc.Typ)
+			// fmt.Println("IteminFunc : ", itemInFunc)
+
 			switch itemInFunc.Typ {
 			case itemRightRound:
 				break L
@@ -1764,6 +1769,9 @@ L:
 					err = parseGeoArgs(it, function)
 
 				case IsInequalityFn(function.Name):
+					err = parseIneqArgs(it, function)
+
+				case function.Name == "uid_in":
 					err = parseIneqArgs(it, function)
 
 				default:
@@ -3232,6 +3240,8 @@ func IsInequalityFn(name string) bool {
 	}
 	return false
 }
+
+// func IsUIDINFn(name string)
 
 // Name can have dashes or alphanumeric characters. Lexer lexes them as separate items.
 // We put it back together here.
