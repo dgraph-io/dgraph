@@ -17,12 +17,14 @@
 package schema
 
 import (
+	"fmt"
+	"regexp"
+	"strings"
+
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
-	"regexp"
-	"strings"
 )
 
 const (
@@ -48,6 +50,101 @@ type AuthContainer struct {
 	Add    *RuleNode
 	Update *RuleNode
 	Delete *RuleNode
+}
+
+type RuleResult int
+
+const (
+	Uncertain RuleResult = iota
+	Positive
+	Negative
+)
+
+func (r *RuleNode) IsRBAC() bool {
+	for _, i := range r.Or {
+		if i.IsRBAC() {
+			return true
+		}
+	}
+	for _, i := range r.And {
+		if i.IsRBAC() {
+			return true
+		}
+	}
+
+	if r.Not != nil && r.Not.IsRBAC() {
+		return true
+	}
+
+	if r.RBACRule != nil {
+		return true
+	}
+
+	return false
+}
+
+func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
+	if rq.Operator == "eq" {
+		if av[rq.Variable] == rq.Operand {
+			return Positive
+		}
+	}
+	return Negative
+}
+
+func (node *RuleNode) GetRBACRules(av map[string]interface{}) RuleResult {
+	hasUncertain := false
+	for _, rule := range node.Or {
+		if rule.IsRBAC() {
+			val := rule.GetRBACRules(av)
+			if val == Positive {
+				return Positive
+			} else if val == Uncertain {
+				hasUncertain = true
+			}
+		} else {
+			hasUncertain = true
+		}
+	}
+
+	if len(node.Or) > 0 && !hasUncertain {
+		return Negative
+	}
+
+	for _, rule := range node.And {
+		if rule.IsRBAC() {
+			val := rule.GetRBACRules(av)
+			if val == Negative {
+				return Negative
+			} else if val == Uncertain {
+				hasUncertain = true
+			}
+		} else {
+			hasUncertain = true
+		}
+	}
+
+	if len(node.And) > 0 && !hasUncertain {
+		return Positive
+	}
+
+	if node.Not != nil && node.Not.IsRBAC() {
+		switch node.Not.GetRBACRules(av) {
+		case Uncertain:
+			return Uncertain
+		case Positive:
+			return Negative
+		case Negative:
+			return Positive
+		}
+
+	}
+
+	if node.RBACRule != nil {
+		return node.RBACRule.EvaluateRBACRule(av)
+	}
+
+	return Uncertain
 }
 
 type TypeAuth struct {
@@ -177,6 +274,8 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		errResult = AppendGQLErrs(errResult, gqlerror.Errorf("Type %s: @auth: there "+
 			"should be only one of \"and\", \"or\", \"not\" and \"rule\"", typ.Name))
 	}
+
+	fmt.Println("Error", errResult)
 
 	return result, errResult
 }
