@@ -106,6 +106,7 @@ func (asr *updateSchemaResolver) Execute(
 		return &dgoapi.Response{Json: b}, err
 	}
 
+	req.CommitNow = true
 	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
 		return nil, err
