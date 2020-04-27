@@ -108,18 +108,53 @@ const adminTypes = `
 	}
 
 	type BackupGroup {
+		"""
+		The ID of the cluster group.
+		"""
 		groupId: Int
+
+		"""
+		List of predicates assigned to the group.
+		"""
 		predicates: [String]
 	}
 
 	type Manifest {
-		path: String
-		type: String
-		since: Int
-		groups: [BackupGroup]
+		"""
+		Unique ID for the backup series.
+		"""
 		backupId: String
+
+		"""
+		Number of this backup within the backup series. The full backup always has a value of one.
+		"""
 		backupNum: Int
+
+		"""
+		Whether this backup was encrypted.
+		"""
 		encrypted: Boolean
+
+		"""
+		List of groups and the predicates they store in this backup.
+		"""
+		groups: [BackupGroup]
+
+		"""
+		Path to the manifest file.
+		"""
+		path: String
+
+		"""
+		The timestamp at which this backup was taken. The next incremental backup will
+		start from this timestamp.
+		"""
+		since: Int
+
+		"""
+		The type of backup, either full or incremental.
+		"""
+		type: String
 	}
 	
 	type LoginResponse {
