@@ -1066,26 +1066,9 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 		sg.Params.ParentIds = append(sg.Params.ParentIds, uid)
 	}
 
-	idxSlice := make([]int, len(sg.Children))
-	var wg sync.WaitGroup
-	for j := range sg.Children {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			pc := sg.Children[i]
-			if pc.Params.IgnoreResult || pc.IsInternal() || len(pc.uidMatrix) == 0 ||
-				(len(pc.facetsMatrix) > 0 && len(pc.facetsMatrix) != len(pc.uidMatrix)) {
-				idxSlice[i] = -1
-				return
-			}
-			idxSlice[i] = algo.IndexOf(pc.SrcUIDs, uid)
-		}(j)
-	}
-	wg.Wait()
-
 	var invalidUids map[uint64]bool
 	// We go through all predicate children of the subprotos.
-	for ci, pc := range sg.Children {
+	for _, pc := range sg.Children {
 		if pc.Params.IgnoreResult {
 			continue
 		}
@@ -1111,7 +1094,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 				len(pc.facetsMatrix), len(pc.uidMatrix))
 		}
 
-		idx := idxSlice[ci]
+		idx := algo.IndexOf(pc.SrcUIDs, uid)
 		if idx < 0 {
 			continue
 		}
