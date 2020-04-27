@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -973,7 +974,16 @@ func rewriteObject(
 	// if this object has an xid, then we don't need to rewrite its children if we have encountered
 	// it earlier
 	if xidString == "" || xidEncounteredFirstTime {
-		for field, val := range obj {
+
+		var fields []string
+		for field := range obj {
+			fields = append(fields, field)
+		}
+		sort.Strings(fields)
+
+		for _, field := range fields {
+			val := obj[field]
+
 			var frags []*mutationFragment
 
 			fieldDef := typ.Field(field)
