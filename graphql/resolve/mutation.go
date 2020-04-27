@@ -204,7 +204,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	req := &dgoapi.Request{
 		Query:     dgraph.AsString(upsert.Query),
-		CommitNow: true,
 		Mutations: upsert.Mutations,
 	}
 
@@ -226,7 +225,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 	}
 
-	authErr := authorizeNewNodes(ctx, mutResp.Uids, upsert.NewNodes, mr.executor)
+	authErr := authorizeNewNodes(ctx, mutResp.Uids, upsert.NewNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
@@ -240,7 +239,10 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 
 	qryResp, err := mr.executor.Execute(ctx,
-		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
+		&dgoapi.Request{Query: dgraph.AsString(dgQuery),
+			CommitNow: true,
+			StartTs:   mutResp.Txn.GetStartTs(),
+		})
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
@@ -312,7 +314,8 @@ func authorizeNewNodes(
 	ctx context.Context,
 	uids map[string]string,
 	newNodeTypes map[string]schema.Type,
-	queryExecutor DgraphExecutor) error {
+	queryExecutor DgraphExecutor,
+	txn *dgoapi.TxnContext) error {
 
 	authVariables, err := ExtractAuthVariables(ctx)
 	if err != nil {
@@ -406,8 +409,9 @@ func authorizeNewNodes(
 
 	resp, errs := queryExecutor.Execute(ctx,
 		&dgoapi.Request{
-			Query:    dgraph.AsString(&gql.GraphQuery{Children: qs}),
-			ReadOnly: true})
+			Query:   dgraph.AsString(&gql.GraphQuery{Children: qs}),
+			StartTs: txn.GetStartTs(),
+		})
 	if errs != nil || len(resp.Json) == 0 {
 		return x.GqlErrorf("authorization request failed")
 	}
