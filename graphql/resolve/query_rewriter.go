@@ -19,11 +19,11 @@ package resolve
 import (
 	"context"
 	"fmt"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"sort"
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/pkg/errors"

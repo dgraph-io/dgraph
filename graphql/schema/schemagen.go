@@ -18,11 +18,11 @@ package schema
 
 import (
 	"fmt"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
