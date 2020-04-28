@@ -17,6 +17,7 @@
 package core
 
 import (
+	"io/ioutil"
 	"math/big"
 	"testing"
 	"time"
@@ -28,6 +29,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
 	"github.com/stretchr/testify/require"
@@ -44,7 +46,7 @@ func newTestServiceWithFirstBlock(t *testing.T) *Service {
 	kp, err := sr25519.GenerateKeypair()
 	require.Nil(t, err)
 
-	err = tt.Put(testAuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
+	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, kp.Public().Encode()...))
 	require.Nil(t, err)
 
 	ks := keystore.NewKeystore()
@@ -170,4 +172,40 @@ func TestAnnounceBlock(t *testing.T) {
 	case <-time.After(testMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
+}
+
+func TestCheckForRuntimeChanges(t *testing.T) {
+	tt := trie.NewEmptyTrie()
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
+
+	kp, err := sr25519.GenerateKeypair()
+	require.Nil(t, err)
+
+	pubkey := kp.Public().Encode()
+	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	require.Nil(t, err)
+
+	ks := keystore.NewKeystore()
+	ks.Insert(kp)
+
+	cfg := &Config{
+		Runtime:          rt,
+		Keystore:         ks,
+		TransactionQueue: transaction.NewPriorityQueue(),
+		IsBabeAuthority:  false,
+	}
+
+	s := NewTestService(t, cfg)
+
+	_, err = runtime.GetRuntimeBlob(runtime.TESTS_FP, runtime.TEST_WASM_URL)
+	require.Nil(t, err)
+
+	testRuntime, err := ioutil.ReadFile(runtime.TESTS_FP)
+	require.Nil(t, err)
+
+	err = s.storageState.SetStorage([]byte(":code"), testRuntime)
+	require.Nil(t, err)
+
+	err = s.checkForRuntimeChanges()
+	require.Nil(t, err)
 }

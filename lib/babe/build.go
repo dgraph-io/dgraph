@@ -26,7 +26,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 
 	log "github.com/ChainSafe/log15"
@@ -52,11 +51,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 	}
 
 	// initialize block header
-	encodedHeader, err := scale.Encode(header)
-	if err != nil {
-		return nil, fmt.Errorf("cannot encode header: %s", err)
-	}
-	err = b.initializeBlock(encodedHeader)
+	err = b.rt.InitializeBlock(header)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +75,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 	log.Trace("[babe] built block extrinsics")
 
 	// finalize block
-	header, err = b.finalizeBlock()
+	header, err = b.rt.FinalizeBlock()
 	if err != nil {
 		b.addToQueue(included)
 		return nil, fmt.Errorf("cannot finalize block: %s", err)
@@ -174,10 +169,9 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 	extrinsic := b.nextReadyExtrinsic()
 	included := []*transaction.ValidTransaction{}
 
-	// TODO: check when block is full
 	for !hasSlotEnded(slot) && extrinsic != nil {
 		log.Trace("[babe] build block", "applying extrinsic", extrinsic)
-		ret, err := b.applyExtrinsic(extrinsic)
+		ret, err := b.rt.ApplyExtrinsic(extrinsic)
 		if err != nil {
 			return nil, err
 		}
@@ -229,7 +223,7 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 	}
 
 	// Call BlockBuilder_inherent_extrinsics
-	_, err = b.inherentExtrinsics(ienc)
+	_, err = b.rt.InherentExtrinsics(ienc)
 	if err != nil {
 		return err
 	}

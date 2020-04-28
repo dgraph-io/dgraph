@@ -26,7 +26,7 @@ var testInvalidExt = []byte{1, 212, 53, 147, 199, 21, 253, 211, 28, 97, 20, 26, 
 
 func TestAuthorModule_Pending(t *testing.T) {
 	txQueue := state.NewTransactionQueue()
-	auth := NewAuthorModule(nil, txQueue)
+	auth := NewAuthorModule(nil, nil, txQueue)
 
 	res := new(PendingExtrinsicsResponse)
 	err := auth.PendingExtrinsics(nil, nil, res)
@@ -107,7 +107,7 @@ func TestAuthorModule_SubmitExtrinsic_invalid(t *testing.T) {
 	res := new(ExtrinsicHashResponse)
 
 	err := auth.SubmitExtrinsic(nil, &ext, res)
-	require.EqualError(t, err, core.ErrInvalidTransaction.Message)
+	require.EqualError(t, err, runtime.ErrInvalidTransaction.Message)
 }
 
 func TestAuthorModule_SubmitExtrinsic_invalid_input(t *testing.T) {
@@ -160,7 +160,7 @@ func TestAuthorModule_SubmitExtrinsic_InQueue(t *testing.T) {
 func TestAuthorModule_InsertKey_Valid(t *testing.T) {
 	cs := core.NewTestService(t, nil)
 
-	auth := NewAuthorModule(cs, nil)
+	auth := NewAuthorModule(cs, nil, nil)
 	req := &KeyInsertRequest{"babe", "0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309", "0x6246ddf254e0b4b4e7dffefc8adf69d212b98ac2b579c362b473fec8c40b4c0a"}
 	res := &KeyInsertResponse{}
 	err := auth.InsertKey(nil, req, res)
@@ -172,7 +172,7 @@ func TestAuthorModule_InsertKey_Valid(t *testing.T) {
 func TestAuthorModule_InsertKey_Valid_gran_keytype(t *testing.T) {
 	cs := core.NewTestService(t, nil)
 
-	auth := NewAuthorModule(cs, nil)
+	auth := NewAuthorModule(cs, nil, nil)
 	req := &KeyInsertRequest{"gran", "0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309", "0x6246ddf254e0b4b4e7dffefc8adf69d212b98ac2b579c362b473fec8c40b4c0a"}
 	res := &KeyInsertResponse{}
 	err := auth.InsertKey(nil, req, res)
@@ -184,7 +184,7 @@ func TestAuthorModule_InsertKey_Valid_gran_keytype(t *testing.T) {
 func TestAuthorModule_InsertKey_InValid(t *testing.T) {
 	cs := core.NewTestService(t, nil)
 
-	auth := NewAuthorModule(cs, nil)
+	auth := NewAuthorModule(cs, nil, nil)
 	req := &KeyInsertRequest{"babe", "0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309", "0x0000000000000000000000000000000000000000000000000000000000000000"}
 	res := &KeyInsertResponse{}
 	err := auth.InsertKey(nil, req, res)
@@ -194,7 +194,7 @@ func TestAuthorModule_InsertKey_InValid(t *testing.T) {
 func TestAuthorModule_InsertKey_UnknownKeyType(t *testing.T) {
 	cs := core.NewTestService(t, nil)
 
-	auth := NewAuthorModule(cs, nil)
+	auth := NewAuthorModule(cs, nil, nil)
 	req := &KeyInsertRequest{"mack", "0xb7e9185065667390d2ad952a5324e8c365c9bf503dcf97c67a5ce861afe97309", "0x6246ddf254e0b4b4e7dffefc8adf69d212b98ac2b579c362b473fec8c40b4c0a"}
 	res := &KeyInsertResponse{}
 	err := auth.InsertKey(nil, req, res)
@@ -231,5 +231,6 @@ func newCoreService(t *testing.T) *core.Service {
 
 func setupAuthModule(t *testing.T, txq *state.TransactionQueue) *AuthorModule {
 	cs := newCoreService(t)
-	return NewAuthorModule(cs, txq)
+	rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+	return NewAuthorModule(cs, rt, txq)
 }

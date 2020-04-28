@@ -66,7 +66,7 @@ func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEp
 		require.Nil(t, err)
 
 		nextEpochData := &NextEpochDescriptor{
-			Authorities: []*AuthorityData{},
+			Authorities: []*types.AuthorityData{},
 		}
 
 		consensusDigest := &types.ConsensusDigest{
@@ -156,7 +156,7 @@ func TestCheckForConsensusDigest(t *testing.T) {
 	require.Nil(t, err)
 
 	nextEpochData := &NextEpochDescriptor{
-		Authorities: []*AuthorityData{},
+		Authorities: []*types.AuthorityData{},
 	}
 
 	expected := &types.ConsensusDigest{
@@ -169,15 +169,12 @@ func TestCheckForConsensusDigest(t *testing.T) {
 
 func TestVerificationManager_VerifyBlock(t *testing.T) {
 	babesession := createTestSession(t, nil)
-	err := babesession.configurationFromRuntime()
-	require.Nil(t, err)
-
 	descriptor := babesession.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
 
 	block, _ := createTestBlock(t, babesession, [][]byte{})
-	err = vm.blockState.AddBlock(block)
+	err := vm.blockState.AddBlock(block)
 	require.Nil(t, err)
 
 	ok, err := vm.VerifyBlock(block.Header)
@@ -188,9 +185,6 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 
 func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
 	babesession := createTestSession(t, nil)
-	err := babesession.configurationFromRuntime()
-	require.Nil(t, err)
-
 	descriptor := babesession.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
@@ -266,10 +260,6 @@ func TestVerifySlotWinner(t *testing.T) {
 	}
 
 	babesession := createTestSession(t, cfg)
-	err = babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)
@@ -290,8 +280,8 @@ func TestVerifySlotWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	authorityData := make([]*AuthorityData, 1)
-	authorityData[0] = &AuthorityData{
+	authorityData := make([]*types.AuthorityData, 1)
+	authorityData[0] = &types.AuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
 
@@ -316,10 +306,6 @@ func TestVerifySlotWinner(t *testing.T) {
 
 func TestVerifyAuthorshipRight(t *testing.T) {
 	babesession := createTestSession(t, nil)
-	err := babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
 	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
@@ -355,13 +341,9 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 	}
 
 	babesession := createTestSession(t, cfg)
-	err = babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	babesession.authorityData = make([]*AuthorityData, 1)
-	babesession.authorityData[0] = &AuthorityData{
+	babesession.authorityData = make([]*types.AuthorityData, 1)
+	babesession.authorityData[0] = &types.AuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
 

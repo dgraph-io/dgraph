@@ -34,6 +34,7 @@ import (
 // AuthorModule holds a pointer to the API
 type AuthorModule struct {
 	coreAPI    CoreAPI
+	runtimeAPI RuntimeAPI
 	txQueueAPI TransactionQueueAPI
 }
 
@@ -82,9 +83,10 @@ type ExtrinsicStatus struct {
 type ExtrinsicHashResponse string
 
 // NewAuthorModule creates a new Author module.
-func NewAuthorModule(coreAPI CoreAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
+func NewAuthorModule(coreAPI CoreAPI, runtimeAPI RuntimeAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
 	return &AuthorModule{
 		coreAPI:    coreAPI,
+		runtimeAPI: runtimeAPI,
 		txQueueAPI: txQueueAPI,
 	}
 }
@@ -159,7 +161,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 
 	ext := types.Extrinsic(extBytes)
 	// validate the transaction
-	txv, err := cm.coreAPI.ValidateTransaction(ext)
+	txv, err := cm.runtimeAPI.ValidateTransaction(ext)
 	if err != nil {
 		return err
 	}

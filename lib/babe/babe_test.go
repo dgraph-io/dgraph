@@ -39,6 +39,11 @@ var genesisHeader = &types.Header{
 func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
 
+	babeCfg, err := rt.BabeConfiguration()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if cfg == nil {
 		cfg = &SessionConfig{
 			Runtime: rt,
@@ -63,7 +68,6 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 
 	cfg.SyncLock = &sync.Mutex{}
 
-	var err error
 	if cfg.Keypair == nil {
 		cfg.Keypair, err = sr25519.GenerateKeypair()
 		if err != nil {
@@ -72,11 +76,11 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	}
 
 	if cfg.AuthData == nil {
-		auth := &AuthorityData{
+		auth := &types.AuthorityData{
 			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
 			Weight: 1,
 		}
-		cfg.AuthData = []*AuthorityData{auth}
+		cfg.AuthData = []*types.AuthorityData{auth}
 	}
 
 	if cfg.TransactionQueue == nil {
@@ -107,6 +111,8 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	babesession.config = babeCfg
 
 	return babesession
 }
@@ -248,27 +254,25 @@ func TestBabeAnnounceMessage(t *testing.T) {
 	}
 
 	babesession := createTestSession(t, cfg)
-	err := babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	babesession.config = &Configuration{
+	babesession.config = &types.BabeConfiguration{
 		SlotDuration:       1,
 		EpochLength:        6,
 		C1:                 1,
 		C2:                 10,
-		GenesisAuthorities: []*AuthorityDataRaw{},
+		GenesisAuthorities: []*types.AuthorityDataRaw{},
 		Randomness:         0,
 		SecondarySlots:     false,
 	}
 
 	babesession.authorityIndex = 0
-	babesession.authorityData = []*AuthorityData{
-		{nil, 1}, {nil, 1}, {nil, 1},
+	babesession.authorityData = []*types.AuthorityData{
+		{ID: nil, Weight: 1},
+		{ID: nil, Weight: 1},
+		{ID: nil, Weight: 1},
 	}
 
-	err = babesession.Start()
+	err := babesession.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +298,7 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 	pubA := kpA.Public().(*sr25519.PublicKey)
 	pubB := kpB.Public().(*sr25519.PublicKey)
 
-	authData := []*AuthorityData{
+	authData := []*types.AuthorityData{
 		{ID: pubA, Weight: 1},
 		{ID: pubB, Weight: 1},
 	}

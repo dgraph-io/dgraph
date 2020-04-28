@@ -43,10 +43,6 @@ func TestSeal(t *testing.T) {
 	}
 
 	babesession := createTestSession(t, cfg)
-	err = babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	zeroHash, err := common.HexToHash("0x00")
 	if err != nil {
@@ -136,10 +132,6 @@ func TestBuildBlock_ok(t *testing.T) {
 	}
 
 	babesession := createTestSession(t, cfg)
-	err := babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	// see https://github.com/noot/substrate/blob/add-blob/core/test-runtime/src/system.rs#L468
 	txb := []byte{3, 16, 110, 111, 111, 116, 1, 64, 103, 111, 115, 115, 97, 109, 101, 114, 95, 105, 115, 95, 99, 111, 111, 108}
@@ -197,13 +189,12 @@ func TestBuildBlock_failing(t *testing.T) {
 		TransactionQueue: transactionQueue,
 	}
 
+	var err error
 	babesession := createTestSession(t, cfg)
-	err := babesession.configurationFromRuntime()
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	babesession.authorityData = []*AuthorityData{{nil, 1}}
+	babesession.authorityData = []*types.AuthorityData{
+		{ID: nil, Weight: 1},
+	}
 
 	// create proof that we can authorize this block
 	babesession.epochThreshold = big.NewInt(0)

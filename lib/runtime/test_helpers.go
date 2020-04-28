@@ -33,6 +33,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestAuthorityDataKey is the location of authority data in the storage trie
+var TestAuthorityDataKey, _ = common.HexToBytes("0xe3b47b6c84c0493481f97c5197d2554f")
+
 // NewTestRuntime will create a new runtime (polkadot/test)
 func NewTestRuntime(t *testing.T, targetRuntime string) *Runtime {
 	return NewTestRuntimeWithTrie(t, targetRuntime, nil)

@@ -220,7 +220,7 @@ func checkForConsensusDigest(header *types.Header) (*types.ConsensusDigest, erro
 // epochVerifier represents a BABE verifier for a specific epoch
 type epochVerifier struct {
 	blockState    BlockState
-	authorityData []*AuthorityData
+	authorityData []*types.AuthorityData
 	randomness    byte // TODO: update to [32]byte when runtime is updated
 }
 

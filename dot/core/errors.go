@@ -3,8 +3,6 @@ package core
 import (
 	"errors"
 	"fmt"
-
-	"github.com/gorilla/rpc/v2/json2"
 )
 
 // ErrNilBlockState is returned when BlockState is nik
@@ -21,17 +19,6 @@ var ErrNoKeysProvided = errors.New("no keys provided for authority node")
 
 // ErrServiceStopped is returned when the service has been stopped
 var ErrServiceStopped = errors.New("service has been stopped")
-
-// ErrCannotValidateTx is returned if the call to runtime function TaggedTransactionQueueValidateTransaction fails
-var ErrCannotValidateTx = errors.New("could not validate transaction")
-
-// ErrInvalidTransaction is returned if the call to runtime function TaggedTransactionQueueValidateTransaction fails with
-//  value of [1, 0, x]
-var ErrInvalidTransaction = &json2.Error{Code: 1010, Message: "Invalid Transaction"}
-
-// ErrUnknownTransaction is returned if the call to runtime function TaggedTransactionQueueValidateTransaction fails with
-//  value of [1, 1, x]
-var ErrUnknownTransaction = &json2.Error{Code: 1011, Message: "Unknown Transaction Validity"}
 
 // ErrInvalidBlock is returned when a block cannot be verified
 var ErrInvalidBlock = errors.New("could not verify block")

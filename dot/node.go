@@ -208,7 +208,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	// Core Service
 
 	// create core service and append core service to node services
-	coreSrvc, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	coreSrvc, rt, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create core service: %s", err)
 	}
@@ -241,7 +241,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc)
+		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt)
 		nodeSrvcs = append(nodeSrvcs, rpcSrvc)
 
 	} else {

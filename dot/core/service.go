@@ -128,7 +128,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 	var srv = &Service{}
 
-	var authData []*babe.AuthorityData
+	var authData []*types.AuthorityData
 	var currentDescriptor *babe.NextEpochDescriptor
 
 	if cfg.IsBabeAuthority {
@@ -159,7 +159,7 @@ func NewService(cfg *Config) (*Service, error) {
 			respOut:          respChan,
 		}
 
-		authData, err = srv.grandpaAuthorities()
+		authData, err = srv.rt.GrandpaAuthorities()
 		if err != nil {
 			return nil, err
 		}
@@ -210,7 +210,7 @@ func NewService(cfg *Config) (*Service, error) {
 			respOut:          respChan,
 		}
 
-		authData, err = srv.grandpaAuthorities()
+		authData, err = srv.rt.GrandpaAuthorities()
 		if err != nil {
 			return nil, err
 		}

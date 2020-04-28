@@ -20,12 +20,13 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 )
 
 func TestDecodeNextEpochDescriptor(t *testing.T) {
 	length := 3
-	auths := []*AuthorityData{}
+	auths := []*types.AuthorityData{}
 
 	for i := 0; i < length; i++ {
 		kp, err := sr25519.GenerateKeypair()
@@ -33,7 +34,7 @@ func TestDecodeNextEpochDescriptor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		auth := &AuthorityData{
+		auth := &types.AuthorityData{
 			ID:     kp.Public().(*sr25519.PublicKey),
 			Weight: 1,
 		}
