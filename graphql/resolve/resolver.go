@@ -1178,6 +1178,14 @@ func completeValue(
 		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
+	case []map[string]interface{}:
+		// This case is different from the []interface{} case above and is true for admin queries
+		// where we built the val ourselves.
+		listVal := make([]interface{}, 0, len(val))
+		for _, v := range val {
+			listVal = append(listVal, v)
+		}
+		return completeList(path, field, listVal)
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {
