@@ -1,0 +1,71 @@
+type Car @remote {
+  id: ID!
+  name: String!
+}
+
+type User {
+  id: ID!
+  name: String
+    @custom(
+      http: {
+        url: "http://mock:8888/gqlUserNames"
+        method: "POST"
+        operation: "batch"
+        graphql: "query { userNames(input: [{ id: $id, age: $age}]) }"
+      }
+    )
+  age: Int! @search
+  cars: Car
+    @custom(
+      http: {
+        url: "http://mock:8888/cars"
+        method: "GET"
+        body: "{uid: $id}"
+        operation: "batch"
+      }
+    )
+  schools: [School]
+}
+
+type School {
+  id: ID!
+  established: Int! @search
+  name: String
+     @custom(
+      http: {
+        url: "http://mock:8888/gqlSchoolName"
+        method: "POST"
+        operation: "single"
+        graphql: "query { schoolName(id: $id) }"
+      }
+    )
+  classes: [Class]
+    @custom(
+      http: {
+        url: "http://mock:8888/class"
+        method: "POST"
+        body: "{sid: $id}"
+        operation: "single"
+      }
+    )
+  teachers: [Teacher]
+}
+
+type Class @remote {
+  id: ID!
+  name: String!
+}
+
+type Teacher {
+  tid: ID!
+  age: Int!
+  name: String
+    @custom(
+      http: {
+        url: "http://mock:8888/gqlTeacherNames"
+        method: "POST"
+        operation: "batch"
+        graphql: "query { teacherNames(input: [{ id: $tid, age: $age}]) }"
+      }
+    )
+}

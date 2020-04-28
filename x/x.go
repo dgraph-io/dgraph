@@ -134,6 +134,10 @@ const (
 	// bulk load.
 	GroupIdFileName = "group_id"
 
+	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
+		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With"
+
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
 {"predicate":"dgraph.graphql.schema", "type": "string"},
@@ -300,9 +304,7 @@ func SetHttpStatus(w http.ResponseWriter, code int, msg string) {
 func AddCorsHeaders(w http.ResponseWriter) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "X-Dgraph-AccessToken, "+
-		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, "+
-		"X-CSRF-Token, X-Auth-Token, X-Requested-With")
+	w.Header().Set("Access-Control-Allow-Headers", AccessControlAllowedHeaders)
 	w.Header().Set("Access-Control-Allow-Credentials", "true")
 	w.Header().Set("Connection", "close")
 }
