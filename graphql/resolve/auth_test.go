@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -32,6 +33,10 @@ import (
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
 	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
+)
+
+var (
+	metainfo = &authorization.AuthMeta{}
 )
 
 type AuthQueryRewritingCase struct {
@@ -60,7 +65,12 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	testRewriter := NewQueryRewriter()
 
-	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	strSchema := string(sch)
+	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo.Parse(strSchema)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 
@@ -86,12 +96,17 @@ func TestAuthQueryRewriting(t *testing.T) {
 	}
 }
 
+type ClientCustomClaims struct {
+	AuthVariables map[string]interface{} `json:"https://xyz.io/jwt/claims"`
+	jwt.StandardClaims
+}
+
 func addClaimsToContext(
 	ctx context.Context,
 	t *testing.T,
 	authVars map[string]interface{}) context.Context {
 
-	claims := CustomClaims{
+	claims := ClientCustomClaims{
 		authVars,
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute).Unix(),
@@ -100,7 +115,7 @@ func addClaimsToContext(
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte(AuthHmacSecret))
+	ss, err := token.SignedString([]byte(metainfo.PublicKey))
 	require.NoError(t, err)
 
 	md := metadata.New(nil)
@@ -200,7 +215,12 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 		},
 	}
 
-	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	strSchema := string(sch)
+	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo.Parse(strSchema)
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
