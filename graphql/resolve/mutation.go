@@ -241,18 +241,13 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	numUidsField := mutation.NumUidsField()
 	numUidsFieldRespName := schema.NumUid
-	numUids := 0
+	numUids := getNumUids(mutation, mutResp.Uids, result)
 	if numUidsField != nil {
 		numUidsFieldRespName = numUidsField.ResponseName()
-		numUids = getNumUids(mutation, mutResp.Uids, result)
 	}
 
 	// merge the extensions we got from Mutate and Query into extM
-	if extM == nil {
-		extM = extQ
-	} else {
-		extM.Merge(extQ)
-	}
+	extM.Merge(extQ)
 
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), errs)
 	if resolved.Data == nil && resolved.Err != nil {
@@ -287,9 +282,15 @@ func deleteCompletion() CompletionFunc {
 		if fld, ok := resolved.Data.(map[string]interface{}); ok {
 			if rsp, ok := fld[resolved.Field.ResponseName()].(map[string]interface{}); ok {
 				rsp["msg"] = "Deleted"
-				if rsp["numUids"] == 0 {
+				// as delete is a mutation, so the resolved field should be of Mutation type
+				numUidsField := resolved.Field.(schema.Mutation).NumUidsField()
+				numUidsFieldRespName := schema.NumUid
+				if numUidsField != nil {
+					numUidsFieldRespName = numUidsField.ResponseName()
+				}
+				if rsp[numUidsFieldRespName] == 0 {
 					rsp["msg"] = "No nodes were deleted"
-				} 
+				}
 			}
 		}
 	})
