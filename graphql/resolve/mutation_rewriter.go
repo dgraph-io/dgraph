@@ -394,7 +394,7 @@ func (urw *UpdateRewriter) Rewrite(
 		return nil, nil
 	}
 
-	upsertQuery := RewriteUpsertQueryFromMutation(m)
+	upsertQuery := RewriteUpsertQueryFromMutation(m, nil)
 	srcUID := MutationQueryVarUID
 
 	xidMd := newXidMetadata()
@@ -560,7 +560,7 @@ func extractFilter(m schema.Mutation) map[string]interface{} {
 	return filter
 }
 
-func RewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
+func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gql.GraphQuery {
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
 		Var:  MutationQueryVar,
@@ -580,6 +580,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
+	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
 	return dgQuery
 }
 
@@ -594,7 +595,25 @@ func (drw *deleteRewriter) Rewrite(
 	}
 
 	varGen := NewVariableGenerator()
-	qry := RewriteUpsertQueryFromMutation(m)
+
+	authVariables, err := ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	authRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        varGen,
+		selector:      deleteAuthSelector,
+	}
+
+	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
+	qry := dgQry
+	if qry.Attr == "" {
+		// Auth queries must have been added to the query, first query is the actual delete
+		qry = dgQry.Children[0]
+	}
+
 	deletes := []interface{}{map[string]interface{}{"uid": "uid(x)"}}
 
 	// we need to delete this node with ^^ and then any reference we know about
@@ -635,7 +654,7 @@ func (drw *deleteRewriter) Rewrite(
 	b, err := json.Marshal(deletes)
 
 	upsert := &UpsertMutation{
-		Query:     qry,
+		Query:     dgQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
@@ -665,6 +684,15 @@ func asUID(val interface{}) (uint64, error) {
 	}
 
 	return uid, nil
+}
+
+func deleteAuthSelector(t schema.Type) *schema.RuleNode {
+	auth := t.AuthRules()
+	if auth == nil || auth.Rules == nil {
+		return nil
+	}
+
+	return auth.Rules.Delete
 }
 
 func mutationsFromFragments(

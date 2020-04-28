@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
@@ -33,12 +35,17 @@ import (
 )
 
 type AuthQueryRewritingCase struct {
-	Name      string
-	GQLQuery  string
-	Variables map[string]interface{}
-	DGQuery   string
-	User      string
-	Role      string
+	Name        string
+	GQLQuery    string
+	Variables   string
+	DGMutations []*dgraphMutation
+	DGQuery     string
+	User        string
+	Role        string
+
+	// needed?
+	Error           *x.GqlError
+	ValidationError *x.GqlError
 }
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -59,8 +66,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 			op, err := gqlSchema.Operation(
 				&schema.Request{
-					Query:     tcase.GQLQuery,
-					Variables: tcase.Variables,
+					Query: tcase.GQLQuery,
+					// Variables: tcase.Variables,
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
@@ -218,5 +225,69 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			require.Equal(t, tt.dgQuery, dgraph.AsString(dgQuery))
 		})
 
+	}
+}
+
+// Tests showing that the query rewriter produces the expected Dgraph queries
+// for delete when it also needs to write in auth - this doesn't extend to other nodes
+// it only ever applies at the top level because delete only deletes the nodes
+// referenced by the filter, not anything deeper.
+func TestAuthDeleteRewriting(t *testing.T) {
+	b, err := ioutil.ReadFile("auth_delete_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []AuthQueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			// -- Arrange --
+			var vars map[string]interface{}
+			if tcase.Variables != "" {
+				err := json.Unmarshal([]byte(tcase.Variables), &vars)
+				require.NoError(t, err)
+			}
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query:     tcase.GQLQuery,
+					Variables: vars,
+				})
+			require.NoError(t, err)
+			mut := test.GetMutation(t, op)
+			rewriterToTest := NewDeleteRewriter()
+
+			authVars := map[string]interface{}{
+				"USER": "user1",
+				"ROLE": tcase.Role,
+			}
+
+			ctx := addClaimsToContext(context.Background(), t, authVars)
+
+			// -- Act --
+			upsert, err := rewriterToTest.Rewrite(ctx, mut)
+			q := upsert.Query
+			muts := upsert.Mutations
+
+			// -- Assert --
+			if tcase.Error != nil || err != nil {
+				require.Equal(t, tcase.Error.Error(), err.Error())
+			} else {
+				require.Equal(t, tcase.DGQuery, dgraph.AsString(q))
+				require.Len(t, muts, len(tcase.DGMutations))
+				for i, expected := range tcase.DGMutations {
+					require.Equal(t, expected.Cond, muts[i].Cond)
+					if len(muts[i].SetJson) > 0 || expected.SetJSON != "" {
+						require.JSONEq(t, expected.SetJSON, string(muts[i].SetJson))
+					}
+					if len(muts[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+						require.JSONEq(t, expected.DeleteJSON, string(muts[i].DeleteJson))
+					}
+				}
+			}
+		})
 	}
 }
