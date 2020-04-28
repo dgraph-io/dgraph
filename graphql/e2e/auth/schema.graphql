@@ -247,3 +247,5 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
+
+# Authorization auth-header secretkey https://xyz.io/jwt/claims
