@@ -395,6 +395,7 @@ func health(t *testing.T) {
           version
           uptime
           lastEcho
+          ee_features
         }
       }`,
 	}
@@ -421,6 +422,7 @@ func health(t *testing.T) {
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
