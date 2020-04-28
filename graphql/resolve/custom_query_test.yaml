@@ -12,24 +12,22 @@
       }
     }
   httpresponse: |
-    {
-      "myFavoriteMovies": [
-        {
-          "id": "0x1",
-          "name": "Star Wars",
-          "director": [
-            {
-              "id": "0x2",
-              "name": "George Lucas"
-            }
-          ]
-        },
-        {
-          "id": "0x3",
-          "name": "Star Trek"
-        }
-      ]
-    }
+    [
+      {
+        "id": "0x1",
+        "name": "Star Wars",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "George Lucas"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Star Trek"
+      }
+    ]
   url: http://myapi.com/favMovies/0x1?name=Michael&num=
   method: GET
   resolvedresponse: |
@@ -68,23 +66,21 @@
   variables: |
     { "id": "0x9" }
   httpresponse: |
-    {
-      "myFavoriteMoviesPart2": [
-        {
-          "id": "0x1",
-          "director": [
-            {
-              "id": "0x2",
-              "name": "George Lucas"
-            }
-          ]
-        },
-        {
-          "id": "0x3",
-          "name": "Star Trek"
-        }
-      ]
-    }
+    [
+      {
+        "id": "0x1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "George Lucas"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Star Trek"
+      }
+    ]
   url: http://myapi.com/favMovies/0x9?name=Michael&num=10
   method: POST
   body: '{ "id": "0x9", "name": "Michael", "director": { "number": 10 }}'
