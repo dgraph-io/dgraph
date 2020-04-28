@@ -1471,6 +1471,38 @@ func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
 	}`, userID)
 }
 
+func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprint(w, introspectedSchemaForQuery("userName", "id"))
+		return
+	}
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+	userID := req.Variables["id"].(string)
+	fmt.Fprintf(w, `
+	{
+		"data": {
+		  "userName": "uname-%s"
+		},
+		"errors": [
+			{
+				"message": "error-1 from username"
+			},
+			{
+				"message": "error-2 from username"
+			}
+		]
+	}`, userID)
+}
+
 func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
@@ -1828,102 +1860,92 @@ func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, res)
 }
 
-func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, `{
-			"data":{
-				"__schema":{
-				"queryType":{
-					"name":"Query"
-				},
-				"mutationType":null,
-				"subscriptionType":null,
-				"types":[
-					{
-					"kind":"OBJECT",
-					"name":"Query",
-					"fields":[
-						{
-						"name":"cars",
-						"args":[
-							{
-							"name":"input",
-							"type":{
-								"kind":"LIST",
-								"name":null,
-								"ofType": {
-									"kind": "INPUT_OBJECT",
-									"name": "UserInput",
-									"ofType": null
-								}
-							},
-							"defaultValue":null
-							}
-						],
-						"type":{
-							"kind": "LIST",
-							"name": null,
-							"ofType": {
-								"kind":"OBJECT",
-								"name":"Car",
-								"ofType":null
-							}
-						},
-						"isDeprecated":false,
-						"deprecationReason":null
-						}
-					]
-					},
+const (
+	gqlCarsSchemaIntrospection = `{
+		"data":{
+			"__schema":{
+			"queryType":{
+				"name":"Query"
+			},
+			"mutationType":null,
+			"subscriptionType":null,
+			"types":[
 				{
-				  "kind": "INPUT_OBJECT",
-				  "name": "UserInput",
-				  "fields": [
+				"kind":"OBJECT",
+				"name":"Query",
+				"fields":[
 					{
-						"name": "id",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-						 	"kind": "SCALAR",
-						 	"name": "ID",
-							"ofType": null
-						  }
+					"name":"cars",
+					"args":[
+						{
+						"name":"input",
+						"type":{
+							"kind":"LIST",
+							"name":null,
+							"ofType": {
+								"kind": "INPUT_OBJECT",
+								"name": "UserInput",
+								"ofType": null
+							}
 						},
-						"isDeprecated": false,
-						"deprecationReason": null
+						"defaultValue":null
+						}
+					],
+					"type":{
+						"kind": "LIST",
+						"name": null,
+						"ofType": {
+							"kind":"OBJECT",
+							"name":"Car",
+							"ofType":null
+						}
 					},
-					{
-						"name": "age",
-						"type": {
-						  "kind": "NON_NULL",
-						  "name": null,
-						  "ofType": {
-						 	"kind": "SCALAR",
-						 	"name": "Int",
-							"ofType": null
-						  }
-						},
-						"isDeprecated": false,
-						"deprecationReason": null
+					"isDeprecated":false,
+					"deprecationReason":null
 					}
-				  ]
-				}
 				]
+				},
+			{
+			  "kind": "INPUT_OBJECT",
+			  "name": "UserInput",
+			  "fields": [
+				{
+					"name": "id",
+					"type": {
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						 "kind": "SCALAR",
+						 "name": "ID",
+						"ofType": null
+					  }
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
+				},
+				{
+					"name": "age",
+					"type": {
+					  "kind": "NON_NULL",
+					  "name": null,
+					  "ofType": {
+						 "kind": "SCALAR",
+						 "name": "Int",
+						"ofType": null
+					  }
+					},
+					"isDeprecated": false,
+					"deprecationReason": null
 				}
+			  ]
 			}
-		}`)
-		return
-	}
+			]
+			}
+		}
+	}`
+)
 
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
+func buildCarBatchOutput(b []byte, req request) []interface{} {
 	input := req.Variables["input"]
 	output := []interface{}{}
 	for _, i := range input.([]interface{}) {
@@ -1933,10 +1955,67 @@ func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
 			"name": "car-" + id,
 		})
 	}
+	return output
+}
 
+func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, gqlCarsSchemaIntrospection)
+		return
+	}
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+
+	output := buildCarBatchOutput(b, req)
 	response := map[string]interface{}{
 		"data": map[string]interface{}{
 			"cars": output,
+		},
+	}
+
+	b, err = json.Marshal(response)
+	if err != nil {
+		return
+	}
+	check2(fmt.Fprint(w, string(b)))
+}
+
+func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
+	b, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+	if strings.Contains(string(b), "__schema") {
+		fmt.Fprintf(w, gqlCarsSchemaIntrospection)
+		return
+	}
+
+	var req request
+	if err := json.Unmarshal(b, &req); err != nil {
+		return
+	}
+
+	output := buildCarBatchOutput(b, req)
+	response := map[string]interface{}{
+		"data": map[string]interface{}{
+			"cars": output,
+		},
+		"errors": []map[string]interface{}{
+			map[string]interface{}{
+				"message": "error-1 from cars",
+			},
+			map[string]interface{}{
+				"message": "error-2 from cars",
+			},
 		},
 	}
 
@@ -2128,6 +2207,7 @@ func main() {
 
 	// for testing single mode
 	http.HandleFunc("/gqlUserName", gqlUserNameHandler)
+	http.HandleFunc("/gqlUserNameWithError", gqlUserNameWithErrorHandler)
 	http.HandleFunc("/gqlCar", gqlCarHandler)
 	http.HandleFunc("/gqlClass", gqlClassHandler)
 	http.HandleFunc("/gqlTeacherName", gqlTeacherNameHandler)
@@ -2137,6 +2217,7 @@ func main() {
 	http.HandleFunc("/getPosts", getPosts)
 	http.HandleFunc("/gqlUserNames", gqlUserNamesHandler)
 	http.HandleFunc("/gqlCars", gqlCarsHandler)
+	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)
 	http.HandleFunc("/gqlClasses", gqlClassesHandler)
 	http.HandleFunc("/gqlTeacherNames", gqlTeacherNamesHandler)
 	http.HandleFunc("/gqlSchoolNames", gqlSchoolNamesHandler)
