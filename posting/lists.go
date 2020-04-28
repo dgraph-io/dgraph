@@ -129,13 +129,19 @@ func updateMemoryMetrics(lc *y.Closer) {
 }
 
 var (
-	pstore *badger.DB
-	closer *y.Closer
+	pstore  *badger.DB
+	closer  *y.Closer
+	plCache *PlCache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
+	var err error
+	plCache, err = NewPlCache()
+	if err != nil {
+		glog.Warningf("Error while creating posting list cache: %v", err)
+	}
 	closer = y.NewCloser(1)
 	go updateMemoryMetrics(closer)
 }

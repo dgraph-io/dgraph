@@ -80,6 +80,10 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 			glog.V(2).Infof("Rolled up %d keys", count)
 		}
 	}
+
+	for _, kv := range kvs {
+		plCache.Del(kv.Key)
+	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
@@ -333,6 +337,10 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
+	if l := plCache.Get(key, readTs); l != nil {
+		return l, nil
+	}
+
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
@@ -344,5 +352,11 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	itr := txn.NewKeyIterator(key, iterOpts)
 	defer itr.Close()
 	itr.Seek(key)
-	return ReadPostingList(key, itr)
+
+	l, err := ReadPostingList(key, itr)
+	if err != nil {
+		return nil, err
+	}
+	plCache.Set(key, readTs, l)
+	return l, nil
 }

@@ -291,12 +291,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	span := otrace.FromContext(ctx)
 
 	if proposal.Mutations.DropOp == pb.Mutations_DATA {
+		posting.ClearCache()
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		return posting.DeleteData()
 	}
 
 	if proposal.Mutations.DropOp == pb.Mutations_ALL {
+		posting.ClearCache()
 		// Ensures nothing get written to disk due to commit proposals.
 		posting.Oracle().ResetTxns()
 		schema.State().DeleteAll()
@@ -346,6 +348,12 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// would be picked up in building indexes. Any uncommitted txns would be cancelled
 		// by detectPendingTxns below.
 		startTs := posting.Oracle().MaxAssigned()
+
+		// Clear cache if there is a schema update because the index rebuild will invalidate
+		// the state.
+		if len(proposal.Mutations.Schema) > 0 {
+			posting.ClearCache()
+		}
 
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
@@ -720,6 +728,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 			return
 		}
 		txn.Update()
+		txn.RemoveCachedKeys()
 		err := x.RetryUntilSuccess(x.WorkerConfig.MaxRetries, 10*time.Millisecond, func() error {
 			return txn.CommitToDisk(writer, commit)
 		})
