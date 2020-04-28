@@ -90,30 +90,30 @@
 	{
 		"uid": "_:log1",
 		"dgraph.type": "Log",
-		"Log.msg": "Log1"
+		"Log.logs": "Log1"
 	},
 	{
 		"uid": "_:log2",
 		"dgraph.type": "Log",
-		"Log.msg": "Log2"
+		"Log.logs": "Log2"
 	},
 	{
 		"uid": "_:role1",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
-		"Role.permissions":[0,1,2]
+		"Role.permission":["VIEW"]
 	},
 	{
 		"uid": "_:role2",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
-		"Role.permissions":[0]
+		"Role.permission":["VIEW"]
 	},
 	{
 		"uid": "_:role3",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user4"}],
-		"Role.permissions":[0,1]
+		"Role.permission":["VIEW"]
 	},
 	{
 		"uid": "_:project1",
@@ -133,7 +133,7 @@
 		"uid": "_:column1",
 		"dgraph.type": "Column",
 		"Column.inProject": {"uid": "_:project1"},
-		"Column.name": "Column2",
+		"Column.name": "Column1",
 		"ticket.tickets": [{"uid": "_:ticket1"}, {"uid": "_:ticket2"}]
 	},
 	{

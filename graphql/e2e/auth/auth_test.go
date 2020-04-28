@@ -18,13 +18,17 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -64,17 +68,9 @@ type Log struct {
 	Logs string
 }
 
-type Permission int
-
-const (
-	VIEW Permission = iota
-	EDIT
-	ADMIN
-)
-
 type Role struct {
 	Id          uint64
-	Permissions []Permission
+	Permissions []string
 	AssignedTo  []User
 }
 
@@ -86,7 +82,7 @@ type Ticket struct {
 }
 
 type Column struct {
-	ColID     uint64
+	ColID     string
 	InProject Project
 	Name      string
 	Tickets   []Ticket
@@ -96,17 +92,16 @@ type Project struct {
 	ProjID  uint64
 	Name    string
 	Roles   []Role
-	columns []Column
+	Columns []Column
 }
 
 type TestCase struct {
-	name   string
 	user   string
 	role   string
 	result string
 }
 
-func getJWT(t *testing.T, user, role string) string {
+func getJWT(t *testing.T, user, role string) http.Header {
 	type MyCustomClaims struct {
 		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
 		jwt.StandardClaims
@@ -116,29 +111,62 @@ func getJWT(t *testing.T, user, role string) string {
 	claims := MyCustomClaims{
 		map[string]interface{}{},
 		jwt.StandardClaims{
-			ExpiresAt: 15000,
+			ExpiresAt: time.Now().Add(time.Minute * 1000).Unix(),
 			Issuer:    "test",
 		},
 	}
 
-	claims.Foo["User"] = user
-	claims.Foo["Role"] = role
+	claims.Foo["USER"] = user
+	claims.Foo["ROLE"] = role
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte("Secret"))
+	ss, err := token.SignedString([]byte("Secretkey"))
 	require.NoError(t, err)
 
-	return ss
+	h := make(http.Header)
+	h.Add("X-Dgraph-HeadersToken", ss)
+
+	return h
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user1",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user4",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}}
 	query := `
-                 queryProject (order: {asc: name}) {
+            query {
+                queryProject (order: {asc: name}) {
 			name
 		}
+	    }
 	`
 
 	var result, data struct {
@@ -147,8 +175,8 @@ func TestOrRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Headers: getJWT(t, tcase.user, tcase.role),
+			Query:   query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -166,22 +194,29 @@ func TestOrRBACFilter(t *testing.T) {
 	}
 }
 
-func rootGetFilter(t *testing.T, id uint64, user string) {
-	testCases := []TestCase{}
+func rootGetFilter(t *testing.T, col *Column, tcase TestCase) {
+	testCases := []TestCase{{
+		user:   tcase.user,
+		role:   tcase.role,
+		result: fmt.Sprintf(`{"getColumn": {"name": "%s"}}`, col.Name),
+	}}
 	query := `
-		getColumn(colID: {asc: name}) {
-			name
+		query($id: ID!) {
+		    getColumn(colID: $id) {
+		    	name
+		    }
 		}
 	`
 
 	var result, data struct {
-		QueryColumn []*Column
+		GetColumn *Column
 	}
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Headers:   getJWT(t, tcase.user, tcase.role),
+			Query:     query,
+			Variables: map[string]interface{}{"id": col.ColID},
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -201,14 +236,30 @@ func rootGetFilter(t *testing.T, id uint64, user string) {
 }
 
 func TestRootFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column1"}]}`,
+	}, {
+		user:   "user1",
+		role:   "ADMIN",
+		result: `{"queryColumn": [{"name": "Column1"}]}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column1"}, {"name": "Column2"}, {"name": "Column3"}]}`,
+	}, {
+		user:   "user4",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column2"}, {"name": "Column3"}]}`,
+	}}
 	query := `
+	query {
 		queryColumn(order: {asc: name}) {
 			colID
 			name
 		}
+	}
 	`
 
 	var result, data struct {
@@ -216,37 +267,61 @@ func TestRootFilter(t *testing.T) {
 	}
 
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role),  // FIXME:
-			Query: query,
-		}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.Nil(t, err)
 
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
+			err = json.Unmarshal([]byte(tcase.result), &data)
+			require.Nil(t, err)
 
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+			opt := cmpopts.IgnoreFields(Column{}, "ColID")
+			if diff := cmp.Diff(result, data, opt); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
 
-		if len(result.QueryColumn) > 0 {
-			rootGetFilter(t, result.QueryColumn[0].ColID, tcase.user)
-		}
+			if len(result.QueryColumn) > 0 {
+				rootGetFilter(t, result.QueryColumn[0], tcase)
+			}
+		})
 	}
 }
 
 func TestRBACFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{
+		{role: "USER", result: `{
+    "queryLog": [
+      {
+        "logs": "Log1"
+      },
+      {
+        "logs": "Log2"
+      }
+    ]
+  }`},
+		{role: "ADMIN", result: `{
+    "queryLog": [
+      {
+        "logs": "Log1"
+      },
+      {
+        "logs": "Log2"
+      }
+    ]
+  }`},
+	}
 	query := `
-                 queryLog (order: {asc: logs}) {
-			logs
+		query {
+                    queryLog (order: {asc: logs}) {
+		    	logs
+		    }
 		}
 	`
 
@@ -256,58 +331,8 @@ func TestRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
-}
-
-func TestDeepFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                 queryProject (order: {asc: name}) {
-			name
-			roles {
-				permissions
-				assignedTo {
-					username
-				}
-			}
-			columns {
-				name 
-				tickets {
-					title
-					assignedTo  {
-						username
-					}
-				}
-			}
-		}
-	`
-
-	var result, data struct {
-		QueryProject []*Project
-	}
-
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Headers: getJWT(t, tcase.user, tcase.role),
+			Query:   query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -326,15 +351,28 @@ func TestDeepFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryIssue": [{"msg": "Issue1"}]}`,
+	}, {
+		user:   "user1",
+		role:   "ADMIN",
+		result: `{"queryIssue": [{"msg": "Issue1"}]}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
+	}, {
+		user:   "user2",
+		role:   "ADMIN",
+		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
+	}}
 	query := `
-                 queryIssue (order: {asc: msg}) {
+		query {
+                queryIssue (order: {asc: msg}) {
 			msg
-			user {
-				username
-			}
+		}
 		}
 	`
 
@@ -344,8 +382,8 @@ func TestAndRBACFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Headers: getJWT(t, tcase.user, tcase.role),
+			Query:   query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -365,18 +403,150 @@ func TestAndRBACFilter(t *testing.T) {
 }
 
 func TestAndFilter(t *testing.T) {
-	t.Skip()
+	testCases := []TestCase{{
+		user: "user1",
+		role: "USER",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
+}
+		`,
+	}, {
+		user: "user1",
+		role: "ADMIN",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
+}
+		`,
+	}, {
+		user: "user2",
+		role: "USER",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie1",
+         "regionsAvailable": [
+            {
+               "name": "Region2"
+            },
+            {
+               "name": "Region3"
+            }
+         ]
+      },
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
+}
+		`,
+	}, {
+		user: "user2",
+		role: "ADMIN",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie1",
+         "regionsAvailable": [
+            {
+               "name": "Region2"
+            },
+            {
+               "name": "Region3"
+            }
+         ]
+      },
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
+}
+		`,
+	}}
 
-	testCases := []TestCase{}
 	query := `
-                 queryMovie (order: {asc: content}) {
-			content
-			regionsAvailable (order: {asc: name}) {
-				name
-				users (order: {asc: username}) {
-					username
-				}
-			}
+		query {
+                    queryMovie (order: {asc: content}) {
+		           content
+		           regionsAvailable (order: {asc: name}) {
+		           	name
+		           }
+		    }
 		}
 	`
 
@@ -386,8 +556,8 @@ func TestAndFilter(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
+			Headers: getJWT(t, tcase.user, tcase.role),
+			Query:   query,
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -403,93 +573,6 @@ func TestAndFilter(t *testing.T) {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 	}
-}
-
-func TestDeepFieldFilters(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                 queryProject (order: {asc: name}) {
-			name
-			roles {
-				permissions
-				assignedTo {
-					username
-					age
-				}
-			}
-		}
-	`
-
-	var result, data struct {
-		QueryProject []*Project
-	}
-
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
-}
-
-func TestFieldFilters(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                queryUser (order: {asc: username}) {
-			username
-			age
-			isPublic
-		}
-	`
-
-	var result, data struct {
-		QueryUser []*User
-	}
-
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
-}
-
-func TestSchema_Auth(t *testing.T) {
-	// TODO write this test
-
-	//t.Run("graphql schema", func(t *testing.T) {
-	//	common.SchemaTest(t, expectedDgraphSchema)
-	//})
 }
 
 func TestMain(m *testing.M) {

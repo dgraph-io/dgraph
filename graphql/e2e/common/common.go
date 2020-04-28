@@ -193,6 +193,10 @@ func BootstrapServer(schema, data []byte) {
 		x.Panic(err)
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
+	err = client.Alter(ctx, &api.Operation{DropAll: true})
+	if err != nil {
+		x.Panic(err)
+	}
 
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
@@ -439,7 +443,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	require.NoError(t, err)
 
 	return result
-
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
