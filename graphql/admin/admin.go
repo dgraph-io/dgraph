@@ -116,6 +116,11 @@ const (
 		List of predicates for which indexes are built in the background.
 		"""
 		indexing: [String]
+
+		"""
+		List of Enterprise Features that are enabled.
+		"""
+		ee_features: [String]
 	}
 
 	type MembershipState {
