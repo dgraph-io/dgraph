@@ -43,8 +43,8 @@ func TestEncodeMemory(t *testing.T) {
 		for i := 0; i < 15000; i++ {
 			enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 				types.ValueForType(types.StringID))
-			enc.AddListChild(n, enc.idForAttr(fmt.Sprintf("another long child %06d", i)),
-				enc.newNode())
+			enc.AddListChild(n,
+				enc.newNodeWithAttr(enc.idForAttr(fmt.Sprintf("another long child %06d", i))))
 		}
 		wg.Add(1)
 		go func() {
@@ -74,19 +74,19 @@ func TestNormalizeJSONLimit(t *testing.T) {
 		enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 			types.ValueForType(types.StringID))
 		child1 := enc.newNodeWithAttr(enc.idForAttr("child1"))
-		enc.AddListChild(n, enc.idForAttr("child1"), child1)
+		enc.AddListChild(n, child1)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
 		child2 := enc.newNodeWithAttr(enc.idForAttr("child2"))
-		enc.AddListChild(n, enc.idForAttr("child2"), child2)
+		enc.AddListChild(n, child2)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
 		child3 := enc.newNodeWithAttr(enc.idForAttr("child3"))
-		enc.AddListChild(n, enc.idForAttr("child3"), child3)
+		enc.AddListChild(n, child3)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
 				types.ValueForType(types.StringID))
@@ -150,8 +150,7 @@ func TestFastJsonNode(t *testing.T) {
 	list := true
 
 	enc := newEncoder()
-	fj := enc.newNode()
-	enc.setAttr(fj, attrId)
+	fj := enc.newNodeWithAttr(attrId)
 	require.NoError(t, enc.setScalarVal(fj, scalarVal))
 	enc.setList(fj, list)
 
@@ -161,8 +160,7 @@ func TestFastJsonNode(t *testing.T) {
 	require.Equal(t, scalarVal, sv)
 	require.Equal(t, list, enc.getList(fj))
 
-	fj2 := enc.newNode()
-	enc.setAttr(fj2, attrId)
+	fj2 := enc.newNodeWithAttr(attrId)
 	require.NoError(t, enc.setScalarVal(fj2, scalarVal))
 	enc.setList(fj2, list)
 

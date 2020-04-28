@@ -131,8 +131,7 @@ func (enc *encoder) attrForID(id uint16) string {
 
 // makeScalarNode returns a fastJsonNode with all of its meta data, scalarVal populated.
 func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (fastJsonNode, error) {
-	fj := enc.newNode()
-	enc.setAttr(fj, attr)
+	fj := enc.newNodeWithAttr(attr)
 	if err := enc.setScalarVal(fj, val); err != nil {
 		return 0, err
 	}
@@ -255,10 +254,10 @@ func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list
 	return nil
 }
 
-func (enc *encoder) AddMapChild(fj fastJsonNode, attr uint16, val fastJsonNode) {
+func (enc *encoder) AddMapChild(fj fastJsonNode, val fastJsonNode) {
 	var childNode fastJsonNode
 	for _, c := range enc.getAttrs(fj) {
-		if enc.getAttr(c) == attr {
+		if enc.getAttr(c) == enc.getAttr(val) {
 			childNode = c
 			break
 		}
@@ -267,13 +266,11 @@ func (enc *encoder) AddMapChild(fj fastJsonNode, attr uint16, val fastJsonNode) 
 	if childNode > 0 {
 		enc.appendAttrs(childNode, enc.getAttrs(val)...)
 	} else {
-		enc.setAttr(val, attr)
 		enc.appendAttrs(fj, val)
 	}
 }
 
-func (enc *encoder) AddListChild(fj fastJsonNode, attr uint16, child fastJsonNode) {
-	enc.setAttr(child, attr)
+func (enc *encoder) AddListChild(fj fastJsonNode, child fastJsonNode) {
 	enc.setList(child, true)
 	enc.appendAttrs(fj, child)
 }
@@ -508,13 +505,12 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 				return err
 			}
 		} else {
-			facetNode := enc.newNode()
-			enc.setAttr(facetNode, enc.idForAttr(fName))
+			facetNode := enc.newNodeWithAttr(enc.idForAttr(fName))
 			err := enc.AddValue(facetNode, enc.idForAttr(strconv.Itoa(facetIdx)), fVal)
 			if err != nil {
 				return err
 			}
-			enc.AddMapChild(fj, enc.idForAttr(fName), facetNode)
+			enc.AddMapChild(fj, facetNode)
 		}
 	}
 
@@ -721,9 +717,9 @@ func (sg *SubGraph) addGroupby(enc *encoder, fj fastJsonNode,
 				return err
 			}
 		}
-		enc.AddListChild(g, enc.idForAttr("@groupby"), uc)
+		enc.AddListChild(g, uc)
 	}
-	enc.AddListChild(fj, enc.idForAttr(fname), g)
+	enc.AddListChild(fj, g)
 	return nil
 }
 
@@ -742,14 +738,14 @@ func (sg *SubGraph) addAggregations(enc *encoder, fj fastJsonNode) error {
 			continue
 		}
 		fieldName := child.aggWithVarFieldName()
-		n1 := enc.newNodeWithAttr(enc.idForAttr(fieldName))
+		n1 := enc.newNodeWithAttr(enc.idForAttr(sg.Params.Alias))
 		if err := enc.AddValue(n1, enc.idForAttr(fieldName), aggVal); err != nil {
 			return err
 		}
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), n1)
+		enc.AddListChild(fj, n1)
 	}
 	if enc.IsEmpty(fj) {
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newNode())
+		enc.AddListChild(fj, enc.newNodeWithAttr(enc.idForAttr(sg.Params.Alias)))
 	}
 	return nil
 }
@@ -775,7 +771,7 @@ func (sg *SubGraph) handleCountUIDNodes(enc *encoder, n fastJsonNode, count int)
 			if err := enc.AddValue(fjChild, enc.idForAttr(field), c); err != nil {
 				return false, err
 			}
-			enc.AddListChild(n, enc.idForAttr(fieldName), fjChild)
+			enc.AddListChild(n, fjChild)
 		}
 	}
 
@@ -787,8 +783,9 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return sg.addAggregations(enc, fj)
 	}
 
+	attrID := enc.idForAttr(sg.Params.Alias)
 	if sg.uidMatrix == nil {
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newNode())
+		enc.AddListChild(fj, enc.newNodeWithAttr(attrID))
 		return nil
 	}
 
@@ -814,7 +811,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 			continue
 		}
 
-		n1 := enc.newNodeWithAttr(enc.idForAttr(sg.Params.Alias))
+		n1 := enc.newNodeWithAttr(attrID)
 		enc.setAttr(n1, enc.idForAttr(sg.Params.Alias))
 		if err := sg.preTraverse(enc, uid, n1); err != nil {
 			if err.Error() == "_INV_" {
@@ -829,7 +826,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 
 		hasChild = true
 		if !sg.Params.Normalize {
-			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), n1)
+			enc.AddListChild(fj, n1)
 			continue
 		}
 
@@ -839,15 +836,15 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 			return err
 		}
 		for _, c := range normalized {
-			node := enc.newNode()
+			node := enc.newNodeWithAttr(attrID)
 			enc.appendAttrs(node, c...)
-			enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), node)
+			enc.AddListChild(fj, node)
 		}
 	}
 
 	if !hasChild {
 		// So that we return an empty key if the root didn't have any children.
-		enc.AddListChild(fj, enc.idForAttr(sg.Params.Alias), enc.newNode())
+		enc.AddListChild(fj, enc.newNodeWithAttr(attrID))
 	}
 	return nil
 }
@@ -1127,16 +1124,16 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							// }
 							// boss should be of list type because there can be mutliple friends of
 							// boss.
-							node := enc.newNode()
+							node := enc.newNodeWithAttr(enc.idForAttr(fieldName))
 							enc.appendAttrs(node, c...)
-							enc.AddListChild(dst, enc.idForAttr(fieldName), node)
+							enc.AddListChild(dst, node)
 						}
 						continue
 					}
 					if pc.List {
-						enc.AddListChild(dst, enc.idForAttr(fieldName), uc)
+						enc.AddListChild(dst, uc)
 					} else {
-						enc.AddMapChild(dst, enc.idForAttr(fieldName), uc)
+						enc.AddMapChild(dst, uc)
 					}
 				}
 			}
