@@ -2508,8 +2508,8 @@ Filtering works similarly to how it works on edges and has the same available fu
 
 For example, `@filter(eq(occupations, "Teacher"))` at the root of the query or the
 parent edge will display all the occupations from a list of each node in an array but
-will only include nodes which have `Teacher` as one of the occupations.
-
+will only include nodes which have `Teacher` as one of the occupations. However, filtering
+on value edge is not supported.
 
 ### Reverse Edges
 
