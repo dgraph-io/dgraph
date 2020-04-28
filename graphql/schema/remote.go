@@ -487,25 +487,15 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 	for _, typ := range param.introspection.Data.Schema.Types {
 		if typ.Name == arg {
 			typeFound = true
-			param.typesToFields[typ.Name] = make([]*gqlField, 0, len(typ.Fields))
+			param.typesToFields[typ.Name] = make([]*gqlField, 0,
+				len(typ.Fields)+len(typ.InputFields))
 			param.typesToFields[typ.Name] = append(param.typesToFields[typ.Name],
 				typ.Fields...)
-			// Expand the non scalar types.
-			for _, field := range typ.Fields {
-				_, ok := graphqlScalarType[field.Type.Name]
-				if !ok {
-					// expand this field.
-					err := expandArgRecursively(field.Type.NamedType(), param)
-					if err != nil {
-						return err
-					}
-				}
-			}
-			// expand input fields as well.
 			param.typesToFields[typ.Name] = append(param.typesToFields[typ.Name],
 				typ.InputFields...)
-			for _, field := range typ.InputFields {
-				_, ok := graphqlScalarType[field.Type.NamedType()]
+			// Expand the non scalar types.
+			for _, field := range param.typesToFields[typ.Name] {
+				_, ok := graphqlScalarType[field.Type.Name]
 				if !ok {
 					// expand this field.
 					err := expandArgRecursively(field.Type.NamedType(), param)

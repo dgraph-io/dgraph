@@ -75,8 +75,8 @@ func init() {
 	}
 }
 
-func generateIntrospectionResult(scheme string) string {
-	cmd := exec.Command("node", "index.js", scheme)
+func generateIntrospectionResult(schema string) string {
+	cmd := exec.Command("node", "index.js", schema)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		log.Fatal(err)
