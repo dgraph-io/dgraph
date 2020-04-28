@@ -11,7 +11,7 @@ type State {
         code: String! @id
         country: Country
         name: String!
-        capital: String
+	capital: String
 }
 
 type Author {
@@ -38,7 +38,8 @@ type Post {
         isPublished: Boolean @search
         postType: PostType @search
         author: Author!
-        category: Category @hasInverse(field: posts)
+	category: Category @hasInverse(field: posts)
+	comments: [Comment]
 }
 
 type Category {
@@ -104,40 +105,105 @@ type Computer {
 }
 
 type ComputerOwner {
-        name: String! @id
-        nickName: String
-        computers: Computer! @hasInverse(field: owners)
+	name: String! @id
+	nickName: String
+	computers: Computer! @hasInverse(field: owners)
 }
 
 type User @secret(field: "pwd") {
-        name: String! @id
+	name: String! @id
 }
 
 # For testing duplicate XID in single mutation
 type District {
-        code: String! @id
-        name: String!
-        cities: [City] @hasInverse(field: district)
+	code: String! @id
+	name: String!
+	cities: [City] @hasInverse(field: district)
 }
 
 type City {
-        id: ID!
-        name: String!
-        district: District
+	id: ID!
+	name: String!
+	district: District
 }
 
 # For testing duplicate XID in single mutation for interface
 interface People {
-        id: ID!
-        xid: String! @id
-        name: String!
+	id: ID!
+	xid: String! @id
+	name: String!
 }
 
 type Teacher implements People {
-        subject: String
-        teaches: [Student]
+	subject: String
+	teaches: [Student]
 }
 
 type Student implements People {
-        taughtBy: [Teacher]
+	taughtBy: [Teacher]
+}
+
+type Comment {
+    id: ID!
+    author: String!
+    title: String
+    content: String @custom(http: {
+              url: "http://api-gateway.com/post/$ups?myId=$title",
+              method: "GET",
+              operation: "batch",
+              body: "{ myId: $id, theAuthor: $author}",
+              forwardHeaders: ["X-App-Token"]})
+
+    url: String! @id
+    ups: Int!
+    downs: Int
+    relatedUsers: [User] @custom(http: {
+              url: "http://api-gateway.com/relatedPosts",
+              method: "POST",
+              operation: "single",
+              body: "{ myId: $url }"})
+}
+
+type Query {
+	myFavoriteMovies(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+		method: "GET"
+	})
+
+	myFavoriteMoviesPart2(id: ID!, name: String!, num: Int): [Movie] @custom(http: {
+		url: "http://myapi.com/favMovies/$id?name=$name&num=$num",
+		method: "POST",
+                body: "{ id: $id, name: $name, director: { number: $num }}",
+                forwardHeaders: ["X-App-Token", "Auth0-token"]
+        })
+}
+
+input MovieDirectorInput {
+        id: ID
+        name: String
+        directed: [MovieInput]
+}
+
+input MovieInput {
+        id: ID
+        name: String
+        director: [MovieDirectorInput]
+}
+
+type Mutation {
+        createMyFavouriteMovies(input: [MovieInput!]): [Movie] @custom(http: {
+                url: "http://myapi.com/favMovies",
+                method: "POST",
+                body: "{ movies: $input}",
+                forwardHeaders: ["X-App-Token", "Auth0-token"]
+        })
+        updateMyFavouriteMovie(id: ID!, input: MovieInput!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "PATCH",
+                body: "{ movie: $input}"
+        })
+        deleteMyFavouriteMovie(id: ID!): Movie @custom(http: {
+                url: "http://myapi.com/favMovies/$id",
+                method: "DELETE"
+        })
 }

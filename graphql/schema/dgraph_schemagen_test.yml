@@ -435,8 +435,34 @@ schemas:
       A.p: string .
       A.q: string .
 
-  -
-    name: "fields with same @dgraph(pred: ...) occur only once in schema"
+  - name: "remote types shouldn't be part of Dgraph schema"
+    input: |
+      interface C {
+        c: String
+      }
+
+      type A implements C @remote {
+        id: ID!
+        p: String
+        q: String
+      }
+
+      type B implements C {
+        id: ID!
+        p: String
+      }
+    output: |
+      type C {
+        C.c
+      }
+      C.c: string .
+      type B {
+        C.c
+        B.p
+      }
+      B.p: string .
+
+  - name: "fields with same @dgraph(pred: ...) occur only once in schema"
     input: |
       interface A {
         p: String @dgraph(pred: "key")
@@ -466,8 +492,7 @@ schemas:
       }
       C.name: string .
 
-  -
-    name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
+  - name: "fields with same @dgraph(pred: ...) and different @search(by: [...]) have indexes
     combined"
     input: |
       type A {
@@ -490,3 +515,31 @@ schemas:
       type C {
         name
       }
+
+  -
+    name: "custom types shouldn't be part of Dgraph schema"
+    input: |
+      interface C {
+        c: String
+      }
+
+      type A implements C @remote {
+        id: ID!
+        p: String
+        q: String
+      }
+
+      type B implements C {
+        id: ID!
+        p: String
+      }
+    output: |
+      type C {
+        C.c
+      }
+      C.c: string .
+      type B {
+        C.c
+        B.p
+      }
+      B.p: string .

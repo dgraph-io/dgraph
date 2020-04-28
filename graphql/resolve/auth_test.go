@@ -139,9 +139,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
     onColumn : Ticket.onColumn {
       colID : uid
       name : Column.name
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   Ticket1 as var(func: uid(0x4))
   Ticket2 as var(func: uid(Ticket1)) @cascade {
@@ -182,9 +180,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
     onColumn : Ticket.onColumn {
       colID : uid
       name : Column.name
-      dgraph.uid : uid
     }
-    dgraph.uid : uid
   }
   Ticket1 as var(func: uid(0x4))
   Ticket2 as var(func: uid(Ticket1)) @cascade {
@@ -234,7 +230,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // for delete when it also needs to write in auth - this doesn't extend to other nodes
-// it only every applies at the top level because delete only deletes the nodes
+// it only ever applies at the top level because delete only deletes the nodes
 // referenced by the filter, not anything deeper.
 func TestAuthDeleteRewriting(t *testing.T) {
 	b, err := ioutil.ReadFile("auth_delete_test.yaml")

@@ -11,7 +11,6 @@
       queryUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
         id : uid
         ownedBy : UserSecret.ownedBy
-        dgraph.uid : uid
       }
       UserSecret1 as var(func: type(UserSecret))
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
@@ -30,7 +29,6 @@
       getUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
         id : uid
         ownedBy : UserSecret.ownedBy
-        dgraph.uid : uid
       }
       UserSecret1 as var(func: uid(0x123)) @filter(type(UserSecret))
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
@@ -49,7 +47,6 @@
       queryUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
         id : uid
         ownedBy : UserSecret.ownedBy
-        dgraph.uid : uid
       }
       UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
@@ -68,7 +65,6 @@
       queryTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
         id : uid
         title : Ticket.title
-        dgraph.uid : uid
       }
       Ticket1 as var(func: type(Ticket))
       Ticket2 as var(func: uid(Ticket1)) @cascade {
@@ -104,7 +100,6 @@
         tickets : User.tickets @filter(uid(Ticket1)) {
           id : uid
           title : Ticket.title
-          dgraph.uid : uid
         }
         dgraph.uid : uid
       }
@@ -141,7 +136,6 @@
         tickets : User.tickets @filter((anyofterms(Ticket.title, "graphql") AND uid(Ticket1))) {
           id : uid
           title : Ticket.title
-          dgraph.uid : uid
         }
         dgraph.uid : uid
       }

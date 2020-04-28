@@ -3,10 +3,11 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func fragmentInMutation(t *testing.T) {
@@ -31,7 +32,7 @@ func fragmentInMutation(t *testing.T) {
 	}
 
 	gqlResponse := addStarshipParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	addStarshipExpected := fmt.Sprintf(`{"addStarship":{
 		"starship":[{
@@ -83,7 +84,7 @@ func fragmentInQuery(t *testing.T) {
 	}
 
 	gqlResponse := queryStarshipParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	queryStarshipExpected := fmt.Sprintf(`
 	{
@@ -152,7 +153,7 @@ func fragmentInQueryOnInterface(t *testing.T) {
 	}
 
 	gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	queryCharacterExpected := fmt.Sprintf(`
 	{
@@ -227,7 +228,7 @@ func fragmentInQueryOnObject(t *testing.T) {
 	}
 
 	gqlResponse := queryHumanParams.ExecuteAsPost(t, graphqlURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	queryCharacterExpected := fmt.Sprintf(`
 	{

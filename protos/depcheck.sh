@@ -4,7 +4,7 @@ set -e
 
 readonly PROTOCMINVER="3.6.1"
 
-which protoc &>/dev/null || (echo "Error: protoc not found" ; exit 1)
+which protoc &>/dev/null || (echo "Error: protoc not found" >&2; exit 1)
 
 PROTOCVER=`protoc --version | awk '{printf $2}'`
 
@@ -14,11 +14,12 @@ function CompareSemVer() {
 	local minver=(${1//./ })
 	local curver=(${2//./ })
 
-	echo "Checking for semantic version $1 or newer"
+	echo -n "Checking protoc for semantic version $1 or newer... "
 
 	for i in 0 1 2; do
 		if [ ${minver[$i]} -gt ${curver[$i]} ]; then
-			echo "Error: version $2 is lower than the required version $1"
+			echo "FAIL" >&2
+			echo "Error: version $2 is lower than the required version $1" >&2
 			exit 1
 		elif [ ${curver[$i]} -gt ${minver[$i]} ]; then
 			break
@@ -26,10 +27,21 @@ function CompareSemVer() {
 	done
 }
 
+function CheckProtobufIncludes() {
+	echo -n "Checking for directory /usr/local/include/google/protobuf... "
+	if [ ! -d /usr/local/include/google/protobuf ]; then
+		echo "FAIL" >&2
+		echo "Missing protobuf types in /usr/local/include/google/protobuf: directory not found" >&2
+		echo "Download and install protoc and the protobuf types from protobuf releases page:" >&2
+		echo "https://github.com/protocolbuffers/protobuf/releases/" >&2
+		exit 1
+	fi
+}
+
 CompareSemVer $PROTOCMINVER $PROTOCVER
+echo "OK"
 
-# TODO: check proto api versions
-
+CheckProtobufIncludes
 echo "OK"
 
 exit 0
