@@ -40,6 +40,12 @@ type User struct {
 	Disabled bool
 }
 
+type UserSecret struct {
+	Id      uint64
+	ASecret string
+	OwnedBy string
+}
+
 type Region struct {
 	Id    uint64
 	Name  string
@@ -467,6 +473,49 @@ func TestFieldFilters(t *testing.T) {
 		getUserParams := &common.GraphQLParams{
 			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
 			Query: query,
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.Nil(t, err)
+
+		err = json.Unmarshal([]byte(tcase.result), &data)
+		require.Nil(t, err)
+
+		if diff := cmp.Diff(result, data); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+func TestDeleteAuthRule(t *testing.T) {
+	t.Skip()
+
+	testCases := []TestCase{
+		{name: "user with secret info", user: "user1", role: "admin"},
+		{name: "user without secret info", user: "user2", role: "admin"},
+		{name: "non existent user", user: "user100", role: "admin"}}
+	query := `
+		 mutation deleteUserSecret($filter: UserSecretFilter!){
+		  deleteUserSecret(filter: $filter) {
+			msg
+			numUids
+		  }
+		}
+	`
+
+	var result, data struct {
+		QueryUserSecret []*UserSecret
+	}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
+			Query: query,
+			Variables: map[string]interface{}{
+				"ownedBy": tcase.user,
+			},
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
