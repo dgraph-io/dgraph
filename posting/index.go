@@ -627,7 +627,11 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
 		for _, kv := range kvList.Kv {
-			if err := tmpWriter.SetEntryAt((&badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: kv.UserMeta[0]}).WithDiscard(), kv.Version); err != nil {
+			e := &badger.Entry{Key: kv.Key, Value: kv.Value}
+			if len(kv.UserMeta) > 0 {
+				e.UserMeta = kv.UserMeta[0]
+			}
+			if err := tmpWriter.SetEntryAt(e, kv.Version); err != nil {
 				return errors.Wrap(err, "error setting entries in temp badger")
 			}
 		}
