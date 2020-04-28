@@ -28,17 +28,14 @@ import (
 )
 
 func init() {
-	http.HandleFunc("/admin/backup", backupHandler)
+	http.Handle("/admin/backup", adminAuthHandler(http.HandlerFunc(backupHandler),
+		adminAuthOptions{allowedMethods: map[string]bool{
+			http.MethodPost: true,
+		}}))
 }
 
 // backupHandler handles backup requests coming from the HTTP endpoint.
 func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodPost: true,
-	}, true) {
-		return
-	}
-
 	destination := r.FormValue("destination")
 	accessKey := r.FormValue("access_key")
 	secretKey := r.FormValue("secret_key")

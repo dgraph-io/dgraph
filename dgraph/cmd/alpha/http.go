@@ -581,7 +581,8 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 		return
 	}
 
-	if !checkIpIsWhitelisted(w, r) || !checkPoormansAcl(w, r) {
+	if !hasPoormansAuth(r) {
+		x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
 		return
 	}
 

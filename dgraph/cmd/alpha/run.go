@@ -453,10 +453,24 @@ func setupServer(closer *y.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
-	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
+	http.Handle("/admin/shutdown", adminAuthHandler(http.HandlerFunc(shutDownHandler),
+		adminAuthOptions{allowedMethods: map[string]bool{
+			http.MethodGet: true,
+		}}))
+	http.Handle("/admin/draining", adminAuthHandler(http.HandlerFunc(drainingHandler),
+		adminAuthOptions{allowedMethods: map[string]bool{
+			http.MethodPut:  true,
+			http.MethodPost: true,
+		}}))
+	http.Handle("/admin/export", adminAuthHandler(http.HandlerFunc(exportHandler),
+		adminAuthOptions{allowedMethods: map[string]bool{
+			http.MethodGet: true,
+		}}))
+	http.Handle("/admin/config/lru_mb", adminAuthHandler(http.HandlerFunc(memoryLimitHandler),
+		adminAuthOptions{allowedMethods: map[string]bool{
+			http.MethodGet: true,
+			http.MethodPut: true,
+		}}))
 
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
@@ -476,20 +490,16 @@ func setupServer(closer *y.Closer) {
 	globalEpoch := uint64(0)
 	mainServer, adminServer := admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
-
-	whitelist := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !handlerInit(w, r, map[string]bool{
-				http.MethodPost:    true,
+	http.Handle("/admin", adminAuthHandler(adminServer.HTTPHandler(),
+		adminAuthOptions{
+			allowedMethods: map[string]bool{
 				http.MethodGet:     true,
+				http.MethodPost:    true,
 				http.MethodOptions: true,
-			}, false) {
-				return
-			}
-			h.ServeHTTP(w, r)
-		})
-	}
-	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
+			},
+			skipIpWhitelisting: true,
+			skipGuardianAuth:   true,
+		}))
 	http.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
 	})

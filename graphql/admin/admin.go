@@ -403,22 +403,22 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 
-	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
-		"backup":   resolve.CommonMutationMiddlewares.Then(resolveBackup),
-		"config":   resolve.CommonMutationMiddlewares.Then(resolveConfig),
-		"draining": resolve.CommonMutationMiddlewares.Then(resolveDraining),
-		"export":   resolve.CommonMutationMiddlewares.Then(resolveExport),
-		"login":    resolve.IpWhitelistingMW4Mutation(resolveLogin),
-		"restore":  resolve.CommonMutationMiddlewares.Then(resolveRestore),
-		"shutdown": resolve.CommonMutationMiddlewares.Then(resolveShutdown),
+	adminMutationResolvers := map[string]resolve.MutationResolver{
+		"backup":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveBackup)),
+		"config":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveConfig)),
+		"draining": resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveDraining)),
+		"export":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveExport)),
+		"login":    resolve.IpWhitelistingMW4Mutation(resolve.MutationResolverFunc(resolveLogin)),
+		"restore":  resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveRestore)),
+		"shutdown": resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveShutdown)),
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveHealth)
+			return resolve.AdminQueryMWs.Then(resolve.QueryResolverFunc(resolveHealth))
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
-			return resolve.QueryResolverFunc(resolveState)
+			return resolve.AdminQueryMWs.Then(resolve.QueryResolverFunc(resolveState))
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
@@ -437,7 +437,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
 		// otherwise you get variable capture issues
-		func(f resolve.MutationResolverFunc) {
+		func(f resolve.MutationResolver) {
 			rf.WithMutationResolver(gqlMut, func(m schema.Mutation) resolve.MutationResolver {
 				return f
 			})
@@ -585,10 +585,11 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				baseMutationExecutor: dgEx,
 			}
 
-			return resolve.NewDgraphResolver(
+			// not applying ip whitelisting to keep it in sync with /alter
+			return resolve.GuardianAuthMW4Mutation(resolve.NewDgraphResolver(
 				updResolver,
 				updResolver,
-				resolve.StdMutationCompletion(m.Name()))
+				resolve.StdMutationCompletion(m.Name())))
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
@@ -596,31 +597,32 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					admin: as,
 				}
 
-				return resolve.NewQueryResolver(
+				// not applying ip whitelisting to keep it in sync with /alter
+				return resolve.GuardianAuthMW4Query(resolve.NewQueryResolver(
 					getResolver,
 					getResolver,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
+				return resolve.AdminQueryMWs.Then(resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
+				return resolve.AdminQueryMWs.Then(resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
+				return resolve.AdminQueryMWs.Then(resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithQueryResolver("getCurrentUser",
 			func(q schema.Query) resolve.QueryResolver {
@@ -628,59 +630,59 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					baseRewriter: qryRw,
 				}
 
-				return resolve.NewQueryResolver(
+				return resolve.AdminQueryMWs.Then(resolve.NewQueryResolver(
 					cuResolver,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.NewQueryResolver(
+				return resolve.AdminQueryMWs.Then(resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion()))
 			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					resolve.NewAddRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name())))
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					NewAddGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name())))
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					resolve.NewUpdateRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name())))
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					NewUpdateGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name())))
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+					resolve.StdDeleteCompletion(m.Name())))
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewDgraphResolver(
+				return resolve.AdminMutationMWs.Then(resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+					resolve.StdDeleteCompletion(m.Name())))
 			})
 }
 

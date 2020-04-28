@@ -18,8 +18,9 @@ package resolve
 
 import (
 	"context"
-	"errors"
 	"net"
+
+	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/peer"
 
@@ -29,21 +30,67 @@ import (
 )
 
 var (
-	CommonMutationMiddlewares = MutationMiddlewares{
+	// AdminQueryMWs are the middlewares which should be applied to queries served by admin server
+	// unless some exceptional behaviour is required
+	AdminQueryMWs = QueryMiddlewares{
+		IpWhitelistingMW4Query, // its better to apply ip whitelisting before Guardian auth
+		GuardianAuthMW4Query,
+	}
+	// AdminMutationMWs are the middlewares which should be applied to queries served by admin
+	// server unless some exceptional behaviour is required
+	AdminMutationMWs = MutationMiddlewares{
 		IpWhitelistingMW4Mutation, // its better to apply ip whitelisting before Guardian auth
 		GuardianAuthMW4Mutation,
 	}
 )
 
+// QueryMiddleware represents a middleware for queries
+type QueryMiddleware func(resolver QueryResolver) QueryResolver
+
 // MutationMiddleware represents a middleware for mutations
-type MutationMiddleware func(resolverFunc MutationResolverFunc) MutationResolverFunc
+type MutationMiddleware func(resolver MutationResolver) MutationResolver
+
+// QueryMiddlewares represents a list of middlewares for queries, that get applied in the order
+// they are present in the list.
+// Inspired from: https://github.com/justinas/alice
+type QueryMiddlewares []QueryMiddleware
 
 // MutationMiddlewares represents a list of middlewares for mutations, that get applied in the order
 // they are present in the list.
 // Inspired from: https://github.com/justinas/alice
 type MutationMiddlewares []MutationMiddleware
 
-// Then chains the middlewares and returns the final MutationResolverFunc.
+// Then chains the middlewares and returns the final QueryResolver.
+//     QueryMiddlewares{m1, m2, m3}.Then(r)
+// is equivalent to:
+//     m1(m2(m3(r)))
+// When the request comes in, it will be passed to m1, then m2, then m3
+// and finally, the given resolverFunc
+// (assuming every middleware calls the following one).
+//
+// A chain can be safely reused by calling Then() several times.
+//     commonMiddlewares := QueryMiddlewares{authMiddleware, loggingMiddleware}
+//     healthResolver = commonMiddlewares.Then(resolveHealth)
+//     stateResolver = commonMiddlewares.Then(resolveState)
+// Note that middlewares are called on every call to Then()
+// and thus several instances of the same middleware will be created
+// when a chain is reused in this way.
+// For proper middleware, this should cause no problems.
+//
+// Then() treats nil as a QueryResolverFunc that resolves to &Resolved{Field: query}
+func (mws QueryMiddlewares) Then(resolver QueryResolver) QueryResolver {
+	if resolver == nil {
+		resolver = QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+			return &Resolved{Field: query}
+		})
+	}
+	for i := len(mws) - 1; i >= 0; i-- {
+		resolver = mws[i](resolver)
+	}
+	return resolver
+}
+
+// Then chains the middlewares and returns the final MutationResolver.
 //     MutationMiddlewares{m1, m2, m3}.Then(r)
 // is equivalent to:
 //     m1(m2(m3(r)))
@@ -61,16 +108,17 @@ type MutationMiddlewares []MutationMiddleware
 // For proper middleware, this should cause no problems.
 //
 // Then() treats nil as a MutationResolverFunc that resolves to (&Resolved{Field: mutation}, true)
-func (mws MutationMiddlewares) Then(resolverFunc MutationResolverFunc) MutationResolverFunc {
-	if resolverFunc == nil {
-		resolverFunc = func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+func (mws MutationMiddlewares) Then(resolver MutationResolver) MutationResolver {
+	if resolver == nil {
+		resolver = MutationResolverFunc(func(ctx context.Context,
+			mutation schema.Mutation) (*Resolved, bool) {
 			return &Resolved{Field: mutation}, true
-		}
+		})
 	}
 	for i := len(mws) - 1; i >= 0; i-- {
-		resolverFunc = mws[i](resolverFunc)
+		resolver = mws[i](resolver)
 	}
-	return resolverFunc
+	return resolver
 }
 
 // resolveGuardianAuth returns a Resolved with error if the context doesn't contain any Guardian auth,
@@ -92,27 +140,48 @@ func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
 		return EmptyResult(f, err)
 	}
 	if !alpha.IpInIPWhitelistRanges(ip) {
-		return EmptyResult(f, errors.New("unauthorized ip address"))
+		return EmptyResult(f, errors.Errorf("unauthorized ip address: %s", ip))
 	}
 	return nil
 }
 
+// GuardianAuthMW4Query blocks the resolution of resolverFunc if there is no Guardian auth
+// present in context, otherwise it lets the resolverFunc resolve the query.
+func GuardianAuthMW4Query(resolver QueryResolver) QueryResolver {
+	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+		if resolved := resolveGuardianAuth(ctx, query); resolved != nil {
+			return resolved
+		}
+		return resolver.Resolve(ctx, query)
+	})
+}
+
+func IpWhitelistingMW4Query(resolver QueryResolver) QueryResolver {
+	return QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
+		if resolved := resolveIpWhitelisting(ctx, query); resolved != nil {
+			return resolved
+		}
+		return resolver.Resolve(ctx, query)
+	})
+}
+
 // GuardianAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian auth
 // present in context, otherwise it lets the resolverFunc resolve the mutation.
-func GuardianAuthMW4Mutation(resolverFunc MutationResolverFunc) MutationResolverFunc {
-	return func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+func GuardianAuthMW4Mutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
 		if resolved := resolveGuardianAuth(ctx, mutation); resolved != nil {
 			return resolved, false
 		}
-		return resolverFunc.Resolve(ctx, mutation)
-	}
+		return resolver.Resolve(ctx, mutation)
+	})
 }
 
-func IpWhitelistingMW4Mutation(resolverFunc MutationResolverFunc) MutationResolverFunc {
-	return func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+func IpWhitelistingMW4Mutation(resolver MutationResolver) MutationResolver {
+	return MutationResolverFunc(func(ctx context.Context, mutation schema.Mutation) (*Resolved,
+		bool) {
 		if resolved := resolveIpWhitelisting(ctx, mutation); resolved != nil {
 			return resolved, false
 		}
-		return resolverFunc.Resolve(ctx, mutation)
-	}
+		return resolver.Resolve(ctx, mutation)
+	})
 }

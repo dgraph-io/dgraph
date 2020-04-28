@@ -32,55 +32,60 @@ import (
 	"github.com/golang/glog"
 )
 
-func checkIpIsWhitelisted(w http.ResponseWriter, r *http.Request) bool {
-	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || !IpInIPWhitelistRanges(ip) {
-		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
-		return false
-	}
-	return true
+// adminAuthOptions are used by adminAuthHandler
+type adminAuthOptions struct {
+	allowedMethods     map[string]bool
+	skipIpWhitelisting bool
+	skipPoormansAuth   bool
+	skipGuardianAuth   bool
 }
 
-func checkPoormansAcl(w http.ResponseWriter, r *http.Request) bool {
+// hasPoormansAuth check if poorman's auth is required and if so whether the given http request has
+// poorman's auth in it or not
+func hasPoormansAuth(r *http.Request) bool {
 	if worker.Config.AuthToken != "" && worker.Config.AuthToken != r.Header.Get(
 		"X-Dgraph-AuthToken") {
-		x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
 		return false
 	}
 	return true
 }
 
-// handlerInit does some standard checks. Returns false if something is wrong.
-func handlerInit(w http.ResponseWriter, r *http.Request, allowedMethods map[string]bool,
-	allowOnlyGuardians bool) bool {
-	if _, ok := allowedMethods[r.Method]; !ok {
-		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return false
-	}
-
-	if !checkIpIsWhitelisted(w, r) || !checkPoormansAcl(w, r) {
-		return false
-	}
-
-	if allowOnlyGuardians {
-		err := edgraph.AuthorizeGuardians(x.AttachAccessJwt(context.Background(), r))
-		if err != nil {
-			x.SetStatus(w, x.ErrorUnauthorized, err.Error())
-			return false
+// adminAuthHandler does some standard checks for admin endpoints.
+// It returns if something is wrong. Otherwise, it lets the given handler serve the request.
+func adminAuthHandler(handler http.Handler, options adminAuthOptions) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if _, ok := options.allowedMethods[r.Method]; !ok {
+			x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
 		}
-	}
-	return true
+
+		if !options.skipIpWhitelisting {
+			ip, _, err := net.SplitHostPort(r.RemoteAddr)
+			if err != nil || !IpInIPWhitelistRanges(ip) {
+				x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
+				return
+			}
+		}
+
+		if !options.skipPoormansAuth && !hasPoormansAuth(r) {
+			x.SetStatus(w, x.ErrorUnauthorized, "Invalid X-Dgraph-AuthToken")
+			return
+		}
+
+		if !options.skipGuardianAuth {
+			err := edgraph.AuthorizeGuardians(x.AttachAccessJwt(context.Background(), r))
+			if err != nil {
+				x.SetStatus(w, x.ErrorUnauthorized, err.Error())
+				return
+			}
+		}
+
+		handler.ServeHTTP(w, r)
+	})
 }
 
 func drainingHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodPut:  true,
-		http.MethodPost: true,
-	}, true) {
-		return
-	}
-
 	enableStr := r.URL.Query().Get("enable")
 
 	enable, err := strconv.ParseBool(enableStr)
@@ -99,23 +104,12 @@ func drainingHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func shutDownHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodGet: true,
-	}, true) {
-		return
-	}
-
 	close(worker.ShutdownCh)
 	w.Header().Set("Content-Type", "application/json")
 	x.Check2(w.Write([]byte(`{"code": "Success", "message": "Server is shutting down"}`)))
 }
 
 func exportHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodGet: true,
-	}, true) {
-		return
-	}
 	if err := r.ParseForm(); err != nil {
 		x.SetHttpStatus(w, http.StatusBadRequest, "Parse of export request failed.")
 		return
@@ -143,13 +137,6 @@ func exportHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func memoryLimitHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodGet: true,
-		http.MethodPut: true,
-	}, true) {
-		return
-	}
-
 	switch r.Method {
 	case http.MethodGet:
 		memoryLimitGetHandler(w, r)
