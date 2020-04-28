@@ -2128,15 +2128,15 @@ See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-st
 
 ## Data compression on disk
 
-Alpha exposes a `--badger.compression_level` option to configure the compression
+Alpha exposes the option `--badger.compression_level` to configure the compression
 level for data on disk using Zstd compression. The option can be set as
 
 ```sh
 dgraph alpha --badger.compression_level=xxx
 ```
 
-A higher value of the compression level is more CPU intensive but offers better
-compression ratio. The default value is 3.
+A higher compression level is more CPU intensive but offers a better compression
+ratio. The default level is 3.
 
 This option is available in v20.03.1 and later.
 
