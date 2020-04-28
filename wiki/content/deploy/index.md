@@ -2021,7 +2021,7 @@ Dgraph alpha instances more evenly.
 
 Ludicrous mode is available in Dgraph v20.03.1 or later.
 
-Ludicrous mode allows Dgraph to ingest data at an incredibly fast speed. It differs from the normal mode in terms of fewer guarantees that it provides. In normal scenarios dgraph provides strict consistency, which is not the case in ludicrous mode. In ludicrous mode, any mutation which succeeds **might be available eventually**. **Eventually** means the changes will be applied later and might not be reflected in queries away. If dgraph crashes unexpectedly, there **might** be unapplied mutations which **will not** be picked up when Dgraph starts later. In normal scenarios, Dgraph with ludicrous mode enabled behaves as an eventually consistent system.
+Ludicrous mode allows Dgraph to ingest data at an incredibly fast speed. It differs from the normal mode as it provides fewer guarantees. In normal mode, Dgraph provides strong consistency. In ludicrous mode, Dgraph provides eventual consistency. In ludicrous mode, any mutation which succeeds **might be available eventually**. **Eventually** means the changes will be applied later and might not be reflected in queries away. If Dgraph crashes unexpectedly, there **might** be unapplied mutations which **will not** be picked up when Dgraph restarts. Dgraph with ludicrous mode enabled behaves as an eventually consistent system.
 
 
 **How do I enable it?**
@@ -2031,7 +2031,9 @@ Ludicrous mode can be enabled by setting the `--ludicrous_mode` config option to
 
 **What does it do?**
 
-It doesn't wait for mutations to be applied. When a mutation comes, it proposes the mutation to the cluster and as soon as the proposal reaches the other nodes, it returns the response right away. One doesn’t need to send a commit request for mutation. It's equivalent to all mutations having CommitNow set automatically. All the mutations are then sent to background workers which keep applying all the mutation. Also we are not using sync mode while writing to disk. 
+It doesn't wait for mutations to be applied. When a mutation comes, it proposes the mutation to the cluster and as soon as the proposal reaches the other nodes, it returns the response right away. You don't need to send a commit request for mutation. It's equivalent to having CommitNow set automatically for all mutations. All the mutations are then sent to background workers which keep applying them.
+
+Also, Dgraph does not sync writes to disk. This increases throughput but may result in loss of unsynced writes in the event of hardware failure.
 
 
 **What is the trade off?**
