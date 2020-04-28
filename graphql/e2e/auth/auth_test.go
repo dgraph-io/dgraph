@@ -69,9 +69,9 @@ type Log struct {
 }
 
 type Role struct {
-	Id          uint64
-	Permissions []string
-	AssignedTo  []User
+	Id         uint64
+	Permission string
+	AssignedTo []User
 }
 
 type Ticket struct {
@@ -194,12 +194,13 @@ func TestOrRBACFilter(t *testing.T) {
 	}
 }
 
-func rootGetFilter(t *testing.T, col *Column, tcase TestCase) {
-	testCases := []TestCase{{
-		user:   tcase.user,
-		role:   tcase.role,
+func TestRootGetFilter(t *testing.T, col *Column, testcase TestCase) {
+	tcase := TestCase{
+		user:   testcase.user,
+		role:   testcase.role,
 		result: fmt.Sprintf(`{"getColumn": {"name": "%s"}}`, col.Name),
-	}}
+	}
+
 	query := `
 		query($id: ID!) {
 		    getColumn(colID: $id) {
@@ -212,27 +213,24 @@ func rootGetFilter(t *testing.T, col *Column, tcase TestCase) {
 		GetColumn *Column
 	}
 
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			Headers:   getJWT(t, tcase.user, tcase.role),
-			Query:     query,
-			Variables: map[string]interface{}{"id": col.ColID},
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+	getUserParams := &common.GraphQLParams{
+		Headers:   getJWT(t, tcase.user, tcase.role),
+		Query:     query,
+		Variables: map[string]interface{}{"id": col.ColID},
 	}
 
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	err = json.Unmarshal([]byte(tcase.result), &data)
+	require.Nil(t, err)
+
+	if diff := cmp.Diff(result, data); diff != "" {
+		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	}
 }
 
 func TestRootFilter(t *testing.T) {
@@ -285,10 +283,6 @@ func TestRootFilter(t *testing.T) {
 			opt := cmpopts.IgnoreFields(Column{}, "ColID")
 			if diff := cmp.Diff(result, data, opt); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
-
-			if len(result.QueryColumn) > 0 {
-				rootGetFilter(t, result.QueryColumn[0], tcase)
 			}
 		})
 	}
