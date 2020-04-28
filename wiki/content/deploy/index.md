@@ -2126,6 +2126,20 @@ Dgraph can be configured to send traces directly to a Jaeger collector with the 
 
 See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
 
+## Data compression on disk
+
+Alpha exposes the option `--badger.compression_level` to configure the compression
+level for data on disk using Zstd compression. The option can be set as
+
+```sh
+dgraph alpha --badger.compression_level=xxx
+```
+
+A higher compression level is more CPU intensive but offers a better compression
+ratio. The default level is 3.
+
+This option is available in v20.03.1 and later.
+
 ## Dgraph Administration
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
