@@ -18,6 +18,7 @@ package schema
 
 import (
 	"fmt"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"sort"
 	"strings"
 	"sync"
@@ -76,6 +77,8 @@ func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
+
+	authorization.ParseAuthMeta(input)
 
 	// The input schema contains just what's required to describe the types,
 	// relationships and searchability - but that's not enough to define a

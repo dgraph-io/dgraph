@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"fmt"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"sort"
 	"strconv"
 
@@ -48,7 +49,7 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	authVariables, err := ExtractAuthVariables(ctx)
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
