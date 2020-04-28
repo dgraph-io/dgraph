@@ -93,6 +93,10 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 }
 
 func (node *RuleNode) GetRBACRules(av map[string]interface{}) RuleResult {
+	if node == nil {
+		return Uncertain
+	}
+
 	hasUncertain := false
 	for _, rule := range node.Or {
 		if rule.IsRBAC() {

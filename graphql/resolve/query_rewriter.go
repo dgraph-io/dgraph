@@ -192,16 +192,17 @@ func addUID(dgQuery *gql.GraphQuery) {
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
 	rbac := authRw.GetRBAC(field)
-	if rbac == schema.Negative {
-		return &gql.GraphQuery{}
-	}
-
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
-		Func: &gql.Function{
-			Name: "uid",
-			UID:  uids,
-		},
+	}
+
+	if rbac == schema.Negative {
+		return dgQuery
+	}
+
+	dgQuery.Func = &gql.Function{
+		Name: "uid",
+		UID:  uids,
 	}
 
 	if ids := idFilter(field, field.Type().IDField()); ids != nil {
@@ -302,8 +303,13 @@ func rewriteAsGet(
 }
 
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
+	rbac := authRw.GetRBAC(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
+	}
+
+	if rbac == schema.Negative {
+		return dgQuery
 	}
 
 	if authRw != nil && authRw.isWritingAuth && authRw.varName != "" {
@@ -330,7 +336,9 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
 
-	dgQuery = authRw.addAuthQueries(field, dgQuery)
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(field, dgQuery)
+	}
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
