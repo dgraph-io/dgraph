@@ -138,7 +138,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
-	pclaims, ok := token.Claims.(*CustomClaims)
+	claims, ok := token.Claims.(*CustomClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
@@ -146,9 +146,9 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
-	if !pclaims.VerifyExpiresAt(now, true) {
+	if !claims.VerifyExpiresAt(now, true) {
 		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
-	return pclaims.AuthVariables, nil
+	return claims.AuthVariables, nil
 }
