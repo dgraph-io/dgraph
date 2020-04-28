@@ -1,5 +1,4 @@
--
-  name: "Delete with auth"
+- name: "Delete with auth"
   gqlquery: |
     mutation deleteUserSecret($filter: UserSecretFilter!) {
       deleteUserSecret(filter: $filter) {
@@ -120,13 +119,11 @@
         ]
   dgquery: |-
     query {
-      x as deleteRegion(func: uid(Region1)) @filter(uid(Region2)) {
+      x as deleteRegion(func: uid(0x1, 0x2)) @filter(type(Region)) {
         uid
       }
-      Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
-      Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
     }
 
 # FIXME: when RBAC is done, have cases for
 # - with RBAC + that simplifies on some way
-# - what happens when the RBAC is False ? 
+# - what happens when the RBAC is False ?
