@@ -34,7 +34,7 @@ import (
 
 func checkIpIsWhitelisted(w http.ResponseWriter, r *http.Request) bool {
 	ip, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil || (!ipInIPWhitelistRanges(ip) && !net.ParseIP(ip).IsLoopback()) {
+	if err != nil || !IpInIPWhitelistRanges(ip) {
 		x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
 		return false
 	}
@@ -188,11 +188,15 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func ipInIPWhitelistRanges(ipString string) bool {
+func IpInIPWhitelistRanges(ipString string) bool {
 	ip := net.ParseIP(ipString)
 
 	if ip == nil {
 		return false
+	}
+
+	if ip.IsLoopback() {
+		return true
 	}
 
 	for _, ipRange := range x.WorkerConfig.WhiteListedIPRanges {

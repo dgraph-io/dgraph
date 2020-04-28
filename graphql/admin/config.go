@@ -35,12 +35,12 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 
 	input, err := getConfigInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	err = worker.UpdateLruMb(input.LruMB)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{

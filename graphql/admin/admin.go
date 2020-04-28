@@ -408,7 +408,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		"config":   resolve.CommonMutationMiddlewares.Then(resolveConfig),
 		"draining": resolve.CommonMutationMiddlewares.Then(resolveDraining),
 		"export":   resolve.CommonMutationMiddlewares.Then(resolveExport),
-		"login":    resolveLogin,
+		"login":    resolve.IpWhitelistingMW4Mutation(resolveLogin),
 		"restore":  resolve.CommonMutationMiddlewares.Then(resolveRestore),
 		"shutdown": resolve.CommonMutationMiddlewares.Then(resolveShutdown),
 	}
@@ -716,12 +716,4 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 func response(code, msg string) map[string]interface{} {
 	return map[string]interface{}{
 		"response": map[string]interface{}{"code": code, "message": msg}}
-}
-
-func emptyResult(f schema.Field, err error) *resolve.Resolved {
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{f.Name(): nil},
-		Field: f,
-		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
-	}
 }

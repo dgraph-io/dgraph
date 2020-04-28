@@ -18,13 +18,21 @@ package resolve
 
 import (
 	"context"
+	"errors"
+	"net"
 
+	"google.golang.org/grpc/peer"
+
+	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
 var (
-	CommonMutationMiddlewares = MutationMiddlewares{mutationAuthMiddleware}
+	CommonMutationMiddlewares = MutationMiddlewares{
+		IpWhitelistingMW4Mutation, // its better to apply ip whitelisting before Guardian auth
+		GuardianAuthMW4Mutation,
+	}
 )
 
 // MutationMiddleware represents a middleware for mutations
@@ -47,41 +55,62 @@ type MutationMiddlewares []MutationMiddleware
 //     commonMiddlewares := MutationMiddlewares{authMiddleware, loggingMiddleware}
 //     backupResolver = commonMiddlewares.Then(resolveBackup)
 //     configResolver = commonMiddlewares.Then(resolveConfig)
-// Note that constructors are called on every call to Then()
+// Note that middlewares are called on every call to Then()
 // and thus several instances of the same middleware will be created
 // when a chain is reused in this way.
 // For proper middleware, this should cause no problems.
 //
 // Then() treats nil as a MutationResolverFunc that resolves to (&Resolved{Field: mutation}, true)
-func (mms MutationMiddlewares) Then(resolverFunc MutationResolverFunc) MutationResolverFunc {
+func (mws MutationMiddlewares) Then(resolverFunc MutationResolverFunc) MutationResolverFunc {
 	if resolverFunc == nil {
 		resolverFunc = func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
 			return &Resolved{Field: mutation}, true
 		}
 	}
-	for i := len(mms) - 1; i >= 0; i-- {
-		resolverFunc = mms[i](resolverFunc)
+	for i := len(mws) - 1; i >= 0; i-- {
+		resolverFunc = mws[i](resolverFunc)
 	}
 	return resolverFunc
 }
 
-// resolveAuth returns a Resolved with error if the context doesn't contain any Guardian auth,
+// resolveGuardianAuth returns a Resolved with error if the context doesn't contain any Guardian auth,
 // otherwise it returns nil
-func resolveAuth(ctx context.Context, f schema.Field) *Resolved {
+func resolveGuardianAuth(ctx context.Context, f schema.Field) *Resolved {
 	if err := edgraph.AuthorizeGuardians(ctx); err != nil {
-		return &Resolved{
-			Field: f,
-			Err:   schema.AsGQLErrors(err),
-		}
+		return EmptyResult(f, err)
 	}
 	return nil
 }
 
-// mutationAuthMiddleware blocks the resolution of resolverFunc if there is no Guardian auth
+func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		return EmptyResult(f, errors.New("unable to find source ip"))
+	}
+	ip, _, err := net.SplitHostPort(peerInfo.Addr.String())
+	if err != nil {
+		return EmptyResult(f, err)
+	}
+	if !alpha.IpInIPWhitelistRanges(ip) {
+		return EmptyResult(f, errors.New("unauthorized ip address"))
+	}
+	return nil
+}
+
+// GuardianAuthMW4Mutation blocks the resolution of resolverFunc if there is no Guardian auth
 // present in context, otherwise it lets the resolverFunc resolve the mutation.
-func mutationAuthMiddleware(resolverFunc MutationResolverFunc) MutationResolverFunc {
+func GuardianAuthMW4Mutation(resolverFunc MutationResolverFunc) MutationResolverFunc {
 	return func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
-		if resolved := resolveAuth(ctx, mutation); resolved != nil {
+		if resolved := resolveGuardianAuth(ctx, mutation); resolved != nil {
+			return resolved, false
+		}
+		return resolverFunc.Resolve(ctx, mutation)
+	}
+}
+
+func IpWhitelistingMW4Mutation(resolverFunc MutationResolverFunc) MutationResolverFunc {
+	return func(ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
+		if resolved := resolveIpWhitelisting(ctx, mutation); resolved != nil {
 			return resolved, false
 		}
 		return resolverFunc.Resolve(ctx, mutation)
