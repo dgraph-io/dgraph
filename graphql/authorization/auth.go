@@ -18,11 +18,13 @@ package authorization
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -33,13 +35,38 @@ const (
 )
 
 var (
-	AuthHmacSecret string
-	AuthHeader     string
+	metainfo = &AuthMeta{}
 )
+
+type AuthMeta struct {
+	HmacSecret string
+	Header     string
+	Namespace  string
+}
+
+func (m *AuthMeta) Parse(schema string) {
+	lastComment := schema[strings.LastIndex(schema, "#"):]
+	length := strings.Index(lastComment, "\n")
+	if length > -1 {
+		lastComment = lastComment[:length]
+	}
+
+	authMeta := strings.Split(lastComment, " ")
+	if len(authMeta) != 5 || authMeta[1] != "Authorization" {
+		return
+	}
+	m.Header = authMeta[2]
+	m.HmacSecret = authMeta[3]
+	m.Namespace = authMeta[4]
+}
+
+func ParseAuthMeta(schema string) {
+	metainfo.Parse(schema)
+}
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
 func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
-	authorizationJwt := r.Header.Get(AuthHeader)
+	authorizationJwt := r.Header.Get(metainfo.Header)
 	if authorizationJwt == "" {
 		return ctx
 	}
@@ -55,8 +82,26 @@ func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Contex
 }
 
 type CustomClaims struct {
-	AuthVariables map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
+	AuthVariables map[string]interface{}
 	jwt.StandardClaims
+}
+
+func (c *CustomClaims) UnmarshalJSON(data []byte) error {
+	// Unmarshal the standard claims first.
+	if err := json.Unmarshal(data, &c.StandardClaims); err != nil {
+		return err
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(data, &result); err != nil {
+		return err
+	}
+
+	// Unmarshal the auth variables for a particular namespace.
+	if authVariables, ok := result[metainfo.Namespace]; ok {
+		c.AuthVariables = authVariables.(map[string]interface{})
+	}
+	return nil
 }
 
 func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
@@ -77,22 +122,23 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {
-	if AuthHmacSecret == "" {
+	if metainfo.HmacSecret == "" {
 		return nil, fmt.Errorf(" jwt token cannot be validated because secret key is empty")
 	}
+
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 			}
-			return []byte(AuthHmacSecret), nil
+			return []byte(metainfo.HmacSecret), nil
 		})
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
-	claims, ok := token.Claims.(*CustomClaims)
+	pclaims, ok := token.Claims.(*CustomClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
@@ -100,9 +146,9 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
 	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
+	if !pclaims.VerifyExpiresAt(now, true) {
 		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
-	return claims.AuthVariables, nil
+	return pclaims.AuthVariables, nil
 }

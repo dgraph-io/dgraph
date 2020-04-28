@@ -216,4 +216,4 @@ type Ticket @auth(
     assignedTo: [User!]
 }
 
-# Authorization auth-header secretkey
+# Authorization auth-header secretkey https://xyz.io/jwt/claims
