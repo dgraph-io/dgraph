@@ -533,74 +533,26 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 		return err
 	}
 
-	i := 0
+	// This is an internal node.
 	if _, err := out.WriteRune('{'); err != nil {
 		return err
 	}
-	cur := fjAttrs[i]
-	i++
-	cnt := 1
-	last := false
-	inArray := false
-	for {
-		var next fastJsonNode
-		if i < len(fjAttrs) {
-			next = fjAttrs[i]
-			i++
-		} else {
-			last = true
+	cnt := 0
+	var cur, next fastJsonNode
+	for i := 0; i < len(fjAttrs); i++ {
+		cnt++
+		validNext := false
+		cur = fjAttrs[i]
+		if i+1 < len(fjAttrs) {
+			next = fjAttrs[i+1]
+			validNext = true
 		}
 
-		if !last {
-			if enc.getAttr(cur) == enc.getAttr(next) {
-				if cnt == 1 {
-					if err := enc.writeKey(cur, out); err != nil {
-						return err
-					}
-					if _, err := out.WriteRune('['); err != nil {
-						return err
-					}
-					inArray = true
-				}
-				if err := enc.encode(cur, out); err != nil {
-					return err
-				}
-				cnt++
-			} else {
-				if cnt == 1 {
-					if err := enc.writeKey(cur, out); err != nil {
-						return err
-					}
-					if enc.getList(cur) {
-						if _, err := out.WriteRune('['); err != nil {
-							return err
-						}
-						inArray = true
-					}
-				}
-				if err := enc.encode(cur, out); err != nil {
-					return err
-				}
-				if cnt != 1 || enc.getList(cur) {
-					if _, err := out.WriteRune(']'); err != nil {
-						return err
-					}
-					inArray = false
-				}
-				cnt = 1
-			}
-			if _, err := out.WriteRune(','); err != nil {
-				return err
-			}
-
-			cur = next
-		} else {
+		if validNext && enc.getAttr(cur) == enc.getAttr(next) {
 			if cnt == 1 {
 				if err := enc.writeKey(cur, out); err != nil {
 					return err
 				}
-			}
-			if enc.getList(cur) && !inArray {
 				if _, err := out.WriteRune('['); err != nil {
 					return err
 				}
@@ -608,13 +560,35 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 			if err := enc.encode(cur, out); err != nil {
 				return err
 			}
-			if cnt != 1 || enc.getList(cur) {
+		} else {
+			if cnt == 1 {
+				if err := enc.writeKey(cur, out); err != nil {
+					return err
+				}
+				if enc.getList(cur) {
+					if _, err := out.WriteRune('['); err != nil {
+						return err
+					}
+				}
+			}
+			if err := enc.encode(cur, out); err != nil {
+				return err
+			}
+			if cnt > 1 || enc.getList(cur) {
 				if _, err := out.WriteRune(']'); err != nil {
 					return err
 				}
 			}
-			break
+			cnt = 0 // Reset the count.
 		}
+		// We need to print comma except for the last attribute.
+		if i != len(fjAttrs)-1 {
+			if _, err := out.WriteRune(','); err != nil {
+				return err
+			}
+		}
+
+		cur = next
 	}
 	if _, err := out.WriteRune('}'); err != nil {
 		return err

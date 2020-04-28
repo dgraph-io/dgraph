@@ -25,6 +25,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/gqlerror"
+	_ "github.com/vektah/gqlparser/v2/validator/rules"
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,7 +39,7 @@ type TestCase struct {
 }
 
 func TestDGSchemaGen(t *testing.T) {
-	fileName := "schemagen_test.yml"
+	fileName := "dgraph_schemagen_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 
@@ -109,8 +110,13 @@ func TestSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input)
+				schHandler, errlist := NewHandler(sch.Input)
 				require.NoError(t, errlist, sch.Name)
+
+				newSchemaStr := schHandler.GQLSchema()
+
+				_, err = FromString(newSchemaStr)
+				require.NoError(t, err)
 			})
 		}
 	})

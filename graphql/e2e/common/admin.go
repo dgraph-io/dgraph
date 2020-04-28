@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -378,7 +379,7 @@ func introspect(t *testing.T, expected string) {
 	}
 
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	require.JSONEq(t, expected, string(gqlResponse.Data))
 }
@@ -395,11 +396,12 @@ func health(t *testing.T) {
           version
           uptime
           lastEcho
+          ee_features
         }
       }`,
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		Health []pb.HealthInfo
@@ -421,10 +423,39 @@ func health(t *testing.T) {
 	opts := []cmp.Option{
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "Uptime"),
 		cmpopts.IgnoreFields(pb.HealthInfo{}, "LastEcho"),
+		cmpopts.EquateEmpty(),
 	}
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func partialHealth(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+            health {
+              instance
+              status
+              group
+            }
+        }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t, `{
+        "health": [
+          {
+            "instance": "zero",
+            "status": "healthy",
+            "group": "0"
+          },
+          {
+            "instance": "alpha",
+            "status": "healthy",
+            "group": "1"
+          }
+        ]
+      }`, string(gqlResponse.Data))
 }
 
 // The GraphQL /admin state result should be the same as /state
@@ -489,7 +520,7 @@ func adminState(t *testing.T) {
 		}`,
 	}
 	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
-	requireNoGQLErrors(t, gqlResponse)
+	RequireNoGQLErrors(t, gqlResponse)
 
 	var result struct {
 		State struct {
