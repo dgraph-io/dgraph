@@ -15,7 +15,6 @@ ADD_UPDATE_MUTATION:
         post(func: uid(0x4)) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
 
@@ -35,7 +34,6 @@ ADD_UPDATE_MUTATION:
         result(func: uid(0x4)) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
 
@@ -55,7 +53,6 @@ ADD_UPDATE_MUTATION:
         post(func: uid(0x4)) {
           id : uid
           postTitle : Post.title
-          dgraph.uid : uid
         }
       }
 
@@ -75,7 +72,6 @@ ADD_UPDATE_MUTATION:
         post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) @filter(anyofterms(Post.title, "GraphQL")) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
 
@@ -102,7 +98,6 @@ ADD_UPDATE_MUTATION:
             name : Author.name
             dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
       }
 
@@ -129,9 +124,7 @@ ADD_UPDATE_MUTATION:
           postAuthor : Post.author {
             authorID : uid
             authorName : Author.name
-            dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
       }
 
@@ -165,7 +158,6 @@ ADD_UPDATE_MUTATION:
             }
             dgraph.uid : uid
           }
-          dgraph.uid : uid
         }
       }
 
@@ -214,7 +206,6 @@ UPDATE_MUTATION:
         post(func: uid(0x4)) @filter(anyofterms(Post.title, "GraphQL")) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
   -
@@ -233,7 +224,6 @@ UPDATE_MUTATION:
         post(func: uid(0x4), orderasc: Post.title) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
 
@@ -253,6 +243,5 @@ UPDATE_MUTATION:
         post(func: uid(0x4), orderasc: Post.title, first: 0, offset: 10) {
           postID : uid
           title : Post.title
-          dgraph.uid : uid
         }
       }
