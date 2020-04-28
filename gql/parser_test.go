@@ -4849,6 +4849,15 @@ func TestParseGraphQLVarArray(t *testing.T) {
 			vars: map[string]string{"$a": "srfrog"}, args: 2},
 		{q: `query test($a: string){q(func: eq(name, ["mrtrout", $a])) {name}}`,
 			vars: map[string]string{"$a": "srfrog"}, args: 2},
+		// uid_in test cases (uids and predicate inside uid_in are dummy)
+		{q: `query test($a: string){q(func: uid_in(director.film, [$a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 1},
+		{q: `query test($a: string, $b: string){q(func: uid_in(director.film, [$a, $b])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a", "$b": "0x4e9545"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, [$a, "0x4e9545"])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+		{q: `query test($a: string){q(func: eq(name, ["0x4e9545", $a])) {name}}`,
+			vars: map[string]string{"$a": "srfrog"}, args: 2},
 	}
 	for _, tc := range tests {
 		gq, err := Parse(Request{Str: tc.q, Variables: tc.vars})
