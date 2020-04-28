@@ -1534,7 +1534,7 @@ func deleteWrongID(t *testing.T) {
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	expectedData := `{ "deleteCountry": {
-		"msg": "Deleted",
+		"msg": "No nodes were deleted",
 		"numUids": 0
 	} }`
 
