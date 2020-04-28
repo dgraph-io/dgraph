@@ -1037,6 +1037,58 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
+func TestUidInFunction3a(t *testing.T) {
+
+	query := `
+	{
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, 5000, 5001)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+}
+
+func TestUidInFunction3b(t *testing.T) {
+
+	query := `
+	{
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, [5000, 5001])) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+}
+func TestUidInFunction4a(t *testing.T) {
+
+	query := `
+	{
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, 5000, 5001)) {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+		js)
+}
+
+func TestUidInFunction4b(t *testing.T) {
+
+	query := `
+	{
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, [5000, 5001])) {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+		js)
+}
 func TestUidInFunctionAtRoot(t *testing.T) {
 
 	query := `
