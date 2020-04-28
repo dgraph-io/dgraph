@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
@@ -99,6 +100,7 @@ func TestCustomGetQuery(t *testing.T) {
 		 })
 	 }`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	query := `
 	 query {
@@ -131,6 +133,7 @@ func TestCustomPostQuery(t *testing.T) {
 		 })
 	 }`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	query := `
 	 query {
@@ -164,6 +167,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 })
 	 }`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	query := `
 	 query {
@@ -216,6 +220,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 	}`
 
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	req, err := http.NewRequest(http.MethodOptions, alphaURL, nil)
 	require.NoError(t, err)
@@ -263,6 +268,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
         })
 	}`
 	updateSchema(t, schema)
+	time.Sleep(time.Second)
 
 	query := `
 	query {
@@ -332,6 +338,7 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	}`
 
 	updateSchema(t, schema)
+	time.Sleep(time.Second)
 	p := addPerson(t)
 
 	queryPerson := `
@@ -776,6 +783,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 
 	schema := readFile(t, "schemas/batch-mode-rest.graphql")
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	// add some data
 	teachers := addTeachers(t)
@@ -879,6 +887,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 	query := `
 	query {
 		getCountry(id: "BI"){
@@ -905,6 +914,7 @@ func TestCustomLogicGraphqlWithError(t *testing.T) {
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 	query := `
 	query {
 		getCountryOnlyErr(id: "BI"){
@@ -931,6 +941,7 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 	query := `
 	query {
 		getCountries(id: "BI"){
@@ -957,6 +968,7 @@ func TestCustomLogicWithErrorResponse(t *testing.T) {
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 	query := `
 	query {
 		getCountriesErr(id: "BI"){
@@ -1064,6 +1076,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 		episodes: [Episode]
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	ep1 := "episode-1"
 	ep2 := "episode-2"
@@ -1197,6 +1210,7 @@ func TestCustomPostMutation(t *testing.T) {
         })
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1266,6 +1280,7 @@ func TestCustomPatchMutation(t *testing.T) {
         })
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1316,6 +1331,7 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
         })
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1596,6 +1612,7 @@ func TestCustomGraphqlMutation1(t *testing.T) {
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1661,6 +1678,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
 							})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
@@ -1702,6 +1720,7 @@ func TestForValidInputArgument(t *testing.T) {
     }
 	 `
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+	time.Sleep(time.Second)
 
 	params := &common.GraphQLParams{
 		Query: `
