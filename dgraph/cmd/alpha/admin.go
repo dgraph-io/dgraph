@@ -17,7 +17,6 @@
 package alpha
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -62,7 +61,7 @@ func adminAuthHandler(handler http.Handler, options adminAuthOptions) http.Handl
 
 		if !options.skipIpWhitelisting {
 			ip, _, err := net.SplitHostPort(r.RemoteAddr)
-			if err != nil || !IpInIPWhitelistRanges(ip) {
+			if err != nil || !x.IsIpWhitelisted(ip) {
 				x.SetStatus(w, x.ErrorUnauthorized, fmt.Sprintf("Request from IP: %v", ip))
 				return
 			}
@@ -173,23 +172,4 @@ func memoryLimitGetHandler(w http.ResponseWriter, r *http.Request) {
 	if _, err := fmt.Fprintln(w, memoryMB); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-}
-
-func IpInIPWhitelistRanges(ipString string) bool {
-	ip := net.ParseIP(ipString)
-
-	if ip == nil {
-		return false
-	}
-
-	if ip.IsLoopback() {
-		return true
-	}
-
-	for _, ipRange := range x.WorkerConfig.WhiteListedIPRanges {
-		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
-			return true
-		}
-	}
-	return false
 }

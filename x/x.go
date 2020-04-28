@@ -369,6 +369,26 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 	return ctx
 }
 
+// IsIpWhitelisted checks if the given ipString is within the whitelisted ip range
+func IsIpWhitelisted(ipString string) bool {
+	ip := net.ParseIP(ipString)
+
+	if ip == nil {
+		return false
+	}
+
+	if ip.IsLoopback() {
+		return true
+	}
+
+	for _, ipRange := range WorkerConfig.WhiteListedIPRanges {
+		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Write response body, transparently compressing if necessary.
 func WriteResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
 	var out io.Writer = w

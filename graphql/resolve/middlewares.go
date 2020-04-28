@@ -20,11 +20,12 @@ import (
 	"context"
 	"net"
 
+	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 
 	"google.golang.org/grpc/peer"
 
-	"github.com/dgraph-io/dgraph/dgraph/cmd/alpha"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
@@ -139,7 +140,7 @@ func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
 	if err != nil {
 		return EmptyResult(f, err)
 	}
-	if !alpha.IpInIPWhitelistRanges(ip) {
+	if !x.IsIpWhitelisted(ip) {
 		return EmptyResult(f, errors.Errorf("unauthorized ip address: %s", ip))
 	}
 	return nil
