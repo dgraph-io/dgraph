@@ -8,7 +8,7 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 
 ### Running locally
 
-1. Download and install hugo from [here](https://github.com/spf13/hugo/releases).
+1. Download and install the hugo extended version `hugo_extended_0.58.3` from [here](https://github.com/gohugoio/hugo/releases/tag/v0.58.3).
 
 2. From within the `wiki` folder, run the command below to get the theme.
 
