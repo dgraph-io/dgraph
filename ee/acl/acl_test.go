@@ -1746,7 +1746,8 @@ func TestWrongPermission(t *testing.T) {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
-func assertNonGuardianFailure(t *testing.T, queryName string, params testutil.GraphQLParams) {
+func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
+	params testutil.GraphQLParams) {
 	resetUser(t)
 
 	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
@@ -1762,7 +1763,11 @@ func assertNonGuardianFailure(t *testing.T, queryName string, params testutil.Gr
 		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
 			" User '%s' is not a member of guardians group.", userid))
 	if len(resp.Data) != 0 {
-		require.JSONEq(t, fmt.Sprintf(`{"%s": []}`, queryName), string(resp.Data))
+		queryVal := "null"
+		if !respIsNull {
+			queryVal = "[]"
+		}
+		require.JSONEq(t, fmt.Sprintf(`{"%s": %s}`, queryName, queryVal), string(resp.Data))
 	}
 }
 
@@ -1783,7 +1788,7 @@ func TestHealthForAcl(t *testing.T) {
 	}
 
 	// assert errors for non-guardians
-	assertNonGuardianFailure(t, "health", params)
+	assertNonGuardianFailure(t, "health", false, params)
 
 	// assert data for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1832,7 +1837,7 @@ func TestBackupForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "backup", params)
+	assertNonGuardianFailure(t, "backup", true, params)
 
 	// assert non-ACL error for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1859,7 +1864,7 @@ func TestConfigForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "config", params)
+	assertNonGuardianFailure(t, "config", true, params)
 
 	// assert non-ACL error for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1886,7 +1891,7 @@ func TestDrainingForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "draining", params)
+	assertNonGuardianFailure(t, "draining", true, params)
 
 	// assert success for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1917,7 +1922,7 @@ func TestExportForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "export", params)
+	assertNonGuardianFailure(t, "export", true, params)
 
 	// assert non-ACL error for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1934,7 +1939,7 @@ func TestRestoreForAcl(t *testing.T) {
 		// we don't want to do an actual restore
 		Query: `
 		mutation {
-		  restore(input: {location: "", backupId: ""}) {
+		  restore(input: {location: "", backupId: "", keyFile: ""}) {
 			response {
 			  code
 			  message
@@ -1944,7 +1949,7 @@ func TestRestoreForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "restore", params)
+	assertNonGuardianFailure(t, "restore", true, params)
 
 	// assert non-ACL error for guardians
 	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
@@ -1973,7 +1978,7 @@ func TestShutdownForAcl(t *testing.T) {
 	}
 
 	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "shutdown", params)
+	assertNonGuardianFailure(t, "shutdown", true, params)
 }
 
 func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
