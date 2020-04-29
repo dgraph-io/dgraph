@@ -17,7 +17,6 @@
 package schema
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 
@@ -278,8 +277,6 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 		errResult = AppendGQLErrs(errResult, gqlerror.Errorf("Type %s: @auth: there "+
 			"should be only one of \"and\", \"or\", \"not\" and \"rule\"", typ.Name))
 	}
-
-	fmt.Println("Error", errResult)
 
 	return result, errResult
 }
