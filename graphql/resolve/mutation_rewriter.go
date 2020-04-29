@@ -27,8 +27,10 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 )
 
@@ -363,7 +365,7 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	authVariables, err := ExtractAuthVariables(ctx)
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -525,7 +527,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	authVariables, err := ExtractAuthVariables(ctx)
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -633,7 +635,7 @@ func (drw *deleteRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	authVariables, err := ExtractAuthVariables(ctx)
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
