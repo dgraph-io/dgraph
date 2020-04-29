@@ -520,7 +520,7 @@ func expandArg(typeToBeExpanded *gqlType,
 	introspectedSchema *introspectedSchema) (map[string][]*gqlField, error) {
 
 	param := &expandArgParams{
-		expandedTypes: make(map[string]struct{}, 0),
+		expandedTypes: make(map[string]struct{}),
 		typesToFields: make(map[string][]*gqlField),
 		introspection: introspectedSchema,
 	}

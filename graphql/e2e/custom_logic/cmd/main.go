@@ -454,7 +454,7 @@ func invalidInputForBatchedField(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(fmt.Fprintf(w,
+	check2(fmt.Fprint(w,
 		generateIntrospectionResult(graphqlResponses["invalidinputbatchedfield"].Schema)))
 }
 
@@ -530,7 +530,7 @@ func getPosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	check2(fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
+	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPosts"].Schema)))
 }
 
 func getPostswithLike(w http.ResponseWriter, r *http.Request) {
@@ -543,7 +543,7 @@ func getPostswithLike(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	check2(fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
+	check2(fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["getPostswithLike"].Schema)))
 }
 
 type input struct {
@@ -808,7 +808,7 @@ func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
 
 	// FIXME - Return type isn't validated yet.
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["carschema"].Schema))
+		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["carschema"].Schema))
 		return
 	}
 
@@ -835,7 +835,7 @@ func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["classschema"].Schema))
+		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["classschema"].Schema))
 		return
 	}
 
@@ -994,7 +994,7 @@ func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["carsschema"].Schema))
+		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["carsschema"].Schema))
 		return
 	}
 
@@ -1032,7 +1032,7 @@ func gqlClassesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, generateIntrospectionResult(graphqlResponses["classesschema"].Schema))
+		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["classesschema"].Schema))
 		return
 	}
 
