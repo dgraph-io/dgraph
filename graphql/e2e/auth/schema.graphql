@@ -179,8 +179,9 @@ type Column @auth(
     }"""}
 #     delete: { rule: "false" }
 ) {
+  colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })
-  name: String! @id
+  name: String! @search(by: [hash])
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
 
