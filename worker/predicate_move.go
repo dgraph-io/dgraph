@@ -230,7 +230,6 @@ func movePredicateHelper(ctx context.Context, in *pb.MovePredicatePayload) error
 	span := otrace.FromContext(ctx)
 
 	pl := groups().Leader(in.DestGid)
-	fmt.Println(groups(), "Anurag")
 	if pl == nil {
 		return errors.Errorf("Unable to find a connection for group: %d\n", in.DestGid)
 	}
