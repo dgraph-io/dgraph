@@ -247,9 +247,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 
 	qryResp, err := mr.executor.Execute(ctx,
-		&dgoapi.Request{Query: dgraph.AsString(dgQuery),
+		&dgoapi.Request{
+			Query:    dgraph.AsString(dgQuery),
 			ReadOnly: true,
-			StartTs:  mutResp.Txn.GetStartTs(),
 		})
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
