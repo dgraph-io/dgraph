@@ -4856,8 +4856,9 @@ func TestParseGraphQLVarArray(t *testing.T) {
 		require.Equal(t, 1, len(gq.Query))
 		require.Equal(t, "eq", gq.Query[0].Func.Name)
 		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
-		found := false
+		var found bool
 		for _, val := range tc.vars {
+			found = false
 			for _, arg := range gq.Query[0].Func.Args {
 				if val == arg.Value {
 					found = true
@@ -4891,8 +4892,9 @@ func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
 		require.Equal(t, 1, len(gq.Query))
 		require.Equal(t, "uid_in", gq.Query[0].Func.Name)
 		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
-		found := false
+		var found bool
 		for _, val := range tc.vars {
+			found = false
 			for _, arg := range gq.Query[0].Func.Args {
 				if val == arg.Value {
 					found = true
