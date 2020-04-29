@@ -229,6 +229,11 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 }
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
+	if plist == nil {
+		return errors.Errorf("cannot unmarshal value at key %s to a nil object",
+			hex.Dump(item.Key()))
+	}
+
 	return item.Value(func(val []byte) error {
 		if len(val) == 0 {
 			// empty pl
@@ -260,9 +265,9 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		return nil, ErrInvalidKey
 	}
 
-	l := new(List)
+	l := &List{}
 	l.key = key
-	l.plist = new(pb.PostingList)
+	l.plist = &pb.PostingList{}
 
 	// We use the following block of code to trigger incremental rollup on this key.
 	deltaCount := 0
@@ -289,9 +294,11 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			l.minTs = item.Version()
 			return l, nil
 		case BitCompletePosting:
-			if err := unmarshalOrCopy(l.plist, item); err != nil {
+			pl := &pb.PostingList{}
+			if err := unmarshalOrCopy(pl, item); err != nil {
 				return nil, err
 			}
+			l.plist = pl
 			l.minTs = item.Version()
 
 			// No need to do Next here. The outer loop can take care of skipping
