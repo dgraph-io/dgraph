@@ -130,6 +130,7 @@ func getJWT(t *testing.T, user, role string) http.Header {
 }
 
 func TestOrRBACFilter(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{}
 	query := `
             query {
@@ -255,6 +256,7 @@ func TestRootFilter(t *testing.T) {
 }
 
 func TestRBACFilter(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{
 		{role: "USER", result: `{
     "queryLog": [
@@ -301,6 +303,7 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
+	t.Skip()
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
