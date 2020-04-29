@@ -1663,7 +1663,7 @@ L:
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
-		fmt.Println("Top level print it: ", name)
+		fmt.Println("Top level function name: ", name)
 		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
@@ -1671,7 +1671,7 @@ L:
 			if attrItemsAgo >= 0 {
 				attrItemsAgo++
 			}
-			fmt.Println("IteminFunc: ", itemInFunc)
+			// fmt.Println("IteminFunc: ", itemInFunc)
 			var val string
 			switch itemInFunc.Typ {
 			case itemRightRound:
@@ -1695,16 +1695,13 @@ L:
 				nestedFunc, err := parseFunction(it, gq)
 
 				res2B, _ := json.Marshal(nestedFunc)
-				fmt.Printf("Nested Function : " + string(res2B) + "\n")
+				fmt.Printf("Nested Function is: " + string(res2B) + "\n\n")
 				if err != nil {
 					return nil, err
 				}
 				seenFuncArg = true
 				switch nestedFunc.Name {
 				case valueFunc:
-					fmt.Printf("Function: %+v\n ", function)
-					fmt.Printf("Nested Function: %+v\n", nestedFunc)
-
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
@@ -1736,14 +1733,17 @@ L:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
 				case uidFunc:
-					fmt.Println("nestedFunc: ", nestedFunc.NeedsVar)
-					fmt.Println("function.Attr ", function.Attr)
-
+					fmt.Println("Inside uid in nested loop")
 					if len(nestedFunc.NeedsVar) > 1 {
 						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
 					}
-					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
-					function.NeedsVar[0].Typ = UidVar
+					if len(nestedFunc.NeedsVar) != 0 {
+						function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+						function.NeedsVar[0].Typ = UidVar
+						function.Args = append(function.Args,
+							Arg{Value: nestedFunc.NeedsVar[0].Name, IsUIDVar: true})
+					}
+					function.UID = append(function.UID, nestedFunc.UID...)
 					// uid, err := strconv.ParseUint(val, 0, 64)
 					// switch e := err.(type) {
 					// case nil:
@@ -1856,7 +1856,7 @@ L:
 			}
 			val += v
 
-			fmt.Println("val: ", val)
+			fmt.Println("Val: ", val)
 
 			if isDollar {
 				val = "$" + val
@@ -1944,6 +1944,8 @@ L:
 		}
 	}
 
+	res2B, _ := json.Marshal(function)
+	fmt.Printf("Function at the end : " + string(res2B) + "\n\n\n")
 	// if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
 	// 	return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
 	// }
@@ -1952,8 +1954,6 @@ L:
 		return nil, it.Errorf("type function only supports one argument. Got: %v", function.Args)
 	}
 
-	res2B, _ := json.Marshal(function)
-	fmt.Printf("Function at the end : " + string(res2B) + "\n")
 	return function, nil
 }
 
