@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -1816,7 +1817,12 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
-		//TODO (Anurag) Implement an argsCount for min 1 argument
+		fmt.Println("q.SrcFunc.Args: ", q.SrcFunc.Args)
+		if len(q.SrcFunc.Args) == 0 {
+			err := errors.Errorf("Function '%s' requires atleast 1 argument, but got %d (%v)",
+				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
+			return nil, err
+		}
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {
