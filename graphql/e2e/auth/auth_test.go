@@ -47,10 +47,14 @@ type User struct {
 }
 
 type deleteUserResult struct {
-	Name deleteUserSecret `json:"deleteUserSecret"`
+	Result resultFields `json:"deleteUserSecret"`
 }
 
-type deleteUserSecret struct {
+type deleteTicketResult struct {
+	Result resultFields `json:"deleteTicket"`
+}
+
+type resultFields struct {
 	Msg     string `json:"msg"`
 	NumUids int    `json:"numUids"`
 }
@@ -473,6 +477,7 @@ func TestFieldFilters(t *testing.T) {
 		}
 	}
 }
+
 func TestDeleteAuthRule(t *testing.T) {
 	testCases := []TestCase{
 		{name: "user with secret info", user: "user1", role: "admin",
@@ -496,6 +501,60 @@ func TestDeleteAuthRule(t *testing.T) {
 		filter := map[string]interface{}{
 			"aSecret": map[string]interface{}{
 				"anyofterms": "Secret data",
+			},
+		}
+
+		getUserParams := &common.GraphQLParams{
+			Headers: map[string][]string{},
+			Query:   query,
+			Variables: map[string]interface{}{
+				"filter": filter,
+			},
+		}
+
+		authVars := map[string]interface{}{
+			"USER": tcase.user,
+			"ROLE": tcase.role,
+		}
+		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
+		getUserParams.Headers.Add(metainfo.Header, jwtToken)
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal(gqlResponse.Data, &result)
+		require.Nil(t, err)
+
+		err = json.Unmarshal([]byte(tcase.result), &data)
+		require.Nil(t, err)
+
+		if diff := cmp.Diff(result, data); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+	}
+}
+
+func TestDeleteDeepAuthRule(t *testing.T) {
+	testCases := []TestCase{
+		{name: "ticket with permission", user: "user1", role: "admin",
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`},
+		{name: "ticket without permission", user: "user2", role: "admin",
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`}}
+	query := `
+	mutation deleteTicket($filter: TicketFilter!) {
+	  deleteTicket(filter: $filter) {
+		msg
+		numUids
+	  }
+	}
+	`
+
+	var result, data deleteTicketResult
+
+	for _, tcase := range testCases {
+		filter := map[string]interface{}{
+			"title": map[string]interface{}{
+				"anyofterms": "Ticket1",
 			},
 		}
 
