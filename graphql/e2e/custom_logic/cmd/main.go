@@ -130,9 +130,8 @@ func verifyGraphqlRequest(r *http.Request, expectedRequest expectedGraphqlReques
 	return false, nil
 }
 
-func getDefaultResponse(resKey string) []byte {
-	resTemplate := `{
-		"%s": [
+func getDefaultResponse() []byte {
+	resTemplate := `[
 			{
 				"id": "0x3",
 				"name": "Star Wars",
@@ -153,10 +152,9 @@ func getDefaultResponse(resKey string) []byte {
 					}
 				]
 			}
-		]
-	}`
+		]`
 
-	return []byte(fmt.Sprintf(resTemplate, resKey))
+	return []byte(resTemplate)
 }
 
 func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +168,7 @@ func getFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write(getDefaultResponse("myFavoriteMovies")))
+	check2(w.Write(getDefaultResponse()))
 }
 
 func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +182,7 @@ func postFavMoviesHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write(getDefaultResponse("myFavoriteMoviesPost")))
+	check2(w.Write(getDefaultResponse()))
 }
 
 func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
@@ -203,7 +201,7 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`)))
+	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -218,9 +216,7 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	check2(w.Write([]byte(`
-	{
-      "createMyFavouriteMovies": [
+	check2(w.Write([]byte(`[
         {
           "id": "0x1",
           "name": "Mov1",
@@ -235,8 +231,7 @@ func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
           "id": "0x3",
           "name": "Mov2"
         }
-      ]
-    }`)))
+    ]`)))
 }
 
 func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +248,6 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
 
 	check2(w.Write([]byte(`
 	{
-      "updateMyFavouriteMovie": {
         "id": "0x1",
         "name": "Mov1",
         "director": [
@@ -262,7 +256,6 @@ func favMoviesUpdateHandler(w http.ResponseWriter, r *http.Request) {
             "name": "Dir1"
           }
         ]
-      }
     }`)))
 }
 
@@ -285,10 +278,8 @@ func favMoviesDeleteHandler(w http.ResponseWriter, r *http.Request) {
 
 	check2(w.Write([]byte(`
 	{
-      "deleteMyFavouriteMovie": {
         "id": "0x1",
         "name": "Mov1"
-      }
     }`)))
 }
 
