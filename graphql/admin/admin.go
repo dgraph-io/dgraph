@@ -415,10 +415,12 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
-			return resolve.AdminQueryMWs.Then(resolve.QueryResolverFunc(resolveHealth))
+			// dgraph handles Guardian auth for health
+			return resolve.IpWhitelistingMW4Query(resolve.QueryResolverFunc(resolveHealth))
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
-			return resolve.AdminQueryMWs.Then(resolve.QueryResolverFunc(resolveState))
+			// dgraph handles Guardian auth for state
+			return resolve.IpWhitelistingMW4Query(resolve.QueryResolverFunc(resolveState))
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

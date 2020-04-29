@@ -1962,6 +1962,45 @@ func TestRestoreForAcl(t *testing.T) {
 	require.JSONEq(t, `{"restore": null}`, string(resp.Data))
 }
 
+func TestGetSchemaForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// can't do a positive test, only negative test is possible for this,
+		// as we don't want to mess up the schema for other tests
+		Query: `
+		query {
+		  getGQLSchema {
+			id
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "getGQLSchema", true, params)
+
+	// assert no error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := makeRequest(t, accessJwt, params)
+	resp.RequireNoGraphQLErrors(t)
+}
+
+func TestUpdateSchemaForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// can't do a positive test, only negative test is possible for this,
+		// as we don't want to mess up the schema for other tests
+		Query: `
+		mutation {
+		  updateGQLSchema(input: {set: {schema: ""}}) {
+			gqlSchema {
+			  id
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "updateGQLSchema", true, params)
+}
+
 func TestShutdownForAcl(t *testing.T) {
 	params := testutil.GraphQLParams{
 		// can't do a positive test, only negative test is possible for this,

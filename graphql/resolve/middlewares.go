@@ -30,13 +30,7 @@ import (
 )
 
 var (
-	// AdminQueryMWs are the middlewares which should be applied to queries served by admin server
-	// unless some exceptional behaviour is required
-	AdminQueryMWs = QueryMiddlewares{
-		IpWhitelistingMW4Query, // its better to apply ip whitelisting before Guardian auth
-		GuardianAuthMW4Query,
-	}
-	// AdminMutationMWs are the middlewares which should be applied to queries served by admin
+	// AdminMutationMWs are the middlewares which should be applied to mutations served by admin
 	// server unless some exceptional behaviour is required
 	AdminMutationMWs = MutationMiddlewares{
 		IpWhitelistingMW4Mutation, // its better to apply ip whitelisting before Guardian auth
