@@ -4856,16 +4856,53 @@ func TestParseGraphQLVarArray(t *testing.T) {
 		require.Equal(t, 1, len(gq.Query))
 		require.Equal(t, "eq", gq.Query[0].Func.Name)
 		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
-		found := false
+		var found bool
 		for _, val := range tc.vars {
+			found = false
 			for _, arg := range gq.Query[0].Func.Args {
 				if val == arg.Value {
 					found = true
 					break
 				}
 			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
 		}
-		require.True(t, found, "vars not matched: %v", tc.vars)
+	}
+}
+
+func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
+	tests := []struct {
+		q    string
+		vars map[string]string
+		args int
+	}{
+		// uid_in test cases (uids and predicate inside uid_in are dummy)
+		{q: `query test($a: string){q(func: uid_in(director.film, [$a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 1},
+		{q: `query test($a: string, $b: string){q(func: uid_in(director.film, [$a, $b])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a", "$b": "0x4e9545"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, [$a, "0x4e9545"])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, ["0x4e9545", $a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+	}
+	for _, tc := range tests {
+		gq, err := Parse(Request{Str: tc.q, Variables: tc.vars})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(gq.Query))
+		require.Equal(t, "uid_in", gq.Query[0].Func.Name)
+		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
+		var found bool
+		for _, val := range tc.vars {
+			found = false
+			for _, arg := range gq.Query[0].Func.Args {
+				if val == arg.Value {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
+		}
 	}
 }
 
