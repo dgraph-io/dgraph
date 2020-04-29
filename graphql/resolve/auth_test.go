@@ -260,13 +260,15 @@ func TestAuthDeleteRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	strSchema := string(sch)
+	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo.Parse(strSchema)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			if tcase.Name != "Filtering by ID" {
-				return
-			}
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.Variables != "" {
