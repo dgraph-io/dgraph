@@ -18,7 +18,6 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -28,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -82,7 +80,6 @@ type Ticket struct {
 }
 
 type Column struct {
-	ColID     string
 	InProject Project
 	Name      string
 	Tickets   []Ticket
@@ -99,6 +96,7 @@ type TestCase struct {
 	user   string
 	role   string
 	result string
+	name   string
 }
 
 func getJWT(t *testing.T, user, role string) http.Header {
@@ -200,17 +198,28 @@ func TestOrRBACFilter(t *testing.T) {
 	}
 }
 
-func rootGetFilter(t *testing.T, col *Column, testcase TestCase) {
-	tcase := TestCase{
-		user:   testcase.user,
-		role:   testcase.role,
-		result: fmt.Sprintf(`{"getColumn": {"name": "%s"}}`, col.Name),
-	}
+func TestRootGetFilter(t *testing.T) {
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"getColumn": {"name": "Column1"}}`,
+		name:   "Column1",
+	}, {
+		user:   "user1",
+		role:   "USER",
+		result: `{"getColumn": null}`,
+		name:   "Column2",
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"getColumn": {"name": "Column2"}}`,
+		name:   "Column2",
+	}}
 
 	query := `
-		query($id: ID!) {
-		    getColumn(colID: $id) {
-		    	name
+		query($name: String!) {
+		    getColumn(name: $name) {
+			name
 		    }
 		}
 	`
@@ -219,23 +228,27 @@ func rootGetFilter(t *testing.T, col *Column, testcase TestCase) {
 		GetColumn *Column
 	}
 
-	getUserParams := &common.GraphQLParams{
-		Headers:   getJWT(t, tcase.user, tcase.role),
-		Query:     query,
-		Variables: map[string]interface{}{"id": col.ColID},
-	}
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"name": tcase.name},
+			}
 
-	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.Nil(t, err)
+			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			require.Nil(t, err)
 
-	err = json.Unmarshal([]byte(tcase.result), &data)
-	require.Nil(t, err)
+			err = json.Unmarshal([]byte(tcase.result), &data)
+			require.Nil(t, err)
 
-	if diff := cmp.Diff(result, data); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
+			if diff := cmp.Diff(result, data); diff != "" {
+				t.Errorf("result mismatch (-want +got):\n%s", diff)
+			}
+		})
 	}
 }
 
@@ -256,7 +269,6 @@ func TestRootFilter(t *testing.T) {
 	query := `
 	query {
 		queryColumn(order: {asc: name}) {
-			colID
 			name
 		}
 	}
@@ -282,8 +294,7 @@ func TestRootFilter(t *testing.T) {
 			err = json.Unmarshal([]byte(tcase.result), &data)
 			require.Nil(t, err)
 
-			opt := cmpopts.IgnoreFields(Column{}, "ColID")
-			if diff := cmp.Diff(result, data, opt); diff != "" {
+			if diff := cmp.Diff(result, data); diff != "" {
 				t.Errorf("result mismatch (-want +got):\n%s", diff)
 			}
 		})
@@ -340,7 +351,6 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
-	t.Skip()
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
