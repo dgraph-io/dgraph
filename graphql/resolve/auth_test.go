@@ -363,6 +363,10 @@ func TestAuthDeleteRewriting(t *testing.T) {
 
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	metainfo.Parse(string(sch))
+
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 			// -- Arrange --
@@ -441,6 +445,9 @@ func TestAuthAdd(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	metainfo.Parse(string(sch))
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -465,6 +472,9 @@ func TestAuthUpdate(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	metainfo.Parse(string(sch))
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
