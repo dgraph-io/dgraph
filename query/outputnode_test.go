@@ -169,7 +169,7 @@ func TestFastJsonNode(t *testing.T) {
 	require.Equal(t, scalarVal, sv)
 	require.Equal(t, list, enc.getList(fj2))
 
-	enc.appendAttrs(fj, false, fj2)
+	enc.appendAttrs(fj, fj2)
 	require.Equal(t, []fastJsonNode{fj2}, enc.getAttrs(fj))
 }
 
@@ -209,7 +209,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 			ch := enc.newNode(enc.idForAttr(testAttr), false)
 			buildTestTree(b, enc, level+1, maxlevel, ch)
 		}
-		enc.appendAttrs(fj, false, ch)
+		enc.appendAttrs(fj, ch)
 	}
 }
 
