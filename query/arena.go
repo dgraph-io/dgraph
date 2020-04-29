@@ -45,6 +45,7 @@ var (
 // arena only once.
 // For now, max size for underlying buffer is limited to math.MaxUint32.
 type arena struct {
+	sync.RWMutex
 	buf       []byte
 	offsetMap map[uint64]uint32
 }
@@ -64,11 +65,21 @@ func newArena(size int) *arena {
 // Note: for now this function can only put buffers such that:
 // len(current arena buf) + varint(len(b)) + len(b) <= math.MaxUint32.
 func (a *arena) put(b []byte) (uint32, error) {
+	a.RLock()
 	// Check if we already have b.
 	fp := z.MemHash(b)
 	if co, ok := a.offsetMap[fp]; ok {
+		a.RUnlock()
 		return co, nil
 	}
+	a.RUnlock()
+
+	a.Lock()
+	defer a.Unlock()
+	if co, ok := a.offsetMap[fp]; ok {
+		return co, nil
+	}
+
 	// First put length of buffer(varint encoded), then put actual buffer.
 	var sizeBuf [binary.MaxVarintLen64]byte
 	w := binary.PutVarint(sizeBuf[:], int64(len(b)))
@@ -92,6 +103,8 @@ func (a *arena) get(offset uint32) ([]byte, error) {
 		return nil, nil
 	}
 
+	a.RLock()
+	defer a.RUnlock()
 	if int64(offset) >= int64(len(a.buf)) {
 		return nil, errInvalidOffset
 	}
@@ -103,6 +116,8 @@ func (a *arena) get(offset uint32) ([]byte, error) {
 }
 
 func (a *arena) reset() {
+	a.Lock()
+	defer a.Unlock()
 	a.buf = a.buf[:1]
 
 	for k := range a.offsetMap {
