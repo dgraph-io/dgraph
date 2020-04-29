@@ -701,7 +701,6 @@ func (qs *queryState) handleUidPostings(
 			}
 			var key []byte
 			switch srcFn.fnType {
-			//Check with pawan/ashish if this needs any changes
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
 					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
@@ -758,10 +757,9 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			//Check with Pawan/Ashish what this function do? I suppose itreturns the relevant posting/uid list to append to uid matrix
 			case srcFn.fnType == uidInFn:
 				if i == 0 {
-					span.Annotate(nil, "UidInFn") //Check with Pawan/Ashish what does this do?
+					span.Annotate(nil, "UidInFn")
 				}
 				reqList := &pb.List{Uids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
