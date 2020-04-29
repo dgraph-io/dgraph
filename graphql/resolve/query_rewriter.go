@@ -425,7 +425,9 @@ func (authRw *authRewriter) rewriteRuleNode(
 		for _, orRn := range rns {
 			q, f := authRw.rewriteRuleNode(typ, orRn)
 			qrys = append(qrys, q...)
-			filts = append(filts, f)
+			if f != nil {
+				filts = append(filts, f)
+			}
 		}
 		return qrys, filts
 	}
@@ -433,18 +435,33 @@ func (authRw *authRewriter) rewriteRuleNode(
 	switch {
 	case len(rn.And) > 0:
 		qrys, filts := nodeList(typ, rn.And)
+		if len(filts) == 0 {
+			return qrys, nil
+		}
+		if len(filts) == 1 {
+			return qrys, filts[0]
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "and",
 			Child: filts,
 		}
 	case len(rn.Or) > 0:
 		qrys, filts := nodeList(typ, rn.Or)
+		if len(filts) == 0 {
+			return qrys, nil
+		}
+		if len(filts) == 1 {
+			return qrys, filts[0]
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "or",
 			Child: filts,
 		}
 	case rn.Not != nil:
 		qrys, filter := authRw.rewriteRuleNode(typ, rn.Not)
+		if filter == nil {
+			return qrys, nil
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "not",
 			Child: []*gql.FilterTree{filter},

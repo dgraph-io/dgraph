@@ -26,8 +26,6 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgrijalva/jwt-go"
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -124,7 +122,7 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	require.NoError(t, err)
 
 	h := make(http.Header)
-	h.Add("auth-header", ss)
+	h.Add("X-Test-Auth", ss)
 
 	return h
 }
@@ -141,10 +139,6 @@ func TestOrRBACFilter(t *testing.T) {
 	    }
 	`
 
-	var result, data struct {
-		QueryProject []*Project
-	}
-
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
@@ -155,15 +149,7 @@ func TestOrRBACFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
-
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
-
-			if diff := cmp.Diff(result, data); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
@@ -227,10 +213,6 @@ func TestRootGetFilter(t *testing.T) {
 		}
 	`
 
-	var result, data struct {
-		GetColumn *Column
-	}
-
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			id := getColID(t, tcase)
@@ -248,15 +230,52 @@ func TestRootGetFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
 
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
+func TestDeepFilter(t *testing.T) {
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[{"name":"Column1"}]}]}`,
+		name:   "Column1",
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[{"name":"Column1"}]}, {"name":"Project2","columns":[]}]}`,
+		name:   "Column1",
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[]}, {"name":"Project2","columns":[{"name":"Column3"}]}]}`,
+		name:   "Column3",
+	}}
 
-			if diff := cmp.Diff(result, data); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
+	query := `
+		query($name: String!) {
+		    queryProject (order: {asc: name}) {
+		       name
+		       columns (filter: {name: {eq: $name}}, first: 1) {
+		       	   name
+                       }
+                    }
+                 }
+	`
+
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"name": tcase.name},
 			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
@@ -278,15 +297,10 @@ func TestRootFilter(t *testing.T) {
 	query := `
 	query {
 		queryColumn(order: {asc: name}) {
-			colID
 			name
 		}
 	}
 	`
-
-	var result, data struct {
-		QueryColumn []*Column
-	}
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
@@ -298,16 +312,7 @@ func TestRootFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
-
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
-
-			opt := cmpopts.IgnoreFields(Column{}, "ColID")
-			if diff := cmp.Diff(result, data, opt); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
@@ -323,10 +328,6 @@ func TestRBACFilter(t *testing.T) {
 		}
 	`
 
-	var result, data struct {
-		QueryLog []*Log
-	}
-
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
@@ -337,15 +338,7 @@ func TestRBACFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
-
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
-
-			if diff := cmp.Diff(result, data); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
@@ -361,10 +354,6 @@ func TestAndRBACFilter(t *testing.T) {
 		}
 	`
 
-	var result, data struct {
-		QueryIssue []*Issue
-	}
-
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
@@ -375,21 +364,13 @@ func TestAndRBACFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
-
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
-
-			if diff := cmp.Diff(result, data); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 
 }
 
-func TestAndFilter(t *testing.T) {
+func TestNestedFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user: "user1",
 		role: "USER",
@@ -470,10 +451,6 @@ func TestAndFilter(t *testing.T) {
 		}
 	`
 
-	var result, data struct {
-		QueryMovie []*Movie
-	}
-
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
@@ -484,15 +461,7 @@ func TestAndFilter(t *testing.T) {
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-			require.Nil(t, err)
-
-			err = json.Unmarshal([]byte(tcase.result), &data)
-			require.Nil(t, err)
-
-			if diff := cmp.Diff(result, data); diff != "" {
-				t.Errorf("result mismatch (-want +got):\n%s", diff)
-			}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
