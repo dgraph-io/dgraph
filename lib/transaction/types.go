@@ -17,6 +17,8 @@
 package transaction
 
 import (
+	"encoding/binary"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/scale"
@@ -61,5 +63,32 @@ func NewValidTransaction(extrinsic types.Extrinsic, validity *Validity) *ValidTr
 
 // Encode SCALE encodes the transaction
 func (vt *ValidTransaction) Encode() ([]byte, error) {
-	return scale.Encode(vt)
+	enc := []byte(vt.Extrinsic)
+
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, vt.Validity.Priority)
+	enc = append(enc, buf...)
+
+	d, err := scale.Encode(vt.Validity.Requires)
+	if err != nil {
+		return nil, err
+	}
+	enc = append(enc, d...)
+
+	d, err = scale.Encode(vt.Validity.Provides)
+	if err != nil {
+		return nil, err
+	}
+	enc = append(enc, d...)
+
+	binary.LittleEndian.PutUint64(buf, vt.Validity.Longevity)
+	enc = append(enc, buf...)
+
+	if vt.Validity.Propagate {
+		enc = append(enc, 1)
+	} else {
+		enc = append(enc, 0)
+	}
+
+	return enc, nil
 }

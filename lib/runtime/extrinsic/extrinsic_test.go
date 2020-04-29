@@ -3,12 +3,14 @@ package extrinsic
 import (
 	"bytes"
 	"encoding/binary"
-	"reflect"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/keystore"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestAuthoritiesChangeExt_Encode(t *testing.T) {
@@ -16,9 +18,7 @@ func TestAuthoritiesChangeExt_Encode(t *testing.T) {
 
 	// TODO: scale isn't working for arrays of [32]byte
 	kp, err := sr25519.GenerateKeypair()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	pub := kp.Public().Encode()
 	pubk := [32]byte{}
@@ -29,26 +29,27 @@ func TestAuthoritiesChangeExt_Encode(t *testing.T) {
 	ext := NewAuthoritiesChangeExt(authorities)
 
 	enc, err := ext.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log(enc)
+	require.NoError(t, err)
 
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !reflect.DeepEqual(res, ext) {
-		t.Fatalf("Fail: got %v expected %v", res, ext)
-	}
+	require.Equal(t, ext, res)
 }
 
 var alice, _ = common.HexToHash("0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d")
 var bob, _ = common.HexToHash("0x90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22")
+
+func TestTransfer_AsSignedExtrinsic(t *testing.T) {
+	kr, err := keystore.NewKeyring()
+	require.NoError(t, err)
+
+	transfer := NewTransfer(alice, bob, 1000, 1)
+	_, err = transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	require.NoError(t, err)
+}
 
 func TestTransferExt_Encode(t *testing.T) {
 	transfer := NewTransfer(alice, bob, 1000, 1)
@@ -56,20 +57,14 @@ func TestTransferExt_Encode(t *testing.T) {
 	ext := NewTransferExt(transfer, sig)
 
 	enc, err := ext.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !reflect.DeepEqual(res, ext) {
-		t.Fatalf("Fail: got %v expected %v", res, ext)
-	}
+	require.Equal(t, ext, res)
 }
 
 func TestTransferExt_Decode(t *testing.T) {
@@ -78,9 +73,7 @@ func TestTransferExt_Decode(t *testing.T) {
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	amount := binary.LittleEndian.Uint64([]byte{69, 0, 0, 0, 0, 0, 0, 0})
 	nonce := binary.LittleEndian.Uint64([]byte{1, 0, 0, 0, 0, 0, 0, 0})
@@ -106,9 +99,7 @@ func TestTransferExt_Decode(t *testing.T) {
 		t.Fatal("Fail: got wrong extrinsic type")
 	}
 
-	if !reflect.DeepEqual(transfer, expected) {
-		t.Fatalf("Fail: got %v expected %v", transfer, expected)
-	}
+	require.Equal(t, expected, transfer)
 }
 
 func TestIncludeDataExt_Encode(t *testing.T) {
@@ -116,20 +107,14 @@ func TestIncludeDataExt_Encode(t *testing.T) {
 	ext := NewIncludeDataExt(data)
 
 	enc, err := ext.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !reflect.DeepEqual(res, ext) {
-		t.Fatalf("Fail: got %v expected %v", res, ext)
-	}
+	require.Equal(t, ext, res)
 }
 
 func TestIncludeDataExt_Decode(t *testing.T) {
@@ -137,17 +122,13 @@ func TestIncludeDataExt_Decode(t *testing.T) {
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expected := &IncludeDataExt{
 		data: []byte{111, 0, 0, 0, 0, 0, 0, 0},
 	}
 
-	if !reflect.DeepEqual(res, expected) {
-		t.Fatalf("Fail: got %v expected %v", res, expected)
-	}
+	require.Equal(t, expected, res)
 }
 
 func TestStorageChangeExt_Encode(t *testing.T) {
@@ -156,20 +137,14 @@ func TestStorageChangeExt_Encode(t *testing.T) {
 	ext := NewStorageChangeExt(key, value)
 
 	enc, err := ext.Encode()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	if !reflect.DeepEqual(res, ext) {
-		t.Fatalf("Fail: got %v expected %v", res, ext)
-	}
+	require.Equal(t, ext, res)
 }
 
 func TestStorageChangeExt_Decode(t *testing.T) {
@@ -177,16 +152,12 @@ func TestStorageChangeExt_Decode(t *testing.T) {
 	r := &bytes.Buffer{}
 	r.Write(enc)
 	res, err := DecodeExtrinsic(r)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	expected := &StorageChangeExt{
 		key:   []byte{77, 1, 2, 3},
 		value: optional.NewBytes(true, []byte{99}),
 	}
 
-	if !reflect.DeepEqual(res, expected) {
-		t.Fatalf("Fail: got %v expected %v", res, expected)
-	}
+	require.Equal(t, expected, res)
 }

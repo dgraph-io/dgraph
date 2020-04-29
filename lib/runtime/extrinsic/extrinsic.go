@@ -153,6 +153,24 @@ func (t *Transfer) Decode(r io.Reader) (err error) {
 	return nil
 }
 
+// AsSignedExtrinsic returns a TransferExt that includes the transfer and a signature.
+func (t *Transfer) AsSignedExtrinsic(key *sr25519.PrivateKey) (*TransferExt, error) {
+	enc, err := t.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	sig, err := key.Sign(enc)
+	if err != nil {
+		return nil, err
+	}
+
+	sigb := [64]byte{}
+	copy(sigb[:], sig)
+
+	return NewTransferExt(t, sigb), nil
+}
+
 // TransferExt represents an Extrinsic::Transfer
 type TransferExt struct {
 	transfer  *Transfer
