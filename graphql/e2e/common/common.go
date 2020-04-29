@@ -213,6 +213,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("partial health", partialHealth)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
