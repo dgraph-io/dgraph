@@ -126,10 +126,8 @@ func (c *PlCache) Set(key []byte, ts uint64, pl *List) {
 		return
 	}
 
-	prevKey := generateKey(key, prevTs)
-	cacheKey := generateKey(key, ts)
-	_ = c.cache.Set(cacheKey, copyList(pl), 0)
-	c.cache.Del(prevKey)
+	_ = c.cache.Set(generateKey(key, ts), copyList(pl), 0)
+	c.cache.Del(generateKey(key, prevTs))
 
 	c.Lock()
 	defer c.Unlock()
@@ -150,6 +148,7 @@ func (c *PlCache) Del(key []byte) {
 	c.Lock()
 	prevTs, ok := c.tsMap[hash]
 	if !ok {
+		c.Unlock()
 		return
 	}
 	delete(c.tsMap, hash)
