@@ -68,7 +68,7 @@ const (
 		schema: String!  @dgraph(pred: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema that was generated from the 'schema' field.  
+		The GraphQL schema that was generated from the 'schema' field.
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
@@ -220,7 +220,7 @@ const (
 	input ConfigInput {
 
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		Estimated memory the LRU cache can take. Actual usage by the process would be
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
@@ -593,7 +593,8 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			return resolve.NewDgraphResolver(
 				updResolver,
 				updResolver,
-				resolve.StdMutationCompletion(m.Name()))
+				resolve.StdMutationCompletion(m.Name()),
+				nil)
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
@@ -604,28 +605,32 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				return resolve.NewQueryResolver(
 					getResolver,
 					getResolver,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithQueryResolver("getCurrentUser",
 			func(q schema.Query) resolve.QueryResolver {
@@ -636,56 +641,64 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				return resolve.NewQueryResolver(
 					cuResolver,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion())
+					resolve.StdQueryCompletion(),
+					nil)
 			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					resolve.NewAddRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name()),
+					nil)
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					NewAddGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name()),
+					nil)
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					resolve.NewUpdateRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name()),
+					nil)
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					NewUpdateGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name()))
+					resolve.StdMutationCompletion(m.Name()),
+					nil)
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+					resolve.StdDeleteCompletion(m.Name()),
+					nil)
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
 				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name()))
+					resolve.StdDeleteCompletion(m.Name()),
+					nil)
 			})
 }
 

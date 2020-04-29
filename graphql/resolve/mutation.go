@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
@@ -144,11 +145,13 @@ func (mr MutationResolverFunc) Resolve(ctx context.Context, m schema.Mutation) (
 func NewDgraphResolver(
 	mr MutationRewriter,
 	ex DgraphExecutor,
-	rc ResultCompleter) MutationResolver {
+	rc ResultCompleter,
+	client *http.Client) MutationResolver {
 	return &dgraphResolver{
 		mutationRewriter: mr,
 		executor:         ex,
 		resultCompleter:  rc,
+		httpClient:       client,
 	}
 }
 
@@ -157,6 +160,7 @@ type dgraphResolver struct {
 	mutationRewriter MutationRewriter
 	executor         DgraphExecutor
 	resultCompleter  ResultCompleter
+	httpClient       *http.Client
 }
 
 func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Resolved, bool) {
@@ -254,7 +258,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		extM.Merge(extQ)
 	}
 
-	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), errs)
+	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), mr.httpClient,
+		errs)
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
