@@ -1323,24 +1323,24 @@ func addDelete(
 	//
 	// We'll bring out Author4 to a query so we can check it's length against the auth query.
 	//
-	// Author4(func: uid(Auth4))
+	// Author4(func: uid(Author4))
 	// Author4.auth(func: uid(Auth4)) @filter(...auth filter...)
 	// Author5, Author6, etc. ... auth queries...
 
-	frag.queries = append(frag.queries, &gql.GraphQuery{
-		Attr: targetVar,
-		Func: &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{Value: targetVar}}},
-		Children: []*gql.GraphQuery{{Attr: "uid"}}})
-
-	frag.queries = append(frag.queries, &gql.GraphQuery{
-		Attr: targetVar + ".auth",
-		Func: &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{Value: targetVar}}},
-		Filter:   authFilter,
-		Children: []*gql.GraphQuery{{Attr: "uid"}}})
+	frag.queries = append(frag.queries,
+		&gql.GraphQuery{
+			Attr: targetVar,
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: targetVar}}},
+			Children: []*gql.GraphQuery{{Attr: "uid"}}},
+		&gql.GraphQuery{
+			Attr: targetVar + ".auth",
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: targetVar}}},
+			Filter:   authFilter,
+			Children: []*gql.GraphQuery{{Attr: "uid"}}})
 
 	frag.queries = append(frag.queries, authQueries...)
 
