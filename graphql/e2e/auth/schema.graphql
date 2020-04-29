@@ -131,9 +131,8 @@ type Column @auth(
                           }
                           }"""},
  ) {
-  colID: ID!
   inProject: Project!
-  name: String! @search(by: [hash])
+  name: String! @search(by: [hash]) @id
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
 
