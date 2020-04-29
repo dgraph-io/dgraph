@@ -1327,14 +1327,16 @@ func addDelete(
 		Attr: targetVar,
 		Func: &gql.Function{
 			Name: "uid",
-			Args: []gql.Arg{{Value: targetVar}}}})
+			Args: []gql.Arg{{Value: targetVar}}},
+		Children: []*gql.GraphQuery{{Attr: "uid"}}})
 
 	frag.queries = append(frag.queries, &gql.GraphQuery{
 		Attr: targetVar + ".auth",
 		Func: &gql.Function{
 			Name: "uid",
 			Args: []gql.Arg{{Value: targetVar}}},
-		Filter: authFilter})
+		Filter:   authFilter,
+		Children: []*gql.GraphQuery{{Attr: "uid"}}})
 
 	frag.queries = append(frag.queries, authQueries...)
 

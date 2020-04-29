@@ -432,8 +432,12 @@
       var(func: uid(Ticket3)) {
         Column4 as Ticket.onColumn
       }
-      Column4(func: uid(Column4))
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5))
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+        uid
+      }
       Column5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
@@ -503,8 +507,12 @@
       var(func: uid(Ticket3)) {
         Column4 as Ticket.onColumn
       }
-      Column4(func: uid(Column4))
-      Column4.auth(func: uid(Column4)) @filter(uid(Column5))
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+        uid
+      }
       Column5 as var(func: uid(Column4)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
