@@ -434,7 +434,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 // So the only auth to check is through authorizeNewNodes() function.
 //
 // We don't need to test the json mutations that are created, because those are the same
-// as in the add_mutation_test.  What we need to test is the processing around if
+// as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func TestAuthAdd(t *testing.T) {
 	b, err := ioutil.ReadFile("auth_add_test.yaml")
@@ -461,7 +461,7 @@ func TestAuthAdd(t *testing.T) {
 // that any nodes added by the mutation were also allowed.
 //
 // We don't need to test the json mutations that are created, because those are the same
-// as in the add_mutation_test.  What we need to test is the processing around if
+// as in update_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
 func TestAuthUpdate(t *testing.T) {
 	b, err := ioutil.ReadFile("auth_update_test.yaml")

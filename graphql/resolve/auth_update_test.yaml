@@ -33,6 +33,16 @@
         }
       }
     }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
   dgquery: |-
     query {
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
@@ -50,20 +60,10 @@
         dgraph.uid : uid
       }
     }
-  variables: |
-    { "upd":
-      { 
-        "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
-          "tickets": [ { "title": "a ticket" } ]
-        }
-      }
-    }
   uids: |
     { "Ticket4": "0x789" }
   json: |
-    { "Column2": [ { "uid": "0x123" } ] }
+    {  }
   authquery: |-
     query {
       Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
@@ -99,6 +99,16 @@
         }
       }
     }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
   dgquery: |-
     query {
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
@@ -116,20 +126,10 @@
         dgraph.uid : uid
       }
     }
-  variables: |
-    { "upd":
-      { 
-        "filter": { "colID": [ "0x123" ] },
-        "set": { 
-          "name": "new name", 
-          "tickets": [ { "title": "a ticket" } ]
-        }
-      }
-    }
   uids: |
     { "Ticket4": "0x789" }
   json: |
-    { "Column2": [ { "uid": "0x123" } ] }
+    {  }
   authquery: |-
     query {
       Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
