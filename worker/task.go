@@ -1832,7 +1832,9 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 			}
 			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
 		}
-		sort.Slice(fc.uidsPresent, func(i, j int) bool { return fc.uidsPresent[i] < fc.uidsPresent[j] })
+		sort.Slice(fc.uidsPresent, func(i, j int) bool {
+			return fc.uidsPresent[i] < fc.uidsPresent[j]
+		})
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
