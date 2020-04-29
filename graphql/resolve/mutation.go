@@ -316,7 +316,8 @@ func deleteCompletion() CompletionFunc {
 //
 // We group the nodes into their types, generate the authorization add rules for that type
 // and then check that the authorized nodes for each type is equal to the nodes created
-// for that type.  If the authorization query returns fewer nodes than we created, some
+// for that type by performing an authorization query to Dgraph as part of the ongoing
+// transaction (txn).  If the authorization query returns fewer nodes than we created, some
 // of the new nodes failed the auth rules.
 func authorizeNewNodes(
 	ctx context.Context,

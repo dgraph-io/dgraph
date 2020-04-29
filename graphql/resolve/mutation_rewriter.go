@@ -256,6 +256,8 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 
 	newNodes := make(map[string]schema.Type)
 	for _, f := range mrw.frags {
+		// squashFragments puts all the new nodes into the first fragment, so we only
+		// need to collect from there.
 		copyTypeMap(f[0].newNodes, newNodes)
 	}
 
@@ -314,6 +316,8 @@ func (mrw *AddRewriter) handleMultipleMutations(
 
 	newNodes := make(map[string]schema.Type)
 	for _, f := range mrw.frags {
+		// squashFragments puts all the new nodes into the first fragment, so we only
+		// need to collect from there.
 		copyTypeMap(f[0].newNodes, newNodes)
 	}
 
