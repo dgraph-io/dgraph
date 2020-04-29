@@ -41,6 +41,7 @@ type HTTPServerConfig struct {
 	CoreAPI             modules.CoreAPI
 	RuntimeAPI          modules.RuntimeAPI
 	TransactionQueueAPI modules.TransactionQueueAPI
+	RPCAPI              modules.RPCAPI
 	Host                string
 	RPCPort             uint32
 	WSPort              uint32
@@ -73,6 +74,8 @@ func (h *HTTPServer) RegisterModules(mods []string) {
 			srvc = modules.NewChainModule(h.serverConfig.BlockAPI)
 		case "state":
 			srvc = modules.NewStateModule(h.serverConfig.NetworkAPI, h.serverConfig.StorageAPI, h.serverConfig.CoreAPI)
+		case "rpc":
+			srvc = modules.NewRPCModule(h.serverConfig.RPCAPI)
 		default:
 			log.Warn("[rpc] Unrecognized module", "module", mod)
 			continue
@@ -84,6 +87,7 @@ func (h *HTTPServer) RegisterModules(mods []string) {
 			log.Warn("[rpc] Failed to register module", "mod", mod, "err", err)
 		}
 
+		h.serverConfig.RPCAPI.BuildMethodNames(srvc, mod)
 	}
 }
 

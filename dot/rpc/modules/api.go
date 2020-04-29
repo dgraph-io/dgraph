@@ -43,6 +43,12 @@ type CoreAPI interface {
 	IsBabeAuthority() bool
 }
 
+// RPCAPI is the interface for methods related to RPC service
+type RPCAPI interface {
+	Methods() []string
+	BuildMethodNames(rcvr interface{}, name string)
+}
+
 // RuntimeAPI is the interface for runtime methods
 type RuntimeAPI interface {
 	ValidateTransaction(e types.Extrinsic) (*transaction.Validity, error)

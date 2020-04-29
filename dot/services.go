@@ -152,6 +152,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		"mods", cfg.RPC.Modules,
 		"ws port", cfg.RPC.WSPort,
 	)
+	rpcService := rpc.NewService()
 
 	rpcConfig := &rpc.HTTPServerConfig{
 		BlockAPI:            stateSrvc.Block,
@@ -160,6 +161,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		CoreAPI:             coreSrvc,
 		RuntimeAPI:          rt,
 		TransactionQueueAPI: stateSrvc.TransactionQueue,
+		RPCAPI:              rpcService,
 		Host:                cfg.RPC.Host,
 		RPCPort:             cfg.RPC.Port,
 		WSPort:              cfg.RPC.WSPort,
