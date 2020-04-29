@@ -807,7 +807,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			defer api.PanicHandler(
 				func(err error) {
 					errChan <- internalServerError(err, f)
-					return
 				})
 
 			requestInput := input
