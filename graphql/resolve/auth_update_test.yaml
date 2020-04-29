@@ -221,27 +221,6 @@
       "Column5":  [ { "uid": "0x456" } ],
       "Column5.auth": [ { "uid": "0x456" } ]
     }
-  authquery: |-
-    query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
-        uid
-      }
-      Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
-  authjson: |
-    { 
-      "Column": [ { "uid": "0x456" } ] 
-    }  
   
 - name: "update with auth on additional delete that fails"
   gqlquery: |
@@ -307,26 +286,5 @@
       "Ticket4": [ { "uid": "0x789" } ],
       "Column5":  [ { "uid": "0x456" } ]
     }
-  authquery: |-
-    query {
-      Column(func: uid(Column1)) @filter(uid(Column2)) {
-        uid
-      }
-      Column1 as var(func: uid(0x456))
-      Column2 as var(func: uid(Column1)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
-  authjson: |
-    { 
-      "Column": [ { "uid": "0x456" } ] 
-    }  
   error:
     { "message": "couldn't rewrite query for mutation updateColumn because authorization failed" }
