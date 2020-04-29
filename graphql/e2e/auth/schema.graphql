@@ -133,7 +133,7 @@ type Column @auth(
  ) {
   colID: ID!
   inProject: Project!
-  name: String!
+  name: String! @search(by: [hash])
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
 
