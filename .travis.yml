@@ -41,6 +41,8 @@ matrix:
     script: make test-state-race
   - name: Integration Tests - Stable
     script: make it-stable
+  - name: Integration Tests - RPC
+    script: make it-rpc
   - name: Golang-ci Linter
     script: make lint
   - name: Build docker image
