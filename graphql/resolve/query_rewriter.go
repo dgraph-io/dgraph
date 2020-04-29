@@ -23,6 +23,7 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/pkg/errors"
@@ -48,7 +49,7 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	authVariables, err := ExtractAuthVariables(ctx)
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +215,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	addUID(dgQuery)
 
 	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(field, dgQuery)
+		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 	}
 
 	if len(selectionAuth) > 0 {
@@ -293,8 +294,9 @@ func rewriteAsGet(
 	addTypeFilter(dgQuery, field.Type())
 
 	if rbac == schema.Uncertain {
-		dgQuery = auth.addAuthQueries(field, dgQuery)
+		dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 	}
+
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
 	}
@@ -337,7 +339,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addUID(dgQuery)
 
 	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(field, dgQuery)
+		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 	}
 
 	if len(selectionAuth) > 0 {
@@ -352,7 +354,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 // the nodes authorized to be queried, returning a new graphQuery that does the
 // original query and the auth.
 func (authRw *authRewriter) addAuthQueries(
-	field schema.Field,
+	typ schema.Type,
 	dgQuery *gql.GraphQuery) *gql.GraphQuery {
 
 	// There's no need to recursively inject auth queries into other auth queries, so if
@@ -361,9 +363,9 @@ func (authRw *authRewriter) addAuthQueries(
 		return dgQuery
 	}
 
-	authRw.varName = authRw.varGen.Next(field.Type(), "", "")
+	authRw.varName = authRw.varGen.Next(typ, "", "")
 
-	fldAuthQueries, filter := authRw.rewriteAuthQueries(field)
+	fldAuthQueries, filter := authRw.rewriteAuthQueries(typ)
 	if len(fldAuthQueries) == 0 {
 		return dgQuery
 	}
@@ -415,7 +417,7 @@ func queryAuthSelector(t schema.Type) *schema.RuleNode {
 	return auth.Rules.Query
 }
 
-func (authRw *authRewriter) rewriteAuthQueries(f schema.Field) ([]*gql.GraphQuery, *gql.FilterTree) {
+func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQuery, *gql.FilterTree) {
 	if authRw == nil || authRw.isWritingAuth {
 		return nil, nil
 	}
@@ -426,7 +428,7 @@ func (authRw *authRewriter) rewriteAuthQueries(f schema.Field) ([]*gql.GraphQuer
 		isWritingAuth: true,
 		varName:       authRw.varName,
 		selector:      authRw.selector,
-	}).rewriteRuleNode(f, authRw.selector(f.Type()))
+	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
 func (authRw *authRewriter) GetRBAC(f schema.Field) schema.RuleResult {
@@ -439,21 +441,21 @@ func (authRw *authRewriter) GetRBAC(f schema.Field) schema.RuleResult {
 }
 
 func (authRw *authRewriter) rewriteRuleNode(
-	field schema.Field,
+	typ schema.Type,
 	rn *schema.RuleNode) ([]*gql.GraphQuery, *gql.FilterTree) {
 
-	if field == nil || rn == nil {
+	if typ == nil || rn == nil {
 		return nil, nil
 	}
 
 	nodeList := func(
-		field schema.Field,
+		typ schema.Type,
 		rns []*schema.RuleNode) ([]*gql.GraphQuery, []*gql.FilterTree) {
 
 		var qrys []*gql.GraphQuery
 		var filts []*gql.FilterTree
 		for _, orRn := range rns {
-			q, f := authRw.rewriteRuleNode(field, orRn)
+			q, f := authRw.rewriteRuleNode(typ, orRn)
 			qrys = append(qrys, q...)
 			if f != nil {
 				filts = append(filts, f)
@@ -464,7 +466,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 
 	switch {
 	case len(rn.And) > 0:
-		qrys, filts := nodeList(field, rn.And)
+		qrys, filts := nodeList(typ, rn.And)
 		if len(filts) == 0 {
 			return qrys, nil
 		}
@@ -476,7 +478,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 			Child: filts,
 		}
 	case len(rn.Or) > 0:
-		qrys, filts := nodeList(field, rn.Or)
+		qrys, filts := nodeList(typ, rn.Or)
 		if len(filts) == 0 {
 			return qrys, nil
 		}
@@ -488,7 +490,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 			Child: filts,
 		}
 	case rn.Not != nil:
-		qrys, filter := authRw.rewriteRuleNode(field, rn.Not)
+		qrys, filter := authRw.rewriteRuleNode(typ, rn.Not)
 		if filter == nil {
 			return qrys, nil
 		}
@@ -498,11 +500,11 @@ func (authRw *authRewriter) rewriteRuleNode(
 		}
 	case rn.Rule != nil:
 		// create a copy of the auth query that's specialized for the values from the JWT
-		qry := rn.Rule.AuthFor(field, authRw.authVariables)
+		qry := rn.Rule.AuthFor(typ, authRw.authVariables)
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
-		varName := authRw.varGen.Next(field.Type(), "", "")
+		varName := authRw.varGen.Next(typ, "", "")
 		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
@@ -609,31 +611,32 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
-
 		addedFields[f.Name()] = true
-
+		selectionAuth := addSelectionSetFrom(child, f, auth)
 		rbac := auth.GetRBAC(field)
-		if rbac == schema.Uncertain {
-			selectionAuth := addSelectionSetFrom(child, f, auth)
-			fieldAuth, authFilter := auth.rewriteAuthQueries(f)
-			authQueries = append(authQueries, selectionAuth...)
-			authQueries = append(authQueries, fieldAuth...)
-
-			if len(fieldAuth) > 0 {
-				if child.Filter == nil {
-					child.Filter = authFilter
-				} else {
-					child.Filter = &gql.FilterTree{
-						Op:    "and",
-						Child: []*gql.FilterTree{child.Filter, authFilter},
-					}
-				}
-			}
-		}
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
 		}
+
+		if rbac != schema.Uncertain {
+			continue
+		}
+
+		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
+		authQueries = append(authQueries, selectionAuth...)
+		authQueries = append(authQueries, fieldAuth...)
+		if len(fieldAuth) > 0 {
+			if child.Filter == nil {
+				child.Filter = authFilter
+			} else {
+				child.Filter = &gql.FilterTree{
+					Op:    "and",
+					Child: []*gql.FilterTree{child.Filter, authFilter},
+				}
+			}
+		}
+
 	}
 
 	// Sort the required fields before adding them to q.Children so that the query produced after

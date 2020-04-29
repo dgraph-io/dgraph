@@ -163,9 +163,17 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	return aex.dg.Execute(ctx, req)
 }
 
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return aex.dg.CommitOrAbort(ctx, tc)
+}
+
 func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	*dgoapi.Response, error) {
 	return de.dg.Execute(ctx, req)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return de.dg.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
@@ -1178,6 +1186,14 @@ func completeValue(
 		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
+	case []map[string]interface{}:
+		// This case is different from the []interface{} case above and is true for admin queries
+		// where we built the val ourselves.
+		listVal := make([]interface{}, 0, len(val))
+		for _, v := range val {
+			listVal = append(listVal, v)
+		}
+		return completeList(path, field, listVal)
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {

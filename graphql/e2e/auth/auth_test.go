@@ -101,7 +101,7 @@ type TestCase struct {
 
 func getJWT(t *testing.T, user, role string) http.Header {
 	type MyCustomClaims struct {
-		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
+		Foo map[string]interface{} `json:"https://xyz.io/jwt/claims"`
 		jwt.StandardClaims
 	}
 
@@ -118,11 +118,11 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	claims.Foo["ROLE"] = role
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte("Secretkey"))
+	ss, err := token.SignedString([]byte("secretkey"))
 	require.NoError(t, err)
 
 	h := make(http.Header)
-	h.Add("X-Dgraph-AuthorizationToken", ss)
+	h.Add("auth-header", ss)
 
 	return h
 }

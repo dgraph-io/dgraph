@@ -14,9 +14,31 @@ type UserSecret @auth(
                 __typename
             }
         }
+    """},
+    add: { rule: """
+        query($USER: String!) {
+            queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """},
+    update: { rule: """
+        query($USER: String!) {
+            queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """}
+    delete: { rule: """
+        query($USER: String!) {
+            queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
     """}
 ){
   id: ID!
+  aSecret: String @search(by: [term])
   ownedBy: String @search(by: [hash])
 }
 
@@ -119,20 +141,46 @@ enum Permission {
 }
 
 type Column @auth(
-     query: { rule: """query ($USER: String!) {
-                        queryColumn {
-                          inProject {
-                            roles(filter: { permission: { eq: VIEW } } ) {
-                             assignedTo(filter: { username: { eq: $USER } }) {
-                              __typename
-                             }
-                            }
-                          }
-                          }
-                          }"""},
- ) {
-  inProject: Project!
-  name: String! @search(by: [hash]) @id
+    query: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: VIEW } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
+    add: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: ADMIN } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
+    update: { rule: """
+    query($USER: String!) {
+        queryColumn {
+            inProject {
+                roles(filter: { permission: { eq: ADMIN } } ) {
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""}
+#     delete: { rule: "false" }
+) {
+  inProject: Project! # @auth(update: { rule: "DENY" })
+  name: String! @id
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
 
@@ -150,6 +198,41 @@ type Ticket @auth(
                     }
                 }
             }
+        }"""},
+    add: { rule: """
+        query($USER: String!) {
+            queryTicket {
+                onColumn{
+                    inProject {
+                        roles(filter: { permission: { eq: EDIT } } ) {
+                            assignedTo(filter: { username: { eq: $USER } }) {
+                                __typename
+                            }
+                        }
+                    }
+                }
+            }
+        }"""}
+    # update: { rule: """onColumn {
+    #                     inProject {
+    #                         role(filter: { permission: { eq: WRITE } } ) {
+    #                             users(filter: { username: { eq: $USER } })
+    #                         }
+    #                     }
+    #                 }"""},
+    delete: { rule: """
+        query($USER: String!) {
+            queryTicket {
+                onColumn{
+                    inProject {
+                        roles(filter: { permission: { eq: EDIT } } ) {
+                            assignedTo(filter: { username: { eq: $USER } }) {
+                                __typename
+                            }
+                        }
+                    }
+                }
+            }
         }"""}
 ){
     id: ID!
@@ -157,3 +240,5 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
+
+# Authorization auth-header secretkey https://xyz.io/jwt/claims

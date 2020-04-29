@@ -192,6 +192,7 @@ message HealthInfo {
     int64 lastEcho = 7;
     repeated string ongoing = 8;
     repeated string indexing = 9;
+    repeated string ee_features = 10;
 }
 
 message Tablet {
