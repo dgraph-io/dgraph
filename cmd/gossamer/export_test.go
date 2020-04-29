@@ -66,8 +66,14 @@ func TestExportCommand(t *testing.T) {
 				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,
-				Network: testCfg.Network,
-				RPC:     testCfg.RPC,
+				Network: dot.NetworkConfig{
+					Port:        testCfg.Network.Port,
+					Bootnodes:   []string{}, // TODO: improve cmd tests #687
+					ProtocolID:  testCfg.Network.ProtocolID,
+					NoBootstrap: testCfg.Network.NoBootstrap,
+					NoMDNS:      testCfg.Network.NoMDNS,
+				},
+				RPC: testCfg.RPC,
 			},
 		},
 		{
@@ -104,7 +110,7 @@ func TestExportCommand(t *testing.T) {
 				Core:    testCfg.Core,
 				Network: dot.NetworkConfig{
 					Port:        testCfg.Network.Port,
-					Bootnodes:   testCfg.Network.Bootnodes,
+					Bootnodes:   []string{}, // TODO: improve cmd tests #687
 					ProtocolID:  testProtocol,
 					NoBootstrap: testCfg.Network.NoBootstrap,
 					NoMDNS:      testCfg.Network.NoMDNS,

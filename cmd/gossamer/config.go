@@ -89,9 +89,6 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	// set global configuration values
 	setDotGlobalConfig(ctx, &cfg.Global)
 
-	// ensure configuration values match genesis and overwrite with genesis
-	updateDotConfigFromGenesisJSON(ctx, cfg)
-
 	// set remaining cli configuration values
 	setDotAccountConfig(ctx, &cfg.Account)
 	setDotCoreConfig(ctx, &cfg.Core)
@@ -325,6 +322,13 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 
 // updateDotConfigFromGenesisJSON updates the configuration based on the genesis file values
 func updateDotConfigFromGenesisJSON(ctx *cli.Context, cfg *dot.Config) {
+
+	// use default genesis file if genesis configuration not provided, for example,
+	// if we load a toml configuration file without a defined genesis init value or
+	// if we pass an empty string as the genesis init value using the --geneis flag
+	if cfg.Init.Genesis == "" {
+		cfg.Init.Genesis = DefaultCfg.Init.Genesis
+	}
 
 	// load Genesis from genesis configuration file
 	gen, err := genesis.NewGenesisFromJSON(cfg.Init.Genesis)

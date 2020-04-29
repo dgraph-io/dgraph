@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -35,36 +34,19 @@ import (
 func NewTestConfig(t *testing.T) *Config {
 	dir := utils.NewTestDir(t)
 
+	// TODO: use default config instead of gssmr config for test config #776
+
 	return &Config{
 		Global: GlobalConfig{
-			Name:    string("test"),
-			ID:      string("test"),
+			Name:    GssmrConfig().Global.Name,
+			ID:      GssmrConfig().Global.ID,
 			DataDir: dir,
 		},
-		Init: InitConfig{
-			Genesis: string(""),
-		},
-		Account: AccountConfig{
-			Key:    string(""),
-			Unlock: string(""),
-		},
-		Core: CoreConfig{
-			Authority: true,    // BABE block producer
-			Roles:     byte(4), // authority node
-		},
-		Network: NetworkConfig{
-			Port:        uint32(7001),
-			Bootnodes:   []string{"/ip4/104.131.131.82/tcp/4001/ipfs/QmaCpDMGvV2BGHeYERUEnRQAwe3N8SzbUtfsmvsqQLuvuJ"},
-			ProtocolID:  string("/gossamer/test/0"),
-			NoBootstrap: false,
-			NoMDNS:      false,
-		},
-		RPC: RPCConfig{
-			Host:    string("localhost"),
-			Port:    uint32(8545),
-			Modules: []string{"system", "author", "chain"},
-			WSPort:  uint32(8546),
-		},
+		Init:    GssmrConfig().Init,
+		Account: GssmrConfig().Account,
+		Core:    GssmrConfig().Core,
+		Network: GssmrConfig().Network,
+		RPC:     GssmrConfig().RPC,
 	}
 }
 
@@ -85,7 +67,7 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 
 // NewTestGenesis returns a test genesis instance using "gssmr" raw data
 func NewTestGenesis(t *testing.T) *genesis.Genesis {
-	fp := getGssmrGenesisPath(t)
+	fp := utils.GetGssmrGenesisPath()
 
 	gssmrGen, err := genesis.NewGenesisFromJSON(fp)
 	if err != nil {
@@ -108,7 +90,7 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 	file, err := ioutil.TempFile(dir, "genesis-")
 	require.Nil(t, err)
 
-	fp := getGssmrGenesisPath(t)
+	fp := utils.GetGssmrGenesisPath()
 
 	gssmrGen, err := genesis.NewGenesisFromJSON(fp)
 	require.Nil(t, err)
@@ -161,26 +143,4 @@ func NewTestGenesisAndRuntime(t *testing.T) string {
 	require.Nil(t, err)
 
 	return genFile.Name()
-}
-
-// getGssmrGenesisPath gets the gossamer genesis path
-func getGssmrGenesisPath(t *testing.T) string {
-	path1 := "../node/gssmr/genesis.json"
-	path2 := "../../node/gssmr/genesis.json"
-
-	var fp string
-	var err error
-
-	if utils.PathExists(path1) {
-
-		fp, err = filepath.Abs(path1)
-		require.Nil(t, err)
-
-	} else if utils.PathExists(path2) {
-
-		fp, err = filepath.Abs(path2)
-		require.Nil(t, err)
-	}
-
-	return fp
 }

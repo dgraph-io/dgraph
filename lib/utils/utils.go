@@ -144,3 +144,35 @@ func KeystoreFilepaths(datadir string) ([]string, error) {
 
 	return keys, nil
 }
+
+// GetGssmrGenesisPath gets the gssmr genesis path
+func GetGssmrGenesisPath() string {
+	path1 := "../node/gssmr/genesis.json"
+	path2 := "../../node/gssmr/genesis.json"
+
+	var fp string
+
+	if PathExists(path1) {
+		fp, _ = filepath.Abs(path1)
+	} else if PathExists(path2) {
+		fp, _ = filepath.Abs(path2)
+	}
+
+	return fp
+}
+
+// GetKsmccGenesisPath gets the ksmcc genesis path
+func GetKsmccGenesisPath() string {
+	path1 := "../node/ksmcc/genesis.json"
+	path2 := "../../node/ksmcc/genesis.json"
+
+	var fp string
+
+	if PathExists(path1) {
+		fp, _ = filepath.Abs(path1)
+	} else if PathExists(path2) {
+		fp, _ = filepath.Abs(path2)
+	}
+
+	return fp
+}
