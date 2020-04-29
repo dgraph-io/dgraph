@@ -124,43 +124,13 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	require.NoError(t, err)
 
 	h := make(http.Header)
-	h.Add("X-Dgraph-HeadersToken", ss)
+	h.Add("X-Dgraph-AuthorizationToken", ss)
 
 	return h
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	testCases := []TestCase{{
-		user: "user1",
-		role: "ADMIN",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project1"
-                              }
-                            ]
-                        }`,
-	}, {
-		user: "user1",
-		role: "USER",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project1"
-                              }
-                            ]
-                        }`,
-	}, {
-		user: "user4",
-		role: "USER",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project2"
-                              }
-                            ]
-                        }`,
-	}}
+	testCases := []TestCase{}
 	query := `
             query {
                 queryProject (order: {asc: name}) {
@@ -194,7 +164,7 @@ func TestOrRBACFilter(t *testing.T) {
 	}
 }
 
-func TestRootGetFilter(t *testing.T, col *Column, testcase TestCase) {
+func rootGetFilter(t *testing.T, col *Column, testcase TestCase) {
 	tcase := TestCase{
 		user:   testcase.user,
 		role:   testcase.role,
@@ -237,10 +207,6 @@ func TestRootFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
-		result: `{"queryColumn": [{"name": "Column1"}]}`,
-	}, {
-		user:   "user1",
-		role:   "ADMIN",
 		result: `{"queryColumn": [{"name": "Column1"}]}`,
 	}, {
 		user:   "user2",
@@ -300,16 +266,6 @@ func TestRBACFilter(t *testing.T) {
       }
     ]
   }`},
-		{role: "ADMIN", result: `{
-    "queryLog": [
-      {
-        "logs": "Log1"
-      },
-      {
-        "logs": "Log2"
-      }
-    ]
-  }`},
 	}
 	query := `
 		query {
@@ -350,16 +306,8 @@ func TestAndRBACFilter(t *testing.T) {
 		role:   "USER",
 		result: `{"queryIssue": [{"msg": "Issue1"}]}`,
 	}, {
-		user:   "user1",
-		role:   "ADMIN",
-		result: `{"queryIssue": [{"msg": "Issue1"}]}`,
-	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
-	}, {
-		user:   "user2",
-		role:   "ADMIN",
 		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
 	}}
 	query := `
@@ -426,75 +374,8 @@ func TestAndFilter(t *testing.T) {
 }
 		`,
 	}, {
-		user: "user1",
-		role: "ADMIN",
-		result: `
-{
-   "queryMovie": [
-      {
-         "content": "Movie2",
-         "regionsAvailable": [
-            {
-               "name": "Region1"
-            }
-         ]
-      },
-      {
-         "content": "Movie3",
-         "regionsAvailable": [
-            {
-               "name": "Region1"
-            },
-            {
-               "name": "Region4"
-            }
-         ]
-      }
-   ]
-}
-		`,
-	}, {
 		user: "user2",
 		role: "USER",
-		result: `
-{
-   "queryMovie": [
-      {
-         "content": "Movie1",
-         "regionsAvailable": [
-            {
-               "name": "Region2"
-            },
-            {
-               "name": "Region3"
-            }
-         ]
-      },
-      {
-         "content": "Movie2",
-         "regionsAvailable": [
-            {
-               "name": "Region1"
-            }
-         ]
-      },
-      {
-         "content": "Movie3",
-         "regionsAvailable": [
-            {
-               "name": "Region1"
-            },
-            {
-               "name": "Region4"
-            }
-         ]
-      }
-   ]
-}
-		`,
-	}, {
-		user: "user2",
-		role: "ADMIN",
 		result: `
 {
    "queryMovie": [

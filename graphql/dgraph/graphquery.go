@@ -63,7 +63,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 		x.Check2(b.WriteRune(')'))
 	}
 
-	if !root && hasOrderOrPage(query) {
+	if !root && query.Func == nil && hasOrderOrPage(query) {
 		x.Check2(b.WriteString(" ("))
 		writeOrderAndPage(b, query, false)
 		x.Check2(b.WriteRune(')'))
