@@ -217,10 +217,7 @@ func (enc *encoder) newNode(attr uint16, list bool, attrs ...fastJsonNode) fastJ
 		return fj
 	}
 
-	cs, ok := enc.childrenMap[fj]
-	if !ok {
-		cs = make([]fastJsonNode, 0, len(attrs))
-	}
+	cs := make([]fastJsonNode, 0, len(attrs))
 	cs = append(cs, attrs...)
 	enc.childrenMap[fj] = cs
 	return fj
@@ -542,11 +539,11 @@ func (n nodeSlice) Swap(i, j int) {
 	n.nodes[i], n.nodes[j] = n.nodes[j], n.nodes[i]
 }
 
-func (enc *encoder) writeKey(fj fastJsonNode, out *bytes.Buffer) error {
+func (enc *encoder) writeKey(attrID uint16, out *bytes.Buffer) error {
 	if _, err := out.WriteRune('"'); err != nil {
 		return err
 	}
-	attrID := enc.getAttr(fj)
+
 	if _, err := out.WriteString(enc.attrForID(attrID)); err != nil {
 		return err
 	}
@@ -604,19 +601,21 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 		return err
 	}
 	cnt := 0
-	var cur, next fastJsonNode
+	var curAttr, nextAttr uint16
 	for i := 0; i < len(fjAttrs); i++ {
 		cnt++
+		cur := fjAttrs[i]
+		curAttr = enc.getAttr(cur)
+
 		validNext := false
-		cur = fjAttrs[i]
 		if i+1 < len(fjAttrs) {
-			next = fjAttrs[i+1]
+			nextAttr = enc.getAttr(fjAttrs[i+1])
 			validNext = true
 		}
 
-		if validNext && enc.getAttr(cur) == enc.getAttr(next) {
+		if validNext && curAttr == nextAttr {
 			if cnt == 1 {
-				if err := enc.writeKey(cur, out); err != nil {
+				if err := enc.writeKey(curAttr, out); err != nil {
 					return err
 				}
 				if _, err := out.WriteRune('['); err != nil {
@@ -628,7 +627,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 			}
 		} else {
 			if cnt == 1 {
-				if err := enc.writeKey(cur, out); err != nil {
+				if err := enc.writeKey(curAttr, out); err != nil {
 					return err
 				}
 				if enc.getList(cur) {
@@ -653,8 +652,6 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 				return err
 			}
 		}
-
-		cur = next
 	}
 	if _, err := out.WriteRune('}'); err != nil {
 		return err
