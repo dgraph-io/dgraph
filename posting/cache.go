@@ -87,11 +87,11 @@ func (c *PlCache) Get(key []byte, ts uint64) *List {
 		return nil
 	}
 
-	c.RLock()
-	defer c.RUnlock()
-
 	hash := z.MemHash(key)
+	c.RLock()
 	maxTs, ok := c.tsMap[hash]
+	c.RUnlock()
+
 	if !ok {
 		return nil
 	}
@@ -117,11 +117,11 @@ func (c *PlCache) Set(key []byte, ts uint64, pl *List) {
 		return
 	}
 
-	c.Lock()
-	defer c.Unlock()
-
 	hash := z.MemHash(key)
+	c.RLock()
 	prevTs := c.tsMap[hash]
+	c.RUnlock()
+
 	if ts <= prevTs {
 		return
 	}
@@ -130,6 +130,15 @@ func (c *PlCache) Set(key []byte, ts uint64, pl *List) {
 	cacheKey := generateKey(key, ts)
 	_ = c.cache.Set(cacheKey, copyList(pl), 0)
 	c.cache.Del(prevKey)
+
+	c.Lock()
+	defer c.Unlock()
+	maxTs := c.tsMap[hash]
+	// Check the current value again and return here if it's been updated to a greater timestamp.
+	if maxTs != prevTs && maxTs > ts {
+		return
+	}
+	c.tsMap[hash] = ts
 }
 
 func (c *PlCache) Del(key []byte) {
@@ -137,15 +146,15 @@ func (c *PlCache) Del(key []byte) {
 		return
 	}
 
-	c.Lock()
-	defer c.Unlock()
 	hash := z.MemHash(key)
+	c.Lock()
 	prevTs, ok := c.tsMap[hash]
 	if !ok {
 		return
 	}
-
 	delete(c.tsMap, hash)
+	c.Unlock()
+
 	c.cache.Del(generateKey(key, prevTs))
 }
 
