@@ -109,7 +109,7 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 	case 2:
 		// auth
 
-		// check that we go the expected auth query
+		// check that we got the expected auth query
 		require.Equal(ex.t, ex.authQuery, req.Query)
 
 		// respond to query
