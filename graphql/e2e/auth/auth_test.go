@@ -129,40 +129,7 @@ func getJWT(t *testing.T, user, role string) http.Header {
 
 func TestOrRBACFilter(t *testing.T) {
 	t.Skip()
-	testCases := []TestCase{{
-		user: "user1",
-		role: "ADMIN",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project1"
-                              },
-                              {
-                                "name": "Project2"
-                              }
-                            ]
-                        }`,
-	}, {
-		user: "user1",
-		role: "USER",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project1"
-                              }
-                            ]
-                        }`,
-	}, {
-		user: "user4",
-		role: "USER",
-		result: `{
-                            "queryProject": [
-                              {
-                                "name": "Project2"
-                              }
-                            ]
-                        }`,
-	}}
+	testCases := []TestCase{}
 
 	query := `
             query {
@@ -304,19 +271,7 @@ func TestRootFilter(t *testing.T) {
 
 func TestRBACFilter(t *testing.T) {
 	t.Skip()
-	testCases := []TestCase{
-		{role: "USER", result: `{"queryLog": []}`},
-		{role: "ADMIN", result: `{
-    "queryLog": [
-      {
-        "logs": "Log1"
-      },
-      {
-        "logs": "Log2"
-      }
-    ]
-  }`},
-	}
+	testCases := []TestCase{}
 	query := `
 		query {
                     queryLog (order: {asc: logs}) {
@@ -354,24 +309,12 @@ func TestRBACFilter(t *testing.T) {
 
 func TestAndRBACFilter(t *testing.T) {
 	t.Skip()
-	testCases := []TestCase{{
-		user:   "user1",
-		role:   "USER",
-		result: `{"queryIssue": []}`,
-	}, {
-		user:   "user2",
-		role:   "USER",
-		result: `{"queryIssue": []}`,
-	}, {
-		user:   "user2",
-		role:   "ADMIN",
-		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
-	}}
+	testCases := []TestCase{}
 	query := `
 		query {
-                queryIssue (order: {asc: msg}) {
+                    queryIssue (order: {asc: msg}) {
 			msg
-		}
+		    }
 		}
 	`
 
