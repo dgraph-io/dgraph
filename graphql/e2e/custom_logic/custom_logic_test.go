@@ -903,17 +903,19 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 	users := addUsers(t)
 
 	queryUser := `
-	 query {
-		 queryUser(order: {asc: age}) {
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
 			name
 			age
 			cars {
 				name
 			}
-		 }
-	 }`
+		}
+	}`
 	params := &common.GraphQLParams{
 		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)

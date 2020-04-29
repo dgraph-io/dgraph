@@ -751,7 +751,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 
 		// To collect errors from remote GraphQL endpoint and those encountered during execution.
-		var errs x.GqlErrorList
+		var errs error
 		var result []interface{}
 		if graphql {
 			resp := &graphqlResp{}
@@ -761,11 +761,13 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				return
 			}
 
-			errs = append(errs, resp.Errors...)
+			if len(resp.Errors) > 0 {
+				errs = schema.AppendGQLErrs(errs, resp.Errors)
+			}
 			var ok bool
 			result, ok = resp.Data[fconf.RemoteGqlQueryName].([]interface{})
 			if !ok {
-				errCh <- append(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
+				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
 		} else {
@@ -779,7 +781,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of"+
 				"external request to be of size %v, got: %v for field: %s within type: %s.",
 				len(vals), len(result), f.Name(), f.GetObjectName()).WithLocations(f.Location())
-			errCh <- append(errs, gqlErr)
+			errCh <- schema.AppendGQLErrs(errs, gqlErr)
 			return
 		}
 
@@ -796,7 +798,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
-	errChan := make(chan x.GqlErrorList, len(inputs))
+	errChan := make(chan error, len(inputs))
 	for i := 0; i < len(inputs); i++ {
 		go func(idx int, input interface{}) {
 			requestInput := input
@@ -837,7 +839,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			}
 
 			var result interface{}
-			var errs x.GqlErrorList
+			var errs error
 			if graphql {
 				resp := &graphqlResp{}
 				err = json.Unmarshal(b, resp)
@@ -846,11 +848,14 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 					return
 				}
 
-				errs = append(errs, resp.Errors...)
+				if len(resp.Errors) > 0 {
+					errs = schema.AppendGQLErrs(errs, resp.Errors)
+				}
 				var ok bool
 				result, ok = resp.Data[fconf.RemoteGqlQueryName]
 				if !ok {
-					errChan <- append(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
+					errChan <- schema.AppendGQLErrs(errs,
+						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
 			} else {
@@ -870,16 +875,16 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}(i, inputs[i])
 	}
 
+	var errs error
 	// Some of the errors can be null, so lets collect the non-null errors here.
-	var errs x.GqlErrorList
 	for i := 0; i < len(inputs); i++ {
 		e := <-errChan
-		if len(e) != 0 {
-			errs = append(errs, e...)
+		if e != nil {
+			errs = schema.AppendGQLErrs(errs, e)
 		}
 	}
 
-	if len(errs) == 0 {
+	if errs == nil {
 		errCh <- nil
 		return
 	}
