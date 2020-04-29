@@ -205,6 +205,15 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
+// graphqlScalarType holds all the scalar types supported by the graphql spec.
+var graphqlScalarType = map[string]bool{
+	"Int":     true,
+	"Float":   true,
+	"String":  true,
+	"Boolean": true,
+	"ID":      true,
+}
+
 // Dgraph index filters that have contains intersecting filter
 // directive.
 var filtersCollisions = map[string][]string{
