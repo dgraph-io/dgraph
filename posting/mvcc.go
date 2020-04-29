@@ -230,7 +230,7 @@ func (txn *Txn) CommitToDisk(writer *TxnWriter, commitTs uint64) error {
 
 func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	if plist == nil {
-		return errors.Errorf("cannot unmarshal value at key %s to a nil object",
+		return errors.Errorf("cannot unmarshal value at key %s to a nil posting list",
 			hex.Dump(item.Key()))
 	}
 
