@@ -415,6 +415,30 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	return resp
 }
 
+// ValidateSubscription will check the given subscription query is valid or not.
+func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
+	op, err := r.schema.Operation(req)
+	if err != nil {
+		return err
+	}
+
+	queries := op.Queries()
+	if len(queries) == 0 {
+		return errors.Errorf("Given query %s is not a valid subscription request",
+			req.Query)
+	}
+
+	for _, q := range op.Queries() {
+		for _, field := range q.SelectionSet() {
+			if has, _ := field.HasCustomDirective(); has {
+				return errors.Errorf("Custom field `%s` is not supported in graphql subscription",
+					field.Name())
+			}
+		}
+	}
+	return nil
+}
+
 func addResult(resp *schema.Response, res *Resolved) {
 	// Errors should report the "path" into the result where the error was found.
 	//
