@@ -1965,7 +1965,7 @@ func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, gqlCarsSchemaIntrospection)
+		fmt.Fprint(w, gqlCarsSchemaIntrospection)
 		return
 	}
 
@@ -1995,7 +1995,7 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.Contains(string(b), "__schema") {
-		fmt.Fprintf(w, gqlCarsSchemaIntrospection)
+		fmt.Fprint(w, gqlCarsSchemaIntrospection)
 		return
 	}
 
