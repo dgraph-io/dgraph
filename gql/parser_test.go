@@ -4865,8 +4865,8 @@ func TestParseGraphQLVarArray(t *testing.T) {
 					break
 				}
 			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
 		}
-		require.True(t, found, "vars not matched: %v", tc.vars)
 	}
 }
 
@@ -4901,8 +4901,8 @@ func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
 					break
 				}
 			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
 		}
-		require.True(t, found, "vars not matched: %v", tc.vars)
 	}
 }
 
