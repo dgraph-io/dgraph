@@ -22,8 +22,10 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/dgraph/testutil"
+
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -33,6 +35,10 @@ const (
 	graphqlURL = "http://localhost:8180/graphql"
 )
 
+var (
+	metainfo = &authorization.AuthMeta{}
+)
+
 type User struct {
 	Username string
 	Age      uint64
@@ -40,10 +46,13 @@ type User struct {
 	Disabled bool
 }
 
-type UserSecret struct {
-	Id      uint64
-	ASecret string
-	OwnedBy string
+type deleteUserResult struct {
+	Name deleteUserSecret `json:"deleteUserSecret"`
+}
+
+type deleteUserSecret struct {
+	Msg     string `json:"msg"`
+	NumUids int    `json:"numUids"`
 }
 
 type Region struct {
@@ -110,31 +119,6 @@ type TestCase struct {
 	user   string
 	role   string
 	result string
-}
-
-func getJWT(t *testing.T, user, role string) string {
-	type MyCustomClaims struct {
-		Foo map[string]interface{} `json:"https://dgraph.io/jwt/claims"`
-		jwt.StandardClaims
-	}
-
-	// Create the Claims
-	claims := MyCustomClaims{
-		map[string]interface{}{},
-		jwt.StandardClaims{
-			ExpiresAt: 15000,
-			Issuer:    "test",
-		},
-	}
-
-	claims.Foo["User"] = user
-	claims.Foo["Role"] = role
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte("Secret"))
-	require.NoError(t, err)
-
-	return ss
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -490,12 +474,13 @@ func TestFieldFilters(t *testing.T) {
 	}
 }
 func TestDeleteAuthRule(t *testing.T) {
-	t.Skip()
-
 	testCases := []TestCase{
-		{name: "user with secret info", user: "user1", role: "admin"},
-		{name: "user without secret info", user: "user2", role: "admin"},
-		{name: "non existent user", user: "user100", role: "admin"}}
+		{name: "user with secret info", user: "user1", role: "admin",
+			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":1}}`},
+		{name: "user without secret info", user: "user2", role: "admin",
+			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`},
+		{name: "non existent user", user: "user100", role: "admin",
+			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`}}
 	query := `
 		 mutation deleteUserSecret($filter: UserSecretFilter!){
 		  deleteUserSecret(filter: $filter) {
@@ -505,23 +490,34 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 	`
 
-	var result, data struct {
-		QueryUserSecret []*UserSecret
-	}
+	var result, data deleteUserResult
 
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-			Variables: map[string]interface{}{
-				"ownedBy": tcase.user,
+		filter := map[string]interface{}{
+			"aSecret": map[string]interface{}{
+				"anyofterms": "Secret data",
 			},
 		}
+
+		getUserParams := &common.GraphQLParams{
+			Headers: map[string][]string{},
+			Query:   query,
+			Variables: map[string]interface{}{
+				"filter": filter,
+			},
+		}
+
+		authVars := map[string]interface{}{
+			"USER": tcase.user,
+			"ROLE": tcase.role,
+		}
+		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
+		getUserParams.Headers.Add(metainfo.Header, jwtToken)
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+		err := json.Unmarshal(gqlResponse.Data, &result)
 		require.Nil(t, err)
 
 		err = json.Unmarshal([]byte(tcase.result), &data)
@@ -547,6 +543,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	metainfo.Parse(string(schema))
 
 	jsonFile := "test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)

@@ -21,22 +21,17 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"testing"
-	"time"
+
+	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgrijalva/jwt-go"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
-	"google.golang.org/grpc/metadata"
 	"gopkg.in/yaml.v2"
-)
-
-var (
-	metainfo = &authorization.AuthMeta{}
 )
 
 type AuthQueryRewritingCase struct {
@@ -70,6 +65,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo := &authorization.AuthMeta{}
 	metainfo.Parse(strSchema)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -87,40 +83,13 @@ func TestAuthQueryRewriting(t *testing.T) {
 				"ROLE": tcase.Role,
 			}
 
-			ctx := addClaimsToContext(context.Background(), t, authVars)
+			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
 		})
 	}
-}
-
-type ClientCustomClaims struct {
-	AuthVariables map[string]interface{} `json:"https://xyz.io/jwt/claims"`
-	jwt.StandardClaims
-}
-
-func addClaimsToContext(
-	ctx context.Context,
-	t *testing.T,
-	authVars map[string]interface{}) context.Context {
-
-	claims := ClientCustomClaims{
-		authVars,
-		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute).Unix(),
-			Issuer:    "test",
-		},
-	}
-
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte(metainfo.PublicKey))
-	require.NoError(t, err)
-
-	md := metadata.New(nil)
-	md.Append("authorizationJwt", ss)
-	return metadata.NewIncomingContext(ctx, md)
 }
 
 // Tests that the queries that run after a mutation get auth correctly added in.
@@ -220,6 +189,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo := &authorization.AuthMeta{}
 	metainfo.Parse(strSchema)
 
 	for name, tt := range tests {
@@ -232,7 +202,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			authVars := map[string]interface{}{
 				"USER": "user1",
 			}
-			ctx := addClaimsToContext(context.Background(), t, authVars)
+			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
 			_, err = rewriter.Rewrite(ctx, gqlMutation)
 			require.Nil(t, err)
 
@@ -265,6 +235,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	metainfo := &authorization.AuthMeta{}
 	metainfo.Parse(strSchema)
 
 	for _, tcase := range tests {
@@ -290,7 +261,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 				"ROLE": tcase.Role,
 			}
 
-			ctx := addClaimsToContext(context.Background(), t, authVars)
+			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(ctx, mut)

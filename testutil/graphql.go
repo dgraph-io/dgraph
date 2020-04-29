@@ -17,10 +17,16 @@
 package testutil
 
 import (
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgrijalva/jwt-go"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -68,4 +74,37 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
 	require.Nil(t, result.Errors)
+}
+
+type clientCustomClaims struct {
+	AuthVariables map[string]interface{} `json:"https://xyz.io/jwt/claims"`
+	jwt.StandardClaims
+}
+
+func GetSignedToken(t *testing.T,
+	authVars map[string]interface{},
+	metaInfo *authorization.AuthMeta) string {
+	claims := clientCustomClaims{
+		authVars,
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute).Unix(),
+			Issuer:    "test",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString([]byte(metaInfo.PublicKey))
+	require.NoError(t, err)
+	return ss
+}
+
+func AddClaimsToContext(
+	ctx context.Context,
+	t *testing.T,
+	authVars map[string]interface{},
+	metaInfo *authorization.AuthMeta) context.Context {
+
+	md := metadata.New(nil)
+	md.Append("authorizationJwt", GetSignedToken(t, authVars, metaInfo))
+	return metadata.NewIncomingContext(ctx, md)
 }
