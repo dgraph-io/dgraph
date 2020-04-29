@@ -1314,7 +1314,10 @@ func (t *astType) ListType() Type {
 	if t.typ == nil || t.typ.Elem == nil {
 		return nil
 	}
-	return &astType{typ: t.typ.Elem}
+	return &astType{
+		typ:             t.typ.Elem,
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate}
 }
 
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
