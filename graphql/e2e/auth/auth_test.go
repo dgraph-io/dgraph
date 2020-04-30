@@ -188,21 +188,27 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
+	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1"})
+	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2"})
+
+	require.NotEqual(t, idCol1, "")
+	require.NotEqual(t, idCol2, "")
+
 	tcases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
 		result: `{"getColumn": {"name": "Column1"}}`,
-		name:   "Column1",
+		name:   idCol1,
 	}, {
 		user:   "user1",
 		role:   "USER",
 		result: `{"getColumn": null}`,
-		name:   "Column2",
+		name:   idCol2,
 	}, {
 		user:   "user2",
 		role:   "USER",
 		result: `{"getColumn": {"name": "Column2"}}`,
-		name:   "Column2",
+		name:   idCol2,
 	}}
 
 	query := `
@@ -215,16 +221,10 @@ func TestRootGetFilter(t *testing.T) {
 
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
-			id := getColID(t, tcase)
-			if id == "" {
-				// set invalid id
-				id = "0x1"
-			}
-
 			getUserParams := &common.GraphQLParams{
 				Headers:   getJWT(t, tcase.user, tcase.role),
 				Query:     query,
-				Variables: map[string]interface{}{"id": id},
+				Variables: map[string]interface{}{"id": tcase.name},
 			}
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
