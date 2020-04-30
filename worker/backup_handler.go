@@ -94,39 +94,6 @@ type UriHandler interface {
 	ReadManifest(string, *Manifest) error
 }
 
-// Credentials holds the credentials needed to perform a backup operation.
-// If these credentials are missing the default credentials will be used.
-type Credentials struct {
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-}
-
-func (creds *Credentials) hasCredentials() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.AccessKey != "" || creds.SecretKey != "" || creds.SessionToken != ""
-}
-
-func (creds *Credentials) isAnonymous() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.Anonymous
-}
-
-// GetCredentialsFromRequest extracts the credentials from a backup request.
-func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
-	return &Credentials{
-		AccessKey:    req.GetAccessKey(),
-		SecretKey:    req.GetSecretKey(),
-		SessionToken: req.GetSessionToken(),
-		Anonymous:    req.GetAnonymous(),
-	}
-}
-
 // getHandler returns a UriHandler for the URI scheme.
 func getHandler(scheme string, creds *Credentials) UriHandler {
 	switch scheme {
@@ -174,9 +141,6 @@ func NewUriHandler(uri *url.URL, creds *Credentials) (UriHandler, error) {
 	return h, nil
 }
 
-// predicateSet is a map whose keys are predicates. It is meant to be used as a set.
-type predicateSet map[string]struct{}
-
 // loadFn is a function that will receive the current file being read.
 // A reader, the backup groupId, and a map whose keys are the predicates to restore
 // are passed as arguments.
@@ -216,7 +180,7 @@ func VerifyBackup(location, backupId string, creds *Credentials, currentGroups [
 }
 
 // ListBackupManifests scans location l for backup files and returns the list of manifests.
-func ListBackupManifests(l string) (map[string]*Manifest, error) {
+func ListBackupManifests(l string, creds *Credentials) (map[string]*Manifest, error) {
 	uri, err := url.Parse(l)
 	if err != nil {
 		return nil, err
@@ -239,6 +203,7 @@ func ListBackupManifests(l string) (map[string]*Manifest, error) {
 		if err := h.ReadManifest(path, &m); err != nil {
 			return nil, errors.Wrapf(err, "While reading %q", path)
 		}
+		m.Path = path
 		listedManifests[path] = &m
 	}
 
