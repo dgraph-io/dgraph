@@ -525,6 +525,14 @@ func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
 		return nil, err
 	}
 
+	// Now strip the exposed schema
+	strippedSchema, err := schema.Strip(sch.Schema)
+	if err != nil {
+		return nil, err
+	}
+	sch.Schema = strippedSchema
+	sch.GeneratedSchema = schHandler.StrippedGQLSchema()
+
 	return &generatedSchema, nil
 }
 

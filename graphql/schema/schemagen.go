@@ -17,10 +17,13 @@
 package schema
 
 import (
+	"bytes"
 	"fmt"
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/vektah/gqlparser/v2/formatter"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -35,6 +38,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	StrippedGQLSchema() string
 }
 
 type handler struct {
@@ -42,6 +46,32 @@ type handler struct {
 	originalDefs   []string
 	completeSchema *ast.Schema
 	dgraphSchema   string
+}
+
+func Strip(schema string) (string, error) {
+	doc, gqlErr := parser.ParseSchemas(&ast.Source{Input: schema})
+	if gqlErr != nil {
+		return "", errors.Wrap(gqlErr, "while parsing GraphQL schema")
+	}
+
+	for _, defn := range doc.Definitions {
+		for _, fld := range defn.Fields {
+			// remove un-necessary directives from slice in-place
+			i := 0
+			for _, dir := range fld.Directives {
+				if !isStrippableDirective(dir.Name) {
+					fld.Directives[i] = dir
+					i++
+				}
+			}
+			fld.Directives = fld.Directives[:i]
+		}
+	}
+
+	buf := &bytes.Buffer{}
+	formatter.NewFormatter(buf).FormatSchemaDocument(doc)
+
+	return buf.String(), nil
 }
 
 // FromString builds a GraphQL Schema from input string, or returns any parsing
@@ -62,12 +92,16 @@ func FromString(schema string) (Schema, error) {
 	return AsSchema(gqlSchema), nil
 }
 
-func (s *handler) GQLSchema() string {
-	return Stringify(s.completeSchema, s.originalDefs)
-}
-
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+func (s *handler) GQLSchema() string {
+	return Stringify(s.completeSchema, s.originalDefs, false)
+}
+
+func (s *handler) StrippedGQLSchema() string {
+	return Stringify(s.completeSchema, s.originalDefs, true)
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns

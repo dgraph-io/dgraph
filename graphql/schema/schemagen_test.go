@@ -265,3 +265,218 @@ func TestOnlyCorrectSearchArgsWork(t *testing.T) {
 		})
 	}
 }
+
+func TestStrip(t *testing.T) {
+	inputSchema := `
+		interface Human @remote {
+			id: ID!
+			name: String @custom(http: {
+							url: "http://www.google.com"
+							method: "GET"
+						})
+			gender: Gender
+		}
+		enum Gender {
+			MALE
+			FEMALE
+		}
+		type Toddler implements Human @remote {
+			friends: [Toddler] @hasInverse(field: "friends")
+								@custom(http: {
+									url: "http://www.google.com"
+									method: "GET"
+								})
+								@deprecated
+		}
+		input ToddlerInput {
+			id: ID
+			name: String
+			gender: Gender
+		}
+		type Query {
+			findToddlers(name: String!): [Toddler] @custom(http: {
+													url: "http://www.google.com"
+													method: "GET"
+												})
+		}
+		type Mutation {
+			setToddler(input: ToddlerInput!): Toddler @custom(http: {
+														url: "http://www.google.com"
+														method: "GET"
+													})
+		}`
+	strippedSchema, err := Strip(inputSchema)
+	require.NoError(t, err)
+	require.Equal(t, `interface Human @remote {
+	id: ID!
+	name: String
+	gender: Gender
+}
+enum Gender {
+	MALE
+	FEMALE
+}
+type Toddler implements Human @remote {
+	friends: [Toddler] @hasInverse(field: "friends") @deprecated
+}
+input ToddlerInput {
+	id: ID
+	name: String
+	gender: Gender
+}
+type Query {
+	findToddlers(name: String!): [Toddler]
+}
+type Mutation {
+	setToddler(input: ToddlerInput!): Toddler
+}
+`, strippedSchema)
+
+	handler, err := NewHandler(inputSchema)
+	require.NoError(t, err)
+	require.Equal(t, `#######################
+# Input Schema
+#######################
+
+interface Human @remote {
+	id: ID!
+	name: String
+	gender: Gender
+}
+
+enum Gender {
+	MALE
+	FEMALE
+}
+
+type Toddler implements Human @remote {
+	id: ID!
+	name: String
+	gender: Gender
+	friends: [Toddler] @hasInverse(field: "friends") @deprecated
+}
+
+input ToddlerInput {
+	id: ID
+	name: String
+	gender: Gender
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String!
+	forwardHeaders: [String!]
+}
+
+input CustomGraphQL {
+	query: String!
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @custom(http: CustomHTTP, graphql: CustomGraphQL) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	findToddlers(name: String!): [Toddler]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	setToddler(input: ToddlerInput!): Toddler
+}
+
+`, handler.StrippedGQLSchema())
+}

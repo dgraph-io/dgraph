@@ -264,6 +264,10 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
+var directivesToStrip = map[string]bool{
+	customDirective: true,
+}
+
 var directiveValidators = map[string]directiveValidator{
 	inverseDirective: hasInverseValidation,
 	searchDirective:  searchValidation,
@@ -1344,7 +1348,7 @@ func genArgumentsString(args ast.ArgumentList) string {
 	return fmt.Sprintf("(%s)", strings.Join(argStrs, ", "))
 }
 
-func genDirectivesString(direcs ast.DirectiveList) string {
+func genDirectivesString(direcs ast.DirectiveList, strip bool) string {
 	if len(direcs) == 0 {
 		return ""
 	}
@@ -1353,7 +1357,7 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	idx := 0
 
 	for _, dir := range direcs {
-		if directiveValidators[dir.Name] == nil {
+		if directiveValidators[dir.Name] == nil || (strip && isStrippableDirective(dir.Name)) {
 			continue
 		}
 		direcArgs[idx] = fmt.Sprintf("@%s%s", dir.Name, genArgumentsString(dir.Arguments))
@@ -1367,7 +1371,7 @@ func genDirectivesString(direcs ast.DirectiveList) string {
 	return " " + strings.Join(direcArgs, " ")
 }
 
-func genFieldsString(flds ast.FieldList) string {
+func genFieldsString(flds ast.FieldList, strip bool) string {
 	if flds == nil {
 		return ""
 	}
@@ -1380,17 +1384,17 @@ func genFieldsString(flds ast.FieldList) string {
 			if d := generateDescription(fld.Description); d != "" {
 				x.Check2(sch.WriteString(fmt.Sprintf("\t%s", d)))
 			}
-			x.Check2(sch.WriteString(genFieldString(fld)))
+			x.Check2(sch.WriteString(genFieldString(fld, strip)))
 		}
 	}
 
 	return sch.String()
 }
 
-func genFieldString(fld *ast.FieldDefinition) string {
+func genFieldString(fld *ast.FieldDefinition, strip bool) string {
 	return fmt.Sprintf(
 		"\t%s%s: %s%s\n", fld.Name, genArgumentsDefnString(fld.Arguments),
-		fld.Type.String(), genDirectivesString(fld.Directives))
+		fld.Type.String(), genDirectivesString(fld.Directives, strip))
 }
 
 func genArgumentDefnString(arg *ast.ArgumentDefinition) string {
@@ -1401,8 +1405,8 @@ func genArgumentString(arg *ast.Argument) string {
 	return fmt.Sprintf("%s: %s", arg.Name, arg.Value.String())
 }
 
-func generateInputString(typ *ast.Definition) string {
-	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields))
+func generateInputString(typ *ast.Definition, strip bool) string {
+	return fmt.Sprintf("input %s {\n%s}\n", typ.Name, genFieldsString(typ.Fields, strip))
 }
 
 func generateEnumString(typ *ast.Definition) string {
@@ -1431,22 +1435,22 @@ func generateDescription(description string) string {
 	return fmt.Sprintf("\"\"\"%s\"\"\"\n", description)
 }
 
-func generateInterfaceString(typ *ast.Definition) string {
+func generateInterfaceString(typ *ast.Definition, strip bool) string {
 	return fmt.Sprintf("%sinterface %s%s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
-		genFieldsString(typ.Fields))
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives,
+			strip), genFieldsString(typ.Fields, strip))
 }
 
-func generateObjectString(typ *ast.Definition) string {
+func generateObjectString(typ *ast.Definition, strip bool) string {
 	if len(typ.Interfaces) > 0 {
 		interfaces := strings.Join(typ.Interfaces, " & ")
 		return fmt.Sprintf("%stype %s implements %s%s {\n%s}\n",
 			generateDescription(typ.Description), typ.Name, interfaces,
-			genDirectivesString(typ.Directives), genFieldsString(typ.Fields))
+			genDirectivesString(typ.Directives, strip), genFieldsString(typ.Fields, strip))
 	}
 	return fmt.Sprintf("%stype %s%s {\n%s}\n",
-		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives),
-		genFieldsString(typ.Fields))
+		generateDescription(typ.Description), typ.Name, genDirectivesString(typ.Directives, strip),
+		genFieldsString(typ.Fields, strip))
 }
 
 // Stringify the schema as a GraphQL SDL string.  It's assumed that the schema was
@@ -1456,7 +1460,7 @@ func generateObjectString(typ *ast.Definition) string {
 // Any types in originalTypes are printed first, followed by the schemaExtras,
 // and then all generated types, scalars, enums, directives, query and
 // mutations all in alphabetical order.
-func Stringify(schema *ast.Schema, originalTypes []string) string {
+func Stringify(schema *ast.Schema, originalTypes []string, strip bool) string {
 	var sch, original, object, input, enum strings.Builder
 
 	if schema.Types == nil {
@@ -1475,13 +1479,13 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		typ := schema.Types[typName]
 		switch typ.Kind {
 		case ast.Interface:
-			x.Check2(original.WriteString(generateInterfaceString(typ) + "\n"))
+			x.Check2(original.WriteString(generateInterfaceString(typ, strip) + "\n"))
 		case ast.Object:
-			x.Check2(original.WriteString(generateObjectString(typ) + "\n"))
+			x.Check2(original.WriteString(generateObjectString(typ, strip) + "\n"))
 		case ast.Enum:
 			x.Check2(original.WriteString(generateEnumString(typ) + "\n"))
 		case ast.InputObject:
-			x.Check2(original.WriteString(generateInputString(typ) + "\n"))
+			x.Check2(original.WriteString(generateInputString(typ, strip) + "\n"))
 		}
 		printed[typName] = true
 	}
@@ -1523,9 +1527,9 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 		typ := schema.Types[typName]
 		switch typ.Kind {
 		case ast.Object:
-			x.Check2(object.WriteString(generateObjectString(typ) + "\n"))
+			x.Check2(object.WriteString(generateObjectString(typ, strip) + "\n"))
 		case ast.InputObject:
-			x.Check2(input.WriteString(generateInputString(typ) + "\n"))
+			x.Check2(input.WriteString(generateInputString(typ, strip) + "\n"))
 		case ast.Enum:
 			x.Check2(enum.WriteString(generateEnumString(typ) + "\n"))
 		}
@@ -1557,18 +1561,18 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 	if len(schema.Query.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Query\n#######################\n\n"))
-		x.Check2(sch.WriteString(generateObjectString(schema.Query) + "\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Query, strip) + "\n"))
 	}
 
 	if len(schema.Mutation.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Mutations\n#######################\n\n"))
-		x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
+		x.Check2(sch.WriteString(generateObjectString(schema.Mutation, strip) + "\n"))
 	}
 	if len(schema.Subscription.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Subscriptions\n#######################\n\n"))
-		x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
+		x.Check2(sch.WriteString(generateObjectString(schema.Subscription, strip)))
 	}
 
 	return sch.String()
@@ -1597,4 +1601,9 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 	}
 
 	return errs
+}
+
+func isStrippableDirective(dirName string) bool {
+	_, ok := directivesToStrip[dirName]
+	return ok
 }
