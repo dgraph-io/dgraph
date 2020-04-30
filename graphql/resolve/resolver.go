@@ -664,9 +664,9 @@ func externalRequestError(err error, f schema.Field) *x.GqlError {
 		f.GetObjectName()).WithLocations(f.Location())
 }
 
-func internalServerError(err error, f schema.Field) *x.GqlError {
-	return x.GqlErrorf("Evaluation of custom field failed because of an error: %s for field: %s"+
-		" within type: %s.", err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
+func internalServerError(err error, f schema.Field) error {
+	return schema.GQLWrapLocationf(err, f.Location(), "evaluation of custom field failed"+
+		" for field: %s within type: %s.", f.Name(), f.GetObjectName())
 }
 
 type graphqlResp struct {
@@ -801,7 +801,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	// This is single mode, make calls concurrently for each input and fill in the results.
-	errChan := make(chan *x.GqlError, len(inputs))
+	errChan := make(chan error, len(inputs))
 	for i := 0; i < len(inputs); i++ {
 		go func(idx int, input interface{}) {
 			defer api.PanicHandler(
@@ -877,18 +877,14 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	}
 
 	// Some of the errors can be null, so lets collect the non-null errors here.
-	var errs x.GqlErrorList
+	var errs error
 	for i := 0; i < len(inputs); i++ {
 		e := <-errChan
 		if e != nil {
-			errs = append(errs, e)
+			errs = schema.AppendGQLErrs(errs, e)
 		}
 	}
 
-	if len(errs) == 0 {
-		errCh <- nil
-		return
-	}
 	errCh <- errs
 }
 
