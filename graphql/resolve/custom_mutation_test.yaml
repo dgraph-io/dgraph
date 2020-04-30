@@ -18,24 +18,22 @@
       ]
     }
   httpresponse: |
-    {
-      "createMyFavouriteMovies": [
-        {
-          "id": "0x1",
-          "name": "Mov1",
-          "director": [
-            {
-              "id": "0x2",
-              "name": "Dir1"
-            }
-          ]
-        },
-        {
-          "id": "0x3",
-          "name": "Mov2"
-        }
-      ]
-    }
+    [
+      {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Mov2"
+      }
+    ]
   url: http://myapi.com/favMovies
   method: POST
   body: |
@@ -88,16 +86,14 @@
     }
   httpresponse: |
     {
-      "updateMyFavouriteMovie": {
-        "id": "0x1",
-        "name": "Mov1",
-        "director": [
-          {
-            "id": "0x2",
-            "name": "Dir1"
-          }
-        ]
-      }
+      "id": "0x1",
+      "name": "Mov1",
+      "director": [
+        {
+          "id": "0x2",
+          "name": "Dir1"
+        }
+      ]
     }
   url: http://myapi.com/favMovies/0x01
   method: PATCH
@@ -140,16 +136,14 @@
     }
   httpresponse: |
     {
-      "deleteMyFavouriteMovie": {
-        "id": "0x1",
-        "name": "Mov1",
-        "director": [
-          {
-            "id": "0x2",
-            "name": "Dir1"
-          }
-        ]
-      }
+      "id": "0x1",
+      "name": "Mov1",
+      "director": [
+        {
+          "id": "0x2",
+          "name": "Dir1"
+        }
+      ]
     }
   url: http://myapi.com/favMovies/0x01
   method: DELETE
