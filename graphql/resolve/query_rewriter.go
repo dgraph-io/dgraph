@@ -638,7 +638,6 @@ func addSelectionSetFrom(
 				}
 			}
 		}
-
 	}
 
 	// Sort the required fields before adding them to q.Children so that the query produced after
