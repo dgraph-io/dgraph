@@ -17,12 +17,13 @@
 package schema
 
 import (
+	"regexp"
+	"strings"
+
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
 	"github.com/vektah/gqlparser/v2/validator"
-	"regexp"
-	"strings"
 )
 
 const (
