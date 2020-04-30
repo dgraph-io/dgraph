@@ -664,12 +664,21 @@ func externalRequestError(err error, f schema.Field) *x.GqlError {
 		f.GetObjectName()).WithLocations(f.Location())
 }
 
+func internalServerError(err error, f schema.Field) error {
+	return schema.GQLWrapLocationf(err, f.Location(), "evaluation of custom field failed"+
+		" for field: %s within type: %s.", f.Name(), f.GetObjectName())
+}
+
 type graphqlResp struct {
 	Data   map[string]interface{} `json:"data,omitempty"`
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	defer api.PanicHandler(func(err error) {
+		errCh <- internalServerError(err, f)
+	})
+
 	fconf, err := f.CustomHTTPConfig()
 	if err != nil {
 		errCh <- err
@@ -801,6 +810,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	errChan := make(chan error, len(inputs))
 	for i := 0; i < len(inputs); i++ {
 		go func(idx int, input interface{}) {
+			defer api.PanicHandler(
+				func(err error) {
+					errChan <- internalServerError(err, f)
+				})
+
 			requestInput := input
 			if graphql {
 				body := make(map[string]interface{})
@@ -884,10 +898,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	}
 
-	if errs == nil {
-		errCh <- nil
-		return
-	}
 	errCh <- errs
 }
 
@@ -904,6 +914,10 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // list of all users.
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	errCh chan error) {
+	defer api.PanicHandler(func(err error) {
+		errCh <- internalServerError(err, f)
+	})
+
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {
