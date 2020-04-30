@@ -19,7 +19,6 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"net/http"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -54,9 +53,8 @@ func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Re
 // 1) rewrite the query using qr (return error if failed)
 // 2) execute the rewritten query with qe (return error if failed)
 // 3) process the result with rc
-func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor, rc ResultCompleter,
-	client *http.Client) QueryResolver {
-	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: rc, httpClient: client}
+func NewQueryResolver(qr QueryRewriter, ex DgraphExecutor, rc ResultCompleter) QueryResolver {
+	return &queryResolver{queryRewriter: qr, executor: ex, resultCompleter: rc}
 }
 
 // a queryResolver can resolve a single GraphQL query field.
@@ -64,7 +62,6 @@ type queryResolver struct {
 	queryRewriter   QueryRewriter
 	executor        DgraphExecutor
 	resultCompleter ResultCompleter
-	httpClient      *http.Client // for resolving fields with @custom directive.
 }
 
 func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -104,7 +101,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
-	resolved := completeDgraphResult(ctx, query, resp.GetJson(), qr.httpClient, err)
+	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
 	resolved.Extensions =
 		&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 

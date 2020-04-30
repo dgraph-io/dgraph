@@ -195,46 +195,47 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 func (rf *resolverFactory) WithConventionResolvers(
 	s schema.Schema, fns *ResolverFns) ResolverFactory {
 
-	hc := &http.Client{
-		// TODO - This can be part of a config later.
-		Timeout: time.Minute,
-	}
-
 	queries := append(s.Queries(schema.GetQuery), s.Queries(schema.FilterQuery)...)
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion(), hc)
+			return NewQueryResolver(fns.Qrw, fns.Ex, StdQueryCompletion())
 		})
 	}
 
 	for _, q := range s.Queries(schema.HTTPQuery) {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewHTTPQueryResolver(hc, StdQueryCompletion())
+			return NewHTTPQueryResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()), hc)
+			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()), hc)
+			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Drw, fns.Ex, deleteCompletion(), hc)
+			return NewDgraphResolver(fns.Drw, fns.Ex, deleteCompletion())
 		})
 	}
 
 	for _, m := range s.Mutations(schema.HTTPMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewHTTPMutationResolver(hc, StdQueryCompletion())
+			return NewHTTPMutationResolver(&http.Client{
+				// TODO - This can be part of a config later.
+				Timeout: time.Minute,
+			}, StdQueryCompletion())
 		})
 	}
 
@@ -510,7 +511,6 @@ func completeDgraphResult(
 	ctx context.Context,
 	field schema.Field,
 	dgResult []byte,
-	hc *http.Client,
 	e error) *Resolved {
 
 	span := trace.FromContext(ctx)
@@ -613,7 +613,7 @@ func completeDgraphResult(
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()], hc)
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -669,8 +669,7 @@ type graphqlResp struct {
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
-func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error,
-	hc *http.Client) {
+func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
 	fconf, err := f.CustomHTTPConfig()
 	if err != nil {
 		errCh <- err
@@ -745,7 +744,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			return
 		}
 
-		b, err = makeRequest(hc, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+		b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 		if err != nil {
 			errCh <- x.GqlErrorList{externalRequestError(err, f)}
 			return
@@ -833,7 +832,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				mu.RUnlock()
 			}
 
-			b, err = makeRequest(hc, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
+			b, err = makeRequest(nil, fconf.Method, fconf.URL, string(b), fconf.ForwardHeaders)
 			if err != nil {
 				errChan <- x.GqlErrorList{externalRequestError(err, f)}
 				return
@@ -904,7 +903,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // In the example above, resolveNestedFields would be called on classes field and vals would be the
 // list of all users.
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
-	errCh chan error, hc *http.Client) {
+	errCh chan error) {
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {
@@ -968,7 +967,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 	mu.RUnlock()
 
-	if err := resolveCustomFields(f.SelectionSet(), input, hc); err != nil {
+	if err := resolveCustomFields(f.SelectionSet(), input); err != nil {
 		errCh <- err
 		return
 	}
@@ -1031,7 +1030,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 // work.
 // TODO - We can be smarter about this and know before processing the query if we should be making
 // this recursive call upfront.
-func resolveCustomFields(fields []schema.Field, data interface{}, hc *http.Client) error {
+func resolveCustomFields(fields []schema.Field, data interface{}) error {
 	if data == nil {
 		return nil
 	}
@@ -1062,9 +1061,9 @@ func resolveCustomFields(fields []schema.Field, data interface{}, hc *http.Clien
 		numRoutines++
 		hasCustomDirective, _ := f.HasCustomDirective()
 		if !hasCustomDirective {
-			go resolveNestedFields(f, vals, mu, errCh, hc)
+			go resolveNestedFields(f, vals, mu, errCh)
 		} else {
-			go resolveCustomField(f, vals, mu, errCh, hc)
+			go resolveCustomField(f, vals, mu, errCh)
 		}
 	}
 
@@ -1411,6 +1410,12 @@ func makeRequest(client *http.Client, method, url, body string,
 	}
 	req.Header = header
 
+	// TODO - Needs to be fixed, we shouldn't be initiating a new HTTP client everytime.
+	if client == nil {
+		client = &http.Client{
+			Timeout: time.Minute,
+		}
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
