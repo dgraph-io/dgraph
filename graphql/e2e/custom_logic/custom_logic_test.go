@@ -471,7 +471,7 @@ type user struct {
 	Age int    `json:"age,omitempty"`
 }
 
-func addUsers(t *testing.T, schools []*school) []*user {
+func addUsersWithSchools(t *testing.T, schools []*school) []*user {
 	params := &common.GraphQLParams{
 		Query: `mutation addUser($s1: [SchoolRef], $s2: [SchoolRef], $s3: [SchoolRef]) {
 			 addUser(input: [{ age: 10, schools: $s1 },
@@ -509,10 +509,41 @@ func addUsers(t *testing.T, schools []*school) []*user {
 	return res.AddUser.User
 }
 
+func addUsers(t *testing.T) []*user {
+	params := &common.GraphQLParams{
+		Query: `mutation addUser {
+			 addUser(input: [{ age: 10 }, { age: 11 }, { age: 12 }]) {
+				 user {
+					 id
+					 age
+				 }
+			 }
+		 }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	var res struct {
+		AddUser struct {
+			User []*user
+		}
+	}
+	err := json.Unmarshal([]byte(result.Data), &res)
+	require.NoError(t, err)
+
+	require.Equal(t, len(res.AddUser.User), 3)
+	// The order of mutation result is not the same as the input order, so we sort and return users here.
+	sort.Slice(res.AddUser.User, func(i, j int) bool {
+		return res.AddUser.User[i].Age < res.AddUser.User[j].Age
+	})
+	return res.AddUser.User
+}
+
 func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*school) {
 	queryUser := `
-	 query {
-		 queryUser(order: {asc: age}) {
+	 query ($id: [ID!]){
+		 queryUser(filter: {id: $id}, order: {asc: age}) {
 			name
 			age
 			cars {
@@ -533,6 +564,9 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 	 }`
 	params := &common.GraphQLParams{
 		Query: queryUser,
+		Variables: map[string]interface{}{
+			"id": []interface{}{users[0].ID, users[1].ID, users[2].ID},
+		},
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
@@ -788,7 +822,7 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 	// add some data
 	teachers := addTeachers(t)
 	schools := addSchools(t, teachers)
-	users := addUsers(t, schools)
+	users := addUsersWithSchools(t, schools)
 
 	// lets check batch mode first using REST endpoints.
 	t.Run("rest batch operation mode", func(t *testing.T) {
@@ -823,6 +857,115 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		updateSchemaRequireNoGQLErrors(t, schema)
 		verifyData(t, users, teachers, schools)
 	})
+}
+
+func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
+	schema := `type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String
+		  @custom(
+			http: {
+			  url: "http://mock:8888/gqlUserNameWithError"
+			  method: "POST"
+			  operation: "single"
+			  graphql: "query { userName(id: $id) }"
+			}
+		  )
+		age: Int! @search
+		cars: Car
+		  @custom(
+			http: {
+			  url: "http://mock:8888/gqlCarsWithErrors"
+			  method: "POST"
+			  operation: "batch"
+			  graphql: "query { cars(input: [{ id: $id, age: $age}]) }"
+			}
+		  )
+	}`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	users := addUsers(t)
+	// Sleep so that schema update can come through in Alpha.
+	time.Sleep(time.Second)
+
+	queryUser := `
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
+			name
+			age
+			cars {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	sort.Slice(result.Errors, func(i, j int) bool {
+		return result.Errors[i].Message < result.Errors[j].Message
+	})
+	require.Equal(t, x.GqlErrorList{
+		{
+			Message: "error-1 from cars",
+		},
+		{
+			Message: "error-1 from username",
+		},
+		{
+			Message: "error-1 from username",
+		},
+		{
+			Message: "error-1 from username",
+		},
+		{
+			Message: "error-2 from cars",
+		},
+		{
+			Message: "error-2 from username",
+		},
+		{
+			Message: "error-2 from username",
+		},
+		{
+			Message: "error-2 from username",
+		},
+	}, result.Errors)
+
+	expected := `{
+		"queryUser": [
+		  {
+			"name": "uname-` + users[0].ID + `",
+			"age": 10,
+			"cars": {
+				"name": "car-` + users[0].ID + `"
+			}
+		  },
+		  {
+			"name": "uname-` + users[1].ID + `",
+			"age": 11,
+			"cars": {
+				"name": "car-` + users[1].ID + `"
+			}
+		  },
+		  {
+			"name": "uname-` + users[2].ID + `",
+			"age": 12,
+			"cars": {
+				"name": "car-` + users[2].ID + `"
+			}
+		  }
+		]
+	}`
+
+	testutil.CompareJSON(t, expected, string(result.Data))
 }
 
 func TestForInvalidCustomQuery(t *testing.T) {
@@ -1716,7 +1859,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
 func TestForValidInputArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
@@ -1750,7 +1893,7 @@ func TestForValidInputArgument(t *testing.T) {
 func TestForInvalidInputObject(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	res := updateSchema(t, schema)
@@ -1760,7 +1903,7 @@ func TestForInvalidInputObject(t *testing.T) {
 func TestForNestedInvalidInputObject(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/nestedinvalid", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/nestedinvalid", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	res := updateSchema(t, schema)
