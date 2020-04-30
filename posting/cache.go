@@ -26,6 +26,10 @@ import (
 	"github.com/golang/protobuf/proto"
 )
 
+const (
+	numShards = 16
+)
+
 func generateKey(key []byte, ts uint64) []byte {
 	return nil
 }
@@ -52,18 +56,41 @@ func copyList(l *List) *List {
 	return lCopy
 }
 
-type PlCache struct {
+type tsMap struct {
 	sync.RWMutex
-	tsMap map[uint64]uint64
-	cache *ristretto.Cache
+	m map[uint64]uint64
+}
+
+type PlCache struct {
+	tsMaps []*tsMap
+	cache  *ristretto.Cache
 }
 
 func NewPlCache() (*PlCache, error) {
-	cache := &PlCache{
-		tsMap: make(map[uint64]uint64),
+	cache := &PlCache{}
+	return cache, cache.init()
+}
+
+func (c *PlCache) init() error {
+	if c == nil {
+		return nil
 	}
+
+	c.tsMaps = make([]*tsMap, numShards)
+	for i := range c.tsMaps {
+		c.tsMaps[i] = &tsMap{
+			m: make(map[uint64]uint64),
+		}
+	}
+
+	if c.cache != nil {
+		// Clear the cache if it already exists instead of creating a new one.
+		c.cache.Clear()
+		return nil
+	}
+
 	var err error
-	cache.cache, err = ristretto.NewCache(&ristretto.Config{
+	c.cache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
 		MaxCost:     int64(Config.AllottedMemory * 1024 * 1024),
 		BufferItems: 64,
@@ -76,10 +103,39 @@ func NewPlCache() (*PlCache, error) {
 			return int64(l.DeepSize())
 		},
 	})
-	if err != nil {
-		return nil, err
+	return err
+}
+
+func (c *PlCache) getTs(hash uint64) (uint64, bool) {
+	shard := c.tsMaps[hash%numShards]
+	shard.RLock()
+	defer shard.RUnlock()
+	ts, ok := shard.m[hash]
+	return ts, ok
+}
+
+func (c *PlCache) updateTs(hash uint64, newTs uint64) {
+	shard := c.tsMaps[hash%numShards]
+	shard.Lock()
+	defer shard.Unlock()
+
+	// Return if here's already a value for a higher timestamp.
+	if newTs < shard.m[hash] {
+		return
 	}
-	return cache, nil
+	shard.m[hash] = newTs
+}
+
+func (c *PlCache) delTs(hash uint64) uint64 {
+	shard := c.tsMaps[hash%numShards]
+	shard.Lock()
+	defer shard.Unlock()
+
+	if ts, ok := shard.m[hash]; ok {
+		delete(shard.m, hash)
+		return ts
+	}
+	return 0
 }
 
 func (c *PlCache) Get(key []byte, ts uint64) *List {
@@ -87,11 +143,7 @@ func (c *PlCache) Get(key []byte, ts uint64) *List {
 		return nil
 	}
 
-	hash := z.MemHash(key)
-	c.RLock()
-	maxTs, ok := c.tsMap[hash]
-	c.RUnlock()
-
+	maxTs, ok := c.getTs(z.MemHash(key))
 	if !ok {
 		return nil
 	}
@@ -118,25 +170,14 @@ func (c *PlCache) Set(key []byte, ts uint64, pl *List) {
 	}
 
 	hash := z.MemHash(key)
-	c.RLock()
-	prevTs := c.tsMap[hash]
-	c.RUnlock()
-
+	prevTs, _ := c.getTs(hash)
 	if ts <= prevTs {
 		return
 	}
 
 	_ = c.cache.Set(generateKey(key, ts), copyList(pl), 0)
 	c.cache.Del(generateKey(key, prevTs))
-
-	c.Lock()
-	defer c.Unlock()
-	maxTs := c.tsMap[hash]
-	// Check the current value again and return here if it's been updated to a greater timestamp.
-	if maxTs != prevTs && maxTs > ts {
-		return
-	}
-	c.tsMap[hash] = ts
+	c.updateTs(hash, ts)
 }
 
 func (c *PlCache) Del(key []byte) {
@@ -144,16 +185,7 @@ func (c *PlCache) Del(key []byte) {
 		return
 	}
 
-	hash := z.MemHash(key)
-	c.Lock()
-	prevTs, ok := c.tsMap[hash]
-	if !ok {
-		c.Unlock()
-		return
-	}
-	delete(c.tsMap, hash)
-	c.Unlock()
-
+	prevTs := c.delTs(z.MemHash(key))
 	c.cache.Del(generateKey(key, prevTs))
 }
 
@@ -161,11 +193,7 @@ func (c *PlCache) Clear() {
 	if c == nil {
 		return
 	}
-
-	c.Lock()
-	defer c.Unlock()
-	c.tsMap = make(map[uint64]uint64)
-	c.cache.Clear()
+	c.init()
 }
 
 // ClearCache will clear the entire list cache.
