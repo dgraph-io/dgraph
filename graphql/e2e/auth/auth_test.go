@@ -507,10 +507,15 @@ func TestDeleteAuthRule(t *testing.T) {
 			},
 		}
 
-		authVars := map[string]interface{}{
-			"USER": tcase.user,
+		authMeta := testutil.AuthMeta{
+			PublicKey: metainfo.PublicKey,
+			Namespace: metainfo.Namespace,
+			AuthVars: map[string]interface{}{
+				"USER": tcase.user,
+			},
 		}
-		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
+		jwtToken, err := authMeta.GetSignedToken()
+		require.NoError(t, err)
 		getUserParams.Headers.Add(metainfo.Header, jwtToken)
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
@@ -536,10 +541,10 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 		},
 		{
 			name: "ticket with edit permission but not belonging to user",
-			user: "user5",
+			user: "user3",
 			filter: map[string]interface{}{
 				"title": map[string]interface{}{
-					"anyofterms": "Ticket2",
+					"anyofterms": "Ticket1",
 				},
 			},
 			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
@@ -552,7 +557,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 					"anyofterms": "Ticket1",
 				},
 			},
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":1}}`,
 		},
 	}
 	query := `
@@ -573,10 +578,15 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 			},
 		}
 
-		authVars := map[string]interface{}{
-			"USER": tcase.user,
+		authMeta := testutil.AuthMeta{
+			PublicKey: metainfo.PublicKey,
+			Namespace: metainfo.Namespace,
+			AuthVars: map[string]interface{}{
+				"USER": tcase.user,
+			},
 		}
-		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
+		jwtToken, err := authMeta.GetSignedToken()
+		require.NoError(t, err)
 		getUserParams.Headers.Add(metainfo.Header, jwtToken)
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)

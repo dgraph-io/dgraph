@@ -1,5 +1,5 @@
 type User @auth(
-    delete: { or: [
+    delete: { and: [
         { rule: """
         query($USER: String!) {
             queryUser(filter: { username: { eq: $USER } }) {
@@ -8,8 +8,8 @@ type User @auth(
         }
         """ },
         { rule: """
-        query($USER: String!) {
-            queryUser(filter: { username: { eq: $USER } }) {
+        query {
+            queryUser(filter: { isPublic: true }) {
                 __typename
             }
         }
@@ -25,7 +25,7 @@ type User @auth(
 #     delete: { rule: "false" }) {
   username: String! @id
   age: Int # @auth(query: {rule: "filter: {username: {eq: $USER }}"})
-  isPublic: Boolean
+  isPublic: Boolean @search
   disabled: Boolean # @auth(update: { rule: "$ROLE: { eq: ADMIN }" })
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
@@ -52,7 +52,13 @@ type UserSecret @auth(
   ownedBy: String @search(by: [hash])
 }
 
-type Region {
+type Region @auth(
+    delete: { rule: """
+    query {
+        queryRegion(filter: { global: true }) { __typename }
+    }
+    """}
+){
   id: ID!
   name: String
   global: Boolean @search
@@ -232,7 +238,7 @@ type Ticket @auth(
             queryTicket { 
                 onColumn{
                     inProject { 
-                        roles(filter: { permission: { eq: EDIT } } ) { 
+                        roles(filter: { permission: { eq: EDIT } } ) {
                             assignedTo(filter: { username: { eq: $USER } }) {
                                 __typename
                             }

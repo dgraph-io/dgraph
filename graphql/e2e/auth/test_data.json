@@ -102,19 +102,19 @@
 		"uid": "_:role1",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
-		"Role.permissions":[0,1,2]
+		"Role.permission": "EDIT"
 	},
 	{
 		"uid": "_:role2",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
-		"Role.permissions":[0]
+		"Role.permission":"VIEW"
 	},
 	{
 		"uid": "_:role3",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user4"}],
-		"Role.permissions":[0,1]
+		"Role.permission":"ADMIN"
 	},
 	{
 		"uid": "_:project1",

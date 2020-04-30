@@ -78,12 +78,15 @@ func TestAuthQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			authVars := map[string]interface{}{
-				"USER": "user1",
-				"ROLE": tcase.Role,
+			authMeta := testutil.AuthMeta{
+				PublicKey: metainfo.PublicKey,
+				Namespace: metainfo.Namespace,
+				AuthVars: map[string]interface{}{
+					"USER": "user1",
+				},
 			}
-
-			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
+			ctx, err := authMeta.AddClaimsToContext(context.Background())
+			require.NoError(t, err)
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
@@ -199,10 +202,17 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			op, err := gqlSchema.Operation(&schema.Request{Query: tt.gqlMut})
 			require.NoError(t, err)
 			gqlMutation := test.GetMutation(t, op)
-			authVars := map[string]interface{}{
-				"USER": "user1",
+
+			authMeta := testutil.AuthMeta{
+				PublicKey: metainfo.PublicKey,
+				Namespace: metainfo.Namespace,
+				AuthVars: map[string]interface{}{
+					"USER": "user1",
+				},
 			}
-			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
+			ctx, err := authMeta.AddClaimsToContext(context.Background())
+			require.NoError(t, err)
+
 			_, err = rewriter.Rewrite(ctx, gqlMutation)
 			require.Nil(t, err)
 
@@ -256,12 +266,15 @@ func TestAuthDeleteRewriting(t *testing.T) {
 			mut := test.GetMutation(t, op)
 			rewriterToTest := NewDeleteRewriter()
 
-			authVars := map[string]interface{}{
-				"USER": "user1",
-				"ROLE": tcase.Role,
+			authMeta := testutil.AuthMeta{
+				PublicKey: metainfo.PublicKey,
+				Namespace: metainfo.Namespace,
+				AuthVars: map[string]interface{}{
+					"USER": "user1",
+				},
 			}
-
-			ctx := testutil.AddClaimsToContext(context.Background(), t, authVars, metainfo)
+			ctx, err := authMeta.AddClaimsToContext(context.Background())
+			require.NoError(t, err)
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(ctx, mut)

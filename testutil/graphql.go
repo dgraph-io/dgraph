@@ -24,7 +24,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/pkg/errors"
+
 	"github.com/dgrijalva/jwt-go"
 	"google.golang.org/grpc/metadata"
 
@@ -77,34 +78,61 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 }
 
 type clientCustomClaims struct {
-	AuthVariables map[string]interface{} `json:"https://xyz.io/jwt/claims"`
+	Namespace     string
+	AuthVariables map[string]interface{}
 	jwt.StandardClaims
 }
 
-func GetSignedToken(t *testing.T,
-	authVars map[string]interface{},
-	metaInfo *authorization.AuthMeta) string {
+func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
+	// encode the original
+	m, err := json.Marshal(c.StandardClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	// decode it back to get a map
+	var a interface{}
+	json.Unmarshal(m, &a)
+	b, ok := a.(map[string]interface{})
+	if !ok {
+		return nil, errors.Errorf("error while marshalling custom claim json.")
+	}
+
+	// set the proper namespace and delete additional data.
+	b[c.Namespace] = c.AuthVariables
+	delete(b, "AuthVariables")
+	delete(b, "Namespace")
+
+	// Return encoding of the map
+	return json.Marshal(b)
+}
+
+type AuthMeta struct {
+	PublicKey string
+	Namespace string
+	AuthVars  map[string]interface{}
+}
+
+func (a *AuthMeta) GetSignedToken() (string, error) {
 	claims := clientCustomClaims{
-		authVars,
+		a.Namespace,
+		a.AuthVars,
 		jwt.StandardClaims{
 			ExpiresAt: time.Now().Add(time.Minute).Unix(),
 			Issuer:    "test",
 		},
 	}
-
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte(metaInfo.PublicKey))
-	require.NoError(t, err)
-	return ss
+	return token.SignedString([]byte(a.PublicKey))
 }
 
-func AddClaimsToContext(
-	ctx context.Context,
-	t *testing.T,
-	authVars map[string]interface{},
-	metaInfo *authorization.AuthMeta) context.Context {
+func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
+	token, err := a.GetSignedToken()
+	if err != nil {
+		return ctx, err
+	}
 
 	md := metadata.New(nil)
-	md.Append("authorizationJwt", GetSignedToken(t, authVars, metaInfo))
-	return metadata.NewIncomingContext(ctx, md)
+	md.Append("authorizationJwt", token)
+	return metadata.NewIncomingContext(ctx, md), nil
 }

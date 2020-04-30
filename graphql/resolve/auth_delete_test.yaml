@@ -90,13 +90,13 @@
         ]
   dgquery: |-
     query {
-      x as deleteUser(func: uid(User1)) @filter((uid(User2) OR uid(User3))) {
+      x as deleteUser(func: uid(User1)) @filter((uid(User2) AND uid(User3))) {
         uid
         Ticket4 as User.tickets
       }
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
       User2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
-      User3 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
+      User3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
 - name: "Filtering by ID"
@@ -119,9 +119,11 @@
         ]
   dgquery: |-
     query {
-      x as deleteRegion(func: uid(0x1, 0x2)) @filter(type(Region)) {
+      x as deleteRegion(func: uid(Region1)) @filter(uid(Region2)) {
         uid
       }
+      Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
+      Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
     }
 
 # FIXME: when RBAC is done, have cases for
