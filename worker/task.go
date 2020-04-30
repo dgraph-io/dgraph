@@ -761,7 +761,7 @@ func (qs *queryState) handleUidPostings(
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
-				reqList := &pb.List{Uids: []uint64{srcFn.uidPresent}}
+				reqList := &pb.List{Uids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
 					ReadTs:    args.q.ReadTs,
 					AfterUid:  0,
@@ -1583,7 +1583,7 @@ type functionContext struct {
 	ineqValueToken string
 	n              int
 	threshold      int64
-	uidPresent     uint64
+	uidsPresent    []uint64
 	fname          string
 	fnType         FuncType
 	regex          *cregexp.Regexp
@@ -1816,17 +1816,25 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
-		if err = ensureArgsCount(q.SrcFunc, 1); err != nil {
+		if len(q.SrcFunc.Args) == 0 {
+			err := errors.Errorf("Function '%s' requires atleast 1 argument, but got %d (%v)",
+				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
 			return nil, err
 		}
-		fc.uidPresent, err = strconv.ParseUint(q.SrcFunc.Args[0], 0, 64)
-		if err != nil {
-			if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
-				return nil, errors.Errorf("Value %q in %s is not a number",
-					q.SrcFunc.Args[0], q.SrcFunc.Name)
+		for _, arg := range q.SrcFunc.Args {
+			uidParsed, err := strconv.ParseUint(arg, 0, 64)
+			if err != nil {
+				if e, ok := err.(*strconv.NumError); ok && e.Err == strconv.ErrSyntax {
+					return nil, errors.Errorf("Value %q in %s is not a number",
+						arg, q.SrcFunc.Name)
+				}
+				return nil, err
 			}
-			return nil, err
+			fc.uidsPresent = append(fc.uidsPresent, uidParsed)
 		}
+		sort.Slice(fc.uidsPresent, func(i, j int) bool {
+			return fc.uidsPresent[i] < fc.uidsPresent[j]
+		})
 		checkRoot(q, fc)
 		if fc.isFuncAtRoot {
 			return nil, errors.Errorf("uid_in function not allowed at root")
