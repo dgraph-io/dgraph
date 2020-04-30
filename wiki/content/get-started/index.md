@@ -5,7 +5,7 @@ aliases = ["/get-started-old"]
 
 {{% notice "note" %}}
 This is a quick start guide.
-You can find the getting started tutorial series [here]({{< relref "index.md" >}}).
+You can find the getting started tutorial series [here]({{< relref "tutorials/index.md" >}}).
 {{% /notice %}}
 
 ## Dgraph
