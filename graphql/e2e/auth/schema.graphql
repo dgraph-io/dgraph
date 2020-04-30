@@ -109,8 +109,7 @@ type Log @auth(
 }
 
 type Project @auth(
-     query: { or: [
-         { rule: """query($USER: String!) {
+     query: { rule: """query($USER: String!) {
                       queryProject {
                         roles(filter: { permission: { eq: VIEW } }) {
                          assignedTo(filter: { username: { eq: $USER } }) {
@@ -119,8 +118,6 @@ type Project @auth(
                         }
                       }
                   }""" },
-         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
-     ]}
 ) {
   projID: ID!
   name: String!
