@@ -1,5 +1,5 @@
 +++
-title = "Getting started with Dgraph - Advanced Text Search on Social Graphs"
+title = "Get Started with Dgraph - Advanced Text Search on Social Graphs"
 +++
 
 **Welcome to the sixth tutorial of getting started with Dgraph.**
@@ -377,7 +377,8 @@ Did you know that Dgraph also offers fuzzy search capabilities, which can be use
 Let's learn about the fuzzy search in our next tutorial.
 
 Sounds interesting?
-Then see you all soon in the next tutorial. Till then, happy Graphing!
+
+Check out our next tutorial of the getting started series [here]({{< relref "tutorial-7/index.md" >}}).
 
 ## Need Help
 

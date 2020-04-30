@@ -362,7 +362,7 @@ We need to just traverse the `published` edge starting from the `author` nodes.
 
 {{% load-img "/images/tutorials/3/e-rating-blog.png" "rating-blog-rating" %}}
 
-_Check out our [previous tutorial]{{< relref "tutorial-2/index.md">}} if you have questions around graph traversal queries._
+_Check out our [previous tutorial]({{< relref "tutorial-2/index.md">}}) if you have questions around graph traversal queries._
 
 
 Similarly, let's extend our previous query to fetch the tags of these blog posts.

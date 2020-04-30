@@ -1,5 +1,5 @@
 +++
-title = "Getting started with Dgraph - Fuzzy Search on Social Graphs"
+title = "Get Started with Dgraph - Fuzzy Search on Social Graphs"
 +++
 
 **Welcome to the seventh tutorial of getting started with Dgraph.**
@@ -302,9 +302,9 @@ to get the latest tutorial right to your inbox.
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}})
-  reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph in a cluster.
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+  in a cluster.
 
 ## Need Help
 
