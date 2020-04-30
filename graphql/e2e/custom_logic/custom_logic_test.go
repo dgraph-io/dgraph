@@ -889,6 +889,8 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
 	users := addUsers(t)
+	// Sleep so that schema update can come through in Alpha.
+	time.Sleep(time.Second)
 
 	queryUser := `
 	query ($id: [ID!]){
@@ -1857,7 +1859,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
 func TestForValidInputArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
@@ -1891,7 +1893,7 @@ func TestForValidInputArgument(t *testing.T) {
 func TestForInvalidInputObject(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/invalidfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	res := updateSchema(t, schema)
@@ -1901,7 +1903,7 @@ func TestForInvalidInputObject(t *testing.T) {
 func TestForNestedInvalidInputObject(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/nestedinvalid", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"}) 
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/nestedinvalid", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	res := updateSchema(t, schema)
