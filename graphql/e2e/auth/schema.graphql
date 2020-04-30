@@ -39,6 +39,20 @@ type UserSecret @auth(
             }
         }
     """},
+    add: { rule: """
+        query($USER: String!) { 
+            queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """},
+    update: { rule: """
+        query($USER: String!) { 
+            queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
+                __typename
+            }
+        }
+    """}
     delete: { rule: """
         query($USER: String!) { 
             queryUserSecret(filter: { ownedBy: { eq: $USER } }) {
@@ -179,25 +193,45 @@ enum Permission {
   ADMIN
 }
 
-type Column {
-#     @auth(
-#     query: { rule: """inProject { 
-#                         role(filter: { permission: { eq: VIEW } } ) { 
-#                             users(filter: { username: { eq: $USER } })
-#                         }
-#                     }"""},
-#     add: { rule: """inProject { 
-#                         role(filter: { permission: { eq: ADMIN } } ) { 
-#                             users(filter: { username: { eq: $USER } })
-#                         }
-#                     }"""},
-#     update: { rule: """inProject { 
-#                     role(filter: { permission: { eq: EDIT } } ) { 
-#                         users(filter: { username: { eq: $USER } })
-#                     }
-#                 }"""},
+type Column @auth(
+    query: { rule: """
+    query($USER: String!) { 
+        queryColumn { 
+            inProject { 
+                roles(filter: { permission: { eq: VIEW } } ) { 
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
+    add: { rule: """
+    query($USER: String!) { 
+        queryColumn { 
+            inProject { 
+                roles(filter: { permission: { eq: ADMIN } } ) { 
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""},
+    update: { rule: """
+    query($USER: String!) { 
+        queryColumn { 
+            inProject { 
+                roles(filter: { permission: { eq: ADMIN } } ) { 
+                    assignedTo(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }
+        }
+    }"""}
 #     delete: { rule: "false" }
-# ) {
+) {
   colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })
   name: String!
@@ -218,14 +252,21 @@ type Ticket @auth(
                     }
                 }
             }
+        }"""},
+    add: { rule: """
+        query($USER: String!) { 
+            queryTicket { 
+                onColumn{
+                    inProject { 
+                        roles(filter: { permission: { eq: EDIT } } ) { 
+                            assignedTo(filter: { username: { eq: $USER } }) {
+                                __typename
+                            }
+                        }
+                    }
+                }
+            }
         }"""}
-    # add: { rule: """onColumn {
-    #                     inProject { 
-    #                         role(filter: { permission: { eq: WRITE } } ) { 
-    #                             users(filter: { username: { eq: $USER } })
-    #                         }
-    #                     }
-    #                 }"""},
     # update: { rule: """onColumn {
     #                     inProject { 
     #                         role(filter: { permission: { eq: WRITE } } ) { 

@@ -24,6 +24,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/testutil"
 
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -35,17 +36,97 @@ import (
 )
 
 type AuthQueryRewritingCase struct {
-	Name        string
-	GQLQuery    string
-	Variables   string
-	DGMutations []*dgraphMutation
-	DGQuery     string
-	User        string
-	Role        string
+	Name string
 
-	// needed?
-	Error           *x.GqlError
-	ValidationError *x.GqlError
+	// Values to come in the JWT
+	User string
+	Role string
+
+	// GQL query and variables
+	GQLQuery  string
+	Variables string
+
+	// Dgraph upsert query and mutations built from the GQL
+	DGQuery     string
+	DGMutations []*dgraphMutation
+
+	// UIDS and json from the Dgraph result
+	Uids string
+	Json string
+
+	// Post-mutation auth query and result Dgraph returns from that query
+	AuthQuery string
+	AuthJson  string
+
+	Error *x.GqlError
+}
+
+type authExecutor struct {
+	t     *testing.T
+	state int
+
+	// initial mutation
+	upsertQuery string
+	json        string
+	uids        string
+
+	// auth
+	authQuery string
+	authJson  string
+}
+
+func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	ex.state++
+	switch ex.state {
+	case 1:
+		// initial mutation
+
+		// check that the upsert has built in auth, if required
+		require.Equal(ex.t, ex.upsertQuery, req.Query)
+
+		var assigned map[string]string
+		if ex.uids != "" {
+			err := json.Unmarshal([]byte(ex.uids), &assigned)
+			require.NoError(ex.t, err)
+		}
+
+		if len(assigned) == 0 {
+			// skip state 2, there's no new nodes to apply auth to
+			ex.state++
+		}
+
+		return &dgoapi.Response{
+			Json:    []byte(ex.json),
+			Uids:    assigned,
+			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
+		}, nil
+
+	case 2:
+		// auth
+
+		// check that we got the expected auth query
+		require.Equal(ex.t, ex.authQuery, req.Query)
+
+		// respond to query
+		return &dgoapi.Response{
+			Json:    []byte(ex.authJson),
+			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
+		}, nil
+
+	case 3:
+		// final result
+
+		return &dgoapi.Response{
+			Json:    []byte(`{"done": "and done"}`),
+			Metrics: &dgoapi.Metrics{NumUids: map[string]uint64{touchedUidsKey: 0}},
+		}, nil
+	}
+
+	panic("test failed")
+}
+
+func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
 }
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -120,22 +201,32 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			rewriter: NewAddRewriter,
 			assigned: map[string]string{"Ticket1": "0x4"},
 			dgQuery: `query {
-  ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+  ticket(func: uid(Ticket2)) @filter(uid(Ticket3)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
   }
-  Ticket1 as var(func: uid(0x4))
-  Ticket2 as var(func: uid(Ticket1)) @cascade {
+  Ticket2 as var(func: uid(0x4))
+  Ticket3 as var(func: uid(Ticket2)) @cascade {
     onColumn : Ticket.onColumn {
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
         }
+        dgraph.uid : uid
+      }
+      dgraph.uid : uid
+    }
+    dgraph.uid : uid
+  }
+  Column1 as var(func: type(Column)) @cascade {
+    inProject : Column.inProject {
+      roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
       dgraph.uid : uid
@@ -161,22 +252,32 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			result: map[string]interface{}{
 				"updateTicket": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 			dgQuery: `query {
-  ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+  ticket(func: uid(Ticket2)) @filter(uid(Ticket3)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
   }
-  Ticket1 as var(func: uid(0x4))
-  Ticket2 as var(func: uid(Ticket1)) @cascade {
+  Ticket2 as var(func: uid(0x4))
+  Ticket3 as var(func: uid(Ticket2)) @cascade {
     onColumn : Ticket.onColumn {
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
         }
+        dgraph.uid : uid
+      }
+      dgraph.uid : uid
+    }
+    dgraph.uid : uid
+  }
+  Column1 as var(func: type(Column)) @cascade {
+    inProject : Column.inProject {
+      roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
       dgraph.uid : uid
@@ -298,5 +399,125 @@ func TestAuthDeleteRewriting(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// In an add mutation
+//
+// mutation {
+// 	addAnswer(input: [
+// 	  {
+// 		text: "...",
+// 		datePublished: "2020-03-26",
+// 		author: { username: "u1" },
+// 		inAnswerTo: { id: "0x7e" }
+// 	  }
+// 	]) {
+// 	  answer { ... }
+//
+// There's no initial auth verification.  We add the nodes and then check the auth rules.
+// So the only auth to check is through authorizeNewNodes() function.
+//
+// We don't need to test the json mutations that are created, because those are the same
+// as in add_mutation_test.yaml.  What we need to test is the processing around if
+// new nodes are checked properly - the query generated to check them, and the post-processing.
+func TestAuthAdd(t *testing.T) {
+	b, err := ioutil.ReadFile("auth_add_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []AuthQueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	metainfo := &authorization.AuthMeta{}
+	metainfo.Parse(string(sch))
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, metainfo)
+		})
+	}
+}
+
+// In an update mutation we first need to check that the generated query only finds the
+// authorised nodes - it takes the users filter and applies auth.  Then we need to check
+// that any nodes added by the mutation were also allowed.
+//
+// We don't need to test the json mutations that are created, because those are the same
+// as in update_mutation_test.yaml.  What we need to test is the processing around if
+// new nodes are checked properly - the query generated to check them, and the post-processing.
+func TestAuthUpdate(t *testing.T) {
+	b, err := ioutil.ReadFile("auth_update_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []AuthQueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+	metainfo := &authorization.AuthMeta{}
+	metainfo.Parse(string(sch))
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, metainfo)
+		})
+	}
+}
+
+func checkAddUpdateCase(
+	t *testing.T,
+	gqlSchema schema.Schema,
+	tcase AuthQueryRewritingCase,
+	rewriter func() MutationRewriter,
+	metainfo *authorization.AuthMeta) {
+	// -- Arrange --
+	var vars map[string]interface{}
+	if tcase.Variables != "" {
+		err := json.Unmarshal([]byte(tcase.Variables), &vars)
+		require.NoError(t, err)
+	}
+
+	op, err := gqlSchema.Operation(
+		&schema.Request{
+			Query:     tcase.GQLQuery,
+			Variables: vars,
+		})
+	require.NoError(t, err)
+	mut := test.GetMutation(t, op)
+
+	authMeta := testutil.AuthMeta{
+		PublicKey: metainfo.PublicKey,
+		Namespace: metainfo.Namespace,
+		AuthVars: map[string]interface{}{
+			"USER": "user1",
+			"ROLE": tcase.Role,
+		},
+	}
+	ctx, err := authMeta.AddClaimsToContext(context.Background())
+	require.NoError(t, err)
+
+	ex := &authExecutor{
+		t:           t,
+		upsertQuery: tcase.DGQuery,
+		json:        tcase.Json,
+		uids:        tcase.Uids,
+		authQuery:   tcase.AuthQuery,
+		authJson:    tcase.AuthJson,
+	}
+	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
+
+	// -- Act --
+	resolved, _ := resolver.Resolve(ctx, mut)
+
+	// -- Assert --
+	// most cases are built into the authExecutor
+	if tcase.Error != nil || resolved.Err != nil {
+		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
 	}
 }
