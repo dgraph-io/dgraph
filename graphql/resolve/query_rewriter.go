@@ -198,6 +198,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	}
 
 	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
 		return dgQuery
 	}
 
@@ -311,6 +312,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	}
 
 	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
 		return dgQuery
 	}
 

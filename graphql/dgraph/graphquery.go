@@ -41,9 +41,7 @@ func AsString(query *gql.GraphQuery) string {
 }
 
 func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
-	hasName := false
 	if query.Var != "" || query.Alias != "" || query.Attr != "" {
-		hasName = true
 		x.Check2(b.WriteString(prefix))
 	}
 	if query.Var != "" {
@@ -57,10 +55,6 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 
 	if query.Func != nil {
 		writeRoot(b, query)
-	}
-
-	if hasName && query.Func == nil && query.Filter == nil {
-		x.Check2(b.WriteString("()"))
 	}
 
 	if query.Filter != nil {
