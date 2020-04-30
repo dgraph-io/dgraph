@@ -1,7 +1,16 @@
-FROM golang:1.12.7-alpine3.10
 
-COPY main.go cmd/main.go
+FROM golang:1.14.2-alpine3.11
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main cmd/main.go
+COPY . .
 
-CMD ./main
+RUN apk update && apk add git && apk add nodejs && apk add npm
+
+RUN go get gopkg.in/yaml.v2
+
+RUN npm install
+
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main main.go
+
+WORKDIR . 
+
+CMD ./main 

@@ -1202,6 +1202,14 @@ func completeValue(
 		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
+	case []map[string]interface{}:
+		// This case is different from the []interface{} case above and is true for admin queries
+		// where we built the val ourselves.
+		listVal := make([]interface{}, 0, len(val))
+		for _, v := range val {
+			listVal = append(listVal, v)
+		}
+		return completeList(path, field, listVal)
 	default:
 		if val == nil {
 			if field.Type().ListType() != nil {
@@ -1463,12 +1471,12 @@ func (hr *httpResolver) rewriteAndExecute(ctx context.Context, field schema.Fiel
 
 	// this means it had body and not graphql, so just unmarshal it and return
 	if hrc.RemoteGqlQueryName == "" {
-		var result map[string]interface{}
+		var result interface{}
 		if err := json.Unmarshal(b, &result); err != nil {
 			return emptyResult(jsonUnmarshalError(err, field))
 		}
 		return &Resolved{
-			Data:  result,
+			Data:  map[string]interface{}{field.Name(): result},
 			Field: field,
 		}
 	}
