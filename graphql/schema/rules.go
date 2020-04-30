@@ -1298,6 +1298,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			graphqlOpDef: graphqlOpDef,
 			isBatch:      isBatchOperation,
 			url:          u.Raw,
+			schema:       sch,
 		}); err != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
 				"Type %s; Field %s: inside graphql in @custom directive, %s",

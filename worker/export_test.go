@@ -125,29 +125,32 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.Set(x.SchemaKey("friend"), val))
 	// Schema is always written at timestamp 1
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	require.NoError(t, err)
 	val, err = (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
+	err = txn.Set(x.SchemaKey("http://www.w3.org/2000/01/rdf-schema#range"), val)
 	require.NoError(t, err)
-	txn.Set(x.SchemaKey("friend_not_served"), val)
+	require.NoError(t, txn.Set(x.SchemaKey("friend_not_served"), val))
+	require.NoError(t, txn.Set(x.SchemaKey("age"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	val, err = personType.Marshal()
 	require.NoError(t, err)
 
 	txn = pstore.NewTransactionAt(math.MaxUint64, true)
-	txn.Set(x.TypeKey("Person"), val)
-	require.NoError(t, err)
+	require.NoError(t, txn.Set(x.TypeKey("Person"), val))
 	require.NoError(t, txn.CommitAt(1, nil))
-	txn.Discard()
 
 	populateGraphExport(t)
+
+	// Drop age predicate after populating DB.
+	// age should not exist in the exported schema.
+	txn = pstore.NewTransactionAt(math.MaxUint64, true)
+	require.NoError(t, txn.Delete(x.SchemaKey("age")))
+	require.NoError(t, txn.CommitAt(1, nil))
 }
 
 func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles []string) {
@@ -197,7 +200,10 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, `
+		name:string @index .
+		age:int.
+		`)
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
