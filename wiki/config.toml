@@ -1,5 +1,9 @@
 languageCode = "en-us"
 theme = "hugo-docs"
+canonifyURLs = true
+
+[markup.goldmark.renderer]
+unsafe = true
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
