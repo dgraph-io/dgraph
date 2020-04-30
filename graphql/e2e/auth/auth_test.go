@@ -46,19 +46,6 @@ type User struct {
 	Disabled bool
 }
 
-type deleteUserResult struct {
-	Result resultFields `json:"deleteUserSecret"`
-}
-
-type deleteTicketResult struct {
-	Result resultFields `json:"deleteTicket"`
-}
-
-type resultFields struct {
-	Msg     string `json:"msg"`
-	NumUids int    `json:"numUids"`
-}
-
 type Region struct {
 	Id    uint64
 	Name  string
@@ -123,6 +110,7 @@ type TestCase struct {
 	user   string
 	role   string
 	result string
+	filter map[string]interface{}
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -480,12 +468,27 @@ func TestFieldFilters(t *testing.T) {
 
 func TestDeleteAuthRule(t *testing.T) {
 	testCases := []TestCase{
-		{name: "user with secret info", user: "user1", role: "admin",
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":1}}`},
-		{name: "user without secret info", user: "user2", role: "admin",
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`},
-		{name: "non existent user", user: "user100", role: "admin",
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`}}
+		{
+			name: "user with secret info",
+			user: "user1",
+			filter: map[string]interface{}{
+				"aSecret": map[string]interface{}{
+					"anyofterms": "Secret data",
+				},
+			},
+			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":1}}`,
+		},
+		{
+			name: "user without secret info",
+			user: "user2",
+			filter: map[string]interface{}{
+				"aSecret": map[string]interface{}{
+					"anyofterms": "Sensitive information",
+				},
+			},
+			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`,
+		},
+	}
 	query := `
 		 mutation deleteUserSecret($filter: UserSecretFilter!){
 		  deleteUserSecret(filter: $filter) {
@@ -495,26 +498,17 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 	`
 
-	var result, data deleteUserResult
-
 	for _, tcase := range testCases {
-		filter := map[string]interface{}{
-			"aSecret": map[string]interface{}{
-				"anyofterms": "Secret data",
-			},
-		}
-
 		getUserParams := &common.GraphQLParams{
 			Headers: map[string][]string{},
 			Query:   query,
 			Variables: map[string]interface{}{
-				"filter": filter,
+				"filter": tcase.filter,
 			},
 		}
 
 		authVars := map[string]interface{}{
 			"USER": tcase.user,
-			"ROLE": tcase.role,
 		}
 		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
 		getUserParams.Headers.Add(metainfo.Header, jwtToken)
@@ -522,13 +516,7 @@ func TestDeleteAuthRule(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal(gqlResponse.Data, &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 	}
@@ -536,39 +524,57 @@ func TestDeleteAuthRule(t *testing.T) {
 
 func TestDeleteDeepAuthRule(t *testing.T) {
 	testCases := []TestCase{
-		{name: "ticket with permission", user: "user1", role: "admin",
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`},
-		{name: "ticket without permission", user: "user2", role: "admin",
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`}}
-	query := `
-	mutation deleteTicket($filter: TicketFilter!) {
-	  deleteTicket(filter: $filter) {
-		msg
-		numUids
-	  }
+		{
+			name: "ticket with only view permission",
+			user: "user3",
+			filter: map[string]interface{}{
+				"title": map[string]interface{}{
+					"anyofterms": "Ticket2",
+				},
+			},
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+		},
+		{
+			name: "ticket with edit permission but not belonging to user",
+			user: "user5",
+			filter: map[string]interface{}{
+				"title": map[string]interface{}{
+					"anyofterms": "Ticket2",
+				},
+			},
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+		},
+		{
+			name: "ticket with edit permission",
+			user: "user1",
+			filter: map[string]interface{}{
+				"title": map[string]interface{}{
+					"anyofterms": "Ticket1",
+				},
+			},
+			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+		},
 	}
+	query := `
+		mutation deleteTicket($filter: TicketFilter!) {
+		  deleteTicket(filter: $filter) {
+			msg
+			numUids
+		  }
+		}
 	`
 
-	var result, data deleteTicketResult
-
 	for _, tcase := range testCases {
-		filter := map[string]interface{}{
-			"title": map[string]interface{}{
-				"anyofterms": "Ticket1",
-			},
-		}
-
 		getUserParams := &common.GraphQLParams{
 			Headers: map[string][]string{},
 			Query:   query,
 			Variables: map[string]interface{}{
-				"filter": filter,
+				"filter": tcase.filter,
 			},
 		}
 
 		authVars := map[string]interface{}{
 			"USER": tcase.user,
-			"ROLE": tcase.role,
 		}
 		jwtToken := testutil.GetSignedToken(t, authVars, metainfo)
 		getUserParams.Headers.Add(metainfo.Header, jwtToken)
@@ -576,13 +582,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal(gqlResponse.Data, &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 	}

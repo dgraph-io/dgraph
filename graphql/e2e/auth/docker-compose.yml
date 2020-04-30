@@ -29,6 +29,7 @@ services:
     ports:
       - 8180:8180
       - 9180:9180
+      - 1234:1234
     labels:
       cluster: test
       service: alpha1
@@ -63,6 +64,7 @@ services:
     ports:
       - 8280:8280
       - 9280:9280
+      - 2345:2345
     labels:
       cluster: admintest
       service: alphaAdmin
