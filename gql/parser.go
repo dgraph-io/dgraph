@@ -1556,11 +1556,11 @@ loop:
 	return nil
 }
 
-// parseIneqArgs will try to parse the arguments inside an array ([]). If the values
+// parseFuncArgs will try to parse the arguments inside an array ([]). If the values
 // are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
 // Returns nil on success while appending arguments to the function Args slice. Otherwise
 // returns an error, which can be a parsing or value error.
-func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
+func parseFuncArgs(it *lex.ItemIterator, g *Function) error {
 	var expectArg, isDollar bool
 
 	expectArg = true
@@ -1764,7 +1764,10 @@ L:
 					err = parseGeoArgs(it, function)
 
 				case IsInequalityFn(function.Name):
-					err = parseIneqArgs(it, function)
+					err = parseFuncArgs(it, function)
+
+				case function.Name == "uid_in":
+					err = parseFuncArgs(it, function)
 
 				default:
 					err = itemInFunc.Errorf("Unexpected character [ while parsing request.")

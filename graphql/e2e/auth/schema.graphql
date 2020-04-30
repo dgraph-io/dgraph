@@ -179,8 +179,9 @@ type Column @auth(
     }"""}
 #     delete: { rule: "false" }
 ) {
+  colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })
-  name: String! @id
+  name: String! @search(by: [hash])
   tickets: [Ticket] @hasInverse(field: onColumn)
 }
 
@@ -241,4 +242,4 @@ type Ticket @auth(
     assignedTo: [User!]
 }
 
-# Authorization auth-header secretkey https://xyz.io/jwt/claims
+# Authorization X-Test-Auth secretkey https://xyz.io/jwt/claims
