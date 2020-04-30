@@ -96,6 +96,18 @@ single page quickstart guide [here]({{< relref "get-started/index.md" >}}).
           </p>
         </div>
       </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-8/index.md">}}">
+              8 - Native Geolocation Features
+            </a>
+          </div>
+          <p class="section-desc">
+            Easily build location-aware apps using native geolocation features
+          </p>
+        </div>
+      </div>
     </div>
   </div>
 </section>

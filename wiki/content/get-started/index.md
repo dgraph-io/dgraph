@@ -27,16 +27,16 @@ that can be associated with the predicates to enable filtering using appropriate
 
 You need at least one Dgraph Zero and one Dgraph Alpha to get started.
 
-{{% notice "tip" %}}
-This is guide is for the powerful query language of Dgraph, GraphQL+-.
-You can find the instructions to get started with GraphQL using Dgraph from
-[graphql.dgraph.io](https://graphql.dgraph.io).
-{{% /notice %}}
-
 **Here's a four-step tutorial to get you up and running.**
 
 This is a quick-start guide to running Dgraph.
 For an interactive walkthrough, take the [tour](https://tour.dgraph.io).
+
+{{% notice "tip" %}}
+This is guide is for the powerful query language of Dgraph, GraphQL+-.
+You can find the instructions to get started with GraphQL from
+[dgraph.io/graphql](https://dgraph.io/graphql).
+{{% /notice %}}
 
 ### Step 1: Run Dgraph
 
