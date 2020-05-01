@@ -18,6 +18,7 @@ package dot
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math/big"
 	"reflect"
 	"testing"
@@ -257,4 +258,57 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	if !bytes.Equal(expectedRoot[:], stateRoot[:]) {
 		t.Fatalf("Fail: got %x expected %x", stateRoot, expectedRoot)
 	}
+}
+
+func TestInitNode_LoadBalances(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genPath := NewTestGenesisAndRuntime(t)
+	require.NotNil(t, genPath)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Core.Authority = false
+	cfg.Init.Genesis = genPath
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	ks := keystore.NewKeystore()
+	require.NotNil(t, ks)
+
+	node, err := NewNode(cfg, ks)
+	require.Nil(t, err)
+
+	if reflect.TypeOf(node) != reflect.TypeOf(&Node{}) {
+		t.Fatalf("failed to return correct type: got %v expected %v", reflect.TypeOf(node), reflect.TypeOf(&Node{}))
+	}
+
+	mgr := node.Services.Get(&state.Service{})
+
+	var stateSrv *state.Service
+	var ok bool
+
+	if stateSrv, ok = mgr.(*state.Service); !ok {
+		t.Fatal("could not find core service")
+	}
+
+	if stateSrv == nil {
+		t.Fatal("core service is nil")
+	}
+
+	kr, _ := keystore.NewKeyring()
+	alice := kr.Alice.Public().Encode()
+	ab := [32]byte{}
+	copy(ab[:], alice)
+
+	bal, err := stateSrv.Storage.GetBalance(ab)
+	require.NoError(t, err)
+
+	genbal := "0x0000000000000001"
+	balbytes, _ := common.HexToBytes(genbal)
+	expected := binary.LittleEndian.Uint64(balbytes)
+
+	require.Equal(t, expected, bal)
 }

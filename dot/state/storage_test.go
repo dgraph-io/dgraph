@@ -53,3 +53,24 @@ func TestLoadCodeHash(t *testing.T) {
 		t.Fatalf("Fail: got %s expected %s", resHash, expectedHash)
 	}
 }
+
+func TestSetAndGetBalance(t *testing.T) {
+	storage := newTestStorageState(t)
+
+	key := [32]byte{1, 2, 3, 4, 5, 6, 7}
+	bal := uint64(99)
+
+	err := storage.SetBalance(key, bal)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := storage.GetBalance(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if res != bal {
+		t.Fatalf("Fail: got %d expected %d", res, bal)
+	}
+}

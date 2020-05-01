@@ -17,6 +17,7 @@
 package state
 
 import (
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -183,4 +184,32 @@ func (s *StorageState) LoadCodeHash() (common.Hash, error) {
 	}
 
 	return common.Blake2bHash(code)
+}
+
+// SetBalance sets the balance for an account with the given public key
+func (s *StorageState) SetBalance(key [32]byte, balance uint64) error {
+	skey, err := common.BalanceKey(key)
+	if err != nil {
+		return err
+	}
+
+	bb := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bb, balance)
+
+	return s.SetStorage(skey, bb)
+}
+
+// GetBalance gets the balance for an account with the given public key
+func (s *StorageState) GetBalance(key [32]byte) (uint64, error) {
+	skey, err := common.BalanceKey(key)
+	if err != nil {
+		return 0, err
+	}
+
+	bal, err := s.GetStorage(skey)
+	if err != nil {
+		return 0, err
+	}
+
+	return binary.LittleEndian.Uint64(bal), nil
 }

@@ -64,6 +64,8 @@ type StorageState interface {
 	GetStorageFromChild([]byte, []byte) ([]byte, error)
 	ClearStorage([]byte) error
 	Entries() map[string][]byte
+	SetBalance(key [32]byte, balance uint64) error
+	GetBalance(key [32]byte) (uint64, error)
 }
 
 // TransactionQueue is the interface for transaction queue methods

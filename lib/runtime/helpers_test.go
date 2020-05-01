@@ -328,7 +328,7 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := rt.ApplyExtrinsic(tx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, []byte{0, 0}, res)
 }
@@ -348,7 +348,7 @@ func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := rt.ApplyExtrinsic(tx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, []byte{0, 0}, res)
 }
@@ -363,13 +363,13 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 	alice := kr.Alice.Public().Encode()
 	bob := kr.Bob.Public().Encode()
 
-	aliceb := [32]byte{}
-	copy(aliceb[:], alice)
+	ab := [32]byte{}
+	copy(ab[:], alice)
 
-	bobb := [32]byte{}
-	copy(bobb[:], bob)
+	bb := [32]byte{}
+	copy(bb[:], bob)
 
-	transfer := extrinsic.NewTransfer(aliceb, bobb, 1000, 0)
+	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
 	ext, err := transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
 	require.NoError(t, err)
 	tx, err := ext.Encode()
@@ -379,7 +379,48 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 	require.NoError(t, err)
 
 	res, err := rt.ApplyExtrinsic(tx)
-	require.Nil(t, err)
+	require.NoError(t, err)
 
 	require.Equal(t, []byte{1, 2, 0, 1}, res)
+}
+
+func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
+	rt := NewTestRuntime(t, POLKADOT_RUNTIME_c768a7e4c70e)
+
+	header := &types.Header{
+		Number: big.NewInt(77),
+	}
+
+	alice := kr.Alice.Public().Encode()
+	bob := kr.Bob.Public().Encode()
+
+	ab := [32]byte{}
+	copy(ab[:], alice)
+
+	bb := [32]byte{}
+	copy(bb[:], bob)
+
+	rt.storage.SetBalance(ab, 2000)
+
+	transfer := extrinsic.NewTransfer(ab, bb, 1000, 0)
+	ext, err := transfer.AsSignedExtrinsic(kr.Alice.Private().(*sr25519.PrivateKey))
+	require.NoError(t, err)
+	tx, err := ext.Encode()
+	require.NoError(t, err)
+
+	err = rt.InitializeBlock(header)
+	require.NoError(t, err)
+
+	res, err := rt.ApplyExtrinsic(tx)
+	require.NoError(t, err)
+	require.Equal(t, []byte{0, 0}, res)
+
+	// TODO: not sure if alice's balance is getting decremented properly, seems like it's always getting set to the transfer amount
+	bal, err := rt.storage.GetBalance(ab)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1000), bal)
+
+	bal, err = rt.storage.GetBalance(bb)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1000), bal)
 }
