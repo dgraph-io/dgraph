@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/hex"
 	"math"
 	"strconv"
@@ -31,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -244,6 +246,40 @@ func unmarshalOrCopy(plist *pb.PostingList, item *badger.Item) error {
 	})
 }
 
+func generateCacheKey(key []byte, version uint64) []byte {
+	if len(key) == 0 {
+		return nil
+	}
+
+	cacheKey := make([]byte, len(key)+8)
+	copy(cacheKey, key)
+	binary.BigEndian.PutUint64(cacheKey[len(key):], version)
+	return cacheKey
+}
+
+func NewPlCache() error {
+	var err error
+	plCache, err = ristretto.NewCache(&ristretto.Config{
+		NumCounters: 200e6,
+		MaxCost:     int64(Config.AllottedMemory * 1024 * 1024),
+		BufferItems: 64,
+		Metrics:     true,
+		Cost: func(val interface{}) int64 {
+			pl, ok := val.(*pb.PostingList)
+			if !ok {
+				return int64(0)
+			}
+			return int64(calculatePostingListSize(pl))
+		},
+	})
+	return err
+}
+
+// ClearCache will clear the entire list cache.
+func ClearCache() {
+	plCache.Clear()
+}
+
 // ReadPostingList constructs the posting list from the disk using the passed iterator.
 // Use forward iterator with allversions enabled in iter options.
 // key would now be owned by the posting list. So, ensure that it isn't reused elsewhere.
@@ -295,14 +331,22 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			l.minTs = item.Version()
 			return l, nil
 		case BitCompletePosting:
-			if pl := plCache.Get(key, item.Version()); pl != nil {
+			var pl *pb.PostingList
+			if plCache != nil {
+				val, ok := plCache.Get(generateCacheKey(key, item.Version()))
+				if ok {
+					pl, ok = val.(*pb.PostingList)
+				}
+			}
+
+			if pl != nil {
 				l.plist = pl
 			} else if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
-			} else {
+			} else if plCache != nil {
 				// Put the value in the cache because it was not previously in it and
 				// was unmarshalled correctly.
-				plCache.Set(key, item.Version(), l.plist)
+				plCache.Set(generateCacheKey(key, item.Version()), l.plist, 0)
 			}
 			l.minTs = item.Version()
 

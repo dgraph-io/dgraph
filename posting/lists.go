@@ -38,6 +38,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto"
 )
 
 const (
@@ -131,15 +132,13 @@ func updateMemoryMetrics(lc *y.Closer) {
 var (
 	pstore  *badger.DB
 	closer  *y.Closer
-	plCache *PlCache
+	plCache *ristretto.Cache
 )
 
 // Init initializes the posting lists package, the in memory and dirty list hash.
 func Init(ps *badger.DB) {
 	pstore = ps
-	var err error
-	plCache, err = NewPlCache()
-	if err != nil {
+	if err := NewPlCache(); err != nil {
 		glog.Warningf("Error while creating posting list cache: %v", err)
 	}
 	closer = y.NewCloser(1)
