@@ -92,6 +92,9 @@ func (w *DiskStorage) processIndexRange() {
 	defer w.Closer.Done()
 
 	processSingleRange := func(r indexRange) {
+		if r.from == r.until {
+			return
+		}
 		batch := w.db.NewWriteBatch()
 		if err := w.deleteRange(batch, r.from, r.until); err != nil {
 			glog.Errorf("deleteRange failed with error: %v, from: %d, until: %d\n",
