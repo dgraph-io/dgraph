@@ -18,60 +18,29 @@ package posting
 
 import (
 	"encoding/binary"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 
 	"github.com/dgraph-io/ristretto"
-	"github.com/dgraph-io/ristretto/z"
-	"github.com/golang/protobuf/proto"
 )
 
 const (
 	numShards = 16
 )
 
-func generateKey(key []byte, ts uint64) []byte {
+func generateKey(key []byte, version uint64) []byte {
 	if len(key) == 0 {
 		return nil
 	}
 
-	cacheKey := make([]byte, len(key) + 8)
+	cacheKey := make([]byte, len(key)+8)
 	copy(cacheKey, key)
-	binary.BigEndian.PutUint64(cacheKey[len(key):], ts)
+	binary.BigEndian.PutUint64(cacheKey[len(key):], version)
 	return cacheKey
 }
 
-func copyList(l *List) *List {
-	if l == nil {
-		return nil
-	}
-
-	// No need to clone the immutable layer or the key since mutations will not modify it.
-	lCopy := &List{
-		key:   l.key,
-		maxTs: l.maxTs,
-		minTs: l.minTs,
-		plist: l.plist,
-	}
-
-	if l.mutationMap != nil {
-		lCopy.mutationMap = make(map[uint64]*pb.PostingList, len(l.mutationMap))
-		for ts, pl := range l.mutationMap {
-			lCopy.mutationMap[ts] = proto.Clone(pl).(*pb.PostingList)
-		}
-	}
-	return lCopy
-}
-
-type tsMap struct {
-	sync.RWMutex
-	m map[uint64]uint64
-}
-
 type PlCache struct {
-	tsMaps []*tsMap
-	cache  *ristretto.Cache
+	cache *ristretto.Cache
 }
 
 func NewPlCache() (*PlCache, error) {
@@ -84,19 +53,6 @@ func (c *PlCache) init() error {
 		return nil
 	}
 
-	c.tsMaps = make([]*tsMap, numShards)
-	for i := range c.tsMaps {
-		c.tsMaps[i] = &tsMap{
-			m: make(map[uint64]uint64),
-		}
-	}
-
-	if c.cache != nil {
-		// Clear the cache if it already exists instead of creating a new one.
-		c.cache.Clear()
-		return nil
-	}
-
 	var err error
 	c.cache, err = ristretto.NewCache(&ristretto.Config{
 		NumCounters: 200e6,
@@ -104,118 +60,50 @@ func (c *PlCache) init() error {
 		BufferItems: 64,
 		Metrics:     true,
 		Cost: func(val interface{}) int64 {
-			l, ok := val.(*List)
+			pl, ok := val.(*pb.PostingList)
 			if !ok {
 				return int64(0)
 			}
-			return int64(l.DeepSize())
+			return int64(calculatePostingListSize(pl))
 		},
 	})
 	return err
 }
 
-func (c *PlCache) getTs(hash uint64) (uint64, bool) {
-	shard := c.tsMaps[hash%numShards]
-	shard.RLock()
-	defer shard.RUnlock()
-	ts, ok := shard.m[hash]
-	return ts, ok
-}
-
-func (c *PlCache) updateTs(hash uint64, newTs uint64) {
-	shard := c.tsMaps[hash%numShards]
-	shard.Lock()
-	defer shard.Unlock()
-
-	// Return if here's already a value for a higher timestamp.
-	if newTs < shard.m[hash] {
-		return
-	}
-	shard.m[hash] = newTs
-}
-
-func (c *PlCache) delTs(hash uint64) uint64 {
-	shard := c.tsMaps[hash%numShards]
-	shard.Lock()
-	defer shard.Unlock()
-
-	if ts, ok := shard.m[hash]; ok {
-		delete(shard.m, hash)
-		return ts
-	}
-	return 0
-}
-
-func (c *PlCache) Get(key []byte, ts uint64) *List {
-	if c == nil || len(key) == 0 || ts == 0 {
+func (c *PlCache) Get(key []byte, version uint64) *pb.PostingList {
+	if c == nil || len(key) == 0 {
 		return nil
 	}
 
-	maxTs, ok := c.getTs(z.MemHash(key))
-	if !ok {
-		return nil
-	}
-	if ts < maxTs {
-		return nil
-	}
-
-	cacheKey := generateKey(key, ts)
+	cacheKey := generateKey(key, version)
 	cachedVal, ok := c.cache.Get(cacheKey)
 	if !ok {
 		return nil
 	}
-	l, ok := cachedVal.(*List)
+	pl, ok := cachedVal.(*pb.PostingList)
 	if !ok {
 		return nil
 	}
 
-	return copyList(l)
+	return pl
 }
 
-func (c *PlCache) Set(key []byte, ts uint64, pl *List) {
-	if c == nil || len(key) == 0 || ts == 0 || pl == nil {
+func (c *PlCache) Set(key []byte, version uint64, pl *pb.PostingList) {
+	if c == nil || len(key) == 0 || version == 0 || pl == nil {
 		return
 	}
 
-	hash := z.MemHash(key)
-	prevTs, _ := c.getTs(hash)
-	if ts <= prevTs {
-		return
-	}
-
-	_ = c.cache.Set(generateKey(key, ts), copyList(pl), 0)
-	c.cache.Del(generateKey(key, prevTs))
-	c.updateTs(hash, ts)
-}
-
-func (c *PlCache) Del(key []byte) {
-	if c == nil || len(key) == 0 {
-		return
-	}
-
-	prevTs := c.delTs(z.MemHash(key))
-	c.cache.Del(generateKey(key, prevTs))
+	_ = c.cache.Set(generateKey(key, version), pl, 0)
 }
 
 func (c *PlCache) Clear() {
 	if c == nil {
 		return
 	}
-	c.init()
+	c.cache.Clear()
 }
 
 // ClearCache will clear the entire list cache.
 func ClearCache() {
 	plCache.Clear()
-}
-
-// RemoveCachedKeys will delete the cached list by this transaction.
-func (txn *Txn) RemoveCachedKeys() {
-	if txn == nil || txn.cache == nil {
-		return
-	}
-
-	for key := range txn.cache.deltas {
-		plCache.Del([]byte(key))
-	}
 }

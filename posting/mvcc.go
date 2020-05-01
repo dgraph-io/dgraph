@@ -81,9 +81,6 @@ func (ir *incrRollupi) rollUpKey(writer *TxnWriter, key []byte) error {
 		}
 	}
 
-	for _, kv := range kvs {
-		plCache.Del(kv.Key)
-	}
 	return writer.Write(&bpb.KVList{Kv: kvs})
 }
 
@@ -298,8 +295,14 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 			l.minTs = item.Version()
 			return l, nil
 		case BitCompletePosting:
-			if err := unmarshalOrCopy(l.plist, item); err != nil {
+			if pl := plCache.Get(key, item.Version()); pl != nil {
+				l.plist = pl
+			} else if err := unmarshalOrCopy(l.plist, item); err != nil {
 				return nil, err
+			} else {
+				// Put the value in the cache because it was not previously in it and
+				// was unmarshalled correctly.
+				plCache.Set(key, item.Version(), l.plist)
 			}
 			l.minTs = item.Version()
 
@@ -342,10 +345,6 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 }
 
 func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
-	if l := plCache.Get(key, readTs); l != nil {
-		return l, nil
-	}
-
 	txn := pstore.NewTransactionAt(readTs, false)
 	defer txn.Discard()
 
@@ -362,6 +361,5 @@ func getNew(key []byte, pstore *badger.DB, readTs uint64) (*List, error) {
 	if err != nil {
 		return nil, err
 	}
-	plCache.Set(key, readTs, l)
 	return l, nil
 }
