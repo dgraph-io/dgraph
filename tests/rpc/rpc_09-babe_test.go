@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 	"time"
 
@@ -61,7 +62,8 @@ func TestBabeRPC(t *testing.T) {
 			respBody, err := PostRPC(t, test.method, "http://"+GOSSAMER_NODE_HOST+":"+currentPort, "{}")
 			require.Nil(t, err)
 
-			target := DecodeRPC(t, respBody, test.method)
+			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
+			DecodeRPC(t, respBody, target)
 
 			require.NotNil(t, target)
 

@@ -126,9 +126,10 @@ func CheckNodeStarted(t *testing.T, gossamerHost string) error {
 		return err
 	}
 
-	target := DecodeRPC(t, respBody, method)
+	target := new(modules.SystemHealthResponse)
+	DecodeRPC(t, respBody, target)
 
-	if !target.(*modules.SystemHealthResponse).Health.ShouldHavePeers {
+	if !target.Health.ShouldHavePeers {
 		return fmt.Errorf("no peers")
 	}
 

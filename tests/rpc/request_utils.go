@@ -24,7 +24,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/ChainSafe/gossamer/dot/rpc/modules"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,7 +60,7 @@ func PostRPC(t *testing.T, method, host, params string) ([]byte, error) {
 }
 
 // DecodeRPC will decode []body into target interface
-func DecodeRPC(t *testing.T, body []byte, targetType string) interface{} {
+func DecodeRPC(t *testing.T, body []byte, target interface{}) {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 
@@ -77,22 +76,6 @@ func DecodeRPC(t *testing.T, body []byte, targetType string) interface{} {
 	decoder = json.NewDecoder(bytes.NewReader(response.Result))
 	decoder.DisallowUnknownFields()
 
-	var target interface{}
-
-	switch targetType {
-	case "system_health":
-		target = new(modules.SystemHealthResponse)
-	case "system_networkState":
-		target = new(modules.SystemNetworkStateResponse)
-	case "system_peers":
-		target = new(modules.SystemPeersResponse)
-	case "chain_getHeader":
-		target = new(modules.ChainBlockHeaderResponse)
-	}
-
 	err = decoder.Decode(&target)
 	require.Nil(t, err, "respBody", string(body))
-
-	return target
-
 }

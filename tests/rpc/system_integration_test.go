@@ -17,6 +17,7 @@
 package rpc
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
@@ -74,7 +75,8 @@ func TestStableNetworkRPC(t *testing.T) {
 			respBody, err := PostRPC(t, test.method, GOSSAMER_NODE_HOST, "{}")
 			require.Nil(t, err)
 
-			target := DecodeRPC(t, respBody, test.method)
+			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
+			DecodeRPC(t, respBody, target)
 
 			log.Debug("Will assert payload", "target", target)
 			switch v := target.(type) {
