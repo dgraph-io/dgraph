@@ -100,6 +100,84 @@ const adminTypes = `
 		response: Response
 	}
 
+	input ListBackupsInput {
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""
+		sessionToken: String
+
+		"""
+		Whether the destination doesn't require credentials (e.g. S3 public bucket).
+		"""
+		anonymous: Boolean
+
+	}
+
+	type BackupGroup {
+		"""
+		The ID of the cluster group.
+		"""
+		groupId: Int
+
+		"""
+		List of predicates assigned to the group.
+		"""
+		predicates: [String]
+	}
+
+	type Manifest {
+		"""
+		Unique ID for the backup series.
+		"""
+		backupId: String
+
+		"""
+		Number of this backup within the backup series. The full backup always has a value of one.
+		"""
+		backupNum: Int
+
+		"""
+		Whether this backup was encrypted.
+		"""
+		encrypted: Boolean
+
+		"""
+		List of groups and the predicates they store in this backup.
+		"""
+		groups: [BackupGroup]
+
+		"""
+		Path to the manifest file.
+		"""
+		path: String
+
+		"""
+		The timestamp at which this backup was taken. The next incremental backup will
+		start from this timestamp.
+		"""
+		since: Int
+
+		"""
+		The type of backup, either full or incremental.
+		"""
+		type: String
+	}
+	
 	type LoginResponse {
 
 		"""
@@ -348,4 +426,9 @@ const adminQueries = `
 	getCurrentUser: User
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`
+	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+
+	"""
+	Get the information about the backups at a given location.
+	"""
+	listBackups(input: ListBackupsInput!) : [Manifest]`
