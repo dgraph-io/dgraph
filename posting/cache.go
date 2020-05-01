@@ -17,6 +17,7 @@
 package posting
 
 import (
+	"encoding/binary"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -31,7 +32,14 @@ const (
 )
 
 func generateKey(key []byte, ts uint64) []byte {
-	return nil
+	if len(key) == 0 {
+		return nil
+	}
+
+	cacheKey := make([]byte, len(key) + 8)
+	copy(cacheKey, key)
+	binary.BigEndian.PutUint64(cacheKey[len(key):], ts)
+	return cacheKey
 }
 
 func copyList(l *List) *List {
