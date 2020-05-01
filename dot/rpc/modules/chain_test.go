@@ -97,10 +97,10 @@ func TestChainGetHeader_Genesis(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         big.NewInt(0),
+		Number:         "0x0",
 		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		Digest:         [][]byte{},
+		Digest:         ChainBlockHeaderDigest{},
 	}
 	res := &ChainBlockHeaderResponse{}
 	req := ChainHashRequest("0xc375f478c6887dbcc2d1a4dbcc25f330b3df419325ece49cddfe5a0555663b7e")
@@ -115,10 +115,10 @@ func TestChainGetHeader_Latest(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
 		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
-		Number:         big.NewInt(1),
+		Number:         "0x01",
 		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
 		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Digest:         [][]byte{},
+		Digest:         ChainBlockHeaderDigest{},
 	}
 	res := &ChainBlockHeaderResponse{}
 	req := ChainHashRequest("") // empty request should return latest hash
@@ -153,10 +153,10 @@ func TestChainGetBlock_Genesis(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         big.NewInt(0),
+		Number:         "0x0",
 		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
-		Digest:         [][]byte{},
+		Digest:         ChainBlockHeaderDigest{},
 	}
 	expected := &ChainBlockResponse{
 		Block: ChainBlock{
@@ -178,10 +178,10 @@ func TestChainGetBlock_Latest(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
 		ParentHash:     "0xdbfdd87392d9ee52f499610582737daceecf83dc3ad7946fcadeb01c86e1ef75",
-		Number:         big.NewInt(1),
+		Number:         "0x01",
 		StateRoot:      "0x0000000000000000000000000000000000000000000000000000000000000000",
 		ExtrinsicsRoot: "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Digest:         [][]byte{},
+		Digest:         ChainBlockHeaderDigest{},
 	}
 	expected := &ChainBlockResponse{
 		Block: ChainBlock{

@@ -17,6 +17,7 @@
 package modules
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/big"
 	"net/http"
@@ -45,11 +46,16 @@ type ChainBlock struct {
 
 // ChainBlockHeaderResponse struct
 type ChainBlockHeaderResponse struct {
-	ParentHash     string   `json:"parentHash"`
-	Number         *big.Int `json:"number"`
-	StateRoot      string   `json:"stateRoot"`
-	ExtrinsicsRoot string   `json:"extrinsicsRoot"`
-	Digest         [][]byte `json:"digest"`
+	ParentHash     string                 `json:"parentHash"`
+	Number         string                 `json:"number"`
+	StateRoot      string                 `json:"stateRoot"`
+	ExtrinsicsRoot string                 `json:"extrinsicsRoot"`
+	Digest         ChainBlockHeaderDigest `json:"digest"`
+}
+
+// ChainBlockHeaderDigest struct to hold digest logs
+type ChainBlockHeaderDigest struct {
+	Logs []string `json:"logs"`
 }
 
 // ChainHashResponse interface to handle response
@@ -81,10 +87,16 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 	}
 
 	res.Block.Header.ParentHash = block.Header.ParentHash.String()
-	res.Block.Header.Number = block.Header.Number
+	if block.Header.Number.Int64() == 0 {
+		res.Block.Header.Number = "0x0"
+	} else {
+		res.Block.Header.Number = "0x" + hex.EncodeToString(block.Header.Number.Bytes())
+	}
 	res.Block.Header.StateRoot = block.Header.StateRoot.String()
 	res.Block.Header.ExtrinsicsRoot = block.Header.ExtrinsicsRoot.String()
-	res.Block.Header.Digest = block.Header.Digest // TODO: figure out how to get Digest to be a json object (Issue #744)
+	for _, item := range block.Header.Digest {
+		res.Block.Header.Digest.Logs = append(res.Block.Header.Digest.Logs, "0x"+hex.EncodeToString(item))
+	}
 	if *block.Body != nil {
 		ext, err := block.Body.AsExtrinsics()
 		if err != nil {
@@ -139,11 +151,16 @@ func (cm *ChainModule) GetHeader(r *http.Request, req *ChainHashRequest, res *Ch
 	}
 
 	res.ParentHash = header.ParentHash.String()
-	res.Number = header.Number
+	if header.Number.Int64() == 0 {
+		res.Number = "0x0"
+	} else {
+		res.Number = "0x" + hex.EncodeToString(header.Number.Bytes())
+	}
 	res.StateRoot = header.StateRoot.String()
 	res.ExtrinsicsRoot = header.ExtrinsicsRoot.String()
-	res.Digest = header.Digest // TODO: figure out how to get Digest to be a json object (Issue #744)
-
+	for _, item := range header.Digest {
+		res.Digest.Logs = append(res.Digest.Logs, "0x"+hex.EncodeToString(item))
+	}
 	return nil
 }
 

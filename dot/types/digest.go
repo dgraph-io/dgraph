@@ -43,16 +43,16 @@ func (h ConsensusEngineID) ToBytes() []byte {
 var BabeEngineID = ConsensusEngineID{'B', 'A', 'B', 'E'}
 
 // ChangesTrieRootDigestType is the byte representation of ChangesTrieRootDigest
-var ChangesTrieRootDigestType = byte(0)
+var ChangesTrieRootDigestType = byte(2)
 
 // PreRuntimeDigestType is the byte representation of PreRuntimeDigest
-var PreRuntimeDigestType = byte(1)
+var PreRuntimeDigestType = byte(6)
 
 // ConsensusDigestType is the byte representation of ConsensusDigest
-var ConsensusDigestType = byte(2)
+var ConsensusDigestType = byte(4)
 
 // SealDigestType is the byte representation of SealDigest
-var SealDigestType = byte(4)
+var SealDigestType = byte(5)
 
 // DecodeDigestItem will decode byte array to DigestItem
 func DecodeDigestItem(in []byte) (DigestItem, error) {

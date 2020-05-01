@@ -92,7 +92,7 @@ func TestStressSync(t *testing.T) {
 
 		//TODO: #802 use the name of the authority here, this requires a map implementation (map process/pid/authority)
 		err = db.Write("blocks_"+strconv.Itoa(v.Process.Pid),
-			chainBlockResponse.Number.String(), chainBlockResponse)
+			chainBlockResponse.Number, chainBlockResponse)
 		require.Nil(t, err)
 
 	}
