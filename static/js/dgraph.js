@@ -66,7 +66,7 @@ function getCurrentVersion(pathname) {
     return candidate;
   }
 
-  if (/v\d\.\d\.\d/.test(candidate)) {
+  if (/v\d+\.\d+\.\d+/.test(candidate)) {
     return candidate;
   }
 
