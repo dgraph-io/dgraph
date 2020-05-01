@@ -244,7 +244,8 @@ func run() {
 	// Apply enterprise license if one was given.
 	if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
 		if err := st.applyLicenseFile(license); err != nil {
-			glog.Warningf("Cannot apply enterprise license file %s", license)
+			glog.Warningf("Applying enterprise license file %s failed with error: %s", license,
+				err.Error())
 		}
 	}
 
