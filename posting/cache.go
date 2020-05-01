@@ -24,10 +24,6 @@ import (
 	"github.com/dgraph-io/ristretto"
 )
 
-const (
-	numShards = 16
-)
-
 func generateKey(key []byte, version uint64) []byte {
 	if len(key) == 0 {
 		return nil
