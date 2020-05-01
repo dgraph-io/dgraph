@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"math/big"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
@@ -72,9 +73,14 @@ func (e *AuthoritiesChangeExt) Type() int {
 
 // Encode returns the SCALE encoding of the AuthoritiesChangeExt
 func (e *AuthoritiesChangeExt) Encode() ([]byte, error) {
-	enc, err := scale.Encode(e.authorityIDs)
+	// TODO: scale should work with arrays of [32]byte
+	enc, err := scale.Encode(big.NewInt(int64(len(e.authorityIDs))))
 	if err != nil {
 		return nil, err
+	}
+
+	for _, id := range e.authorityIDs {
+		enc = append(enc, id[:]...)
 	}
 
 	return append([]byte{AuthoritiesChangeType}, enc...), nil

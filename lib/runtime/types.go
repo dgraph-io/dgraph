@@ -78,22 +78,22 @@ func (v *VersionAPI) Decode(in []byte) error {
 }
 
 var (
-	// CoreVersion returns the string representing
+	// CoreVersion is the runtime API call Core_version
 	CoreVersion = "Core_version"
-	// CoreInitializeBlock returns the string representing
+	// CoreInitializeBlock is the runtime API call Core_initialize_block
 	CoreInitializeBlock = "Core_initialize_block"
-	// CoreExecuteBlock returns the string representing
+	// CoreExecuteBlock is the runtime API call Core_execute_block
 	CoreExecuteBlock = "Core_execute_block"
-	// TaggedTransactionQueueValidateTransaction returns the string representing
+	// TaggedTransactionQueueValidateTransaction is the runtime API call TaggedTransactionQueue_validate_transaction
 	TaggedTransactionQueueValidateTransaction = "TaggedTransactionQueue_validate_transaction"
-	// AuraAPIAuthorities represents the AuraApi_authorities call
+	// AuraAPIAuthorities is the runtime API call AuraApi_authorities
 	AuraAPIAuthorities = "AuraApi_authorities" // TODO: deprecated with newest runtime, should be Grandpa_authorities
-	// BabeAPIConfiguration returns the string representing
+	// BabeAPIConfiguration is the runtime API call BabeApi_configuration
 	BabeAPIConfiguration = "BabeApi_configuration"
-	// BlockBuilderInherentExtrinsics returns the string representing
+	// BlockBuilderInherentExtrinsics is the runtime API call BlockBuilder_inherent_extrinsics
 	BlockBuilderInherentExtrinsics = "BlockBuilder_inherent_extrinsics"
-	// BlockBuilderApplyExtrinsic returns the string representing
+	// BlockBuilderApplyExtrinsic is the runtime API call BlockBuilder_apply_extrinsic
 	BlockBuilderApplyExtrinsic = "BlockBuilder_apply_extrinsic"
-	// BlockBuilderFinalizeBlock returns the string representing
+	// BlockBuilderFinalizeBlock is the runtime API call BlockBuilder_finalize_block
 	BlockBuilderFinalizeBlock = "BlockBuilder_finalize_block"
 )

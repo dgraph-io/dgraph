@@ -139,12 +139,12 @@ func TestBuildBlock_ok(t *testing.T) {
 
 	block, slot := createTestBlock(t, babesession, exts)
 
-	stateRoot, err := common.HexToHash("0x31ce5e74d7141520abc11b8a68f884cb1d01b5476a6376a659d93a199c4884e0")
+	stateRoot, err := common.HexToHash("0xd28e7268fa92529641dfae510c471639ec62f310cc30579fca68da0ea72911da")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	extrinsicsRoot, err := common.HexToHash("0xd88e048eda17aaefc427c832ea1208508d67a3e96527be0995db742b5cd91a61")
+	extrinsicsRoot, err := common.HexToHash("0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314")
 	if err != nil {
 		t.Fatal(err)
 	}

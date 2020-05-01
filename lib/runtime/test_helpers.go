@@ -64,7 +64,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 const (
 	POLKADOT_RUNTIME_c768a7e4c70e     = "polkadot_runtime"
 	POLKADOT_RUNTIME_FP_c768a7e4c70e  = "substrate_test_runtime.compact.wasm"
-	POLKADOT_RUNTIME_URL_c768a7e4c70e = "https://github.com/noot/substrate/blob/add-blob/core/test-runtime/wasm/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
+	POLKADOT_RUNTIME_URL_c768a7e4c70e = "https://github.com/noot/substrate/blob/add-blob-042920/target/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
 
 	TEST_RUNTIME  = "test_runtime"
 	TESTS_FP      = "test_wasm.wasm"
