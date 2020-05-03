@@ -22,13 +22,12 @@ import (
 	"io/ioutil"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
-
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 	_ "github.com/vektah/gqlparser/v2/validator/rules" // make gql validator init() all rules
@@ -146,8 +145,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := &authorization.AuthMeta{}
-	metainfo.Parse(strSchema)
+	metainfo := authorization.Parse(strSchema)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 
@@ -293,8 +291,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := &authorization.AuthMeta{}
-	metainfo.Parse(strSchema)
+	metainfo := authorization.Parse(strSchema)
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -346,8 +343,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := &authorization.AuthMeta{}
-	metainfo.Parse(strSchema)
+	metainfo := authorization.Parse(strSchema)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -432,12 +428,11 @@ func TestAuthAdd(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	metainfo := &authorization.AuthMeta{}
-	metainfo.Parse(string(sch))
+	metainfo := authorization.Parse(string(sch))
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, metainfo)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, &metainfo)
 		})
 	}
 }
@@ -460,12 +455,11 @@ func TestAuthUpdate(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	metainfo := &authorization.AuthMeta{}
-	metainfo.Parse(string(sch))
+	metainfo := authorization.Parse(string(sch))
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, metainfo)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, &metainfo)
 		})
 	}
 }

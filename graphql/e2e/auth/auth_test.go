@@ -23,9 +23,8 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
-	"github.com/dgraph-io/dgraph/testutil"
-
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -36,7 +35,7 @@ const (
 )
 
 var (
-	metainfo = &authorization.AuthMeta{}
+	metainfo authorization.AuthMeta
 )
 
 type User struct {
@@ -300,8 +299,7 @@ func TestDeepFilter(t *testing.T) {
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
-			x := string(gqlResponse.Data)
-			require.JSONEq(t, x, tcase.result)
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
 }
@@ -602,7 +600,6 @@ func TestDeleteAuthRule(t *testing.T) {
 }
 
 func TestDeleteDeepAuthRule(t *testing.T) {
-	t.Skip()
 	testCases := []TestCase{
 		{
 			name: "ticket with only view permission",
@@ -679,7 +676,7 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	metainfo.Parse(string(schema))
+	metainfo = authorization.Parse(string(schema))
 
 	jsonFile := "test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)

@@ -36,7 +36,7 @@ const (
 )
 
 var (
-	metainfo = &AuthMeta{}
+	metainfo AuthMeta
 )
 
 type AuthMeta struct {
@@ -45,10 +45,11 @@ type AuthMeta struct {
 	Namespace string
 }
 
-func (m *AuthMeta) Parse(schema string) {
+func Parse(schema string) AuthMeta {
+	var meta AuthMeta
 	poundIdx := strings.LastIndex(schema, "#")
 	if poundIdx == -1 {
-		return
+		return meta
 	}
 	lastComment := schema[poundIdx:]
 	length := strings.Index(lastComment, "\n")
@@ -58,15 +59,16 @@ func (m *AuthMeta) Parse(schema string) {
 
 	authMeta := strings.Split(lastComment, " ")
 	if len(authMeta) != 5 || authMeta[1] != "Authorization" {
-		return
+		return meta
 	}
-	m.Header = authMeta[2]
-	m.PublicKey = authMeta[3]
-	m.Namespace = authMeta[4]
+	meta.Header = authMeta[2]
+	meta.PublicKey = authMeta[3]
+	meta.Namespace = authMeta[4]
+	return meta
 }
 
 func ParseAuthMeta(schema string) {
-	metainfo.Parse(schema)
+	metainfo = Parse(schema)
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -122,8 +124,7 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
-	x, err := validateToken(jwtToken[0])
-	return x, err
+	return validateToken(jwtToken[0])
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {

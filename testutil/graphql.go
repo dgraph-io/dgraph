@@ -92,7 +92,11 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 
 	// decode it back to get a map
 	var a interface{}
-	json.Unmarshal(m, &a)
+	err = json.Unmarshal(m, &a)
+	if err != nil {
+		return nil, err
+	}
+
 	b, ok := a.(map[string]interface{})
 	if !ok {
 		return nil, errors.Errorf("error while marshalling custom claim json.")
