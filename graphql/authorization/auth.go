@@ -20,12 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc/metadata"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/pkg/errors"
+	"google.golang.org/grpc/metadata"
 )
 
 type ctxKey string
@@ -121,8 +122,8 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
-
-	return validateToken(jwtToken[0])
+	x, err := validateToken(jwtToken[0])
+	return x, err
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {
