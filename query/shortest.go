@@ -19,6 +19,8 @@ package query
 import (
 	"container/heap"
 	"context"
+	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
 
@@ -149,11 +151,15 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 	sg.SrcUIDs = &pb.List{Uids: in}
 	sg.uidMatrix = []*pb.List{{Uids: in}}
 	sg.DestUIDs = sg.SrcUIDs
-
+	fmt.Println("Expand out graph:")
+	b, err := json.MarshalIndent(sg, "", "  ")
+	fmt.Println(string(b))
 	for _, child := range sg.Children {
 		child.SrcUIDs = sg.DestUIDs
 		exec = append(exec, child)
 	}
+	fmt.Println("Children: ", sg.Children)
+	fmt.Printf("\n\n")
 	dummy := &SubGraph{}
 	for {
 		isNext := <-next
@@ -289,7 +295,9 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
-
+	fmt.Println("Run K shortestPath Subgraph: ")
+	b, err := json.MarshalIndent(sg, "", "  ")
+	fmt.Println(string(b) + "\n")
 	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
@@ -325,6 +333,8 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var stopExpansion bool
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
+		fmt.Printf("Item is: %+v", item)
+		fmt.Printf("\n\n")
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
 			if item.cost < minWeight {
@@ -450,6 +460,10 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // 23     return dist[], prev[]
 func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
+	fmt.Println("shortestPath Subgraph: ")
+	b, err := json.MarshalIndent(sg, "", "  ")
+	fmt.Println(string(b))
+
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
