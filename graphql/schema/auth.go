@@ -59,29 +59,6 @@ const (
 	Negative
 )
 
-func (r *RuleNode) IsRBAC() bool {
-	for _, i := range r.Or {
-		if i.IsRBAC() {
-			return true
-		}
-	}
-	for _, i := range r.And {
-		if i.IsRBAC() {
-			return true
-		}
-	}
-
-	if r.Not != nil && r.Not.IsRBAC() {
-		return true
-	}
-
-	if r.RBACRule != nil {
-		return true
-	}
-
-	return false
-}
-
 func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	if rq.Operator == "eq" {
 		if av[rq.Variable] == rq.Operand {
@@ -91,21 +68,17 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	return Negative
 }
 
-func (node *RuleNode) GetRBACRules(av map[string]interface{}) RuleResult {
+func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 	if node == nil {
 		return Uncertain
 	}
 
 	hasUncertain := false
 	for _, rule := range node.Or {
-		if rule.IsRBAC() {
-			val := rule.GetRBACRules(av)
-			if val == Positive {
-				return Positive
-			} else if val == Uncertain {
-				hasUncertain = true
-			}
-		} else {
+		val := rule.EvaluateRBACRules(av)
+		if val == Positive {
+			return Positive
+		} else if val == Uncertain {
 			hasUncertain = true
 		}
 	}
@@ -115,14 +88,10 @@ func (node *RuleNode) GetRBACRules(av map[string]interface{}) RuleResult {
 	}
 
 	for _, rule := range node.And {
-		if rule.IsRBAC() {
-			val := rule.GetRBACRules(av)
-			if val == Negative {
-				return Negative
-			} else if val == Uncertain {
-				hasUncertain = true
-			}
-		} else {
+		val := rule.EvaluateRBACRules(av)
+		if val == Negative {
+			return Negative
+		} else if val == Uncertain {
 			hasUncertain = true
 		}
 	}
@@ -131,8 +100,8 @@ func (node *RuleNode) GetRBACRules(av map[string]interface{}) RuleResult {
 		return Positive
 	}
 
-	if node.Not != nil && node.Not.IsRBAC() {
-		switch node.Not.GetRBACRules(av) {
+	if node.Not != nil && node.Not.RBACRule != nil {
+		switch node.Not.EvaluateRBACRules(av) {
 		case Uncertain:
 			return Uncertain
 		case Positive:

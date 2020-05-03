@@ -108,6 +108,16 @@ type Log @auth(
   logs: String
 }
 
+type ComplexLog @auth(
+     query: { and : [
+      { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
+     ]}
+) {
+  id: ID!
+  logs: String
+}
+
 type Project @auth(
      query: { or: [
          { rule: """query($USER: String!) {

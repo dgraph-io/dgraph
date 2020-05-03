@@ -52,7 +52,7 @@
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
-- name: "Auth with top level AND rbac ADMIN"
+- name: "Auth with top level AND rbac true"
   gqlquery: |
     query {
       queryIssue {
@@ -73,7 +73,36 @@
        }
      }
 
-- name: "Auth with top level rbac ADMIN"
+- name: "Auth with complex rbac rules, true"
+  gqlquery: |
+    query {
+      queryComplexLog {
+        logs
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+      queryComplexLog(func: type(ComplexLog)) {
+        logs : ComplexLog.logs
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with complex rbac rules, false"
+  gqlquery: |
+    query {
+      queryComplexLog {
+        logs
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+      queryComplexLog()
+    }
+
+- name: "Auth with top level rbac true"
   gqlquery: |
     query {
       queryLog {
@@ -89,7 +118,7 @@
       }
     }
 
-- name: "Auth with top level rbac USER"
+- name: "Auth with top level rbac false"
   gqlquery: |
     query {
       queryLog {
@@ -102,7 +131,7 @@
        queryLog()
      }
 
-- name: "Auth with top level AND rbac USER"
+- name: "Auth with top level AND rbac false"
   gqlquery: |
     query {
       queryIssue {
@@ -116,7 +145,7 @@
      }
 
 
-- name: "Auth with top level OR rbac ADMIN"
+- name: "Auth with top level OR rbac true"
   gqlquery: |
     query {
       queryProject {
@@ -132,7 +161,7 @@
        }
      }
 
-- name: "Auth with top level OR rbac USER"
+- name: "Auth with top level OR rbac false"
   gqlquery: |
     query {
       queryProject {

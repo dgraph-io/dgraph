@@ -192,7 +192,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.GetRBAC(field)
+	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 	}
@@ -242,7 +242,7 @@ func rewriteAsGet(
 	auth *authRewriter) *gql.GraphQuery {
 
 	var dgQuery *gql.GraphQuery
-	rbac := auth.GetRBAC(field)
+	rbac := auth.evaluateRBAC(field)
 	if rbac == schema.Negative {
 		return &gql.GraphQuery{}
 	}
@@ -306,7 +306,7 @@ func rewriteAsGet(
 }
 
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.GetRBAC(field)
+	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
 	}
@@ -433,13 +433,13 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
-func (authRw *authRewriter) GetRBAC(f schema.Field) schema.RuleResult {
+func (authRw *authRewriter) evaluateRBAC(f schema.Field) schema.RuleResult {
 	if authRw == nil || authRw.isWritingAuth {
 		return schema.Uncertain
 	}
 
 	rn := authRw.selector(f.Type())
-	return rn.GetRBACRules(authRw.authVariables)
+	return rn.EvaluateRBACRules(authRw.authVariables)
 }
 
 func (authRw *authRewriter) rewriteRuleNode(
@@ -615,7 +615,7 @@ func addSelectionSetFrom(
 		addPagination(child, f)
 		addedFields[f.Name()] = true
 		selectionAuth := addSelectionSetFrom(child, f, auth)
-		rbac := auth.GetRBAC(field)
+		rbac := auth.evaluateRBAC(field)
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)

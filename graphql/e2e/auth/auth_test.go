@@ -114,8 +114,13 @@ func getJWT(t *testing.T, user, role string) http.Header {
 		},
 	}
 
-	claims.Foo["USER"] = user
-	claims.Foo["ROLE"] = role
+	if user != "" {
+		claims.Foo["USER"] = user
+	}
+
+	if role != "" {
+		claims.Foo["ROLE"] = role
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	ss, err := token.SignedString([]byte("secretkey"))
@@ -332,6 +337,33 @@ func TestRootFilter(t *testing.T) {
 			name
 		}
 	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestEmptyRBACValue(t *testing.T) {
+	testCases := []TestCase{{
+		result: `{"queryLog": []}`,
+	}}
+	query := `
+		query {
+                    queryLog (order: {asc: logs}) {
+		    	logs
+		    }
+		}
+	`
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
