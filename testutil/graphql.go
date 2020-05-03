@@ -84,13 +84,13 @@ type clientCustomClaims struct {
 }
 
 func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
-	// encode the original
+	// Encode the original
 	m, err := json.Marshal(c.StandardClaims)
 	if err != nil {
 		return nil, err
 	}
 
-	// decode it back to get a map
+	// Decode it back to get a map
 	var a interface{}
 	err = json.Unmarshal(m, &a)
 	if err != nil {
@@ -102,7 +102,7 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 		return nil, errors.Errorf("error while marshalling custom claim json.")
 	}
 
-	// set the proper namespace and delete additional data.
+	// Set the proper namespace and delete additional data.
 	b[c.Namespace] = c.AuthVariables
 	delete(b, "AuthVariables")
 	delete(b, "Namespace")
