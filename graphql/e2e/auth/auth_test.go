@@ -19,13 +19,16 @@ package auth
 import (
 	"encoding/json"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/testutil"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgrijalva/jwt-go"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -70,18 +73,10 @@ type Log struct {
 	Logs string
 }
 
-type Permission int
-
-const (
-	VIEW Permission = iota
-	EDIT
-	ADMIN
-)
-
 type Role struct {
-	Id          uint64
-	Permissions []Permission
-	AssignedTo  []User
+	Id         uint64
+	Permission string
+	AssignedTo []User
 }
 
 type Ticket struct {
@@ -92,7 +87,7 @@ type Ticket struct {
 }
 
 type Column struct {
-	ColID     uint64
+	ColID     string
 	InProject Project
 	Name      string
 	Tickets   []Ticket
@@ -102,367 +97,383 @@ type Project struct {
 	ProjID  uint64
 	Name    string
 	Roles   []Role
-	columns []Column
+	Columns []Column
 }
 
 type TestCase struct {
-	name   string
 	user   string
 	role   string
 	result string
+	name   string
 	filter map[string]interface{}
+
+}
+
+func getJWT(t *testing.T, user, role string) http.Header {
+	type MyCustomClaims struct {
+		Foo map[string]interface{} `json:"https://xyz.io/jwt/claims"`
+		jwt.StandardClaims
+	}
+
+	// Create the Claims
+	claims := MyCustomClaims{
+		map[string]interface{}{},
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute * 1000).Unix(),
+			Issuer:    "test",
+		},
+	}
+
+	claims.Foo["USER"] = user
+	claims.Foo["ROLE"] = role
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	ss, err := token.SignedString([]byte("secretkey"))
+	require.NoError(t, err)
+
+	h := make(http.Header)
+	h.Add("X-Test-Auth", ss)
+
+	return h
+>>>>>>> graphql/authorization
 }
 
 func TestOrRBACFilter(t *testing.T) {
 	t.Skip()
-
 	testCases := []TestCase{}
+
 	query := `
-                 queryProject (order: {asc: name}) {
+            query {
+                queryProject (order: {asc: name}) {
 			name
 		}
+	    }
 	`
 
-	var result, data struct {
-		QueryProject []*Project
-	}
-
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 }
 
-func rootGetFilter(t *testing.T, id uint64, user string) {
-	testCases := []TestCase{}
+func getColID(t *testing.T, tcase TestCase) string {
 	query := `
-		getColumn(colID: {asc: name}) {
-			name
+		query($name: String!) {
+		    queryColumn(filter: {name: {eq: $name}}) {
+		        colID
+		    	name
+		    }
 		}
 	`
 
-	var result, data struct {
+	var result struct {
 		QueryColumn []*Column
 	}
 
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+	getUserParams := &common.GraphQLParams{
+		Headers:   getJWT(t, tcase.user, tcase.role),
+		Query:     query,
+		Variables: map[string]interface{}{"name": tcase.name},
 	}
 
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.Nil(t, err)
+
+	if len(result.QueryColumn) > 0 {
+		return result.QueryColumn[0].ColID
+	}
+
+	return ""
+}
+
+func TestRootGetFilter(t *testing.T) {
+	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1"})
+	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2"})
+
+	require.NotEqual(t, idCol1, "")
+	require.NotEqual(t, idCol2, "")
+
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"getColumn": {"name": "Column1"}}`,
+		name:   idCol1,
+	}, {
+		user:   "user1",
+		role:   "USER",
+		result: `{"getColumn": null}`,
+		name:   idCol2,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"getColumn": {"name": "Column2"}}`,
+		name:   idCol2,
+	}}
+
+	query := `
+		query($id: ID!) {
+		    getColumn(colID: $id) {
+			name
+		    }
+		}
+	`
+
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"id": tcase.name},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func TestDeepFilter(t *testing.T) {
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[{"name":"Column1"}]}]}`,
+		name:   "Column1",
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[{"name":"Column1"}]}, {"name":"Project2","columns":[]}]}`,
+		name:   "Column1",
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryProject":[{"name":"Project1","columns":[]}, {"name":"Project2","columns":[{"name":"Column3"}]}]}`,
+		name:   "Column3",
+	}}
+
+	query := `
+		query($name: String!) {
+		    queryProject (order: {asc: name}) {
+		       name
+		       columns (filter: {name: {eq: $name}}, first: 1) {
+		       	   name
+                       }
+                    }
+                 }
+	`
+
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"name": tcase.name},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
 }
 
 func TestRootFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column1"}]}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column1"}, {"name": "Column2"}, {"name": "Column3"}]}`,
+	}, {
+		user:   "user4",
+		role:   "USER",
+		result: `{"queryColumn": [{"name": "Column2"}, {"name": "Column3"}]}`,
+	}}
 	query := `
+	query {
 		queryColumn(order: {asc: name}) {
-			colID
 			name
 		}
+	}
 	`
 
-	var result, data struct {
-		QueryColumn []*Column
-	}
-
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role),  // FIXME:
-			Query: query,
-		}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-
-		if len(result.QueryColumn) > 0 {
-			rootGetFilter(t, result.QueryColumn[0].ColID, tcase.user)
-		}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 }
 
 func TestRBACFilter(t *testing.T) {
 	t.Skip()
-
 	testCases := []TestCase{}
 	query := `
-                 queryLog (order: {asc: logs}) {
-			logs
+		query {
+                    queryLog (order: {asc: logs}) {
+		    	logs
+		    }
 		}
 	`
 
-	var result, data struct {
-		QueryLog []*Log
-	}
-
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
-}
-
-func TestDeepFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                 queryProject (order: {asc: name}) {
-			name
-			roles {
-				permissions
-				assignedTo {
-					username
-				}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
 			}
-			columns {
-				name 
-				tickets {
-					title
-					assignedTo  {
-						username
-					}
-				}
-			}
-		}
-	`
 
-	var result, data struct {
-		QueryProject []*Project
-	}
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 }
 
 func TestAndRBACFilter(t *testing.T) {
 	t.Skip()
-
 	testCases := []TestCase{}
 	query := `
-                 queryIssue (order: {asc: msg}) {
+		query {
+                    queryIssue (order: {asc: msg}) {
 			msg
-			user {
-				username
-			}
+		    }
 		}
 	`
 
-	var result, data struct {
-		QueryIssue []*Issue
-	}
-
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 
 }
 
-func TestAndFilter(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                 queryMovie (order: {asc: content}) {
-			content
-			regionsAvailable (order: {asc: name}) {
-				name
-				users (order: {asc: username}) {
-					username
-				}
-			}
-		}
-	`
-
-	var result, data struct {
-		QueryMovie []*Movie
-	}
-
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
+func TestNestedFilter(t *testing.T) {
+	testCases := []TestCase{{
+		user: "user1",
+		role: "USER",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
 }
-
-func TestDeepFieldFilters(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
-	query := `
-                 queryProject (order: {asc: name}) {
-			name
-			roles {
-				permissions
-				assignedTo {
-					username
-					age
-				}
-			}
-		}
-	`
-
-	var result, data struct {
-		QueryProject []*Project
-	}
-
-	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
-
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
-
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
-	}
+		`,
+	}, {
+		user: "user2",
+		role: "USER",
+		result: `
+{
+   "queryMovie": [
+      {
+         "content": "Movie1",
+         "regionsAvailable": [
+            {
+               "name": "Region2"
+            },
+            {
+               "name": "Region3"
+            }
+         ]
+      },
+      {
+         "content": "Movie2",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            }
+         ]
+      },
+      {
+         "content": "Movie3",
+         "regionsAvailable": [
+            {
+               "name": "Region1"
+            },
+            {
+               "name": "Region4"
+            }
+         ]
+      }
+   ]
 }
+		`,
+	}}
 
-func TestFieldFilters(t *testing.T) {
-	t.Skip()
-
-	testCases := []TestCase{}
 	query := `
-                queryUser (order: {asc: username}) {
-			username
-			age
-			isPublic
+		query {
+                    queryMovie (order: {asc: content}) {
+		           content
+		           regionsAvailable (order: {asc: name}) {
+		           	name
+		           }
+		    }
 		}
 	`
 
-	var result, data struct {
-		QueryUser []*User
-	}
-
 	for _, tcase := range testCases {
-		getUserParams := &common.GraphQLParams{
-			// Authorization: getJWT(t, tcase.user, tcase.role), // FIXME:
-			Query: query,
-		}
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
 
-		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
 
-		err := json.Unmarshal([]byte(gqlResponse.Data), &result)
-		require.Nil(t, err)
-
-		err = json.Unmarshal([]byte(tcase.result), &data)
-		require.Nil(t, err)
-
-		if diff := cmp.Diff(result, data); diff != "" {
-			t.Errorf("result mismatch (-want +got):\n%s", diff)
-		}
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
 }
 
@@ -596,14 +607,6 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)
 		}
 	}
-}
-
-func TestSchema_Auth(t *testing.T) {
-	// TODO write this test
-
-	//t.Run("graphql schema", func(t *testing.T) {
-	//	common.SchemaTest(t, expectedDgraphSchema)
-	//})
 }
 
 func TestMain(m *testing.M) {

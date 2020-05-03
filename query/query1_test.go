@@ -1037,6 +1037,70 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
+func TestUidInFunction3a(t *testing.T) {
+	// query at top level with unsorted input UIDs
+	query := `
+	{
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, [5001, 5000])) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+}
+
+func TestUidInFunction3b(t *testing.T) {
+	// query at top level with sorted input UIDs
+	query := `
+	{
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, [5000, 5001])) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
+}
+
+func TestUidInFunction3c(t *testing.T) {
+	// query at top level with no UIDs present in predicate
+	query := `
+	{
+		me(func: UID(1, 23, 24)) @filter(uid_in(school, [500, 501])) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[]}}`, js)
+}
+func TestUidInFunction4a(t *testing.T) {
+	// query inside with sorted input UIDs
+	query := `
+	{
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, [5000, 5001])) {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+		js)
+}
+
+func TestUidInFunction4b(t *testing.T) {
+	// query inside with unsorted input UIDs + not all uids present in predicate
+	query := `
+	{
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, [5001, 500])) {
+				name
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+		js)
+}
 func TestUidInFunctionAtRoot(t *testing.T) {
 
 	query := `

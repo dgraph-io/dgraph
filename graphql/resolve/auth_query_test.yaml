@@ -52,6 +52,25 @@
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
+
+- name: "Auth with top level filter : query, filter and order"
+  gqlquery: |
+    query {
+      queryUserSecret(filter: { ownedBy: { eq: "user2" }}, order: {asc: aSecret}, first: 1) {
+        id
+        ownedBy
+      }
+    }
+  dgquery: |-
+    query {
+      queryUserSecret(func: uid(UserSecret1), orderasc: UserSecret.aSecret, first: 1) @filter(uid(UserSecret2)) {
+        id : uid
+        ownedBy : UserSecret.ownedBy
+      }
+      UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
 - name: "Auth with deep filter : query top-level"
   gqlquery: |
     query {

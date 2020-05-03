@@ -5,8 +5,7 @@
 		"User.age": 10,
 		"User.username": "user1",
 		"User.isPublic": true,
-		"User.disabled": false,
-		"User.secrets" : [{"uid": "_:usersecret1"}, {"uid": "_:usersecret2"}]
+		"User.disabled": false
 	},
 	{
 		"uid": "_:user2",
@@ -91,30 +90,30 @@
 	{
 		"uid": "_:log1",
 		"dgraph.type": "Log",
-		"Log.msg": "Log1"
+		"Log.logs": "Log1"
 	},
 	{
 		"uid": "_:log2",
 		"dgraph.type": "Log",
-		"Log.msg": "Log2"
+		"Log.logs": "Log2"
 	},
 	{
 		"uid": "_:role1",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
-		"Role.permission": "EDIT"
+		"Role.permission": "VIEW"
 	},
 	{
 		"uid": "_:role2",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
-		"Role.permission":"VIEW"
+		"Role.permission": "VIEW"
 	},
 	{
 		"uid": "_:role3",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user4"}],
-		"Role.permission":"ADMIN"
+		"Role.permission": "VIEW"
 	},
 	{
 		"uid": "_:project1",
@@ -134,7 +133,7 @@
 		"uid": "_:column1",
 		"dgraph.type": "Column",
 		"Column.inProject": {"uid": "_:project1"},
-		"Column.name": "Column2",
+		"Column.name": "Column1",
 		"ticket.tickets": [{"uid": "_:ticket1"}, {"uid": "_:ticket2"}]
 	},
 	{
@@ -178,17 +177,5 @@
 		"Ticket.onColumn": {"uid": "_:column3"},
 		"Ticket.title": "Ticket4",
 		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
-	},
-	{
-		"uid": "_:usersecret1",
-		"dgraph.type": "UserSecret",
-		"UserSecret.aSecret": "Secret data",
-		"UserSecret.ownedBy": "user1"
-	},
-	{
-		"uid": "_:usersecret2",
-		"dgraph.type": "UserSecret",
-		"UserSecret.aSecret": "Sensitive information",
-		"UserSecret.ownedBy": "user1"
 	}
 ]
