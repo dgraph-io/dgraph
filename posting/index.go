@@ -689,7 +689,10 @@ func (r *rebuilder) Run(ctx context.Context) error {
 			// which occurred before this schema mutation.
 			//err := writer.SetAt(kv.Key, kv.Value, BitCompletePosting, r.startTs)
 
-			if err := writer.SetEntryAt((&badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}).WithDiscard(), r.startTs); err != nil {
+			if err := writer.SetEntryAt(
+				(&badger.Entry{Key: kv.Key,
+					Value:    kv.Value,
+					UserMeta: BitCompletePosting}).WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
 		}
