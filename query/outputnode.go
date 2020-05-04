@@ -855,7 +855,7 @@ type Extensions struct {
 	Metrics *api.Metrics    `json:"metrics,omitempty"`
 }
 
-const maxEncodedSize = (4 << 30) // 4GB
+const maxEncodedSize = int64(4 << 30) // 4GB
 
 func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	encodingStart := time.Now()
@@ -889,7 +889,7 @@ func (sg *SubGraph) toFastJSON(l *Latency) ([]byte, error) {
 	}
 
 	// Return error if encoded buffer size exceeds than a threshold size.
-	if bufw.Len() > maxEncodedSize {
+	if int64(bufw.Len()) > maxEncodedSize {
 		return nil, fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
 			bufw.Len(), maxEncodedSize)
 	}
