@@ -405,6 +405,11 @@
   error:
     { "message": "mutation failed because authorization failed" }
 
+# See comments about additional deletes in add_mutation_test.yaml.
+# Because of those additional deletes, for example, when we add a column and 
+# link it to an existing ticket, we remove that ticket from the column it was
+# attached to ... so we need authorization to update that column as well
+# as to add the new column.
 - name: "Add with auth on additional delete"
   gqlquery: |
     mutation addColumn($col: AddColumnInput!) {
@@ -453,8 +458,8 @@
     { 
       "Project2": [ { "uid": "0x123" } ],
       "Ticket3": [ { "uid": "0x789" } ],
-      "Column4":  [ { "uid": "0x456" } ],
-      "Column4.auth": [ { "uid": "0x456" } ]
+      "Column4":  [ { "uid": "0x799" } ],
+      "Column4.auth": [ { "uid": "0x799" } ]
     }
   uids: |
     { "Column1": "0x456" }
@@ -478,7 +483,7 @@
   authjson: |
     { 
       "Column": [ { "uid": "0x456" } ] 
-    }  
+    }
   
 - name: "Add with auth on additional delete that fails"
   gqlquery: |
@@ -528,7 +533,7 @@
     { 
       "Project2": [ { "uid": "0x123" } ],
       "Ticket3": [ { "uid": "0x789" } ],
-      "Column4":  [ { "uid": "0x456" } ]
+      "Column4":  [ { "uid": "0x799" } ]
     }
   uids: |
     { "Column1": "0x456" }
@@ -555,3 +560,158 @@
     }  
   error:
     { "message": "couldn't rewrite query for mutation addColumn because authorization failed" }
+
+- name: "Add with deep auth on additional delete"
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  variables: |
+    { 
+      "proj": {
+        "name": "Project1",
+        "columns": [ { 
+          "name": "a column",
+          "tickets": [ { "id": "0x789" } ]
+        } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+        uid
+      }
+      Column5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ],
+      "Column4.auth": [ { "uid": "0x799" } ]
+    }
+  uids: |
+    { 
+      "Project1": "0x123",
+      "Column2": "0x456" 
+    }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    { 
+      "Column": [ { "uid": "0x456" } ] 
+    }
+
+- name: "Add with deep auth on additional delete that fails"
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  variables: |
+    { 
+      "proj": {
+        "name": "Project1",
+        "columns": [ { 
+          "name": "a column",
+          "tickets": [ { "id": "0x789" } ]
+        } ]
+      }
+    }
+  dgquery: |-
+    query {
+      Ticket3 as Ticket3(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket3)) {
+        Column4 as Ticket.onColumn
+      }
+      Column4(func: uid(Column4)) {
+        uid
+      }
+      Column4.auth(func: uid(Column4)) @filter(uid(Column5)) {
+        uid
+      }
+      Column5 as var(func: uid(Column4)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Ticket3": [ { "uid": "0x789" } ],
+      "Column4":  [ { "uid": "0x799" } ]
+    }
+  uids: |
+    { 
+      "Project1": "0x123",
+      "Column2": "0x456" 
+    }
+  authquery: |-
+    query {
+      Column(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: uid(0x456))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    { 
+      "Column": [ { "uid": "0x456" } ] 
+    }  
+  error:
+    { "message": "couldn't rewrite query for mutation addProject because authorization failed" }
