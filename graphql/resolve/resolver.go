@@ -422,18 +422,27 @@ func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 		return err
 	}
 
-	queries := op.Queries()
-	if len(queries) == 0 {
-		return errors.Errorf("Given query %s is not a valid subscription request",
-			req.Query)
-	}
-
 	for _, q := range op.Queries() {
 		for _, field := range q.SelectionSet() {
-			if has, _ := field.HasCustomDirective(); has {
-				return errors.Errorf("Custom field `%s` is not supported in graphql subscription",
-					field.Name())
+			if err := validateCustomFieldsRecursively(field); err != nil {
+				return err
 			}
+		}
+	}
+	return nil
+}
+
+// validateCustomFieldsRecursively will return err if the given field is custom or any of its
+// children is type of a custom field.
+func validateCustomFieldsRecursively(field schema.Field) error {
+	if has, _ := field.HasCustomDirective(); has {
+		return x.GqlErrorf("Custom field `%s` is not supported in graphql subscription",
+			field.Name()).WithLocations(field.Location())
+	}
+	for _, f := range field.SelectionSet() {
+		err := validateCustomFieldsRecursively(f)
+		if err != nil {
+			return err
 		}
 	}
 	return nil

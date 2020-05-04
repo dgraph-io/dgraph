@@ -263,6 +263,44 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 	require.Contains(t, err.Error(), "Custom field `name` is not supported in graphql subscription")
 }
 
+func TestSubscriptionInNestedCustomField(t *testing.T) {
+	updateSchemaRequireNoGQLErrors(t, `
+	type Episode {
+		name: String! @id
+		anotherName: String! @custom(http: {
+					url: "http://mock:8888/userNames",
+					method: "GET",
+					body: "{uid: $name}",
+					operation: "batch"
+				})
+	}
+
+	type Character {
+		name: String! @id
+		lastName: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $name}",
+						operation: "batch"
+					})
+		episodes: [Episode]
+	}`)
+
+	client, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{				
+			queryCharacter {
+				name
+				episodes {
+					name
+					anotherName
+				}
+			 }
+		  }`,
+	})
+	require.NoError(t, err)
+	_, err = client.RecvMsg()
+	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
+}
 func addPerson(t *testing.T) *user {
 	addTeacherParams := &common.GraphQLParams{
 		Query: `mutation addPerson {
