@@ -1194,7 +1194,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
+    {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id] which appear more than once, each argument can appear only once.",
      "locations":[{"line":10, "column":15}]},
     ]
 
@@ -1212,7 +1212,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
+    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, query `getAuthor` has arguments [id] which appear more than once, each argument can appear only once.",
      "locations":[{"line":8, "column":15}]},
     ]
 

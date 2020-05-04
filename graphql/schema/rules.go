@@ -1200,9 +1200,13 @@ func customDirectiveValidation(sch *ast.Schema,
 					repeatingArgs.WriteString(" ")
 				}
 			}
-			repeatingArgs.WriteRune(']')
-			repeatingArgsStr := repeatingArgs.String()
-			if repeatingArgsStr != "[]" {
+			repeatingArgsStr := ""
+			if repeatingArgs.Len() > 1 {
+				repeatingArgsStr = repeatingArgs.String()
+				repeatingArgsStr = repeatingArgsStr[:len(repeatingArgsStr)-1] // remove last space
+				repeatingArgsStr += "]"
+			}
+			if len(repeatingArgsStr) > 0 {
 				return gqlerror.ErrorPosf(graphql.Position,
 					"Type %s; Field %s: inside graphql in @custom directive, %s `%s` has arguments"+
 						" %s which appear more than once, each argument can appear only once.",
