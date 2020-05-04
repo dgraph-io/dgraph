@@ -785,14 +785,31 @@ func (r countryResolver) Code() *string {
 }
 
 func (r countryResolver) Name() *string {
-	s := "Burundi"
-	return &s
+	return &(r.c.Name)
 }
 
 func (_ *query) Country(ctx context.Context, args struct {
 	Code string
 }) countryResolver {
-	return countryResolver{&country{Code: graphql.ID(args.Code)}}
+	return countryResolver{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}
+}
+
+func (_ *query) Countries(ctx context.Context, args struct {
+	Filter struct {
+		Code string
+		Name string
+	}
+}) []countryResolver {
+	return []countryResolver{countryResolver{&country{
+		Code: graphql.ID(args.Filter.Code),
+		Name: args.Filter.Name,
+	}}}
+}
+
+func (_ *query) ValidCountries(ctx context.Context, args struct {
+	Code string
+}) *[]*countryResolver {
+	return &[]*countryResolver{{&country{Code: graphql.ID(args.Code), Name: "Burundi"}}}
 }
 
 func (_ *query) UserName(ctx context.Context, args struct {
@@ -1146,8 +1163,12 @@ func main() {
 	http.Handle("/validcountry", &relay.Handler{Schema: vsch})
 	http.HandleFunc("/validcountrywitherror", commonGraphqlHandler("validcountrywitherror"))
 	http.HandleFunc("/graphqlerr", commonGraphqlHandler("graphqlerr"))
-	http.HandleFunc("/validcountries", commonGraphqlHandler("validcountries"))
-	http.HandleFunc("/validinpputfield", commonGraphqlHandler("validinpputfield"))
+	http.Handle("/validcountries", &relay.Handler{
+		Schema: graphql.MustParseSchema(graphqlResponses["validcountries"].Schema, &query{}),
+	})
+	http.Handle("/validinputfield", &relay.Handler{
+		Schema: graphql.MustParseSchema(graphqlResponses["validinputfield"].Schema, &query{}),
+	})
 	http.HandleFunc("/invalidfield", commonGraphqlHandler("invalidfield"))
 	http.HandleFunc("/nestedinvalid", commonGraphqlHandler("nestedinvalid"))
 
@@ -1159,6 +1180,7 @@ func main() {
 	sch := graphql.MustParseSchema(graphqlResponses["singleOperationSchema"].Schema, &query{})
 	h := &relay.Handler{Schema: sch}
 	http.Handle("/gqlUserName", h)
+	// TODO - Figure out how to return multiple errors and then replace the handler below.
 	http.HandleFunc("/gqlUserNameWithError", gqlUserNameWithErrorHandler)
 	http.Handle("/gqlCar", h)
 	http.Handle("/gqlClass", h)

@@ -1080,7 +1080,7 @@ func TestCustomLogicGraphQLValidArrayResponse(t *testing.T) {
 		getCountries(id: ID!): [Country] @custom(http: {
 										url: "http://mock:8888/validcountries",
 										method: "POST",
-										graphql: "query { country(code: $id) }"
+										graphql: "query { validCountries(code: $id) }"
 									})
 	}`
 	updateSchemaRequireNoGQLErrors(t, schema)
@@ -1859,7 +1859,7 @@ func TestCustomGraphqlMutation2(t *testing.T) {
 func TestForValidInputArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinpputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
+		myCustom(yo: CountryInput!): [Country!]! @custom(http: {url: "http://mock:8888/validinputfield", method: "POST",forwardHeaders: ["Content-Type"], graphql: "query{countries(filter: $yo)}"})
     }
 	 `
 	common.RequireNoGQLErrors(t, updateSchema(t, schema))
@@ -1882,7 +1882,7 @@ func TestForValidInputArgument(t *testing.T) {
 	{
 		"myCustom": [
 		  {
-			"name": "Burundi",
+			"name": "sd",
 			"code": "BI"
 		  }
 		]

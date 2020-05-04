@@ -1,50 +1,19 @@
-- name: "validinpputfield"
+- name: "validinputfield"
   description: "Test case for validating remote input type with valid local input type."
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
-
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
-
-      input StateInput {
-        code: String!
-        name: String!
-      }
-
-      type Query{
-        countries(filter: CountryInput!): [Country!]!
-      }
-  request: |
-    query{countries(filter: $yo){
-    name
-    code
-    }}
-  response: |
-    {
-      "data":{
-        "countries":[
-          {
-            "name":"Burundi",
-            "code":"BI"
-          }
-        ]
-      }
+    type Country {
+      code: String
+      name: String
     }
-  variables: |
-    {"yo":{"code":"BI","name":"sd"}}
+
+    input CountryInput {
+      code: String!
+      name: String!
+    }
+
+    type Query{
+      countries(filter: CountryInput!): [Country!]!
+    }
 
 - name: "invalidfield"
   description: "Test case for validating remote input type with invalid local input type."
@@ -173,51 +142,16 @@
     {"id":"BI"}
 
 - name: "validcountries"
-  description: "Test case to validate whether dgraph can handle both valid data and error"
+  description: "Test case to validate return multiple entities as part of graphql response"
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
-
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
-
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
-
-      input StateInput {
-        code: String!
-        name: String!
-      }
-
-      type Query{
-        country(code: ID!): [Country]
-      }
-  request: |
-    query { country(code: $id) {
-    code
-    name
-    }}
-  response: |
-    {
-      "data":{
-        "country":[{
-          "name":"Burundi",
-          "code":"BI"
-        }]
-      }
+    type Country {
+      code: String
+      name: String
     }
-  variables: |
-    {"id":"BI"}
+
+    type Query{
+      validCountries(code: ID!): [Country]
+    }
 
 - name: "graphqlerr"
   description: "Test case to validate whether dgraph can handle graphql error"
@@ -268,37 +202,37 @@
 - name: "setcountry"
   description: "Test case to validate graphql mutation"
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
 
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
 
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
 
-      input StateInput {
-        code: String!
-        name: String!
-      }
+    input StateInput {
+      code: String!
+      name: String!
+    }
 
-      type Mutation {
-        setCountry(country: CountryInput!): Country!
-      }
+    type Mutation {
+      setCountry(country: CountryInput!): Country!
+    }
 
-      type Query {
-        country(code: ID!): [Country]
-      }
+    type Query {
+      country(code: ID!): [Country]
+    }
   request: |
     mutation { setCountry(country: $input) {
     code
