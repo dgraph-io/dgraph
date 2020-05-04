@@ -68,3 +68,4 @@ require (
 	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/yaml.v2 v2.2.4
 )
+replace github.com/dgraph-io/badger/v2 => /home/alvis/go/src/github.com/dgraph-io/badger

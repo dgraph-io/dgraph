@@ -638,7 +638,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 	}
 	glog.V(1).Infof("Rebuilding index for predicate %s: building temp index took: %v\n",
 		r.attr, time.Since(start))
-
+	fmt.Printf("Anurag: Rebuilding index for predicate %s: building temp index took: %v\n",
+		r.attr, time.Since(start))
 	// Now we write all the created posting lists to disk.
 	glog.V(1).Infof("Rebuilding index for predicate %s: writing index to badger", r.attr)
 	start = time.Now()
