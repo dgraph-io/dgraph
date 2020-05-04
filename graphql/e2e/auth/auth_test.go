@@ -353,16 +353,21 @@ func TestRootFilter(t *testing.T) {
 	}
 }
 
-func TestEmptyRBACValue(t *testing.T) {
-	testCases := []TestCase{{
-		result: `{"queryLog": []}`,
-	}}
+func TestDeepRBACValue(t *testing.T) {
+	testCases := []TestCase{
+		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
+		{user: "user1", role: "ADMIN", result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`},
+	}
+
 	query := `
-		query {
-                    queryLog (order: {asc: logs}) {
-		    	logs
-		    }
-		}
+{
+  queryUser (filter:{username:{eq:"user1"}}) {
+    username
+    issues {
+      msg
+    }
+  }
+}
 	`
 
 	for _, tcase := range testCases {
@@ -383,6 +388,7 @@ func TestEmptyRBACValue(t *testing.T) {
 func TestRBACFilter(t *testing.T) {
 	testCases := []TestCase{
 		{role: "USER", result: `{"queryLog": []}`},
+		{result: `{"queryLog": []}`},
 		{role: "ADMIN", result: `{"queryLog": [{"logs": "Log1"},{"logs": "Log2"}]}`}}
 
 	query := `

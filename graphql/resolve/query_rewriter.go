@@ -438,7 +438,8 @@ func (authRw *authRewriter) evaluateRBAC(f schema.Field) schema.RuleResult {
 		return schema.Uncertain
 	}
 
-	rn := authRw.selector(f.Type())
+	typ := f.Type()
+	rn := authRw.selector(typ)
 	return rn.EvaluateRBACRules(authRw.authVariables)
 }
 
@@ -615,7 +616,7 @@ func addSelectionSetFrom(
 		addPagination(child, f)
 		addedFields[f.Name()] = true
 		selectionAuth := addSelectionSetFrom(child, f, auth)
-		rbac := auth.evaluateRBAC(field)
+		rbac := auth.evaluateRBAC(f)
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)

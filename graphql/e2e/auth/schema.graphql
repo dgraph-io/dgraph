@@ -5,6 +5,7 @@ type User {
   disabled: Boolean
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
+  issues: [Issue]
 }
 
 type UserSecret @auth(
@@ -95,10 +96,10 @@ type Issue @auth(
                           }
                       }
                 }"""}
-     ]}){
+     ]}) {
   id: ID!
   msg: String
-  owner: User!
+  owner: User! @hasInverse(field: issues)
 }
 
 type Log @auth(
