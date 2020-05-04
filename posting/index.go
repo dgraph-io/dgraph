@@ -673,10 +673,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-			if err := writer.SetEntryAt(
-				(&badger.Entry{Key: kv.Key,
-					Value:    kv.Value,
-					UserMeta: BitCompletePosting}).WithDiscard(), r.startTs); err != nil {
+			e := &badger.Entry{Key: kv.Key, Value: kv.Value, UserMeta: BitCompletePosting}
+			if err := writer.SetEntryAt(e.WithDiscard(), r.startTs); err != nil {
 				return errors.Wrap(err, "error in writing index to pstore")
 			}
 		}
