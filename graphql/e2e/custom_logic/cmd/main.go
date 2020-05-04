@@ -17,6 +17,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -28,6 +29,8 @@ import (
 	"strconv"
 	"strings"
 
+	graphql "github.com/graph-gophers/graphql-go"
+	"github.com/graph-gophers/graphql-go/relay"
 	"gopkg.in/yaml.v2"
 )
 
@@ -765,30 +768,27 @@ type request struct {
 	Variables map[string]interface{}
 }
 
-func gqlUserNameHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
+type query struct{}
 
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectedSchemaForQuery("userName", "id"))
-		return
-	}
+func (_ *query) UserName(ctx context.Context, args struct {
+	Id string
+}) *string {
+	s := fmt.Sprintf(`uname-%s`, args.Id)
+	return &s
+}
 
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-	// TODO - Have tests in place either here or as part of unit tests to verify the queries
-	// that are finally sent.
-	userID := req.Variables["id"].(string)
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "userName": "uname-%s"
-		}
-	}`, userID)
+func (_ *query) TeacherName(ctx context.Context, args struct {
+	Id string
+}) *string {
+	s := fmt.Sprintf(`tname-%s`, args.Id)
+	return &s
+}
+
+func (_ *query) SchoolName(ctx context.Context, args struct {
+	Id string
+}) *string {
+	s := fmt.Sprintf(`sname-%s`, args.Id)
+	return &s
 }
 
 func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
@@ -823,106 +823,48 @@ func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 	}`, userID)
 }
 
-func gqlCarHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	// FIXME - Return type isn't validated yet.
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["carschema"].Schema))
-		return
-	}
-
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-
-	userID := req.Variables["id"]
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  	"car": {
-				"name": "car-%s"
-			}
-		}
-	}`, userID)
+type car struct {
+	ID graphql.ID
 }
 
-func gqlClassHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["classschema"].Schema))
-		return
-	}
-
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-	schoolID := req.Variables["id"]
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "class": [{
-			  "name": "class-%s"
-		  }]
-		}
-	}`, schoolID)
+type carResolver struct {
+	c *car
 }
 
-func gqlTeacherNameHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectedSchemaForQuery("teacherName", "id"))
-		return
-	}
-
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-	teacherID := req.Variables["tid"]
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "teacherName": "tname-%s"
-		}
-	}`, teacherID)
+func (r *carResolver) ID() graphql.ID {
+	return r.c.ID
 }
 
-func gqlSchoolNameHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
+func (r *carResolver) Name() string {
+	return "car-" + string(r.c.ID)
+}
 
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectedSchemaForQuery("schoolName", "id"))
-		return
-	}
+func (_ *query) Car(ctx context.Context, args struct {
+	Id string
+}) *carResolver {
+	return &carResolver{&car{ID: graphql.ID(args.Id)}}
+}
 
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-	schoolID := req.Variables["id"]
-	fmt.Fprintf(w, `
-	{
-		"data": {
-		  "schoolName": "sname-%s"
-		}
-	}`, schoolID)
+type class struct {
+	ID graphql.ID
+}
+
+type classResolver struct {
+	c *class
+}
+
+func (r *classResolver) ID() graphql.ID {
+	return r.c.ID
+}
+
+func (r *classResolver) Name() string {
+	return "class-" + string(r.c.ID)
+}
+
+func (_ *query) Class(ctx context.Context, args struct {
+	Id string
+}) *[]*classResolver {
+	return &[]*classResolver{&classResolver{&class{ID: graphql.ID(args.Id)}}}
 }
 
 func introspectionResult(name string) string {
@@ -1188,12 +1130,14 @@ func main() {
 	http.HandleFunc("/updateCountries", commonGraphqlHandler("updatecountries"))
 
 	// for testing single mode
-	http.HandleFunc("/gqlUserName", gqlUserNameHandler)
+	sch := graphql.MustParseSchema(graphqlResponses["singleOperationSchema"].Schema, &query{})
+	h := &relay.Handler{Schema: sch}
+	http.Handle("/gqlUserName", h)
 	http.HandleFunc("/gqlUserNameWithError", gqlUserNameWithErrorHandler)
-	http.HandleFunc("/gqlCar", gqlCarHandler)
-	http.HandleFunc("/gqlClass", gqlClassHandler)
-	http.HandleFunc("/gqlTeacherName", gqlTeacherNameHandler)
-	http.HandleFunc("/gqlSchoolName", gqlSchoolNameHandler)
+	http.Handle("/gqlCar", h)
+	http.Handle("/gqlClass", h)
+	http.Handle("/gqlTeacherName", h)
+	http.Handle("/gqlSchoolName", h)
 
 	// for testing in batch mode
 	http.HandleFunc("/getPosts", getPosts)

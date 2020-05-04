@@ -164,7 +164,7 @@
         states: [State]
         std: Int
       }
-      
+
       type State @remote {
         code: String
         name: String
@@ -432,30 +432,23 @@
       %s(input: [UserInput]): [String]
     }
 
-- name: introspectedSchemaForQuery
-  schema: |
-    type Query {
-      %s(%s:ID!): String
-    } 
-
-- name: carschema
+- name: singleOperationSchema
   schema: |
     type Car {
       id: ID!
       name: String!
     }
-    
-    type Query {
-      car(id: ID!): Car
-    }
 
-- name: classschema
-  schema: |
     type Class {
       id: ID!
       name: String!
     }
+
     type Query {
+      userName(id :ID!): String
+      teacherName(id :ID!): String
+      schoolName(id: ID!): String
+      car(id: ID!): Car
       class(id: ID!): [Class]
     }
 
@@ -573,7 +566,7 @@
     type Query{
       getPosts(input: [Int]): [Post!]
     }
-    
+
 - name: invalidtypebatchfield
   schema: |
     type Post {
