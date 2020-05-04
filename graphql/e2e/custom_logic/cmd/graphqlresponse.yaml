@@ -111,49 +111,14 @@
 - name: "validcountry"
   description: "Test case to check return type is valid and results are properly rewritten by the dgraph"
   schema: |
-      type Country @remote {
-        code: String
-        name: String
-        states: [State]
-        std: Int
-      }
-
-      type State @remote {
-        code: String
-        name: String
-        country: Country
-      }
-
-      input CountryInput {
-        code: String!
-        name: String!
-        states: [StateInput]
-      }
-
-      input StateInput {
-        code: String!
-        name: String!
-      }
-
-      type Query{
-        country(code: ID!): Country!
-      }
-  request: |
-    query { country(code: $id) {
-    code
-    name
-    }}
-  response: |
-    {
-      "data":{
-        "country": {
-            "name":"Burundi",
-            "code":"BI"
-          }
-      }
+    type Country {
+      code: String
+      name: String
     }
-  variables: |
-    {"id":"BI"}
+
+    type Query{
+      country(code: ID!): Country!
+    }
 
 - name: "validcountrywitherror"
   description: "Test case to validate dgraph can handle both valid data and error"

@@ -770,6 +770,31 @@ type request struct {
 
 type query struct{}
 
+type country struct {
+	Code graphql.ID
+	Name string
+}
+
+type countryResolver struct {
+	c *country
+}
+
+func (r countryResolver) Code() *string {
+	s := string(r.c.Code)
+	return &(s)
+}
+
+func (r countryResolver) Name() *string {
+	s := "Burundi"
+	return &s
+}
+
+func (_ *query) Country(ctx context.Context, args struct {
+	Code string
+}) countryResolver {
+	return countryResolver{&country{Code: graphql.ID(args.Code)}}
+}
+
 func (_ *query) UserName(ctx context.Context, args struct {
 	Id string
 }) *string {
@@ -1117,7 +1142,8 @@ func main() {
 	http.HandleFunc("/missingTypeForBatchedFieldInput", missingTypeForBatchedFieldInput)
 
 	// for queries
-	http.HandleFunc("/validcountry", commonGraphqlHandler("validcountry"))
+	vsch := graphql.MustParseSchema(graphqlResponses["validcountry"].Schema, &query{})
+	http.Handle("/validcountry", &relay.Handler{Schema: vsch})
 	http.HandleFunc("/validcountrywitherror", commonGraphqlHandler("validcountrywitherror"))
 	http.HandleFunc("/graphqlerr", commonGraphqlHandler("graphqlerr"))
 	http.HandleFunc("/validcountries", commonGraphqlHandler("validcountries"))
