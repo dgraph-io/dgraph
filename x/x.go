@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"github.com/dgraph-io/badger/v2"
-	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -848,22 +847,6 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 		}
 	}
 	return password, nil
-}
-
-//BulkWriteKVsBatchWriter exposes Write API batch writer.
-func BulkWriteKVsBatchWriter(writer *badger.WriteBatch, kvList *bpb.KVList) error {
-	for _, kv := range kvList.Kv {
-		e := &badger.Entry{Key: kv.Key, Value: kv.Value}
-		//
-		if len(kv.UserMeta) > 0 {
-			e.UserMeta = kv.UserMeta[0]
-		}
-		if err := writer.SetEntryAt(e, kv.Version); err != nil {
-			return err
-		}
-	}
-	return nil
-
 }
 
 // GetPassAndLogin uses the given credentials and client to perform the login operation.

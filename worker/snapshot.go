@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -38,24 +37,6 @@ const (
 type badgerWriter interface {
 	Write(kvs *bpb.KVList) error
 	Flush() error
-}
-type newBatchWriter struct {
-	wb *badger.WriteBatch
-}
-
-func writeBatchWriter(db *badger.DB) *newBatchWriter {
-	return &newBatchWriter{wb: db.NewManagedWriteBatch()}
-}
-
-func (nwb *newBatchWriter) Write(kvs *bpb.KVList) error {
-	if err := x.BulkWriteKVsBatchWriter(nwb.wb, kvs); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (nwb *newBatchWriter) Flush() error {
-	return nwb.wb.Flush()
 }
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
@@ -84,7 +65,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 		writer = sw
 	} else {
-		writer = writeBatchWriter(pstore)
+		writer = pstore.NewManagedWriteBatch()
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
