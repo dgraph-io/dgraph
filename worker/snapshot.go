@@ -38,6 +38,30 @@ type badgerWriter interface {
 	Write(kvs *bpb.KVList) error
 	Flush() error
 }
+type newwriteBatch struct {
+	wb *badger.WriteBatch
+}
+
+func newWriteBatchWriter(db *badger.DB) *newwriteBatch {
+	return &newwriteBatch{wb: db.NewManagedWriteBatch()}
+}
+
+func (nwb *newwriteBatch) Write(kvs *bpb.KVList) error {
+	for _, kv := range kvs.Kv {
+		e := &badger.Entry{Key: kv.Key, Value: kv.Value}
+		if len(kv.UserMeta) > 0 {
+			e.UserMeta = kv.UserMeta[0]
+		}
+		if err := nwb.wb.SetEntryAt(e, kv.Version); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (nwb *newwriteBatch) Flush() error {
+	return nwb.wb.Flush()
+}
 
 // populateSnapshot gets data for a shard from the leader and writes it to BadgerDB on the follower.
 func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
@@ -62,11 +86,9 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		if err := sw.Prepare(); err != nil {
 			return 0, err
 		}
-
 		writer = sw
 	} else {
-		//writer = posting.NewTxnWriter(pstore)
-		writer = pstore.NewManagedWriteBatch()
+		writer = newWriteBatchWriter(pstore)
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
@@ -87,18 +109,9 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 
 		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		for _, kv := range kvs.Kv {
-			e := &badger.Entry{Key: kv.Key, Value: kv.Value}
-			if len(kv.UserMeta) > 0 {
-				e.UserMeta = kv.UserMeta[0]
-			}
-			if err := writer.SetEntryAt(e, kv.Version); err != nil {
-				return 0, err
-			}
+		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
+			return 0, err
 		}
-		// if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
-		// 	return 0, err
-		// }
 
 		count += len(kvs.Kv)
 	}
