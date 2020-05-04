@@ -1138,16 +1138,17 @@ func addDelete(frag *mutationFragment,
 	// We shouldn't do the delete if it ends up that the mutation is linking to the existing
 	// value for this edge in Dgraph - otherwise (because there's a non-deterministic order
 	// in executing set and delete) we might end up deleting the value in a set mutation.
-	//
-	// That can only happen at the top level of an update, where the variable is
-	// already uid(...)
+	exclude := excludeVar
 	if strings.HasPrefix(excludeVar, "uid(") {
+		exclude = excludeVar[4 : len(excludeVar)-1]
+	}
+	if !strings.HasPrefix(excludeVar, "_:") {
 		qry.Children[0].Filter = &gql.FilterTree{
 			Op: "not",
 			Child: []*gql.FilterTree{{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: excludeVar[4 : len(excludeVar)-1]}}}}},
+					Args: []gql.Arg{{Value: exclude}}}}},
 		}
 	}
 
