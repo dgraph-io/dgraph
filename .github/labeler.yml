@@ -1,0 +1,6 @@
+area/graphql:
+  - graphql/**/*
+area/documentation :
+  - wiki/content/**/*
+area/bulk-loader:
+  - dgraph/cmd/bulk/**/*
