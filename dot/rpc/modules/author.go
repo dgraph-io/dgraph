@@ -169,7 +169,8 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 	vtx := transaction.NewValidTransaction(ext, txv)
 
 	if cm.coreAPI.IsBabeAuthority() {
-		hash, err := cm.txQueueAPI.Push(vtx)
+		var hash common.Hash
+		hash, err = cm.txQueueAPI.Push(vtx)
 		if err != nil {
 			log.Trace("[rpc] submitted extrinsic failed to push transaction to queue", "error", err)
 			return err
@@ -179,7 +180,13 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 		log.Trace("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
 	}
 
-	return nil
+	//broadcast
+	err = cm.coreAPI.HandleSubmittedExtrinsic(ext)
+	if err != nil {
+		log.Trace("[rpc] submitted extrinsic failed to submit Extrinsic to network", "error", err)
+	}
+
+	return err
 }
 
 // determineKeyType takes string as defined in https://github.com/w3f/PSPs/blob/psp-rpc-api/psp-002.md#Key-types

@@ -41,6 +41,7 @@ type CoreAPI interface {
 	InsertKey(kp crypto.Keypair)
 	GetRuntimeVersion() (*runtime.VersionAPI, error)
 	IsBabeAuthority() bool
+	HandleSubmittedExtrinsic(types.Extrinsic) error
 }
 
 // RPCAPI is the interface for methods related to RPC service

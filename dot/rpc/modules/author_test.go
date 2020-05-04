@@ -149,11 +149,12 @@ func TestAuthorModule_SubmitExtrinsic_InQueue(t *testing.T) {
 		Validity:  val,
 	}
 
-	txQueue.Push(expected)
+	_, err := txQueue.Push(expected)
+	require.Nil(t, err)
 
 	// this should cause error since transaction is already in txQueue
-	err := auth.SubmitExtrinsic(nil, &ext, res)
-	require.EqualError(t, err, "transaction is already in pool")
+	err = auth.SubmitExtrinsic(nil, &ext, res)
+	require.EqualError(t, err, transaction.ErrTransactionExists.Error())
 
 }
 
