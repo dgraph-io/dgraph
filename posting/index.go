@@ -622,7 +622,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		if err := WriteBatchWriter(tmpWriter, kvList); err != nil {
+		if err := x.WriteBatchWriter(tmpWriter, kvList); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
@@ -673,7 +673,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 
 			// We choose to write the PL at r.startTs, so it won't be read by txns,
 			// which occurred before this schema mutation.
-
 			if err := writer.SetEntryAt(
 				(&badger.Entry{Key: kv.Key,
 					Value:    kv.Value,

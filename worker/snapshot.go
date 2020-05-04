@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -42,12 +43,12 @@ type newWriteBatch struct {
 	wb *badger.WriteBatch
 }
 
-func newWriteBatchWriter(db *badger.DB) *newwriteBatch {
+func newWriteBatchWriter(db *badger.DB) *newWriteBatch {
 	return &newwriteBatch{wb: db.NewManagedWriteBatch()}
 }
 
 func (nwb *newWriteBatch) Write(kvs *bpb.KVList) error {
-	if err := WriteBatchWriter(nwb.wb, kvs); err != nil {
+	if err := x.WriteBatchWriter(nwb.wb, kvs); err != nil {
 		return err
 	}
 	return nil
@@ -80,6 +81,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		if err := sw.Prepare(); err != nil {
 			return 0, err
 		}
+
 		writer = sw
 	} else {
 		writer = newWriteBatchWriter(pstore)
@@ -106,7 +108,6 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
 			return 0, err
 		}
-
 		count += len(kvs.Kv)
 	}
 	if err := writer.Flush(); err != nil {

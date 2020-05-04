@@ -854,6 +854,7 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 func WriteBatchWriter(writer *badger.WriteBatch, kvList *bpb.KVList) error {
 	for _, kv := range kvList.Kv {
 		e := &badger.Entry{Key: kv.Key, Value: kv.Value}
+		//
 		if len(kv.UserMeta) > 0 {
 			e.UserMeta = kv.UserMeta[0]
 		}
