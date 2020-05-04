@@ -104,6 +104,20 @@ type TestCase struct {
 	filter map[string]interface{}
 }
 
+func getJWT(t *testing.T, user, role string) string {
+	authMeta := testutil.AuthMeta{
+		PublicKey: metainfo.PublicKey,
+		Namespace: metainfo.Namespace,
+		AuthVars: map[string]interface{}{
+			"USER": user,
+			"ROLE": role,
+		},
+	}
+	jwtToken, err := authMeta.GetSignedToken()
+	require.NoError(t, err)
+	return jwtToken
+}
+
 func TestOrRBACFilter(t *testing.T) {
 	t.Skip()
 	testCases := []TestCase{}
@@ -122,18 +136,7 @@ func TestOrRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -162,23 +165,12 @@ func getColID(t *testing.T, tcase TestCase) string {
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
-
-	authMeta := testutil.AuthMeta{
-		PublicKey: metainfo.PublicKey,
-		Namespace: metainfo.Namespace,
-		AuthVars: map[string]interface{}{
-			"USER": tcase.user,
-			"ROLE": tcase.role,
-		},
-	}
-	jwtToken, err := authMeta.GetSignedToken()
-	require.NoError(t, err)
-	getUserParams.Headers.Add(metainfo.Header, jwtToken)
+	getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
 	require.Nil(t, err)
 
 	if len(result.QueryColumn) > 0 {
@@ -227,18 +219,7 @@ func TestRootGetFilter(t *testing.T) {
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -284,18 +265,7 @@ func TestDeepFilter(t *testing.T) {
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -332,18 +302,7 @@ func TestRootFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -370,18 +329,7 @@ func TestRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -408,18 +356,7 @@ func TestAndRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -517,18 +454,7 @@ func TestNestedFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": tcase.user,
-					"ROLE": tcase.role,
-				},
-			}
-			jwtToken, err := authMeta.GetSignedToken()
-			require.NoError(t, err)
-			getUserParams.Headers.Add(metainfo.Header, jwtToken)
+			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -578,17 +504,7 @@ func TestDeleteAuthRule(t *testing.T) {
 				"filter": tcase.filter,
 			},
 		}
-
-		authMeta := testutil.AuthMeta{
-			PublicKey: metainfo.PublicKey,
-			Namespace: metainfo.Namespace,
-			AuthVars: map[string]interface{}{
-				"USER": tcase.user,
-			},
-		}
-		jwtToken, err := authMeta.GetSignedToken()
-		require.NoError(t, err)
-		getUserParams.Headers.Add(metainfo.Header, jwtToken)
+		getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
@@ -649,17 +565,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 				"filter": tcase.filter,
 			},
 		}
-
-		authMeta := testutil.AuthMeta{
-			PublicKey: metainfo.PublicKey,
-			Namespace: metainfo.Namespace,
-			AuthVars: map[string]interface{}{
-				"USER": tcase.user,
-			},
-		}
-		jwtToken, err := authMeta.GetSignedToken()
-		require.NoError(t, err)
-		getUserParams.Headers.Add(metainfo.Header, jwtToken)
+		getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
