@@ -43,18 +43,19 @@ func BenchmarkWriter(b *testing.B) {
 		return KVList
 	}
 
-	writeInBagder := func(db *badger.DB, KVList []kv, wg *sync.WaitGroup) {
+	writeInBadger := func(db *badger.DB, KVList []kv, wg *sync.WaitGroup) {
 		defer wg.Done()
 		wb := db.NewManagedWriteBatch()
 		for _, typ := range KVList {
 			e := &badger.Entry{Key: typ.key, Value: typ.value}
-			wb.SetEntryAt(e, 1)
+			err := wb.SetEntryAt(e, 1)
+			require.NoError(b, err)
 		}
 		require.NoError(b, wb.Flush())
 
 	}
 
-	writeInBagder2 := func(wb *badger.WriteBatch, KVList []kv, wg *sync.WaitGroup) {
+	writeInBadger2 := func(wb *badger.WriteBatch, KVList []kv, wg *sync.WaitGroup) {
 		defer wg.Done()
 
 		for _, typ := range KVList {
@@ -90,7 +91,8 @@ func BenchmarkWriter(b *testing.B) {
 			for _, typ := range KVList {
 				k := typ.key
 				v := typ.value
-				w.SetAt(k, v, BitSchemaPosting, 1)
+				err := w.SetAt(k, v, BitSchemaPosting, 1)
+				require.NoError(b, err)
 			}
 			require.NoError(b, w.Flush())
 
@@ -115,7 +117,8 @@ func BenchmarkWriter(b *testing.B) {
 			wb := db.NewManagedWriteBatch()
 			for _, typ := range KVList {
 				e := &badger.Entry{Key: typ.key, Value: typ.value}
-				wb.SetEntryAt(e, 1)
+				err := wb.SetEntryAt(e, 1)
+				require.NoError(b, err)
 			}
 			require.NoError(b, wb.Flush())
 		}
@@ -138,11 +141,11 @@ func BenchmarkWriter(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
 			wg.Add(5)
-			go writeInBagder(db, KVList[:10000], &wg)
-			go writeInBagder(db, KVList[10001:20000], &wg)
-			go writeInBagder(db, KVList[20001:30000], &wg)
-			go writeInBagder(db, KVList[30001:40000], &wg)
-			go writeInBagder(db, KVList[40001:], &wg)
+			go writeInBadger(db, KVList[:10000], &wg)
+			go writeInBadger(db, KVList[10001:20000], &wg)
+			go writeInBadger(db, KVList[20001:30000], &wg)
+			go writeInBadger(db, KVList[30001:40000], &wg)
+			go writeInBadger(db, KVList[40001:], &wg)
 			wg.Wait()
 
 		}
@@ -166,11 +169,11 @@ func BenchmarkWriter(b *testing.B) {
 			var wg sync.WaitGroup
 			wg.Add(5)
 			wb := db.NewManagedWriteBatch()
-			go writeInBagder2(wb, KVList[:10000], &wg)
-			go writeInBagder2(wb, KVList[10001:20000], &wg)
-			go writeInBagder2(wb, KVList[20001:30000], &wg)
-			go writeInBagder2(wb, KVList[30001:40000], &wg)
-			go writeInBagder2(wb, KVList[40001:], &wg)
+			go writeInBadger2(wb, KVList[:10000], &wg)
+			go writeInBadger2(wb, KVList[10001:20000], &wg)
+			go writeInBadger2(wb, KVList[20001:30000], &wg)
+			go writeInBadger2(wb, KVList[30001:40000], &wg)
+			go writeInBadger2(wb, KVList[40001:], &wg)
 			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}

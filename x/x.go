@@ -850,8 +850,8 @@ func AskUserPassword(userid string, pwdType string, times int) (string, error) {
 	return password, nil
 }
 
-//WriteBatchWriter exposes Write API batch writer.
-func WriteBatchWriter(writer *badger.WriteBatch, kvList *bpb.KVList) error {
+//BulkWriteKVsBatchWriter exposes Write API batch writer.
+func BulkWriteKVsBatchWriter(writer *badger.WriteBatch, kvList *bpb.KVList) error {
 	for _, kv := range kvList.Kv {
 		e := &badger.Entry{Key: kv.Key, Value: kv.Value}
 		//

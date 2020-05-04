@@ -39,22 +39,22 @@ type badgerWriter interface {
 	Write(kvs *bpb.KVList) error
 	Flush() error
 }
-type newWriteBatch struct {
+type newBatchWriter struct {
 	wb *badger.WriteBatch
 }
 
-func newWriteBatchWriter(db *badger.DB) *newWriteBatch {
-	return &newwriteBatch{wb: db.NewManagedWriteBatch()}
+func writeBatchWriter(db *badger.DB) *newBatchWriter {
+	return &newBatchWriter{wb: db.NewManagedWriteBatch()}
 }
 
-func (nwb *newWriteBatch) Write(kvs *bpb.KVList) error {
-	if err := x.WriteBatchWriter(nwb.wb, kvs); err != nil {
+func (nwb *newBatchWriter) Write(kvs *bpb.KVList) error {
+	if err := x.BulkWriteKVsBatchWriter(nwb.wb, kvs); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (nwb *newWriteBatch) Flush() error {
+func (nwb *newBatchWriter) Flush() error {
 	return nwb.wb.Flush()
 }
 
@@ -84,7 +84,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 		writer = sw
 	} else {
-		writer = newWriteBatchWriter(pstore)
+		writer = writeBatchWriter(pstore)
 	}
 
 	// We can use count to check the number of posting lists returned in tests.

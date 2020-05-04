@@ -622,7 +622,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	stream.Send = func(kvList *bpb.KVList) error {
-		if err := x.WriteBatchWriter(tmpWriter, kvList); err != nil {
+		if err := x.BulkWriteKVsBatchWriter(tmpWriter, kvList); err != nil {
 			return errors.Wrap(err, "error setting entries in temp badger")
 		}
 
