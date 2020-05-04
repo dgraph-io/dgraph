@@ -323,7 +323,7 @@ func nameCheck(defn *ast.Definition) *gqlerror.Error {
 			for _, fld := range defn.Fields {
 				// If we find any query or mutation field defined without a @custom directive, that
 				// is an error for us.
-				custom := fld.Directives.ForName("custom")
+				custom := fld.Directives.ForName(customDirective)
 				if custom == nil {
 					errMesg = "GraphQL Query and Mutation types are only allowed to have fields " +
 						"with @custom directive. Other fields are built automatically for you. " +

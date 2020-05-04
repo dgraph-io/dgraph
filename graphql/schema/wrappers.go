@@ -627,15 +627,7 @@ func (f *field) Include() bool {
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
-	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	if typeDef == nil {
-		return false, nil
-	}
-	tf := typeDef.Fields.ForName(f.Name())
-	if tf == nil {
-		return false, nil
-	}
-	custom := tf.Directives.ForName("custom")
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
 		return false, nil
 	}
