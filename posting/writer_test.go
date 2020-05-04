@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"math"
 	"os"
+	"sync"
 	"testing"
 
 	"github.com/dgraph-io/badger/v2"
@@ -42,6 +43,27 @@ func BenchmarkWriter(b *testing.B) {
 		return KVList
 	}
 
+	writeInBagder := func(db *badger.DB, KVList []kv, wg *sync.WaitGroup) {
+		defer wg.Done()
+		wb := db.NewManagedWriteBatch()
+		for _, typ := range KVList {
+			e := &badger.Entry{Key: typ.key, Value: typ.value}
+			wb.SetEntryAt(e, 1)
+		}
+		require.NoError(b, wb.Flush())
+
+	}
+
+	writeInBagder2 := func(wb *badger.WriteBatch, KVList []kv, wg *sync.WaitGroup) {
+		defer wg.Done()
+
+		for _, typ := range KVList {
+			e := &badger.Entry{Key: typ.key, Value: typ.value}
+			wb.SetEntryAt(e, 1)
+		}
+
+	}
+
 	dbOpts := badger.DefaultOptions("").
 		WithLogger(nil).
 		WithSyncWrites(false).
@@ -50,6 +72,7 @@ func BenchmarkWriter(b *testing.B) {
 
 	KVList := createKVList()
 
+	//Vanilla TxnWriter
 	b.Run("TxnWriter", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
@@ -73,7 +96,8 @@ func BenchmarkWriter(b *testing.B) {
 
 		}
 	})
-	b.Run("WriteBatch", func(b *testing.B) {
+	//Single threaded BatchWriter
+	b.Run("WriteBatch1", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -93,6 +117,61 @@ func BenchmarkWriter(b *testing.B) {
 				e := &badger.Entry{Key: typ.key, Value: typ.value}
 				wb.SetEntryAt(e, 1)
 			}
+			require.NoError(b, wb.Flush())
+		}
+	})
+	//Multi threaded Batchwriter with thread contention in WriteBatch
+	b.Run("WriteBatchMultThread1", func(b *testing.B) {
+		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		require.NoError(b, err)
+		defer os.RemoveAll(tmpIndexDir)
+
+		dbOpts.Dir = tmpIndexDir
+		dbOpts.ValueDir = tmpIndexDir
+
+		var db, err2 = badger.OpenManaged(dbOpts)
+		require.NoError(b, err2)
+		defer db.Close()
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			var wg sync.WaitGroup
+			wg.Add(5)
+			go writeInBagder(db, KVList[:10000], &wg)
+			go writeInBagder(db, KVList[10001:20000], &wg)
+			go writeInBagder(db, KVList[20001:30000], &wg)
+			go writeInBagder(db, KVList[30001:40000], &wg)
+			go writeInBagder(db, KVList[40001:], &wg)
+			wg.Wait()
+
+		}
+	})
+	//Multi threaded Batchwriter with thread contention in SetEntry
+	b.Run("WriteBatchMultThread2", func(b *testing.B) {
+		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
+		require.NoError(b, err)
+		defer os.RemoveAll(tmpIndexDir)
+
+		dbOpts.Dir = tmpIndexDir
+		dbOpts.ValueDir = tmpIndexDir
+
+		var db, err2 = badger.OpenManaged(dbOpts)
+		require.NoError(b, err2)
+		defer db.Close()
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			var wg sync.WaitGroup
+			wg.Add(5)
+			wb := db.NewManagedWriteBatch()
+			go writeInBagder2(wb, KVList[:10000], &wg)
+			go writeInBagder2(wb, KVList[10001:20000], &wg)
+			go writeInBagder2(wb, KVList[20001:30000], &wg)
+			go writeInBagder2(wb, KVList[30001:40000], &wg)
+			go writeInBagder2(wb, KVList[40001:], &wg)
+			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}
 	})
