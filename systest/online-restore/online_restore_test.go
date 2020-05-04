@@ -161,3 +161,37 @@ func TestInvalidBackupId(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "failed to verify backup")
 }
+
+func TestListBackups(t *testing.T) {
+	query := `query backup() {
+		listBackups(input: {location: "/data/backup"}) {
+			backupId
+			backupNum
+			encrypted
+			groups {
+				groupId
+				predicates    
+			}
+			path
+			since
+			type
+		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: query,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	sbuf := string(buf)
+	require.Contains(t, sbuf, `"backupId":"heuristic_sammet9"`)
+	require.Contains(t, sbuf, `"backupNum":1`)
+	require.Contains(t, sbuf, `"backupNum":2`)
+	require.Contains(t, sbuf, "initial_release_date")
+}
