@@ -38,7 +38,7 @@ type badgerWriter interface {
 	Write(kvs *bpb.KVList) error
 	Flush() error
 }
-type newwriteBatch struct {
+type newWriteBatch struct {
 	wb *badger.WriteBatch
 }
 
@@ -46,20 +46,14 @@ func newWriteBatchWriter(db *badger.DB) *newwriteBatch {
 	return &newwriteBatch{wb: db.NewManagedWriteBatch()}
 }
 
-func (nwb *newwriteBatch) Write(kvs *bpb.KVList) error {
-	for _, kv := range kvs.Kv {
-		e := &badger.Entry{Key: kv.Key, Value: kv.Value}
-		if len(kv.UserMeta) > 0 {
-			e.UserMeta = kv.UserMeta[0]
-		}
-		if err := nwb.wb.SetEntryAt(e, kv.Version); err != nil {
-			return err
-		}
+func (nwb *newWriteBatch) Write(kvs *bpb.KVList) error {
+	if err := WriteBatchWriter(nwb.wb, kvs); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (nwb *newwriteBatch) Flush() error {
+func (nwb *newWriteBatch) Flush() error {
 	return nwb.wb.Flush()
 }
 
