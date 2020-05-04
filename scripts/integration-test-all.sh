@@ -9,10 +9,9 @@ QTD=1
 SLEEP_TIMEOUT=5
 TEST_QTD=3
 
-#PORT AND RPC_PORT 3 initial digits, to be concat with a suffix later when node is initialized
-PORT="700"
-RPC_PORT="854"
-IP_ADDR="0.0.0.0"
+PORT=7000
+RPC_PORT=8540
+HOSTNAME="0.0.0.0"
 MODE="stable"
 
 KEY="alice"
@@ -57,8 +56,8 @@ arr=()
 
 start_func() {
   echo "starting gossamer node $i in background ..."
-  "$PWD"/bin/gossamer --port=$PORT"$i" --key=$KEY --datadir="$DATA_DIR$i" \
-    --rpc --rpchost=$IP_ADDR --rpcport=$RPC_PORT"$i" --rpcmods=system,author,chain >"$DATA_DIR"/node"$i".log 2>&1 & disown
+  "$PWD"/bin/gossamer --port=$(($PORT + $i)) --key=$KEY --datadir="$DATA_DIR$i" \
+    --rpc --rpchost=$HOSTNAME --rpcport=$(($RPC_PORT + $i)) --rpcmods=system,author,chain >"$DATA_DIR"/node"$i".log 2>&1 & disown
 
   GOSSAMER_PID=$!
   echo "started gossamer node, pid=$GOSSAMER_PID"
@@ -84,9 +83,8 @@ set +e
 if [[ -z $TEST || $TEST == "rpc" ]]; then
 
   for i in $(seq 1 "$TEST_QTD"); do
-    HOST_RPC=http://$IP_ADDR:$RPC_PORT"$i"
-    echo "going to test gossamer node $HOST_RPC ..."
-    GOSSAMER_INTEGRATION_TEST_MODE=$MODE GOSSAMER_NODE_HOST=$HOST_RPC go test ./tests/rpc/... -timeout=60s -v -count=1
+    echo "going to test gossamer node $(($RPC_PORT + $i))..."
+    GOSSAMER_INTEGRATION_TEST_MODE=$MODE NETWORK_SIZE=$QTD HOSTNAME=$HOSTNAME PORT=$(($RPC_PORT + $i)) go test ./tests/rpc/... -timeout=60s -v -count=1
 
     RPC_FAIL=$?
   done

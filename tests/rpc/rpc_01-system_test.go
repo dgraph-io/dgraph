@@ -19,28 +19,22 @@ package rpc
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/tests/utils"
 	"github.com/stretchr/testify/require"
 )
 
 func TestSystemRPC(t *testing.T) {
-	if GOSSAMER_INTEGRATION_TEST_MODE != rpcSuite {
+	if utils.GOSSAMER_INTEGRATION_TEST_MODE != rpcSuite {
 		_, _ = fmt.Fprintln(os.Stdout, "Going to skip RPC suite tests")
 		return
 	}
 
-	testsCases := []struct {
-		description string
-		method      string
-		expected    interface{}
-		skip        bool
-	}{
+	testCases := []*testCase{
 		{ //TODO
 			description: "test system_name",
 			method:      "system_name",
@@ -113,41 +107,25 @@ func TestSystemRPC(t *testing.T) {
 		},
 	}
 
-	t.Log("going to start gossamer")
-
-	localPidList, err := StartNodes(t, make([]*exec.Cmd, 1))
+	t.Log("starting gossamer...")
+	nodes, err := utils.StartNodes(t, 3)
 
 	//use only first server for tests
 	require.Nil(t, err)
 
 	time.Sleep(time.Second) // give server a second to start
 
-	for _, test := range testsCases {
+	for _, test := range testCases {
 		t.Run(test.description, func(t *testing.T) {
-			if test.skip {
-				t.Skip("RPC endpoint not yet implemented")
-				return
-			}
-
-			respBody, err := PostRPC(t, test.method, "http://"+GOSSAMER_NODE_HOST+":"+currentPort, "{}")
-			require.Nil(t, err)
-
-			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
-			DecodeRPC(t, respBody, target)
-
-			require.NotNil(t, target)
-
-			t.Log("Will start assertion for ", "target", target, "type", reflect.TypeOf(target))
+			target := getResponse(t, test)
 
 			switch v := target.(type) {
-
-			//TODO: #815
 			case *modules.SystemHealthResponse:
 				t.Log("Will assert SystemHealthResponse", "target", target)
 
 				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.IsSyncing, v.Health.IsSyncing)
 				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, v.Health.ShouldHavePeers)
-				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, v.Health.Peers)
+				require.GreaterOrEqual(t, v.Health.Peers, test.expected.(modules.SystemHealthResponse).Health.Peers)
 
 			case *modules.SystemNetworkStateResponse:
 				t.Log("Will assert SystemNetworkStateResponse", "target", target)
@@ -177,8 +155,8 @@ func TestSystemRPC(t *testing.T) {
 		})
 	}
 
-	t.Log("going to TearDown Gossamer node")
+	t.Log("going to tear down gossamer...")
 
-	errList := TearDown(t, localPidList)
+	errList := utils.TearDown(t, nodes)
 	require.Len(t, errList, 0)
 }

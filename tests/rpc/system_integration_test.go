@@ -18,34 +18,39 @@ package rpc
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/tests/utils"
 
 	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
 func TestStableNetworkRPC(t *testing.T) {
-	if GOSSAMER_INTEGRATION_TEST_MODE != "stable" {
+	if utils.GOSSAMER_INTEGRATION_TEST_MODE != "stable" {
 		t.Skip("Integration tests are disabled, going to skip.")
 	}
 	log.Info("Going to run NetworkAPI tests",
-		"GOSSAMER_INTEGRATION_TEST_MODE", GOSSAMER_INTEGRATION_TEST_MODE,
-		"GOSSAMER_NODE_HOST", GOSSAMER_NODE_HOST)
+		"GOSSAMER_INTEGRATION_TEST_MODE", utils.GOSSAMER_INTEGRATION_TEST_MODE,
+		"HOSTNAME", utils.HOSTNAME,
+		"PORT", utils.PORT,
+	)
 
-	testsCases := []struct {
-		description string
-		method      string
-		expected    interface{}
-	}{
+	networkSize, err := strconv.Atoi(utils.NETWORK_SIZE)
+	if err != nil {
+		networkSize = 0
+	}
+
+	testsCases := []*testCase{
 		{
 			description: "test system_health",
 			method:      "system_health",
 			expected: modules.SystemHealthResponse{
 				Health: common.Health{
-					Peers:           2,
+					Peers:           networkSize - 1,
 					IsSyncing:       false,
 					ShouldHavePeers: true,
 				},
@@ -71,22 +76,19 @@ func TestStableNetworkRPC(t *testing.T) {
 
 	for _, test := range testsCases {
 		t.Run(test.description, func(t *testing.T) {
-
-			respBody, err := PostRPC(t, test.method, GOSSAMER_NODE_HOST, "{}")
+			respBody, err := utils.PostRPC(t, test.method, "http://"+utils.HOSTNAME+":"+utils.PORT, "{}")
 			require.Nil(t, err)
 
 			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
-			DecodeRPC(t, respBody, target)
+			utils.DecodeRPC(t, respBody, target)
 
-			log.Debug("Will assert payload", "target", target)
 			switch v := target.(type) {
-
 			case *modules.SystemHealthResponse:
 				t.Log("Will assert SystemHealthResponse", "target", target)
 
 				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.IsSyncing, v.Health.IsSyncing)
 				require.Equal(t, test.expected.(modules.SystemHealthResponse).Health.ShouldHavePeers, v.Health.ShouldHavePeers)
-				require.GreaterOrEqual(t, test.expected.(modules.SystemHealthResponse).Health.Peers, v.Health.Peers)
+				require.GreaterOrEqual(t, v.Health.Peers, test.expected.(modules.SystemHealthResponse).Health.Peers)
 
 			case *modules.SystemNetworkStateResponse:
 				t.Log("Will assert SystemNetworkStateResponse", "target", target)
@@ -98,7 +100,7 @@ func TestStableNetworkRPC(t *testing.T) {
 				t.Log("Will assert SystemPeersResponse", "target", target)
 
 				require.NotNil(t, v.Peers)
-				require.GreaterOrEqual(t, len(v.Peers), 2)
+				require.GreaterOrEqual(t, len(v.Peers), networkSize-1)
 
 				for _, vv := range v.Peers {
 					require.NotNil(t, vv.PeerID)
@@ -107,10 +109,7 @@ func TestStableNetworkRPC(t *testing.T) {
 					require.NotNil(t, vv.BestHash)
 					require.NotNil(t, vv.BestNumber)
 				}
-
 			}
-
 		})
 	}
-
 }

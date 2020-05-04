@@ -19,25 +19,20 @@ package rpc
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"reflect"
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/tests/utils"
 	"github.com/stretchr/testify/require"
 )
 
 func TestChainRPC(t *testing.T) {
-	if GOSSAMER_INTEGRATION_TEST_MODE != rpcSuite {
+	if utils.GOSSAMER_INTEGRATION_TEST_MODE != rpcSuite {
 		_, _ = fmt.Fprintln(os.Stdout, "Going to skip RPC suite tests")
 		return
 	}
-	testsCases := []struct {
-		description string
-		method      string
-		expected    interface{}
-		skip        bool
-	}{
+
+	testCases := []*testCase{
 		{ //TODO
 			description: "test chain_getHeader",
 			method:      "chain_getHeader",
@@ -60,33 +55,19 @@ func TestChainRPC(t *testing.T) {
 		},
 	}
 
-	t.Log("going to start gossamer")
-
-	localPidList, err := StartNodes(t, make([]*exec.Cmd, 1))
+	t.Log("starting gossamer...")
+	nodes, err := utils.StartNodes(t, 1)
 	require.Nil(t, err)
 
 	time.Sleep(time.Second) // give server a second to start
 
-	for _, test := range testsCases {
+	for _, test := range testCases {
 		t.Run(test.description, func(t *testing.T) {
-			if test.skip {
-				t.Skip("RPC endpoint not yet implemented")
-				return
-			}
-
-			respBody, err := PostRPC(t, test.method, "http://"+GOSSAMER_NODE_HOST+":"+currentPort, "{}")
-			require.Nil(t, err)
-
-			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
-			DecodeRPC(t, respBody, target)
-
-			require.NotNil(t, target)
-
+			_ = getResponse(t, test)
 		})
 	}
 
-	t.Log("going to TearDown Gossamer node")
-
-	errList := TearDown(t, localPidList)
+	t.Log("going to tear down gossamer...")
+	errList := utils.TearDown(t, nodes)
 	require.Len(t, errList, 0)
 }

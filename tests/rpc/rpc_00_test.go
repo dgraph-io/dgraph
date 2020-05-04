@@ -19,11 +19,16 @@ package rpc
 import (
 	"fmt"
 	"os"
+	"reflect"
+	"strconv"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/tests/utils"
+	"github.com/stretchr/testify/require"
 )
 
-const (
-	currentPort = "8540"
+var (
+	currentPort = strconv.Itoa(utils.BaseRPCPort)
 	rpcSuite    = "rpc_suite"
 )
 
@@ -33,4 +38,27 @@ func TestMain(m *testing.M) {
 	// Start all tests
 	code := m.Run()
 	os.Exit(code)
+}
+
+type testCase struct {
+	description string
+	method      string
+	expected    interface{}
+	skip        bool
+}
+
+func getResponse(t *testing.T, test *testCase) interface{} {
+	if test.skip {
+		t.Skip("RPC endpoint not yet implemented")
+		return nil
+	}
+
+	respBody, err := utils.PostRPC(t, test.method, "http://"+utils.HOSTNAME+":"+currentPort, "{}")
+	require.Nil(t, err)
+
+	target := reflect.New(reflect.TypeOf(test.expected)).Interface()
+	utils.DecodeRPC(t, respBody, target)
+	require.NotNil(t, target)
+
+	return target
 }

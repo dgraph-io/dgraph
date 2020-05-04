@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+package utils
 
 import (
 	"fmt"
@@ -32,23 +32,36 @@ import (
 
 //TODO: #799
 var (
-	keyList = []string{"alice", "bob", "charlie", "dave", "eve", "fred", "george", "heather"}
+	keyList  = []string{"alice", "bob", "charlie", "dave", "eve", "fred", "george", "heather"}
+	basePort = 7000
+
+	// BaseRPCPort is the starting RPC port for test nodes
+	// It increases by 2 for each node added, since node a port uses --rpcport as the HTTP port and --rpcport + 1 as the websockets port
+	BaseRPCPort = 8540
 )
 
-// RunGossamer will start a gossamer instance and check if its online and returns CMD, otherwise return err
-func RunGossamer(t *testing.T, nodeNumb int, dataDir string) (*exec.Cmd, error) {
+// Node represents a gossamer process
+type Node struct {
+	Process *exec.Cmd
+	Key     string
+	RPCPort string
+	Idx     int
+}
 
+// RunGossamer will start a gossamer instance and check if its online and returns CMD, otherwise return err
+func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return nil, err
 	}
 
 	gossamerCMD := filepath.Join(currentDir, "../..", "bin/gossamer")
+	genesisPath := filepath.Join(currentDir, "../..", "node/gssmr/genesis.json")
 
 	//nolint
 	cmdInit := exec.Command(gossamerCMD, "init",
-		"--datadir", dataDir+strconv.Itoa(nodeNumb),
-		"--genesis", filepath.Join(currentDir, "../..", "node/gssmr/genesis.json"),
+		"--datadir", dataDir+strconv.Itoa(idx),
+		"--genesis", genesisPath,
 		"--force",
 	)
 
@@ -60,22 +73,25 @@ func RunGossamer(t *testing.T, nodeNumb int, dataDir string) (*exec.Cmd, error) 
 		return nil, err
 	}
 
+	// TODO: get init exit code to see if node was successfully initialized
 	t.Log("Gossamer init ok")
 
+	key := keyList[idx]
+	rpcPort := strconv.Itoa(BaseRPCPort + idx*2) // needs *2 since previous node uses port for rpc and port+1 for WS
+
 	//nolint
-	cmd := exec.Command(gossamerCMD, "--port", "700"+strconv.Itoa(nodeNumb),
-		"--key", keyList[nodeNumb],
-		"--datadir", dataDir+strconv.Itoa(nodeNumb),
-		"--rpchost", GOSSAMER_NODE_HOST,
-		"--rpcport", "854"+strconv.Itoa(nodeNumb),
+	cmd := exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
+		"--key", key,
+		"--datadir", dataDir+strconv.Itoa(idx),
+		"--rpchost", HOSTNAME,
+		"--rpcport", rpcPort,
 		"--rpcmods", "system,author,chain",
-		"--key", keyList[nodeNumb],
 		"--roles", "4",
 		"--rpc",
 	)
 
 	// a new file will be created, it will be used for log the outputs from the node
-	f, err := os.Create(filepath.Join(dataDir+strconv.Itoa(nodeNumb), "gossamer.log"))
+	f, err := os.Create(filepath.Join(dataDir+strconv.Itoa(idx), "gossamer.log"))
 	if err != nil {
 		t.Fatalf("Error when trying to set a log file for gossamer output: %v", err)
 	}
@@ -93,28 +109,31 @@ func RunGossamer(t *testing.T, nodeNumb int, dataDir string) (*exec.Cmd, error) 
 		return nil, err
 	}
 
-	t.Log("Gossamer start", "err", err)
-
 	t.Log("wait few secs for node to come up", "cmd.Process.Pid", cmd.Process.Pid)
 	var started bool
 
 	for i := 0; i < 10; i++ {
 		time.Sleep(1 * time.Second)
-		// TODO: #801 port numbers will overflow once reach +10, upgrade code to handle it
-		if err = CheckNodeStarted(t, "http://"+GOSSAMER_NODE_HOST+":854"+strconv.Itoa(nodeNumb)); err == nil {
+		if err = CheckNodeStarted(t, "http://"+HOSTNAME+":"+rpcPort); err == nil {
 			started = true
 			break
 		} else {
 			t.Log("Waiting for Gossamer to start", "err", err)
 		}
 	}
+
 	if started {
-		t.Log("Gossamer started :D", "cmd.Process.Pid", cmd.Process.Pid)
+		t.Log("Gossamer started", "key", key, "cmd.Process.Pid", cmd.Process.Pid)
 	} else {
-		t.Fatal("Gossamer node never managed to start!", "err", err)
+		t.Fatal("Gossamer didn't start!", "err", err)
 	}
 
-	return cmd, nil
+	return &Node{
+		Process: cmd,
+		Key:     key,
+		RPCPort: rpcPort,
+		Idx:     idx,
+	}, nil
 }
 
 // CheckNodeStarted check if gossamer node is already started
@@ -133,8 +152,6 @@ func CheckNodeStarted(t *testing.T, gossamerHost string) error {
 		return fmt.Errorf("no peers")
 	}
 
-	//if we get here, we assume it worked :D
-
 	return nil
 }
 
@@ -147,34 +164,33 @@ func KillProcess(t *testing.T, cmd *exec.Cmd) error {
 	return err
 }
 
-// StartNodes will spin gossamer nodes
-func StartNodes(t *testing.T, pidList []*exec.Cmd) ([]*exec.Cmd, error) {
-	var newPidList []*exec.Cmd
+// StartNodes will spin up `num` gossamer nodes
+func StartNodes(t *testing.T, num int) ([]*Node, error) {
+	var nodes []*Node
 
-	tempDir, err := ioutil.TempDir("", "gossamer-stress")
+	tempDir, err := ioutil.TempDir("", "gossamer-stress-")
 	if err != nil {
 		t.Log("failed to create tempDir")
 		return nil, err
 	}
 
-	for i, cmd := range pidList {
-		t.Log("starting gossamer ", "cmd", cmd, "i", i)
-		cmd, err := RunGossamer(t, i, tempDir+strconv.Itoa(i))
+	for i := 0; i < num; i++ {
+		node, err := RunGossamer(t, i, tempDir+strconv.Itoa(i))
 		if err != nil {
 			t.Log("failed to runGossamer", "i", i)
 			return nil, err
 		}
 
-		newPidList = append(newPidList, cmd)
+		nodes = append(nodes, node)
 	}
 
-	return newPidList, nil
+	return nodes, nil
 }
 
 // TearDown will stop gossamer nodes
-func TearDown(t *testing.T, pidList []*exec.Cmd) (errorList []error) {
-	for i := range pidList {
-		cmd := pidList[i]
+func TearDown(t *testing.T, nodes []*Node) (errorList []error) {
+	for i := range nodes {
+		cmd := nodes[i].Process
 		err := KillProcess(t, cmd)
 		if err != nil {
 			t.Log("failed to killGossamer", "i", i, "cmd", cmd)

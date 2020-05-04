@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+package utils
 
 import (
 	"encoding/json"
@@ -28,9 +28,10 @@ import (
 var (
 	GOSSAMER_INTEGRATION_TEST_MODE = os.Getenv("GOSSAMER_INTEGRATION_TEST_MODE")
 
-	GOSSAMER_NODE_HOST = os.Getenv("GOSSAMER_NODE_HOST")
+	HOSTNAME = os.Getenv("HOSTNAME")
+	PORT     = os.Getenv("PORT")
 
-	NETWORK_SIZE_STR = os.Getenv("NETWORK_SIZE")
+	NETWORK_SIZE = os.Getenv("NETWORK_SIZE")
 
 	ContentTypeJSON   = "application/json"
 	dialTimeout       = 60 * time.Second

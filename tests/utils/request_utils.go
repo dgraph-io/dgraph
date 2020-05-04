@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package rpc
+package utils
 
 import (
 	"bytes"
@@ -37,15 +37,17 @@ func PostRPC(t *testing.T, method, host, params string) ([]byte, error) {
 
 	r, err := http.NewRequest("POST", host, buf)
 	if err != nil {
-		return nil, fmt.Errorf("not available")
+		return nil, err
 	}
 
 	r.Header.Set("Content-Type", ContentTypeJSON)
 	r.Header.Set("Accept", ContentTypeJSON)
 
 	resp, err := httpClient.Do(r)
-	if err != nil || resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("not available")
+	if err != nil {
+		return nil, err
+	} else if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("status code not OK")
 	}
 
 	defer func() {
