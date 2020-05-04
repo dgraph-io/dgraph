@@ -212,7 +212,6 @@ func TestAuthRSAJWTAlgo(t *testing.T) {
 				"USER": "user1",
 				"ROLE": tcase.Role,
 			}
-
 			ctx := addClaimsToContext(context.Background(), t, authVars)
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
@@ -240,11 +239,10 @@ func addClaimsToContext(
 		},
 	}
 
-	var token *jwt.Token
 	var signedString string
 	var err error
 	if metainfo.Algo == "HS256" {
-		token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		signedString, err = token.SignedString([]byte(metainfo.HMACPublicKey))
 		require.NoError(t, err)
 	} else if metainfo.Algo == "RS256" {
@@ -253,7 +251,7 @@ func addClaimsToContext(
 
 		privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
 		require.NoError(t, err, "Unable to parse private key")
-		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 		signedString, err = token.SignedString(privateKey)
 		require.NoError(t, err)
 	}

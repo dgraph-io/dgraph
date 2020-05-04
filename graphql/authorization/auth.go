@@ -63,12 +63,12 @@ func (m *AuthMeta) Parse(schema string) error {
 	authMetaRegex, err :=
 		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
 	if err != nil {
-		return errors.Errorf("error while parsing jwt authorization info.")
+		return errors.Errorf("error while parsing jwt authorization info: %v", err)
 	}
 	idx := authMetaRegex.FindAllStringSubmatchIndex(lastComment, -1)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
 		!strings.HasPrefix(lastComment, lastComment[idx[0][0]:idx[0][1]]) {
-		return errors.Errorf("error while parsing jwt authorization info.")
+		return errors.Errorf("error while parsing jwt authorization info")
 	}
 
 	m.Header = lastComment[idx[0][4]:idx[0][5]]
@@ -155,13 +155,13 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 func validateToken(jwtStr string) (map[string]interface{}, error) {
 	if len(metainfo.Algo) == 0 {
 		return nil, fmt.Errorf(
-			" jwt token cannot be validated because verificaiton algorithm is not set")
+			"jwt token cannot be validated because verificaiton algorithm is not set")
 	}
 	if metainfo.Algo == "HS256" && metainfo.HMACPublicKey == "" {
-		return nil, fmt.Errorf(" jwt token cannot be validated because HMAC key is empty")
+		return nil, fmt.Errorf("jwt token cannot be validated because HMAC key is empty")
 	}
 	if metainfo.Algo == "RS256" && metainfo.RSAPublicKey == nil {
-		return nil, fmt.Errorf(" jwt token cannot be validated because RSA public key is empty")
+		return nil, fmt.Errorf("jwt token cannot be validated because RSA public key is empty")
 	}
 
 	token, err :=
