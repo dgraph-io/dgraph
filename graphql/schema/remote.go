@@ -242,14 +242,9 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		return errors.Errorf("found return type mismatch for %s `%s`, expected `%s`, got `%s`.",
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
 	}
-
-	// Deep check the remote type.
-	expandedTypes, err := expandArg(introspectedRemoteQuery.Type, remoteIntrospection)
-	if err != nil {
-		return err
-	}
-	err = matchRemoteTypes(expandedTypes, metadata.schema)
-	if err != nil {
+	// Deep check the remote return type.
+	if err := matchDeepTypes(introspectedRemoteQuery.Type, remoteIntrospection,
+		metadata.schema); err != nil {
 		return err
 	}
 
@@ -302,6 +297,15 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 
 func missingRemoteTypeError(typName string) error {
 	return errors.Errorf("remote schema doesn't have any type named %s.", typName)
+}
+
+func matchDeepTypes(remoteType *gqlType, remoteSchema *introspectedSchema,
+	localSchema *ast.Schema) error {
+	expandedTypes, err := expandArg(remoteType, remoteSchema)
+	if err != nil {
+		return err
+	}
+	return matchRemoteTypes(expandedTypes, localSchema)
 }
 
 func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) error {
@@ -363,23 +367,16 @@ func matchArgSignature(md *argMatchingMetadata) error {
 			//if rootType.NamedType == "ID" {
 			//	rootType.NamedType = "String"
 			//}
-
-			// expand the given type and verify it with the local schema.
-			expandedTypes, err := expandArg(remoteArgTyp, md.introspection)
-			if err != nil {
-				return err
-			}
-			err = matchRemoteTypes(expandedTypes, md.schema)
-			if err != nil {
-				return err
-			}
-
 			expectedArgType := givenArgTyp.String()
 			gotArgType := remoteArgTyp.String()
 			if expectedArgType != gotArgType {
 				return errors.Errorf("found type mismatch for variable `$%s` in %s `%s`, expected"+
 					" `%s`, got `%s`.", givenArgVal.Raw, *md.operationType, *md.givenQryName,
 					expectedArgType, gotArgType)
+			}
+			// deep check the remote type and verify it with the local schema.
+			if err := matchDeepTypes(remoteArgTyp, md.introspection, md.schema); err != nil {
+				return err
 			}
 		case ast.ObjectValue:
 			if !(remoteArgTyp.Kind == "INPUT_OBJECT" || (remoteArgTyp.
@@ -495,8 +492,7 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 				typ.InputFields...)
 			// Expand the non scalar types.
 			for _, field := range param.typesToFields[typ.Name] {
-				_, ok := graphqlScalarType[field.Type.Name]
-				if !ok {
+				if !isGraphqlSpecScalar(field.Type.Name) {
 					// expand this field.
 					err := expandArgRecursively(field.Type.NamedType(), param)
 					if err != nil {
@@ -518,6 +514,9 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 // It also expands deep nested types.
 func expandArg(typeToBeExpanded *gqlType,
 	introspectedSchema *introspectedSchema) (map[string][]*gqlField, error) {
+	if isGraphqlSpecScalar(typeToBeExpanded.NamedType()) {
+		return nil, nil
+	}
 
 	param := &expandArgParams{
 		expandedTypes: make(map[string]struct{}),
@@ -525,11 +524,6 @@ func expandArg(typeToBeExpanded *gqlType,
 		introspection: introspectedSchema,
 	}
 	// Expand the types that are required to do a query.
-
-	_, ok := graphqlScalarType[typeToBeExpanded.NamedType()]
-	if ok {
-		return param.typesToFields, nil
-	}
 	err := expandArgRecursively(typeToBeExpanded.NamedType(), param)
 	if err != nil {
 		return nil, err
