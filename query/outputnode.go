@@ -1125,9 +1125,17 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 							return err
 						}
 					}
-					nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
+					if !pc.Params.Normalize {
+						nonEmptyUID = append(nonEmptyUID, childIdx) // append index to nonEmptyUID.
+					}
 
 					if pc.Params.Normalize {
+						if pc.Params.Facet != nil && len(fcsList) > childIdx {
+							err := enc.attachFacets(uc, fieldName, false, fcsList[childIdx].Facets, 0)
+							if err != nil {
+								return err
+							}
+						}
 						// We will normalize at each level instead of
 						// calling normalize after pretraverse.
 						// Now normalize() only flattens one level,
