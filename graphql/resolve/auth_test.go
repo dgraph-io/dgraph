@@ -246,6 +246,7 @@ func addClaimsToContext(
 	if metainfo.Algo == "HS256" {
 		token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 		signedString, err = token.SignedString([]byte(metainfo.HMACPublicKey))
+		require.NoError(t, err)
 	} else if metainfo.Algo == "RS256" {
 		keyData, err := ioutil.ReadFile("../e2e/auth/private_key.pem")
 		require.NoError(t, err, "Unable to read private key file")
@@ -254,8 +255,8 @@ func addClaimsToContext(
 		require.NoError(t, err, "Unable to parse private key")
 		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
 		signedString, err = token.SignedString(privateKey)
+		require.NoError(t, err)
 	}
-	require.NoError(t, err)
 
 	md := metadata.New(nil)
 	md.Append("authorizationJwt", signedString)
