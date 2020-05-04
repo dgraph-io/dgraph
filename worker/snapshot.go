@@ -65,7 +65,8 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 		writer = sw
 	} else {
-		writer = posting.NewTxnWriter(pstore)
+		//writer = posting.NewTxnWriter(pstore)
+		writer = pstore.NewManagedWriteBatch()
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
@@ -86,9 +87,19 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		}
 
 		glog.V(1).Infof("Received a batch of %d keys. Total so far: %d\n", len(kvs.Kv), count)
-		if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
-			return 0, err
+		for _, kv := range kvs.Kv {
+			e := &badger.Entry{Key: kv.Key, Value: kv.Value}
+			if len(kv.UserMeta) > 0 {
+				e.UserMeta = kv.UserMeta[0]
+			}
+			if err := writer.SetEntryAt(e, kv.Version); err != nil {
+				return 0, err
+			}
 		}
+		// if err := writer.Write(&bpb.KVList{Kv: kvs.Kv}); err != nil {
+		// 	return 0, err
+		// }
+
 		count += len(kvs.Kv)
 	}
 	if err := writer.Flush(); err != nil {
