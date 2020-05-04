@@ -239,4 +239,4 @@ type Ticket @auth(
     assignedTo: [User!]
 }
 
-# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 "-----BEGIN PUBLIC KEY-----\nMFwwDQYJKoZIhvcNAQEBBQADSwAwSAJBAIdHCD6UCPADXXefvmamEdGKoB2NKV+E\nsqDO1H6MpoQED0QjL4iZHulVMjlFt+lwjU/ty+GG9ev/pqyk9pMzIlkCAwEAAQ==\n-----END PUBLIC KEY-----"

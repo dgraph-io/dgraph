@@ -17,15 +17,19 @@
 package authorization
 
 import (
+	"bytes"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"regexp"
+	"strings"
+	"time"
+
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
-	"net/http"
-	"strings"
-	"time"
 )
 
 type ctxKey string
@@ -39,33 +43,56 @@ var (
 )
 
 type AuthMeta struct {
-	PublicKey string
-	Header    string
-	Namespace string
+	HMACPublicKey string
+	RSAPublicKey  *rsa.PublicKey
+	Header        string
+	Namespace     string
+	Algo          string
 }
 
-func (m *AuthMeta) Parse(schema string) {
+func (m *AuthMeta) Parse(schema string) error {
 	poundIdx := strings.LastIndex(schema, "#")
 	if poundIdx == -1 {
-		return
+		return nil
 	}
 	lastComment := schema[poundIdx:]
-	length := strings.Index(lastComment, "\n")
-	if length > -1 {
-		lastComment = lastComment[:length]
+	if !strings.HasPrefix(lastComment, "# Authorization") {
+		return nil
 	}
 
-	authMeta := strings.Split(lastComment, " ")
-	if len(authMeta) != 5 || authMeta[1] != "Authorization" {
-		return
+	authMetaRegex, err :=
+		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
+	if err != nil {
+		return errors.Errorf("error while parsing jwt authorization info.")
 	}
-	m.Header = authMeta[2]
-	m.PublicKey = authMeta[3]
-	m.Namespace = authMeta[4]
+	idx := authMetaRegex.FindAllStringSubmatchIndex(lastComment, -1)
+	if len(idx) != 1 || len(idx[0]) != 12 ||
+		!strings.HasPrefix(lastComment, lastComment[idx[0][0]:idx[0][1]]) {
+		return errors.Errorf("error while parsing jwt authorization info.")
+	}
+
+	m.Header = lastComment[idx[0][4]:idx[0][5]]
+	m.Namespace = lastComment[idx[0][6]:idx[0][7]]
+	m.Algo = lastComment[idx[0][8]:idx[0][9]]
+
+	key := lastComment[idx[0][10]:idx[0][11]]
+	if m.Algo == "HS256" {
+		m.HMACPublicKey = key
+		return nil
+	}
+	if m.Algo != "RS256" {
+		return errors.Errorf("invalid jwt algorithm: %s", m.Algo)
+	}
+
+	// Replace "\n" with ASCII new line value.
+	bytekey := bytes.ReplaceAll([]byte(key), []byte{92, 110}, []byte{10})
+
+	m.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
+	return err
 }
 
-func ParseAuthMeta(schema string) {
-	metainfo.Parse(schema)
+func ParseAuthMeta(schema string) error {
+	return metainfo.Parse(schema)
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -126,16 +153,34 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {
-	if metainfo.PublicKey == "" {
-		return nil, fmt.Errorf(" jwt token cannot be validated because public key is empty")
+	if len(metainfo.Algo) == 0 {
+		return nil, fmt.Errorf(
+			" jwt token cannot be validated because verificaiton algorithm is not set")
+	}
+	if metainfo.Algo == "HS256" && metainfo.HMACPublicKey == "" {
+		return nil, fmt.Errorf(" jwt token cannot be validated because HMAC key is empty")
+	}
+	if metainfo.Algo == "RS256" && metainfo.RSAPublicKey == nil {
+		return nil, fmt.Errorf(" jwt token cannot be validated because RSA public key is empty")
 	}
 
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-				return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
+			algo, _ := token.Header["alg"].(string)
+			if algo != metainfo.Algo {
+				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
+					metainfo.Algo, algo)
 			}
-			return []byte(metainfo.PublicKey), nil
+			if algo == "HS256" {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+					return []byte(metainfo.HMACPublicKey), nil
+				}
+			} else if algo == "RS256" {
+				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+					return metainfo.RSAPublicKey, nil
+				}
+			}
+			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
 		})
 
 	if err != nil {

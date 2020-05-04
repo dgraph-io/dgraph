@@ -151,7 +151,9 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo.Parse(strSchema)
+	err = metainfo.Parse(strSchema)
+	require.NoError(t, err)
+
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 
@@ -159,6 +161,49 @@ func TestAuthQueryRewriting(t *testing.T) {
 				&schema.Request{
 					Query: tcase.GQLQuery,
 					// Variables: tcase.Variables,
+				})
+			require.NoError(t, err)
+			gqlQuery := test.GetQuery(t, op)
+
+			authVars := map[string]interface{}{
+				"USER": "user1",
+				"ROLE": tcase.Role,
+			}
+
+			ctx := addClaimsToContext(context.Background(), t, authVars)
+
+			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
+			require.Nil(t, err)
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(dgQuery))
+		})
+	}
+}
+
+// Tests showing that the RSA algorithm works for JWT signing.
+func TestAuthRSAJWTAlgo(t *testing.T) {
+	b, err := ioutil.ReadFile("auth_query_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []AuthQueryRewritingCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	testRewriter := NewQueryRewriter()
+
+	sch, err := ioutil.ReadFile("../e2e/auth/schema_rsa.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	strSchema := string(sch)
+	gqlSchema := test.LoadSchemaFromString(t, strSchema)
+	err = metainfo.Parse(strSchema)
+	require.NoError(t, err)
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+
+			op, err := gqlSchema.Operation(
+				&schema.Request{
+					Query: tcase.GQLQuery,
 				})
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
@@ -195,12 +240,25 @@ func addClaimsToContext(
 		},
 	}
 
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	ss, err := token.SignedString([]byte(metainfo.PublicKey))
+	var token *jwt.Token
+	var signedString string
+	var err error
+	if metainfo.Algo == "HS256" {
+		token = jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signedString, err = token.SignedString([]byte(metainfo.HMACPublicKey))
+	} else if metainfo.Algo == "RS256" {
+		keyData, err := ioutil.ReadFile("../e2e/auth/private_key.pem")
+		require.NoError(t, err, "Unable to read private key file")
+
+		privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
+		require.NoError(t, err, "Unable to parse private key")
+		token = jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+		signedString, err = token.SignedString(privateKey)
+	}
 	require.NoError(t, err)
 
 	md := metadata.New(nil)
-	md.Append("authorizationJwt", ss)
+	md.Append("authorizationJwt", signedString)
 	return metadata.NewIncomingContext(ctx, md)
 }
 
@@ -321,7 +379,8 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 
 	strSchema := string(sch)
 	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo.Parse(strSchema)
+	err = metainfo.Parse(strSchema)
+	require.NoError(t, err)
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -365,7 +424,8 @@ func TestAuthDeleteRewriting(t *testing.T) {
 
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	metainfo.Parse(string(sch))
+	err = metainfo.Parse(string(sch))
+	require.NoError(t, err)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -447,7 +507,8 @@ func TestAuthAdd(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	metainfo.Parse(string(sch))
+	err = metainfo.Parse(string(sch))
+	require.NoError(t, err)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -474,7 +535,8 @@ func TestAuthUpdate(t *testing.T) {
 	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
-	metainfo.Parse(string(sch))
+	err = metainfo.Parse(string(sch))
+	require.NoError(t, err)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
