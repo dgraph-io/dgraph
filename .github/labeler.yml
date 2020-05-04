@@ -10,6 +10,8 @@ area/querylang:
   - gql/**/*
 area/integrations:
   - contrib/**/*
+  - .github/**/*
+  - .travis/**/*
 area/testing/jepsen:
   - contrib/jepsen/**/* 
 area/commercial:
