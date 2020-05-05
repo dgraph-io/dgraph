@@ -309,7 +309,7 @@ func TestCheckNonNulls(t *testing.T) {
 
 	typ := &astType{
 		typ:      &ast.Type{NamedType: "T"},
-		inSchema: (gqlSchema.(*schema)).schema,
+		inSchema: (gqlSchema.(*schema)),
 	}
 
 	for name, test := range tcases {

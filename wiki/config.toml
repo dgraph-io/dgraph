@@ -15,7 +15,7 @@ title = "Dgraph Documentation"
   identifier = "get-started"
   weight = 1
 [[menu.main]]
-  name = "Tutorial"
+  name = "Tutorials"
   url = "/tutorials/"
   identifier = "tutorials"
   weight = 2

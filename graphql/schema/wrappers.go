@@ -123,6 +123,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
@@ -140,6 +141,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
+	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -159,6 +161,7 @@ type Type interface {
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
+	AuthRules() *TypeAuth
 	fmt.Stringer
 }
 
@@ -176,7 +179,7 @@ type FieldDefinition interface {
 
 type astType struct {
 	typ             *ast.Type
-	inSchema        *ast.Schema
+	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
 
@@ -192,6 +195,8 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// Map from typename to auth rules
+	authRules map[string]*TypeAuth
 }
 
 type operation struct {
@@ -216,7 +221,7 @@ type field struct {
 
 type fieldDefinition struct {
 	fieldDef        *ast.FieldDefinition
-	inSchema        *ast.Schema
+	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
 
@@ -458,14 +463,14 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	return dgraphPredicate
 }
 
-func mutatedTypeMapping(s *ast.Schema,
+func mutatedTypeMapping(s *schema,
 	dgraphPredicate map[string]map[string]string) map[string]*astType {
-	if s.Mutation == nil {
+	if s.schema.Mutation == nil {
 		return nil
 	}
 
-	m := make(map[string]*astType, len(s.Mutation.Fields))
-	for _, field := range s.Mutation.Fields {
+	m := make(map[string]*astType, len(s.schema.Mutation.Fields))
+	for _, field := range s.schema.Mutation.Fields {
 		mutatedTypeName := ""
 		switch {
 		case strings.HasPrefix(field.Name, "add"):
@@ -481,8 +486,8 @@ func mutatedTypeMapping(s *ast.Schema,
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
 		var def *ast.Definition
-		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
-			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		if def = s.schema.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.schema.Types["Add"+mutatedTypeName+"Payload"]
 		}
 
 		if def == nil {
@@ -511,14 +516,26 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 }
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
+func AsSchema(s *ast.Schema) (Schema, error) {
+
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	authRules, err := authRules(s)
+	if err != nil {
+		return nil, err
+	}
+
 	dgraphPredicate := dgraphMapping(s)
-	return &schema{
+
+	sch := &schema{
 		schema:          s,
 		dgraphPredicate: dgraphPredicate,
-		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
 		typeNameAst:     typeMappings(s),
+		authRules:       authRules,
 	}
+	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
+
+	return sch, nil
 }
 
 func responseName(f *ast.Field) string {
@@ -552,6 +569,10 @@ func (f *field) SetArgTo(arg string, val interface{}) {
 	if argument == nil {
 		f.field.Arguments = append(f.field.Arguments, &ast.Argument{Name: arg})
 	}
+}
+
+func (f *field) IsAuthQuery() bool {
+	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
 func (f *field) ArgValue(name string) interface{} {
@@ -711,7 +732,7 @@ func (f *field) Type() Type {
 	}
 	return &astType{
 		typ:             t,
-		inSchema:        f.op.inSchema.schema,
+		inSchema:        f.op.inSchema,
 		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
 }
@@ -881,6 +902,23 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 
 	}
 	return false
+}
+
+func (q *query) IsAuthQuery() bool {
+	return (*field)(q).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
+	// copy the template, so that multiple queries can run rewriting for the rule.
+	return &query{
+		field: (*field)(q).field,
+		op: &operation{op: q.op.op,
+			query:    q.op.query,
+			doc:      q.op.doc,
+			inSchema: typ.(*astType).inSchema,
+			vars:     jwtVars,
+		},
+		sel: q.sel}
 }
 
 func (q *query) Rename(newName string) {
@@ -1124,10 +1162,18 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(m).IncludeInterfaceField(dgraphTypes)
 }
 
+func (m *mutation) IsAuthQuery() bool {
+	return (*field)(m).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (t *astType) AuthRules() *TypeAuth {
+	return t.inSchema.authRules[t.Name()]
+}
+
 func (t *astType) Field(name string) FieldDefinition {
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
+		fieldDef:        t.inSchema.schema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
 	}
@@ -1136,7 +1182,7 @@ func (t *astType) Field(name string) FieldDefinition {
 func (t *astType) Fields() []FieldDefinition {
 	var result []FieldDefinition
 
-	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
 		result = append(result,
 			&fieldDefinition{
 				fieldDef:        fld,
@@ -1186,7 +1232,7 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	}
 
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[fd.Type().Name()]
 
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
@@ -1218,7 +1264,7 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 
 	fedge := strings.Trim(name, "<~>")
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[fd.Type().Name()]
 
 	var fld *ast.FieldDefinition
 	// Have to range through all the fields and find the correct forward edge. This would be
@@ -1252,7 +1298,7 @@ func (t *astType) Name() string {
 }
 
 func (t *astType) DgraphName() string {
-	typeDef := t.inSchema.Types[t.typ.Name()]
+	typeDef := t.inSchema.schema.Types[t.typ.Name()]
 	name := typeName(typeDef)
 	if name != "" {
 		return name
@@ -1268,7 +1314,10 @@ func (t *astType) ListType() Type {
 	if t.typ == nil || t.typ.Elem == nil {
 		return nil
 	}
-	return &astType{typ: t.typ.Elem}
+	return &astType{
+		typ:             t.typ.Elem,
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate}
 }
 
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
@@ -1306,7 +1355,7 @@ func (t *astType) String() string {
 }
 
 func (t *astType) IDField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1324,7 +1373,7 @@ func (t *astType) IDField() FieldDefinition {
 }
 
 func (t *astType) PasswordField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1341,7 +1390,7 @@ func (t *astType) PasswordField() FieldDefinition {
 }
 
 func (t *astType) XIDField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1359,7 +1408,7 @@ func (t *astType) XIDField() FieldDefinition {
 }
 
 func (t *astType) Interfaces() []string {
-	interfaces := t.inSchema.Types[t.typ.Name()].Interfaces
+	interfaces := t.inSchema.schema.Types[t.typ.Name()].Interfaces
 	if len(interfaces) == 0 {
 		return nil
 	}
@@ -1368,7 +1417,7 @@ func (t *astType) Interfaces() []string {
 	// overwritten using @dgraph(type: ...)
 	names := make([]string, 0, len(interfaces))
 	for _, intr := range interfaces {
-		i := t.inSchema.Types[intr]
+		i := t.inSchema.schema.Types[intr]
 		name := intr
 		if n := typeName(i); n != "" {
 			name = n
@@ -1414,7 +1463,7 @@ func (t *astType) Interfaces() []string {
 // and then check ourselves that either there's an ID, or there's all the bits to
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
-	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
 		if fld.Type.NonNull && !isID(fld) && !(fld.Name == exclusion) {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
@@ -1742,13 +1791,13 @@ func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interf
 // If the field wasn't inherited, but belonged to this type, this type's name is returned.
 // Otherwise, empty string is returned.
 func (t *astType) FieldOriginatedFrom(fieldName string) string {
-	for _, implements := range t.inSchema.Implements[t.Name()] {
+	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
 			return implements.Name
 		}
 	}
 
-	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
 		return t.Name()
 	}
 
