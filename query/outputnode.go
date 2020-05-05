@@ -261,7 +261,7 @@ func (enc *encoder) AddListValue(fj fastJsonNode, attr uint16, v types.Val, list
 	return nil
 }
 
-func (enc *encoder) AddMapChild(fj fastJsonNode, val fastJsonNode) {
+func (enc *encoder) AddMapChild(fj, val fastJsonNode) {
 	var childNode fastJsonNode
 	for _, c := range enc.getAttrs(fj) {
 		if enc.getAttr(c) == enc.getAttr(val) {
@@ -277,7 +277,7 @@ func (enc *encoder) AddMapChild(fj fastJsonNode, val fastJsonNode) {
 	}
 }
 
-func (enc *encoder) AddListChild(fj fastJsonNode, child fastJsonNode) {
+func (enc *encoder) AddListChild(fj, child fastJsonNode) {
 	enc.setList(child, true)
 	enc.appendAttrs(fj, child)
 }
@@ -602,7 +602,7 @@ func (enc *encoder) encode(fj fastJsonNode, out *bytes.Buffer) error {
 	return nil
 }
 
-func merge(parent [][]fastJsonNode, child [][]fastJsonNode) ([][]fastJsonNode, error) {
+func merge(parent, child [][]fastJsonNode) ([][]fastJsonNode, error) {
 	if len(parent) == 0 {
 		return child, nil
 	}
@@ -811,10 +811,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		if len(sg.GroupbyRes) == 0 {
 			return errors.Errorf("Expected GroupbyRes to have length > 0.")
 		}
-		if err := sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias); err != nil {
-			return err
-		}
-		return nil
+		return sg.addGroupby(enc, fj, sg.GroupbyRes[0], sg.Params.Alias)
 	}
 
 	lenList := len(sg.uidMatrix[0].Uids)
@@ -930,11 +927,7 @@ func (sg *SubGraph) addCount(enc *encoder, count uint64, dst fastJsonNode) error
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("count(%s)", sg.Attr)
 	}
-	if err := enc.AddValue(dst, enc.idForAttr(fieldName), c); err != nil {
-		return err
-	}
-
-	return nil
+	return enc.AddValue(dst, enc.idForAttr(fieldName), c)
 }
 
 func (sg *SubGraph) aggWithVarFieldName() string {
@@ -957,10 +950,7 @@ func (sg *SubGraph) addInternalNode(enc *encoder, uid uint64, dst fastJsonNode) 
 		return nil
 	}
 	fieldName := sg.aggWithVarFieldName()
-	if err := enc.AddValue(dst, enc.idForAttr(fieldName), sv); err != nil {
-		return err
-	}
-	return nil
+	return enc.AddValue(dst, enc.idForAttr(fieldName), sv)
 }
 
 func (sg *SubGraph) addCheckPwd(enc *encoder, vals []*pb.TaskValue, dst fastJsonNode) error {
@@ -975,10 +965,7 @@ func (sg *SubGraph) addCheckPwd(enc *encoder, vals []*pb.TaskValue, dst fastJson
 	if fieldName == "" {
 		fieldName = fmt.Sprintf("checkpwd(%s)", sg.Attr)
 	}
-	if err := enc.AddValue(dst, enc.idForAttr(fieldName), c); err != nil {
-		return err
-	}
-	return nil
+	return enc.AddValue(dst, enc.idForAttr(fieldName), c)
 }
 
 func alreadySeen(parentIds []uint64, uid uint64) bool {
@@ -1228,7 +1215,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 					if lang != "" && lang != "*" {
 						fieldNameWithTag += "@" + lang
 					}
-					encodeAsList := pc.List && len(lang) == 0
+					encodeAsList := pc.List && lang == ""
 					if err := enc.AddListValue(dst, enc.idForAttr(fieldNameWithTag),
 						sv, encodeAsList); err != nil {
 						return err
