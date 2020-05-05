@@ -289,7 +289,7 @@ Fuzzy search is a simple and yet effective search technique for a wide range of 
 Along with the existing features to query and search string predicates, the addition of
 `tf-idf` based search will further improve Dgraph's capabilities.
 
-This marks the end of our three tutorial-streak exploring string indices and their queries
+This marks the end of our three tutorial streak exploring string indices and their queries
 using the graph model of tweets.
 
 Check out our next tutorial of the getting started series [here]({{< relref "tutorial-8/index.md" >}}).

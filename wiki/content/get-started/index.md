@@ -33,7 +33,9 @@ This is a quick-start guide to running Dgraph.
 For an interactive walkthrough, take the [tour](https://tour.dgraph.io).
 
 {{% notice "tip" %}}
-This is guide is for the powerful query language of Dgraph, GraphQL+-.
+This guide is for the powerful query language of Dgraph, [GraphQL+-](https://dgraph.io/docs/master/query-language/#graphql)
+which is a variation of a query language created by Facebook, [GraphQL](https://graphql.org/).
+
 You can find the instructions to get started with GraphQL from
 [dgraph.io/graphql](https://dgraph.io/graphql).
 {{% /notice %}}
