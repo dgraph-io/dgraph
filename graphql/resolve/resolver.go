@@ -1160,7 +1160,7 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.ResponseName()]
+		val := res[f.Name()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection
