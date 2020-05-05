@@ -1808,8 +1808,15 @@ func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]b
 		return rf, err
 	}
 
+	// Single request would be of the form query($id: ID!) { userName(id: $id)}
+	// There are two ( here, one for defining the variables and other for the query arguments.
+	// We need to fetch the query arguments here.
+
 	// The request can contain nested arguments/variables as well, so we get the args here and
 	// then wrap them with { } to pass to parseBodyTemplate to get the required fields.
+
+	bracket := strings.Index(req, "{")
+	req = req[bracket:]
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{" + args + "}")
 	return rf, err

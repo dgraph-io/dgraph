@@ -669,31 +669,31 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 	}{
 		{
 			"parse required args for single request",
-			"query { userNames(id: $id, age: $age) }",
+			"query($id: ID!) { userNames(id: $id, age: $age) }",
 			"single",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required nested args for single request",
-			"query { userNames(id: $id, car: {age: $age}) }",
+			"query($id: ID!, $age: String!) { userNames(id: $id, car: {age: $age}) }",
 			"single",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required args for batch request",
-			"query { userNames(input: [{ id: $id, age: $age}]) }",
+			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, age: $age}]) }",
 			"batch",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required nested args for batch request",
-			"query { userNames(input: [{ id: $id, car: { age: $age}}]) }",
+			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, car: { age: $age}}]) }",
 			"batch",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required nested array args for batch request",
-			"query { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
+			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
 			"batch",
 			map[string]bool{"id": true, "age": true},
 		},
