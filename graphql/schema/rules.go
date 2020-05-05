@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -1291,7 +1292,9 @@ func customDirectiveValidation(sch *ast.Schema,
 
 	// 11. Finally validate the given graphql operation on remote server, when all locally doable
 	// validations have finished
-	if graphql != nil && graphqlOpDef != nil {
+	si := httpArg.Value.Children.ForName("skipIntrospection").Raw
+	skip, _ := strconv.ParseBool(si)
+	if graphql != nil && !skip && graphqlOpDef != nil {
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
 			parentField:  field,

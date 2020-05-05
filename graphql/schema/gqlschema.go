@@ -82,6 +82,7 @@ input CustomHTTP {
 	method: HTTPMethod!
 	body: String!
 	forwardHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 input CustomGraphQL {

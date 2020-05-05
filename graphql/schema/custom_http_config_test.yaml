@@ -1,0 +1,46 @@
+-
+  name: "custom query"
+  gqlschema: |
+    type Country @remote {
+        code: String
+        name: String
+    }
+
+    type Query {
+      getCountry(id: ID!): Country! @custom(http: {
+          url: "http://google.com/validcountry",
+          method: "POST",
+          forwardHeaders: ["Content-Type"],
+          graphql: "query { country(code: $id) }",
+          skipIntrospection: true
+      })
+    }
+  gqlquery: |
+    query {
+      getCountry(id: "0x1") {
+        name
+        code
+      }
+    }
+  remoteschema: |
+    type Country @remote {
+      code: String
+      name: String
+    }
+
+    type Query {
+      country(code: ID!): Country! @custom(http: {
+        url: "http://google.com/validcountry",
+        method: "POST",
+        forwardHeaders: ["Content-Type"],
+        graphql: "query { country(code: $id) }",
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query { country(code: $id) {
+    name
+    code
+    }}
+  remotevariables: { "id": "0x1" }
+

@@ -17,12 +17,14 @@
 package schema
 
 import (
+	"io/ioutil"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
+	"gopkg.in/yaml.v2"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -701,6 +703,69 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 			args, err := ParseRequiredArgsFromGQLRequest(test.req, test.operation)
 			require.NoError(t, err)
 			require.Equal(t, test.requiredArgs, args)
+		})
+	}
+}
+
+// Tests showing that the query rewriter produces the expected Dgraph queries
+type CustomHTTPConfigCase struct {
+	Name            string
+	GQLQuery        string
+	GQLSchema       string
+	RemoteSchema    string
+	RemoteQuery     string
+	RemoteVariables map[string]interface{}
+}
+
+func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
+	b, err := ioutil.ReadFile("custom_http_config_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []CustomHTTPConfigCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			schHandler, errs := NewHandler(tcase.GQLSchema)
+			require.NoError(t, errs)
+			sch, err := FromString(schHandler.GQLSchema())
+			require.NoError(t, err)
+
+			op, err := sch.Operation(
+				&Request{
+					Query: tcase.GQLQuery,
+				})
+			require.NoError(t, err)
+			require.NotNil(t, op)
+
+			queries := op.Queries()
+			require.Len(t, queries, 1)
+			gqlQuery := queries[0]
+			c, err := gqlQuery.CustomHTTPConfig()
+			require.NoError(t, err)
+
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
+			require.NoError(t, errs)
+			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
+			require.NoError(t, err)
+
+			// Validate the generated query against the remote schema.
+			tmpl, ok := (*c.Template).(map[string]interface{})
+			require.True(t, ok)
+			q := tmpl["query"].(string)
+			v := tmpl["variables"].(map[string]interface{})
+
+			require.Equal(t, tcase.RemoteQuery, q)
+			require.Equal(t, tcase.RemoteVariables, v)
+
+			op, err = remoteSchema.Operation(
+				&Request{
+					Query:     q,
+					Variables: v,
+				})
+			require.NoError(t, err)
+			require.NotNil(t, op)
 		})
 	}
 }
