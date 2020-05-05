@@ -743,14 +743,3 @@ dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb
 
 If multiple alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
 each of the alphas.
-
-### Bulk loader with Encryption
-
-Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
-Later we can point the generated `p` directory to a new alpha server.
-
-Here's an example to run bulk loader with a key used to write encrypted data:
-
-```bash
-dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
-```
