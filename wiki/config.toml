@@ -1,6 +1,12 @@
 languageCode = "en-us"
 theme = "hugo-docs"
 
+[markup.goldmark.renderer]
+unsafe = true
+
+[markup.highlight]
+noClasses = false
+
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
 
