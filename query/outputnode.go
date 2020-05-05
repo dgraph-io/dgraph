@@ -75,8 +75,7 @@ type encoder struct {
 	// estSize tracking has been kept simple. estSize is crossing threshold value or not is only
 	// checked at leaf(scalar) nodes as of now. estSize is updated in following cases:
 	// 1. By adding predicate len, while expanding it for an uid in preTraverse().
-	// 2. By adding facets name len, while adding facets node for a predicate in attachFacets()
-	// 3. By adding scalarVal len in setScalarVal function for a leaf(scalar) node.
+	// 2. By adding scalarVal len in setScalarVal function for a leaf(scalar) node.
 	estSize uint64
 
 	// metaSlice has meta data for all fastJsonNodes.
@@ -505,7 +504,6 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 	idxFieldID := enc.idForAttr(strconv.Itoa(facetIdx))
 	for _, f := range fList {
 		fName := facetName(fieldName, f)
-		enc.estSize += uint64(len(fName))
 		fVal, err := facets.ValFor(f)
 		if err != nil {
 			return err
