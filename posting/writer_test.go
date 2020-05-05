@@ -25,42 +25,35 @@ import (
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
+	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/stretchr/testify/require"
 )
 
-type kv struct {
-	key   []byte
-	value []byte
-}
-
 func BenchmarkWriter(b *testing.B) {
-	createKVList := func() []kv {
-		var KVList = []kv{}
+	createKVList := func() bpb.KVList {
+		var KVList bpb.KVList
 		for i := 0; i < 50000; i++ {
-			n := kv{key: []byte(string(i)), value: []byte(string(i))}
-			KVList = append(KVList, n)
+			n := &bpb.KV{Key: []byte(string(i)), Value: []byte(string(i)), Version: 5}
+			KVList.Kv = append(KVList.Kv, n)
 		}
 		return KVList
 	}
 
-	writeInBadger := func(db *badger.DB, KVList []kv, wg *sync.WaitGroup) {
+	writeInBadger := func(db *badger.DB, KVList *bpb.KVList, wg *sync.WaitGroup) {
 		defer wg.Done()
 		wb := db.NewManagedWriteBatch()
-		for _, typ := range KVList {
-			e := &badger.Entry{Key: typ.key, Value: typ.value}
-			err := wb.SetEntryAt(e, 1)
-			require.NoError(b, err)
+		if err := wb.Write(KVList); err != nil {
+			panic(err)
 		}
 		require.NoError(b, wb.Flush())
 
 	}
 
-	writeInBadger2 := func(wb *badger.WriteBatch, KVList []kv, wg *sync.WaitGroup) {
+	writeInBadger2 := func(wb *badger.WriteBatch, KVList *bpb.KVList, wg *sync.WaitGroup) {
 		defer wg.Done()
 
-		for _, typ := range KVList {
-			e := &badger.Entry{Key: typ.key, Value: typ.value}
-			wb.SetEntryAt(e, 1)
+		if err := wb.Write(KVList); err != nil {
+			panic(err)
 		}
 
 	}
@@ -88,9 +81,9 @@ func BenchmarkWriter(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			w := NewTxnWriter(db)
-			for _, typ := range KVList {
-				k := typ.key
-				v := typ.value
+			for _, typ := range KVList.Kv {
+				k := typ.Key
+				v := typ.Value
 				err := w.SetAt(k, v, BitSchemaPosting, 1)
 				require.NoError(b, err)
 			}
@@ -115,10 +108,8 @@ func BenchmarkWriter(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			wb := db.NewManagedWriteBatch()
-			for _, typ := range KVList {
-				e := &badger.Entry{Key: typ.key, Value: typ.value}
-				err := wb.SetEntryAt(e, 1)
-				require.NoError(b, err)
+			if err := wb.Write(&KVList); err != nil {
+				panic(err)
 			}
 			require.NoError(b, wb.Flush())
 		}
@@ -141,11 +132,12 @@ func BenchmarkWriter(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			var wg sync.WaitGroup
 			wg.Add(5)
-			go writeInBadger(db, KVList[:10000], &wg)
-			go writeInBadger(db, KVList[10001:20000], &wg)
-			go writeInBadger(db, KVList[20001:30000], &wg)
-			go writeInBadger(db, KVList[30001:40000], &wg)
-			go writeInBadger(db, KVList[40001:], &wg)
+
+			go writeInBadger(db, &bpb.KVList{Kv: KVList.Kv[:10000]}, &wg)
+			go writeInBadger(db, &bpb.KVList{Kv: KVList.Kv[10001:20000]}, &wg)
+			go writeInBadger(db, &bpb.KVList{Kv: KVList.Kv[20001:30000]}, &wg)
+			go writeInBadger(db, &bpb.KVList{Kv: KVList.Kv[30001:40000]}, &wg)
+			go writeInBadger(db, &bpb.KVList{Kv: KVList.Kv[40001:]}, &wg)
 			wg.Wait()
 
 		}
@@ -169,11 +161,12 @@ func BenchmarkWriter(b *testing.B) {
 			var wg sync.WaitGroup
 			wg.Add(5)
 			wb := db.NewManagedWriteBatch()
-			go writeInBadger2(wb, KVList[:10000], &wg)
-			go writeInBadger2(wb, KVList[10001:20000], &wg)
-			go writeInBadger2(wb, KVList[20001:30000], &wg)
-			go writeInBadger2(wb, KVList[30001:40000], &wg)
-			go writeInBadger2(wb, KVList[40001:], &wg)
+			go writeInBadger2(wb, &bpb.KVList{Kv: KVList.Kv[:10000]}, &wg)
+			go writeInBadger2(wb, &bpb.KVList{Kv: KVList.Kv[10001:20000]}, &wg)
+			go writeInBadger2(wb, &bpb.KVList{Kv: KVList.Kv[20001:30000]}, &wg)
+			go writeInBadger2(wb, &bpb.KVList{Kv: KVList.Kv[30001:40000]}, &wg)
+			go writeInBadger2(wb, &bpb.KVList{Kv: KVList.Kv[40001:]}, &wg)
+
 			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}

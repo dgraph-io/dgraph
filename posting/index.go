@@ -667,6 +667,8 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		return &bpb.KVList{Kv: kvs}, nil
 	}
 	tmpStream.Send = func(kvList *bpb.KVList) error {
+		// TODO (Anurag): Instead of calling SetEntryAt everytime, we can filter KVList and call Write only once.
+		// SetEntryAt requries lock for every entry, whereas Write reduces lock contention.
 		for _, kv := range kvList.Kv {
 			if len(kv.Value) == 0 {
 				continue
