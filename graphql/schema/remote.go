@@ -164,19 +164,36 @@ type remoteGraphqlMetadata struct {
 	schema *ast.Schema
 }
 
+// argMatchingMetadata represents all the info needed for the purpose of matching the argument
+// signature of given @custom graphql query with remote query.
 type argMatchingMetadata struct {
-	givenArgVals  map[string]*ast.Value
+	// givenArgVals is the mapping of argName -> argValue (*ast.Value), for given query.
+	// The value is allowed to be a Variable, Object or a List of Objects at the moment.
+	givenArgVals map[string]*ast.Value
+	// givenVarTypes is the mapping of varName -> type (*ast.Type), for the variables used in given
+	// query. For @custom fields, these are fetched from the parent type of the field.
+	// For @custom query/mutation these are fetched from the args of that query/mutation.
 	givenVarTypes map[string]*ast.Type
-	remoteArgMd   *remoteArgMetadata
-	remoteTypes   map[string]*types
-	givenQryName  *string
+	// remoteArgMd represents the arguments of the remote query.
+	remoteArgMd *remoteArgMetadata
+	// remoteTypes is the mapping of typename -> typeDefinition for all the types present in
+	// introspection response for remote query.
+	remoteTypes map[string]*types
+	// givenQryName points to the name of the given query. Used while reporting errors.
+	givenQryName *string
+	// operationType points to the name of the given operation (i.e., query or mutation).
+	// Used while reporting errors.
 	operationType *string
-	introspection *introspectedSchema
-	schema        *ast.Schema
+	// local GraphQL schema supplied by the user
+	schema *ast.Schema
 }
 
+// remoteArgMetadata represents all the arguments in the remote query.
+// It is used for the purpose of matching the argument signature for remote query.
 type remoteArgMetadata struct {
-	typMap       map[string]*gqlType
+	// typMap is the mapping of arg typename -> typeDefinition obtained from introspection
+	typMap map[string]*gqlType
+	// requiredArgs is the list of NON_NULL args in remote query
 	requiredArgs []string
 }
 
@@ -231,7 +248,6 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 			operationType, givenQuery.Name)
 	}
 
-	// TODO: still need to do deep type checking for return types
 	// check whether the return type of remote query is same as the required return type
 	expectedReturnType := metadata.parentField.Type.String()
 	gotReturnType := introspectedRemoteQuery.Type.String()
@@ -243,7 +259,7 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 			operationType, givenQuery.Name, expectedReturnType, gotReturnType)
 	}
 	// Deep check the remote return type.
-	if err := matchDeepTypes(introspectedRemoteQuery.Type, remoteIntrospection,
+	if err := matchDeepTypes(introspectedRemoteQuery.Type, remoteTypes,
 		metadata.schema); err != nil {
 		return err
 	}
@@ -286,7 +302,6 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		remoteTypes:   remoteTypes,
 		givenQryName:  &givenQuery.Name,
 		operationType: &operationType,
-		introspection: remoteIntrospection,
 		schema:        metadata.schema,
 	}); err != nil {
 		return err
@@ -299,9 +314,9 @@ func missingRemoteTypeError(typName string) error {
 	return errors.Errorf("remote schema doesn't have any type named %s.", typName)
 }
 
-func matchDeepTypes(remoteType *gqlType, remoteSchema *introspectedSchema,
+func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 	localSchema *ast.Schema) error {
-	expandedTypes, err := expandArg(remoteType, remoteSchema)
+	expandedTypes, err := expandType(remoteType, remoteTypes)
 	if err != nil {
 		return err
 	}
@@ -375,7 +390,7 @@ func matchArgSignature(md *argMatchingMetadata) error {
 					expectedArgType, gotArgType)
 			}
 			// deep check the remote type and verify it with the local schema.
-			if err := matchDeepTypes(remoteArgTyp, md.introspection, md.schema); err != nil {
+			if err := matchDeepTypes(remoteArgTyp, md.remoteTypes, md.schema); err != nil {
 				return err
 			}
 		case ast.ObjectValue:
@@ -401,7 +416,6 @@ func matchArgSignature(md *argMatchingMetadata) error {
 				remoteTypes:   md.remoteTypes,
 				givenQryName:  md.givenQryName,
 				operationType: md.operationType,
-				introspection: md.introspection,
 				schema:        md.schema,
 			}); err != nil {
 				return err
@@ -441,7 +455,6 @@ func matchArgSignature(md *argMatchingMetadata) error {
 					remoteTypes:   md.remoteTypes,
 					givenQryName:  md.givenQryName,
 					operationType: md.operationType,
-					introspection: md.introspection,
 					schema:        md.schema,
 				}); err != nil {
 					return err
@@ -467,22 +480,28 @@ func matchArgSignature(md *argMatchingMetadata) error {
 	return nil
 }
 
-type expandArgParams struct {
+type expandTypeParams struct {
+	// expandedTypes tells whether a type has already been expanded or not.
+	// If a key with typename is present in this map, it means that type has been expanded.
 	expandedTypes map[string]struct{}
-	introspection *introspectedSchema
+	// remoteTypes is the mapping of typename -> typeDefinition for all the types present in
+	// introspection response for remote query.
+	remoteTypes map[string]*types
+	// typesToFields is the mapping of typename -> fieldDefinitions for the types present in
+	// introspection response for remote query.
 	typesToFields map[string][]*gqlField
 }
 
-func expandArgRecursively(arg string, param *expandArgParams) error {
-	_, alreadyExpanded := param.expandedTypes[arg]
+func expandTypeRecursively(typenameToExpand string, param *expandTypeParams) error {
+	_, alreadyExpanded := param.expandedTypes[typenameToExpand]
 	if alreadyExpanded {
 		return nil
 	}
 	// We're marking this to avoid recursive expansion.
-	param.expandedTypes[arg] = struct{}{}
+	param.expandedTypes[typenameToExpand] = struct{}{}
 	typeFound := false
-	for _, typ := range param.introspection.Data.Schema.Types {
-		if typ.Name == arg {
+	for _, typ := range param.remoteTypes {
+		if typ.Name == typenameToExpand {
 			typeFound = true
 			param.typesToFields[typ.Name] = make([]*gqlField, 0,
 				len(typ.Fields)+len(typ.InputFields))
@@ -494,7 +513,7 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 			for _, field := range param.typesToFields[typ.Name] {
 				if !isGraphqlSpecScalar(field.Type.Name) {
 					// expand this field.
-					err := expandArgRecursively(field.Type.NamedType(), param)
+					err := expandTypeRecursively(field.Type.NamedType(), param)
 					if err != nil {
 						return err
 					}
@@ -503,28 +522,28 @@ func expandArgRecursively(arg string, param *expandArgParams) error {
 		}
 	}
 	if !typeFound {
-		return errors.Errorf("Unable to find the type %s on the remote schema", arg)
+		return errors.Errorf("Unable to find the type %s on the remote schema", typenameToExpand)
 	}
 	return nil
 
 }
 
-// expandArg will expand the nested type into flat structure. For eg. Country having a filed called
+// expandType will expand the nested type into flat structure. For eg. Country having a filed called
 // states of type State is expanded as Country and State. Scalar fields won't be expanded.
 // It also expands deep nested types.
-func expandArg(typeToBeExpanded *gqlType,
-	introspectedSchema *introspectedSchema) (map[string][]*gqlField, error) {
+func expandType(typeToBeExpanded *gqlType,
+	remoteTypes map[string]*types) (map[string][]*gqlField, error) {
 	if isGraphqlSpecScalar(typeToBeExpanded.NamedType()) {
 		return nil, nil
 	}
 
-	param := &expandArgParams{
+	param := &expandTypeParams{
 		expandedTypes: make(map[string]struct{}),
 		typesToFields: make(map[string][]*gqlField),
-		introspection: introspectedSchema,
+		remoteTypes:   remoteTypes,
 	}
 	// Expand the types that are required to do a query.
-	err := expandArgRecursively(typeToBeExpanded.NamedType(), param)
+	err := expandTypeRecursively(typeToBeExpanded.NamedType(), param)
 	if err != nil {
 		return nil, err
 	}
