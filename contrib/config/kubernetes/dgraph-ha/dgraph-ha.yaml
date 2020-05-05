@@ -3,11 +3,11 @@
 # will still be available to service requests even when one Zero
 # and/or one Alpha are down.
 #
-# There are 4 public services exposed, users can use:
+# There are 3 services can can be used to expose outside the cluster as needed:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
 #       dgraph-alpha-public - To connect clients and for HTTP APIs
 #       dgraph-ratel-public - For Dgraph UI
-#       dgraph-alpha-x-http-public - Use for debugging & profiling
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -16,7 +16,7 @@ metadata:
     app: dgraph-zero
     monitor: zero-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 5080
     targetPort: 5080
@@ -35,7 +35,7 @@ metadata:
     app: dgraph-alpha
     monitor: alpha-dgraph-io
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8080
     targetPort: 8080
@@ -46,24 +46,6 @@ spec:
   selector:
     app: dgraph-alpha
 ---
-# This service is created in-order to debug & profile a specific alpha.
-# You can create one for each alpha that you need to profile.
-# For a more general HTTP APIs use the above service instead.
-apiVersion: v1
-kind: Service
-metadata:
-  name: dgraph-alpha-0-http-public
-  labels:
-    app: dgraph-alpha
-spec:
-  type: LoadBalancer
-  ports:
-  - port: 8080
-    targetPort: 8080
-    name: alpha-http
-  selector:
-    statefulset.kubernetes.io/pod-name: dgraph-alpha-0
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -71,7 +53,7 @@ metadata:
   labels:
     app: dgraph-ratel
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
   - port: 8000
     targetPort: 8000
