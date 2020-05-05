@@ -450,14 +450,3 @@ Here is an example that starts one zero server and one alpha server with the enc
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
 dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
-
-### Bulk loader with Encryption
-
-Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
-Later we can point the generated `p` directory to a new alpha server.
-
-Here's an example to run bulk loader with a key used to write encrypted data:
-
-```bash
-dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
-```
