@@ -11,7 +11,7 @@ set -e
 
 GREEN='\033[32;1m'
 RESET='\033[0m'
-HOST="${HOST:-https://docs.dgraph.io}"
+HOST="${HOST:-https://dgraph.io/docs}"
 # Name of output public directory
 PUBLIC="${PUBLIC:-public}"
 # LOOP true makes this script run in a loop to check for updates

@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 	secretDirective = "secret"
+	authDirective   = "auth"
 	customDirective = "custom"
 	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
 
@@ -69,6 +70,13 @@ enum DgraphIndex {
 	hour
 }
 
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
 enum HTTPMethod {
 	GET
 	POST
@@ -93,9 +101,13 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule, 
+	add: AuthRule, 
+	update: AuthRule, 
+	delete:AuthRule) on OBJECT | FIELD_DEFINITION
 directive @custom(http: CustomHTTP, graphql: CustomGraphQL) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-
 
 input IntFilter {
 	eq: Int
@@ -273,6 +285,14 @@ var directiveValidators = map[string]directiveValidator{
 	customDirective:  customDirectiveValidation,
 	remoteDirective:  remoteDirectiveValidation,
 	deprecatedDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
+	// Just go get it printed into generated schema
+	authDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
 		field *ast.FieldDefinition,

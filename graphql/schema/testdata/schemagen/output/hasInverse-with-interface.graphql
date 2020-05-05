@@ -54,6 +54,13 @@ enum DgraphIndex {
 	hour
 }
 
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
 enum HTTPMethod {
 	GET
 	POST
@@ -78,9 +85,13 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule, 
+	add: AuthRule, 
+	update: AuthRule, 
+	delete:AuthRule) on OBJECT | FIELD_DEFINITION
 directive @custom(http: CustomHTTP, graphql: CustomGraphQL) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-
 
 input IntFilter {
 	eq: Int

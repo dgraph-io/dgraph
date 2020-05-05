@@ -27,15 +27,17 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
 )
 
 const (
-	alphaURL      = "http://localhost:8180/graphql"
-	alphaAdminURL = "http://localhost:8180/admin"
-	customTypes   = `type MovieDirector @remote {
+	alphaURL             = "http://localhost:8180/graphql"
+	alphaAdminURL        = "http://localhost:8180/admin"
+	subscriptionEndpoint = "ws://localhost:8180/graphql"
+	customTypes          = `type MovieDirector @remote {
 		 id: ID!
 		 name: String!
 		 directed: [Movie]
@@ -232,6 +234,73 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 	require.Subset(t, headers, []string{"X-App-Token", "X-User-Id", "User-Id", "X-App-User", "X-Group-Id"})
 }
 
+func TestCustomFieldsInSubscription(t *testing.T) {
+	updateSchemaRequireNoGQLErrors(t, `
+	type Teacher {
+		tid: ID!
+		age: Int!
+		name: String
+		  @custom(
+			http: {
+			  url: "http://mock:8888/teacherName"
+			  method: "POST"
+			  body: "{tid: $tid}"
+			  operation: "single"
+			}
+		  )
+	  }
+	`)
+
+	client, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{
+			getTeacher(tid: "0x2712"){
+			  name   
+			}
+		  }`,
+	})
+	require.NoError(t, err)
+	_, err = client.RecvMsg()
+	require.Contains(t, err.Error(), "Custom field `name` is not supported in graphql subscription")
+}
+
+func TestSubscriptionInNestedCustomField(t *testing.T) {
+	updateSchemaRequireNoGQLErrors(t, `
+	type Episode {
+		name: String! @id
+		anotherName: String! @custom(http: {
+					url: "http://mock:8888/userNames",
+					method: "GET",
+					body: "{uid: $name}",
+					operation: "batch"
+				})
+	}
+
+	type Character {
+		name: String! @id
+		lastName: String @custom(http: {
+						url: "http://mock:8888/userNames",
+						method: "GET",
+						body: "{uid: $name}",
+						operation: "batch"
+					})
+		episodes: [Episode]
+	}`)
+
+	client, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{				
+			queryCharacter {
+				name
+				episodes {
+					name
+					anotherName
+				}
+			 }
+		  }`,
+	})
+	require.NoError(t, err)
+	_, err = client.RecvMsg()
+	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
+}
 func addPerson(t *testing.T) *user {
 	addTeacherParams := &common.GraphQLParams{
 		Query: `mutation addPerson {

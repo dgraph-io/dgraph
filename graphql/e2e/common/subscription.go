@@ -18,6 +18,7 @@ package common
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"net/http"
@@ -40,6 +41,8 @@ const (
 	dataMsg = "data"
 	// Message type for terminating the subscription.
 	terminateMsg = "connection_terminate"
+	// Message type to indicate that given message is of error type
+	errorMsg = "error"
 )
 
 type operationMessage struct {
@@ -121,6 +124,9 @@ func (client *GraphQLSubscriptionClient) RecvMsg() ([]byte, error) {
 	// TODO: handle complete, error... for testing. This should be enough.
 	// We can do this, if we are planning to opensource this as subscription
 	// library.
+	if msg.Type == errorMsg {
+		return nil, errors.New(string(msg.Payload))
+	}
 	if msg.Type != dataMsg {
 		return nil, nil
 	}
