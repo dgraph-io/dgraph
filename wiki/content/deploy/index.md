@@ -1802,6 +1802,8 @@ A new flag keyfile is added to the Live Loader. This option is required to decry
 If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted. 
 {{% /notice %}}
 
+#### Encrypted RDF/JSON file and schema via Live Loader
+`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> -keyfile <path-to-keyfile-to-decrypt-files>`
 
 #### Other Live Loader options
 
