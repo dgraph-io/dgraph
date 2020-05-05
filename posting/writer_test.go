@@ -203,8 +203,6 @@ func BenchmarkWriter(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			wg.Add(5)
 			wb := db.NewManagedWriteBatch()
 			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[:10000]})
 			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[10001:20000]})
@@ -212,7 +210,6 @@ func BenchmarkWriter(b *testing.B) {
 			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[30001:40000]})
 			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[40001:]})
 
-			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}
 	})
@@ -231,8 +228,6 @@ func BenchmarkWriter(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			var wg sync.WaitGroup
-			wg.Add(5)
 			wb := db.NewManagedWriteBatch()
 			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[:10000]})
 			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[10001:20000]})
@@ -240,7 +235,6 @@ func BenchmarkWriter(b *testing.B) {
 			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[30001:40000]})
 			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[40001:]})
 
-			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}
 	})
