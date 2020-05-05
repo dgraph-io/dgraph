@@ -310,7 +310,7 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 	}
 
 	// check whether args of given query/mutation match the args of remote query/mutation
-	if err = matchArgSignature(&argMatchingMetadata{
+	err = matchArgSignature(&argMatchingMetadata{
 		givenArgVals:  givenQryArgVals,
 		givenVarTypes: givenQryVarTypes,
 		remoteArgMd:   remoteQryArgMetadata,
@@ -318,11 +318,9 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		givenQryName:  &givenQuery.Name,
 		operationType: &operationType,
 		schema:        metadata.schema,
-	}); err != nil {
-		return err
-	}
+	})
 
-	return nil
+	return err
 }
 
 func missingRemoteTypeError(typName string) error {

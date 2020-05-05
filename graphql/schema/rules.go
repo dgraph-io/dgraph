@@ -674,7 +674,7 @@ func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
 	return nil
 }
 
-func implements(typ *ast.Definition, intfc *ast.Definition) bool {
+func implements(typ, intfc *ast.Definition) bool {
 	for _, t := range typ.Interfaces {
 		if t == intfc.Name {
 			return true
