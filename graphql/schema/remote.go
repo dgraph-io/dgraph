@@ -60,6 +60,12 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 	return result, json.Unmarshal(body, result)
 }
 
+const (
+	list        = "LIST"
+	nonNull     = "NON_NULL"
+	inputObject = string(ast.InputObject)
+)
+
 const introspectionQuery = `
 	query {
 	  __schema {
@@ -270,25 +276,34 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 
 	// verify remote query arg format for batch operations
 	if metadata.isBatch {
-		// TODO: make sure if it is [{}] or [{}!] or [{}]! or [{}!]!
 		if len(remoteQryArgMetadata.typMap) != 1 {
 			return errors.Errorf("remote %s `%s` accepts %d arguments, It must have only one "+
 				"argument of the form `[{param1: $var1, param2: $var2, ...}]` for batch operation.",
 				operationType, givenQuery.Name, len(remoteQryArgMetadata.typMap))
 		}
 		for argName, inputTyp := range remoteQryArgMetadata.typMap {
-			if inputTyp.Kind != "LIST" || inputTyp.OfType == nil || inputTyp.OfType.
-				Kind != "INPUT_OBJECT" {
+			if !((inputTyp.Kind == list && inputTyp.OfType != nil && inputTyp.OfType.
+				Kind == inputObject) ||
+				(inputTyp.Kind == list && inputTyp.OfType != nil && inputTyp.OfType.
+					Kind == nonNull && inputTyp.OfType.OfType != nil && inputTyp.OfType.OfType.
+					Kind == inputObject) ||
+				(inputTyp.Kind == nonNull && inputTyp.OfType != nil && inputTyp.OfType.
+					Kind == list && inputTyp.OfType.OfType != nil && inputTyp.OfType.OfType.
+					Kind == inputObject) ||
+				(inputTyp.Kind == nonNull && inputTyp.OfType != nil && inputTyp.OfType.
+					Kind == list && inputTyp.OfType.OfType != nil && inputTyp.OfType.OfType.
+					Kind == nonNull && inputTyp.OfType.OfType.OfType != nil && inputTyp.
+					OfType.OfType.OfType.Kind == inputObject)) {
 				return errors.Errorf("argument `%s` for given %s `%s` must be of the form `[{param1"+
 					": $var1, param2: $var2, ...}]` for batch operations in remote %s.", argName,
 					operationType, givenQuery.Name, operationType)
 			}
-			inputTypName := inputTyp.OfType.Name
+			inputTypName := inputTyp.NamedType()
 			typ, ok := remoteTypes[inputTypName]
 			if !ok {
 				return missingRemoteTypeError(inputTypName)
 			}
-			if typ.Kind != "INPUT_OBJECT" {
+			if typ.Kind != inputObject {
 				return errors.Errorf("type %s in remote schema is not an INPUT_OBJECT.", inputTypName)
 			}
 		}
@@ -394,17 +409,14 @@ func matchArgSignature(md *argMatchingMetadata) error {
 				return err
 			}
 		case ast.ObjectValue:
-			if !(remoteArgTyp.Kind == "INPUT_OBJECT" || (remoteArgTyp.
-				Kind == "NON_NULL" && remoteArgTyp.OfType != nil && remoteArgTyp.OfType.
-				Kind == "INPUT_OBJECT")) {
+			if !(remoteArgTyp.Kind == inputObject || (remoteArgTyp.
+				Kind == nonNull && remoteArgTyp.OfType != nil && remoteArgTyp.OfType.
+				Kind == inputObject)) {
 				return errors.Errorf("object value supplied for argument `%s` in %s `%s`, "+
 					"but remote argument doesn't accept INPUT_OBJECT.", givenArgName,
 					*md.operationType, *md.givenQryName)
 			}
-			remoteObjTypname := remoteArgTyp.Name
-			if remoteArgTyp.Kind != "INPUT_OBJECT" {
-				remoteObjTypname = remoteArgTyp.OfType.Name
-			}
+			remoteObjTypname := remoteArgTyp.NamedType()
 			remoteObjTyp, ok := md.remoteTypes[remoteObjTypname]
 			if !ok {
 				return missingRemoteTypeError(remoteObjTypname)
@@ -421,22 +433,19 @@ func matchArgSignature(md *argMatchingMetadata) error {
 				return err
 			}
 		case ast.ListValue:
-			if !((remoteArgTyp.Kind == "LIST" && remoteArgTyp.OfType != nil) || (remoteArgTyp.
-				Kind == "NON_NULL" && remoteArgTyp.OfType != nil && remoteArgTyp.OfType.
-				Kind == "LIST" && remoteArgTyp.OfType.OfType != nil)) {
+			if !((remoteArgTyp.Kind == list && remoteArgTyp.OfType != nil) || (remoteArgTyp.
+				Kind == nonNull && remoteArgTyp.OfType != nil && remoteArgTyp.OfType.
+				Kind == list && remoteArgTyp.OfType.OfType != nil)) {
 				return errors.Errorf("LIST value supplied for argument `%s` in %s `%s`, "+
 					"but remote argument doesn't accept LIST.", givenArgName, *md.operationType,
 					*md.givenQryName)
 			}
-			remoteListElemTypname := remoteArgTyp.OfType.Name
-			if remoteArgTyp.Kind != "LIST" {
-				remoteListElemTypname = remoteArgTyp.OfType.OfType.Name
-			}
+			remoteListElemTypname := remoteArgTyp.NamedType()
 			remoteObjTyp, ok := md.remoteTypes[remoteListElemTypname]
 			if !ok {
 				return missingRemoteTypeError(remoteListElemTypname)
 			}
-			if remoteObjTyp.Kind != "INPUT_OBJECT" {
+			if remoteObjTyp.Kind != inputObject {
 				return errors.Errorf("argument `%s` in %s `%s` of List kind has non-object"+
 					" elements in remote %s, Lists can have only INPUT_OBJECT as element.",
 					givenArgName, *md.operationType, *md.givenQryName, *md.operationType)
@@ -570,7 +579,7 @@ func getRemoteTypeFieldsMetadata(remoteTyp *types) *remoteArgMetadata {
 
 	for _, field := range fields {
 		md.typMap[field.Name] = field.Type
-		if field.Type.Kind == "NON_NULL" {
+		if field.Type.Kind == nonNull {
 			md.requiredArgs = append(md.requiredArgs, field.Name)
 		}
 	}
@@ -613,7 +622,7 @@ func getRemoteQueryArgMetadata(remoteQuery *gqlField) *remoteArgMetadata {
 
 	for _, arg := range remoteQuery.Args {
 		md.typMap[arg.Name] = arg.Type
-		if arg.Type.Kind == "NON_NULL" {
+		if arg.Type.Kind == nonNull {
 			md.requiredArgs = append(md.requiredArgs, arg.Name)
 		}
 	}
@@ -676,9 +685,9 @@ func (t *gqlType) String() string {
 	// it confirms, if type kind is LIST or NON_NULL all other fields except ofType will be
 	// null, so there won't be any name at that level. For other kinds, there will always be a name.
 	switch t.Kind {
-	case "LIST":
+	case list:
 		return fmt.Sprintf("[%s]", t.OfType.String())
-	case "NON_NULL":
+	case nonNull:
 		return fmt.Sprintf("%s!", t.OfType.String())
 	// TODO: we will consider ID as String for the purpose of type matching
 	//case "SCALAR":
