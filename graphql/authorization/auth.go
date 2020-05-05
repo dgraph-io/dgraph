@@ -166,7 +166,7 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 }
 
 func validateToken(jwtStr string) (map[string]interface{}, error) {
-	if len(metainfo.Algo) == 0 {
+	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
