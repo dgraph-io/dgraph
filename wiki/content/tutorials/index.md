@@ -2,9 +2,10 @@
 title = "Tutorials - Get Started with Dgraph series"
 +++
 
-{{% notice "note" %}}This is a tutorial series on getting started with Dgraph. You can see find the quickstart guide [here]({{< relref "get-started/index.md" >}}).{{% /notice %}}
-
-## Tutorials
+{{% notice "note" %}}
+This is a tutorial series on getting started with Dgraph. You can find a
+single page quickstart guide [here]({{< relref "get-started/index.md" >}}).
+{{% /notice %}}
 
 **Welcome to Dgraph. Here are a series of tutorials for getting started :**
 
@@ -92,6 +93,18 @@ title = "Tutorials - Get Started with Dgraph series"
           </div>
           <p class="section-desc">
             Learn about searching user names using fuzzy search on social graphs.
+          </p>
+        </div>
+      </div>
+      <div class="col-12 col-sm-12">
+        <div class="section-item">
+          <div class="section-name">
+            <a href="{{< relref "tutorial-8/index.md">}}">
+              8 - Native Geolocation Features
+            </a>
+          </div>
+          <p class="section-desc">
+            Easily build location-aware apps using native geolocation features
           </p>
         </div>
       </div>
