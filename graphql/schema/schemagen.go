@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -59,7 +60,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema), nil
+	return AsSchema(gqlSchema)
 }
 
 func (s *handler) GQLSchema() string {
@@ -75,6 +76,10 @@ func (s *handler) DGSchema() string {
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
+	}
+
+	if err := authorization.ParseAuthMeta(input); err != nil {
+		return nil, err
 	}
 
 	// The input schema contains just what's required to describe the types,
