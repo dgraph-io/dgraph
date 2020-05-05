@@ -1,6 +1,6 @@
 # Dgraph High Availability
 
-Enclosed is an example manifest `dgraph-ha.yaml` to deploy Dgraph cluster on Kubernetes:
+`dgraph-ha.yaml` is an example manifest to deploy Dgraph cluster on Kubernetes:
 
 * 3 zero nodes
 * 3 alpha nodes
@@ -25,7 +25,7 @@ kubectl port-forward svc/dgraph-alpha-public 8080:8080
 
 ## Public Services
 
-There are four services specified in the manifest that can be used to expose services outside the cluster.  Highly recommend that when doing this, they are only accessible on a private subnet, and not exposed to the public Internet.
+There are three services specified in the manifest that can be used to expose services outside the cluster.  Highly recommend that when doing this, they are only accessible on a private subnet, and not exposed to the public Internet.
 
 * `dgraph-zero-public` - To load data using Live & Bulk Loaders
 * `dgraph-alpha-public` - To connect clients and for HTTP APIs

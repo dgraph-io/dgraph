@@ -6,7 +6,7 @@ metadata:
 managedNodeGroups:
   - name: dgraph-ha-cluster-workers
     minSize: 3
-    maxSize: 5
+    maxSize: 6
     desiredCapacity: 3
     labels: {role: worker}
     tags:
