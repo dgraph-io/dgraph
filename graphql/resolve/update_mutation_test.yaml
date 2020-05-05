@@ -1213,21 +1213,21 @@
       deletejson: |
         [
           {
-            "uid": "uid(Author3)",
-            "Author.posts": [{"uid": "uid(Post2)"}]
+            "uid": "uid(Author4)",
+            "Author.posts": [{"uid": "uid(Post3)"}]
           }
         ]
-      cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Post3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
         uid
       }
-      Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
+      Post3 as Post3(func: uid(0x456)) @filter(type(Post)) {
         uid
       }
-      var(func: uid(Post2)) {
-        Author3 as Post.author @filter(NOT (uid(x)))
+      var(func: uid(Post3)) {
+        Author4 as Post.author @filter(NOT (uid(x)))
       }
     }
 
@@ -1263,21 +1263,21 @@
       deletejson: |
         [
           {
-            "uid": "uid(Author3)",
+            "uid": "uid(Author4)",
             "Author.posts": [ { "uid": "uid(x)" } ]
           }
         ]
-      cond: "@if(eq(len(Author2), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Author3), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updatePost(func: type(Post)) @filter(uid(0x123)) {
         uid
       }
-      Author2 as Author2(func: uid(0x456)) @filter(type(Author)) {
+      Author3 as Author3(func: uid(0x456)) @filter(type(Author)) {
         uid
       }
       var(func: uid(x)) {
-        Author3 as Post.author @filter(NOT (uid(Author2)))
+        Author4 as Post.author @filter(NOT (uid(Author3)))
       }
     }
 
@@ -1307,7 +1307,7 @@
           "uid" : "uid(x)",
           "Country.states": [
             {
-              "uid": "_:State3",
+              "uid": "_:State4",
               "dgraph.type": ["State"],
               "State.code": "abc",
               "State.name": "Alphabet",
@@ -1315,13 +1315,13 @@
             }
           ]
         }
-      cond: "@if(eq(len(State3), 0) AND gt(len(x), 0))"
+      cond: "@if(eq(len(State4), 0) AND gt(len(x), 0))"
     - setjson: |
         { 
           "uid" : "uid(x)",
           "Country.states": [
             {
-              "uid": "uid(State3)",
+              "uid": "uid(State4)",
               "State.country": { "uid": "uid(x)" }
             }
           ]
@@ -1329,21 +1329,21 @@
       deletejson: |
         [
           {
-            "uid": "uid(Country4)",
-            "Country.states": [ { "uid": "uid(State3)" } ]
+            "uid": "uid(Country5)",
+            "Country.states": [ { "uid": "uid(State4)" } ]
           }
         ]
-      cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(State4), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateCountry(func: type(Country)) @filter(uid(0x123)) {
         uid
       }
-      State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+      State4 as State4(func: eq(State.code, "abc")) @filter(type(State)) {
         uid
       }
-      var(func: uid(State3)) {
-        Country4 as State.country @filter(NOT (uid(x)))
+      var(func: uid(State4)) {
+        Country5 as State.country @filter(NOT (uid(x)))
       }
     }
 
@@ -1368,37 +1368,37 @@
     - setjson: |
         { "uid" : "uid(x)",
           "ComputerOwner.computers": { 
-            "uid": "_:Computer3",
+            "uid": "_:Computer4",
             "dgraph.type": ["Computer"],
             "Computer.name": "Comp",
             "Computer.owners": [ { "uid": "uid(x)" } ]
           }
         }
-      cond: "@if(eq(len(Computer3), 0) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Computer4), 0) AND gt(len(x), 0))"
     - setjson: |
         { "uid" : "uid(x)",
           "ComputerOwner.computers": { 
-            "uid": "uid(Computer3)",
+            "uid": "uid(Computer4)",
             "Computer.owners": [ { "uid": "uid(x)" } ]
           }
         }
       deletejson: |
         [
           {
-            "uid": "uid(Computer4)",
+            "uid": "uid(Computer5)",
             "Computer.owners": [ { "uid": "uid(x)" } ]
           }
         ]
-      cond: "@if(eq(len(Computer3), 1) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Computer4), 1) AND gt(len(x), 0))"
   dgquery: |-
     query {
       x as updateComputerOwner(func: type(ComputerOwner)) @filter(eq(ComputerOwner.name, "A.N. Owner")) {
         uid
       }
-      Computer3 as Computer3(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
+      Computer4 as Computer4(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
         uid
       }
       var(func: uid(x)) {
-        Computer4 as ComputerOwner.computers @filter(NOT (uid(Computer3)))
+        Computer5 as ComputerOwner.computers @filter(NOT (uid(Computer4)))
       }
     }
