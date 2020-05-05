@@ -36,6 +36,8 @@ type ctxKey string
 
 const (
 	AuthJwtCtxKey = ctxKey("authorizationJwt")
+	RSA256        = "RS256"
+	HMAC256       = "HS256"
 )
 
 var (
@@ -51,15 +53,23 @@ type AuthMeta struct {
 }
 
 func (m *AuthMeta) Parse(schema string) error {
-	poundIdx := strings.LastIndex(schema, "#")
-	if poundIdx == -1 {
+	lastCommentIdx := strings.LastIndex(schema, "#")
+	if lastCommentIdx == -1 {
 		return nil
 	}
-	lastComment := schema[poundIdx:]
+	lastComment := schema[lastCommentIdx:]
 	if !strings.HasPrefix(lastComment, "# Authorization") {
 		return nil
 	}
 
+	// This regex matches authorization information present in the last line of the schema.
+	// Format: # Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
+	// Example: # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// On successful regex match the index for the following strings will be returned.
+	// [0][0]:[0][1] : # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
+	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
+	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
 	authMetaRegex, err :=
 		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
 	if err != nil {
@@ -76,15 +86,18 @@ func (m *AuthMeta) Parse(schema string) error {
 	m.Algo = lastComment[idx[0][8]:idx[0][9]]
 
 	key := lastComment[idx[0][10]:idx[0][11]]
-	if m.Algo == "HS256" {
+	if m.Algo == HMAC256 {
 		m.HMACPublicKey = key
 		return nil
 	}
-	if m.Algo != "RS256" {
-		return errors.Errorf("invalid jwt algorithm: %s", m.Algo)
+	if m.Algo != RSA256 {
+		return errors.Errorf(
+			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", m.Algo)
 	}
 
-	// Replace "\n" with ASCII new line value.
+	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
+	// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
+	// To fix this we replace "\n" with new line's ASCII value.
 	bytekey := bytes.ReplaceAll([]byte(key), []byte{92, 110}, []byte{10})
 
 	m.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
@@ -155,13 +168,7 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 func validateToken(jwtStr string) (map[string]interface{}, error) {
 	if len(metainfo.Algo) == 0 {
 		return nil, fmt.Errorf(
-			"jwt token cannot be validated because verificaiton algorithm is not set")
-	}
-	if metainfo.Algo == "HS256" && metainfo.HMACPublicKey == "" {
-		return nil, fmt.Errorf("jwt token cannot be validated because HMAC key is empty")
-	}
-	if metainfo.Algo == "RS256" && metainfo.RSAPublicKey == nil {
-		return nil, fmt.Errorf("jwt token cannot be validated because RSA public key is empty")
+			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
 	token, err :=
@@ -171,11 +178,11 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
 					metainfo.Algo, algo)
 			}
-			if algo == "HS256" {
+			if algo == HMAC256 {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
 					return []byte(metainfo.HMACPublicKey), nil
 				}
-			} else if algo == "RS256" {
+			} else if algo == RSA256 {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
 					return metainfo.RSAPublicKey, nil
 				}

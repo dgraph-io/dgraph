@@ -238,5 +238,3 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
-
-# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
