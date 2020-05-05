@@ -1,5 +1,6 @@
 -
   name: "custom query"
+  type: "query"
   gqlschema: |
     type Country @remote {
         code: String
@@ -11,7 +12,7 @@
           url: "http://google.com/validcountry",
           method: "POST",
           forwardHeaders: ["Content-Type"],
-          graphql: "query { country(code: $id) }",
+          graphql: "query($id: ID!) { country(code: $id) }",
           skipIntrospection: true
       })
     }
@@ -32,15 +33,139 @@
       country(code: ID!): Country! @custom(http: {
         url: "http://google.com/validcountry",
         method: "POST",
-        forwardHeaders: ["Content-Type"],
         graphql: "query { country(code: $id) }",
         skipIntrospection: true
       })
     }
   remotequery: |-
-    query { country(code: $id) {
+    query($id: ID!) { country(code: $id) {
     name
     code
     }}
-  remotevariables: { "id": "0x1" }
+  remotevariables: |-
+    { "id": "0x1" }
+
+-
+  name: "custom mutation"
+  type: "mutation"
+  gqlschema: |
+    type Country @remote {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
+
+    type State @remote {
+      code: String
+      name: String
+      country: Country
+    }
+
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
+
+    input StateInput {
+        code: String!
+        name: String!
+    }
+
+    type Mutation {
+      addCountry(input: CountryInput!): Country! @custom(http: {
+        url: "http://mock:8888/setCountry",
+        method: "POST",
+        skipIntrospection: true,
+        graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
+      })
+    }
+  gqlquery: |
+    mutation addCountry($input: CountryInput!) {
+      addCountry(input: $input) {
+        code
+        name
+        states {
+          code
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "input":
+      {
+        "code": "IN",
+        "name": "India",
+        "states": [
+          {
+            "code": "RJ",
+            "name": "Rajasthan"
+          },
+          {
+            "code": "KA",
+            "name": "Karnataka"
+          }
+        ]
+      }
+    }
+  remoteschema: |
+    type Country {
+      code: String
+      name: String
+      states: [State]
+      std: Int
+    }
+
+    type State {
+      code: String
+      name: String
+      country: Country
+    }
+
+    input CountryInput {
+      code: String!
+      name: String!
+      states: [StateInput]
+    }
+
+    input StateInput {
+      code: String!
+      name: String!
+    }
+
+    type Mutation {
+      setCountry(country: CountryInput!): Country!  @custom(http: {
+        url: "http://mock:8888/setCountry",
+        method: "POST",
+        skipIntrospection: true,
+        graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
+      })
+    }
+  remotequery: |-
+    mutation($input: CountryInput!) { setCountry(country: $input) {
+    code
+    name
+    states{
+    code
+    name
+    }
+    }}
+  remotevariables: |
+    { "input":
+      {
+        "code": "IN",
+        "name": "India",
+        "states": [
+          {
+            "code": "RJ",
+            "name": "Rajasthan"
+          },
+          {
+            "code": "KA",
+            "name": "Karnataka"
+          }
+        ]
+      }
+    }
 

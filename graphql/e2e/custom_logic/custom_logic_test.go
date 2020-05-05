@@ -35,41 +35,42 @@ import (
 const (
 	alphaURL      = "http://localhost:8180/graphql"
 	alphaAdminURL = "http://localhost:8180/admin"
-	customTypes   = `type MovieDirector @remote {
-		 id: ID!
-		 name: String!
-		 directed: [Movie]
-	 }
+	customTypes   = `
+	type MovieDirector @remote {
+		id: ID!
+		name: String!
+		directed: [Movie]
+	}
 
-	 type Movie @remote {
-		 id: ID!
-		 name: String!
-		 director: [MovieDirector]
-	 }
-	  type Country @remote {
+	type Movie @remote {
+		id: ID!
+		name: String!
+		director: [MovieDirector]
+	}
+
+	type Country @remote {
 		code: String
 		name: String
 		states: [State]
 		std: Int
-	  }
+	}
 
-	  type State @remote {
+	type State @remote {
 		code: String
 		name: String
 		country: Country
-	  }
+	}
 
-	  input CountryInput {
+	input CountryInput {
 		code: String!
 		name: String!
 		states: [StateInput]
-	  }
+	}
 
-	  input StateInput {
+	input StateInput {
 		code: String!
 		name: String!
-	  }
- `
+	}`
 )
 
 func updateSchema(t *testing.T, sch string) *common.GraphQLResponse {

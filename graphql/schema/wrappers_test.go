@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
@@ -707,14 +708,22 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 	}
 }
 
-// Tests showing that the query rewriter produces the expected Dgraph queries
+// Tests showing that the correct query and variables are sent to the remote server.
 type CustomHTTPConfigCase struct {
-	Name            string
-	GQLQuery        string
-	GQLSchema       string
-	RemoteSchema    string
+	Name string
+	Type string
+
+	// the query and variables given as input by the user.
+	GQLQuery     string
+	GQLVariables string
+	// our schema against which the above query and variables are resolved.
+	GQLSchema string
+
+	// remote query and variables which are built as part of the HTTP config and checked.
 	RemoteQuery     string
-	RemoteVariables map[string]interface{}
+	RemoteVariables string
+	// remote schema against which the RemoteQuery and RemoteVariables are validated.
+	RemoteSchema string
 }
 
 func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
@@ -732,17 +741,32 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			sch, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
 
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err = json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
+
 			op, err := sch.Operation(
 				&Request{
-					Query: tcase.GQLQuery,
+					Query:     tcase.GQLQuery,
+					Variables: vars,
 				})
 			require.NoError(t, err)
 			require.NotNil(t, op)
 
-			queries := op.Queries()
-			require.Len(t, queries, 1)
-			gqlQuery := queries[0]
-			c, err := gqlQuery.CustomHTTPConfig()
+			var field Field
+			if tcase.Type == "query" {
+				queries := op.Queries()
+				require.Len(t, queries, 1)
+				field = queries[0]
+			} else if tcase.Type == "mutation" {
+				mutations := op.Mutations()
+				require.Len(t, mutations, 1)
+				field = mutations[0]
+			}
+
+			c, err := field.CustomHTTPConfig()
 			require.NoError(t, err)
 
 			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
@@ -757,7 +781,10 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			v := tmpl["variables"].(map[string]interface{})
 
 			require.Equal(t, tcase.RemoteQuery, q)
-			require.Equal(t, tcase.RemoteVariables, v)
+
+			var rv map[string]interface{}
+			require.NoError(t, json.Unmarshal([]byte(tcase.RemoteVariables), &rv))
+			require.Equal(t, rv, v)
 
 			op, err = remoteSchema.Operation(
 				&Request{

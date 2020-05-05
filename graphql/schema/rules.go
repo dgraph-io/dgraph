@@ -1125,11 +1125,12 @@ func customDirectiveValidation(sch *ast.Schema,
 				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
 					"name `%s`, it can't have a name.", typ.Name, field.Name, graphqlOpDef.Name)
 		}
-		if graphqlOpDef.VariableDefinitions != nil {
-			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
-					"variables, it can't have any variable definitions.", typ.Name, field.Name)
-		}
+		// TODO - Ensure that the variables used should be already defined.
+		// if graphqlOpDef.VariableDefinitions != nil {
+		// 	return gqlerror.ErrorPosf(graphql.Position,
+		// 		"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
+		// 			"variables, it can't have any variable definitions.", typ.Name, field.Name)
+		// }
 		if graphqlOpDef.Directives != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
 				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+

@@ -202,14 +202,14 @@
 - name: "setcountry"
   description: "Test case to validate graphql mutation"
   schema: |
-    type Country @remote {
+    type Country {
       code: String
       name: String
       states: [State]
       std: Int
     }
 
-    type State @remote {
+    type State {
       code: String
       name: String
       country: Country

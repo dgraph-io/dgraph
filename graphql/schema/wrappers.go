@@ -767,7 +767,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			return fconf, gqlErr
 		}
 		// queryDoc will always have only one operation with only one field
-		fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
+		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
+		fconf.RemoteGqlQueryName = qfield.Name
 		buf := &bytes.Buffer{}
 		buildGraphqlRequestFields(buf, f.field)
 		remoteQuery := graphqlArg.Raw
