@@ -163,9 +163,17 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	return aex.dg.Execute(ctx, req)
 }
 
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return aex.dg.CommitOrAbort(ctx, tc)
+}
+
 func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	*dgoapi.Response, error) {
 	return de.dg.Execute(ctx, req)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return de.dg.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
@@ -413,6 +421,39 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	return resp
+}
+
+// ValidateSubscription will check the given subscription query is valid or not.
+func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
+	op, err := r.schema.Operation(req)
+	if err != nil {
+		return err
+	}
+
+	for _, q := range op.Queries() {
+		for _, field := range q.SelectionSet() {
+			if err := validateCustomFieldsRecursively(field); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateCustomFieldsRecursively will return err if the given field is custom or any of its
+// children is type of a custom field.
+func validateCustomFieldsRecursively(field schema.Field) error {
+	if has, _ := field.HasCustomDirective(); has {
+		return x.GqlErrorf("Custom field `%s` is not supported in graphql subscription",
+			field.Name()).WithLocations(field.Location())
+	}
+	for _, f := range field.SelectionSet() {
+		err := validateCustomFieldsRecursively(f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func addResult(resp *schema.Response, res *Resolved) {
@@ -664,12 +705,21 @@ func externalRequestError(err error, f schema.Field) *x.GqlError {
 		f.GetObjectName()).WithLocations(f.Location())
 }
 
+func internalServerError(err error, f schema.Field) error {
+	return schema.GQLWrapLocationf(err, f.Location(), "evaluation of custom field failed"+
+		" for field: %s within type: %s.", f.Name(), f.GetObjectName())
+}
+
 type graphqlResp struct {
 	Data   map[string]interface{} `json:"data,omitempty"`
 	Errors x.GqlErrorList         `json:"errors,omitempty"`
 }
 
 func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, errCh chan error) {
+	defer api.PanicHandler(func(err error) {
+		errCh <- internalServerError(err, f)
+	})
+
 	fconf, err := f.CustomHTTPConfig()
 	if err != nil {
 		errCh <- err
@@ -801,6 +851,11 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	errChan := make(chan error, len(inputs))
 	for i := 0; i < len(inputs); i++ {
 		go func(idx int, input interface{}) {
+			defer api.PanicHandler(
+				func(err error) {
+					errChan <- internalServerError(err, f)
+				})
+
 			requestInput := input
 			if graphql {
 				body := make(map[string]interface{})
@@ -884,10 +939,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	}
 
-	if errs == nil {
-		errCh <- nil
-		return
-	}
 	errCh <- errs
 }
 
@@ -904,6 +955,10 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 // list of all users.
 func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	errCh chan error) {
+	defer api.PanicHandler(func(err error) {
+		errCh <- internalServerError(err, f)
+	})
+
 	// If this field doesn't have custom directive and also doesn't have any children,
 	// then there is nothing to do and we can just continue.
 	if len(f.SelectionSet()) == 0 {

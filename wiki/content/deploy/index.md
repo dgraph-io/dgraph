@@ -7,7 +7,7 @@ This page talks about running Dgraph in various deployment modes, in a distribut
 running multiple instances of Dgraph, over multiple servers in a cluster.
 
 {{% notice "tip" %}}
-For a single server setup, recommended for new users, please see [Get Started](/get-started) page.
+For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
 {{% /notice %}}
 
 ## Install Dgraph
@@ -63,7 +63,7 @@ curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
 {{% notice "note" %}}
-Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#exporting-database) before running this script and reimported to the new cluster running the updated version.
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported]({{< relref "deploy/index.md#exporting-database" >}}) before running this script and reimported to the new cluster running the updated version.
 {{% /notice %}}
 
 ### Manual download [optional]
@@ -2161,6 +2161,27 @@ Dgraph can be configured to send traces directly to a Jaeger collector with the 
 
 See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
 
+#### Setting up multiple Dgraph clusters with Jaeger
+
+Jaeger allows you to examine traces from multiple Dgraph clusters. To do this, use the `--collector.tags` on a Jaeger collector to set custom trace tags. For example, run one collector with `--collector.tags env=qa` and then another collector with `--collector.tags env=dev`. In Dgraph, set the `--jaeger.collector` flag in the Dgraph QA cluster to the first collector and the flag in the Dgraph Dev cluster to the second collector.
+You can run multiple Jaeger collector components for the same single Jaeger backend (e.g., many Jaeger collectors to a single Cassandra backend). This is still a single Jaeger installation but with different collectors customizing the tags per environment.
+
+Once you have this configured, you can filter by tags in the Jaeger UI. Filter traces by tags matching `env=dev`:
+
+{{% load-img "/images/jaeger-ui.png" "Jaeger UI" %}}
+
+Every trace has your custom tags set under the “Process” section of each span:
+
+{{% load-img "/images/jaeger-server-query.png" "Jaeger Query" %}}
+
+Filter traces by tags matching `env=qa`:
+
+{{% load-img "/images/jaeger-json.png" "Jaeger JSON" %}}
+
+{{% load-img "/images/jaeger-server-query-2.png" "Jaeger Query Result" %}}
+
+For more information, check out [Jaeger's Deployment Guide](https://www.jaegertracing.io/docs/deployment/).
+
 ## Data compression on disk
 
 Alpha exposes the option `--badger.compression_level` to configure the compression
@@ -2195,7 +2216,7 @@ the server which has IP address as `192.168.1.1`.
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
 the predicate gets added to the schema with an appropriate
-[Dgraph Type](https://docs.dgraph.io/master/query-language/#schema-types).
+[Dgraph Type]({{< relref "query-language/index.md#schema-types" >}}).
 
 You can use `--mutations disallow` to disable all mutations,
 which is set to `allow` by default.

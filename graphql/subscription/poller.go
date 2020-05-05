@@ -61,6 +61,11 @@ type SubscriberResponse struct {
 func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error) {
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
 
+	err := p.resolver.ValidateSubscription(req)
+	if err != nil {
+		return nil, err
+	}
+
 	buf, err := json.Marshal(req)
 	x.Check(err)
 
