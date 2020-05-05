@@ -214,6 +214,7 @@ func RunAll(t *testing.T) {
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
+	t.Run("alias should work in admin", adminAlias)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
