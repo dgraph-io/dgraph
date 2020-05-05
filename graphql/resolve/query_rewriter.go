@@ -172,7 +172,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
-		Attr: field.ResponseName(),
+		Attr: field.Name(),
 		Func: &gql.Function{
 			Name: "uid",
 			UID:  uids,
@@ -218,7 +218,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 
 	if uid > 0 {
 		dgQuery = &gql.GraphQuery{
-			Attr: field.ResponseName(),
+			Attr: field.Name(),
 			Func: &gql.Function{
 				Name: "uid",
 				UID:  []uint64{uid},
@@ -230,7 +230,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 
 	} else {
 		dgQuery = &gql.GraphQuery{
-			Attr: field.ResponseName(),
+			Attr: field.Name(),
 			Func: eqXidFunc,
 		}
 	}
@@ -242,7 +242,7 @@ func rewriteAsGet(field schema.Field, uid uint64, xid *string) *gql.GraphQuery {
 
 func rewriteAsQuery(field schema.Field) *gql.GraphQuery {
 	dgQuery := &gql.GraphQuery{
-		Attr: field.ResponseName(),
+		Attr: field.Name(),
 	}
 
 	if ids := idFilter(field, field.Type().IDField()); ids != nil {
@@ -322,11 +322,7 @@ func addSelectionSetFrom(q *gql.GraphQuery, field schema.Field) {
 
 		child := &gql.GraphQuery{}
 
-		if f.Alias() != "" {
-			child.Alias = f.Alias()
-		} else {
-			child.Alias = f.Name()
-		}
+		child.Alias = f.Name()
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
