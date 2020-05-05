@@ -874,7 +874,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			  url: "http://mock:8888/gqlUserNameWithError"
 			  method: "POST"
 			  operation: "single"
-			  graphql: "query { userName(id: $id) }"
+			  graphql: "query($id: ID!) { userName(id: $id) }"
 			}
 		  )
 		age: Int! @search
@@ -884,7 +884,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			  url: "http://mock:8888/gqlCarsWithErrors"
 			  method: "POST"
 			  operation: "batch"
-			  graphql: "query { cars(input: [{ id: $id, age: $age}]) }"
+			  graphql: "query($id: ID!, $age: Int!) { cars(input: [{ id: $id, age: $age}]) }"
 			}
 		  )
 	}`

@@ -321,6 +321,12 @@
   variables: |
     {"name":"Australia","std":91}
 
+- name: introspectedSchemaForQuery
+  schema: |
+    type Query {
+      %s(%s:ID!): String
+    }
+
 - name: "introspectionresults"
   schema: |
     input UserInput{

@@ -35,7 +35,6 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 	}
 
 	body, err := json.Marshal(param)
-
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +55,8 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 		return nil, err
 	}
 	result := &introspectedSchema{}
-
-	return result, json.Unmarshal(body, result)
+	return result, errors.Wrapf(json.Unmarshal(body, result),
+		"while json unmarshaling result from remote introspection query")
 }
 
 const introspectionQuery = `

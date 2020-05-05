@@ -843,7 +843,6 @@ func gqlUserNameWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, introspectedSchemaForQuery("userName", "id"))
 		return
 	}
-
 	var req request
 	if err := json.Unmarshal(b, &req); err != nil {
 		return
