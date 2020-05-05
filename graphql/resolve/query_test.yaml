@@ -1201,8 +1201,6 @@
       getComment(func: uid(0x1)) @filter(type(Comment)) {
         author : Comment.author
         id : uid
-        title : Comment.title
-        ups : Comment.ups
         url : Comment.url
       }
     }

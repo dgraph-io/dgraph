@@ -971,7 +971,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 func TestForInvalidCustomQuery(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/noquery",
 										method: "POST",
 										forwardHeaders: ["Content-Type"],
@@ -987,7 +987,7 @@ func TestForInvalidCustomQuery(t *testing.T) {
 func TestForInvalidArgument(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/invalidargument",
 										method: "POST",
 										forwardHeaders: ["Content-Type"],
@@ -1005,7 +1005,7 @@ func TestForInvalidArgument(t *testing.T) {
 func TestForInvalidType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/invalidtype",
 										method: "POST",
 										forwardHeaders: ["Content-Type"],
@@ -1022,7 +1022,7 @@ func TestForInvalidType(t *testing.T) {
 func TestCustomLogicGraphql(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/validcountry",
 										method: "POST",
 										forwardHeaders: ["Content-Type"],
@@ -1033,7 +1033,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	query := `
 	query {
-		getCountry(id: "BI"){
+		getCountry1(id: "BI"){
 			code
 			name
 		}
@@ -1044,7 +1044,7 @@ func TestCustomLogicGraphql(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
-	require.JSONEq(t, string(result.Data), `{"getCountry":{"code":"BI","name":"Burundi"}}`)
+	require.JSONEq(t, string(result.Data), `{"getCountry1":{"code":"BI","name":"Burundi"}}`)
 }
 
 func TestCustomLogicGraphqlWithError(t *testing.T) {
@@ -1507,7 +1507,7 @@ func TestCustomMutationShouldForwardHeaders(t *testing.T) {
 func TestCustomGraphqlNullQueryType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/nullQueryAndMutationType",
 										method: "POST",
 										graphql: "query { getCountry(id: $id) }"
@@ -1522,7 +1522,7 @@ func TestCustomGraphqlNullQueryType(t *testing.T) {
 func TestCustomGraphqlNullMutationType(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Country! @custom(http: {
+		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/nullQueryAndMutationType",
 										method: "POST",
 										graphql: "mutation { putCountry(country: $input) }"
@@ -1537,7 +1537,7 @@ func TestCustomGraphqlNullMutationType(t *testing.T) {
 func TestCustomGraphqlMissingQueryType(t *testing.T) {
 	schema := customTypes + `
 	type Query {
-		getCountry(id: ID!): Country! @custom(http: {
+		getCountry1(id: ID!): Country! @custom(http: {
 										url: "http://mock:8888/missingQueryAndMutationType",
 										method: "POST",
 										graphql: "query { getCountry(id: $id) }"
@@ -1552,7 +1552,7 @@ func TestCustomGraphqlMissingQueryType(t *testing.T) {
 func TestCustomGraphqlMissingMutationType(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Country! @custom(http: {
+		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/missingQueryAndMutationType",
 										method: "POST",
 										graphql: "mutation { putCountry(country: $input) }"
@@ -1567,7 +1567,7 @@ func TestCustomGraphqlMissingMutationType(t *testing.T) {
 func TestCustomGraphqlMissingMutation(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Country! @custom(http: {
+		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/setCountry",
 										method: "POST",
 										graphql: "mutation { putCountry(country: $input) }"
@@ -1583,7 +1583,7 @@ func TestCustomGraphqlMissingMutation(t *testing.T) {
 func TestCustomGraphqlReturnTypeMismatch(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Movie! @custom(http: {
+		addCountry1(input: CountryInput!): Movie! @custom(http: {
 										url: "http://mock:8888/setCountry",
 										method: "POST",
 										graphql: "mutation { setCountry(country: $input) }"
@@ -1710,7 +1710,7 @@ func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
 func TestCustomGraphqlMissingRequiredArgument(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Country! @custom(http: {
+		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/setCountry",
 										method: "POST",
 										graphql: "mutation { setCountry() }"
@@ -1748,7 +1748,7 @@ func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
 func TestCustomGraphqlMutation1(t *testing.T) {
 	schema := customTypes + `
 	type Mutation {
-		addCountry(input: CountryInput!): Country! @custom(http: {
+		addCountry1(input: CountryInput!): Country! @custom(http: {
 										url: "http://mock:8888/setCountry",
 										method: "POST",
 										graphql: "mutation { setCountry(country: $input) }"
@@ -1759,8 +1759,8 @@ func TestCustomGraphqlMutation1(t *testing.T) {
 
 	params := &common.GraphQLParams{
 		Query: `
-		mutation addCountry($input: CountryInput!) {
-			addCountry(input: $input) {
+		mutation addCountry1($input: CountryInput!) {
+			addCountry1(input: $input) {
 				code
 				name
 				states {
@@ -1792,7 +1792,7 @@ func TestCustomGraphqlMutation1(t *testing.T) {
 
 	expected := `
 	{
-		"addCountry": {
+		"addCountry1": {
 			"code": "IN",
 			"name": "India",
 			"states": [
