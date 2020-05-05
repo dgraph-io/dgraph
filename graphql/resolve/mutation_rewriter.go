@@ -1111,7 +1111,7 @@ func addAdditionalDeletes(
 //
 // we are about to attach
 //
-// Post1 --- author --> Author1
+// Post2 --- author --> Author1
 //
 // So Post2 should get removed from Author3's posts edge
 //
