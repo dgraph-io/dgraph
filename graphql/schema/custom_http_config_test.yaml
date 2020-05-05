@@ -169,3 +169,81 @@
       }
     }
 
+-
+  name: "custom field single mode"
+  type: "field"
+  gqlschema: |
+    type User {
+      id: ID!
+      age: Float!
+      name: String @custom(
+        http: {
+          url: "http://mock:8888/gqlUserName"
+          method: "POST"
+          operation: "single"
+          graphql: "query($id: ID!, $age: Float!) { userName(id: $id, age: $age)}"
+          skipIntrospection: true
+        }
+      )
+    }
+  gqlquery: |
+    query {
+      queryUser {
+        name
+      }
+    }
+  remoteschema: |
+    type Query {
+      userName(id: ID!, age: Float!): String @custom(http: {
+        url: "http://google.com/validcountry"
+        method: "POST"
+        graphql: "query { blah(code: $id) }"
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($id: ID!, $age: Float!) { userName(id: $id, age: $age)}
+  inputvariables: |-
+    { "id": "0x2", "age": 10 }
+
+-
+  name: "custom field batch mode"
+  type: "field"
+  gqlschema: |
+    type User {
+      id: ID!
+      age: String!
+      name: String @custom(
+        http: {
+          url: "http://mock:8888/gqlUserName"
+          method: "POST"
+          operation: "batch"
+          graphql: "query($id: ID!, $age: String!) { userName(random: [{id: $id, age: $age}])}"
+          skipIntrospection: true
+        }
+      )
+    }
+  gqlquery: |
+    query {
+      queryUser {
+        name
+      }
+    }
+  remoteschema: |
+    input UserInput {
+      id: ID!
+      age: String!
+    }
+
+    type Query {
+      userName(random: [UserInput]): String @custom(http: {
+        url: "http://google.com/validcountry"
+        method: "POST"
+        graphql: "query { blah(code: $id) }"
+        skipIntrospection: true
+      })
+    }
+  remotequery: |-
+    query($id: ID!, $age: String!) { userName(random: [{id: $id, age: $age}])}
+  inputvariables: |-
+    { "id": "0x2", "age": "10" }

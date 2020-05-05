@@ -719,6 +719,9 @@ type CustomHTTPConfigCase struct {
 	// our schema against which the above query and variables are resolved.
 	GQLSchema string
 
+	// for resolving fields variables are populated from the result of resolving a Dgraph query
+	// so RemoteVariables won't have anything.
+	InputVariables string
 	// remote query and variables which are built as part of the HTTP config and checked.
 	RemoteQuery     string
 	RemoteVariables string
@@ -764,6 +767,13 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 				mutations := op.Mutations()
 				require.Len(t, mutations, 1)
 				field = mutations[0]
+			} else if tcase.Type == "field" {
+				queries := op.Queries()
+				require.Len(t, queries, 1)
+				q := queries[0]
+				require.Len(t, q.SelectionSet(), 1)
+				// We are allow checking the custom http config on the first field of the query.
+				field = q.SelectionSet()[0]
 			}
 
 			c, err := field.CustomHTTPConfig()
@@ -777,18 +787,22 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			// Validate the generated query against the remote schema.
 			tmpl, ok := (*c.Template).(map[string]interface{})
 			require.True(t, ok)
-			q := tmpl["query"].(string)
-			v := tmpl["variables"].(map[string]interface{})
 
-			require.Equal(t, tcase.RemoteQuery, q)
+			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
 
+			v, ok := tmpl["variables"].(map[string]interface{})
 			var rv map[string]interface{}
-			require.NoError(t, json.Unmarshal([]byte(tcase.RemoteVariables), &rv))
+			if tcase.RemoteVariables != "" {
+				require.NoError(t, json.Unmarshal([]byte(tcase.RemoteVariables), &rv))
+			}
 			require.Equal(t, rv, v)
 
+			if tcase.InputVariables != "" {
+				require.NoError(t, json.Unmarshal([]byte(tcase.InputVariables), &v))
+			}
 			op, err = remoteSchema.Operation(
 				&Request{
-					Query:     q,
+					Query:     c.RemoteGqlQuery,
 					Variables: v,
 				})
 			require.NoError(t, err)

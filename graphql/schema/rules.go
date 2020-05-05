@@ -1293,8 +1293,11 @@ func customDirectiveValidation(sch *ast.Schema,
 
 	// 11. Finally validate the given graphql operation on remote server, when all locally doable
 	// validations have finished
-	si := httpArg.Value.Children.ForName("skipIntrospection").Raw
-	skip, _ := strconv.ParseBool(si)
+	si := httpArg.Value.Children.ForName("skipIntrospection")
+	var skip bool
+	if si != nil {
+		skip, _ = strconv.ParseBool(si.Raw)
+	}
 	if graphql != nil && !skip && graphqlOpDef != nil {
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
