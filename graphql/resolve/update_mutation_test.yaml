@@ -839,7 +839,7 @@
         Owner3 as House.owner @filter(NOT (uid(x)))
       }
       var(func: uid(x)) {
-        House4 as Owner.house
+        House4 as Owner.house @filter(NOT (uid(House2)))
       }
     }
 
@@ -1138,3 +1138,267 @@
   error:
     message: |-
       failed to rewrite mutation payload because duplicate XID found: T1
+
+
+# Additional Deletes
+#
+# If we have
+# 
+# type Post { ... author: Author @hasInverse(field: posts) ... }
+# type Author { ... posts: [Post] ... }
+#
+# and existing edge
+# 
+# Post1 --- author --> Author1
+# 
+# there must also exist edge
+# 
+# Author1 --- posts --> Post1
+#
+# So if we did an update that changes the author of Post1 to Author2, we need to
+#  * add edge Post1 --- author --> Author2 (done by asIDReference/asXIDReference)
+#  * add edge Author2 --- posts --> Post1 (done by addInverseLink)
+#  * delete edge Author1 --- posts --> Post1 (done by addAdditionalDeletes)
+#
+# This delete only needs to be done when there is a singular edge in the mutation:
+# i.e. if both directions of the edge are [], then it's just an add.  We also need
+# to guard all these cases.  For example: an updateAuthor mutation might contain
+#   "set": { ... "posts": [ { "postID": "0x456" } ] ... }
+# but we don't know if the author we are updating already has "0x456" in its list
+# of posts, so we only do the delete if that post's author is different to the
+# author we are updating.
+#
+# Updates can only happen at the top level of a mutation, so there's no deep cases.
+# There's four cases to consider: 
+#  * updating a node by adding a reference by ID (e.g. attaching a post to an author
+#    causes a delete on the author the post was attached to - if it's not the post
+#    being updated)
+#  * updating a node by adding a reference by XID (e.g. updating a country to set
+#    a state by xid)
+#  * as per case one, but updating the post rather than the author (i.e. the singular
+#    edge is in the updated node, not the reference node)
+#  * as per case two, but with the singular edge in the updated node.
+
+- name: "Additional Deletes - Update references existing node by ID (updt list edge)"
+  gqlmutation: |
+    mutation updateAuthor($patch: UpdateAuthorInput!) {
+      updateAuthor(input: $patch) {
+        author {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { 
+      "patch": { 
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "posts": [ { "postID": "0x456" } ]
+        }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { 
+          "uid" : "uid(x)",
+          "Author.posts": [
+            {
+              "uid": "0x456",
+              "Post.author": { "uid": "uid(x)" }
+            }
+          ]
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [{"uid": "uid(Post2)"}]
+          }
+        ]
+      cond: "@if(eq(len(Post2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateAuthor(func: type(Author)) @filter(uid(0x123)) {
+        uid
+      }
+      Post2 as Post2(func: uid(0x456)) @filter(type(Post)) {
+        uid
+      }
+      var(func: uid(Post2)) {
+        Author3 as Post.author @filter(NOT (uid(x)))
+      }
+    }
+
+- name: "Additional Deletes - Update references existing node by ID (updt single edge)"
+  gqlmutation: |
+    mutation updatePost($patch: UpdatePostInput!) {
+      updatePost(input: $patch) {
+        post {
+          postID
+        }
+      }
+    }
+  gqlvariables: |
+    { "patch":
+      { "filter": {
+          "postID": ["0x123"]
+        },
+        "set": {
+          "text": "updated text",
+          "author": { "id": "0x456" }
+        }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "Post.text": "updated text",
+          "Post.author": { 
+            "uid": "0x456",
+            "Author.posts": [ { "uid": "uid(x)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Author3)",
+            "Author.posts": [ { "uid": "uid(x)" } ]
+          }
+        ]
+      cond: "@if(eq(len(Author2), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updatePost(func: type(Post)) @filter(uid(0x123)) {
+        uid
+      }
+      Author2 as Author2(func: uid(0x456)) @filter(type(Author)) {
+        uid
+      }
+      var(func: uid(x)) {
+        Author3 as Post.author @filter(NOT (uid(Author2)))
+      }
+    }
+
+- name: "Additional Deletes - Update references existing node by XID (updt list edge)"
+  gqlmutation: |
+    mutation updateCountry($patch: UpdateCountryInput!) {
+      updateCountry(input: $patch) {
+        country {
+          id
+        }
+      }
+    }
+  gqlvariables: |
+    { 
+      "patch": { 
+        "filter": {
+          "id": ["0x123"]
+        },
+        "set": {
+          "states": [ { "code": "abc", "name": "Alphabet" } ]
+        }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { 
+          "uid" : "uid(x)",
+          "Country.states": [
+            {
+              "uid": "_:State3",
+              "dgraph.type": ["State"],
+              "State.code": "abc",
+              "State.name": "Alphabet",
+              "State.country": { "uid": "uid(x)" }
+            }
+          ]
+        }
+      cond: "@if(eq(len(State3), 0) AND gt(len(x), 0))"
+    - setjson: |
+        { 
+          "uid" : "uid(x)",
+          "Country.states": [
+            {
+              "uid": "uid(State3)",
+              "State.country": { "uid": "uid(x)" }
+            }
+          ]
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Country4)",
+            "Country.states": [ { "uid": "uid(State3)" } ]
+          }
+        ]
+      cond: "@if(eq(len(State3), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateCountry(func: type(Country)) @filter(uid(0x123)) {
+        uid
+      }
+      State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State3)) {
+        Country4 as State.country @filter(NOT (uid(x)))
+      }
+    }
+
+- name: "Additional Deletes - Update references existing node by XID (updt single edge)"
+  gqlmutation: |
+    mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
+      updateComputerOwner(input: $patch) {
+        computerowner {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { 
+      "patch":
+      { 
+        "filter": { "name": { "eq": "A.N. Owner" } },
+        "set": { "computers": { "name": "Comp" } }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        { "uid" : "uid(x)",
+          "ComputerOwner.computers": { 
+            "uid": "_:Computer3",
+            "dgraph.type": ["Computer"],
+            "Computer.name": "Comp",
+            "Computer.owners": [ { "uid": "uid(x)" } ]
+          }
+        }
+      cond: "@if(eq(len(Computer3), 0) AND gt(len(x), 0))"
+    - setjson: |
+        { "uid" : "uid(x)",
+          "ComputerOwner.computers": { 
+            "uid": "uid(Computer3)",
+            "Computer.owners": [ { "uid": "uid(x)" } ]
+          }
+        }
+      deletejson: |
+        [
+          {
+            "uid": "uid(Computer4)",
+            "Computer.owners": [ { "uid": "uid(x)" } ]
+          }
+        ]
+      cond: "@if(eq(len(Computer3), 1) AND gt(len(x), 0))"
+  dgquery: |-
+    query {
+      x as updateComputerOwner(func: type(ComputerOwner)) @filter(eq(ComputerOwner.name, "A.N. Owner")) {
+        uid
+      }
+      Computer3 as Computer3(func: eq(Computer.name, "Comp")) @filter(type(Computer)) {
+        uid
+      }
+      var(func: uid(x)) {
+        Computer4 as ComputerOwner.computers @filter(NOT (uid(Computer3)))
+      }
+    }

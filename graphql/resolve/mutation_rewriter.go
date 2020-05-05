@@ -1102,6 +1102,46 @@ func addAdditionalDeletes(
 	addDelete(frag, varGen, srcUID, variable, srcField, invField)
 }
 
+// addDelete adds a delete to the mutation if adding/updating an edge will cause another
+// edge to disappear (see notes at addAdditionalDeletes)
+//
+// e.g. we have edges
+// Post2 --- author --> Author3
+// Author3 --- posts --> Post2
+//
+// we are about to attach
+//
+// Post2 --- author --> Author1
+//
+// So Post2 should get removed from Author3's posts edge
+//
+// qryVar - is the variable storing Post2's uid
+// excludeVar - is the uid we might have to exclude from the query
+//
+// e.g. if qryVar = Post2, we'll generate
+//
+// query {
+//   ...
+// 	 var(func: uid(Post2)) {
+// 	  Author3 as Post.author
+// 	 }
+//  }
+//
+// and delete Json
+//
+// { "uid": "uid(Author3)", "Author.posts": [ { "uid": "uid(Post2)" } ] }
+//
+// removing the post from Author3
+//
+// but if there's a chance (e.g. during an update) that Author1 and Author3 are the same
+// e.g. the update isn't really changing an existing edge, we have to definitely not
+// do the delete. So we add a condition using the excludeVar
+//
+// 	 var(func: uid(Post2)) {
+// 	  Author3 as Post.author @filter(NOT(uid(Author1)))
+// 	 }
+//
+// and the delete won't run.
 func addDelete(frag *mutationFragment,
 	varGen *VariableGenerator,
 	qryVar, excludeVar string,
@@ -1135,19 +1175,28 @@ func addDelete(frag *mutationFragment,
 		}},
 	}
 
+	exclude := excludeVar
+	if strings.HasPrefix(excludeVar, "uid(") {
+		exclude = excludeVar[4 : len(excludeVar)-1]
+	}
+
 	// We shouldn't do the delete if it ends up that the mutation is linking to the existing
 	// value for this edge in Dgraph - otherwise (because there's a non-deterministic order
 	// in executing set and delete) we might end up deleting the value in a set mutation.
 	//
-	// That can only happen at the top level of an update, where the variable is
-	// already uid(...)
-	if strings.HasPrefix(excludeVar, "uid(") {
+	// The only time that we always remove the edge and not check is a new node: e.g.
+	// excludeVar is a blank node like _:Author1.   E.g. if
+	// Post2 --- author --> Author3
+	// Author3 --- posts --> Post2
+	// is in the graph and we are creating a new node _:Author1 ... there's no way
+	// Author3 and _:Author1 can be the same uid, so the check isn't required.
+	if !strings.HasPrefix(excludeVar, "_:") {
 		qry.Children[0].Filter = &gql.FilterTree{
 			Op: "not",
 			Child: []*gql.FilterTree{{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: excludeVar[4 : len(excludeVar)-1]}}}}},
+					Args: []gql.Arg{{Value: exclude}}}}},
 		}
 	}
 
