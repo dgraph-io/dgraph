@@ -116,6 +116,10 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.R
 
 }
 
+func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
 // of "null", errors and error propagation).  Exact JSON result (e.g. order) doesn't
 // matter here - that makes for easier to format and read tests for these many cases.
@@ -565,7 +569,7 @@ func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,
 	vars map[string]interface{},
-	ex *executor) *schema.Response {
+	ex DgraphExecutor) *schema.Response {
 	resolver := New(
 		gqlSchema,
 		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{

@@ -19,9 +19,12 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"sort"
+	"strconv"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -103,6 +106,7 @@ type DgraphExecutor interface {
 	// occurs, that indicates that the execution failed in some way significant enough
 	// way as to not continue processing this mutation or others in the same request.
 	Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
 }
 
 // An UpsertMutation is the query and mutations needed for a Dgraph upsert.
@@ -111,7 +115,7 @@ type DgraphExecutor interface {
 type UpsertMutation struct {
 	Query     *gql.GraphQuery
 	Mutations []*dgoapi.Mutation
-	NodeTypes map[string]schema.Type
+	NewNodes  map[string]schema.Type
 }
 
 // DgraphExecutorFunc is an adapter that allows us to compose dgraph execution and
@@ -202,7 +206,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	req := &dgoapi.Request{
 		Query:     dgraph.AsString(upsert.Query),
-		CommitNow: true,
 		Mutations: upsert.Mutations,
 	}
 
@@ -211,7 +214,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
 		return emptyResult(gqlErr), resolverFailed
-
 	}
 
 	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
@@ -224,6 +226,11 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 	}
 
+	authErr := authorizeNewNodes(ctx, mutResp.Uids, upsert.NewNodes, mr.executor, mutResp.Txn)
+	if authErr != nil {
+		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
+	}
+
 	var errs error
 	dgQuery, err := mr.mutationRewriter.FromMutationResult(ctx, mutation, mutResp.GetUids(), result)
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
@@ -232,8 +239,18 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(errs), resolverFailed
 	}
 
+	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	if err != nil {
+		return emptyResult(
+				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
+			resolverFailed
+	}
+
 	qryResp, err := mr.executor.Execute(ctx,
-		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
+		&dgoapi.Request{
+			Query:    dgraph.AsString(dgQuery),
+			ReadOnly: true,
+		})
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
@@ -290,4 +307,154 @@ func deleteCompletion() CompletionFunc {
 			}
 		}
 	})
+}
+
+// authorizeNewNodes takes the new nodes (uids) actually created by a GraphQL mutation and
+// the types that mutation rewriting expects those nodes to be (newNodeTypes) and checks if
+// the JWT that came in with the request is authorized to create those nodes.  We can't check
+// this before the mutation, because the nodes aren't linked into the graph yet.
+//
+// We group the nodes into their types, generate the authorization add rules for that type
+// and then check that the authorized nodes for each type is equal to the nodes created
+// for that type by performing an authorization query to Dgraph as part of the ongoing
+// transaction (txn).  If the authorization query returns fewer nodes than we created, some
+// of the new nodes failed the auth rules.
+func authorizeNewNodes(
+	ctx context.Context,
+	uids map[string]string,
+	newNodeTypes map[string]schema.Type,
+	queryExecutor DgraphExecutor,
+	txn *dgoapi.TxnContext) error {
+
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	if err != nil {
+		return schema.GQLWrapf(err, "authorization failed")
+	}
+	newRw := &authRewriter{
+		authVariables: authVariables,
+		varGen:        NewVariableGenerator(),
+		selector:      addAuthSelector,
+	}
+
+	// Collect all the newly created nodes in type groups
+
+	newByType := make(map[string][]uint64)
+	namesToType := make(map[string]schema.Type)
+	for nodeName, nodeTyp := range newNodeTypes {
+		if uidStr, created := uids[nodeName]; created {
+			uid, err := strconv.ParseUint(uidStr, 0, 64)
+			if err != nil {
+				return schema.GQLWrapf(err, "authorization failed")
+			}
+			if nodeTyp.ListType() != nil {
+				nodeTyp = nodeTyp.ListType()
+			}
+			namesToType[nodeTyp.Name()] = nodeTyp
+			newByType[nodeTyp.Name()] = append(newByType[nodeTyp.Name()], uid)
+		}
+	}
+
+	// sort to get a consistent query rewriting
+	var createdTypes []string
+	for typeName := range newByType {
+		createdTypes = append(createdTypes, typeName)
+	}
+	sort.Strings(createdTypes)
+
+	// Write auth queries for each set of node types
+
+	var needsAuth []string
+	authQrys := make(map[string][]*gql.GraphQuery)
+	for _, typeName := range createdTypes {
+		typ := namesToType[typeName]
+		varName := newRw.varGen.Next(typ, "", "")
+		newRw.varName = varName
+		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
+		if len(authQueries) == 0 {
+			continue
+		}
+
+		// Generate query blocks like this for each node type
+		//
+		// Todo(func: uid(Todo1)) @filter(uid(Todo2) AND uid(Todo3)) { uid }
+		// Todo1 as var(func: uid(...new uids of this type...) )
+		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
+		// Todo3 as var(func: uid(Todo1)) @cascade { ...auth query 2... }
+
+		typQuery := &gql.GraphQuery{
+			Attr: typ.Name(),
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: varName}}},
+			Filter:   authFilter,
+			Children: []*gql.GraphQuery{{Attr: "uid"}}}
+
+		nodes := newByType[typeName]
+		sort.Slice(nodes, func(i, j int) bool { return nodes[i] < nodes[j] })
+		varQry := &gql.GraphQuery{
+			Var:  varName,
+			Attr: "var",
+			Func: &gql.Function{
+				Name: "uid",
+				UID:  nodes,
+			},
+		}
+
+		needsAuth = append(needsAuth, typeName)
+		authQrys[typeName] = append([]*gql.GraphQuery{typQuery, varQry}, authQueries...)
+	}
+
+	if len(needsAuth) == 0 {
+		// no auth to apply
+		return nil
+	}
+
+	// create the query in order so we get a stable query
+	sort.Strings(needsAuth)
+	var qs []*gql.GraphQuery
+	for _, typeName := range needsAuth {
+		qs = append(qs, authQrys[typeName]...)
+	}
+
+	resp, errs := queryExecutor.Execute(ctx,
+		&dgoapi.Request{
+			Query:   dgraph.AsString(&gql.GraphQuery{Children: qs}),
+			StartTs: txn.GetStartTs(),
+		})
+	if errs != nil || len(resp.Json) == 0 {
+		return x.GqlErrorf("authorization request failed")
+	}
+
+	authResult := make(map[string]interface{})
+	if err := json.Unmarshal(resp.Json, &authResult); err != nil {
+		return x.GqlErrorf("authorization checking failed")
+	}
+
+	for _, typeName := range needsAuth {
+		check, ok := authResult[typeName]
+		if !ok || check == nil {
+			// We needed auth on this type, but it wasn't even in the response.  That
+			// means Dgraph found no matching nodes and returned nothing for this field.
+			// So all the nodes failed auth.
+
+			// FIXME: what do we actually want to return to users when auth failed?
+			// Is this too much?
+			return x.GqlErrorf("authorization failed")
+		}
+
+		foundUIDs, ok := check.([]interface{})
+		if !ok {
+			return x.GqlErrorf("authorization failed")
+		}
+
+		if len(newByType[typeName]) != len(foundUIDs) {
+			// Some of the created nodes passed auth and some failed.
+			return x.GqlErrorf("authorization failed")
+		}
+	}
+
+	// By now either there were no types that needed auth, or all nodes passed the
+	// auth checks.  So the mutation as a whole passed authorization.
+
+	return nil
 }

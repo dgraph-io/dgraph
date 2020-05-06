@@ -7,7 +7,7 @@ This page talks about running Dgraph in various deployment modes, in a distribut
 running multiple instances of Dgraph, over multiple servers in a cluster.
 
 {{% notice "tip" %}}
-For a single server setup, recommended for new users, please see [Get Started](/get-started) page.
+For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
 {{% /notice %}}
 
 ## Install Dgraph
@@ -63,7 +63,7 @@ curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
 ```
 
 {{% notice "note" %}}
-Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported](https://docs.dgraph.io/deploy/#exporting-database) before running this script and reimported to the new cluster running the updated version.
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported]({{< relref "deploy/index.md#exporting-database" >}}) before running this script and reimported to the new cluster running the updated version.
 {{% /notice %}}
 
 ### Manual download [optional]
@@ -1794,6 +1794,17 @@ $ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
 
+#### Encrypted imports via Live Loader
+
+A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance. 
+
+{{% notice "note" %}}
+If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted. 
+{{% /notice %}}
+
+#### Encrypted RDF/JSON file and schema via Live Loader
+`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> -keyfile <path-to-keyfile-to-decrypt-files>`
+
 #### Other Live Loader options
 
 `--new_uids` (default: false): Assign new UIDs instead of using the existing
@@ -1954,6 +1965,40 @@ $ dgraph bulk -f <./path-to-gzipped-RDF-or-JSON-files> ...
 $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
+
+#### Encryption at rest with Bulk Loader
+
+Even before the Dgraph cluster starts, we can load data using Bulk Loader with the encryption feature turned on. Later we can point the generated `p` directory to a new Alpha server.
+
+Here's an example to run Bulk Loader with a key used to write encrypted data:
+
+```bash
+dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+```
+
+#### Encrypting imports via Bulk Loader
+
+The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files. 
+
+Another option, `--encrypted`, indicates whether the input `rdf`/`json` data and schema files are encrypted or not. With this switch, we support the use case of migrating data from unencrypted exports to encrypted import.
+
+So, with the above two options we have 4 cases:
+
+1. `--encrypted=true` and no `encryption_key_file`.
+
+Error: If the input is encrypted, a key file must be provided.
+
+2. `--encrypted=true` and `encryption_key_file`=`path to key.
+
+Input is encrypted and output `p` dir is encrypted as well.
+
+3. `--encrypted=false` and no `encryption_key_file`.
+
+Input is not encrypted and the output `p` dir is also not encrypted.   
+
+4. `--encrypted=false` and `encryption_key_file`=`path to key`.
+
+Input is not encrypted but the output is encrypted. (This is the migration use case mentioned above).
 
 #### Other Bulk Loader options
 
@@ -2216,7 +2261,7 @@ the server which has IP address as `192.168.1.1`.
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
 the predicate gets added to the schema with an appropriate
-[Dgraph Type](https://docs.dgraph.io/master/query-language/#schema-types).
+[Dgraph Type]({{< relref "query-language/index.md#schema-types" >}}).
 
 You can use `--mutations disallow` to disable all mutations,
 which is set to `allow` by default.
@@ -2316,6 +2361,14 @@ mutation {
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
+
+#### Encrypting Exports
+
+Export is available wherever an Alpha is running. To encrypt an export, the Alpha must be configured with the `encryption-key-file`.
+
+{{% notice "note" %}}
+The `encryption-key-file` was used for `encryption-at-rest` and will now also be used for encrypted backups and exports.
+{{% /notice %}}
 
 ### Shutting Down Database
 
