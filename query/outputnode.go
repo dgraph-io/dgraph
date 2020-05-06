@@ -199,7 +199,7 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 	}
 	enc.metaSlice[fj] |= uint64(offset)
 
-	// Also increase estSize.
+	// Also increase curSize.
 	enc.curSize += uint64(len(sv))
 
 	// check if it exceeds threshold size.
@@ -1065,7 +1065,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 
 			// calculate it once to avoid mutliple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
-			// Add len of fieldName to enc.estSize.
+			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
 
 			// We create as many predicate entity children as the length of uids for
@@ -1178,7 +1178,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 
 			// calculate it once to avoid mutliple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
-			// Add len of fieldName to enc.estSize.
+			// Add len of fieldName to enc.curSize.
 			enc.curSize += uint64(len(fieldName))
 
 			if pc.Attr == "uid" {
