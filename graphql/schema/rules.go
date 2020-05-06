@@ -1381,6 +1381,13 @@ func customDirectiveValidation(sch *ast.Schema,
 						fname, typName)
 				}
 
+				if fd.Directives.ForName(customDirective) != nil {
+					return gqlerror.ErrorPosf(errPos,
+						"Type %s; Field %s; @custom directive, %s can't use another field with "+
+							"@custom directive, found field `%s` with @custom.", typ.Name,
+						field.Name, errIn, fname)
+				}
+
 				if fname == idField || fname == xidField {
 					requiresID = true
 				}

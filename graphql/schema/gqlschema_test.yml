@@ -1379,6 +1379,28 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          body: "{ id: $id, abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, body template can't use another field with @custom directive, found field `foo` with @custom.",
+     "locations":[{"line":12, "column":12}]},
+    ]
+
+  -
     name: "@custom directive on field doesn't use field with ID! type or @id directive in body"
     input: |
       type Author {
@@ -1464,6 +1486,28 @@ invalid_schemas:
     errlist: [
     {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
      "locations":[{"line":11, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $foo, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
+     "locations":[{"line":12, "column":15}]},
     ]
 
   -
