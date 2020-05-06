@@ -70,13 +70,16 @@ type encoder struct {
 	// arena is used to store scalarVal for fastJsonNodes. Offset of scalarVal inside arena buffer
 	// is stored in fastJsonNode meta.
 	arena *arena
-	// estsize is current estimated size of the encoded response. If response size exceeds a
-	// threshold size, we return query response with error saying response is too big. Currently
-	// estSize tracking has been kept simple. estSize is crossing threshold value or not is only
-	// checked at leaf(scalar) nodes as of now. estSize is updated in following cases:
+	// curSize is current estimated size of the encoded response. It should be less than actual
+	// response size after encoding. If curSize exceeds a threshold size(maxEncodedSize), we return
+	// query response with error saying response is too big. Currently curSize tracking has been
+	// kept very simple. curSize is crossing threshold value or not is only checked at leaf(scalar)
+	// nodes as of now. curSize is updated in following cases:
 	// 1. By adding predicate len, while expanding it for an uid in preTraverse().
 	// 2. By adding scalarVal len in setScalarVal function for a leaf(scalar) node.
-	estSize uint64
+	// TODO(Ashish): currently we are not including facets/groupby/aggregations fields in curSize
+	// for simplicity. curSize can be made more accurate by adding these fields.
+	curSize uint64
 
 	// metaSlice has meta data for all fastJsonNodes.
 	// meta stores meta information for a fastJsonNode in an uint64. Layout is as follows.
@@ -197,12 +200,12 @@ func (enc *encoder) setScalarVal(fj fastJsonNode, sv []byte) error {
 	enc.metaSlice[fj] |= uint64(offset)
 
 	// Also increase estSize.
-	enc.estSize += uint64(len(sv))
+	enc.curSize += uint64(len(sv))
 
 	// check if it exceeds threshold size.
-	if enc.estSize > maxEncodedSize {
+	if enc.curSize > maxEncodedSize {
 		return fmt.Errorf("encoded response size: %d is bigger than threshold: %d",
-			enc.estSize, maxEncodedSize)
+			enc.curSize, maxEncodedSize)
 	}
 
 	return nil
@@ -795,7 +798,7 @@ func processNodeUids(fj fastJsonNode, enc *encoder, sg *SubGraph) error {
 		return sg.addAggregations(enc, fj)
 	}
 
-	enc.estSize += uint64(len(sg.Params.Alias))
+	enc.curSize += uint64(len(sg.Params.Alias))
 
 	attrID := enc.idForAttr(sg.Params.Alias)
 	if sg.uidMatrix == nil {
@@ -1063,7 +1066,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			// calculate it once to avoid mutliple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.estSize.
-			enc.estSize += uint64(len(fieldName))
+			enc.curSize += uint64(len(fieldName))
 
 			// We create as many predicate entity children as the length of uids for
 			// this predicate.
@@ -1176,7 +1179,7 @@ func (sg *SubGraph) preTraverse(enc *encoder, uid uint64, dst fastJsonNode) erro
 			// calculate it once to avoid mutliple call to idToAttr()
 			fieldID := enc.idForAttr(fieldName)
 			// Add len of fieldName to enc.estSize.
-			enc.estSize += uint64(len(fieldName))
+			enc.curSize += uint64(len(fieldName))
 
 			if pc.Attr == "uid" {
 				if err := enc.SetUID(dst, uid, fieldID); err != nil {
