@@ -17,6 +17,8 @@
 package schema
 
 import (
+	"net/http"
+
 	"github.com/pkg/errors"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -30,6 +32,8 @@ type Request struct {
 	Query         string                 `json:"query"`
 	OperationName string                 `json:"operationName"`
 	Variables     map[string]interface{} `json:"variables"`
+
+	Header http.Header
 }
 
 // Operation finds the operation in req, if it is a valid request for GraphQL
@@ -70,6 +74,7 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 	operation := &operation{op: op,
 		vars:     vars,
 		query:    req.Query,
+		header:   req.Header,
 		doc:      doc,
 		inSchema: s,
 	}
@@ -135,10 +140,12 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	// Find all valid type names that this field satisfies
 
 	typeName := field.Definition.Type.Name()
+	typeKind := op.inSchema.schema.Types[typeName].Kind
 	// this field always has to expand any fragment on its own type
-	satisfies := []string{typeName}
+	// "" tackles the case for an inline fragment which doesn't specify type condition
+	satisfies := []string{typeName, ""}
 	var additionalTypes []*ast.Definition
-	switch op.inSchema.schema.Types[typeName].Kind {
+	switch typeKind {
 	case ast.Interface:
 		// expand fragments on types which implement this interface
 		additionalTypes = op.inSchema.schema.PossibleTypes[typeName]
@@ -165,6 +172,32 @@ func recursivelyExpandFragmentSelections(field *ast.Field, op *operation) {
 	field.SelectionSet = make([]ast.Selection, 0, len(collectedFields))
 	for _, collectedField := range collectedFields {
 		field.SelectionSet = append(field.SelectionSet, collectedField.Field)
+	}
+
+	// It helps when __typename is requested for an Object in a fragment on Interface, so we don't
+	// have to fetch dgraph.type from dgraph. Otherwise, each field in the selection set will have
+	// its ObjectDefinition point to an Interface instead of an Object, resulting in wrong output
+	// for __typename. For example:
+	// 		query {
+	//			queryHuman {
+	//				...characterFrag
+	//				...
+	//			}
+	//		}
+	//		fragment characterFrag on Character {
+	//			__typename
+	//			...
+	//		}
+	// Here, queryHuman is guaranteed to return an Object and not an Interface, so dgraph.type is
+	// never fetched for it, thinking that its fields will have their ObjectDefinition point to a
+	// Human. But, when __typename is put into the selection set of queryHuman expanding the
+	// fragment on Character (an Interface), it still has its ObjectDefinition point to Character.
+	// This, if not set to point to Human, will result in __typename being reported as Character.
+	if typeKind == ast.Object {
+		typeDefinition := op.inSchema.schema.Types[typeName]
+		for _, f := range field.SelectionSet {
+			f.(*ast.Field).ObjectDefinition = typeDefinition
+		}
 	}
 
 	// recursively run for this field's selectionSet

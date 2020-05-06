@@ -177,31 +177,32 @@ message MembershipState {
 }
 
 message ConnectionState {
-	Member member = 1;
-	MembershipState state = 2;
-	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+    Member member = 1;
+    MembershipState state = 2;
+    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
 message HealthInfo {
-	string instance = 1;
-	string address = 2;
-	string status = 3;
-	string group = 4;  // string so group = 0 can be printed in JSON.
-	string version = 5;
-	int64 uptime = 6;
-	int64 lastEcho = 7;
-	repeated string ongoing = 8;
-	repeated string indexing = 9;
+    string instance = 1;
+    string address = 2;
+    string status = 3;
+    string group = 4; // string so group = 0 can be printed in JSON.
+    string version = 5;
+    int64 uptime = 6;
+    int64 lastEcho = 7;
+    repeated string ongoing = 8;
+    repeated string indexing = 9;
+    repeated string ee_features = 10;
 }
 
 message Tablet {
-	uint32 group_id  = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
-	string predicate = 2;
-	bool force       = 3; // Used while moving predicate.
-	int64 space      = 7;
-	bool remove      = 8;
-	bool read_only   = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
-	uint64 move_ts   = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
+    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+    string predicate = 2;
+    bool force = 3; // Used while moving predicate.
+    int64 space = 7;
+    bool remove = 8;
+    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
+    uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
 }
 
 message DirectedEdge {
@@ -264,20 +265,37 @@ message Snapshot {
 	uint64 since_ts = 5;
 }
 
+message RestoreRequest {
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
+
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
+
+	// Info needed to process encrypted backups.
+	string key_file = 9;
+}
+
 message Proposal {
-	Mutations mutations    = 2;
-	repeated KV kv         = 4;
-	MembershipState state  = 5;
-	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
-	string key             = 7;
-	OracleDelta delta      = 8;
-	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
-	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
-	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
+	Mutations mutations    		= 2;
+	repeated badgerpb2.KV kv  = 4;
+	MembershipState state  		= 5;
+	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
+	string key             		= 7;
+	OracleDelta delta      		= 8;
+	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
+	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore 		= 12;
 }
 
 message KVS {
- repeated pb.KV kv = 1;
+ repeated badgerpb2.KV kv = 1;
  // done used to indicate if the stream of KVS is over.
  bool done      = 2;
 }
@@ -513,10 +531,11 @@ service Worker {
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Restore (RestoreRequest)            returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -524,7 +543,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+    badgerpb2.KVList kvs = 1;
 }
 
 message Num {

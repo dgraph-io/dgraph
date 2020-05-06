@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -437,8 +438,13 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
+		// Skip exporting delete data including Schema and Types.
+		if item.IsDeletedOrExpired() {
+			return false
+		}
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -469,6 +475,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
 			return nil, err
 		}
 		e := &exporter{
@@ -564,6 +571,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				// prepended
 				hasDataBefore = true
 			}
+
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}

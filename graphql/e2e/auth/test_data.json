@@ -1,0 +1,181 @@
+[
+	{
+		"uid": "_:user1",
+		"dgraph.type": "User",
+		"User.age": 10,
+		"User.username": "user1",
+		"User.isPublic": true,
+		"User.disabled": false
+	},
+	{
+		"uid": "_:user2",
+		"dgraph.type": "User",
+		"User.age": 11,
+		"User.username": "user2",
+		"User.isPublic": true,
+		"User.disabled": true
+	},
+	{
+		"uid": "_:user3",
+		"dgraph.type": "User",
+		"User.age": 12,
+		"User.username": "user3",
+		"User.isPublic": false,
+		"User.disabled": false
+	},
+	{
+		"uid": "_:user4",
+		"dgraph.type": "User",
+		"User.age": 13,
+		"User.username": "user4",
+		"User.isPublic": false,
+		"User.disabled": true
+	},
+	{
+		"uid": "_:region1",
+		"dgraph.type": "Region",
+		"Region.name": "Region1",
+		"Region.users": [{"uid": "_:user1"}, {"uid": "_:user2"}]
+	},
+	{
+		"uid": "_:region2",
+		"dgraph.type": "Region",
+		"Region.name": "Region2",
+		"Region.users": [{"uid": "_:user2"}, {"uid": "_:user3"}]
+	},
+	{
+		"uid": "_:region3",
+		"dgraph.type": "Region",
+		"Region.name": "Region3",
+		"Region.users": [{"uid": "_:user3"}, {"uid": "_:user4"}]
+	},
+	{
+		"uid": "_:region4",
+		"dgraph.type": "Region",
+		"Region.name": "Region4",
+		"Region.users": [{"uid": "_:user4"}, {"uid": "_:user1"}]
+	},
+	{
+		"uid": "_:movie1",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie1",
+		"Movie.regionsAvailable": [{"uid": "_:region2"}, {"uid": "_:region3"}],
+		"Movie.disabled": false
+	}, {
+		"uid": "_:movie2",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie2",
+		"Movie.regionsAvailable": [{"uid": "_:region1"}],
+		"Movie.disabled": false
+	},
+	{
+		"uid": "_:movie3",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie3",
+		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}],
+		"Movie.disabled": true
+	},
+	{
+		"uid": "_:issue1",
+		"dgraph.type": "Issue",
+		"Issue.msg": "Issue1",
+		"Issue.owner": {"uid": "_:user1"}
+	},
+	{
+		"uid": "_:issue2",
+		"dgraph.type": "Issue",
+		"Issue.msg": "Issue2",
+		"Issue.owner": {"uid": "_:user2"}
+	},
+	{
+		"uid": "_:log1",
+		"dgraph.type": "Log",
+		"Log.logs": "Log1"
+	},
+	{
+		"uid": "_:log2",
+		"dgraph.type": "Log",
+		"Log.logs": "Log2"
+	},
+	{
+		"uid": "_:role1",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:role2",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:role3",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user4"}],
+		"Role.permission": "VIEW"
+	},
+	{
+		"uid": "_:project1",
+		"dgraph.type": "Project",
+		"Project.name": "Project1",
+		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}],
+		"Project.columns": [{"uid": "_:column1"}]
+	},
+	{
+		"uid": "_:project2",
+		"dgraph.type": "Project",
+		"Project.name": "Project2",
+		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}],
+		"Project.columns": [{"uid": "_:column2"}, {"uid": "_:column3"}]
+	},
+	{
+		"uid": "_:column1",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project1"},
+		"Column.name": "Column1",
+		"ticket.tickets": [{"uid": "_:ticket1"}, {"uid": "_:ticket2"}]
+	},
+	{
+		"uid": "_:column2",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project2"},
+		"Column.name": "Column2",
+		"ticket.tickets": [{"uid": "_:ticket3"}]
+	},
+	{
+		"uid": "_:column3",
+		"dgraph.type": "Column",
+		"Column.inProject": {"uid": "_:project2"},
+		"Column.name": "Column3",
+		"ticket.tickets": [{"uid": "_:ticket4"}]
+	},
+	{
+		"uid": "_:ticket1",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column1"},
+		"Ticket.title": "Ticket1",
+		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user3"}]
+	},
+	{
+		"uid": "_:ticket2",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column1"},
+		"Ticket.title": "Ticket2",
+		"ticket.assignedTo": [{"uid": "_:user3"}]
+	},
+	{
+		"uid": "_:ticket3",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column2"},
+		"Ticket.title": "Ticket3",
+		"ticket.assignedTo": [{"uid": "_:user2"}]
+	},
+	{
+		"uid": "_:ticket4",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "_:column3"},
+		"Ticket.title": "Ticket4",
+		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
+	}
+]

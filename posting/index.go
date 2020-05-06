@@ -92,7 +92,9 @@ func (txn *Txn) addIndexMutations(ctx context.Context, info *indexMutationInfo) 
 
 	attr := info.edge.Attr
 	uid := info.edge.Entity
-	x.AssertTrue(uid != 0)
+	if uid == 0 {
+		return errors.New("invalid UID with value 0")
+	}
 	tokens, err := indexTokens(ctx, info)
 	if err != nil {
 		// This data is not indexable
@@ -555,7 +557,6 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithNumVersionsToKeep(math.MaxInt32).
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
-		WithEventLogging(false).
 		WithLogRotatesToFlush(10).
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
 	tmpDB, err := badger.OpenManaged(dbOpts)

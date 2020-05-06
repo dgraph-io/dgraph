@@ -100,6 +100,7 @@ instances to achieve high-availability.
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
 	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
+	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -239,6 +240,14 @@ func run() {
 	var st state
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
+
+	// Apply enterprise license if one was given.
+	if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
+		if err := st.applyLicenseFile(license); err != nil {
+			glog.Warningf("Applying enterprise license file %s failed with error: %s", license,
+				err.Error())
+		}
+	}
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)

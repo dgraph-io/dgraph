@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"sync"
@@ -83,6 +84,8 @@ func (id op) String() string {
 		return "opSnapshot"
 	case opIndexing:
 		return "opIndexing"
+	case opRestore:
+		return "opRestore"
 	default:
 		return "opUnknown"
 	}
@@ -92,14 +95,15 @@ const (
 	opRollup op = iota + 1
 	opSnapshot
 	opIndexing
+	opRestore
 )
 
-// startTask is used to check whether an op is already going on.
-// If rollup is going on, we cancel and wait for rollup to complete
-// before we return. If the same task is already going, we return error.
-// You should only call Done() on the returned closer. Calling other
-// functions (such as SignalAndWait) for closer could result in panics.
-// For more details, see GitHub issue #5034.
+// startTask is used to check whether an op is already running. If a rollup is running,
+// it is canceled and startTask will wait until it completes before returning.
+// If the same task is already running, this method returns an errror.
+// Restore operations have preference and cancel all other operations, not just rollups.
+// You should only call Done() on the returned closer. Calling other functions (such as
+// SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
 func (n *node) startTask(id op) (*y.Closer, error) {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
@@ -110,11 +114,11 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 		n.opsLock.Unlock()
 		glog.Infof("Operation completed with id: %s", id)
 
-		// If we were doing any other operation, let's restart rollups.
+		// Resume rollups if another operation is being stopped.
 		if id != opRollup {
 			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
-			// If any other operation is running, this would error out. So, ignore error.
-			// Ignoring the error since stop task runs in a goruotine.
+			// If any other operation is running, this would error out. This error can
+			// be safely ignored because rollups will resume once that other task is done.
 			_, _ = n.startTask(opRollup)
 		}
 	}
@@ -126,7 +130,17 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			return nil, errors.Errorf("another operation is already running")
 		}
 		go posting.IncrRollup.Process(closer)
-
+	case opRestore:
+		// Restores cancel all other operations, except for other restores since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opRestore {
+				return nil, errors.Errorf("another restore operation is already running")
+			}
+			// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
+			n.ops[otherId] = nil
+			otherCloser.SignalAndWait()
+		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
@@ -258,6 +272,7 @@ func detectPendingTxns(attr string) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
 			return false
 		}
 		return pk.Attr == attr
@@ -567,6 +582,31 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		// We can now discard all invalid versions of keys below this ts.
 		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
+
+	case proposal.Restore != nil:
+		// Enable draining mode for the duration of the restore processing.
+		x.UpdateDrainingMode(true)
+		defer x.UpdateDrainingMode(false)
+
+		var err error
+		var closer *y.Closer
+		closer, err = n.startTask(opRestore)
+		if err != nil {
+			return errors.Wrapf(err, "cannot start restore task")
+		}
+		defer closer.Done()
+
+		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+			return err
+		}
+
+		// Call commitOrAbort to update the group checksums.
+		ts := proposal.Restore.RestoreTs
+		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			Txns: []*pb.TxnStatus{
+				{StartTs: ts, CommitTs: ts},
+			},
+		})
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
@@ -1216,7 +1256,7 @@ func (n *node) calculateTabletSizes() {
 		if left.Attr != right.Attr {
 			// Skip all tables not fully owned by one predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(2).Info("Skipping table not owned by one predicate")
+			glog.V(3).Info("Skipping table not owned by one predicate")
 			continue
 		}
 		pred := left.Attr
@@ -1305,7 +1345,7 @@ func (n *node) abortOldTransactions() {
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:

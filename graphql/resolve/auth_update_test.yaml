@@ -1,0 +1,430 @@
+- name: "Update one node that creates nothing"
+  gqlquery: |
+    mutation updateUserSecret($upd: UpdateUserSecretInput!) {
+      updateUserSecret(input: $upd) {
+        usersecret {
+          id
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { "filter": { "id": [ "0x123" ] },
+        "set": { "aSecret": "new Value" }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+        uid
+      }
+      UserSecret1 as var(func: type(UserSecret)) @filter(uid(0x123))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+  uids: |
+    { }
+
+- name: "Update a node that does a deep add"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  uids: |
+    { "Ticket4": "0x789" }
+  json: |
+    {  }
+  authquery: |-
+    query {
+      Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        uid
+      }
+      Ticket1 as var(func: uid(0x789))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    { 
+      "Ticket": [ { "uid": "0x789" } ] 
+    }  
+
+
+- name: "Update a node that does a deep add and fails auth"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "title": "a ticket" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  uids: |
+    { "Ticket4": "0x789" }
+  json: |
+    {  }
+  authquery: |-
+    query {
+      Ticket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        uid
+      }
+      Ticket1 as var(func: uid(0x789))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    { }  
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+# See comments about additional deletes in update_mutation_test.yaml.
+# Because of those additional deletes, for example, when we update a column and 
+# link it to an existing ticket, we might remove that ticket from the column it was
+# attached to ... so we need authorization to update that column as well.
+- name: "update with auth on additional delete (updt list edge)"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "id": "0x789" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket4)) {
+        Column5 as Ticket.onColumn @filter(NOT (uid(x)))
+      }
+      Column5(func: uid(Column5)) {
+        uid
+      }
+      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+        uid
+      }
+      Column6 as var(func: uid(Column5)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Column1": [ { "uid": "0x123" } ],
+      "Ticket4": [ { "uid": "0x789" } ],
+      "Column5":  [ { "uid": "0x456" } ],
+      "Column5.auth": [ { "uid": "0x456" } ]
+    }
+  
+- name: "update with auth on additional delete that fails (updt list edge)"
+  gqlquery: |
+    mutation updateColumn($upd: UpdateColumnInput!) {
+      updateColumn(input: $upd) {
+        column {
+          colID
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "colID": [ "0x123" ] },
+        "set": { 
+          "name": "new name", 
+          "tickets": [ { "id": "0x789" } ]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
+        uid
+      }
+      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column2 as var(func: uid(Column1)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Ticket4 as Ticket4(func: uid(0x789)) @filter(type(Ticket)) {
+        uid
+      }
+      var(func: uid(Ticket4)) {
+        Column5 as Ticket.onColumn @filter(NOT (uid(x)))
+      }
+      Column5(func: uid(Column5)) {
+        uid
+      }
+      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+        uid
+      }
+      Column6 as var(func: uid(Column5)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Column1": [ { "uid": "0x123" } ],
+      "Ticket4": [ { "uid": "0x789" } ],
+      "Column5":  [ { "uid": "0x456" } ]
+    }
+  error:
+    { "message": "couldn't rewrite query for mutation updateColumn because authorization failed" }
+
+- name: "update with auth on additional delete (updt single edge)"
+  gqlquery: |
+    mutation updateTicket($upd: UpdateTicketInput!) {
+      updateTicket(input: $upd) {
+        ticket {
+          id
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "id": [ "0x123" ] },
+        "set": { 
+          "title": "new title", 
+          "onColumn": { "colID": "0x456" }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        uid
+      }
+      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
+        uid
+      }
+      var(func: uid(x)) {
+        Column5 as Ticket.onColumn @filter(NOT (uid(Column4)))
+      }
+      Column5(func: uid(Column5)) {
+        uid
+      }
+      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+        uid
+      }
+      Column6 as var(func: uid(Column5)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Column4": [ { "uid": "0x456" } ],
+      "Column5":  [ { "uid": "0x499" } ],
+      "Column5.auth": [ { "uid": "0x499" } ]
+    }
+  
+- name: "update with auth on additional delete that fails (updt single edge)"
+  gqlquery: |
+    mutation updateTicket($upd: UpdateTicketInput!) {
+      updateTicket(input: $upd) {
+        ticket {
+          id
+        }
+      }
+    }
+  variables: |
+    { "upd":
+      { 
+        "filter": { "id": [ "0x123" ] },
+        "set": { 
+          "title": "new title", 
+          "onColumn": { "colID": "0x456" }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        uid
+      }
+      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Column4 as Column4(func: uid(0x456)) @filter(type(Column)) {
+        uid
+      }
+      var(func: uid(x)) {
+        Column5 as Ticket.onColumn @filter(NOT (uid(Column4)))
+      }
+      Column5(func: uid(Column5)) {
+        uid
+      }
+      Column5.auth(func: uid(Column5)) @filter(uid(Column6)) {
+        uid
+      }
+      Column6 as var(func: uid(Column5)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  json: |
+    { 
+      "Column4": [ { "uid": "0x456" } ],
+      "Column5":  [ { "uid": "0x499" } ]
+    }
+  error:
+    { "message": "couldn't rewrite query for mutation updateTicket because authorization failed" }

@@ -56,6 +56,128 @@ const adminTypes = `
 		response: Response
 	}
 
+	input RestoreInput {
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		"""
+		backupId: String!
+
+		"""
+		Path to the key file needed to decrypt the backup. This file should be accessible
+		by all alphas in the group. The backup will be written using the encryption key
+		with which the cluster was started, which might be different than this key.
+		"""
+		keyFile: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""		
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""	
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""	
+		anonymous: Boolean
+	}
+
+	type RestorePayload {
+		response: Response
+	}
+
+	input ListBackupsInput {
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket.
+		"""
+		location: String!
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""
+		sessionToken: String
+
+		"""
+		Whether the destination doesn't require credentials (e.g. S3 public bucket).
+		"""
+		anonymous: Boolean
+
+	}
+
+	type BackupGroup {
+		"""
+		The ID of the cluster group.
+		"""
+		groupId: Int
+
+		"""
+		List of predicates assigned to the group.
+		"""
+		predicates: [String]
+	}
+
+	type Manifest {
+		"""
+		Unique ID for the backup series.
+		"""
+		backupId: String
+
+		"""
+		Number of this backup within the backup series. The full backup always has a value of one.
+		"""
+		backupNum: Int
+
+		"""
+		Whether this backup was encrypted.
+		"""
+		encrypted: Boolean
+
+		"""
+		List of groups and the predicates they store in this backup.
+		"""
+		groups: [BackupGroup]
+
+		"""
+		Path to the manifest file.
+		"""
+		path: String
+
+		"""
+		The timestamp at which this backup was taken. The next incremental backup will
+		start from this timestamp.
+		"""
+		since: Int
+
+		"""
+		The type of backup, either full or incremental.
+		"""
+		type: String
+	}
+	
 	type LoginResponse {
 
 		"""
@@ -252,6 +374,12 @@ const adminMutations = `
 	backup(input: BackupInput!) : BackupPayload
 
 	"""
+	Start restoring a binary backup.  See :
+		https://docs.dgraph.io/enterprise-features/#binary-backups
+	"""
+	restore(input: RestoreInput!) : RestorePayload
+
+	"""
 	Login to Dgraph.  Successful login results in a JWT that can be used in future requests.
 	If login is not successful an error is returned.
 	"""
@@ -298,4 +426,9 @@ const adminQueries = `
 	getCurrentUser: User
 
 	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]`
+	queryGroup(filter: GroupFilter, order: GroupOrder, first: Int, offset: Int): [Group]
+
+	"""
+	Get the information about the backups at a given location.
+	"""
+	listBackups(input: ListBackupsInput!) : [Manifest]`

@@ -47,6 +47,22 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
+			r, err := enc.GetReader(keyfile, r)
+			if err != nil {
+				return 0, err
+			}
+
+			gzReader, err := gzip.NewReader(r)
+			if err != nil {
+				if len(keyfile) != 0 {
+					err = errors.Wrap(err,
+						"Unable to read the backup. Ensure the encryption key is correct.")
+				}
+				return 0, err
+
+			}
+			// The badger DB should be opened only after creating the backup
+			// file reader and verifying the encryption in the backup file.
 			db, err := badger.OpenManaged(badger.DefaultOptions(dir).
 				WithSyncWrites(false).
 				WithTableLoadingMode(options.MemoryMap).
@@ -57,19 +73,10 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 				return 0, err
 			}
 			defer db.Close()
-			fmt.Printf("Restoring groupId: %d\n", groupId)
 			if !pathExist(dir) {
 				fmt.Println("Creating new db:", dir)
 			}
-			r, err = enc.GetReader(keyfile, r)
-			if err != nil {
-				return 0, err
-			}
-			gzReader, err := gzip.NewReader(r)
-			if err != nil {
-				return 0, err
-			}
-			maxUid, err := loadFromBackup(db, gzReader, preds)
+			maxUid, err := loadFromBackup(db, gzReader, 0, preds)
 			if err != nil {
 				return 0, err
 			}
@@ -80,7 +87,11 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 // loadFromBackup reads the backup, converts the keys and values to the required format,
 // and loads them to the given badger DB. The set of predicates is used to avoid restoring
 // values from predicates no longer assigned to this group.
-func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, error) {
+// If restoreTs is greater than zero, the key-value pairs will be written with that timestamp.
+// Otherwise, the original value is used.
+// TODO(DGRAPH-1234): Check whether restoreTs can be removed.
+func loadFromBackup(db *badger.DB, r io.Reader, restoreTs uint64, preds predicateSet) (
+	uint64, error) {
 	br := bufio.NewReaderSize(r, 16<<10)
 	unmarshalBuf := make([]byte, 1<<10)
 
@@ -141,6 +152,12 @@ func loadFromBackup(db *badger.DB, r io.Reader, preds predicateSet) (uint64, err
 			// Update the max id that has been seen while restoring this backup.
 			if parsedKey.Uid > maxUid {
 				maxUid = parsedKey.Uid
+			}
+
+			// Override the version if requested. Should not be done for type and schema predicates,
+			// which always have their version set to 1.
+			if restoreTs > 0 && !parsedKey.IsSchema() && !parsedKey.IsType() {
+				kv.Version = restoreTs
 			}
 
 			switch kv.GetUserMeta()[0] {

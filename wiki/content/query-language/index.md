@@ -2501,6 +2501,15 @@ score: [int] .
   "#functions">}}) on them.
 * Sorting is not allowed using these predicates.
 
+### Filtering on list
+
+Dgraph supports filtering based on the list.
+Filtering works similarly to how it works on edges and has the same available functions.
+
+For example, `@filter(eq(occupations, "Teacher"))` at the root of the query or the
+parent edge will display all the occupations from a list of each node in an array but
+will only include nodes which have `Teacher` as one of the occupations. However, filtering
+on value edge is not supported.
 
 ### Reverse Edges
 
