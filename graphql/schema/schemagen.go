@@ -78,7 +78,9 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	authorization.ParseAuthMeta(input)
+	if err := authorization.ParseAuthMeta(input); err != nil {
+		return nil, err
+	}
 
 	// The input schema contains just what's required to describe the types,
 	// relationships and searchability - but that's not enough to define a

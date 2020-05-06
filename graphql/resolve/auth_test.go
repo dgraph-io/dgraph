@@ -130,7 +130,7 @@ func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
-func TestAuthQueryRewriting(t *testing.T) {
+func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	b, err := ioutil.ReadFile("auth_query_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -139,13 +139,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
 	testRewriter := NewQueryRewriter()
+	gqlSchema := test.LoadSchemaFromString(t, sch)
 
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	strSchema := string(sch)
-	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := authorization.Parse(strSchema)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 
@@ -157,12 +152,8 @@ func TestAuthQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlQuery := test.GetQuery(t, op)
 
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": "user1",
-				},
+			authMeta.AuthVars = map[string]interface{}{
+				"USER": "user1",
 			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
@@ -175,7 +166,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 }
 
 // Tests that the queries that run after a mutation get auth correctly added in.
-func TestAuthMutationQueryRewriting(t *testing.T) {
+func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	tests := map[string]struct {
 		gqlMut   string
 		rewriter func() MutationRewriter
@@ -286,12 +277,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 		},
 	}
 
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	strSchema := string(sch)
-	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := authorization.Parse(strSchema)
+	gqlSchema := test.LoadSchemaFromString(t, sch)
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -301,12 +287,8 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 			require.NoError(t, err)
 			gqlMutation := test.GetMutation(t, op)
 
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": "user1",
-				},
+			authMeta.AuthVars = map[string]interface{}{
+				"USER": "user1",
 			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
@@ -330,7 +312,7 @@ func TestAuthMutationQueryRewriting(t *testing.T) {
 // for delete when it also needs to write in auth - this doesn't extend to other nodes
 // it only ever applies at the top level because delete only deletes the nodes
 // referenced by the filter, not anything deeper.
-func TestAuthDeleteRewriting(t *testing.T) {
+func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	b, err := ioutil.ReadFile("auth_delete_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -338,12 +320,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	strSchema := string(sch)
-	gqlSchema := test.LoadSchemaFromString(t, strSchema)
-	metainfo := authorization.Parse(strSchema)
+	gqlSchema := test.LoadSchemaFromString(t, sch)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
@@ -363,12 +340,8 @@ func TestAuthDeleteRewriting(t *testing.T) {
 			mut := test.GetMutation(t, op)
 			rewriterToTest := NewDeleteRewriter()
 
-			authMeta := testutil.AuthMeta{
-				PublicKey: metainfo.PublicKey,
-				Namespace: metainfo.Namespace,
-				AuthVars: map[string]interface{}{
-					"USER": "user1",
-				},
+			authMeta.AuthVars = map[string]interface{}{
+				"USER": "user1",
 			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
@@ -417,7 +390,7 @@ func TestAuthDeleteRewriting(t *testing.T) {
 // We don't need to test the json mutations that are created, because those are the same
 // as in add_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
-func TestAuthAdd(t *testing.T) {
+func mutationAdd(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	b, err := ioutil.ReadFile("auth_add_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -425,14 +398,11 @@ func TestAuthAdd(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-	metainfo := authorization.Parse(string(sch))
+	gqlSchema := test.LoadSchemaFromString(t, sch)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, &metainfo)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewAddRewriter, authMeta)
 		})
 	}
 }
@@ -444,7 +414,7 @@ func TestAuthAdd(t *testing.T) {
 // We don't need to test the json mutations that are created, because those are the same
 // as in update_mutation_test.yaml.  What we need to test is the processing around if
 // new nodes are checked properly - the query generated to check them, and the post-processing.
-func TestAuthUpdate(t *testing.T) {
+func mutationUpdate(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 	b, err := ioutil.ReadFile("auth_update_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -452,14 +422,10 @@ func TestAuthUpdate(t *testing.T) {
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
-	gqlSchema := test.LoadSchemaFromFile(t, "../e2e/auth/schema.graphql")
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-	metainfo := authorization.Parse(string(sch))
-
+	gqlSchema := test.LoadSchemaFromString(t, sch)
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, &metainfo)
+			checkAddUpdateCase(t, gqlSchema, tcase, NewUpdateRewriter, authMeta)
 		})
 	}
 }
@@ -469,7 +435,7 @@ func checkAddUpdateCase(
 	gqlSchema schema.Schema,
 	tcase AuthQueryRewritingCase,
 	rewriter func() MutationRewriter,
-	metainfo *authorization.AuthMeta) {
+	authMeta *testutil.AuthMeta) {
 	// -- Arrange --
 	var vars map[string]interface{}
 	if tcase.Variables != "" {
@@ -485,13 +451,9 @@ func checkAddUpdateCase(
 	require.NoError(t, err)
 	mut := test.GetMutation(t, op)
 
-	authMeta := testutil.AuthMeta{
-		PublicKey: metainfo.PublicKey,
-		Namespace: metainfo.Namespace,
-		AuthVars: map[string]interface{}{
-			"USER": "user1",
-			"ROLE": tcase.Role,
-		},
+	authMeta.AuthVars = map[string]interface{}{
+		"USER": "user1",
+		"ROLE": tcase.Role,
 	}
 	ctx, err := authMeta.AddClaimsToContext(context.Background())
 	require.NoError(t, err)
@@ -513,5 +475,47 @@ func checkAddUpdateCase(
 	// most cases are built into the authExecutor
 	if tcase.Error != nil || resolved.Err != nil {
 		require.Equal(t, tcase.Error.Error(), resolved.Err.Error())
+	}
+}
+
+func TestAuthSchemaRewriting(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
+
+	for _, algo := range jwtAlgo {
+		result, err := testutil.AppendAuthInfo(sch, algo)
+		require.NoError(t, err)
+		strSchema := string(result)
+
+		authMeta, err := authorization.Parse(strSchema)
+		metaInfo := &testutil.AuthMeta{
+			PublicKey: authMeta.PublicKey,
+			Namespace: authMeta.Namespace,
+			Algo:      authMeta.Algo,
+		}
+
+		require.NoError(t, err)
+
+		t.Run("Query Rewriting "+algo, func(t *testing.T) {
+			queryRewriting(t, strSchema, metaInfo)
+		})
+
+		t.Run("Mutation Query Rewriting "+algo, func(t *testing.T) {
+			mutationQueryRewriting(t, strSchema, metaInfo)
+		})
+
+		t.Run("Add Mutation "+algo, func(t *testing.T) {
+			mutationAdd(t, strSchema, metaInfo)
+		})
+
+		t.Run("Update Mutation "+algo, func(t *testing.T) {
+			mutationUpdate(t, strSchema, metaInfo)
+		})
+
+		t.Run("Delete Query Rewriting "+algo, func(t *testing.T) {
+			deleteQueryRewriting(t, strSchema, metaInfo)
+		})
 	}
 }

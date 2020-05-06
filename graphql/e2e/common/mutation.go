@@ -1230,6 +1230,7 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 func updateMutationReferences(t *testing.T) {
 	updateMutationUpdatesRefs(t, postExecutor)
 	updateMutationUpdatesRefsXID(t, postExecutor)
+	updateMutationOnlyUpdatesRefsIfDifferent(t, postExecutor)
 }
 
 func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
@@ -1276,6 +1277,55 @@ func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 		[]*country{newCountry},
 		[]*author{newAuthor, newAuthor2},
 		[]*post{newPost})
+}
+
+func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+	newAuthor := addAuthor(t, newCountry.ID, executeRequest)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+
+	// update the post text, the mutation payload will also contain the author ... but,
+	// the only change should be in the post text
+	updateAuthorParams := &GraphQLParams{
+		Query: `mutation updatePost($id: ID!, $set: PostPatch!) {
+			updatePost(
+				input: {
+					filter: {postID: [$id]},
+					set: $set
+				}
+			) {
+			  	post { 
+					postID 
+					text
+					author { id }
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id": newPost.PostID,
+			"set": map[string]interface{}{
+				"text":   "The Updated Text",
+				"author": newAuthor},
+		},
+	}
+	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	// The expected post was updated
+	// The text is updated as expected
+	// The author is unchanged
+	expected := fmt.Sprintf(`
+		{ "updatePost": {  "post": [ 
+			{ 
+				"postID": "%s", 
+				"text": "The Updated Text",
+				"author": { "id": "%s" }
+			}
+		] } }`, newPost.PostID, newAuthor.ID)
+
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
 func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {

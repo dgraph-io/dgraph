@@ -572,7 +572,12 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	metainfo = authorization.Parse(string(schema))
+	metainfo, err = authorization.Parse(string(schema))
+
+	schema, err = testutil.AppendAuthInfo(schema, "HS256")
+	if err != nil {
+		panic(err)
+	}
 
 	jsonFile := "test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)

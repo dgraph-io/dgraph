@@ -233,14 +233,21 @@ type Ticket @auth(
                     }
                 }
             }
-        }"""}
-    # update: { rule: """onColumn {
-    #                     inProject {
-    #                         role(filter: { permission: { eq: WRITE } } ) {
-    #                             users(filter: { username: { eq: $USER } })
-    #                         }
-    #                     }
-    #                 }"""},
+        }"""},
+    update: { rule: """
+        query($USER: String!) {
+            queryTicket {
+                onColumn{
+                    inProject {
+                        roles(filter: { permission: { eq: EDIT } } ) {
+                            assignedTo(filter: { username: { eq: $USER } }) {
+                                __typename
+                            }
+                        }
+                    }
+                }
+            }
+        }"""},
     delete: { rule: """
         query($USER: String!) {
             queryTicket {
@@ -261,5 +268,3 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
-
-# Authorization X-Test-Auth secretkey https://xyz.io/jwt/claims

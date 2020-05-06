@@ -17,6 +17,7 @@
 package testutil
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io/ioutil"
@@ -114,6 +115,7 @@ func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
 type AuthMeta struct {
 	PublicKey string
 	Namespace string
+	Algo      string
 	AuthVars  map[string]interface{}
 }
 
@@ -126,8 +128,30 @@ func (a *AuthMeta) GetSignedToken() (string, error) {
 			Issuer:    "test",
 		},
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(a.PublicKey))
+
+	var signedString string
+	var err error
+	if a.Algo == "HS256" {
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signedString, err = token.SignedString([]byte(a.PublicKey))
+		return signedString, err
+	}
+	if a.Algo != "RS256" {
+		return signedString, err
+
+	}
+	keyData, err := ioutil.ReadFile("../e2e/auth/sample_private_key.pem")
+	if err != nil {
+		return signedString, errors.Errorf("unable to read private key file: %v", err)
+	}
+
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
+	if err != nil {
+		return signedString, errors.Errorf("unable to parse private key: %v", err)
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signedString, err = token.SignedString(privateKey)
+	return signedString, err
 }
 
 func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
@@ -139,4 +163,26 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 	md := metadata.New(nil)
 	md.Append("authorizationJwt", token)
 	return metadata.NewIncomingContext(ctx, md), nil
+}
+
+func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
+	if algo == "HS256" {
+		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		return append(schema, []byte(authInfo)...), nil
+	}
+
+	if algo != "RS256" {
+		return schema, nil
+	}
+
+	keyData, err := ioutil.ReadFile("../e2e/auth/sample_public_key.pem")
+	if err != nil {
+		return nil, err
+	}
+
+	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
+	// present in a single line.
+	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
+	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" + string(keyData) + "\""
+	return append(schema, []byte(authInfo)...), nil
 }
