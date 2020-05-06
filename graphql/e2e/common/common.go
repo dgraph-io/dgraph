@@ -194,6 +194,12 @@ func BootstrapServer(schema, data []byte) {
 	}
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 
+	// Drop all previous data.
+	op := api.Operation{DropAll: true}
+	if err := client.Alter(ctx, &op); err != nil {
+		x.Panic(err)
+	}
+
 	err = addSchema(graphqlAdminURL, string(schema))
 	if err != nil {
 		x.Panic(err)

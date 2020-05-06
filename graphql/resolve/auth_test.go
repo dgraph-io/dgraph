@@ -485,7 +485,7 @@ func TestAuthSchemaRewriting(t *testing.T) {
 	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 
 	for _, algo := range jwtAlgo {
-		result, err := testutil.AppendAuthInfo(sch, algo)
+		result, err := testutil.AppendAuthInfo(sch, algo, "../e2e/auth/sample_public_key.pem")
 		require.NoError(t, err)
 		strSchema := string(result)
 

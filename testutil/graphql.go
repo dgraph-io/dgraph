@@ -116,10 +116,11 @@ type AuthMeta struct {
 	PublicKey string
 	Namespace string
 	Algo      string
+	Header    string
 	AuthVars  map[string]interface{}
 }
 
-func (a *AuthMeta) GetSignedToken() (string, error) {
+func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
 	claims := clientCustomClaims{
 		a.Namespace,
 		a.AuthVars,
@@ -140,7 +141,7 @@ func (a *AuthMeta) GetSignedToken() (string, error) {
 		return signedString, err
 
 	}
-	keyData, err := ioutil.ReadFile("../e2e/auth/sample_private_key.pem")
+	keyData, err := ioutil.ReadFile(privateKeyFile)
 	if err != nil {
 		return signedString, errors.Errorf("unable to read private key file: %v", err)
 	}
@@ -155,7 +156,7 @@ func (a *AuthMeta) GetSignedToken() (string, error) {
 }
 
 func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
-	token, err := a.GetSignedToken()
+	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem")
 	if err != nil {
 		return ctx, err
 	}
@@ -165,7 +166,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 	return metadata.NewIncomingContext(ctx, md), nil
 }
 
-func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
+func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
 		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
 		return append(schema, []byte(authInfo)...), nil
@@ -175,7 +176,7 @@ func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
 		return schema, nil
 	}
 
-	keyData, err := ioutil.ReadFile("../e2e/auth/sample_public_key.pem")
+	keyData, err := ioutil.ReadFile(publicKeyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +184,7 @@ func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" + string(keyData) + "\""
+	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
+		string(keyData) + "\""
 	return append(schema, []byte(authInfo)...), nil
 }

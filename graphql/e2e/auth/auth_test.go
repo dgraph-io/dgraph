@@ -35,7 +35,7 @@ const (
 )
 
 var (
-	metainfo authorization.AuthMeta
+	metaInfo *testutil.AuthMeta
 )
 
 type User struct {
@@ -105,15 +105,12 @@ type TestCase struct {
 }
 
 func getJWT(t *testing.T, user, role string) string {
-	authMeta := testutil.AuthMeta{
-		PublicKey: metainfo.PublicKey,
-		Namespace: metainfo.Namespace,
-		AuthVars: map[string]interface{}{
-			"USER": user,
-			"ROLE": role,
-		},
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": user,
+		"ROLE": role,
 	}
-	jwtToken, err := authMeta.GetSignedToken()
+
+	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
 	require.NoError(t, err)
 	return jwtToken
 }
@@ -136,7 +133,7 @@ func TestOrRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -165,12 +162,12 @@ func getColID(t *testing.T, tcase TestCase) string {
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
-	getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+	getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
-	err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+	err := json.Unmarshal(gqlResponse.Data, &result)
 	require.Nil(t, err)
 
 	if len(result.QueryColumn) > 0 {
@@ -219,7 +216,7 @@ func TestRootGetFilter(t *testing.T) {
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -265,7 +262,7 @@ func TestDeepFilter(t *testing.T) {
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -302,7 +299,7 @@ func TestRootFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -329,7 +326,7 @@ func TestRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -356,7 +353,7 @@ func TestAndRBACFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -454,7 +451,7 @@ func TestNestedFilter(t *testing.T) {
 				Headers: map[string][]string{},
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -504,7 +501,7 @@ func TestDeleteAuthRule(t *testing.T) {
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
@@ -555,7 +552,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metainfo.Header, getJWT(t, tcase.user, tcase.role))
+		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
@@ -572,12 +569,6 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	metainfo, err = authorization.Parse(string(schema))
-
-	schema, err = testutil.AppendAuthInfo(schema, "HS256")
-	if err != nil {
-		panic(err)
-	}
 
 	jsonFile := "test_data.json"
 	data, err := ioutil.ReadFile(jsonFile)
@@ -585,7 +576,31 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	common.BootstrapServer(schema, data)
+	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 
-	os.Exit(m.Run())
+	for _, algo := range jwtAlgo {
+		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
+		if err != nil {
+			panic(err)
+		}
+
+		authMeta, err := authorization.Parse(string(authSchema))
+		if err != nil {
+			panic(err)
+		}
+
+		metaInfo = &testutil.AuthMeta{
+			PublicKey: authMeta.PublicKey,
+			Namespace: authMeta.Namespace,
+			Algo:      authMeta.Algo,
+			Header:    authMeta.Header,
+		}
+
+		common.BootstrapServer(authSchema, data)
+		exitCode := m.Run()
+		if exitCode != 0 {
+			os.Exit(exitCode)
+		}
+	}
+	os.Exit(0)
 }
