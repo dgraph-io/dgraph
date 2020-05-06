@@ -708,7 +708,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 	return true, nil
 }
 
-func addSchema(url string, schema string) error {
+func addSchema(url, schema string) error {
 	add := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -751,7 +751,7 @@ func addSchema(url string, schema string) error {
 	return nil
 }
 
-func addSchemaThroughAdminSchemaEndpt(url string, schema string) error {
+func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(schema))
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")
