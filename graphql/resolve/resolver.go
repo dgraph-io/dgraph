@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -1459,7 +1460,14 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 
 func makeRequest(client *http.Client, method, url, body string,
 	header http.Header) ([]byte, error) {
-	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+	var reqBody io.Reader
+	if body == "" || method == http.MethodGet {
+		reqBody = http.NoBody
+	} else {
+		reqBody = bytes.NewBufferString(body)
+	}
+
+	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
 		return nil, err
 	}
