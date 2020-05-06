@@ -86,7 +86,7 @@ func BenchmarkWriter(b *testing.B) {
 
 	KVList := createKVList()
 
-	//Vanilla TxnWriter
+	// Vanilla TxnWriter
 	b.Run("TxnWriter", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
@@ -111,7 +111,7 @@ func BenchmarkWriter(b *testing.B) {
 
 		}
 	})
-	//Single threaded BatchWriter
+	// Single threaded BatchWriter
 	b.Run("WriteBatch1", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
@@ -134,7 +134,7 @@ func BenchmarkWriter(b *testing.B) {
 			require.NoError(b, wb.Flush())
 		}
 	})
-	//Multi threaded Batchwriter with thread contention in WriteBatch
+	// Multi threaded Batchwriter with thread contention in WriteBatch
 	b.Run("WriteBatchMultThreadDiffWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
@@ -162,7 +162,7 @@ func BenchmarkWriter(b *testing.B) {
 
 		}
 	})
-	//Multi threaded Batchwriter with thread contention in SetEntry
+	// Multi threaded Batchwriter with thread contention in SetEntry
 	b.Run("WriteBatchMultThreadSameWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
