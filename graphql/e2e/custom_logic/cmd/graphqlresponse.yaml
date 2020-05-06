@@ -85,7 +85,7 @@
       name: String
     }
 
-    type Query{
+    type Query {
       country(code: ID!): Country!
     }
 

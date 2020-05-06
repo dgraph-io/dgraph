@@ -119,7 +119,7 @@ func TestCustomGetQuery(t *testing.T) {
 	}
 
 	result := params.ExecuteAsPost(t, alphaURL)
-	require.Nil(t, result.Errors)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
 
 	expected := `{"myFavoriteMovies":[{"id":"0x3","name":"Star Wars","director":[{"id":"0x4","name":"George Lucas"}]},{"id":"0x5","name":"Star Trek","director":[{"id":"0x6","name":"J.J. Abrams"}]}]}`
 	require.JSONEq(t, expected, string(result.Data))
@@ -884,7 +884,8 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			  url: "http://mock:8888/gqlCarsWithErrors"
 			  method: "POST"
 			  operation: "batch"
-			  graphql: "query($id: ID!, $age: Int!) { cars(input: [{ id: $id, age: $age}]) }"
+			  graphql: "query($input: [UserInput]) { cars(input: $input) }"
+			  body: "{ id: $id, age: $age}"
 			}
 		  )
 	}`

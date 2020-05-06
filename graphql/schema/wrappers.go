@@ -759,7 +759,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	var bodyTemplate string
 	if bodyArg != nil {
 		bodyTemplate = bodyArg.Raw
-	} else if fconf.Operation == "single" {
+	} else if graphqlArg != nil {
 		bodyTemplate = `{ query: $query, variables: $variables }`
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
@@ -772,7 +772,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.RequiredArgs = rf
 	}
 
-	if graphqlArg != nil && fconf.Operation == "single" {
+	if !isQueryOrMutation && graphqlArg != nil && fconf.Operation == "single" {
 		// For batch mode, required args would have been parsed from the body above.
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
