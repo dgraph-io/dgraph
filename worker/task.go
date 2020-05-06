@@ -856,10 +856,13 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 		span.Annotatef(nil, "Done waiting for maxAssigned. Attr: %q ReadTs: %d Max: %d",
 			q.Attr, q.ReadTs, maxAssigned)
 	}
-	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return &pb.Result{}, err
+
+	if !q.GetBestEffort() {
+		if err := groups().ChecksumsMatch(ctx); err != nil {
+			return &pb.Result{}, err
+		}
+		span.Annotatef(nil, "Done waiting for checksum match")
 	}
-	span.Annotatef(nil, "Done waiting for checksum match")
 
 	// If a group stops serving tablet and it gets partitioned away from group
 	// zero, then it wouldn't know that this group is no longer serving this

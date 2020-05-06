@@ -73,6 +73,8 @@ message Query {
 	int32 cache = 14;
 	int32 first = 15; // used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
+
+	bool best_effort = 16;
 }
 
 message ValueList {
@@ -106,6 +108,7 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
+	bool best_effort = 14;
 }
 
 message SortResult {

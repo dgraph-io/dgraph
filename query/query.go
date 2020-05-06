@@ -238,6 +238,7 @@ type Function struct {
 //       valueMatrix: [["Foo"]]
 type SubGraph struct {
 	ReadTs      uint64
+	BestEffort  bool
 	Cache       int
 	Attr        string
 	UnknownAttr bool
@@ -884,6 +885,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
+		BestEffort:   sg.BestEffort,
 		Cache:        int32(sg.Cache),
 		Attr:         attr,
 		Langs:        sg.Params.Langs,
@@ -1935,6 +1937,11 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 	stop := x.SpanTimer(span, "query.ProcessGraph"+suffix)
 	defer stop()
 
+	// Propagate BestEffort data from the parent subgraph.
+	if parent != nil && parent.BestEffort {
+		sg.BestEffort = true
+	}
+
 	if sg.Attr == "uid" {
 		// We dont need to call ProcessGraph for uid, as we already have uids
 		// populated from parent and there is nothing to process but uidMatrix
@@ -2281,11 +2288,12 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 	x.AssertTrue(len(sg.Params.Order) > 0)
 
 	sortMsg := &pb.SortMessage{
-		Order:     sg.Params.Order,
-		UidMatrix: sg.uidMatrix,
-		Offset:    int32(sg.Params.Offset),
-		Count:     int32(sg.Params.Count),
-		ReadTs:    sg.ReadTs,
+		Order:      sg.Params.Order,
+		UidMatrix:  sg.uidMatrix,
+		Offset:     int32(sg.Params.Offset),
+		Count:      int32(sg.Params.Count),
+		ReadTs:     sg.ReadTs,
+		BestEffort: sg.BestEffort,
 	}
 	result, err := worker.SortOverNetwork(ctx, sortMsg)
 	if err != nil {
@@ -2566,10 +2574,11 @@ func UidsToHex(m map[string]uint64) map[string]string {
 // Initially ReadTs, Cache and GqlQuery are set.
 // Subgraphs, Vars and Latency are filled when processing query.
 type Request struct {
-	ReadTs   uint64 // ReadTs for the transaction.
-	Cache    int    // 0 represents use txn cache, 1 represents not to use cache.
-	Latency  *Latency
-	GqlQuery *gql.Result
+	ReadTs     uint64 // ReadTs for the transaction.
+	Cache      int    // 0 represents use txn cache, 1 represents not to use cache.
+	BestEffort bool
+	Latency    *Latency
+	GqlQuery   *gql.Result
 
 	Subgraphs []*SubGraph
 
@@ -2667,6 +2676,11 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 			if sg.Params.IsEmpty || isEmptyIneqFnWithVar(sg) {
 				errChan <- nil
 				continue
+			}
+
+			// Propagate BestEffort data to the subgraphs.
+			if req.BestEffort {
+				sg.BestEffort = true
 			}
 
 			switch {

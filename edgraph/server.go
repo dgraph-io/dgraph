@@ -889,6 +889,7 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	switch {
 	case qc.req.BestEffort:
 		qc.span.Annotate([]otrace.Attribute{otrace.BoolAttribute("be", true)}, "")
+		qr.BestEffort = true
 	case qc.req.ReadOnly:
 		qc.span.Annotate([]otrace.Attribute{otrace.BoolAttribute("ro", true)}, "")
 	default:
