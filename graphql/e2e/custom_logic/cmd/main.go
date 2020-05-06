@@ -908,37 +908,6 @@ func (_ *query) Class(ctx context.Context, args struct {
 	return &[]*classResolver{&classResolver{&class{ID: graphql.ID(args.Id)}}}
 }
 
-func introspectionResult(name string) string {
-	return generateIntrospectionResult(fmt.Sprintf(graphqlResponses["introspectionresults"].Schema,
-		name))
-}
-
-func makeResponse(b []byte, id, key, prefix string) (string, error) {
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return "", err
-	}
-	input := req.Variables["input"]
-	output := []string{}
-	for _, i := range input.([]interface{}) {
-		im := i.(map[string]interface{})
-		id := im[id].(string)
-		output = append(output, prefix+id)
-	}
-
-	response := map[string]interface{}{
-		"data": map[string]interface{}{
-			key: output,
-		},
-	}
-
-	b, err := json.Marshal(response)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
 func (_ *query) UserNames(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
@@ -1064,46 +1033,6 @@ func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
 			map[string]interface{}{
 				"message": "error-2 from cars",
 			},
-		},
-	}
-
-	b, err = json.Marshal(response)
-	if err != nil {
-		return
-	}
-	check2(fmt.Fprint(w, string(b)))
-}
-
-func gqlClassesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["classesschema"].Schema))
-		return
-	}
-
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-	input := req.Variables["input"]
-	output := []interface{}{}
-	for _, i := range input.([]interface{}) {
-		im := i.(map[string]interface{})
-		id := im["id"].(string)
-		output = append(output, []map[string]interface{}{
-			{
-				"name": "class-" + id,
-			},
-		})
-	}
-
-	response := map[string]interface{}{
-		"data": map[string]interface{}{
-			"classes": output,
 		},
 	}
 

@@ -1457,6 +1457,67 @@ invalid_schemas:
           "locations":[{"line":6, "column":11}]},
         ]
 
+  -
+    name: "@custom directive with variable definitions in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      type Query {
+        getAuthors(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($input: [UserInput]) { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+      {"message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
+        "locations": [{"line": 10, "column": 15}]},
+      ]
+
+  -
+    name: "@custom directive on a field in a type, should only use fields defined in the type as GraphQL variables"
+    input: |
+      type Author {
+        id: ID!
+        foo: String!
+        bar: Int!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query ($fooz: String) { getUsers(foo: $fooz) }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, graphql variables must use fields defined within the type, found `fooz`.",
+        "locations": [{"line": 8, "column": 15}]},
+      ]
+
+  -
+    name: "@custom directive on a field in a type, should only use only scalar fields as GraphQL variables"
+    input: |
+      type Car {
+        id: ID!
+        make: String!
+      }
+      type Author {
+        id: ID!
+        foo: String!
+        bar: Int!
+        car: Car
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query ($car: Car) { getUsers(foo: $car) }"
+        })
+      }
+    errlist: [
+      {"message": "Type Author; Field name; @custom directive, graphql variables must use scalar fields, found field of type `Car`.",
+        "locations": [{"line": 13, "column": 15}]},
+      ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
@@ -1659,20 +1720,16 @@ valid_schemas:
         f5: String @dgraph(pred: "X.f5")
       }
 
-
   -
     name: "@custom directive with variable definitions in operation in graphql"
     input: |
       type Author {
         id: ID!
         age: Int!
-      }
-
-      type Query {
-        getAuthors(id: ID): Author! @custom(http: {
+        name: String! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query ($id: ID, $age: Int!) { getAuthor(id: $id, age: $age) }",
+          graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
           skipIntrospection: true
         })
       }

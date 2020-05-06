@@ -139,7 +139,7 @@
         url: "http://mock:8888/setCountry",
         method: "POST",
         skipIntrospection: true,
-        graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
+        graphql: "mutation($country: CountryInput!) { setCountry(country: $country) }"
       })
     }
   remotequery: |-

@@ -1134,12 +1134,41 @@ func customDirectiveValidation(sch *ast.Schema,
 				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
 					"name `%s`, it can't have a name.", typ.Name, field.Name, graphqlOpDef.Name)
 		}
-		// TODO - Ensure that the variables used should be already defined.
-		// if graphqlOpDef.VariableDefinitions != nil {
-		// 	return gqlerror.ErrorPosf(graphql.Position,
-		// 		"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
-		// 			"variables, it can't have any variable definitions.", typ.Name, field.Name)
-		// }
+		if graphqlOpDef.VariableDefinitions != nil {
+			if isQueryOrMutationType(typ) {
+				for _, vd := range graphqlOpDef.VariableDefinitions {
+					ad := field.Arguments.ForName(vd.Variable)
+					if ad == nil {
+						return gqlerror.ErrorPosf(graphql.Position,
+							"Type %s; Field %s; @custom directive, graphql variables must use "+
+								"fields defined within the type, found `%s`.", typ.Name,
+							field.Name, vd.Variable)
+					}
+				}
+			} else {
+				// For batch operation we already verify that body should use fields defined inside the
+				// parent type.
+				if !isBatchOperation {
+					for _, vd := range graphqlOpDef.VariableDefinitions {
+						fd := typ.Fields.ForName(vd.Variable)
+						if fd == nil {
+							return gqlerror.ErrorPosf(graphql.Position,
+								"Type %s; Field %s; @custom directive, graphql variables must use "+
+									"fields defined within the type, found `%s`.", typ.Name,
+								field.Name, vd.Variable)
+						}
+
+						typName := fd.Type.Name()
+						if !isScalar(typName) {
+							return gqlerror.ErrorPosf(graphql.Position,
+								"Type %s; Field %s; @custom directive, graphql variables must use "+
+									"scalar fields, found field of type `%s`.", typ.Name, field.Name,
+								typName)
+						}
+					}
+				}
+			}
+		}
 		if graphqlOpDef.Directives != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
 				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
