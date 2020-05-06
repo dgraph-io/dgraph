@@ -1079,11 +1079,20 @@ func customDirectiveValidation(sch *ast.Schema,
 					" @custom directive, method can only be POST if graphql field is present.",
 				typ.Name, field.Name, method.Raw)
 		}
-		if body != nil {
-			return gqlerror.ErrorPosf(dir.Position,
-				"Type %s; Field %s; has both body and graphql field inside @custom directive, "+
-					"they can't be present together.",
-				typ.Name, field.Name)
+		if !isBatchOperation {
+			if body != nil {
+				return gqlerror.ErrorPosf(dir.Position,
+					"Type %s; Field %s; has both body and graphql field inside @custom directive, "+
+						"they can't be present together.",
+					typ.Name, field.Name)
+			}
+		} else {
+			if body == nil {
+				return gqlerror.ErrorPosf(dir.Position,
+					"Type %s; Field %s; both body and graphql field inside @custom directive "+
+						"are required if operation is batch.",
+					typ.Name, field.Name)
+			}
 		}
 	}
 
@@ -1166,24 +1175,18 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 		if len(query.Arguments) > 0 {
 			argCountMap := make(map[string]int)
-			requiredFields = make(map[string]bool)
 			// validate the specific input requirements for batch mode
 			if isBatchOperation {
 				if len(query.Arguments) != 1 ||
-					query.Arguments[0].Value.Kind != ast.ListValue ||
-					len(query.Arguments[0].Value.Children) != 1 ||
-					query.Arguments[0].Value.Children[0].Value.Kind != ast.ObjectValue {
+					query.Arguments[0].Value.Kind != ast.Variable {
 					return gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
-							"operations, %s `%s` can have only one argument with value formatted "+
-							"as `[{param1: $var1, param2: $var2, ...}]`.",
+							"operations, %s `%s` can have only one argument whose value should "+
+							"be a variable.",
 						typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 				}
-				for _, arg := range query.Arguments[0].Value.Children[0].Value.Children {
-					argCountMap[arg.Name] = argCountMap[arg.Name] + 1
-					requiredFields[arg.Value.String()[1:]] = true
-				}
 			} else {
+				requiredFields = make(map[string]bool)
 				for _, arg := range query.Arguments {
 					argCountMap[arg.Name] = argCountMap[arg.Name] + 1
 					requiredFields[arg.Value.String()[1:]] = true

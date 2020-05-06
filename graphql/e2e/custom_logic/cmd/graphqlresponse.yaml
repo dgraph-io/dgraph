@@ -357,6 +357,29 @@
       class(id: ID!): [Class]
     }
 
+- name: batchOperationSchema
+  schema: |
+    input UserInput {
+      id: ID!
+      age: String!
+    }
+
+    input TeacherInput {
+      id: ID!
+      age: String!
+    }
+
+    input SchoolInput {
+      id: ID!
+      established: String!
+    }
+
+    type Query {
+      userNames(users: [UserInput]): [String]
+      teacherNames(users: [TeacherInput]): [String]
+      schoolNames(users: [SchoolInput]): [String]
+    }
+
 - name: getPosts
   schema: |
     input PostFilterInput{

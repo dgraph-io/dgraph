@@ -218,7 +218,8 @@
           url: "http://mock:8888/gqlUserName"
           method: "POST"
           operation: "batch"
-          graphql: "query($id: ID!, $age: String!) { userName(random: [{id: $id, age: $age}])}"
+          graphql: "query($random: [UserInput]) { userName(random: $random)}",
+          body: "{id: $id, age: $age}"
           skipIntrospection: true
         }
       )
@@ -244,6 +245,6 @@
       })
     }
   remotequery: |-
-    query($id: ID!, $age: String!) { userName(random: [{id: $id, age: $age}])}
+    query($random: [UserInput]) { userName(random: $random)}
   inputvariables: |-
-    { "id": "0x2", "age": "10" }
+    {"random": [{ "id": "0x2", "age": "10" },{ "id": "0x3", "age": "20"}]}

@@ -1025,25 +1025,6 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive with variable definitions in operation in graphql"
-    input: |
-      type Author {
-        id: ID!
-      }
-
-      type Query {
-        getAuthor(id: ID): Author! @custom(http: {
-          url: "http://google.com/",
-          method: "POST",
-          graphql: "query ($id: ID){ getAuthor(id: $id) }"
-        })
-      }
-    errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with variables, it can't have any variable definitions.",
-     "locations":[{"line":9, "column":15}]},
-    ]
-
-  -
     name: "@custom directive with directives in operation in graphql"
     input: |
       type Author {
@@ -1170,33 +1151,35 @@ invalid_schemas:
           url: "http://google.com/",
           method: "POST",
           operation: "batch"
-          graphql: "query { getAuthor(postId: $id) }"
+          graphql: "query { getAuthor(postId: {id: $id}) }",
+          body: "{id: $id}"
         })
       }
     errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, for batch operations, query `getAuthor` can have only one argument with value formatted as `[{param1: $var1, param2: $var2, ...}]`.",
+    {"message": "Type Post; Field author: inside graphql in @custom directive, for batch operations, query `getAuthor` can have only one argument whose value should be a variable.",
      "locations":[{"line":11, "column":15}]},
     ]
 
-  -
-    name: "@custom directive with batch mode on field and repeating arguments for query in graphql"
-    input: |
-      type Author {
-        id: ID!
-      }
-      type Post {
-        id: ID!
-        author: Author! @custom(http: {
-          url: "http://google.com/",
-          method: "POST",
-          operation: "batch"
-          graphql: "query { getAuthor(input: [{id: $id, id: $id}]) }"
-        })
-      }
-    errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
-     "locations":[{"line":10, "column":15}]},
-    ]
+  # -
+  #   name: "@custom directive with batch mode on field and repeating arguments for query in graphql"
+  #   input: |
+  #     type Author {
+  #       id: ID!
+  #     }
+  #     type Post {
+  #       id: ID!
+  #       author: Author! @custom(http: {
+  #         url: "http://google.com/",
+  #         method: "POST",
+  #         operation: "batch"
+  #         graphql: "query($random: [AuthorInput]) { getAuthor(input: $random) }"
+  #         body: [{id: $id, id: $id}]
+  #       })
+  #     }
+  #   errlist: [
+  #   {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
+  #    "locations":[{"line":10, "column":15}]},
+  #   ]
 
   -
     name: "@custom directive with repeating arguments for query in graphql"
@@ -1674,4 +1657,22 @@ valid_schemas:
         f3: [String]! @dgraph(pred: "f3")
         f4: [String!]! @dgraph(pred: "f4")
         f5: String @dgraph(pred: "X.f5")
+      }
+
+
+  -
+    name: "@custom directive with variable definitions in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      type Query {
+        getAuthors(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID, $age: Int!) { getAuthor(id: $id, age: $age) }",
+          skipIntrospection: true
+        })
       }

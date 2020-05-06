@@ -939,58 +939,46 @@ func makeResponse(b []byte, id, key, prefix string) (string, error) {
 	return string(b), nil
 }
 
-func gqlUserNamesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
+func (_ *query) UserNames(ctx context.Context, args struct {
+	Users *[]*struct {
+		Id  string
+		Age string
 	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectionResult("userNames"))
-		return
+}) *[]*string {
+	res := make([]*string, 0)
+	for _, arg := range *args.Users {
+		n := fmt.Sprintf(`uname-%s`, arg.Id)
+		res = append(res, &n)
 	}
-
-	res, err := makeResponse(b, "id", "userNames", "uname-")
-	if err != nil {
-		return
-	}
-	fmt.Fprint(w, res)
+	return &res
 }
 
-func gqlTeacherNamesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
+func (_ *query) TeacherNames(ctx context.Context, args struct {
+	Teachers *[]*struct {
+		Tid string
+		Age string
 	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectionResult("teacherNames"))
-		return
+}) *[]*string {
+	res := make([]*string, 0)
+	for _, arg := range *args.Teachers {
+		n := fmt.Sprintf(`tname-%s`, arg.Tid)
+		res = append(res, &n)
 	}
-
-	res, err := makeResponse(b, "tid", "teacherNames", "tname-")
-	if err != nil {
-		return
-	}
-	fmt.Fprint(w, res)
+	return &res
 }
 
-func gqlSchoolNamesHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
+func (_ *query) SchoolNames(ctx context.Context, args struct {
+	Schools *[]*struct {
+		Id          string
+		Established string
 	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, introspectionResult("schoolNames"))
-		return
+}) *[]*string {
+	res := make([]*string, 0)
+	for _, arg := range *args.Schools {
+		n := fmt.Sprintf(`sname-%s`, arg.Id)
+		res = append(res, &n)
 	}
-
-	res, err := makeResponse(b, "id", "schoolNames", "sname-")
-	if err != nil {
-		return
-	}
-	fmt.Fprint(w, res)
+	return &res
 }
 
 func buildCarBatchOutput(b []byte, req request) []interface{} {
@@ -1187,14 +1175,16 @@ func main() {
 	http.Handle("/gqlSchoolName", h)
 
 	// for testing in batch mode
+	bsch := graphql.MustParseSchema(graphqlResponses["batchOperationSchema"].Schema, &query{})
+	bh := &relay.Handler{Schema: bsch}
 	http.HandleFunc("/getPosts", getPosts)
 	http.HandleFunc("/getPostswithLike", getPostswithLike)
-	http.HandleFunc("/gqlUserNames", gqlUserNamesHandler)
+	http.Handle("/gqlUserNames", bh)
 	http.HandleFunc("/gqlCars", gqlCarsHandler)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)
 	http.HandleFunc("/gqlClasses", gqlClassesHandler)
-	http.HandleFunc("/gqlTeacherNames", gqlTeacherNamesHandler)
-	http.HandleFunc("/gqlSchoolNames", gqlSchoolNamesHandler)
+	http.Handle("/gqlTeacherNames", bh)
+	http.Handle("/gqlSchoolNames", bh)
 
 	fmt.Println("Listening on port 8888")
 	log.Fatal(http.ListenAndServe(":8888", nil))
