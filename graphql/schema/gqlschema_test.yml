@@ -767,6 +767,34 @@ invalid_schemas:
      "locations":[{"line":4, "column":7}]},
     ]
 
+  - name: "@custom query can't have same name as the query generated for other types"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+    errlist: [
+    {"message": "getAuthor is a reserved word, so you can't declare a query with this name. Pick a different name for the query.",
+     "locations":[{"line":6, "column":3}]},
+    ]
+
+  - name: "@custom mutation can't have same name as the mutation generated for other types"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Mutation {
+        addAuthor(id: ID): Author! @custom(http: {url: "http://blah.com", method: "GET"})
+      }
+    errlist: [
+    {"message": "addAuthor is a reserved word, so you can't declare a mutation with this name. Pick a different name for the mutation.",
+     "locations":[{"line":6, "column":3}]},
+    ]
+
   - name: "@custom directive with extra arguments"
     input: |
       type Author {
@@ -774,11 +802,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
+        getAuthor1(id: ID): Author! @custom(http: {url: "blah.com", method: "GET"}, extra: "random")
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: has 2 arguments for @custom directive, it should contain exactly 1 argument.",
-     "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly 1 argument.",
+     "locations":[{"line":6, "column":32}]},
     ]
 
   - name: "@custom directive without http argument"
@@ -788,11 +816,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
+        getAuthor1(id: ID): Author! @custom(https: {url: "blah.com", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor: http argument for @custom directive should not be empty.",
-      "locations":[{"line":6, "column":31}]},
+      {"message": "Type Query; Field getAuthor1: http argument for @custom directive should not be empty.",
+      "locations":[{"line":6, "column":32}]},
     ]
 
   -
@@ -803,11 +831,26 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {url: "123", method: "GET"})
+        getAuthor1(id: ID): Author! @custom(http: {url: "123", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor; url field inside @custom directive is invalid.",
-      "locations":[{"line":6, "column":51}]},
+      {"message": "Type Query; Field getAuthor1; url field inside @custom directive is invalid.",
+      "locations":[{"line":6, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive on a query with undefined parameter in path is not allowed"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/$idm", method: "GET"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; url path inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":6, "column":52}]},
     ]
 
   -
@@ -818,11 +861,26 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/$id", method: "GET"})
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/$id", method: "GET"})
       }
     errlist: [
-      {"message": "Type Query; Field getAuthor; url path inside @custom directive uses an argument id that can be null.",
-      "locations":[{"line":6, "column":51}]},
+      {"message": "Type Query; Field getAuthor1; url path inside @custom directive uses an argument id that can be null.",
+      "locations":[{"line":6, "column":52}]},
+    ]
+
+  -
+    name: "@custom directive on a query with undefined parameter in query is not allowed"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com?a=$idm", method: "GET"})
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; url query inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":6, "column":52}]},
     ]
 
   -
@@ -833,11 +891,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GETS"})
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor; method field inside @custom directive can only be GET/POST/PUT/PATCH/DELETE.",
-     "locations":[{"line":6, "column":81}]},
+    {"message": "Type Query; Field getAuthor1; method field inside @custom directive can only be GET/POST/PUT/PATCH/DELETE.",
+     "locations":[{"line":6, "column":82}]},
     ]
 
   -
@@ -848,11 +906,11 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "single"})
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "single"})
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor; operation field inside @custom directive can't be present on Query/Mutation.",
-     "locations":[{"line":6, "column":99}]},
+    {"message": "Type Query; Field getAuthor1; operation field inside @custom directive can't be present on Query/Mutation.",
+     "locations":[{"line":6, "column":100}]},
     ]
 
   -
@@ -872,6 +930,25 @@ invalid_schemas:
     ]
 
   -
+    name: "@custom directive with url params for batch operation"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Post {
+        id: ID!
+        author: Author! @custom(http: {
+          url: "http://google.com?a=$id",
+          method: "GET",
+          operation: "batch"})
+      }
+    errlist: [
+    {"message": "Type Post; Field author; has parameters in url inside @custom directive while operation is batch, url can't contain parameters if operation is batch.",
+     "locations":[{"line":8, "column":11}]},
+    ]
+
+  -
     name: "@custom directive with url params and graphql together"
     input: |
       type Author {
@@ -879,15 +956,15 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/?q=$id",
           method: "POST",
           graphql: "query { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor; has parameters in url along with graphql field inside @custom directive, url can't contain parameters if graphql field is present.",
-     "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor1; has parameters in url along with graphql field inside @custom directive, url can't contain parameters if graphql field is present.",
+     "locations":[{"line":6, "column":32}]},
     ]
 
 
@@ -899,15 +976,15 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "GET",
           graphql: "query { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor; has method GET while graphql field is also present inside @custom directive, method can only be POST if graphql field is present.",
-     "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor1; has method GET while graphql field is also present inside @custom directive, method can only be POST if graphql field is present.",
+     "locations":[{"line":6, "column":32}]},
     ]
 
   -
@@ -918,7 +995,7 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           body: "{id: $id}",
@@ -926,8 +1003,46 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor; has both body and graphql field inside @custom directive, they can't be present together.",
-     "locations":[{"line":6, "column":31}]},
+    {"message": "Type Query; Field getAuthor1; has both body and graphql field inside @custom directive, they can't be present together.",
+     "locations":[{"line":6, "column":32}]},
+    ]
+
+  -
+    name: "@custom directive with unparseable body"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          body: "{id: $id, name: \"name\"}",
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; body template inside @custom directive could not be parsed.",
+     "locations":[{"line":9, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive with undefined parameter in body"
+    input: |
+      type Author {
+        id: ID!
+      }
+
+      type Query {
+        getAuthor1(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          body: "{id: $idm}",
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthor1; body template inside @custom directive uses an argument idm that is not defined.",
+     "locations":[{"line":9, "column":12}]},
     ]
 
   -
@@ -938,14 +1053,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "   "
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 0 operations, it can have exactly one operation.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 0 operations, it can have exactly one operation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -956,14 +1071,14 @@ invalid_schemas:
         id: ID!
       }
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id) } garbage"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: unable to parse graphql in @custom directive because: Unexpected Name \"garbage\"",
+    {"message": "Type Query; Field getAuthor1: unable to parse graphql in @custom directive because: Unexpected Name \"garbage\"",
      "locations":[{"line":8, "column":15}]},
     ]
 
@@ -975,14 +1090,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id) } query { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 2 operations, it can have exactly one operation.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 operations, it can have exactly one operation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -994,14 +1109,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "subscription { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found `subscription` operation, it can only have query/mutation.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found `subscription` operation, it can only have query/mutation.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1013,14 +1128,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query opName { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1032,14 +1147,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query ($id: ID){ getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with variables, it can't have any variable definitions.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with variables, it can't have any variable definitions.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1051,14 +1166,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query @test { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1070,14 +1185,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id) getUser(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1089,14 +1204,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "mutation { authors: getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1108,14 +1223,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id): Author! }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: unable to parse graphql in @custom directive because: Expected Name, found :",
+    {"message": "Type Query; Field getAuthor1: unable to parse graphql in @custom directive because: Expected Name, found :",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1127,14 +1242,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id) @test }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1146,14 +1261,14 @@ invalid_schemas:
       }
 
       type Query {
-        getAuthor(id: ID): Author! @custom(http: {
+        getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
           graphql: "query { getAuthor(id: $id) { id } }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
      "locations":[{"line":9, "column":15}]},
     ]
 
@@ -1176,44 +1291,6 @@ invalid_schemas:
     errlist: [
     {"message": "Type Post; Field author: inside graphql in @custom directive, for batch operations, query `getAuthor` can have only one argument with value formatted as `[{param1: $var1, param2: $var2, ...}]`.",
      "locations":[{"line":11, "column":15}]},
-    ]
-
-  -
-    name: "@custom directive with batch mode on field and repeating arguments for query in graphql"
-    input: |
-      type Author {
-        id: ID!
-      }
-      type Post {
-        id: ID!
-        author: Author! @custom(http: {
-          url: "http://google.com/",
-          method: "POST",
-          operation: "batch"
-          graphql: "query { getAuthor(input: [{id: $id, id: $id}]) }"
-        })
-      }
-    errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
-     "locations":[{"line":10, "column":15}]},
-    ]
-
-  -
-    name: "@custom directive with repeating arguments for query in graphql"
-    input: |
-      type Author {
-        id: ID!
-      }
-      type Query {
-        getAuthor(id: ID): Author! @custom(http: {
-          url: "http://google.com/",
-          method: "POST",
-          graphql: "query { getAuthor(id: $id, id: $id) }"
-        })
-      }
-    errlist: [
-    {"message": "Type Query; Field getAuthor: inside graphql in @custom directive, query `getAuthor` has arguments [id ] which appear more than once, each argument can appear only once.",
-     "locations":[{"line":8, "column":15}]},
     ]
 
   -
@@ -1297,8 +1374,30 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field of type `Note`.",
+    {"message": "Type Author; Field yo; @custom directive, body template must use scalar fields, found field `foo` of type `Note`.",
      "locations":[{"line":11, "column":12}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          body: "{ id: $id, abc: $foo }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, body template can't use another field with @custom directive, found field `foo` with @custom.",
+     "locations":[{"line":12, "column":12}]},
     ]
 
   -
@@ -1336,19 +1435,36 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive on field where graphql uses undefined field"
+    name: "@custom directive on field where graphql uses undefined field for single mode"
     input: |
       type Author {
         id: ID!
         name: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(abc: $abc, id: $id) }"
+          graphql: "query { getName(obj: [{abc: $abc}], id: $id) }"
         })
       }
     errlist: [
     {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
      "locations":[{"line":6, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses undefined field for batch mode"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          operation: "batch",
+          graphql: "query { getName(obj: [{abc: $abc, id: $id}]) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
+     "locations":[{"line":7, "column":15}]},
     ]
 
   -
@@ -1368,8 +1484,30 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field of type `Note`.",
+    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
      "locations":[{"line":11, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field where body uses another field with @custom"
+    input: |
+      type Author {
+        id: ID!
+        name: String! @id
+        foo: String! @custom(http: {
+           url: "http://google.com",
+           method: "POST",
+           body: "{ id: $id }"
+         })
+        yo: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query { getName(abc: $foo, id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
+     "locations":[{"line":12, "column":15}]},
     ]
 
   -
@@ -1473,6 +1611,23 @@ invalid_schemas:
       {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
           "locations":[{"line":6, "column":11}]},
         ]
+
+  -
+    name: "@custom directive on a field in a type, only defined fields allowed in url query"
+    input: |
+      type Author {
+        id: ID!
+        bar: Int
+        name: String! @custom(http: {
+          url: "http://google.com?a=$fooz&b=$bar",
+          method: "GET",
+          body: "{ id: $id }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; url query inside @custom directive uses a field fooz that is not defined.",
+     "locations":[{"line":5, "column":11}]},
+    ]
 
 valid_schemas:
   -

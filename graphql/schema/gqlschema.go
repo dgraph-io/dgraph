@@ -214,8 +214,8 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
-// graphqlScalarType holds all the scalar types supported by the graphql spec.
-var graphqlScalarType = map[string]bool{
+// graphqlSpecScalars holds all the scalar types supported by the graphql spec.
+var graphqlSpecScalars = map[string]bool{
 	"Int":     true,
 	"Float":   true,
 	"String":  true,
@@ -1614,4 +1614,9 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 	}
 
 	return errs
+}
+
+func isGraphqlSpecScalar(typ string) bool {
+	_, ok := graphqlSpecScalars[typ]
+	return ok
 }
