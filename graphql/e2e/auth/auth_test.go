@@ -518,21 +518,11 @@ func TestDeleteAuthRule(t *testing.T) {
 func TestDeleteDeepAuthRule(t *testing.T) {
 	testCases := []TestCase{
 		{
-			name: "ticket with only view permission",
+			name: "ticket without edit permission",
 			user: "user3",
 			filter: map[string]interface{}{
 				"title": map[string]interface{}{
 					"anyofterms": "Ticket2",
-				},
-			},
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
-		},
-		{
-			name: "ticket with edit permission but not belonging to user",
-			user: "user3",
-			filter: map[string]interface{}{
-				"title": map[string]interface{}{
-					"anyofterms": "Ticket1",
 				},
 			},
 			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
