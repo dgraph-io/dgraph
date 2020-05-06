@@ -68,7 +68,7 @@ type FieldHTTPConfig struct {
 
 	// For the following request
 	// graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }"
-	// the GraphqlBatchModeArgument would be schools, we use it to know the GraphQL variable that
+	// the GraphqlBatchModeArgument would be sinput, we use it to know the GraphQL variable that
 	// we should send the data in.
 	GraphqlBatchModeArgument string
 }

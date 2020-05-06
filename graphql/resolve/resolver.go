@@ -735,7 +735,6 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		if graphql {
 			body := make(map[string]interface{})
 			body["query"] = fconf.RemoteGqlQuery
-			// For batch mode, the argument name is input which is a list of maps.
 			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
 		}

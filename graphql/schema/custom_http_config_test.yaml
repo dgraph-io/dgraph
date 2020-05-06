@@ -8,7 +8,7 @@
     }
 
     type Query {
-      getCountry(id: ID!): Country! @custom(http: {
+      getCountry1(id: ID!): Country! @custom(http: {
           url: "http://google.com/validcountry",
           method: "POST",
           forwardHeaders: ["Content-Type"],
@@ -18,7 +18,7 @@
     }
   gqlquery: |
     query {
-      getCountry(id: "0x1") {
+      getCountry1(id: "0x1") {
         name
         code
       }
@@ -74,7 +74,7 @@
     }
 
     type Mutation {
-      addCountry(input: CountryInput!): Country! @custom(http: {
+      addCountry1(input: CountryInput!): Country! @custom(http: {
         url: "http://mock:8888/setCountry",
         method: "POST",
         skipIntrospection: true,
@@ -82,8 +82,8 @@
       })
     }
   gqlquery: |
-    mutation addCountry($input: CountryInput!) {
-      addCountry(input: $input) {
+    mutation addCountry1($input: CountryInput!) {
+      addCountry1(input: $input) {
         code
         name
         states {
