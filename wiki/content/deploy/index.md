@@ -1537,14 +1537,14 @@ $ dgraph cert --help
 # Create Dgraph Root CA, used to sign all other certificates.
 $ dgraph cert
 
-# Create node certificate (needed for Dgraph Live Loader using TLS)
-$ dgraph cert -n live
+# Create node certificate
+$ dgraph cert -n localhost
 
-# Create client certificate
+# Create client certificate for mTLS
 $ dgraph cert -c dgraphuser
 
 # Combine all in one command
-$ dgraph cert -n live -c dgraphuser
+$ dgraph cert -n localhost -c dgraphuser
 
 # List all your certificates and keys
 $ dgraph cert ls
@@ -1641,22 +1641,54 @@ The following configuration options are available for Alpha:
 * `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
 
 ```sh
+# First, create rootca and node certificates
+$ dgraph cert -n localhost
 # Default use for enabling TLS server (after generating certificates)
 $ dgraph alpha --tls_dir tls
 ```
 
 Dgraph Live Loader can be configured with following options:
 
-* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
+* `--tls_cacert string` - Dgraph Root CA, such as `.tls/ca.crt`
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
 * `--tls_server_name string` - Server name, used for validating the server's TLS host name.
 
 ```sh
-# First, create a client certificate for live loader. This will create 'tls/client.live.crt'
-$ dgraph cert -c live
-
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
+$ dgraph live --tls_cacert ./tls/ca.crt --tls_server_name "localhost" -s 21million.schema -f 21million.rdf.gz
+```
+
+### mTLS (Mutual TLS) options
+
+The following configuration options are available for Alpha:
+
+* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. mTLS will require either `REQUIREANY` or `REQUIREANDVERIFY` for this setting. See [Client authentication](#client-authentication) for details.
+
+```sh
+# First, create a rootca, node, and client certificates
+$ dgraph cert -n localhost -c dgraphuser
+# Default use for enabling TLS server (after generating certificates)
+$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
+```
+
+Dgraph Live Loader can be configured with following options:
+
+* `--tls_cacert string` - Dgraph Root CA, such as `.tls/ca.crt`
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_cert` - User cert file provided by the client to Alpha \
+* `--tls_key` - User private key file provided by the client to Alpha \
+* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+
+```sh
+# Now, connect to server using TLS
+$ dgraph live \
+   --tls_cert ./tls/client.dgraphuser.crt \
+   --tls_key ./tls/client.dgraphuser.key \
+   --tls_server_name "localhost" \
+   -s 21million.schema \
+   -f 21million.rdf.gz
 ```
 
 ### Client authentication
@@ -1706,7 +1738,7 @@ If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default
 use the option `--cacert`. For instance (for an export request):
 
 ```
-curl --cacert ./tls/ca.crt https://localhost:8080/admin/export
+curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
 ```
 
 If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`,
@@ -1714,7 +1746,8 @@ in addition to the `--cacert` option, also use the `--cert` and `--key` options.
 For instance (for an export request):
 
 ```
-curl --cacert ./tls/ca.crt --cert ./tls/node.crt --key ./tls/node.key https://localhost:8080/admin/export
+curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt \
+ --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
 ```
 
 Refer to the `curl` documentation for further information on its TLS options.
@@ -1796,10 +1829,10 @@ $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a 
 
 #### Encrypted imports via Live Loader
 
-A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance. 
+A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
 
 {{% notice "note" %}}
-If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted. 
+If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
 {{% /notice %}}
 
 #### Encrypted RDF/JSON file and schema via Live Loader
@@ -1978,7 +2011,7 @@ dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema 
 
 #### Encrypting imports via Bulk Loader
 
-The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files. 
+The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files.
 
 Another option, `--encrypted`, indicates whether the input `rdf`/`json` data and schema files are encrypted or not. With this switch, we support the use case of migrating data from unencrypted exports to encrypted import.
 
