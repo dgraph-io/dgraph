@@ -727,7 +727,7 @@ func verifyData(t *testing.T, users []*user, teachers []*teacher, schools []*sch
 			 name
 			 age
 			 cars {
-				 name
+				name
 			 }
 			 schools(order: {asc: established}) {
 				 name

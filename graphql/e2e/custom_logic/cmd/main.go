@@ -942,10 +942,13 @@ func makeResponse(b []byte, id, key, prefix string) (string, error) {
 func (_ *query) UserNames(ctx context.Context, args struct {
 	Users *[]*struct {
 		Id  string
-		Age string
+		Age float64
 	}
 }) *[]*string {
 	res := make([]*string, 0)
+	if args.Users == nil {
+		return nil
+	}
 	for _, arg := range *args.Users {
 		n := fmt.Sprintf(`uname-%s`, arg.Id)
 		res = append(res, &n)
@@ -953,12 +956,48 @@ func (_ *query) UserNames(ctx context.Context, args struct {
 	return &res
 }
 
+func (_ *query) Cars(ctx context.Context, args struct {
+	Users *[]*struct {
+		Id  string
+		Age float64
+	}
+}) *[]*carResolver {
+	if args.Users == nil {
+		return nil
+	}
+	resolvers := make([]*carResolver, 0, len(*args.Users))
+	for _, user := range *args.Users {
+		resolvers = append(resolvers, &carResolver{&car{ID: graphql.ID(user.Id)}})
+	}
+	return &resolvers
+}
+
+func (_ *query) Classes(ctx context.Context, args struct {
+	Schools *[]*struct {
+		Id          string
+		Established float64
+	}
+}) *[]*[]*classResolver {
+	if args.Schools == nil {
+		return nil
+	}
+	resolvers := make([]*[]*classResolver, 0, len(*args.Schools))
+	for _, user := range *args.Schools {
+		resolvers = append(resolvers, &[]*classResolver{
+			&classResolver{&class{ID: graphql.ID(user.Id)}}})
+	}
+	return &resolvers
+}
+
 func (_ *query) TeacherNames(ctx context.Context, args struct {
 	Teachers *[]*struct {
 		Tid string
-		Age string
+		Age float64
 	}
 }) *[]*string {
+	if args.Teachers == nil {
+		return nil
+	}
 	res := make([]*string, 0)
 	for _, arg := range *args.Teachers {
 		n := fmt.Sprintf(`tname-%s`, arg.Tid)
@@ -970,9 +1009,12 @@ func (_ *query) TeacherNames(ctx context.Context, args struct {
 func (_ *query) SchoolNames(ctx context.Context, args struct {
 	Schools *[]*struct {
 		Id          string
-		Established string
+		Established float64
 	}
 }) *[]*string {
+	if args.Schools == nil {
+		return nil
+	}
 	res := make([]*string, 0)
 	for _, arg := range *args.Schools {
 		n := fmt.Sprintf(`sname-%s`, arg.Id)
@@ -992,36 +1034,6 @@ func buildCarBatchOutput(b []byte, req request) []interface{} {
 		})
 	}
 	return output
-}
-
-func gqlCarsHandler(w http.ResponseWriter, r *http.Request) {
-	b, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
-	if strings.Contains(string(b), "__schema") {
-		fmt.Fprint(w, generateIntrospectionResult(graphqlResponses["carsschema"].Schema))
-		return
-	}
-
-	var req request
-	if err := json.Unmarshal(b, &req); err != nil {
-		return
-	}
-
-	output := buildCarBatchOutput(b, req)
-	response := map[string]interface{}{
-		"data": map[string]interface{}{
-			"cars": output,
-		},
-	}
-
-	b, err = json.Marshal(response)
-	if err != nil {
-		return
-	}
-	check2(fmt.Fprint(w, string(b)))
 }
 
 func gqlCarsWithErrorHandler(w http.ResponseWriter, r *http.Request) {
@@ -1180,9 +1192,9 @@ func main() {
 	http.HandleFunc("/getPosts", getPosts)
 	http.HandleFunc("/getPostswithLike", getPostswithLike)
 	http.Handle("/gqlUserNames", bh)
-	http.HandleFunc("/gqlCars", gqlCarsHandler)
+	http.Handle("/gqlCars", bh)
 	http.HandleFunc("/gqlCarsWithErrors", gqlCarsWithErrorHandler)
-	http.HandleFunc("/gqlClasses", gqlClassesHandler)
+	http.Handle("/gqlClasses", bh)
 	http.Handle("/gqlTeacherNames", bh)
 	http.Handle("/gqlSchoolNames", bh)
 

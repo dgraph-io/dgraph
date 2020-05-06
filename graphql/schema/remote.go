@@ -282,18 +282,20 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		}
 	}
 
-	// check whether args of given query/mutation match the args of remote query/mutation
-	if err = matchArgSignature(&argMatchingMetadata{
-		givenArgVals:  givenQryArgVals,
-		givenVarTypes: givenQryVarTypes,
-		remoteArgMd:   remoteQryArgMetadata,
-		remoteTypes:   remoteTypes,
-		givenQryName:  &givenQuery.Name,
-		operationType: &operationType,
-		introspection: remoteIntrospection,
-		schema:        metadata.schema,
-	}); err != nil {
-		return err
+	if !metadata.isBatch {
+		// check whether args of given query/mutation match the args of remote query/mutation
+		if err = matchArgSignature(&argMatchingMetadata{
+			givenArgVals:  givenQryArgVals,
+			givenVarTypes: givenQryVarTypes,
+			remoteArgMd:   remoteQryArgMetadata,
+			remoteTypes:   remoteTypes,
+			givenQryName:  &givenQuery.Name,
+			operationType: &operationType,
+			introspection: remoteIntrospection,
+			schema:        metadata.schema,
+		}); err != nil {
+			return err
+		}
 	}
 
 	return nil

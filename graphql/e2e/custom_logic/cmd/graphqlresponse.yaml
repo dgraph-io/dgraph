@@ -365,7 +365,7 @@
     }
 
     input TeacherInput {
-      id: ID!
+      tid: ID!
       age: String!
     }
 
@@ -374,10 +374,22 @@
       established: String!
     }
 
+    type Car {
+      id: ID!
+      name: String!
+    }
+
+    type Class {
+      id: ID!
+      name: String!
+    }
+
     type Query {
       userNames(users: [UserInput]): [String]
-      teacherNames(users: [TeacherInput]): [String]
-      schoolNames(users: [SchoolInput]): [String]
+      teacherNames(teachers: [TeacherInput]): [String]
+      cars(users: [UserInput]): [Car]
+      classes(schools: [SchoolInput]): [[Class]]
+      schoolNames(schools: [SchoolInput]): [String]
     }
 
 - name: getPosts

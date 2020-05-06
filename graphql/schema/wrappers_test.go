@@ -664,44 +664,26 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 	tcases := []struct {
 		name         string
 		req          string
-		operation    string
+		body         string
 		requiredArgs map[string]bool
 	}{
 		{
 			"parse required args for single request",
 			"query($id: ID!) { userNames(id: $id, age: $age) }",
-			"single",
+			"",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required nested args for single request",
 			"query($id: ID!, $age: String!) { userNames(id: $id, car: {age: $age}) }",
-			"single",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required args for batch request",
-			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, age: $age}]) }",
-			"batch",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required nested args for batch request",
-			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, car: { age: $age}}]) }",
-			"batch",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required nested array args for batch request",
-			"query($id: ID!, $age: Int!) { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
-			"batch",
+			"",
 			map[string]bool{"id": true, "age": true},
 		},
 	}
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			args, err := ParseRequiredArgsFromGQLRequest(test.req, test.operation)
+			args, err := parseRequiredArgsFromGQLRequest(test.req)
 			require.NoError(t, err)
 			require.Equal(t, test.requiredArgs, args)
 		})
