@@ -219,7 +219,6 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 	}
 
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
 	}
@@ -299,7 +298,6 @@ func rewriteAsGet(
 		dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 	}
 
-	dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
 	}
@@ -345,7 +343,6 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	if rbac == schema.Uncertain {
 		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 	}
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -466,7 +463,6 @@ func (authRw *authRewriter) rewriteRuleNode(
 			if f != nil {
 				filts = append(filts, f)
 			}
-			filts = append(filts, f)
 		}
 		return qrys, filts
 	}
@@ -618,9 +614,10 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
-		addedFields[f.Name()] = true
-		selectionAuth := addSelectionSetFrom(child, f, auth)
 		rbac := auth.evaluateRBAC(f)
+
+		selectionAuth := addSelectionSetFrom(child, f, auth)
+		addedFields[f.Name()] = true
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -630,13 +627,10 @@ func addSelectionSetFrom(
 			continue
 		}
 
-		addedFields[f.Name()] = true
-		q.Children = append(q.Children, child)
-
 		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
-		if len(fieldAuth) > 0 {
+		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter
 			} else {
