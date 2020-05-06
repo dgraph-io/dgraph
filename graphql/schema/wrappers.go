@@ -195,6 +195,14 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
+	// It is read-only.
+	// The outer map will contain typeName key only if one of the fields on that type has @custom.
+	// The inner map will contain fieldName key only if that field has @custom.
+	// It is pre-computed so that runtime queries and mutations can look it up quickly, and not do
+	// something like field.Directives.ForName("custom"), which results in iterating over all the
+	// directives of the field.
+	customDirectives map[string]map[string]*ast.Directive
 	// Map from typename to auth rules
 	authRules map[string]*TypeAuth
 }
@@ -234,7 +242,7 @@ func (s *schema) Queries(t QueryType) []string {
 	}
 	var result []string
 	for _, q := range s.schema.Query.Fields {
-		if queryType(q.Name, q.Directives.ForName(customDirective)) == t {
+		if queryType(q.Name, s.customDirectives["Query"][q.Name]) == t {
 			result = append(result, q.Name)
 		}
 	}
@@ -247,7 +255,7 @@ func (s *schema) Mutations(t MutationType) []string {
 	}
 	var result []string
 	for _, m := range s.schema.Mutation.Fields {
-		if mutationType(m.Name, m.Directives.ForName(customDirective)) == t {
+		if mutationType(m.Name, s.customDirectives["Mutation"][m.Name]) == t {
 			result = append(result, m.Name)
 		}
 	}
@@ -515,6 +523,36 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
+func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
+	customDirectives := make(map[string]map[string]*ast.Directive)
+
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name == customDirective {
+					// remove custom directive from s
+					lastIndex := len(field.Directives) - 1
+					field.Directives[i] = field.Directives[lastIndex]
+					field.Directives = field.Directives[:lastIndex]
+					// now put it into mapping
+					var fieldMap map[string]*ast.Directive
+					if innerMap, ok := customDirectives[typ.Name]; !ok {
+						fieldMap = make(map[string]*ast.Directive)
+					} else {
+						fieldMap = innerMap
+					}
+					fieldMap[field.Name] = dir
+					customDirectives[typ.Name] = fieldMap
+					// break, as there can only be one @custom
+					break
+				}
+			}
+		}
+	}
+
+	return customDirectives
+}
+
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 
@@ -526,12 +564,12 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	}
 
 	dgraphPredicate := dgraphMapping(s)
-
 	sch := &schema{
-		schema:          s,
-		dgraphPredicate: dgraphPredicate,
-		typeNameAst:     typeMappings(s),
-		authRules:       authRules,
+		schema:           s,
+		dgraphPredicate:  dgraphPredicate,
+		typeNameAst:      typeMappings(s),
+		customDirectives: customMappings(s),
+		authRules:        authRules,
 	}
 	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
 
@@ -609,15 +647,7 @@ func (f *field) Include() bool {
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
-	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	if typeDef == nil {
-		return false, nil
-	}
-	tf := typeDef.Fields.ForName(f.Name())
-	if tf == nil {
-		return false, nil
-	}
-	custom := tf.Directives.ForName("custom")
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
 		return false, nil
 	}
@@ -746,9 +776,7 @@ func (f *field) GetObjectName() string {
 }
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
-	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	tf := typeDef.Fields.ForName(f.Name())
-	custom := tf.Directives.ForName(customDirective)
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName("http")
 	fconf := FieldHTTPConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
@@ -990,7 +1018,7 @@ func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
 }
 
 func (q *query) QueryType() QueryType {
-	return queryType(q.Name(), q.field.Directives.ForName(customDirective))
+	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
 
 func queryType(name string, custom *ast.Directive) QueryType {
@@ -1128,7 +1156,7 @@ func (m *mutation) GetObjectName() string {
 }
 
 func (m *mutation) MutationType() MutationType {
-	return mutationType(m.Name(), m.field.Directives.ForName(customDirective))
+	return mutationType(m.Name(), m.op.inSchema.customDirectives["Mutation"][m.Name()])
 }
 
 func mutationType(name string, custom *ast.Directive) MutationType {
