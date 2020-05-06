@@ -29,11 +29,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var val = make([]byte, 128)
+
 func BenchmarkWriter(b *testing.B) {
 	createKVList := func() bpb.KVList {
 		var KVList bpb.KVList
-		for i := 0; i < 50000; i++ {
-			n := &bpb.KV{Key: []byte(string(i)), Value: []byte(string(i)), Version: 5}
+		for i := 0; i < 5000000; i++ {
+			n := &bpb.KV{Key: []byte(string(i)), Value: val, Version: 5}
 			KVList.Kv = append(KVList.Kv, n)
 		}
 		return KVList
@@ -65,6 +67,7 @@ func BenchmarkWriter(b *testing.B) {
 		if err := wb.Write(KVList); err != nil {
 			panic(err)
 		}
+		require.NoError(b, wb.Flush())
 
 	}
 	// Resuses one writer for all threads
@@ -132,7 +135,7 @@ func BenchmarkWriter(b *testing.B) {
 		}
 	})
 	//Multi threaded Batchwriter with thread contention in WriteBatch
-	b.Run("WriteBatchMultThreadB", func(b *testing.B) {
+	b.Run("WriteBatchMultThreadDiffWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -150,17 +153,17 @@ func BenchmarkWriter(b *testing.B) {
 			var wg sync.WaitGroup
 			wg.Add(5)
 
-			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[:10000]}, &wg)
-			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[10001:20000]}, &wg)
-			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[20001:30000]}, &wg)
-			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[30001:40000]}, &wg)
-			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[40001:]}, &wg)
+			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[:1000000]}, &wg)
+			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[1000001:2000000]}, &wg)
+			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[2000001:3000000]}, &wg)
+			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[3000001:4000000]}, &wg)
+			go writeInBadgerMThreadsB(db, &bpb.KVList{Kv: KVList.Kv[4000001:]}, &wg)
 			wg.Wait()
 
 		}
 	})
 	//Multi threaded Batchwriter with thread contention in SetEntry
-	b.Run("WriteBatchMultThreadW", func(b *testing.B) {
+	b.Run("WriteBatchMultThreadSameWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -178,17 +181,17 @@ func BenchmarkWriter(b *testing.B) {
 			var wg sync.WaitGroup
 			wg.Add(5)
 			wb := db.NewManagedWriteBatch()
-			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[:10000]}, &wg)
-			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[10001:20000]}, &wg)
-			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[20001:30000]}, &wg)
-			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[30001:40000]}, &wg)
-			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[40001:]}, &wg)
+			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[:1000000]}, &wg)
+			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[1000001:2000000]}, &wg)
+			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[2000001:3000000]}, &wg)
+			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[3000001:4000000]}, &wg)
+			go writeInBadgerMThreadsW(wb, &bpb.KVList{Kv: KVList.Kv[4000001:]}, &wg)
 
 			wg.Wait()
 			require.NoError(b, wb.Flush())
 		}
 	})
-	b.Run("WriteBatchSingleThreadB", func(b *testing.B) {
+	b.Run("WriteBatchSingleThreadDiffWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -203,17 +206,14 @@ func BenchmarkWriter(b *testing.B) {
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {
-			wb := db.NewManagedWriteBatch()
-			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[:10000]})
-			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[10001:20000]})
-			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[20001:30000]})
-			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[30001:40000]})
-			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[40001:]})
-
-			require.NoError(b, wb.Flush())
+			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[:1000000]})
+			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[1000001:2000000]})
+			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[2000001:3000000]})
+			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[3000001:4000000]})
+			writeInBadgerSingleThreadB(db, &bpb.KVList{Kv: KVList.Kv[4000001:]})
 		}
 	})
-	b.Run("WriteBatchSingleThreadW", func(b *testing.B) {
+	b.Run("WriteBatchSingleThreadSameWB", func(b *testing.B) {
 		tmpIndexDir, err := ioutil.TempDir("", "dgraph")
 		require.NoError(b, err)
 		defer os.RemoveAll(tmpIndexDir)
@@ -229,12 +229,11 @@ func BenchmarkWriter(b *testing.B) {
 
 		for i := 0; i < b.N; i++ {
 			wb := db.NewManagedWriteBatch()
-			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[:10000]})
-			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[10001:20000]})
-			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[20001:30000]})
-			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[30001:40000]})
-			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[40001:]})
-
+			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[:1000000]})
+			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[1000001:2000000]})
+			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[2000001:3000000]})
+			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[3000001:4000000]})
+			writeInBadgerSingleThreadW(wb, &bpb.KVList{Kv: KVList.Kv[4000001:]})
 			require.NoError(b, wb.Flush())
 		}
 	})
