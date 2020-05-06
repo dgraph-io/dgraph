@@ -15,6 +15,7 @@ package worker
 import (
 	"context"
 	"net/url"
+	"sort"
 	"time"
 
 	"github.com/dgraph-io/dgraph/posting"
@@ -188,4 +189,20 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 
 	bp := &BackupProcessor{Request: req}
 	return bp.CompleteBackup(ctx, &m)
+}
+
+func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+	[]*Manifest, error) {
+
+	manifests, err := ListBackupManifests(location, creds)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot read manfiests at location %s", location)
+	}
+
+	res := make([]*Manifest, 0)
+	for _, m := range manifests {
+		res = append(res, m)
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i].Path < res[j].Path })
+	return res, nil
 }

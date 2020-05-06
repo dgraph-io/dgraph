@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -550,6 +551,11 @@ func TestNestedFilter(t *testing.T) {
 func TestMain(m *testing.M) {
 	schemaFile := "schema.graphql"
 	schema, err := ioutil.ReadFile(schemaFile)
+	if err != nil {
+		panic(err)
+	}
+
+	schema, err = testutil.AppendAuthInfo(schema, "HS256")
 	if err != nil {
 		panic(err)
 	}
