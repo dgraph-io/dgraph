@@ -96,10 +96,10 @@ type Issue @auth(
                           }
                       }
                 }"""}
-     ]}) {
+     ]}){
   id: ID!
   msg: String
-  owner: User! @hasInverse(field: issues)
+  owner: User!
 }
 
 type Log @auth(
@@ -259,3 +259,4 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
+
