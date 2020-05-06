@@ -517,7 +517,7 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			// Don't apply trial license if it has an enabled licensed already.
+			// Apply trial license only if not already licensed.
 			if n.server.license() == nil {
 				if err := n.proposeTrialLicense(); err != nil {
 					glog.Errorf("while proposing trial license to cluster: %v", err)
