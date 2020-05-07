@@ -1638,7 +1638,6 @@ The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. Client cert and key will be optional by client with either `REQUEST` or `VERIFYIFGIVEN` for this setting. See [Client authentication](#client-authentication) for details.
 
 ```sh
 # First, create rootca and node certificates and private keys
@@ -1664,12 +1663,12 @@ The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. Client cert and key will be required by client with either `REQUIREANY` or `REQUIREANDVERIFY` for this setting. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
 
 ```sh
 # First, create a rootca, node, and client certificates and private keys
 $ dgraph cert -n localhost -c dgraphuser
-# Default use for enabling TLS server (after generating certificates and private keys)
+# Default use for enabling TLS server with client authentication (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
 ```
 
