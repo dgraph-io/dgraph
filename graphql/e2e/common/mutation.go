@@ -1309,7 +1309,7 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 		},
 	}
 	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
-	RequireNoGQLErrors(t, gqlResponse)
+	requireNoGQLErrors(t, gqlResponse)
 
 	// The expected post was updated
 	// The text is updated as expected
