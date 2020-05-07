@@ -1461,7 +1461,7 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 func makeRequest(client *http.Client, method, url, body string,
 	header http.Header) ([]byte, error) {
 	var reqBody io.Reader
-	if body == "" || method == http.MethodGet {
+	if body == "" {
 		reqBody = http.NoBody
 	} else {
 		reqBody = bytes.NewBufferString(body)
