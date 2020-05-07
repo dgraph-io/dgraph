@@ -674,7 +674,7 @@ func copyTemplate(input interface{}) (interface{}, error) {
 
 	var result interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
-		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
+		return nil, errors.Wrapf(err, "while unmarshalling into map: %s", b)
 	}
 	return result, nil
 }
