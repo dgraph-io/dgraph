@@ -1694,14 +1694,14 @@ $ dgraph live \
 
 ### Client authentication
 
-The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+The server will always REQUEST Client Authentication **only** when the `--tls_client_auth` option is specified.  There are four different values that change the security policy of the client certificate.
 
-| Value              | Client Cert/Key | Description |
+| Value              | Client Cert/Key | Client Certificate Verified |
 |--------------------|-----------------|--------------------|
-| `REQUEST`          | optional        | Server accepts any certificate, invalid and unverified (least secure) |
-| `REQUIREANY`       | required        | Server expects any certificate, valid and unverified |
-| `VERIFYIFGIVEN`    | opitonal        | Client certificate is verified if provided (default) |
-| `REQUIREANDVERIFY` | required        | Always require a valid certificate (most secure) |
+| `REQUEST`          | optional        | Client certificate is not VERIFIED if provided. (least secure) |
+| `REQUIREANY`       | required        | Client certificate is never VERIFIED |
+| `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
+| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
