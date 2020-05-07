@@ -780,6 +780,6 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 	if err != nil {
 		return errors.Wrapf(err, "while proposing enterprise license state to cluster")
 	}
-	glog.Infof("Enterprise license state proposed to the cluster")
+	glog.Infof("Enterprise license proposed to the cluster %+v", proposal)
 	return nil
 }

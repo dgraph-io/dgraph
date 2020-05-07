@@ -188,6 +188,10 @@ func run() {
 		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
 	}
 
+	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
+		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
+	}
+
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
 		log.Fatalf("ERROR: Number of replicas must be odd for consensus. Found: %d",
 			opts.numReplicas)
@@ -240,14 +244,6 @@ func run() {
 	var st state
 	st.serveGRPC(grpcListener, store)
 	st.serveHTTP(httpListener)
-
-	// Apply enterprise license if one was given.
-	if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
-		if err := st.applyLicenseFile(license); err != nil {
-			glog.Warningf("Applying enterprise license file %s failed with error: %s", license,
-				err.Error())
-		}
-	}
 
 	http.HandleFunc("/health", st.pingResponse)
 	http.HandleFunc("/state", st.getState)
