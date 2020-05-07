@@ -1,0 +1,202 @@
+- name: "Auth with top level filter : query, no filter"
+  gqlquery: |
+    query {
+      queryUserSecret {
+        id
+        ownedBy
+      }
+    }
+  dgquery: |-
+    query {
+      queryUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+        id : uid
+        ownedBy : UserSecret.ownedBy
+      }
+      UserSecret1 as var(func: type(UserSecret))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Auth with top level filter : get"
+  gqlquery: |
+    query {
+      getUserSecret(id: "0x123") {
+        id
+        ownedBy
+      }
+    }
+  dgquery: |-
+    query {
+      getUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+        id : uid
+        ownedBy : UserSecret.ownedBy
+      }
+      UserSecret1 as var(func: uid(0x123)) @filter(type(UserSecret))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Auth with top level filter : query and filter"
+  gqlquery: |
+    query {
+      queryUserSecret(filter: { ownedBy: { eq: "user2" }}) {
+        id
+        ownedBy
+      }
+    }
+  dgquery: |-
+    query {
+      queryUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+        id : uid
+        ownedBy : UserSecret.ownedBy
+      }
+      UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+
+- name: "Auth with top level filter : query, filter and order"
+  gqlquery: |
+    query {
+      queryUserSecret(filter: { ownedBy: { eq: "user2" }}, order: {asc: aSecret}, first: 1) {
+        id
+        ownedBy
+      }
+    }
+  dgquery: |-
+    query {
+      queryUserSecret(func: uid(UserSecret1), orderasc: UserSecret.aSecret, first: 1) @filter(uid(UserSecret2)) {
+        id : uid
+        ownedBy : UserSecret.ownedBy
+      }
+      UserSecret1 as var(func: type(UserSecret)) @filter(eq(UserSecret.ownedBy, "user2"))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Auth with deep filter : query top-level"
+  gqlquery: |
+    query {
+      queryTicket {
+        id
+        title
+      }
+    }
+  dgquery: |-
+    query {
+      queryTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        id : uid
+        title : Ticket.title
+      }
+      Ticket1 as var(func: type(Ticket))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with deep filter : query deep requires auth"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets {
+          id
+          title 
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryUser(func: type(User)) {
+        username : User.username
+        tickets : User.tickets @filter(uid(Ticket1)) {
+          id : uid
+          title : Ticket.title
+        }
+        dgraph.uid : uid
+      }
+      Ticket1 as var(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with deep filter and field filter : query deep requires auth"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets(filter: { title: { anyofterms: "graphql" } }) {
+          id
+          title 
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryUser(func: type(User)) {
+        username : User.username
+        tickets : User.tickets @filter((anyofterms(Ticket.title, "graphql") AND uid(Ticket1))) {
+          id : uid
+          title : Ticket.title
+        }
+        dgraph.uid : uid
+      }
+      Ticket1 as var(func: type(Ticket)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with complex filter"
+  gqlquery: |
+    query {
+      queryMovie {
+        content
+      }
+    }
+  dgquery: |-
+    query {
+      queryMovie(func: uid(Movie1)) @filter((NOT (uid(Movie2)) AND (uid(Movie3) OR uid(Movie4)))) {
+        content : Movie.content
+        dgraph.uid : uid
+      }
+      Movie1 as var(func: type(Movie))
+      Movie2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie3 as var(func: uid(Movie1)) @cascade {
+        regionsAvailable : Movie.regionsAvailable {
+          users : Region.users @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Movie4 as var(func: uid(Movie1)) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+        dgraph.uid : uid
+      }
+    }

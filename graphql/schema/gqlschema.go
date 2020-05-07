@@ -39,6 +39,7 @@ const (
 	dgraphPredArg   = "pred"
 	idDirective     = "id"
 	secretDirective = "secret"
+	authDirective   = "auth"
 	customDirective = "custom"
 	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
 
@@ -69,6 +70,13 @@ enum DgraphIndex {
 	hour
 }
 
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
 enum HTTPMethod {
 	GET
 	POST
@@ -80,13 +88,10 @@ enum HTTPMethod {
 input CustomHTTP {
 	url: String!
 	method: HTTPMethod!
-	body: String!
+	body: String
+	graphql: String
 	forwardHeaders: [String!]
 	skipIntrospection: Boolean
-}
-
-input CustomGraphQL {
-	query: String!
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
@@ -94,9 +99,13 @@ directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
-directive @custom(http: CustomHTTP, graphql: CustomGraphQL) on FIELD_DEFINITION
+directive @auth(
+	query: AuthRule, 
+	add: AuthRule, 
+	update: AuthRule, 
+	delete:AuthRule) on OBJECT | FIELD_DEFINITION
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
-
 
 input IntFilter {
 	eq: Int
@@ -206,8 +215,8 @@ var defaultSearches = map[string]string{
 	"DateTime": "year",
 }
 
-// graphqlScalarType holds all the scalar types supported by the graphql spec.
-var graphqlScalarType = map[string]bool{
+// graphqlSpecScalars holds all the scalar types supported by the graphql spec.
+var graphqlSpecScalars = map[string]bool{
 	"Int":     true,
 	"Float":   true,
 	"String":  true,
@@ -274,6 +283,14 @@ var directiveValidators = map[string]directiveValidator{
 	customDirective:  customDirectiveValidation,
 	remoteDirective:  remoteDirectiveValidation,
 	deprecatedDirective: func(
+		sch *ast.Schema,
+		typ *ast.Definition,
+		field *ast.FieldDefinition,
+		dir *ast.Directive) *gqlerror.Error {
+		return nil
+	},
+	// Just go get it printed into generated schema
+	authDirective: func(
 		sch *ast.Schema,
 		typ *ast.Definition,
 		field *ast.FieldDefinition,
@@ -1598,4 +1615,9 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 	}
 
 	return errs
+}
+
+func isGraphqlSpecScalar(typ string) bool {
+	_, ok := graphqlSpecScalars[typ]
+	return ok
 }

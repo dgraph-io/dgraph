@@ -517,8 +517,11 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			if err := n.proposeTrialLicense(); err != nil {
-				glog.Errorf("while proposing trial license to cluster: %v", err)
+			// Apply trial license only if not already licensed.
+			if n.server.license() == nil {
+				if err := n.proposeTrialLicense(); err != nil {
+					glog.Errorf("while proposing trial license to cluster: %v", err)
+				}
 			}
 		}()
 	}
@@ -618,6 +621,7 @@ func (n *node) trySnapshot(skip uint64) {
 
 func (n *node) Run() {
 	var leader bool
+	licenseApplied := false
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -734,6 +738,17 @@ func (n *node) Run() {
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
 					timer.String(), len(rd.Entries), rd.MustSync)
+			}
+
+			// Apply license when I am the leader.
+			if !licenseApplied && n.AmLeader() {
+				licenseApplied = true
+				// Apply the EE License given on CLI which may over-ride previous
+				// license, if present. That is an intended behavior to allow customers
+				// to apply new/renewed licenses.
+				if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
+					go n.server.applyLicenseFile(license)
+				}
 			}
 		}
 	}
