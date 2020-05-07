@@ -704,7 +704,13 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 
 	if op == "single" {
 		// For batch mode, required args would have been parsed from the body above.
-		rf, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
+		var err error
+		rf, err = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
+		// This should not be returning an error since we should have validated this during schema
+		// update.
+		if err != nil {
+			return true, nil
+		}
 	}
 	return true, rf
 }
@@ -823,6 +829,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 
 	if !isQueryOrMutation && graphqlArg != nil && fconf.Operation == "single" {
 		// For batch mode, required args would have been parsed from the body above.
+		// Safe to ignore the error here since we should already have validated that we can parse
+		// the required args from the GraphQL request during schema update.
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
@@ -843,7 +851,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		// queryDoc will always have only one operation with only one field
 		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
 		if fconf.Operation == "batch" {
-			fconf.GraphqlBatchModeArgument = qfield.Arguments[0].Value.String()[1:]
+			fconf.GraphqlBatchModeArgument = queryDoc.Operations[0].VariableDefinitions[0].Variable
 		}
 		fconf.RemoteGqlQueryName = qfield.Name
 		buf := &bytes.Buffer{}

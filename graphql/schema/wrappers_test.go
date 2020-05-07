@@ -669,7 +669,7 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 	}{
 		{
 			"parse required args for single request",
-			"query($id: ID!) { userNames(id: $id, age: $age) }",
+			"query($id: ID!, $age: String!) { userNames(id: $id, age: $age) }",
 			"",
 			map[string]bool{"id": true, "age": true},
 		},

@@ -1344,24 +1344,26 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 	}
 
-	// 10. Validate that arguments used within remote query have variable definitions.
-	if isBatchOperation {
-		query := graphqlOpDef.SelectionSet[0].(*ast.Field)
-		argVal := query.Arguments[0].Value.String()
-		vd := graphqlOpDef.VariableDefinitions.ForName(argVal[1:])
-		if vd == nil {
-			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s; @custom directive, graphql must use fields with "+
-					"a variable definition, found `%s`.", typ.Name, field.Name, argVal)
-		}
-	} else if graphql != nil {
-		// Check that required fields should have variable definitions.
-		for fname := range requiredFields {
-			vd := graphqlOpDef.VariableDefinitions.ForName(fname)
+	if graphql != nil {
+		// 10. Validate that arguments used within remote query have variable definitions.
+		if isBatchOperation {
+			query := graphqlOpDef.SelectionSet[0].(*ast.Field)
+			argVal := query.Arguments[0].Value.String()
+			vd := graphqlOpDef.VariableDefinitions.ForName(argVal[1:])
 			if vd == nil {
 				return gqlerror.ErrorPosf(graphql.Position,
 					"Type %s; Field %s; @custom directive, graphql must use fields with "+
-						"a variable definition, found `%s`.", typ.Name, field.Name, fname)
+						"a variable definition, found `%s`.", typ.Name, field.Name, argVal)
+			}
+		} else {
+			// Check that required fields should have variable definitions.
+			for fname := range requiredFields {
+				vd := graphqlOpDef.VariableDefinitions.ForName(fname)
+				if vd == nil {
+					return gqlerror.ErrorPosf(graphql.Position,
+						"Type %s; Field %s; @custom directive, graphql must use fields with "+
+							"a variable definition, found `%s`.", typ.Name, field.Name, fname)
+				}
 			}
 		}
 	}
@@ -1456,7 +1458,13 @@ func customDirectiveValidation(sch *ast.Schema,
 	si := httpArg.Value.Children.ForName("skipIntrospection")
 	var skip bool
 	if si != nil {
-		skip, _ = strconv.ParseBool(si.Raw)
+		skip, err = strconv.ParseBool(si.Raw)
+		if err != nil {
+			return gqlerror.ErrorPosf(graphql.Position,
+				"Type %s; Field %s; skipIntrospection in @custom directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, field.Name, si.Raw)
+		}
 	}
 	if graphql != nil && !skip && graphqlOpDef != nil {
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{

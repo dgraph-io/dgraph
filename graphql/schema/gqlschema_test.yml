@@ -1753,6 +1753,25 @@ invalid_schemas:
       "locations":[{"line":7, "column":15}]},
     ]
 
+  -
+    name: "invalid value for skip introspection"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com"
+          method: "POST"
+          graphql: "query($id: ID!) { getName(id: $id) }"
+          operation: "single"
+          skipIntrospection: "random"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
+      "locations":[{"line":7, "column":15}]},
+    ]
+
 valid_schemas:
   -
     name: "hasInverse directive on singleton"
