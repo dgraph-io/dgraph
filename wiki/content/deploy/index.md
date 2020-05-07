@@ -1537,10 +1537,10 @@ $ dgraph cert --help
 # Create Dgraph Root CA, used to sign all other certificates.
 $ dgraph cert
 
-# Create node certificate
+# Create node certificate and private key
 $ dgraph cert -n localhost
 
-# Create client certificate for mTLS
+# Create client certificate and private key for mTLS (mutual TLS)
 $ dgraph cert -c dgraphuser
 
 # Combine all in one command
@@ -1641,15 +1641,15 @@ The following configuration options are available for Alpha:
 * `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
 
 ```sh
-# First, create rootca and node certificates
+# First, create rootca and node certificates and private keys
 $ dgraph cert -n localhost
-# Default use for enabling TLS server (after generating certificates)
+# Default use for enabling TLS server (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls
 ```
 
 Dgraph Live Loader can be configured with following options:
 
-* `--tls_cacert string` - Dgraph Root CA, such as `.tls/ca.crt`
+* `--tls_cacert string` - Dgraph Root CA, such as `./tls/ca.crt`
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
 * `--tls_server_name string` - Server name, used for validating the server's TLS host name.
 
@@ -1667,23 +1667,24 @@ The following configuration options are available for Alpha:
 * `--tls_client_auth string` - TLS client authentication used to validate client connection. mTLS will require either `REQUIREANY` or `REQUIREANDVERIFY` for this setting. See [Client authentication](#client-authentication) for details.
 
 ```sh
-# First, create a rootca, node, and client certificates
+# First, create a rootca, node, and client certificates and private keys
 $ dgraph cert -n localhost -c dgraphuser
-# Default use for enabling TLS server (after generating certificates)
+# Default use for enabling TLS server (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
 ```
 
 Dgraph Live Loader can be configured with following options:
 
-* `--tls_cacert string` - Dgraph Root CA, such as `.tls/ca.crt`
+* `--tls_cacert string` - Dgraph Root CA, such as `./tls/ca.crt`
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_cert` - User cert file provided by the client to Alpha \
-* `--tls_key` - User private key file provided by the client to Alpha \
+* `--tls_cert` - User cert file provided by the client to Alpha
+* `--tls_key` - User private key file provided by the client to Alpha
 * `--tls_server_name string` - Server name, used for validating the server's TLS host name.
 
 ```sh
-# Now, connect to server using TLS
+# Now, connect to server using mTLS (mutual TLS)
 $ dgraph live \
+   --tls_cacert ./tls/ca.crt \
    --tls_cert ./tls/client.dgraphuser.crt \
    --tls_key ./tls/client.dgraphuser.key \
    --tls_server_name "localhost" \
