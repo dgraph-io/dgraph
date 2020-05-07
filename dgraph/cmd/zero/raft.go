@@ -743,7 +743,9 @@ func (n *node) Run() {
 			// Apply license when I am the leader.
 			if !licenseApplied && n.AmLeader() {
 				licenseApplied = true
-				// Apply enterprise license if one was given.
+				// Apply the EE License given on CLI which may over-ride previous
+				// license, if present. That is an intended behavior to allow customers
+				// to apply new/renewed licenses.
 				if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
 					go n.server.applyLicenseFile(license)
 				}
