@@ -1550,7 +1550,7 @@ $ dgraph cert -n localhost -c dgraphuser
 $ dgraph cert ls
 ```
 
-### File naming conventions
+#### File naming conventions
 
 To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
 
@@ -1583,7 +1583,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 {{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
 
-### Certificate inspection
+#### Certificate inspection
 
 The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
@@ -1657,13 +1657,15 @@ Dgraph Live Loader can be configured with following options:
 $ dgraph live --tls_cacert ./tls/ca.crt --tls_server_name "localhost" -s 21million.schema -f 21million.rdf.gz
 ```
 
-### mTLS (Mutual TLS) options
+### Client authentication
+
+#### mTLS (Mutual TLS) options
 
 The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client Authentication Options](#client-authentication-options) for details.
 
 ```sh
 # First, create a rootca, node, and client certificates and private keys
@@ -1691,7 +1693,7 @@ $ dgraph live \
    -f 21million.rdf.gz
 ```
 
-### Client authentication
+#### Client Authentication Options
 
 The server will always REQUEST Client Authentication **only** when the `--tls_client_auth` option is specified.  There are four different values that change the security policy of the client certificate.
 
@@ -1732,22 +1734,20 @@ succeed.
 
 ### Using Curl with Client authentication
 
-When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.
-
-If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default),
-use the option `--cacert`. For instance (for an export request):
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
 
 ```
 curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
 ```
 
-If the `--tls_client_auth` option is set to  `REQUIREANY` or  `REQUIREANDVERIFY`,
-in addition to the `--cacert` option, also use the `--cert` and `--key` options.
-For instance (for an export request):
+If you are using `curl` with [Client Authentication](#client-authentication), you will need to provide the client certificate and private key.  For instance (for an export request):
 
 ```
 curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
 ```
+
+When the Dgraph alpha is configured with `--tls_client_auth` set to  `REQUIREANY` or  `REQUIREANDVERIFY`, you are required to provide the client certificate and private key.  With `REQUEST`or `VERIFYIFGIVEN`, providing the client certificate and private key is optional. See [Client Authentication Options](#client-authentication-options) for details.
+
 
 Refer to the `curl` documentation for further information on its TLS options.
 
