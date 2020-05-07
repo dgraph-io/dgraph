@@ -787,6 +787,7 @@ START:
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.StreamMembership(ctx, &api.Payload{})
 	if err != nil {
+		cancel()
 		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
 		goto START
