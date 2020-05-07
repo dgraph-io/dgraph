@@ -108,7 +108,7 @@ func ParseAuthMeta(schema string) error {
 	return metainfo.Parse(schema)
 }
 
-func GetAuthHeader() string{
+func GetHeader() string{
 	return metainfo.Header;
 }
 
