@@ -120,7 +120,7 @@
         country(code: ID!): Country!
       }
   request: |
-    query { country(code: $id) {
+    query($id: ID!) { country(code: $id) {
     code
     name
     }}
@@ -184,7 +184,7 @@
         country(code: ID!): [Country]
       }
   request: |
-    query { country(code: $id) {
+    query($id: ID!) { country(code: $id) {
     code
     name
     }}
@@ -234,7 +234,7 @@
       country(code: ID!): [Country]
     }
   request: |
-    mutation { setCountry(country: $input) {
+    mutation($input: CountryInput!) { setCountry(country: $input) {
     code
     name
     states{
@@ -299,7 +299,7 @@
         country(code: ID!): [Country]
       }
   request: |
-    mutation { updateCountries(name: $name, std: $std) {
+    mutation($name: String, $std: Int) { updateCountries(name: $name, std: $std) {
     name
     std
     }}
