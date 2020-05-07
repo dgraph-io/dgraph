@@ -211,7 +211,7 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-	if len(opts.myAddr) == 0 {
+	if opts.myAddr == "" {
 		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
 

@@ -303,7 +303,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	if err := p.Unmarshal(e.Data); err != nil {
 		return p.Key, err
 	}
-	if len(p.Key) == 0 {
+	if p.Key == "" {
 		return p.Key, errInvalidProposal
 	}
 	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
