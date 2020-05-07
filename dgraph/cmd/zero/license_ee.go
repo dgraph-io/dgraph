@@ -42,7 +42,7 @@ func (n *node) proposeTrialLicense() error {
 		return err
 
 	}
-	glog.Infof("Enterprise state proposed to the cluster: %v", proposal)
+	glog.Infof("Enterprise trial license proposed to the cluster: %v", proposal)
 	return nil
 }
 
@@ -135,14 +135,15 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 	}
 }
 
-// applyLicenseFile applies the license file stored at the given path.
-func (st *state) applyLicenseFile(path string) error {
+func (s *Server) applyLicenseFile(path string) {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		return err
+		glog.Infof("Unable to apply license at %v due to error %v", path, err)
+		return
 	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	return st.zero.applyLicense(ctx, bytes.NewReader(content))
+	if err = s.applyLicense(ctx, bytes.NewReader(content)); err != nil {
+		glog.Infof("Unable to apply license at %v due to error %v", path, err)
+	}
 }
