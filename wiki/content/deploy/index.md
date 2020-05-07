@@ -1526,9 +1526,9 @@ Connections between client and server can be secured with TLS. Password protecte
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
-### Self-signed certificates
+### Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages self-signed certificates using a generated Dgraph Root CA. The _cert_ command simplifies certificate management for you.
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. The `dgraph cert` command simplifies certificate management for you.
 
 ```sh
 # To see the available flags.
@@ -1638,7 +1638,7 @@ The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. Client cert and key will be optional by client with either `REQUEST` or `VERIFYIFGIVEN` for this setting. See [Client authentication](#client-authentication) for details.
 
 ```sh
 # First, create rootca and node certificates and private keys
@@ -1664,7 +1664,7 @@ The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. mTLS will require either `REQUIREANY` or `REQUIREANDVERIFY` for this setting. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. Client cert and key will be required by client with either `REQUIREANY` or `REQUIREANDVERIFY` for this setting. See [Client authentication](#client-authentication) for details.
 
 ```sh
 # First, create a rootca, node, and client certificates and private keys
@@ -1696,12 +1696,12 @@ $ dgraph live \
 
 The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
 
-| Value | Description |
-|-------|-------------|
-| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
-| REQUIREANY | Server expects any certificate, valid and unverified |
-| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
-| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+| Value              | Client Cert/Key | Description |
+|--------------------|-----------------|--------------------|
+| `REQUEST`          | optional        | Server accepts any certificate, invalid and unverified (least secure) |
+| `REQUIREANY`       | required        | Server expects any certificate, valid and unverified |
+| `VERIFYIFGIVEN`    | opitonal        | Client certificate is verified if provided (default) |
+| `REQUIREANDVERIFY` | required        | Always require a valid certificate (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
@@ -1747,8 +1747,7 @@ in addition to the `--cacert` option, also use the `--cert` and `--key` options.
 For instance (for an export request):
 
 ```
-curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt \
- --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
+curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
 ```
 
 Refer to the `curl` documentation for further information on its TLS options.
