@@ -88,7 +88,7 @@ type Ticket struct {
 
 type Column struct {
 	ColID     string    `json:"colID,omitempty"`
-	InProject Project   `json:"inProject,omitempty"`
+	InProject *Project  `json:"inProject,omitempty"`
 	Name      string    `json:"name,omitempty"`
 	Tickets   []*Ticket `json:"tickets,omitempty"`
 }

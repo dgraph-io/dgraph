@@ -26,6 +26,141 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestAddDeepFilter(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user6",
+		role:   "ADMIN",
+		result: ``,
+		variables: map[string]interface{}{"column": &Column{
+			Name: "column_add_1",
+			InProject: &Project{
+				Name: "project_add_1",
+			},
+		}},
+	}, {
+		user:   "user6",
+		role:   "USER",
+		result: ``,
+		variables: map[string]interface{}{"column": &Column{
+			Name: "column_add_2",
+			InProject: &Project{
+				Name: "project_add_2",
+				Roles: []*Role{{
+					Permission: "ADMIN",
+					AssignedTo: []*User{{
+						Username: "user2",
+					}},
+				}},
+			},
+		}},
+	}, {
+		user:   "user6",
+		role:   "USER",
+		result: `{"addColumn":{"column":[{"name":"column_add_3","inProject":{"name":"project_add_4"}}]}}`,
+		variables: map[string]interface{}{"column": &Column{
+			Name: "column_add_3",
+			InProject: &Project{
+				Name: "project_add_4",
+				Roles: []*Role{{
+					Permission: "ADMIN",
+					AssignedTo: []*User{{
+						Username: "user6",
+					}},
+				}, {
+					Permission: "VIEW",
+					AssignedTo: []*User{{
+						Username: "user6",
+					}},
+				}},
+			},
+		}},
+	}}
+
+	query := `
+		mutation addColumn($column: AddColumnInput!) {
+			addColumn(input: [$column]) {
+				column {
+			             name
+				     inProject {
+				           projID
+				           name
+				     }
+				}
+			}
+		}
+	`
+
+	var expected, result struct {
+		AddColumn struct {
+			Column []*Column
+		}
+	}
+
+	var colids []string
+	var projids []string
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Headers:   getJWT(t, tcase.user, tcase.role),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		if tcase.result == "" {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			require.Equal(t, gqlResponse.Errors[0].Error(),
+				"mutation failed because authorization failed")
+			continue
+		}
+
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+
+		opt := cmpopts.IgnoreFields(Column{}, "ColID")
+		opt1 := cmpopts.IgnoreFields(Project{}, "ProjID")
+		if diff := cmp.Diff(expected, result, opt, opt1); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddColumn.Column {
+			colids = append(colids, i.ColID)
+			projids = append(projids, i.InProject.ProjID)
+		}
+	}
+
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, "user1", "admin"),
+		Query: `
+			mutation deleteColumn($colids: [ID!]) {
+				deleteColumn(filter:{colID:$colids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"colids": colids},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	getParams = &common.GraphQLParams{
+		Headers: getJWT(t, "user1", "admin"),
+		Query: `
+			mutation deleteProject($ids: [ID!]) {
+				deleteProject(filter:{projID:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": projids},
+	}
+	gqlResponse = getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestAddOrRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
@@ -41,7 +176,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_2",
 			Roles: []*Role{{
-				Permission: "VIEW",
+				Permission: "ADMIN",
 				AssignedTo: []*User{{
 					Username: "user2",
 				}},
@@ -54,6 +189,11 @@ func TestAddOrRBACFilter(t *testing.T) {
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_3",
 			Roles: []*Role{{
+				Permission: "ADMIN",
+				AssignedTo: []*User{{
+					Username: "user1",
+				}},
+			}, {
 				Permission: "VIEW",
 				AssignedTo: []*User{{
 					Username: "user1",

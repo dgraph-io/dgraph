@@ -179,7 +179,7 @@ type Project @auth(
      add: { or: [
          { rule: """query($USER: String!) {
                       queryProject {
-                        roles(filter: { permission: { eq: VIEW } }) {
+                        roles(filter: { permission: { eq: ADMIN } }) {
                          assignedTo(filter: { username: { eq: $USER } }) {
                           __typename
                          }
