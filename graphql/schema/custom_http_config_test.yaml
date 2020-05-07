@@ -33,7 +33,7 @@
       country(code: ID!): Country! @custom(http: {
         url: "http://google.com/validcountry",
         method: "POST",
-        graphql: "query { country(code: $id) }",
+        graphql: "query($code: ID!) { country(code: $code) }",
         skipIntrospection: true
       })
     }
@@ -197,7 +197,7 @@
       userName(id: ID!, age: Float!): String @custom(http: {
         url: "http://google.com/validcountry"
         method: "POST"
-        graphql: "query { blah(code: $id) }"
+        graphql: "query($id: ID!) { blah(code: $id) }"
         skipIntrospection: true
       })
     }
@@ -237,10 +237,10 @@
     }
 
     type Query {
-      userName(random: [UserInput]): String @custom(http: {
+      userName(id: ID,random: [UserInput]): String @custom(http: {
         url: "http://google.com/validcountry"
         method: "POST"
-        graphql: "query { blah(code: $id) }"
+        graphql: "query($id: ID!) { blah(code: $id) }"
         skipIntrospection: true
       })
     }

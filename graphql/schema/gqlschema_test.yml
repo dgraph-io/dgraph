@@ -1408,7 +1408,7 @@ invalid_schemas:
         name: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(abc: $name, id: $id) }"
+          graphql: "query($id: ID!, $name: String!) { getName(abc: $name, id: $id) }"
         })
       }
     errlist: [
@@ -1424,11 +1424,11 @@ invalid_schemas:
         name: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(obj: [{abc: $abc}], id: $id) }"
+          graphql: "query($id: ID!, $abc: String!) { getName(obj: [{abc: $abc}], id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
+    {"message": "Type Author; Field name; @custom directive, graphql variables must use fields defined within the type, found `abc`.",
      "locations":[{"line":6, "column":15}]},
     ]
 
@@ -1463,11 +1463,11 @@ invalid_schemas:
         yo: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(abc: $foo, id: $id) }"
+          graphql: "query($id: ID!, $foo: Note) { getName(abc: $foo, id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
+    {"message": "Type Author; Field yo; @custom directive, graphql variables must use scalar fields, found field `foo` of type `Note`.",
      "locations":[{"line":11, "column":15}]},
     ]
 
@@ -1485,7 +1485,7 @@ invalid_schemas:
         yo: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(abc: $foo, id: $id) }"
+          graphql: "query($id: ID!, $foo: String!) { getName(abc: $foo, id: $id) }"
         })
       }
     errlist: [
@@ -1503,7 +1503,7 @@ invalid_schemas:
         yo: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          graphql: "query { getName(abc: $foo) }"
+          graphql: "query($foo: String) { getName(abc: $foo) }"
         })
       }
     errlist: [
@@ -1634,7 +1634,7 @@ invalid_schemas:
       ]
 
   -
-    name: "@custom directive on a field in a type, should only use only scalar fields as GraphQL variables"
+    name: "@custom directive on a field in a type, should only use scalar fields as GraphQL variables"
     input: |
       type Car {
         id: ID!
@@ -1652,7 +1652,7 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql variables must use scalar fields, found field of type `Car`.",
+      {"message": "Type Author; Field name; @custom directive, graphql variables must use scalar fields, found field `car` of type `Car`.",
         "locations": [{"line": 13, "column": 15}]},
       ]
 
@@ -1671,6 +1671,86 @@ invalid_schemas:
     errlist: [
     {"message": "Type Author; Field name; url query inside @custom directive uses a field fooz that is not defined.",
      "locations":[{"line":5, "column":11}]},
+    ]
+
+  -
+    name: "@custom directive on field where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com",
+          method: "POST",
+          graphql: "query($id: ID!) { getName(obj: [{abc: $age}], id: $id) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
+      "locations":[{"line":7, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on query where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      type Query {
+        getAuthors(id: ID): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations":[{"line":10, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on mutation where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+      }
+
+      input AuthorInput {
+        age: Int!
+      }
+
+      type Mutation {
+        setCountry1(input: [AuthorInput]): Author! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query { getUsers(input: $input) }"
+        })
+      }
+    errlist: [
+    {"message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations":[{"line":14, "column":15}]},
+    ]
+
+  -
+    name: "@custom directive on field with batch mode where graphql uses a field without a variable definition"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com"
+          method: "POST"
+          graphql: "query($id: ID!) { getName(obj: $input) }"
+          operation: "batch"
+          body: "{ id: $id, age: $age }"
+        })
+      }
+    errlist: [
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `$input`.",
+      "locations":[{"line":7, "column":15}]},
     ]
 
 valid_schemas:
