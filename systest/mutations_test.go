@@ -153,10 +153,10 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 			{
 				"uid":"%s",
 				"access.to":{
-						"uid":"%s"
-				},
-				"access.to|inherit": false,
-				"access.to|permission": "WRITE"
+					"uid":"%s",
+					"access.to|inherit": false,
+					"access.to|permission": "WRITE"
+				}
 			}
 		]
 	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
@@ -416,28 +416,24 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 			{
 				"friend":[
 					{
-						"name":"Charlie"
+						"name":"Charlie",
+						"friend|age": 15,
+						"friend|car": "Tesla"
 					},
 					{
 						"name":"Bubble"
 					},
 					{
-						"name":"Bob"
+						"name":"Bob",
+						"friend|age": 13,
+						"friend|car": "Honda"
 					},
 					{
-						"name":"Abc"
+						"name":"Abc",
+						"friend|age": 20,
+						"friend|car": "Hyundai"
 					}
 				],
-				"friend|age":{
-					"0":15,
-					"2":13,
-					"3":20
-				},
-				"friend|car":{
-					"0":"Tesla",
-					"2":"Honda",
-					"3":"Hyundai"
-				},
 				"name":"Alice"
 			}
 		]
@@ -526,16 +522,14 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 							"name":"Charlie"
 						},
 						{
-							"name":"Alice"
+							"name":"Alice",
+							"friend|since":"2014-01-02T00:00:00Z"
 						},
 						{
-							"name":"Sang Hyun"
+							"name":"Sang Hyun",
+							"friend|since":"2012-01-02T00:00:00Z"
 						}
-					],
-					"friend|since":{
-						"1":"2014-01-02T00:00:00Z",
-						"2":"2012-01-02T00:00:00Z"
-					}
+					]
 				}
 			]
 		}
