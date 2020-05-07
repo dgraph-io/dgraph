@@ -2010,7 +2010,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			curVal := types.Val{Tid: types.IntID, Value: int64(len(sg.DestUIDs.Uids))}
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = sg.SrcUIDs.Uids
+				sg.DestUIDs.Uids = sg.SrcUIDs.GetUids()
 			} else {
 				sg.DestUIDs.Uids = nil
 			}
