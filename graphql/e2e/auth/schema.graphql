@@ -5,6 +5,7 @@ type User {
   disabled: Boolean
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
+  issues: [Issue]
 }
 
 type UserSecret @auth(
@@ -108,8 +109,19 @@ type Log @auth(
   logs: String
 }
 
+type ComplexLog @auth(
+     query: { and : [
+      { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
+     ]}
+) {
+  id: ID!
+  logs: String
+}
+
 type Project @auth(
-     query: { rule: """query($USER: String!) {
+     query: { or: [
+         { rule: """query($USER: String!) {
                       queryProject {
                         roles(filter: { permission: { eq: VIEW } }) {
                          assignedTo(filter: { username: { eq: $USER } }) {
@@ -118,6 +130,8 @@ type Project @auth(
                         }
                       }
                   }""" },
+         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+     ]}
 ) {
   projID: ID!
   name: String!
@@ -245,3 +259,4 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
+

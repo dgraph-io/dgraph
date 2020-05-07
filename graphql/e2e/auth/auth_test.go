@@ -115,8 +115,13 @@ func getJWT(t *testing.T, user, role string) http.Header {
 		},
 	}
 
-	claims.Foo["USER"] = user
-	claims.Foo["ROLE"] = role
+	if user != "" {
+		claims.Foo["USER"] = user
+	}
+
+	if role != "" {
+		claims.Foo["ROLE"] = role
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	ss, err := token.SignedString([]byte("secretkey"))
@@ -129,8 +134,40 @@ func getJWT(t *testing.T, user, role string) http.Header {
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              },
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user1",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user4",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}}
 
 	query := `
             query {
@@ -300,7 +337,38 @@ func TestRootFilter(t *testing.T) {
 		queryColumn(order: {asc: name}) {
 			name
 		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
+}
+
+func TestDeepRBACValue(t *testing.T) {
+	testCases := []TestCase{
+		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
+		{user: "user1", role: "ADMIN", result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`},
+	}
+
+	query := `
+{
+  queryUser (filter:{username:{eq:"user1"}}) {
+    username
+    issues {
+      msg
+    }
+  }
+}
 	`
 
 	for _, tcase := range testCases {
@@ -319,8 +387,11 @@ func TestRootFilter(t *testing.T) {
 }
 
 func TestRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{
+		{role: "USER", result: `{"queryLog": []}`},
+		{result: `{"queryLog": []}`},
+		{role: "ADMIN", result: `{"queryLog": [{"logs": "Log1"},{"logs": "Log2"}]}`}}
+
 	query := `
 		query {
                     queryLog (order: {asc: logs}) {
@@ -345,8 +416,19 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "ADMIN",
+		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
+	}}
 	query := `
 		query {
                     queryIssue (order: {asc: msg}) {
@@ -368,7 +450,6 @@ func TestAndRBACFilter(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
-
 }
 
 func TestNestedFilter(t *testing.T) {
