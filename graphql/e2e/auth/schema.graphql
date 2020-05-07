@@ -80,7 +80,37 @@ type Movie @auth(
             }
         ]}
     ]}
+    add: { and: [
+        { not: { rule: """
+            query {
+                queryMovie(filter: { hidden: true }) { __typename }
+            }
+        """}},
+        { or: [
+            { rule: """
+                query($USER: String!) {
+                    queryMovie {
+                        regionsAvailable {
+                            users(filter: {username: {eq: $USER}}) {
+                                __typename
+                            }
+                        }
+                    }
+                }"""
+            },
+            { rule: """
+                query {
+                    queryMovie {
+                        regionsAvailable(filter: { global: true }) {
+                            __typename
+                        }
+                    }
+                }"""
+            }
+        ]}
+    ]}
 ) {
+  id: ID!
   content: String
   hidden: Boolean @search
   regionsAvailable: [Region]
@@ -96,7 +126,20 @@ type Issue @auth(
                           }
                       }
                 }"""}
-     ]}){
+     ]}
+
+     add:  { and : [
+       { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+       { rule: """ query($USER: String!) {
+                      queryIssue {
+                          owner(filter: { username: { eq: $USER } }) {
+                              __typename
+                          }
+                      }
+                }"""}
+     ]}
+
+){
   id: ID!
   msg: String
   owner: User!
@@ -104,6 +147,7 @@ type Issue @auth(
 
 type Log @auth(
      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+     add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
 ) {
   id: ID!
   logs: String
@@ -121,6 +165,18 @@ type ComplexLog @auth(
 
 type Project @auth(
      query: { or: [
+         { rule: """query($USER: String!) {
+                      queryProject {
+                        roles(filter: { permission: { eq: VIEW } }) {
+                         assignedTo(filter: { username: { eq: $USER } }) {
+                          __typename
+                         }
+                        }
+                      }
+                  }""" },
+         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+     ]}
+     add: { or: [
          { rule: """query($USER: String!) {
                       queryProject {
                         roles(filter: { permission: { eq: VIEW } }) {

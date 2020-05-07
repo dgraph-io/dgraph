@@ -370,6 +370,18 @@ func authorizeNewNodes(
 		varName := newRw.varGen.Next(typ, "", "")
 		newRw.varName = varName
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
+
+		rn := newRw.selector(typ)
+		rbac := rn.EvaluateRBACRules(newRw.authVariables)
+
+		if rbac == schema.Negative {
+			return x.GqlErrorf("authorization failed")
+		}
+
+		if rbac == schema.Positive {
+			continue
+		}
+
 		if len(authQueries) == 0 {
 			continue
 		}
@@ -402,6 +414,7 @@ func authorizeNewNodes(
 
 		needsAuth = append(needsAuth, typeName)
 		authQrys[typeName] = append([]*gql.GraphQuery{typQuery, varQry}, authQueries...)
+
 	}
 
 	if len(needsAuth) == 0 {
