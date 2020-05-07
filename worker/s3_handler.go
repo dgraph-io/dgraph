@@ -45,6 +45,15 @@ const (
 	s3AccelerateSubstr = "s3-accelerate"
 )
 
+func awsCredentialsProvider() credentials.Provider {
+	return &credentials.Chain{
+		Providers: []credentials.Provider{
+			&credentials.EnvAWS{},
+			&credentials.IAM{},
+		},
+	}
+}
+
 // FillRestoreCredentials fills the empty values with the default credentials so that
 // a restore request is sent to all the groups with the same credentials.
 func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
@@ -53,10 +62,14 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 		return err
 	}
 
+	if len(req.AccessKey) != 0 && len(req.SecretKey) != 0 {
+		return nil
+	}
+
 	var provider credentials.Provider
 	switch uri.Scheme {
 	case "s3":
-		provider = &credentials.EnvAWS{}
+		provider = awsCredentialsProvider()
 	case "minio":
 		provider = &credentials.EnvMinio{}
 	default:
@@ -68,15 +81,10 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 	}
 
 	defaultCreds, _ := provider.Retrieve() // Error is always nil.
-	if len(req.AccessKey) == 0 {
-		req.AccessKey = defaultCreds.AccessKeyID
-	}
-	if len(req.SecretKey) == 0 {
-		req.SecretKey = defaultCreds.SecretAccessKey
-	}
-	if len(req.SessionToken) == 0 {
-		req.SessionToken = defaultCreds.SessionToken
-	}
+
+	req.AccessKey = defaultCreds.AccessKeyID
+	req.SecretKey = defaultCreds.SecretAccessKey
+	req.SessionToken = defaultCreds.SessionToken
 
 	return nil
 }
@@ -112,7 +120,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
 			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
 			// Secret Token:      AWS_SESSION_TOKEN.
-			provider = &credentials.EnvAWS{}
+			provider = awsCredentialsProvider()
 		default: // minio
 			// Access Key ID:     MINIO_ACCESS_KEY.
 			// Secret Access Key: MINIO_SECRET_KEY.
