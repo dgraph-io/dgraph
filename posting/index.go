@@ -403,7 +403,7 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 // AddMutationWithIndex is addMutation with support for indexing. It also
 // supports reverse edges.
 func (l *List) AddMutationWithIndex(ctx context.Context, edge *pb.DirectedEdge, txn *Txn) error {
-	if len(edge.Attr) == 0 {
+	if edge.Attr == "" {
 		return errors.Errorf("Predicate cannot be empty for edge with subject: [%v], object: [%v]"+
 			" and value: [%v]", edge.Entity, edge.ValueId, edge.Value)
 	}
