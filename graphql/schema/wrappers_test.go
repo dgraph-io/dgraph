@@ -773,6 +773,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
 
 			v, ok := tmpl["variables"].(map[string]interface{})
+			require.True(t, ok)
 			var rv map[string]interface{}
 			if tcase.RemoteVariables != "" {
 				require.NoError(t, json.Unmarshal([]byte(tcase.RemoteVariables), &rv))
