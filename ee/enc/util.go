@@ -31,11 +31,11 @@ func ReadEncryptionKeyFile(filepath string) []byte {
 }
 
 // GetWriter returns the Writer as is for OSS Builds.
-func GetWriter(filepath string, w io.Writer) (io.Writer, error) {
+func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 	return w, nil
 }
 
 // GetReader returns the reader as is for OSS Builds.
-func GetReader(filepath string, r io.Reader) (io.Reader, error) {
+func GetReader(_ []byte, r io.Reader) (io.Reader, error) {
 	return r, nil
 }
