@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -49,7 +50,7 @@ func awsCredentialsProvider() credentials.Provider {
 	return &credentials.Chain{
 		Providers: []credentials.Provider{
 			&credentials.EnvAWS{},
-			&credentials.IAM{},
+			&credentials.IAM{Client: &http.Client{}},
 		},
 	}
 }
