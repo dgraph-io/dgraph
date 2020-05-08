@@ -17,7 +17,9 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -102,6 +104,12 @@ type TestCase struct {
 	result string
 	name   string
 	filter map[string]interface{}
+}
+
+type uidResult struct {
+	Query []struct {
+		UID string
+	}
 }
 
 func getJWT(t *testing.T, user, role string) string {
@@ -462,6 +470,7 @@ func TestNestedFilter(t *testing.T) {
 }
 
 func TestDeleteAuthRule(t *testing.T) {
+	AddDeleteAuthTestData(t)
 	testCases := []TestCase{
 		{
 			name: "user with secret info",
@@ -512,7 +521,67 @@ func TestDeleteAuthRule(t *testing.T) {
 	}
 }
 
+func AddDeleteAuthTestData(t *testing.T) {
+	client, err := testutil.DgraphClient(common.AlphagRPC)
+	require.NoError(t, err)
+	data := `[{
+		"uid": "_:usersecret1",
+		"dgraph.type": "UserSecret",
+		"UserSecret.aSecret": "Secret data",
+		"UserSecret.ownedBy": "user1"
+		}]`
+
+	err = common.PopulateGraphQLData(client, []byte(data))
+	require.NoError(t, err)
+}
+
+func AddDeleteDeepAuthTestData(t *testing.T) {
+	client, err := testutil.DgraphClient(common.AlphagRPC)
+	require.NoError(t, err)
+
+	userQuery := `{
+	query(func: type(User)) @filter(eq(User.username, "user1") or eq(User.username, "user3") or 
+		eq(User.username, "user5") ) {
+    	uid
+  	} }`
+
+	txn := client.NewTxn()
+	resp, err := txn.Query(context.Background(), userQuery)
+	require.NoError(t, err)
+
+	var user uidResult
+	err = json.Unmarshal(resp.Json, &user)
+	require.NoError(t, err)
+	require.True(t, len(user.Query) == 3)
+
+	columnQuery := `{
+  	query(func: type(Column)) @filter(eq(Column.name, "Column1")) {
+		uid
+		Column.name
+  	} }`
+
+	resp, err = txn.Query(context.Background(), columnQuery)
+	require.NoError(t, err)
+
+	var column uidResult
+	err = json.Unmarshal(resp.Json, &column)
+	require.NoError(t, err)
+	require.True(t, len(column.Query) == 1)
+
+	data := fmt.Sprintf(`[{
+		"uid": "_:ticket1",
+		"dgraph.type": "Ticket",
+		"Ticket.onColumn": {"uid": "%s"},
+		"Ticket.title": "Ticket1",
+		"ticket.assignedTo": [{"uid": "%s"}, {"uid": "%s"}, {"uid": "%s"}]
+	}]`, column.Query[0].UID, user.Query[0].UID, user.Query[1].UID, user.Query[2].UID)
+
+	err = common.PopulateGraphQLData(client, []byte(data))
+	require.NoError(t, err)
+}
+
 func TestDeleteDeepAuthRule(t *testing.T) {
+	AddDeleteDeepAuthTestData(t)
 	testCases := []TestCase{
 		{
 			name: "ticket without edit permission",
@@ -577,7 +646,6 @@ func TestMain(m *testing.M) {
 	}
 
 	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
-
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
 		if err != nil {
@@ -597,6 +665,10 @@ func TestMain(m *testing.M) {
 		}
 
 		common.BootstrapServer(authSchema, data)
+		// Data is added only in the first iteration, but the schema is added every iteration.
+		if data != nil {
+			data = nil
+		}
 		exitCode := m.Run()
 		if exitCode != 0 {
 			os.Exit(exitCode)

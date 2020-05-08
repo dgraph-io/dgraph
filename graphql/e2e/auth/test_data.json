@@ -165,13 +165,6 @@
 		"ticket.tickets": [{"uid": "_:ticket4"}]
 	},
 	{
-		"uid": "_:ticket1",
-		"dgraph.type": "Ticket",
-		"Ticket.onColumn": {"uid": "_:column1"},
-		"Ticket.title": "Ticket1",
-		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user3"}, {"uid": "_:user5"}]
-	},
-	{
 		"uid": "_:ticket2",
 		"dgraph.type": "Ticket",
 		"Ticket.onColumn": {"uid": "_:column1"},
@@ -191,12 +184,6 @@
 		"Ticket.onColumn": {"uid": "_:column3"},
 		"Ticket.title": "Ticket4",
 		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
-	},
-	{
-		"uid": "_:usersecret1",
-		"dgraph.type": "UserSecret",
-		"UserSecret.aSecret": "Secret data",
-		"UserSecret.ownedBy": "user1"
 	},
 	{
 		"uid": "_:usersecret2",
