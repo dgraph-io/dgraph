@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/vektah/gqlparser/v2/ast"
@@ -1161,11 +1162,20 @@ func customDirectiveValidation(sch *ast.Schema,
 					" @custom directive, method can only be POST if graphql field is present.",
 				typ.Name, field.Name, method.Raw)
 		}
-		if body != nil {
-			return gqlerror.ErrorPosf(dir.Position,
-				"Type %s; Field %s; has both body and graphql field inside @custom directive, "+
-					"they can't be present together.",
-				typ.Name, field.Name)
+		if !isBatchOperation {
+			if body != nil {
+				return gqlerror.ErrorPosf(dir.Position,
+					"Type %s; Field %s; has both body and graphql field inside @custom directive, "+
+						"they can't be present together.",
+					typ.Name, field.Name)
+			}
+		} else {
+			if body == nil {
+				return gqlerror.ErrorPosf(dir.Position,
+					"Type %s; Field %s; both body and graphql field inside @custom directive "+
+						"are required if operation is batch.",
+					typ.Name, field.Name)
+			}
 		}
 	}
 
@@ -1231,9 +1241,24 @@ func customDirectiveValidation(sch *ast.Schema,
 					"name `%s`, it can't have a name.", typ.Name, field.Name, graphqlOpDef.Name)
 		}
 		if graphqlOpDef.VariableDefinitions != nil {
-			return gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s: inside graphql in @custom directive, found operation with "+
-					"variables, it can't have any variable definitions.", typ.Name, field.Name)
+			if isQueryOrMutationType(typ) {
+				for _, vd := range graphqlOpDef.VariableDefinitions {
+					ad := field.Arguments.ForName(vd.Variable)
+					if ad == nil {
+						return gqlerror.ErrorPosf(graphql.Position,
+							"Type %s; Field %s; @custom directive, graphql variables must use "+
+								"fields defined within the type, found `%s`.", typ.Name,
+							field.Name, vd.Variable)
+					}
+				}
+			} else if !isBatchOperation {
+				// For batch operation we already verify that body should use fields defined inside the
+				// parent type.
+				requiredFields = make(map[string]bool)
+				for _, vd := range graphqlOpDef.VariableDefinitions {
+					requiredFields[vd.Variable] = true
+				}
+			}
 		}
 		if graphqlOpDef.Directives != nil {
 			return gqlerror.ErrorPosf(graphql.Position,
@@ -1268,27 +1293,23 @@ func customDirectiveValidation(sch *ast.Schema,
 					"selection set, it can't have any selection set.",
 				typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 		}
-		// find required fields for the query from its arguments
+		// Validate that argument values used within remote query are from variable definitions.
 		if len(query.Arguments) > 0 {
 			// validate the specific input requirements for batch mode
 			if isBatchOperation {
-				if len(query.Arguments) != 1 ||
-					query.Arguments[0].Value.Kind != ast.ListValue ||
-					len(query.Arguments[0].Value.Children) != 1 ||
-					query.Arguments[0].Value.Children[0].Value.Kind != ast.ObjectValue {
+				if len(query.Arguments) != 1 || query.Arguments[0].Value.Kind != ast.Variable {
 					return gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
-							"operations, %s `%s` can have only one argument with value formatted "+
-							"as `[{param1: $var1, param2: $var2, ...}]`.",
+							"operations, %s `%s` can have only one argument whose value should "+
+							"be a variable.",
 						typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 				}
-				input := query.Arguments[0]
-				_, requiredFields, err = parseBodyTemplate(input.Value.Children[0].Value.String())
-				if err != nil {
+				argVal := query.Arguments[0].Value.Raw
+				vd := graphqlOpDef.VariableDefinitions.ForName(argVal)
+				if vd == nil {
 					return gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
-							"operation, error in parsing argument `%s` for %s `%s`: %s.", typ.Name,
-						field.Name, input.Name, graphqlOpDef.Operation, query.Name, err.Error())
+						"Type %s; Field %s; @custom directive, graphql must use fields with "+
+							"a variable definition, found `%s`.", typ.Name, field.Name, argVal)
 				}
 			} else {
 				var bodyBuilder strings.Builder
@@ -1304,12 +1325,20 @@ func customDirectiveValidation(sch *ast.Schema,
 					bodyBuilder.WriteString(comma)
 				}
 				bodyBuilder.WriteString("}")
-				_, requiredFields, err = parseBodyTemplate(bodyBuilder.String())
+				_, requiredVars, err := parseBodyTemplate(bodyBuilder.String())
 				if err != nil {
 					return gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, "+
 							"error in parsing arguments for %s `%s`: %s.", typ.Name, field.Name,
 						graphqlOpDef.Operation, query.Name, err.Error())
+				}
+				for varName := range requiredVars {
+					vd := graphqlOpDef.VariableDefinitions.ForName(varName)
+					if vd == nil {
+						return gqlerror.ErrorPosf(graphql.Position,
+							"Type %s; Field %s; @custom directive, graphql must use fields with "+
+								"a variable definition, found `%s`.", typ.Name, field.Name, varName)
+					}
 				}
 			}
 		}
@@ -1400,9 +1429,20 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 	}
 
-	// 11. Finally validate the given graphql operation on remote server, when all locally doable
+	// 12. Finally validate the given graphql operation on remote server, when all locally doable
 	// validations have finished
-	if graphql != nil && graphqlOpDef != nil {
+	si := httpArg.Value.Children.ForName("skipIntrospection")
+	var skip bool
+	if si != nil {
+		skip, err = strconv.ParseBool(si.Raw)
+		if err != nil {
+			return gqlerror.ErrorPosf(graphql.Position,
+				"Type %s; Field %s; skipIntrospection in @custom directive can only be "+
+					"true/false, found: `%s`.",
+				typ.Name, field.Name, si.Raw)
+		}
+	}
+	if graphql != nil && !skip && graphqlOpDef != nil {
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
 			parentField:  field,
