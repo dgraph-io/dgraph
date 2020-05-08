@@ -35,7 +35,6 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 	}
 
 	body, err := json.Marshal(param)
-
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +55,8 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 		return nil, err
 	}
 	result := &introspectedSchema{}
-
-	return result, json.Unmarshal(body, result)
+	return result, errors.Wrapf(json.Unmarshal(body, result),
+		"while json unmarshaling result from remote introspection query")
 }
 
 const (
@@ -309,16 +308,18 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 		}
 	}
 
-	// check whether args of given query/mutation match the args of remote query/mutation
-	err = matchArgSignature(&argMatchingMetadata{
-		givenArgVals:  givenQryArgVals,
-		givenVarTypes: givenQryVarTypes,
-		remoteArgMd:   remoteQryArgMetadata,
-		remoteTypes:   remoteTypes,
-		givenQryName:  &givenQuery.Name,
-		operationType: &operationType,
-		schema:        metadata.schema,
-	})
+	if !metadata.isBatch {
+		// check whether args of given query/mutation match the args of remote query/mutation
+		err = matchArgSignature(&argMatchingMetadata{
+			givenArgVals:  givenQryArgVals,
+			givenVarTypes: givenQryVarTypes,
+			remoteArgMd:   remoteQryArgMetadata,
+			remoteTypes:   remoteTypes,
+			givenQryName:  &givenQuery.Name,
+			operationType: &operationType,
+			schema:        metadata.schema,
+		})
+	}
 
 	return err
 }

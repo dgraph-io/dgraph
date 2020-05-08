@@ -11,7 +11,8 @@ type User {
         url: "http://mock:8888/gqlUserNames"
         method: "POST"
         operation: "batch"
-        graphql: "query { userNames(input: [{ id: $id, age: $age}]) }"
+        graphql: "query($input: [UserInput]) { userNames(users: $input) }"
+        body: "{ id: $id, age: $age }"
       }
     )
   age: Int! @search
@@ -36,7 +37,7 @@ type School {
         url: "http://mock:8888/gqlSchoolName"
         method: "POST"
         operation: "single"
-        graphql: "query { schoolName(id: $id) }"
+        graphql: "query($id: ID!) { schoolName(id: $id) }"
       }
     )
   classes: [Class]
@@ -65,7 +66,8 @@ type Teacher {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
         operation: "batch"
-        graphql: "query { teacherNames(input: [{ id: $tid, age: $age}]) }"
+        graphql: "query($input: [TeacherInput]) { teacherNames(teachers: $input) }",
+        body: "{ id: $tid, age: $age}"
       }
     )
 }

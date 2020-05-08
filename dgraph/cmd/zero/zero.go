@@ -434,7 +434,7 @@ func (s *Server) Connect(ctx context.Context,
 		}
 		return cs, err
 	}
-	if len(m.Addr) == 0 {
+	if m.Addr == "" {
 		return &emptyConnectionState, errors.Errorf("NO_ADDR: No address provided: %+v", m)
 	}
 
@@ -568,7 +568,7 @@ func (s *Server) ShouldServe(
 	ctx, span := otrace.StartSpan(ctx, "Zero.ShouldServe")
 	defer span.End()
 
-	if len(tablet.Predicate) == 0 {
+	if tablet.Predicate == "" {
 		return resp, errors.Errorf("Tablet predicate is empty in %+v", tablet)
 	}
 	if tablet.GroupId == 0 && !tablet.ReadOnly {

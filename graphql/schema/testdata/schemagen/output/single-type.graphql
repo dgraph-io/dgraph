@@ -52,6 +52,7 @@ input CustomHTTP {
 	body: String
 	graphql: String
 	forwardHeaders: [String!]
+	skipIntrospection: Boolean
 }
 
 directive @hasInverse(field: String!) on FIELD_DEFINITION
