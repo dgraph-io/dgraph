@@ -17,7 +17,7 @@
 package testutil
 
 import (
-	"github.com/minio/minio-go"
+	"github.com/minio/minio-go/v6"
 )
 
 var (
