@@ -55,7 +55,7 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		if *input.LogRequest {
 			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
 		} else {
-			atomic.StoreInt32(&x.WorkerConfig.LogRequest, -1)
+			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 0)
 		}
 	}
 
