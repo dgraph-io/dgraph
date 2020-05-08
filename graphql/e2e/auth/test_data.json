@@ -32,6 +32,14 @@
 		"User.disabled": true
 	},
 	{
+		"uid": "_:user5",
+		"dgraph.type": "User",
+		"User.age": 99,
+		"User.username": "user5",
+		"User.isPublic": true,
+		"User.disabled": false
+	},
+	{
 		"uid": "_:region1",
 		"dgraph.type": "Region",
 		"Region.name": "Region1",
@@ -116,10 +124,16 @@
 		"Role.permission": "VIEW"
 	},
 	{
+		"uid": "_:role4",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user5"}],
+		"Role.permission": "EDIT"
+	},
+	{
 		"uid": "_:project1",
 		"dgraph.type": "Project",
 		"Project.name": "Project1",
-		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}],
+		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}, {"uid": "_:role4"}],
 		"Project.columns": [{"uid": "_:column1"}]
 	},
 	{
@@ -151,13 +165,6 @@
 		"ticket.tickets": [{"uid": "_:ticket4"}]
 	},
 	{
-		"uid": "_:ticket1",
-		"dgraph.type": "Ticket",
-		"Ticket.onColumn": {"uid": "_:column1"},
-		"Ticket.title": "Ticket1",
-		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user3"}]
-	},
-	{
 		"uid": "_:ticket2",
 		"dgraph.type": "Ticket",
 		"Ticket.onColumn": {"uid": "_:column1"},
@@ -177,5 +184,11 @@
 		"Ticket.onColumn": {"uid": "_:column3"},
 		"Ticket.title": "Ticket4",
 		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
+	},
+	{
+		"uid": "_:usersecret2",
+		"dgraph.type": "UserSecret",
+		"UserSecret.aSecret": "Sensitive information",
+		"UserSecret.ownedBy": "user1"
 	}
 ]

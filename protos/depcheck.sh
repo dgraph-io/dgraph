@@ -28,11 +28,13 @@ function CompareSemVer() {
 }
 
 function CheckProtobufIncludes() {
-	echo -n "Checking for directory /usr/local/include/google/protobuf... "
-	if [ ! -d /usr/local/include/google/protobuf ]; then
+	echo -n "Checking for directory /usr/include/google/protobuf or /usr/local/include/google/protobuf... "
+	if !([ -d /usr/include/google/protobuf ] || [ -d /usr/local/include/google/protobuf ]) ; then
 		echo "FAIL" >&2
-		echo "Missing protobuf types in /usr/local/include/google/protobuf: directory not found" >&2
-		echo "Download and install protoc and the protobuf types from protobuf releases page:" >&2
+		echo "Missing protobuf headers in /usr/include/google/protobuf or /usr/local/include/google/protobuf:" \
+         "directory not found." >&2
+		echo "Download and install protoc and the protobuf headers by installing protoc via a package manager" \
+         "or downloading it from the protobuf releases page:" >&2
 		echo "https://github.com/protocolbuffers/protobuf/releases/" >&2
 		exit 1
 	fi

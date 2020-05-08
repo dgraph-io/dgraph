@@ -733,14 +733,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	// For GraphQL requests, we substitute arguments in the GraphQL query/mutation to make to
 	// the remote endpoint using the values of other fields obtained from Dgraph.
 	if graphql {
-		requiredArgs, err := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery,
-			fconf.Operation)
-		if err != nil {
-			errCh <- x.GqlErrorf("Evaluation of custom field failed while parsing required "+
-				"args from remote GraphQL query with an error: %s for field: %s within type: %s.",
-				err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-			return
-		}
+		requiredArgs := fconf.RequiredArgs
 		for i := 0; i < len(inputs); i++ {
 			vars := make(map[string]interface{})
 			// vals[i] has all the values fetched for this type from Dgraph, lets copy over the
@@ -783,8 +776,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		if graphql {
 			body := make(map[string]interface{})
 			body["query"] = fconf.RemoteGqlQuery
-			// For batch mode, the argument name is input which is a list of maps.
-			body["variables"] = map[string]interface{}{"input": requestInput}
+			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
 		}
 
