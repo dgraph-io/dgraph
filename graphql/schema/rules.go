@@ -1293,19 +1293,24 @@ func customDirectiveValidation(sch *ast.Schema,
 					"selection set, it can't have any selection set.",
 				typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 		}
-		// find required fields for the query from its arguments
+		// Validate that argument values used within remote query are from variable definitions.
 		if len(query.Arguments) > 0 {
 			// validate the specific input requirements for batch mode
 			if isBatchOperation {
-				if len(query.Arguments) != 1 ||
-					query.Arguments[0].Value.Kind != ast.Variable {
+				if len(query.Arguments) != 1 || query.Arguments[0].Value.Kind != ast.Variable {
 					return gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
 							"operations, %s `%s` can have only one argument whose value should "+
 							"be a variable.",
 						typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 				}
-
+				argVal := query.Arguments[0].Value.Raw
+				vd := graphqlOpDef.VariableDefinitions.ForName(argVal)
+				if vd == nil {
+					return gqlerror.ErrorPosf(graphql.Position,
+						"Type %s; Field %s; @custom directive, graphql must use fields with "+
+							"a variable definition, found `%s`.", typ.Name, field.Name, argVal)
+				}
 			} else {
 				var bodyBuilder strings.Builder
 				comma := ","
@@ -1320,42 +1325,26 @@ func customDirectiveValidation(sch *ast.Schema,
 					bodyBuilder.WriteString(comma)
 				}
 				bodyBuilder.WriteString("}")
-				_, requiredFields, err = parseBodyTemplate(bodyBuilder.String())
+				_, requiredVars, err := parseBodyTemplate(bodyBuilder.String())
 				if err != nil {
 					return gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s: inside graphql in @custom directive, "+
 							"error in parsing arguments for %s `%s`: %s.", typ.Name, field.Name,
 						graphqlOpDef.Operation, query.Name, err.Error())
 				}
-			}
-		}
-	}
-
-	if graphql != nil {
-		// 10. Validate that arguments used within remote query have variable definitions.
-		if isBatchOperation {
-			query := graphqlOpDef.SelectionSet[0].(*ast.Field)
-			argVal := query.Arguments[0].Value.Raw
-			vd := graphqlOpDef.VariableDefinitions.ForName(argVal)
-			if vd == nil {
-				return gqlerror.ErrorPosf(graphql.Position,
-					"Type %s; Field %s; @custom directive, graphql must use fields with "+
-						"a variable definition, found `%s`.", typ.Name, field.Name, argVal)
-			}
-		} else {
-			// Check that required fields should have variable definitions.
-			for fname := range requiredFields {
-				vd := graphqlOpDef.VariableDefinitions.ForName(fname)
-				if vd == nil {
-					return gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s; @custom directive, graphql must use fields with "+
-							"a variable definition, found `%s`.", typ.Name, field.Name, fname)
+				for varName := range requiredVars {
+					vd := graphqlOpDef.VariableDefinitions.ForName(varName)
+					if vd == nil {
+						return gqlerror.ErrorPosf(graphql.Position,
+							"Type %s; Field %s; @custom directive, graphql must use fields with "+
+								"a variable definition, found `%s`.", typ.Name, field.Name, varName)
+					}
 				}
 			}
 		}
 	}
 
-	// 11. Validating params to body/graphql template for fields in types other than Query/Mutation
+	// 10. Validating params to body/graphql template for fields in types other than Query/Mutation
 	if !isQueryOrMutationType(typ) {
 		var idField, xidField string
 		if len(id) > 0 {
