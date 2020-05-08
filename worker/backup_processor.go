@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sync"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
@@ -39,6 +40,28 @@ type BackupProcessor struct {
 	DB *badger.DB
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
+
+	// plPool is a pool to store pb.PostingList objects.
+	plPool *sync.Pool
+	// bplPool is a pool to store pb.BackupPostingList objects.
+	bplPool *sync.Pool
+}
+
+func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
+	return &BackupProcessor{
+		DB: db,
+		Request: req,
+		plPool: &sync.Pool{
+			New: func() interface{} {
+				return &pb.PostingList{}
+			},
+		},
+		bplPool: &sync.Pool{
+			New: func() interface{} {
+				return &pb.BackupPostingList{}
+			},
+		},
+	}
 }
 
 // LoadResult holds the output of a Load operation.
@@ -218,7 +241,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.
 		}
 		kv.Key = backupKey
 
-		backupPl, err := toBackupPostingList(kv.Value)
+		backupPl, err := pr.toBackupPostingList(kv.Value)
 		if err != nil {
 			return nil, err
 		}
@@ -262,12 +285,23 @@ func toBackupKey(key []byte) ([]byte, error) {
 	return backupKey, nil
 }
 
-func toBackupPostingList(val []byte) ([]byte, error) {
-	pl := &pb.PostingList{}
+func (pr *BackupProcessor) toBackupPostingList(val []byte) ([]byte, error) {
+	pl := pr.plPool.Get().(*pb.PostingList)
+	bpl := pr.bplPool.Get().(*pb.BackupPostingList)
+	defer func() {
+		// Put protobufs back into the pools.
+		pl.Reset()
+		pr.plPool.Put(pl)
+		bpl.Reset()
+		pr.bplPool.Put(bpl)
+	}()
+
 	if err := pl.Unmarshal(val); err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list")
 	}
-	backupVal, err := posting.ToBackupPostingList(pl).Marshal()
+	posting.ToBackupPostingList(pl, bpl)
+	backupVal, err := bpl.Marshal()
+
 	if err != nil {
 		return nil, errors.Wrapf(err, "while converting posting list for backup")
 	}
