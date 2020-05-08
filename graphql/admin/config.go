@@ -30,11 +30,9 @@ import (
 
 type configInput struct {
 	LruMB float64
-	// Positive value of logRequest will make alpha print all the request it gets.
-	// To stop we should set it to a negative value, zero value is being ignored because
-	// that might be the case when this parameter isn't specified in query.
-	// It will be used like a boolean. We are keeping int32 because we want to
-	// modify it using atomics(atomics doesn't have support for bool).
+	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
+	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
+	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
 	LogRequest *bool
 }
 
@@ -51,6 +49,8 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 			return emptyResult(m, err), false
 		}
 	}
+
+	// input.LogRequest will be nil, when it is not specified explicitly in config request.
 	if input.LogRequest != nil {
 		if *input.LogRequest {
 			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)

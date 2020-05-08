@@ -84,7 +84,10 @@ type WorkerOptions struct {
 	LudicrousMode bool
 	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
 	BadgerKeyFile string
-	// LogRequest indicates whehter alpha should print all the requests
+	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
+	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
+	// queries hence it has been kept as int32. Postive value of LogRequest enables logging of
+	// requests coming to alphas.
 	LogRequest int32
 }
 

@@ -226,8 +226,8 @@ const (
 		lruMb: Float
 
 		"""
-		Positive value of logRequest will make alpha print all the request it gets.
-		Negative value will will make alpha stop priting all the subsequent requets.
+		True value of logRequest enables logging of all the requests coming to alphas.
+		False value of logRequest disables above.
 		"""
 		logRequest: Boolean
 	}
