@@ -1254,22 +1254,9 @@ func customDirectiveValidation(sch *ast.Schema,
 			} else if !isBatchOperation {
 				// For batch operation we already verify that body should use fields defined inside the
 				// parent type.
+				requiredFields = make(map[string]bool)
 				for _, vd := range graphqlOpDef.VariableDefinitions {
-					fd := typ.Fields.ForName(vd.Variable)
-					if fd == nil {
-						return gqlerror.ErrorPosf(graphql.Position,
-							"Type %s; Field %s; @custom directive, graphql variables must use "+
-								"fields defined within the type, found `%s`.", typ.Name,
-							field.Name, vd.Variable)
-					}
-
-					typName := fd.Type.Name()
-					if !isScalar(typName) {
-						return gqlerror.ErrorPosf(graphql.Position,
-							"Type %s; Field %s; @custom directive, graphql variables must use "+
-								"scalar fields, found field `%s` of type `%s`.", typ.Name, field.Name,
-							fd.Name, typName)
-					}
+					requiredFields[vd.Variable] = true
 				}
 			}
 		}
@@ -1348,8 +1335,8 @@ func customDirectiveValidation(sch *ast.Schema,
 		// 10. Validate that arguments used within remote query have variable definitions.
 		if isBatchOperation {
 			query := graphqlOpDef.SelectionSet[0].(*ast.Field)
-			argVal := query.Arguments[0].Value.String()
-			vd := graphqlOpDef.VariableDefinitions.ForName(argVal[1:])
+			argVal := query.Arguments[0].Value.Raw
+			vd := graphqlOpDef.VariableDefinitions.ForName(argVal)
 			if vd == nil {
 				return gqlerror.ErrorPosf(graphql.Position,
 					"Type %s; Field %s; @custom directive, graphql must use fields with "+

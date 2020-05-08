@@ -1428,7 +1428,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql variables must use fields defined within the type, found `abc`.",
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
      "locations":[{"line":6, "column":15}]},
     ]
 
@@ -1467,7 +1467,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql variables must use scalar fields, found field `foo` of type `Note`.",
+    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
      "locations":[{"line":11, "column":15}]},
     ]
 
@@ -1629,7 +1629,7 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql variables must use fields defined within the type, found `fooz`.",
+      {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
         "locations": [{"line": 8, "column": 15}]},
       ]
 
@@ -1652,7 +1652,7 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql variables must use scalar fields, found field `car` of type `Car`.",
+      {"message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
         "locations": [{"line": 13, "column": 15}]},
       ]
 
@@ -1749,7 +1749,7 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `$input`.",
+    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
       "locations":[{"line":7, "column":15}]},
     ]
 
