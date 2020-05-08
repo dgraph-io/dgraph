@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"math/big"
+	"os"
 	"reflect"
 	"testing"
 
@@ -18,6 +19,13 @@ import (
 )
 
 var kr, _ = keystore.NewKeyring()
+
+func TestExportRuntime(t *testing.T) {
+	fp := "runtime.out"
+	exportRuntime(t, POLKADOT_RUNTIME_c768a7e4c70e, fp)
+	err := os.Remove(fp)
+	require.NoError(t, err)
+}
 
 func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority

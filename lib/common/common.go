@@ -25,6 +25,9 @@ import (
 	"strings"
 )
 
+// ErrNoPrefix is returned when trying to convert a hex-encoded string with no 0x prefix
+var ErrNoPrefix = errors.New("could not byteify non 0x prefixed string")
+
 // StringToInts turns a string consisting of ints separated by commas into an int array
 func StringToInts(in string) ([]int, error) {
 	intstrs := strings.Split(in, ",")
@@ -64,7 +67,7 @@ func HexToBytes(in string) ([]byte, error) {
 	}
 
 	if strings.Compare(in[:2], "0x") != 0 {
-		return nil, errors.New("could not byteify non 0x prefixed string")
+		return nil, ErrNoPrefix
 	}
 	// Ensure we have an even length, otherwise hex.DecodeString will fail and return zero hash
 	if len(in)%2 != 0 {

@@ -103,7 +103,7 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 			return err
 		}
 		for _, e := range ext {
-			res.Block.Body = append(res.Block.Body, string(e))
+			res.Block.Body = append(res.Block.Body, fmt.Sprintf("0x%x", e))
 		}
 	}
 	return nil

@@ -18,6 +18,7 @@ package runtime
 
 import (
 	"encoding/binary"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -59,6 +60,34 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 	require.NotNil(t, r, "Could not create new VM instance", "targetRuntime", targetRuntime)
 
 	return r
+}
+
+// exportRuntime writes the runtime to a file as a hex string.
+func exportRuntime(t *testing.T, targetRuntime string, outFp string) {
+	testRuntimeFilePath, testRuntimeURL, _ := GetRuntimeVars(targetRuntime)
+
+	_, err := GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
+	require.Nil(t, err, "Fail: could not get runtime", "targetRuntime", targetRuntime)
+
+	fp, err := filepath.Abs(testRuntimeFilePath)
+	require.NoError(t, err, "could not create testRuntimeFilePath", "targetRuntime", targetRuntime)
+
+	bytes, err := wasm.ReadBytes(fp)
+	require.NoError(t, err)
+
+	str := fmt.Sprintf("0x%x", bytes)
+
+	out, err := filepath.Abs(outFp)
+	require.NoError(t, err)
+
+	file, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY, 0600)
+	require.NoError(t, err)
+
+	_, err = file.WriteString(str)
+	require.NoError(t, err)
+
+	err = file.Close()
+	require.NoError(t, err)
 }
 
 //nolint

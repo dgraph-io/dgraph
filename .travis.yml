@@ -43,12 +43,20 @@ matrix:
     script: make it-stable
   - name: Integration Tests - RPC
     script: make it-rpc
+  - name: Integration Test - Stress
+    script: make it-stress
+    env: 
+      - GOSSAMER_STRESS=true
   - name: Golang-ci Linter
     script: make lint
   - name: Build docker image
     script:
     - make docker-build
     - make docker-version
+  allow_failures:
+    - stage: build
+      env:
+        - GOSSAMER_STRESS=true
 notifications:
   slack:
     secure: 0kBLVAFOp1nNrnhYbe1tULFbhqM0HgF5gYFkZDwPFSwbNshfygy4dLScxsIYe0ZAWedkiw9+Eb5oYcnsXR1ltzX35ORnyAEiOdqM5YVfa1J0xWm6kI2ZD3QLfWuhlin42eflicr2lSkDlTbbkRu85Qn/ieJZXsgpOEPQrQI6p/0iEIbNeTykIvmEJP74NQGUd4JQSIDayw0fhb1kDdON++dAovkxOwVvklh6f63Lu0V2S2ZVHl6oXePD9Hr4Nk35XoK3R98qstCwChQ/hIh4oXHBSO4GKFBAXtaC+0jqk/c1+Cjd9H++QyP3z3whYCsbX0Dh2Gt+V7J148rhQi8WKWrymCLIOXCYJnZSijJR0BDtwacPtgF2T8TTV05Xr8p/IFVGSCLI18lIfpPcTk4b684RAo0fAgm1nIAfGvKxPr7vECAxbbd8PVALo0O9k2GLFirZ6Sur6SdVfdKqErBXp6kTldQOy7zJOqAbEt4PMqrrZpMAHPF4BeSY023lezUwyU0HVXFZPD1GS+iO3GsH4IYJIWM4S1hA0Qoxf7kgAZVogco+f67l+wIS0NjYaG25nCxGiJPqqI/foCTQFYCtG2iOFWrsa0KNzyD0d4eQoq5j3OcoMumj9tPiqfMJZkNT0ZOhdSEwmb1oytf1+SoE7tWQUsLksR8egZLCXexu8JA=

@@ -17,24 +17,53 @@
 package types
 
 import (
-	"reflect"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBodyToExtrinsics(t *testing.T) {
 	exts := []Extrinsic{{1, 2, 3}, {7, 8, 9, 0}, {0xa, 0xb}}
 
 	body, err := NewBodyFromExtrinsics(exts)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	res, err := body.AsExtrinsics()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+	require.Equal(t, exts, res)
+}
 
-	if !reflect.DeepEqual(res, exts) {
-		t.Fatalf("Fail: got %x expected %x", res, exts)
+func TestNewBodyFromExtrinsicStrings(t *testing.T) {
+	strs := []string{"0xabcd", "0xff9988", "0x7654acdf"}
+	body, err := NewBodyFromExtrinsicStrings(strs)
+	require.NoError(t, err)
+
+	exts, err := body.AsExtrinsics()
+	require.NoError(t, err)
+
+	for i, e := range exts {
+		b, err := common.HexToBytes(strs[i])
+		require.NoError(t, err)
+		require.Equal(t, []byte(e), b)
+	}
+}
+
+func TestNewBodyFromExtrinsicStrings_Mixed(t *testing.T) {
+	strs := []string{"0xabcd", "0xff9988", "noot"}
+	body, err := NewBodyFromExtrinsicStrings(strs)
+	require.NoError(t, err)
+
+	exts, err := body.AsExtrinsics()
+	require.NoError(t, err)
+
+	for i, e := range exts {
+		b, err := common.HexToBytes(strs[i])
+		if err == common.ErrNoPrefix {
+			b = []byte(strs[i])
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		require.Equal(t, []byte(e), b)
 	}
 }

@@ -19,6 +19,7 @@ package utils
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -29,7 +30,6 @@ import (
 
 // PostRPC utils for sending payload to endpoint and getting []byte back
 func PostRPC(t *testing.T, method, host, params string) ([]byte, error) {
-
 	data := []byte(`{"jsonrpc":"2.0","method":"` + method + `","params":` + params + `,"id":1}`)
 	buf := &bytes.Buffer{}
 	_, err := buf.Write(data)
@@ -62,22 +62,23 @@ func PostRPC(t *testing.T, method, host, params string) ([]byte, error) {
 }
 
 // DecodeRPC will decode []body into target interface
-func DecodeRPC(t *testing.T, body []byte, target interface{}) {
+func DecodeRPC(t *testing.T, body []byte, target interface{}) error {
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	decoder.DisallowUnknownFields()
 
 	var response ServerResponse
 	err := decoder.Decode(&response)
 	require.Nil(t, err, "respBody", string(body))
-
-	t.Log("Got payload from RPC request", "serverResponse", response, "string(respBody)", string(body))
-
-	require.Nil(t, response.Error, "respBody", string(body))
 	require.Equal(t, response.Version, "2.0")
+
+	if response.Error != nil {
+		return errors.New(response.Error.Message)
+	}
 
 	decoder = json.NewDecoder(bytes.NewReader(response.Result))
 	decoder.DisallowUnknownFields()
 
 	err = decoder.Decode(&target)
 	require.Nil(t, err, "respBody", string(body))
+	return nil
 }
