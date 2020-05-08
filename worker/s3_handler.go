@@ -46,15 +46,6 @@ const (
 	s3AccelerateSubstr = "s3-accelerate"
 )
 
-func awsCredentialsProvider() credentials.Provider {
-	return &credentials.Chain{
-		Providers: []credentials.Provider{
-			&credentials.EnvAWS{},
-			&credentials.IAM{Client: &http.Client{}},
-		},
-	}
-}
-
 // FillRestoreCredentials fills the empty values with the default credentials so that
 // a restore request is sent to all the groups with the same credentials.
 func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
@@ -70,7 +61,7 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 	var provider credentials.Provider
 	switch uri.Scheme {
 	case "s3":
-		provider = awsCredentialsProvider()
+		provider = &credentials.EnvAWS{}
 	case "minio":
 		provider = &credentials.EnvMinio{}
 	default:
@@ -100,6 +91,36 @@ type s3Handler struct {
 	uri                      *url.URL
 }
 
+func credentialsProvider(scheme string, creds credentials.Value) credentials.Provider {
+	providers := []credentials.Provider{&credentials.Static{Value: creds}}
+
+	switch scheme {
+	case "s3":
+		providers = append(providers, &credentials.EnvAWS{}, &credentials.IAM{Client: &http.Client{}})
+	default:
+		providers = append(providers, &credentials.EnvMinio{})
+	}
+
+	return &credentials.Chain{Providers: providers}
+}
+
+func (h *s3Handler) newMinioClient(uri *url.URL) (*minio.Client, error) {
+	secure := uri.Query().Get("secure") != "false" // secure by default
+
+	if h.creds.isAnonymous() {
+		return minio.New(uri.Host, h.creds.AccessKey, h.creds.SecretKey, secure)
+	}
+
+	defaultCreds := credentials.Value{
+		AccessKeyID:     h.creds.AccessKey,
+		SecretAccessKey: h.creds.SecretKey,
+		SessionToken:    h.creds.SessionToken,
+	}
+	credsProvider := credentials.New(credentialsProvider(uri.Scheme, defaultCreds))
+
+	return minio.NewWithCredentials(uri.Host, credsProvider, secure, "")
+}
+
 // setup creates a new session, checks valid bucket at uri.Path, and configures a minio client.
 // setup also fills in values used by the handler in subsequent calls.
 // Returns a new S3 minio client, otherwise a nil client with an error.
@@ -109,33 +130,6 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 	}
 
 	glog.V(2).Infof("Backup using host: %s, path: %s", uri.Host, uri.Path)
-
-	var creds credentials.Value
-	switch {
-	case h.creds.isAnonymous():
-		// No need to setup credentials.
-	case !h.creds.hasCredentials():
-		var provider credentials.Provider
-		switch uri.Scheme {
-		case "s3":
-			// Access Key ID:     AWS_ACCESS_KEY_ID or AWS_ACCESS_KEY.
-			// Secret Access Key: AWS_SECRET_ACCESS_KEY or AWS_SECRET_KEY.
-			// Secret Token:      AWS_SESSION_TOKEN.
-			provider = awsCredentialsProvider()
-		default: // minio
-			// Access Key ID:     MINIO_ACCESS_KEY.
-			// Secret Access Key: MINIO_SECRET_KEY.
-			provider = &credentials.EnvMinio{}
-		}
-
-		// If no credentials can be retrieved, an attempt to access the destination
-		// with no credentials will be made.
-		creds, _ = provider.Retrieve() // error is always nil
-	default:
-		creds.AccessKeyID = h.creds.AccessKey
-		creds.SecretAccessKey = h.creds.SecretKey
-		creds.SessionToken = h.creds.SessionToken
-	}
 
 	// Verify URI and set default S3 host if needed.
 	switch uri.Scheme {
@@ -153,9 +147,7 @@ func (h *s3Handler) setup(uri *url.URL) (*minio.Client, error) {
 		}
 	}
 
-	secure := uri.Query().Get("secure") != "false" // secure by default
-
-	mc, err := minio.New(uri.Host, creds.AccessKeyID, creds.SecretAccessKey, secure)
+	mc, err := h.newMinioClient(uri)
 	if err != nil {
 		return nil, err
 	}
