@@ -46,6 +46,96 @@ func stripSpaces(str string) string {
 	}, str)
 }
 
+func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Facet, error) {
+	key := fname[len(prefix):]
+	var jsonValue interface{}
+	var valueType api.Facet_ValType
+	switch v := facetVal.(type) {
+	case string:
+		if t, err := types.ParseTime(v); err == nil {
+			valueType = api.Facet_DATETIME
+			jsonValue = t
+		} else {
+			facet, err := facets.FacetFor(key, strconv.Quote(v))
+			if err != nil {
+				return nil, err
+			}
+
+			// the FacetFor function already converts the value to binary
+			// so there is no need for the conversion again after the switch block
+			return facet, nil
+		}
+	case json.Number:
+		number := facetVal.(json.Number)
+		if strings.Contains(number.String(), ".") {
+			jsonFloat, err := number.Float64()
+			if err != nil {
+				return nil, err
+			}
+			jsonValue = jsonFloat
+			valueType = api.Facet_FLOAT
+		} else {
+			jsonInt, err := number.Int64()
+			if err != nil {
+				return nil, err
+			}
+			jsonValue = jsonInt
+			valueType = api.Facet_INT
+		}
+	case bool:
+		jsonValue = v
+		valueType = api.Facet_BOOL
+	default:
+		return nil, errors.Errorf("Facet value for key: %s can only be string/float64/bool.",
+			fname)
+	}
+
+	// convert facet val interface{} to binary
+	binaryValueFacet, err := facets.ToBinary(key, jsonValue, valueType)
+	if err != nil {
+		return nil, err
+	}
+
+	return binaryValueFacet, nil
+}
+
+func parseMapFacetsJSON(m map[string]interface{}, prefix string) ([]map[int]*api.Facet, error) {
+	if prefix == "" {
+		return nil, nil
+	}
+
+	var mapSlice []map[int]*api.Facet
+	for fname, facetVal := range m {
+		if facetVal == nil {
+			continue
+		}
+		if !strings.HasPrefix(fname, prefix) {
+			continue
+		}
+
+		fm, ok := facetVal.(map[string]interface{})
+		if !ok {
+			return nil, errors.New("facets map is not of type map")
+		}
+
+		idxMap := make(map[int]*api.Facet, len(fm))
+		for sidx, val := range fm {
+			facet, err := handleBasicFacetsType(fname, prefix, val)
+			if err != nil {
+				return nil, err
+			}
+			idx, err := strconv.Atoi(sidx)
+			if err != nil {
+				return nil, errors.New("invalid index in facets")
+			}
+			idxMap[idx] = facet
+		}
+		mapSlice = append(mapSlice, idxMap)
+	}
+
+	return mapSlice, nil
+}
+
 func parseFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
@@ -61,56 +151,11 @@ func parseFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, err
 			continue
 		}
 
-		key := fname[len(prefix):]
-		var jsonValue interface{}
-		var valueType api.Facet_ValType
-		switch v := facetVal.(type) {
-		case string:
-			if t, err := types.ParseTime(v); err == nil {
-				valueType = api.Facet_DATETIME
-				jsonValue = t
-			} else {
-				facet, err := facets.FacetFor(key, strconv.Quote(v))
-				if err != nil {
-					return nil, err
-				}
-
-				// the FacetFor function already converts the value to binary
-				// so there is no need for the conversion again after the switch block
-				facetsForPred = append(facetsForPred, facet)
-				continue
-			}
-		case json.Number:
-			number := facetVal.(json.Number)
-			if strings.Contains(number.String(), ".") {
-				jsonFloat, err := number.Float64()
-				if err != nil {
-					return nil, err
-				}
-				jsonValue = jsonFloat
-				valueType = api.Facet_FLOAT
-			} else {
-				jsonInt, err := number.Int64()
-				if err != nil {
-					return nil, err
-				}
-				jsonValue = jsonInt
-				valueType = api.Facet_INT
-			}
-		case bool:
-			jsonValue = v
-			valueType = api.Facet_BOOL
-		default:
-			return nil, errors.Errorf("Facet value for key: %s can only be string/float64/bool.",
-				fname)
-		}
-
-		// convert facet val interface{} to binary
-		binaryValueFacet, err := facets.ToBinary(key, jsonValue, valueType)
+		facet, err := handleBasicFacetsType(fname, prefix, facetVal)
 		if err != nil {
 			return nil, err
 		}
-		facetsForPred = append(facetsForPred, binaryValueFacet)
+		facetsForPred = append(facetsForPred, facet)
 	}
 
 	return facetsForPred, nil
@@ -383,18 +428,22 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			continue
 		}
 
-		prefix := pred + x.FacetDelimeter
-		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
-		// to call parseFacets everytime.
-		fts, err := parseFacetsJSON(m, prefix)
-		if err != nil {
-			return mr, err
-		}
-
 		nq := api.NQuad{
 			Subject:   mr.uid,
 			Predicate: pred,
-			Facets:    fts,
+			//	Facets:    fts,
+		}
+
+		prefix := pred + x.FacetDelimeter
+		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
+		// to call parseFacets everytime.
+		// Only call parseFacetsJSON when value type is not list.
+		if _, ok := v.([]interface{}); !ok {
+			fts, err := parseFacetsJSON(m, prefix)
+			if err != nil {
+				return mr, err
+			}
+			nq.Facets = fts
 		}
 
 		// Here we split predicate and lang directive (ex: "name@en"), if needed. With JSON
@@ -435,7 +484,12 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
 			buf.PushPredHint(pred, pb.Metadata_LIST)
-			for _, item := range v {
+			facetsMapSlice, err := parseMapFacetsJSON(m, prefix)
+			if err != nil {
+				return mr, err
+			}
+
+			for idx, item := range v {
 				nq := api.NQuad{
 					Subject:   mr.uid,
 					Predicate: pred,
@@ -446,6 +500,14 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
+					// Also populate facets for it.
+					var fts []*api.Facet
+					for _, fm := range facetsMapSlice {
+						if ft, ok := fm[idx]; ok {
+							fts = append(fts, ft)
+						}
+					}
+					nq.Facets = fts
 					buf.Push(&nq)
 				case map[string]interface{}:
 					// map[string]interface{} can mean geojson or a connecting entity.
