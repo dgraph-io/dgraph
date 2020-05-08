@@ -947,6 +947,9 @@ func (g *groupi) processOracleDeltaStream() {
 					batch++
 					delta.Txns = append(delta.Txns, more.Txns...)
 					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
+					for gid, checksum := range more.GroupChecksums {
+						delta.GroupChecksums[gid] = checksum
+					}
 				default:
 					break SLURP
 				}
