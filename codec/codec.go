@@ -169,6 +169,12 @@ func (d *Decoder) UnpackBlock() []uint64 {
 
 // ApproxLen returns the approximate number of UIDs in the pb.UidPack object.
 func (d *Decoder) ApproxLen() int {
+	if d == nil {
+		return 0
+	}
+	if d.Pack == nil {
+		return 0
+	}
 	return int(d.Pack.BlockSize) * (len(d.Pack.Blocks) - d.blockIdx)
 }
 

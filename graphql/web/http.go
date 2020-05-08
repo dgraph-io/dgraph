@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+
 	"io"
 	"io/ioutil"
 	"mime"
@@ -34,6 +35,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
@@ -152,6 +154,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	ctx = authorization.AttachAuthorizationJwt(ctx, r)
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
@@ -173,6 +176,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		res = schema.ErrorResponse(err)
 	} else {
+		gqlReq.Header = r.Header
 		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
 
@@ -258,6 +262,10 @@ func getRequest(ctx context.Context, r *http.Request) (*schema.Request, error) {
 func commonHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		x.AddCorsHeaders(w)
+		// Overwrite the allowed headers after also including headers which are part of
+		// forwardHeaders.
+		w.Header().Set("Access-Control-Allow-Headers", schema.AllowedHeaders())
+
 		w.Header().Set("Content-Type", "application/json")
 
 		next.ServeHTTP(w, r)

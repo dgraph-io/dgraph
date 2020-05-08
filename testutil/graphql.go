@@ -17,10 +17,13 @@
 package testutil
 
 import (
+	"bytes"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/stretchr/testify/require"
 )
@@ -44,7 +47,17 @@ type GraphQLError struct {
 }
 
 type GraphQLResponse struct {
-	Errors []GraphQLError
+	Data       json.RawMessage        `json:"data,omitempty"`
+	Errors     x.GqlErrorList         `json:"errors,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+func (resp *GraphQLResponse) RequireNoGraphQLErrors(t *testing.T) {
+	if resp == nil {
+		return
+	}
+	require.Nil(t, resp.Errors, "required no GraphQL errors, but received :\n%s",
+		resp.Errors.Error())
 }
 
 func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
@@ -56,4 +69,26 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
 	require.Nil(t, result.Errors)
+}
+
+func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
+	if algo == "HS256" {
+		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		return append(schema, []byte(authInfo)...), nil
+	}
+
+	if algo != "RS256" {
+		return schema, nil
+	}
+
+	keyData, err := ioutil.ReadFile("../e2e/auth/sample_public_key.pem")
+	if err != nil {
+		return nil, err
+	}
+
+	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
+	// present in a single line.
+	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
+	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" + string(keyData) + "\""
+	return append(schema, []byte(authInfo)...), nil
 }

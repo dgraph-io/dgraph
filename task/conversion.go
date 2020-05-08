@@ -77,7 +77,7 @@ func ToString(val *pb.TaskValue) string {
 // FromFloat converts the given float64 value into a pb.TaskValue object.
 func FromFloat(val float64) *pb.TaskValue {
 	bs := make([]byte, 8)
-	binary.LittleEndian.PutUint64(bs[:], math.Float64bits(val))
+	binary.LittleEndian.PutUint64(bs, math.Float64bits(val))
 	return &pb.TaskValue{Val: []byte(bs), ValType: pb.Posting_FLOAT}
 }
 

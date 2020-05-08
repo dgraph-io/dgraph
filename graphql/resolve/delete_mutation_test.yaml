@@ -16,7 +16,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post1)",
+            "uid": "uid(Post2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -24,7 +24,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
         uid
-        Post1 as Author.posts
+        Post2 as Author.posts
       }
     }
 
@@ -49,7 +49,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post1)",
+            "uid": "uid(Post2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -57,7 +57,7 @@
     query {
       x as deleteAuthor(func: uid(0x1, 0x2)) @filter((eq(Author.name, "A.N. Author") AND type(Author))) {
         uid
-        Post1 as Author.posts
+        Post2 as Author.posts
       }
     }
 
@@ -82,7 +82,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Post1)",
+            "uid": "uid(Post2)",
             "Post.author": { "uid": "uid(x)" }
           }
         ]
@@ -90,7 +90,7 @@
     query {
       x as deleteAuthor(func: type(Author)) @filter((eq(Author.dob, "2000-01-01") AND eq(Author.name, "A.N. Author"))) {
         uid
-        Post1 as Author.posts
+        Post2 as Author.posts
       }
     }
 
@@ -112,7 +112,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Country1)",
+            "uid": "uid(Country2)",
             "Country.states": [{ "uid": "uid(x)" }]
           }
         ]
@@ -120,7 +120,7 @@
     query {
       x as deleteState(func: type(State)) @filter(eq(State.code, "abc")) {
         uid
-        Country1 as State.country
+        Country2 as State.country
       }
     }
 
@@ -142,11 +142,11 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(Author1)",
+            "uid": "uid(Author2)",
             "Author.posts": [{ "uid": "uid(x)" }]
           },
           {
-            "uid": "uid(Category2)",
+            "uid": "uid(Category3)",
             "Category.posts": [{ "uid": "uid(x)" }]
           }
         ]
@@ -154,8 +154,8 @@
     query {
       x as deletePost(func: uid(0x1, 0x2)) @filter(type(Post)) {
         uid
-        Author1 as Post.author
-        Category2 as Post.category
+        Author2 as Post.author
+        Category3 as Post.category
       }
     }
 
@@ -177,7 +177,7 @@
         [
           { "uid": "uid(x)" },
           {
-            "uid": "uid(MovieDirector1)",
+            "uid": "uid(MovieDirector2)",
             "directed.movies": [{ "uid": "uid(x)" }]
           }
         ]
@@ -185,6 +185,6 @@
     query {
       x as deleteMovie(func: uid(0x1, 0x2)) @filter(type(Movie)) {
         uid
-        MovieDirector1 as ~directed.movies
+        MovieDirector2 as ~directed.movies
       }
     }

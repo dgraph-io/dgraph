@@ -19,6 +19,7 @@ import (
 	"net/url"
 
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
@@ -114,10 +115,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 }
 
 // TODO(DGRAPH-1220): Online restores support passing the backup id.
-// TODO(DGRAPH-1230): Track restore operations.
-// TODO(DGRAPH-1231): Use draining mode during restores.
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
-// TODO(DGRAPH-1233): Online restores support encrypted backups.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
 		return errors.Errorf("nil restore request")
@@ -192,12 +190,19 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	}
 
 	// Update the membership state to re-compute the group checksums.
-	return UpdateMembershipState(ctx)
+	if err := UpdateMembershipState(ctx); err != nil {
+		return errors.Wrapf(err, "cannot update membership state after restore")
+	}
+	return nil
 }
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
+			r, err := enc.GetReader(req.GetKeyFile(), r)
+			if err != nil {
+				return 0, errors.Wrapf(err, "cannot get encrypted reader")
+			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot create gzip reader")

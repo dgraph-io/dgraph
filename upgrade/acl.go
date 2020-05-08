@@ -106,6 +106,11 @@ func upgradeACLRules() error {
 			nquads = append(nquads, []*api.NQuad{
 				{
 					Subject:   newRuleStr,
+					Predicate: "dgraph.type",
+					ObjectId:  "dgraph.type.Rule",
+				},
+				{
+					Subject:   newRuleStr,
 					Predicate: "dgraph.rule.predicate",
 					ObjectValue: &api.Value{
 						Val: &api.Value_StrVal{StrVal: r.Predicate},
@@ -122,11 +127,6 @@ func upgradeACLRules() error {
 					Subject:   group.UID,
 					Predicate: "dgraph.acl.rule",
 					ObjectId:  newRuleStr,
-				},
-				{
-					Subject:   newRuleStr,
-					Predicate: "dgraph.type",
-					ObjectId:  "dgraph.type.Rule",
 				},
 			}...)
 

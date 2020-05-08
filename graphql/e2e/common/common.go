@@ -86,6 +86,7 @@ type GraphQLParams struct {
 	Variables     map[string]interface{} `json:"variables"`
 	acceptGzip    bool
 	gzipEncoding  bool
+	Headers       http.Header
 }
 
 type requestExecutor func(t *testing.T, url string, params *GraphQLParams) *GraphQLResponse
@@ -212,6 +213,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("partial health", partialHealth)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
@@ -265,6 +267,7 @@ func RunAll(t *testing.T) {
 	t.Run("query state by xid regex", queryStateByXidRegex)
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
+	t.Run("queries have extensions", queriesHaveExtensions)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -296,6 +299,9 @@ func RunAll(t *testing.T) {
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
+	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
+	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
+	t.Run("mutations have extensions", mutationsHaveExtensions)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
@@ -418,6 +424,9 @@ func getQueryEmptyVariable(t *testing.T) {
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
 func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+	for h := range params.Headers {
+		req.Header.Set(h, params.Headers.Get(h))
+	}
 	res, err := runGQLRequest(req)
 	require.NoError(t, err)
 
@@ -431,7 +440,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	require.NoError(t, err)
 
 	return result
-
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
@@ -533,7 +541,7 @@ func (params *GraphQLParams) createApplicationGQLPost(url string) (*http.Request
 
 // runGQLRequest runs a HTTP GraphQL request and returns the data or any errors.
 func runGQLRequest(req *http.Request) ([]byte, error) {
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -566,7 +574,7 @@ func requireUID(t *testing.T, uid string) {
 	require.NoError(t, err)
 }
 
-func requireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
+func RequireNoGQLErrors(t *testing.T, resp *GraphQLResponse) {
 	require.Nil(t, resp.Errors,
 		"required no GraphQL errors, but received :\n%s", serializeOrError(resp.Errors))
 }
