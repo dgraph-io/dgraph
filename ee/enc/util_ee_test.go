@@ -27,13 +27,13 @@ func TestGetReaderWriter(t *testing.T) {
 	require.NoError(t, err)
 	defer os.Remove("/tmp/enc_test")
 
-	// empty key file
-	neww, err := GetWriter("", f)
+	// empty key
+	neww, err := GetWriter(nil, f)
 	require.NoError(t, err)
 	require.Equal(t, f, neww)
 
 	// valid key
-	neww, err = GetWriter("./enc-key", f)
+	neww, err = GetWriter(ReadEncryptionKeyFile("./enc-key"), f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, neww)
 	require.IsType(t, cipher.StreamWriter{}, neww)
@@ -48,13 +48,13 @@ func TestGetReaderWriter(t *testing.T) {
 	f, err = os.Open("/tmp/enc_test")
 	require.NoError(t, err)
 
-	// empty key file.
-	newr, err := GetReader("", f)
+	// empty key.
+	newr, err := GetReader(nil, f)
 	require.NoError(t, err)
 	require.Equal(t, f, newr)
 
 	// valid key
-	newr, err = GetReader("./enc-key", f)
+	newr, err = GetReader(ReadEncryptionKeyFile("./enc-key"), f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, newr)
 	require.IsType(t, cipher.StreamReader{}, newr)
