@@ -36,3 +36,9 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	glog.Warningf("Backup failed: %v", x.ErrNotSupported)
 	return x.ErrNotSupported
 }
+
+func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+	[]*Manifest, error) {
+
+	return nil, x.ErrNotSupported
+}

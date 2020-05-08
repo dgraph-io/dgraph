@@ -124,6 +124,11 @@ const (
 		List of predicates for which indexes are built in the background.
 		"""
 		indexing: [String]
+
+		"""
+		List of Enterprise Features that are enabled.
+		"""
+		ee_features: [String]
 	}
 
 	type MembershipState {
@@ -443,6 +448,11 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 			})
 		}(resolver)
 	}
+
+	// Add admin query endpoints.
+	rf = rf.WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
+		return resolve.QueryResolverFunc(resolveListBackups)
+	})
 
 	return rf.WithSchemaIntrospection()
 }

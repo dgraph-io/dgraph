@@ -231,7 +231,7 @@ func runRestoreCmd() error {
 
 func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
-	manifests, err := worker.ListBackupManifests(opt.location)
+	manifests, err := worker.ListBackupManifests(opt.location, nil)
 	if err != nil {
 		return errors.Wrapf(err, "while listing manifests")
 	}

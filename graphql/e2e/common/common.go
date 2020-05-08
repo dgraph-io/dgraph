@@ -213,6 +213,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("partial health", partialHealth)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
@@ -439,7 +440,6 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 	require.NoError(t, err)
 
 	return result
-
 }
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
