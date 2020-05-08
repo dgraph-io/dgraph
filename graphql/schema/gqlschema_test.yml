@@ -1673,6 +1673,39 @@ invalid_schemas:
      "locations":[{"line":5, "column":11}]},
     ]
 
+  - name: "@auth directive on field"
+    input: |
+      type X {
+        username: String! @id @auth(query: {rule: "{ X_MyApp_Role : { eq : \"ADMIN\"}}" })
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Type X; Field username: @auth directive is not allowed on fields",
+     "locations":[{"line":2, "column":3}]},
+    ]
+
+  - name: "@auth and @remote directive on type"
+    input: |
+      type Class @remote @auth(query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"}) {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type Class; cannot have both @auth and @remote directive",
+     "locations":[{"line":1, "column":6}]},
+    ]
+
   -
     name: "@custom directive on field where graphql uses a field without a variable definition"
     input: |

@@ -10,7 +10,7 @@ type Todo @auth(query: {or:[{rule:"query($X_MyApp_User: String!) { \n    queryTo
 	dateCompleted: String @search
 	sharedWith(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	owner(filter: UserFilter): User @hasInverse(field: "todos")
-	somethingPrivate: String @auth(query: {rule:"query($X_MyApp_User: String!) { \n    queryTodo {\n        owner (filter: { username: { eq: $X_MyApp_User }}) {\n            username\n        }\n    }\n}"})
+	somethingPrivate: String
 }
 
 type User @auth(update: {rule:"query($X_MyApp_User: String!) { \n    queryUser(filter: { username: { eq: $X_MyApp_User }}) {\n        username\n    }\n}"}) {
@@ -73,7 +73,7 @@ directive @auth(
 	query: AuthRule, 
 	add: AuthRule, 
 	update: AuthRule, 
-	delete:AuthRule) on OBJECT | FIELD_DEFINITION
+	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
 
