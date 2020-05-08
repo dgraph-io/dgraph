@@ -26,6 +26,102 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func (us *UserSecret) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+			mutation deleteUserSecret($ids: [ID!]) {
+				deleteUserSecret(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{us.Id}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (p *Project) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+			mutation deleteProject($ids: [ID!]) {
+				deleteProject(filter:{projID:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": []string{p.ProjID}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (c *Column) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+			mutation deleteColumn($colids: [ID!]) {
+				deleteColumn(filter:{colID:$colids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"colids": c.ColID},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (i *Issue) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+			mutation deleteIssue($ids: [ID!]) {
+				deleteIssue(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": i.Id},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (l *Log) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+			mutation deleteLog($ids: [ID!]) {
+				deleteLog(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": l.Id},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (m *Movie) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, "user1", "admin"),
+		Query: `
+			mutation deleteMovie($ids: [ID!]) {
+				deleteMovie(filter:{id:$ids}) {
+					msg
+				}
+			}
+		`,
+		Variables: map[string]interface{}{"ids": m.Id},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestAddDeepFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user6",
@@ -96,8 +192,6 @@ func TestAddDeepFilter(t *testing.T) {
 		}
 	}
 
-	var colids []string
-	var projids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
@@ -127,38 +221,10 @@ func TestAddDeepFilter(t *testing.T) {
 		}
 
 		for _, i := range result.AddColumn.Column {
-			colids = append(colids, i.ColID)
-			projids = append(projids, i.InProject.ProjID)
+			i.InProject.delete(t, tcase.user, tcase.role)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteColumn($colids: [ID!]) {
-				deleteColumn(filter:{colID:$colids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"colids": colids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
-
-	getParams = &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteProject($ids: [ID!]) {
-				deleteProject(filter:{projID:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": projids},
-	}
-	gqlResponse = getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestAddOrRBACFilter(t *testing.T) {
@@ -248,23 +314,9 @@ func TestAddOrRBACFilter(t *testing.T) {
 		}
 
 		for _, i := range result.AddProject.Project {
-			ids = append(ids, i.ProjID)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteProject($ids: [ID!]) {
-				deleteProject(filter:{projID:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": ids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestAddAndRBACFilter(t *testing.T) {
@@ -331,23 +383,9 @@ func TestAddAndRBACFilter(t *testing.T) {
 		}
 
 		for _, i := range result.AddIssue.Issue {
-			ids = append(ids, i.Id)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteIssue($ids: [ID!]) {
-				deleteIssue(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": ids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestAddComplexFilter(t *testing.T) {
@@ -446,23 +484,9 @@ func TestAddComplexFilter(t *testing.T) {
 		}
 
 		for _, i := range result.AddMovie.Movie {
-			ids = append(ids, i.Id)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteMovie($ids: [ID!]) {
-				deleteMovie(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": ids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestAddRBACFilter(t *testing.T) {
@@ -528,23 +552,9 @@ func TestAddRBACFilter(t *testing.T) {
 		}
 
 		for _, i := range result.AddLog.Log {
-			ids = append(ids, i.Id)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteLog($ids: [ID!]) {
-				deleteLog(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": ids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
 
 func TestAddUserSecret(t *testing.T) {
@@ -611,21 +621,7 @@ func TestAddUserSecret(t *testing.T) {
 		}
 
 		for _, i := range result.AddUserSecret.UserSecret {
-			ids = append(ids, i.Id)
+			i.delete(t, tcase.user, tcase.role)
 		}
 	}
-
-	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
-		Query: `
-			mutation deleteUserSecret($ids: [ID!]) {
-				deleteUserSecret(filter:{id:$ids}) {
-					msg
-				}
-			}
-		`,
-		Variables: map[string]interface{}{"ids": ids},
-	}
-	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
-	require.Nil(t, gqlResponse.Errors)
 }
