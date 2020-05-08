@@ -1,7 +1,24 @@
-type User {
+type User @auth(
+  delete: { and: [
+    { rule: """
+    query($USER: String!) {
+        queryUser(filter: { username: { eq: $USER } }) {
+        __typename
+        }
+    }
+    """ },
+    { rule: """
+    query {
+        queryUser(filter: { isPublic: true }) {
+            __typename
+        }
+    }
+    """}]
+  }
+){
   username: String! @id
   age: Int
-  isPublic: Boolean
+  isPublic: Boolean @search
   disabled: Boolean
   tickets: [Ticket] @hasInverse(field: assignedTo)
   secrets: [UserSecret]
@@ -42,7 +59,13 @@ type UserSecret @auth(
   ownedBy: String @search(by: [hash])
 }
 
-type Region {
+type Region @auth(
+    delete: { rule: """
+    query {
+    queryRegion(filter: { global: true }) { __typename }
+    }
+    """}
+){
   id: ID!
   name: String
   global: Boolean @search
@@ -245,3 +268,4 @@ type Ticket @auth(
     title: String! @search(by: [term])
     assignedTo: [User!]
 }
+
