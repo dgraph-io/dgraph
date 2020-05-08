@@ -54,29 +54,18 @@ func FillRestoreCredentials(location string, req *pb.RestoreRequest) error {
 		return err
 	}
 
-	if len(req.AccessKey) != 0 && len(req.SecretKey) != 0 {
-		return nil
+	defaultCreds := credentials.Value{
+		AccessKeyID:     req.AccessKey,
+		SecretAccessKey: req.SecretKey,
+		SessionToken:    req.SessionToken,
 	}
+	provider := credentialsProvider(uri.Scheme, defaultCreds)
 
-	var provider credentials.Provider
-	switch uri.Scheme {
-	case "s3":
-		provider = &credentials.EnvAWS{}
-	case "minio":
-		provider = &credentials.EnvMinio{}
-	default:
-		return nil
-	}
+	creds, _ := provider.Retrieve() // Error is always nil.
 
-	if req == nil {
-		return nil
-	}
-
-	defaultCreds, _ := provider.Retrieve() // Error is always nil.
-
-	req.AccessKey = defaultCreds.AccessKeyID
-	req.SecretKey = defaultCreds.SecretAccessKey
-	req.SessionToken = defaultCreds.SessionToken
+	req.AccessKey = creds.AccessKeyID
+	req.SecretKey = creds.SecretAccessKey
+	req.SessionToken = creds.SessionToken
 
 	return nil
 }
@@ -91,8 +80,8 @@ type s3Handler struct {
 	uri                      *url.URL
 }
 
-func credentialsProvider(scheme string, creds credentials.Value) credentials.Provider {
-	providers := []credentials.Provider{&credentials.Static{Value: creds}}
+func credentialsProvider(scheme string, requestCreds credentials.Value) credentials.Provider {
+	providers := []credentials.Provider{&credentials.Static{Value: requestCreds}}
 
 	switch scheme {
 	case "s3":
