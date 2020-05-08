@@ -50,6 +50,12 @@ func (blockDB *BlockDB) Get(key []byte) ([]byte, error) {
 	return blockDB.db.Get(key)
 }
 
+// Has appends `block` to the key and checks for existence in the db
+func (blockDB *BlockDB) Has(key []byte) (bool, error) {
+	key = append(blockPrefix, key...)
+	return blockDB.db.Has(key)
+}
+
 // BlockState defines fields for manipulating the state of blocks, such as BlockTree, BlockDB and Header
 type BlockState struct {
 	bt                 *blocktree.BlockTree
@@ -162,6 +168,11 @@ func arrivalTimeKey(hash common.Hash) []byte {
 // GenesisHash returns the hash of the genesis block
 func (bs *BlockState) GenesisHash() common.Hash {
 	return bs.genesisHash
+}
+
+// HasHeader returns if the db contains a header with the given hash
+func (bs *BlockState) HasHeader(hash common.Hash) (bool, error) {
+	return bs.db.Has(headerKey(hash))
 }
 
 // GetHeader returns a BlockHeader for a given hash

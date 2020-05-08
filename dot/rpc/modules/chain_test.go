@@ -11,6 +11,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
+	database "github.com/ChainSafe/chaindb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -135,7 +136,7 @@ func TestChainGetHeader_NotFound(t *testing.T) {
 	res := &ChainBlockHeaderResponse{}
 	req := ChainHashRequest("0xea374832a2c3997280d2772c10e6e5b0b493ccd3d09c0ab14050320e34076c2c")
 	err := svc.GetHeader(nil, &req, res)
-	require.EqualError(t, err, "Key not found")
+	require.EqualError(t, err, database.ErrKeyNotFound.Error())
 }
 
 func TestChainGetHeader_Error(t *testing.T) {
@@ -205,7 +206,7 @@ func TestChainGetBlock_NoFound(t *testing.T) {
 	res := &ChainBlockResponse{}
 	req := ChainHashRequest("0xea374832a2c3997280d2772c10e6e5b0b493ccd3d09c0ab14050320e34076c2c")
 	err := svc.GetBlock(nil, &req, res)
-	require.EqualError(t, err, "Key not found")
+	require.EqualError(t, err, database.ErrKeyNotFound.Error())
 }
 
 func TestChainGetBlock_Error(t *testing.T) {

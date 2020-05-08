@@ -181,9 +181,14 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 		return err
 	}
 
-	// check if block header is stored in block state and save block header
-	_, err = s.blockState.GetHeader(header.Hash())
-	if err != nil && err.Error() == "Key not found" {
+	// check if block header is stored in block state
+	has, err := s.blockState.HasHeader(header.Hash())
+	if err != nil {
+		return err
+	}
+
+	// save block header if we don't have it already
+	if !has {
 		err = s.blockState.SetHeader(header)
 		if err != nil {
 			return err
@@ -193,8 +198,6 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 			"number", header.Number,
 			"hash", header.Hash(),
 		)
-	} else {
-		return err
 	}
 
 	// check if block body is stored in block state (if we should send to syncer)
