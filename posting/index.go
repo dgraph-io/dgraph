@@ -35,7 +35,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	bpb "github.com/dgraph-io/badger/v2/pb"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/tok"
@@ -558,7 +557,7 @@ func (r *rebuilder) Run(ctx context.Context) error {
 		WithLogger(&x.ToGlog{}).
 		WithCompression(options.None).
 		WithLogRotatesToFlush(10).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(x.WorkerConfig.BadgerKeyFile))
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 	tmpDB, err := badger.OpenManaged(dbOpts)
 	if err != nil {
 		return errors.Wrap(err, "error opening temp badger for reindexing")

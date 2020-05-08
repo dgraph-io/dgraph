@@ -41,14 +41,14 @@ func ReadEncryptionKeyFile(filepath string) []byte {
 	return k
 }
 
-// GetWriter wraps a crypto StreamWriter on input Writer given a key file
-func GetWriter(filepath string, w io.Writer) (io.Writer, error) {
+// GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
+func GetWriter(key []byte, w io.Writer) (io.Writer, error) {
 	// No encryption, return the input writer as is.
-	if filepath == "" {
+	if key == nil {
 		return w, nil
 	}
 	// Encryption, wrap crypto StreamWriter on the input Writer.
-	c, err := aes.NewCipher(ReadEncryptionKeyFile(filepath))
+	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
@@ -64,15 +64,15 @@ func GetWriter(filepath string, w io.Writer) (io.Writer, error) {
 	return cipher.StreamWriter{S: cipher.NewCTR(c, iv), W: w}, nil
 }
 
-// GetReader returns a crypto StreamReader on the input Reader given a key file.
-func GetReader(filepath string, r io.Reader) (io.Reader, error) {
+// GetReader wraps a crypto StreamReader using the input key on the input Reader.
+func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 	// No encryption, return input reader as is.
-	if filepath == "" {
+	if key == nil {
 		return r, nil
 	}
 
 	// Encryption, wrap crypto StreamReader on input Reader.
-	c, err := aes.NewCipher(ReadEncryptionKeyFile(filepath))
+	c, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}

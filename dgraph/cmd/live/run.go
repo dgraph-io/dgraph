@@ -185,7 +185,7 @@ func processSchemaFile(ctx context.Context, file string, keyfile string,
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
-	reader, err := enc.GetReader(keyfile, f)
+	reader, err := enc.GetReader(enc.ReadEncryptionKeyFile(keyfile), f)
 	x.Check(err)
 	if strings.HasSuffix(strings.ToLower(file), ".gz") {
 		reader, err = gzip.NewReader(reader)
@@ -250,7 +250,7 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 func (l *loader) processFile(ctx context.Context, filename string, keyfile string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename, keyfile)
+	rd, cleanup := chunker.FileReader(filename, enc.ReadEncryptionKeyFile(keyfile))
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)

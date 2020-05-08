@@ -44,8 +44,8 @@ type Options struct {
 	BadgerTables string
 	// BadgerVlog is the name of the mode used to load the badger value log.
 	BadgerVlog string
-	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
-	BadgerKeyFile string
+	// EncryptionKey is the key used for encryption at rest, backups and exports. Enterprise only feature.
+	EncryptionKey []byte
 	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
 	// higher value means more CPU intensive compression and better compression
 	// ratio.

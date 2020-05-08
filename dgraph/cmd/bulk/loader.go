@@ -153,7 +153,7 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	if !opt.Encrypted {
 		keyfile = ""
 	}
-	r, err := enc.GetReader(keyfile, f)
+	r, err := enc.GetReader(enc.ReadEncryptionKeyFile(keyfile), f)
 	x.Check(err)
 	if filepath.Ext(opt.SchemaFile) == ".gz" {
 		r, err = gzip.NewReader(r)
@@ -218,7 +218,7 @@ func (ld *loader) mapStage() {
 			if !ld.opt.Encrypted {
 				keyfile = ""
 			}
-			r, cleanup := chunker.FileReader(file, keyfile)
+			r, cleanup := chunker.FileReader(file, enc.ReadEncryptionKeyFile(keyfile))
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)

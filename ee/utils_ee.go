@@ -31,7 +31,7 @@ func GetEEFeaturesList() []string {
 	if len(worker.Config.HmacSecret) > 0 {
 		ee = append(ee, "acl")
 	}
-	if worker.Config.BadgerKeyFile != "" {
+	if worker.Config.EncryptionKey != nil {
 		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
 	} else {
 		ee = append(ee, "backup_restore")

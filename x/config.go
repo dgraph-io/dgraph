@@ -82,8 +82,8 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
-	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
-	BadgerKeyFile string
+	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
+	EncryptionKey []byte
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

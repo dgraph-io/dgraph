@@ -539,7 +539,7 @@ func run() {
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
-		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
+		EncryptionKey:          enc.ReadEncryptionKeyFile(Alpha.Conf.GetString("encryption_key_file")),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
 
 		PostingDir: Alpha.Conf.GetString("postings"),
@@ -551,7 +551,7 @@ func run() {
 	}
 
 	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opts.BadgerKeyFile != "" {
+	if !enc.EeBuild && opts.EncryptionKey != nil {
 		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
 	}
 
@@ -608,7 +608,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		BadgerKeyFile:       worker.Config.BadgerKeyFile,
+		EncryptionKey:       worker.Config.EncryptionKey,
 	}
 
 	setupCustomTokenizers()
