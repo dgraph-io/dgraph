@@ -1,0 +1,20 @@
+area/graphql:
+  - graphql/**/*
+area/documentation :
+  - wiki/content/**/*
+area/bulk-loader:
+  - dgraph/cmd/bulk/**/*
+area/live-loader:
+  - dgraph/cmd/live/**/*
+area/querylang:
+  - gql/**/*
+area/integrations:
+  - contrib/**/*
+  - .github/**/*
+  - .travis/**/*
+area/testing/jepsen:
+  - contrib/jepsen/**/* 
+area/commercial:
+  - ee/**/*
+area/schema:
+  - schema/**/*

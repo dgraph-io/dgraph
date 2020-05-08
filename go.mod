@@ -16,7 +16,7 @@ require (
 	github.com/blevesearch/segment v0.0.0-20160915185041-762005e7a34f // indirect
 	github.com/blevesearch/snowballstem v0.0.0-20180110192139-26b06a2c243d // indirect
 	github.com/codahale/hdrhistogram v0.0.0-20161010025455-3a0bb77429bd
-	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200421062606-cddf7c03451c
+	github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200506081535-536fed1846d0
 	github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453
 	github.com/dgraph-io/ristretto v0.0.2
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -35,6 +35,7 @@ require (
 	github.com/google/go-cmp v0.4.0
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.1
+	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
 	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299
 	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
 	github.com/mitchellh/panicwrap v1.0.0
