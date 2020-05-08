@@ -68,7 +68,7 @@ func (c *Column) delete(t *testing.T, user, role string) {
 				}
 			}
 		`,
-		Variables: map[string]interface{}{"colids": c.ColID},
+		Variables: map[string]interface{}{"colids": []string{c.ColID}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -84,7 +84,7 @@ func (i *Issue) delete(t *testing.T, user, role string) {
 				}
 			}
 		`,
-		Variables: map[string]interface{}{"ids": i.Id},
+		Variables: map[string]interface{}{"ids": []string{i.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -100,7 +100,7 @@ func (l *Log) delete(t *testing.T, user, role string) {
 				}
 			}
 		`,
-		Variables: map[string]interface{}{"ids": l.Id},
+		Variables: map[string]interface{}{"ids": []string{l.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -108,7 +108,7 @@ func (l *Log) delete(t *testing.T, user, role string) {
 
 func (m *Movie) delete(t *testing.T, user, role string) {
 	getParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1", "admin"),
+		Headers: getJWT(t, user, role),
 		Query: `
 			mutation deleteMovie($ids: [ID!]) {
 				deleteMovie(filter:{id:$ids}) {
@@ -116,7 +116,7 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 				}
 			}
 		`,
-		Variables: map[string]interface{}{"ids": m.Id},
+		Variables: map[string]interface{}{"ids": []string{m.Id}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -285,7 +285,6 @@ func TestAddOrRBACFilter(t *testing.T) {
 		}
 	}
 
-	var ids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
@@ -354,7 +353,6 @@ func TestAddAndRBACFilter(t *testing.T) {
 		}
 	}
 
-	var ids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
@@ -455,7 +453,6 @@ func TestAddComplexFilter(t *testing.T) {
 		}
 	}
 
-	var ids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
@@ -523,7 +520,6 @@ func TestAddRBACFilter(t *testing.T) {
 		}
 	}
 
-	var ids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
@@ -592,7 +588,6 @@ func TestAddUserSecret(t *testing.T) {
 		}
 	}
 
-	var ids []string
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
 			Headers:   getJWT(t, tcase.user, tcase.role),
