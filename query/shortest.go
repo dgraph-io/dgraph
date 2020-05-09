@@ -19,7 +19,6 @@ package query
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"math"
 	"sync"
 
@@ -481,7 +480,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // 23     return dist[], prev[]
 func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
-	fmt.Println("shortestPath Subgraph: ")
+	// fmt.Println("shortestPath Subgraph: ")
 	//b, err := json.MarshalIndent(sg, "", "  ")
 	//fmt.Println(string(b))
 
