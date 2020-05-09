@@ -2021,10 +2021,10 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return
 			}
 			result, err := worker.ProcessTaskOverNetwork(ctx, taskQuery)
-			switch {
-			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
-				sg.UnknownAttr = true
-			case err != nil:
+			if err != nil {
+				if strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage) {
+					sg.UnknownAttr = true
+				}
 				rch <- err
 				return
 			}
