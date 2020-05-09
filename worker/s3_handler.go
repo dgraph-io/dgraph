@@ -93,19 +93,26 @@ func credentialsProvider(scheme string, requestCreds credentials.Value) credenti
 	return &credentials.Chain{Providers: providers}
 }
 
-func (h *s3Handler) newMinioClient(uri *url.URL) (*minio.Client, error) {
-	secure := uri.Query().Get("secure") != "false" // secure by default
-
-	if h.creds.isAnonymous() {
-		return minio.New(uri.Host, h.creds.AccessKey, h.creds.SecretKey, secure)
+func (h *s3Handler) requestCreds() credentials.Value {
+	if h.creds == nil {
+		return credentials.Value{}
 	}
 
-	defaultCreds := credentials.Value{
+	return credentials.Value{
 		AccessKeyID:     h.creds.AccessKey,
 		SecretAccessKey: h.creds.SecretKey,
 		SessionToken:    h.creds.SessionToken,
 	}
-	credsProvider := credentials.New(credentialsProvider(uri.Scheme, defaultCreds))
+}
+
+func (h *s3Handler) newMinioClient(uri *url.URL) (*minio.Client, error) {
+	secure := uri.Query().Get("secure") != "false" // secure by default
+
+	if h.creds.isAnonymous() {
+		return minio.New(uri.Host, "", "", secure)
+	}
+
+	credsProvider := credentials.New(credentialsProvider(uri.Scheme, h.requestCreds()))
 
 	return minio.NewWithCredentials(uri.Host, credsProvider, secure, "")
 }
