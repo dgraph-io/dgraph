@@ -20,7 +20,7 @@ package enc
 
 import (
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"io"
 )
@@ -44,14 +44,12 @@ func GetReader(_ []byte, r io.Reader) (io.Reader, error) {
 	return r, nil
 }
 
-func SanityChecks(cfg *viper.Viper) error {
-	keyFile := cfg.GetString("encryption_key_file")
-	vaultRoleID := cfg.GetString("vault_roleID")
-	vaultSecretID := cfg.GetString("vault_secretID")
+// RegisterVaultFlags registers the required encryption flags. None for OSS.
+func RegisterFlags(_ *pflag.FlagSet) {
+	return
+}
 
-	if keyFile != "" || vaultRoleID != "" || vaultSecretID != "" {
-		return errors.Errorf("encryption_key_file / vault_roleID / vault_secretID " +
-			"options not allowed in OSS")
-	}
+// SanityChecks return nil
+func SanityChecks(_ *viper.Viper) error {
 	return nil
 }

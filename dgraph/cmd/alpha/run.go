@@ -110,10 +110,7 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -548,6 +545,10 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
+	if err := enc.SanityChecks(Alpha.Conf); err != nil {
+		glog.Errorf("error: %v", err)
+		return
+	}
 	opts.EncryptionKey = enc.ReadEncryptionKeyFile(Alpha.Conf.GetString("encryption_key_file"))
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")

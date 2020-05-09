@@ -15,32 +15,42 @@ package enc
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"github.com/spf13/viper"
 	"io"
 	"io/ioutil"
+
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/ee/enc/vault"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
-// ReadEncryptionKeyFile returns the encryption key in the given file.
-func ReadEncryptionKeyFile(filepath string) []byte {
-	if filepath == "" {
-		return nil
+// RegisterVaultFlags registers the required encryption flags.
+func RegisterFlags(flag *pflag.FlagSet) {
+	flag.String("encryption_key_file", "",
+		"The file that stores the symmetric key. The key size must be 16, 24, or 32 bytes long. "+
+			"The key size determines the corresponding block size for AES encryption "+
+			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+
+	// Register options for Vault stuff.
+	vault.RegisterFlags(flag)
+}
+
+// SanityChecks makes sure the configuration options are compatible.
+func SanityChecks(cfg *viper.Viper) error {
+	keyFile := cfg.GetString("encryption_key_file")
+
+	// Only local file or vault role/secret must be given. Not both.
+	if keyFile != "" && cfg.GetString("vault_roleID") != "" ||
+		keyFile != "" && cfg.GetString("vault_secretID") != "" {
+		return errors.Errorf("cannot have encryption_key_file and vault_roleID/vault_secretID options")
 	}
-	k, err := ioutil.ReadFile(filepath)
-	x.Checkf(err, "Error reading encryption key file (%v)", filepath)
 
-	// len must be 16,24,32 bytes if given. All other lengths are invalid.
-	klen := len(k)
-	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
-		"Invalid encryption key length = %v", klen)
-
-	return k
+	return vault.SanityChecks(cfg)
 }
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
@@ -88,27 +98,18 @@ func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
 }
 
-// SanityChecks makes sure the configuration options are compatible.
-func SanityChecks(cfg *viper.Viper) error {
-	keyFile := cfg.GetString("encryption_key_file")
-	vaultRoleID := cfg.GetString("vault_roleID")
-	vaultSecretID := cfg.GetString("vault_secretID")
-	vaultAddr := cfg.GetString("vault_addr")
-	vaultPath := cfg.GetString("vault_path")
-	vaultField := cfg.GetString("vault_field")
-
-	// Only local file or vault role/secret must be given. Not both.
-	if keyFile != "" && vaultRoleID != "" ||
-		keyFile != "" && vaultSecretID != "" {
-		return errors.Errorf("cannot have encryption_key_file and vault_roleID/vault_secretID options")
+// ReadEncryptionKeyFile returns the encryption key in the given file.
+func ReadEncryptionKeyFile(filepath string) []byte {
+	if filepath == "" {
+		return nil
 	}
+	k, err := ioutil.ReadFile(filepath)
+	x.Checkf(err, "Error reading encryption key file (%v)", filepath)
 
-	if vaultRoleID != "" && vaultSecretID == "" ||
-		vaultRoleID == "" && vaultSecretID != "" {
-		return errors.Errorf("both, vault_roleID and vault_secretID, must be given")
-	}
+	// len must be 16,24,32 bytes if given. All other lengths are invalid.
+	klen := len(k)
+	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
+		"Invalid encryption key length = %v", klen)
 
-	glog.Infof("keyfile: %v; role: %v, secret: %v, addr: %v, path: %v, field: %v",
-		keyFile, vaultRoleID, vaultSecretID, vaultAddr, vaultPath, vaultField)
-	return nil
+	return k
 }
