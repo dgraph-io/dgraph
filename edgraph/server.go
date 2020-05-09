@@ -263,12 +263,18 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
+		if x.IsInInternalNamespace(update.Predicate) {
+			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
+				" which is reserved as the namespace for dgraph's internal types/predicates.",
+				update.Predicate)
+		}
 	}
 
 	for _, typ := range result.Types {
-		if x.IsInternalType(typ.TypeName) {
-			err = errors.Errorf("type %s is an internal type and can't be modified", typ.TypeName)
-			return nil, err
+		if x.IsInInternalNamespace(typ.TypeName) {
+			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
+				"which is reserved as the namespace for dgraph's internal types/predicates.",
+				typ.TypeName)
 		}
 	}
 

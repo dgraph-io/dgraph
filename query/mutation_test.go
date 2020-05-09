@@ -31,36 +31,34 @@ func TestReserverPredicateForMutation(t *testing.T) {
 	require.Error(t, err, "Cannot mutate graphql reserved predicate dgraph.graphql.schema")
 }
 
-func TestAlterInternalTypes(t *testing.T) {
+func TestAlterInInternalNamespace(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
-
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
 	op := &api.Operation{Schema: `
-		type dgraph.type.User {
+		type dgraph.Person {
 			name: string
 			age: int
 		}
+		name: string .
+		age: int .
 	`}
 	err = dg.Alter(ctx, op)
-	require.Error(t, err, "altering internal type shouldn't have succeeded")
+	require.Error(t, err, "altering type in dgraph namespace shouldn't have succeeded")
+	require.Contains(t, err.Error(), "Can't alter type `dgraph.random` as it is prefixed with "+
+		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
 
 	op = &api.Operation{Schema: `
-		type dgraph.type.Group {
-			name: string
-			age: int
+		type Person {
+			dgraph.name
+			age
 		}
+		dgraph.name: string .
+		age: int .
 	`}
 	err = dg.Alter(ctx, op)
-	require.Error(t, err, "altering internal type shouldn't have succeeded")
-
-	op = &api.Operation{Schema: `
-		type dgraph.type.Rule {
-			name: string
-			age: int
-		}
-	`}
-	err = dg.Alter(ctx, op)
-	require.Error(t, err, "altering internal type shouldn't have succeeded")
+	require.Error(t, err, "altering predicate in dgraph namespace shouldn't have succeeded")
+	require.Contains(t, err.Error(), "Can't alter predicate `dgraph.name` as it is prefixed with "+
+		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
 }
