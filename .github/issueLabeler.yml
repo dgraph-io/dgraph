@@ -1,0 +1,8 @@
+kind/bug:
+    - '(/&bug)'
+kind/question:
+    - '(/&question)'
+area/documentation:
+    - '(/&docs)'
+kind/feature:
+    - '(/&feature)'

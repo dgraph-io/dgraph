@@ -5,6 +5,7 @@ about: File a bug report.
 ---
 
 <!-- If you suspect this could be a bug, follow the template. -->
+<!-- flag: /&bug -->
 
 ### What version of Dgraph are you using?
 
