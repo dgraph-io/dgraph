@@ -32,6 +32,7 @@ import (
 	"github.com/dgraph-io/dgraph/dgraph/cmd/migrate"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/version"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/upgrade"
 	"github.com/dgraph-io/dgraph/x"
 
@@ -92,6 +93,17 @@ func initCmds() {
 		"Use 0.0.0.0 instead of localhost to bind to all addresses on local machine.")
 	RootCmd.PersistentFlags().Bool("expose_trace", false,
 		"Allow trace endpoint to be accessible from remote")
+	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
+	RootCmd.PersistentFlags().String("vault_addr", "localhost:8200",
+		"Vault server's ip:port.")
+	RootCmd.PersistentFlags().String("vault_roleID", "",
+		"Vault role-id used for approle auth.")
+	RootCmd.PersistentFlags().String("vault_secretID", "",
+		"Vault secret-id used for approle auth.")
+	RootCmd.PersistentFlags().String("vault_path", "dgraph",
+		"Vault kv store path.")
+	RootCmd.PersistentFlags().String("vault_field", "enc_key",
+		"Vault kv store field whose value is the encryption key.")
 	x.Check(rootConf.BindPFlags(RootCmd.PersistentFlags()))
 
 	// Add all existing global flag (eg: from glog) to rootCmd's flags
@@ -130,6 +142,12 @@ func initCmds() {
 		}
 
 		for _, sc := range subcommands {
+			// TODO: restore is not here ???
+			if sc == &alpha.Alpha || sc == &bulk.Bulk || sc == &debug.Debug ||
+				sc == &live.Live {
+				x.Check(enc.SanityChecks(sc.Conf))
+			}
+
 			// Set config file is provided for each subcommand, this is done
 			// for individual subcommand because each subcommand has its own config
 			// prefix, like `dgraph zero` expects the prefix to be `DGRAPH_ZERO`.

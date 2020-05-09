@@ -18,8 +18,12 @@
 
 package enc
 
-import "io"
-import "github.com/dgraph-io/dgraph/x"
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/pkg/errors"
+	"github.com/spf13/viper"
+	"io"
+)
 
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
@@ -38,4 +42,16 @@ func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 // GetReader returns the reader as is for OSS Builds.
 func GetReader(_ []byte, r io.Reader) (io.Reader, error) {
 	return r, nil
+}
+
+func SanityChecks(cfg *viper.Viper) error {
+	keyFile := cfg.GetString("encryption_key_file")
+	vaultRoleID := cfg.GetString("vault_roleID")
+	vaultSecretID := cfg.GetString("vault_secretID")
+
+	if keyFile != "" || vaultRoleID != "" || vaultSecretID != "" {
+		return errors.Errorf("encryption_key_file / vault_roleID / vault_secretID " +
+			"options not allowed in OSS")
+	}
+	return nil
 }

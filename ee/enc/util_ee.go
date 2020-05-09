@@ -17,7 +17,9 @@ import (
 	"crypto/cipher"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	"github.com/spf13/viper"
 	"io"
 	"io/ioutil"
 )
@@ -84,4 +86,29 @@ func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 		return nil, err
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
+}
+
+// SanityChecks makes sure the configuration options are compatible.
+func SanityChecks(cfg *viper.Viper) error {
+	keyFile := cfg.GetString("encryption_key_file")
+	vaultRoleID := cfg.GetString("vault_roleID")
+	vaultSecretID := cfg.GetString("vault_secretID")
+	vaultAddr := cfg.GetString("vault_addr")
+	vaultPath := cfg.GetString("vault_path")
+	vaultField := cfg.GetString("vault_field")
+
+	// Only local file or vault role/secret must be given. Not both.
+	if keyFile != "" && vaultRoleID != "" ||
+		keyFile != "" && vaultSecretID != "" {
+		return errors.Errorf("cannot have encryption_key_file and vault_roleID/vault_secretID options")
+	}
+
+	if vaultRoleID != "" && vaultSecretID == "" ||
+		vaultRoleID == "" && vaultSecretID != "" {
+		return errors.Errorf("both, vault_roleID and vault_secretID, must be given")
+	}
+
+	glog.Infof("keyfile: %v; role: %v, secret: %v, addr: %v, path: %v, field: %v",
+		keyFile, vaultRoleID, vaultSecretID, vaultAddr, vaultPath, vaultField)
+	return nil
 }

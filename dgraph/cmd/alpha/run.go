@@ -539,21 +539,16 @@ func run() {
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
-		EncryptionKey:          enc.ReadEncryptionKeyFile(Alpha.Conf.GetString("encryption_key_file")),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PostingDir:             Alpha.Conf.GetString("postings"),
+		WALDir:                 Alpha.Conf.GetString("wal"),
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opts.EncryptionKey != nil {
-		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
-	}
+	opts.EncryptionKey = enc.ReadEncryptionKeyFile(Alpha.Conf.GetString("encryption_key_file"))
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
