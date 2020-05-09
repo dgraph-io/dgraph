@@ -549,7 +549,13 @@ func run() {
 		glog.Errorf("error: %v", err)
 		return
 	}
-	opts.EncryptionKey = enc.ReadEncryptionKeyFile(Alpha.Conf.GetString("encryption_key_file"))
+	var key []byte
+	var err error
+	if key, err = enc.ReadKey(Alpha.Conf); err != nil {
+		glog.Errorf("error: %v", err)
+		return
+	}
+	opts.EncryptionKey = key
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {

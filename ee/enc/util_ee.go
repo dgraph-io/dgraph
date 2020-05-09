@@ -21,6 +21,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/ee/enc/vault"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -96,6 +97,24 @@ func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 		return nil, err
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
+}
+
+func ReadKey(cfg *viper.Viper) ([]byte, error) {
+	// Key from local file system.
+	keyfile := cfg.GetString("encryption_key_file")
+	if keyfile != "" {
+		return ReadEncryptionKeyFile(keyfile), nil
+	}
+
+	// Key from the Vault.
+	vault_roleID := cfg.GetString("vault_roleID")
+	if vault_roleID != "" {
+		return vault.ReadKey(cfg)
+	}
+
+	// No encryption. So, no key.
+	glog.Infof("no encryption. return nil key")
+	return nil, nil
 }
 
 // ReadEncryptionKeyFile returns the encryption key in the given file.

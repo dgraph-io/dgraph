@@ -53,3 +53,8 @@ func RegisterFlags(_ *pflag.FlagSet) {
 func SanityChecks(_ *viper.Viper) error {
 	return nil
 }
+
+// ReadKey returns nil key for OSS.
+func ReadKey(_ *viper.Viper) ([]byte, error) {
+	return nil, nil
+}
