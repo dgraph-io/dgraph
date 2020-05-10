@@ -17,12 +17,15 @@
 package schema
 
 import (
+	"encoding/json"
+	"io/ioutil"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"github.com/vektah/gqlparser/v2/ast"
+	"gopkg.in/yaml.v2"
 )
 
 func TestDgraphMapping_WithoutDirectives(t *testing.T) {
@@ -661,46 +664,131 @@ func TestParseRequiredArgsFromGQLRequest(t *testing.T) {
 	tcases := []struct {
 		name         string
 		req          string
-		operation    string
+		body         string
 		requiredArgs map[string]bool
 	}{
 		{
 			"parse required args for single request",
-			"query { userNames(id: $id, age: $age) }",
-			"single",
+			"query($id: ID!, $age: String!) { userNames(id: $id, age: $age) }",
+			"",
 			map[string]bool{"id": true, "age": true},
 		},
 		{
 			"parse required nested args for single request",
-			"query { userNames(id: $id, car: {age: $age}) }",
-			"single",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required args for batch request",
-			"query { userNames(input: [{ id: $id, age: $age}]) }",
-			"batch",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required nested args for batch request",
-			"query { userNames(input: [{ id: $id, car: { age: $age}}]) }",
-			"batch",
-			map[string]bool{"id": true, "age": true},
-		},
-		{
-			"parse required nested array args for batch request",
-			"query { userNames(input: [{ id: $id, car: [{ age: $age}]}]) }",
-			"batch",
+			"query($id: ID!, $age: String!) { userNames(id: $id, car: {age: $age}) }",
+			"",
 			map[string]bool{"id": true, "age": true},
 		},
 	}
 
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
-			args, err := ParseRequiredArgsFromGQLRequest(test.req, test.operation)
+			args, err := parseRequiredArgsFromGQLRequest(test.req)
 			require.NoError(t, err)
 			require.Equal(t, test.requiredArgs, args)
+		})
+	}
+}
+
+// Tests showing that the correct query and variables are sent to the remote server.
+type CustomHTTPConfigCase struct {
+	Name string
+	Type string
+
+	// the query and variables given as input by the user.
+	GQLQuery     string
+	GQLVariables string
+	// our schema against which the above query and variables are resolved.
+	GQLSchema string
+
+	// for resolving fields variables are populated from the result of resolving a Dgraph query
+	// so RemoteVariables won't have anything.
+	InputVariables string
+	// remote query and variables which are built as part of the HTTP config and checked.
+	RemoteQuery     string
+	RemoteVariables string
+	// remote schema against which the RemoteQuery and RemoteVariables are validated.
+	RemoteSchema string
+}
+
+func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
+	b, err := ioutil.ReadFile("custom_http_config_test.yaml")
+	require.NoError(t, err, "Unable to read test file")
+
+	var tests []CustomHTTPConfigCase
+	err = yaml.Unmarshal(b, &tests)
+	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
+
+	for _, tcase := range tests {
+		t.Run(tcase.Name, func(t *testing.T) {
+			schHandler, errs := NewHandler(tcase.GQLSchema)
+			require.NoError(t, errs)
+			sch, err := FromString(schHandler.GQLSchema())
+			require.NoError(t, err)
+
+			var vars map[string]interface{}
+			if tcase.GQLVariables != "" {
+				err = json.Unmarshal([]byte(tcase.GQLVariables), &vars)
+				require.NoError(t, err)
+			}
+
+			op, err := sch.Operation(
+				&Request{
+					Query:     tcase.GQLQuery,
+					Variables: vars,
+				})
+			require.NoError(t, err)
+			require.NotNil(t, op)
+
+			var field Field
+			if tcase.Type == "query" {
+				queries := op.Queries()
+				require.Len(t, queries, 1)
+				field = queries[0]
+			} else if tcase.Type == "mutation" {
+				mutations := op.Mutations()
+				require.Len(t, mutations, 1)
+				field = mutations[0]
+			} else if tcase.Type == "field" {
+				queries := op.Queries()
+				require.Len(t, queries, 1)
+				q := queries[0]
+				require.Len(t, q.SelectionSet(), 1)
+				// We are allow checking the custom http config on the first field of the query.
+				field = q.SelectionSet()[0]
+			}
+
+			c, err := field.CustomHTTPConfig()
+			require.NoError(t, err)
+
+			remoteSchemaHandler, errs := NewHandler(tcase.RemoteSchema)
+			require.NoError(t, errs)
+			remoteSchema, err := FromString(remoteSchemaHandler.GQLSchema())
+			require.NoError(t, err)
+
+			// Validate the generated query against the remote schema.
+			tmpl, ok := (*c.Template).(map[string]interface{})
+			require.True(t, ok)
+
+			require.Equal(t, tcase.RemoteQuery, c.RemoteGqlQuery)
+
+			v, _ := tmpl["variables"].(map[string]interface{})
+			var rv map[string]interface{}
+			if tcase.RemoteVariables != "" {
+				require.NoError(t, json.Unmarshal([]byte(tcase.RemoteVariables), &rv))
+			}
+			require.Equal(t, rv, v)
+
+			if tcase.InputVariables != "" {
+				require.NoError(t, json.Unmarshal([]byte(tcase.InputVariables), &v))
+			}
+			op, err = remoteSchema.Operation(
+				&Request{
+					Query:     c.RemoteGqlQuery,
+					Variables: v,
+				})
+			require.NoError(t, err)
+			require.NotNil(t, op)
 		})
 	}
 }
