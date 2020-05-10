@@ -5,7 +5,8 @@
 		"User.age": 10,
 		"User.username": "user1",
 		"User.isPublic": true,
-		"User.disabled": false
+		"User.disabled": false,
+		"User.issues": [{"uid": "_:issue1"}]
 	},
 	{
 		"uid": "_:user2",
@@ -13,7 +14,8 @@
 		"User.age": 11,
 		"User.username": "user2",
 		"User.isPublic": true,
-		"User.disabled": true
+		"User.disabled": true,
+		"User.issues": [{"uid": "_:issue2"}]
 	},
 	{
 		"uid": "_:user3",

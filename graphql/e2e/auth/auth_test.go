@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
 
@@ -112,20 +113,59 @@ type uidResult struct {
 	}
 }
 
-func getJWT(t *testing.T, user, role string) string {
-	metaInfo.AuthVars = map[string]interface{}{
-		"USER": user,
-		"ROLE": role,
+func getJWT(t *testing.T, user, role string) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	if user != "" {
+		metaInfo.AuthVars["USER"] = user
+	}
+
+	if role != "" {
+		metaInfo.AuthVars["ROLE"] = role
 	}
 
 	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
 	require.NoError(t, err)
-	return jwtToken
+
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              },
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user1",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user4",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}}
 
 	query := `
             query {
@@ -138,10 +178,9 @@ func TestOrRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -166,11 +205,10 @@ func getColID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   map[string][]string{},
+		Headers:   getJWT(t, tcase.user, tcase.role),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
-	getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -220,11 +258,10 @@ func TestRootGetFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   map[string][]string{},
+				Headers:   getJWT(t, tcase.user, tcase.role),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -266,11 +303,10 @@ func TestDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   map[string][]string{},
+				Headers:   getJWT(t, tcase.user, tcase.role),
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -298,16 +334,46 @@ func TestRootFilter(t *testing.T) {
 		queryColumn(order: {asc: name}) {
 			name
 		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
+}
+
+func TestDeepRBACValue(t *testing.T) {
+	testCases := []TestCase{
+		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
+		{user: "user1", role: "ADMIN", result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`},
+	}
+
+	query := `
+{
+  queryUser (filter:{username:{eq:"user1"}}) {
+    username
+    issues {
+      msg
+    }
+  }
+}
 	`
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -318,8 +384,11 @@ func TestRootFilter(t *testing.T) {
 }
 
 func TestRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{
+		{role: "USER", result: `{"queryLog": []}`},
+		{result: `{"queryLog": []}`},
+		{role: "ADMIN", result: `{"queryLog": [{"logs": "Log1"},{"logs": "Log2"}]}`}}
+
 	query := `
 		query {
                     queryLog (order: {asc: logs}) {
@@ -331,10 +400,9 @@ func TestRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -345,8 +413,19 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "ADMIN",
+		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
+	}}
 	query := `
 		query {
                     queryIssue (order: {asc: msg}) {
@@ -358,10 +437,9 @@ func TestAndRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -369,7 +447,6 @@ func TestAndRBACFilter(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
-
 }
 
 func TestNestedFilter(t *testing.T) {
@@ -456,10 +533,9 @@ func TestNestedFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -504,13 +580,12 @@ func TestDeleteAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: map[string][]string{},
+			Headers: getJWT(t, tcase.user, tcase.role),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
@@ -540,7 +615,7 @@ func AddDeleteDeepAuthTestData(t *testing.T) {
 	require.NoError(t, err)
 
 	userQuery := `{
-	query(func: type(User)) @filter(eq(User.username, "user1") or eq(User.username, "user3") or 
+	query(func: type(User)) @filter(eq(User.username, "user1") or eq(User.username, "user3") or
 		eq(User.username, "user5") ) {
     	uid
   	} }`
@@ -615,13 +690,12 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: map[string][]string{},
+			Headers: getJWT(t, tcase.user, tcase.role),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
