@@ -75,7 +75,7 @@ func groups() *groupi {
 func StartRaftNodes(walStore *badger.DB, bindall bool) {
 	gr.ctx, gr.cancel = context.WithCancel(context.Background())
 
-	if len(x.WorkerConfig.MyAddr) == 0 {
+	if x.WorkerConfig.MyAddr == "" {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
@@ -787,6 +787,7 @@ START:
 	ctx, cancel := context.WithCancel(context.Background())
 	stream, err := c.StreamMembership(ctx, &api.Payload{})
 	if err != nil {
+		cancel()
 		glog.Errorf("Error while calling update %v\n", err)
 		time.Sleep(time.Second)
 		goto START
@@ -947,6 +948,9 @@ func (g *groupi) processOracleDeltaStream() {
 					batch++
 					delta.Txns = append(delta.Txns, more.Txns...)
 					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
+					for gid, checksum := range more.GroupChecksums {
+						delta.GroupChecksums[gid] = checksum
+					}
 				default:
 					break SLURP
 				}

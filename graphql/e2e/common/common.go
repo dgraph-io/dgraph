@@ -39,7 +39,7 @@ import (
 const (
 	graphqlURL      = "http://localhost:8180/graphql"
 	graphqlAdminURL = "http://localhost:8180/admin"
-	alphagRPC       = "localhost:9180"
+	AlphagRPC       = "localhost:9180"
 
 	adminDgraphHealthURL           = "http://localhost:8280/health?all"
 	adminDgraphStateURL            = "http://localhost:8280/state"
@@ -188,7 +188,7 @@ func BootstrapServer(schema, data []byte) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	d, err := grpc.DialContext(ctx, alphagRPC, grpc.WithInsecure())
+	d, err := grpc.DialContext(ctx, AlphagRPC, grpc.WithInsecure())
 	if err != nil {
 		x.Panic(err)
 	}
@@ -199,7 +199,7 @@ func BootstrapServer(schema, data []byte) {
 		x.Panic(err)
 	}
 
-	err = populateGraphQLData(client, data)
+	err = maybePopulateData(client, data)
 	if err != nil {
 		x.Panic(err)
 	}
@@ -587,7 +587,22 @@ func serializeOrError(toSerialize interface{}) string {
 	return string(byts)
 }
 
-func populateGraphQLData(client *dgo.Dgraph, data []byte) error {
+func PopulateGraphQLData(client *dgo.Dgraph, data []byte) error {
+	mu := &api.Mutation{
+		CommitNow: true,
+		SetJson:   data,
+	}
+	_, err := client.NewTxn().Mutate(context.Background(), mu)
+	if err != nil {
+		return errors.Wrap(err, "Unable to add GraphQL test data")
+	}
+	return nil
+}
+
+func maybePopulateData(client *dgo.Dgraph, data []byte) error {
+	if data == nil {
+		return nil
+	}
 	// Helps in local dev to not re-add data multiple times.
 	countries, err := allCountriesAdded()
 	if err != nil {
@@ -596,17 +611,7 @@ func populateGraphQLData(client *dgo.Dgraph, data []byte) error {
 	if len(countries) > 0 {
 		return nil
 	}
-
-	mu := &api.Mutation{
-		CommitNow: true,
-		SetJson:   data,
-	}
-	_, err = client.NewTxn().Mutate(context.Background(), mu)
-	if err != nil {
-		return errors.Wrap(err, "Unable to add GraphQL test data")
-	}
-
-	return nil
+	return PopulateGraphQLData(client, data)
 }
 
 func allCountriesAdded() ([]*country, error) {
@@ -702,7 +707,7 @@ func hasCurrentGraphQLSchema(url string) (bool, error) {
 	return true, nil
 }
 
-func addSchema(url string, schema string) error {
+func addSchema(url, schema string) error {
 	add := &GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -745,7 +750,7 @@ func addSchema(url string, schema string) error {
 	return nil
 }
 
-func addSchemaThroughAdminSchemaEndpt(url string, schema string) error {
+func addSchemaThroughAdminSchemaEndpt(url, schema string) error {
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(schema))
 	if err != nil {
 		return errors.Wrap(err, "error running GraphQL query")

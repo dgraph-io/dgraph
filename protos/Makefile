@@ -51,6 +51,7 @@ copy-protos:
 regenerate: copy-protos check clean
 	@protoc \
 		--proto_path=/usr/local/include \
+		--proto_path=/usr/include \
 		--proto_path=${PROTO_PATH} \
 		--gofast_out=plugins=grpc,Mapi.proto=${DGO_PATH}/protos/api:pb \
 		pb.proto
