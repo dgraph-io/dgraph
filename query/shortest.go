@@ -154,7 +154,6 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		child.SrcUIDs = sg.DestUIDs
 		exec = append(exec, child)
 	}
-
 	dummy := &SubGraph{}
 	for {
 		isNext := <-next
@@ -165,6 +164,7 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		for _, subgraph := range exec {
 			go ProcessGraph(ctx, subgraph, dummy, rrch)
 		}
+
 		for range exec {
 			select {
 			case err = <-rrch:
@@ -289,6 +289,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
+
 	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
@@ -323,7 +324,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
 	for pq.Len() > 0 {
-		//stopExpansion = false
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
@@ -395,7 +395,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				attr:  info.attr,
 				facet: info.facet,
 			}
-
 			node := &queueItem{
 				uid:  toUid,
 				cost: item.cost + cost,
@@ -451,7 +450,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // 23     return dist[], prev[]
 func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var err error
-
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
