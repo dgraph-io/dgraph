@@ -19,7 +19,7 @@ package schema
 import (
 	"encoding/json"
 	"io/ioutil"
-  "strings"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -797,7 +797,7 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 func TestAllowedHeadersList(t *testing.T) {
 	// TODO Add Custom logic forward headers tests
 	tcases := []struct {
-		name         string
+		name      string
 		schemaStr string
 		expected  string
 	}{
