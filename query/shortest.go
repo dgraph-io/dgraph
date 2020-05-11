@@ -302,7 +302,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	heap.Push(&pq, srcNode)
 
-	numHops := -1
+	numHops := 0
 	maxHops := math.MaxInt32
 	if sg.Params.ExploreDepth != nil {
 		maxHops = int(*sg.Params.ExploreDepth)
@@ -340,7 +340,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 		}
-		if item.hop > numHops && numHops < maxHops {
+		if item.hop > numHops-1 && numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
