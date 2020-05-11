@@ -597,8 +597,5 @@ func IsInternalPredicate(pred string) bool {
 
 // IsInInternalNamespace returns true if the given name is prefixed with `dgraph.`
 func IsInInternalNamespace(name string) bool {
-	if strings.HasPrefix(name, "dgraph.") {
-		return true
-	}
-	return false
+	return strings.HasPrefix(name, "dgraph.")
 }
