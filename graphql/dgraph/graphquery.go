@@ -34,13 +34,13 @@ func AsString(query *gql.GraphQuery) string {
 
 	var b strings.Builder
 	x.Check2(b.WriteString("query {\n"))
-	writeQuery(&b, query, "  ", true)
+	writeQuery(&b, query, "  ")
 	x.Check2(b.WriteString("}"))
 
 	return b.String()
 }
 
-func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root bool) {
+func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 	if query.Var != "" || query.Alias != "" || query.Attr != "" {
 		x.Check2(b.WriteString(prefix))
 	}
@@ -63,10 +63,14 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 		x.Check2(b.WriteRune(')'))
 	}
 
-	if !root && hasOrderOrPage(query) {
+	if query.Func == nil && hasOrderOrPage(query) {
 		x.Check2(b.WriteString(" ("))
 		writeOrderAndPage(b, query, false)
 		x.Check2(b.WriteRune(')'))
+	}
+
+	if query.Cascade {
+		x.Check2(b.WriteString(" @cascade"))
 	}
 
 	switch {
@@ -77,7 +81,7 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string, root b
 			prefixAdd = "  "
 		}
 		for _, c := range query.Children {
-			writeQuery(b, c, prefix+prefixAdd, false)
+			writeQuery(b, c, prefix+prefixAdd)
 		}
 		if query.Attr != "" {
 			x.Check2(b.WriteString(prefix))

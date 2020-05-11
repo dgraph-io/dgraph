@@ -65,7 +65,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 		writer = sw
 	} else {
-		writer = posting.NewTxnWriter(pstore)
+		writer = pstore.NewManagedWriteBatch()
 	}
 
 	// We can use count to check the number of posting lists returned in tests.
