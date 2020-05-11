@@ -81,7 +81,6 @@ func (node *RuleNode) preEvaluateAuthRule(av map[string]interface{}) {
 			return
 		}
 	}
-	return
 }
 
 func (node *RuleNode) EvaluateRulesLocally(av map[string]interface{}) RuleResult {
