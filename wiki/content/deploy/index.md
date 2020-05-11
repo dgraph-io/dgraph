@@ -961,10 +961,6 @@ helm upgrade my-release dgraph/dgraph [options]
 helm upgrade my-release dgraph/dgraph [options] 
 ```
 
-When `zero.shardReplicaCount` is set to an HA configuration (3 or 5), do
-
-TODO: (this can go before if it a more general case)
-
 
 #### Deleting the Chart
 
