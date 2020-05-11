@@ -531,6 +531,7 @@ func setupServer(closer *y.Closer) {
 }
 
 func run() {
+	var err error
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
@@ -545,17 +546,20 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	if err := enc.SanityChecks(Alpha.Conf); err != nil {
+	var kR enc.KeyReader
+	if kR, err = enc.NewKeyReader(Alpha.Conf); err != nil {
 		glog.Errorf("error: %v", err)
 		return
 	}
-	var key []byte
-	var err error
-	if key, err = enc.ReadKey(Alpha.Conf); err != nil {
-		glog.Errorf("error: %v", err)
-		return
+	// kR can be nil for the no-encryption scenario.
+	if kR != nil {
+		var key []byte
+		if key, err = kR.ReadKey(); err != nil {
+			glog.Errorf("error: %v", err)
+			return
+		}
+		opts.EncryptionKey = key
 	}
-	opts.EncryptionKey = key
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {

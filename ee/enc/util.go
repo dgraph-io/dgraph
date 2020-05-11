@@ -49,12 +49,11 @@ func RegisterFlags(_ *pflag.FlagSet) {
 	return
 }
 
-// SanityChecks return nil
-func SanityChecks(_ *viper.Viper) error {
-	return nil
+type KeyReader interface {
+	ReadKey() ([]byte, error)
 }
 
-// ReadKey returns nil key for OSS.
-func ReadKey(_ *viper.Viper) ([]byte, error) {
+// NewKeyReader return nil KeyReader (i.e. no encryption).
+func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 	return nil, nil
 }

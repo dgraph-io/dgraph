@@ -41,17 +41,65 @@ func RegisterFlags(flag *pflag.FlagSet) {
 	vault.RegisterFlags(flag)
 }
 
-// SanityChecks makes sure the configuration options are compatible.
-func SanityChecks(cfg *viper.Viper) error {
-	keyFile := cfg.GetString("encryption_key_file")
+type KeyReader interface {
+	ReadKey() ([]byte, error)
+}
 
-	// Only local file or vault role/secret must be given. Not both.
-	if keyFile != "" && cfg.GetString("vault_roleID") != "" ||
-		keyFile != "" && cfg.GetString("vault_secretID") != "" {
-		return errors.Errorf("cannot have encryption_key_file and vault_roleID/vault_secretID options")
+type localKeyReader struct {
+	keyFile string
+}
+
+func (lkR *localKeyReader) ReadKey() ([]byte, error) {
+	if lkR == nil {
+		return nil, errors.Errorf("nil localKeyReader")
 	}
+	if lkR.keyFile == "" {
+		return nil, nil
+	}
+	k, err := ioutil.ReadFile(lkR.keyFile)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading encryption key file (%v)", lkR.keyFile)
+	}
+	// len must be 16,24,32 bytes if given. All other lengths are invalid.
+	klen := len(k)
+	if klen != 16 && klen != 24 && klen != 32 {
+		return nil, errors.Errorf("invalid key length %d", klen)
+	}
+	return k, nil
+}
 
-	return vault.SanityChecks(cfg)
+// NewKeyReader returns a KeyReader interface based on the configuration options.
+// Valid KeyReaders are:
+// 1. Local to read key from local filesystem. .
+// 2. Vault to read key from vault.
+// 3. Nil when encryption is turned off.
+func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
+	var keyReaders int
+	var keyReader KeyReader
+	var err error
+
+	keyFile := cfg.GetString("encryption_key_file")
+	roleID := cfg.GetString("vault_roleID")
+	secretID := cfg.GetString("vault_secretID")
+
+	if keyFile != "" {
+		keyReader = &localKeyReader{
+			keyFile: keyFile,
+		}
+		keyReaders++
+	}
+	if roleID != "" || secretID != "" {
+		keyReader, err = vault.NewVaultKeyReader(cfg)
+		if err != nil {
+			return nil, err
+		}
+		keyReaders++
+	}
+	if keyReaders == 2 {
+		return nil, errors.Errorf("cannot have local and vault key readers. re-check the configuration")
+	}
+	glog.Infof("KeyReader instantiated of type %T", keyReader)
+	return keyReader, nil
 }
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
@@ -97,24 +145,6 @@ func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 		return nil, err
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
-}
-
-func ReadKey(cfg *viper.Viper) ([]byte, error) {
-	// Key from local file system.
-	keyfile := cfg.GetString("encryption_key_file")
-	if keyfile != "" {
-		return ReadEncryptionKeyFile(keyfile), nil
-	}
-
-	// Key from the Vault.
-	vault_roleID := cfg.GetString("vault_roleID")
-	if vault_roleID != "" {
-		return vault.ReadKey(cfg)
-	}
-
-	// No encryption. So, no key.
-	glog.Infof("no encryption. return nil key")
-	return nil, nil
 }
 
 // ReadEncryptionKeyFile returns the encryption key in the given file.
