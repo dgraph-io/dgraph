@@ -17,7 +17,6 @@
 package resolve
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -54,10 +53,6 @@ func TestQueryAlias(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.Name, func(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
-
-			if resp.Errors != nil {
-				fmt.Println(resp.Errors)
-			}
 
 			require.Nil(t, resp.Errors)
 			require.JSONEq(t, test.Expected, resp.Data.String())
