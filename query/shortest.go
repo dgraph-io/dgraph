@@ -149,15 +149,12 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 	sg.SrcUIDs = &pb.List{Uids: in}
 	sg.uidMatrix = []*pb.List{{Uids: in}}
 	sg.DestUIDs = sg.SrcUIDs
-	// fmt.Println("Expand out graph:")
-	// b, err := json.MarshalIndent(sg, "", "  ")
-	// fmt.Println(string(b))
+
 	for _, child := range sg.Children {
 		child.SrcUIDs = sg.DestUIDs
 		exec = append(exec, child)
 	}
-	// fmt.Println("Children: ", sg.Children)
-	// fmt.Printf("\n\n")
+
 	dummy := &SubGraph{}
 	for {
 		isNext := <-next
@@ -168,13 +165,10 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		for _, subgraph := range exec {
 			go ProcessGraph(ctx, subgraph, dummy, rrch)
 		}
-		//fmt.Println("What is Exec?")
-		//fmt.Printf("Exec is: %+v", exec[0])
 		for range exec {
 			select {
 			case err = <-rrch:
 				if err != nil {
-					// fmt.Println("Error is: ", err)
 					rch <- err
 					return
 				}
@@ -271,7 +265,6 @@ func (sg *SubGraph) expandOut(ctx context.Context,
 		}
 
 		if len(out) == 0 {
-			// fmt.Println("We stopped here")
 			rch <- errStop
 			return
 		}
@@ -296,9 +289,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	if sg.Params.Alias != "shortest" {
 		return nil, errors.Errorf("Invalid shortest path query")
 	}
-	// fmt.Println("Run K shortestPath Subgraph: ")
-	// b, err := json.MarshalIndent(sg, "", "  ")
-	// fmt.Println(string(b) + "\n")
 	numPaths := sg.Params.NumPaths
 	var kroutes []route
 	pq := make(priorityQueue, 0)
@@ -335,18 +325,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	for pq.Len() > 0 {
 		//stopExpansion = false
 		item := heap.Pop(&pq).(*queueItem)
-		// fmt.Printf("Item is: %+v\n", item)
-		// fmt.Printf("Pathinfo is: \n")
-		// for _, val := range *item.path.route {
-		// 	fmt.Printf(" UID: %d ", val.uid)
-		// }
-		// fmt.Printf("\n")
-		// fmt.Printf("NumHops: %d\n", numHops)
-		// fmt.Println("Kroutes: ", kroutes)
-		// for count, val := range kroutes {
-		// 	fmt.Printf("Route: %d: %+v\n", count, val)
-		// }
-		// fmt.Println("Length of queue: ", pq.Len())
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
 			if item.cost < minWeight {
