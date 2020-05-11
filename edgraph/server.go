@@ -263,7 +263,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
-		if x.IsInInternalNamespace(update.Predicate) {
+		// reserved predicates will always start with `dgraph.`, so skip this check for them as the
+		// update may be same as the existing one. Means report error only if the predicate is not
+		// reserved and uses internal namespace.
+		if !x.IsReservedPredicate(update.Predicate) && x.IsInInternalNamespace(update.Predicate) {
 			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
 				update.Predicate)

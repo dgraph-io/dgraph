@@ -46,7 +46,7 @@ func TestAlterInInternalNamespace(t *testing.T) {
 	`}
 	err = dg.Alter(ctx, op)
 	require.Error(t, err, "altering type in dgraph namespace shouldn't have succeeded")
-	require.Contains(t, err.Error(), "Can't alter type `dgraph.random` as it is prefixed with "+
+	require.Contains(t, err.Error(), "Can't alter type `dgraph.Person` as it is prefixed with "+
 		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
 
 	op = &api.Operation{Schema: `
