@@ -202,8 +202,6 @@ func TestAddDeepFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
@@ -229,14 +227,14 @@ func TestAddDeepFilter(t *testing.T) {
 
 func TestAddOrRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
-		user:   "user1",
+		user:   "user7",
 		role:   "ADMIN",
 		result: `{"addProject": {"project":[{"name":"project_add_1"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
 			Name: "project_add_1",
 		}},
 	}, {
-		user:   "user1",
+		user:   "user7",
 		role:   "USER",
 		result: ``,
 		variables: map[string]interface{}{"project": &Project{
@@ -249,7 +247,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 			}},
 		}},
 	}, {
-		user:   "user1",
+		user:   "user7",
 		role:   "USER",
 		result: `{"addProject": {"project":[{"name":"project_add_3"}]}}`,
 		variables: map[string]interface{}{"project": &Project{
@@ -257,12 +255,12 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Roles: []*Role{{
 				Permission: "ADMIN",
 				AssignedTo: []*User{{
-					Username: "user1",
+					Username: "user7",
 				}},
 			}, {
 				Permission: "VIEW",
 				AssignedTo: []*User{{
-					Username: "user1",
+					Username: "user7",
 				}},
 			}},
 		}},
@@ -295,8 +293,6 @@ func TestAddOrRBACFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
@@ -320,20 +316,20 @@ func TestAddOrRBACFilter(t *testing.T) {
 
 func TestAddAndRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
-		user:   "user1",
+		user:   "user7",
 		role:   "ADMIN",
 		result: `{"addIssue": {"issue":[{"msg":"issue_add_1"}]}}`,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_1",
-			Owner: &User{Username: "user1"},
+			Owner: &User{Username: "user7"},
 		}},
 	}, {
-		user:   "user1",
+		user:   "user7",
 		role:   "USER",
 		result: ``,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_2",
-			Owner: &User{Username: "user1"},
+			Owner: &User{Username: "user7"},
 		}},
 	}}
 
@@ -363,8 +359,6 @@ func TestAddAndRBACFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
@@ -388,7 +382,7 @@ func TestAddAndRBACFilter(t *testing.T) {
 
 func TestAddComplexFilter(t *testing.T) {
 	testCases := []TestCase{{
-		user:   "user1",
+		user:   "user8",
 		role:   "USER",
 		result: ``,
 		variables: map[string]interface{}{"movie": &Movie{
@@ -396,7 +390,7 @@ func TestAddComplexFilter(t *testing.T) {
 			Hidden:  true,
 		}},
 	}, {
-		user:   "user1",
+		user:   "user8",
 		role:   "USER",
 		result: ``,
 		variables: map[string]interface{}{"movie": &Movie{
@@ -408,7 +402,7 @@ func TestAddComplexFilter(t *testing.T) {
 			}},
 		}},
 	}, {
-		user:   "user1",
+		user:   "user8",
 		role:   "USER",
 		result: `{"addMovie": {"movie": [{"content": "add_movie_3"}]}}`,
 		variables: map[string]interface{}{"movie": &Movie{
@@ -420,7 +414,7 @@ func TestAddComplexFilter(t *testing.T) {
 			}},
 		}},
 	}, {
-		user:   "user1",
+		user:   "user8",
 		role:   "USER",
 		result: `{"addMovie": {"movie": [{"content": "add_movie_4"}]}}`,
 		variables: map[string]interface{}{"movie": &Movie{
@@ -430,7 +424,7 @@ func TestAddComplexFilter(t *testing.T) {
 				Name:   "add_region_2",
 				Global: false,
 				Users: []*User{{
-					Username: "user1",
+					Username: "user8",
 				}},
 			}},
 		}},
@@ -463,8 +457,6 @@ func TestAddComplexFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
@@ -530,8 +522,6 @@ func TestAddRBACFilter(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
@@ -598,8 +588,6 @@ func TestAddUserSecret(t *testing.T) {
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		if tcase.result == "" {
 			require.Equal(t, len(gqlResponse.Errors), 1)
-			require.Equal(t, gqlResponse.Errors[0].Error(),
-				"mutation failed because authorization failed")
 			continue
 		}
 
