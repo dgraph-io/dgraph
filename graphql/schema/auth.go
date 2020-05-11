@@ -42,6 +42,7 @@ type RuleNode struct {
 	Not      *RuleNode
 	Rule     Query
 	RBACRule *RBACQuery
+	Result   RuleResult
 }
 
 type AuthContainer struct {
@@ -68,14 +69,29 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	return Negative
 }
 
-func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
+func (node *RuleNode) preEvaluateAuthRule(av map[string]interface{}) {
+	op := node.Rule.Operation()
+	if !op.IsQuery() {
+		return
+	}
+
+	for _, v := range op.QueryVariables() {
+		if _, ok := av[v.Variable]; !ok {
+			node.Result = Negative
+			return
+		}
+	}
+	return
+}
+
+func (node *RuleNode) EvaluateRulesLocally(av map[string]interface{}) RuleResult {
 	if node == nil {
 		return Uncertain
 	}
 
 	hasUncertain := false
 	for _, rule := range node.Or {
-		val := rule.EvaluateRBACRules(av)
+		val := rule.EvaluateRulesLocally(av)
 		if val == Positive {
 			return Positive
 		} else if val == Uncertain {
@@ -88,7 +104,7 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 	}
 
 	for _, rule := range node.And {
-		val := rule.EvaluateRBACRules(av)
+		val := rule.EvaluateRulesLocally(av)
 		if val == Negative {
 			return Negative
 		} else if val == Uncertain {
@@ -100,8 +116,12 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 		return Positive
 	}
 
-	if node.Not != nil && node.Not.RBACRule != nil {
-		switch node.Not.EvaluateRBACRules(av) {
+	if node.Not != nil {
+		result := node.Not.EvaluateRulesLocally(av)
+		if node.Not.RBACRule == nil {
+			return result
+		}
+		switch result {
 		case Uncertain:
 			return Uncertain
 		case Positive:
@@ -109,14 +129,16 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 		case Negative:
 			return Positive
 		}
-
 	}
 
 	if node.RBACRule != nil {
 		return node.RBACRule.EvaluateRBACRule(av)
 	}
 
-	return Uncertain
+	if node.Rule != nil {
+		node.preEvaluateAuthRule(av)
+	}
+	return node.Result
 }
 
 type TypeAuth struct {

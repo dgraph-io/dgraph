@@ -205,6 +205,29 @@
        }
      }
 
+- name: "Query with missing jwt variables"
+  gqlquery: |
+    query {
+      queryGroup {
+        id
+      }
+    }
+  dgquery: |-
+    query {
+      queryGroup(func: uid(Group1)) @filter((uid(Group2) OR uid(Group3))) {
+        id : uid
+      }
+      Group1 as var(func: type(Group))
+      Group2 as var(func: uid(Group1)) @cascade {
+        users : Group.users @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+      Group3 as var(func: uid(Group1)) @cascade {
+        createdBy : Group.createdBy @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+
 - name: "Auth with top level OR rbac false"
   gqlquery: |
     query {

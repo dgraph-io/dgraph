@@ -108,6 +108,7 @@ type Operation interface {
 	IsQuery() bool
 	IsMutation() bool
 	IsSubscription() bool
+	QueryVariables() ast.VariableDefinitionList
 }
 
 // A Field is one field from an Operation.
@@ -286,6 +287,13 @@ func (o *operation) IsSubscription() bool {
 
 func (o *operation) Schema() Schema {
 	return o.inSchema
+}
+
+func (o *operation) QueryVariables() ast.VariableDefinitionList {
+	if !o.IsQuery() {
+		return nil
+	}
+	return o.op.VariableDefinitions
 }
 
 func (o *operation) Queries() (qs []Query) {
