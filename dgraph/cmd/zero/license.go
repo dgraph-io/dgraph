@@ -22,6 +22,7 @@ import (
 	"net/http"
 
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/protos/pb"
 )
 
 // dummy function as enterprise features are not available in oss binary.
@@ -38,6 +39,10 @@ func (st *state) applyEnterpriseLicense(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusNotFound)
 }
 
-func (st *state) applyLicenseFile(path string) error {
+func (s *Server) applyLicenseFile(path string) {
+	return
+}
+
+func (s *Server) license() *pb.License {
 	return nil
 }

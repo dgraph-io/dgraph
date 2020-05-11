@@ -200,10 +200,10 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 
 	for _, defn := range definitions {
 		typ := sch.Types[defn]
-		custom := typ.Directives.ForName("custom")
+		custom := typ.Directives.ForName(customDirective)
 		setHeaders(custom)
 		for _, field := range typ.Fields {
-			custom := field.Directives.ForName("custom")
+			custom := field.Directives.ForName(customDirective)
 			setHeaders(custom)
 		}
 	}

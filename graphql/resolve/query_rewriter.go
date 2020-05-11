@@ -192,12 +192,19 @@ func addUID(dgQuery *gql.GraphQuery) {
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
+	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
-		Func: &gql.Function{
-			Name: "uid",
-			UID:  uids,
-		},
+	}
+
+	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
+		return dgQuery
+	}
+
+	dgQuery.Func = &gql.Function{
+		Name: "uid",
+		UID:  uids,
 	}
 
 	if ids := idFilter(field, field.Type().IDField()); ids != nil {
@@ -208,7 +215,10 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
 
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	}
+
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
 	}
@@ -232,6 +242,10 @@ func rewriteAsGet(
 	auth *authRewriter) *gql.GraphQuery {
 
 	var dgQuery *gql.GraphQuery
+	rbac := auth.evaluateRBAC(field)
+	if rbac == schema.Negative {
+		return &gql.GraphQuery{}
+	}
 
 	if xid == nil {
 		dgQuery = rewriteAsQueryByIds(field, []uint64{uid}, auth)
@@ -280,7 +294,10 @@ func rewriteAsGet(
 	addUID(dgQuery)
 	addTypeFilter(dgQuery, field.Type())
 
-	dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
+	if rbac == schema.Uncertain {
+		dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
+	}
+
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
 	}
@@ -289,8 +306,14 @@ func rewriteAsGet(
 }
 
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
+	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.ResponseName(),
+	}
+
+	if rbac == schema.Negative {
+		dgQuery.Attr = dgQuery.Attr + "()"
+		return dgQuery
 	}
 
 	if authRw != nil && authRw.isWritingAuth && authRw.varName != "" {
@@ -317,7 +340,9 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
 
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	}
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -408,6 +433,16 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
+func (authRw *authRewriter) evaluateRBAC(f schema.Field) schema.RuleResult {
+	if authRw == nil || authRw.isWritingAuth {
+		return schema.Uncertain
+	}
+
+	typ := f.Type()
+	rn := authRw.selector(typ)
+	return rn.EvaluateRBACRules(authRw.authVariables)
+}
+
 func (authRw *authRewriter) rewriteRuleNode(
 	typ schema.Type,
 	rn *schema.RuleNode) ([]*gql.GraphQuery, *gql.FilterTree) {
@@ -425,7 +460,9 @@ func (authRw *authRewriter) rewriteRuleNode(
 		for _, orRn := range rns {
 			q, f := authRw.rewriteRuleNode(typ, orRn)
 			qrys = append(qrys, q...)
-			filts = append(filts, f)
+			if f != nil {
+				filts = append(filts, f)
+			}
 		}
 		return qrys, filts
 	}
@@ -433,18 +470,33 @@ func (authRw *authRewriter) rewriteRuleNode(
 	switch {
 	case len(rn.And) > 0:
 		qrys, filts := nodeList(typ, rn.And)
+		if len(filts) == 0 {
+			return qrys, nil
+		}
+		if len(filts) == 1 {
+			return qrys, filts[0]
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "and",
 			Child: filts,
 		}
 	case len(rn.Or) > 0:
 		qrys, filts := nodeList(typ, rn.Or)
+		if len(filts) == 0 {
+			return qrys, nil
+		}
+		if len(filts) == 1 {
+			return qrys, filts[0]
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "or",
 			Child: filts,
 		}
 	case rn.Not != nil:
 		qrys, filter := authRw.rewriteRuleNode(typ, rn.Not)
+		if filter == nil {
+			return qrys, nil
+		}
 		return qrys, &gql.FilterTree{
 			Op:    "not",
 			Child: []*gql.FilterTree{filter},
@@ -562,15 +614,23 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
+		rbac := auth.evaluateRBAC(f)
 
 		selectionAuth := addSelectionSetFrom(child, f, auth)
 		addedFields[f.Name()] = true
-		q.Children = append(q.Children, child)
+
+		if rbac == schema.Positive || rbac == schema.Uncertain {
+			q.Children = append(q.Children, child)
+		}
+
+		if rbac != schema.Uncertain {
+			continue
+		}
 
 		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
 		authQueries = append(authQueries, selectionAuth...)
 		authQueries = append(authQueries, fieldAuth...)
-		if len(fieldAuth) > 0 {
+		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter
 			} else {

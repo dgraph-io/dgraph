@@ -52,6 +52,182 @@
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
+- name: "Deep RBAC rules true"
+  gqlquery: |
+    query {
+      queryUser {
+        issues {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+      query {
+        queryUser(func: type(User)) {
+          issues : User.issues @filter(uid(Issue1)) {
+            id : uid
+          }
+          dgraph.uid : uid
+        }
+        Issue1 as var(func: type(Issue)) @cascade {
+          owner : Issue.owner @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+      }
+
+- name: "Deep RBAC rules false"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        issues {
+          id
+        }
+      }
+    }
+  role: "USER"
+  dgquery: |-
+      query {
+        queryUser(func: type(User)) {
+          username : User.username
+          dgraph.uid : uid
+        }
+      }
+
+
+- name: "Auth with top level AND rbac true"
+  gqlquery: |
+    query {
+      queryIssue {
+        msg
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+     query {
+       queryIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+         msg : Issue.msg
+         dgraph.uid : uid
+       }
+       Issue1 as var(func: type(Issue))
+       Issue2 as var(func: uid(Issue1)) @cascade {
+         owner : Issue.owner @filter(eq(User.username, "user1"))
+         dgraph.uid : uid
+       }
+     }
+
+- name: "Auth with complex rbac rules, true"
+  gqlquery: |
+    query {
+      queryComplexLog {
+        logs
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+      queryComplexLog(func: type(ComplexLog)) {
+        logs : ComplexLog.logs
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with complex rbac rules, false"
+  gqlquery: |
+    query {
+      queryComplexLog {
+        logs
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+      queryComplexLog()
+    }
+
+- name: "Auth with top level rbac true"
+  gqlquery: |
+    query {
+      queryLog {
+        logs
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+      queryLog(func: type(Log)) {
+        logs : Log.logs
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Auth with top level rbac false"
+  gqlquery: |
+    query {
+      queryLog {
+        logs
+      }
+    }
+  role: "USER"
+  dgquery: |-
+     query {
+       queryLog()
+     }
+
+- name: "Auth with top level AND rbac false"
+  gqlquery: |
+    query {
+      queryIssue {
+        msg
+      }
+    }
+  role: "USER"
+  dgquery: |-
+     query {
+       queryIssue()
+     }
+
+
+- name: "Auth with top level OR rbac true"
+  gqlquery: |
+    query {
+      queryProject {
+        name
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+     query {
+       queryProject(func: type(Project)) {
+         name : Project.name
+         dgraph.uid : uid
+       }
+     }
+
+- name: "Auth with top level OR rbac false"
+  gqlquery: |
+    query {
+      queryProject {
+        name
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+      queryProject(func: uid(Project1)) @filter(uid(Project2)) {
+        name : Project.name
+        dgraph.uid : uid
+      }
+      Project1 as var(func: type(Project))
+      Project2 as var(func: uid(Project1)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
 
 - name: "Auth with top level filter : query, filter and order"
   gqlquery: |
