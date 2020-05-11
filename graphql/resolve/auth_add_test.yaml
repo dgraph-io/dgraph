@@ -637,7 +637,7 @@
       }
       Project3 as var(func: uid(0x123))
       Project4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
         }
@@ -725,7 +725,7 @@
       }
       Project3 as var(func: uid(0x123))
       Project4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
           dgraph.uid : uid
         }
