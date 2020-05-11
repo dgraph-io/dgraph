@@ -99,6 +99,18 @@ func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Fac
 	return binaryValueFacet, nil
 }
 
+// parseMapFacetsJSON parses facets which are of map type. Facets for scalar list predicates are
+// specifed in map format. For example below prdicate nickname and kind facet associated with it.
+// Here nickname "bob" doesn't have any facet associated with it.
+// {
+//		"nickname": ["alice", "bob", "josh"],
+//		"nickname|kind": {
+//			"0": "friends",
+//			"2": "official"
+// 		}
+// }
+// Parsed response would a slice of maps[int]*api.Facet, one map for each facet json.
+// Map key would be the index for the facet.
 func parseMapFacetsJSON(m map[string]interface{}, prefix string) ([]map[int]*api.Facet, error) {
 	if prefix == "" {
 		return nil, nil
@@ -115,18 +127,19 @@ func parseMapFacetsJSON(m map[string]interface{}, prefix string) ([]map[int]*api
 
 		fm, ok := facetVal.(map[string]interface{})
 		if !ok {
-			return nil, errors.New("facets map is not of type map")
+			return nil,
+				errors.Errorf("facets format should be of type map for scalar list predicates")
 		}
 
 		idxMap := make(map[int]*api.Facet, len(fm))
 		for sidx, val := range fm {
 			facet, err := handleBasicFacetsType(fname, prefix, val)
 			if err != nil {
-				return nil, err
+				return nil, errors.Wrapf(err, "Index: %s", sidx)
 			}
 			idx, err := strconv.Atoi(sidx)
 			if err != nil {
-				return nil, errors.New("invalid index in facets")
+				return nil, errors.Wrapf(err, "Index: %s", sidx)
 			}
 			idxMap[idx] = facet
 		}
@@ -136,7 +149,9 @@ func parseMapFacetsJSON(m map[string]interface{}, prefix string) ([]map[int]*api
 	return mapSlice, nil
 }
 
-func parseFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
+// parseBasicefacets parses facets which should be of type string/json.Number/bool.
+// It returns []*api.Facet, one *api.Facet for each facet.
+func parseBasicFacetsJSON(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
 		return nil, nil
@@ -431,15 +446,14 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		nq := api.NQuad{
 			Subject:   mr.uid,
 			Predicate: pred,
-			//	Facets:    fts,
 		}
 
 		prefix := pred + x.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
-		// Only call parseFacetsJSON when value type is not list.
+		// Only call parseBasicFacetsJSON when value type is not list.
 		if _, ok := v.([]interface{}); !ok {
-			fts, err := parseFacetsJSON(m, prefix)
+			fts, err := parseBasicFacetsJSON(m, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -484,6 +498,8 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 			buf.PushPredHint(pred, pb.Metadata_SINGLE)
 		case []interface{}:
 			buf.PushPredHint(pred, pb.Metadata_LIST)
+			// TODO(Ashish): We need to call this only in case of scalarlist, for other lists
+			// this can be avoided.
 			facetsMapSlice, err := parseMapFacetsJSON(m, prefix)
 			if err != nil {
 				return mr, err
@@ -537,7 +553,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseFacetsJSON(m, parentPred+x.FacetDelimeter)
+	fts, err := parseBasicFacetsJSON(m, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
 }

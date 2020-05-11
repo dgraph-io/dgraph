@@ -546,6 +546,110 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	checkCount(t, nq, "friend", 1)
 }
 
+// Test valid facets json.
+func TestNquadsFromJsonFacets3(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua", "David", "Josh"],
+			"friend|from": {
+				"0": "school",
+				"2": "college"
+			},
+			"friend|age": {
+				"1": 20,
+				"2": 21
+			}
+		}
+	]`
+
+	nqs, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(nqs))
+	for _, nq := range nqs {
+		predVal := nq.ObjectValue.GetStrVal()
+		switch predVal {
+		case "Alice":
+			require.Equal(t, 0, len(nq.Facets))
+		case "Joshua":
+			require.Equal(t, 1, len(nq.Facets))
+		case "David":
+			require.Equal(t, 1, len(nq.Facets))
+		case "Josh":
+			require.Equal(t, 2, len(nq.Facets))
+		}
+	}
+}
+
+// Test invalid facet format with scalar list predicate.
+func TestNquadsFromJsonFacets4(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua", "David", "Josh"],
+			"friend|age": 20
+		}
+	]`
+
+	_, err := Parse([]byte(json), SetNquads)
+	require.Error(t, err)
+}
+
+// Test map facet format with predicate with normal predicate.
+func TestNquadsFromJsonFacets5(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": "Joshua",
+			"friend|age": {
+				"0": 20
+			}
+		}
+	]`
+
+	_, err := Parse([]byte(json), SetNquads)
+	require.Error(t, err)
+}
+
+// Test invalid type in map facet format for scalar list.
+func TestNquadsFromJsonFacets6(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua"],
+			"friend|age": {
+				"0": {
+					"1": 20
+				}
+			}
+		}
+	]`
+
+	_, err := Parse([]byte(json), SetNquads)
+	require.Error(t, err)
+}
+
+// Test invalid index value in map facet format for scalar list.
+func TestNquadsFromJsonFacets7(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua"],
+			"friend|age": {
+				"a": 20
+			}
+		}
+	]`
+
+	_, err := Parse([]byte(json), SetNquads)
+	require.Error(t, err)
+}
+
 func TestNquadsFromJsonError1(t *testing.T) {
 	p := Person{
 		Name: "Alice",
