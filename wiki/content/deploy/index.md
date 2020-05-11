@@ -944,11 +944,11 @@ Similarly, you can expose alpha and ratel service to the internet as follows:
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
 
-#### Upgrading the Chart
+#### Upgrading the Chart to increase the number of Alphas
 
-{{% notice "warning" %}}
-Steps to upgrade the Heml Chart must be done in the correct order.
-{{% /notice %}}
+Dgraph is a stateful database that requires some attention on upgrading the configuration in order to maintain state. 
+
+When `zero.shardReplicaCount` is not set to an HA configuration (3 or 5), follow the steps below:
 
 1. Set the shard replica flag on the Zero node group. For example: `zero.shardReplicaCount=3`.
 2. Next, run the Helm upgrade command to restart the Zero node group: 
@@ -960,6 +960,10 @@ helm upgrade my-release dgraph/dgraph [options]
 ```sh
 helm upgrade my-release dgraph/dgraph [options] 
 ```
+
+When `zero.shardReplicaCount` is set to an HA configuration (3 or 5), do
+
+TODO: (this can go before if it a more general case)
 
 
 #### Deleting the Chart
