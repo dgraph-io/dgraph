@@ -102,7 +102,7 @@ type Movie @auth(
                 }"""
             }
         ]}
-    ]}
+    ]},
     add: { and: [
         { not: { rule: """
             query {
@@ -149,8 +149,7 @@ type Issue @auth(
                           }
                       }
                 }"""}
-     ]}
-
+     ]},
      add:  { and : [
        { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
        { rule: """ query($USER: String!) {
@@ -186,16 +185,6 @@ type ComplexLog @auth(
   logs: String
 }
 
-type ComplexLog @auth(
-     query: { and : [
-      { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-      { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
-     ]}
-) {
-  id: ID!
-  logs: String
-}
-
 type Project @auth(
      query: { or: [
          { rule: """query($USER: String!) {
@@ -208,7 +197,7 @@ type Project @auth(
                       }
                   }""" },
          { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
-     ]}
+     ]},
      add: { or: [
          { rule: """query($USER: String!) {
                       queryProject {

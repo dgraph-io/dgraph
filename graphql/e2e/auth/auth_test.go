@@ -232,8 +232,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil})
+	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil, nil})
+	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil, nil})
 
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
