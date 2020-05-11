@@ -751,6 +751,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	} else {
 		for i := 0; i < len(inputs); i++ {
+			if fconf.Template == nil {
+				continue
+			}
 			temp, err := copyTemplate(*fconf.Template)
 			if err != nil {
 				errCh <- err
@@ -988,9 +991,16 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		fieldVals, ok := val[f.Name()].([]interface{})
+		tmpVals, ok := val[f.Name()]
 		if !ok {
 			continue
+		}
+		var fieldVals []interface{}
+		switch tv := tmpVals.(type) {
+		case []interface{}:
+			fieldVals = tv
+		case interface{}:
+			fieldVals = []interface{}{tv}
 		}
 		for _, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
@@ -1026,9 +1036,16 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		fieldVals, ok := val[f.Name()].([]interface{})
+		tmpVals, ok := val[f.Name()]
 		if !ok {
 			continue
+		}
+		var fieldVals []interface{}
+		switch tv := tmpVals.(type) {
+		case []interface{}:
+			fieldVals = tv
+		case interface{}:
+			fieldVals = []interface{}{tv}
 		}
 		for idx, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
@@ -1453,7 +1470,7 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 func makeRequest(client *http.Client, method, url, body string,
 	header http.Header) ([]byte, error) {
 	var reqBody io.Reader
-	if body == "" {
+	if body == "" || body == "null" {
 		reqBody = http.NoBody
 	} else {
 		reqBody = bytes.NewBufferString(body)

@@ -286,6 +286,31 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
 }
 
+func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
+		body:      "",
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write([]byte(`
+	{
+		"users": [{
+			"id": 1231723732206411776,
+			"name": "hi_balaji",
+			"screen_name": "hi_balaji",
+			"location": "",
+			"description": "",
+			"followers_count": 0,
+			"friends_count": 117,
+			"statuses_count": 0
+		}]
+	}`)))
+}
+
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodPost,
@@ -1052,6 +1077,7 @@ func main() {
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
