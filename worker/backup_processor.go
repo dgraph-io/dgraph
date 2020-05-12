@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"sync"
 
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
@@ -34,6 +33,11 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	// backupNumGo is the number of go routines used by the backup stream writer.
+	backupNumGo = 16
+)
+
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
@@ -41,27 +45,28 @@ type BackupProcessor struct {
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
 
-	// plPool is a pool to store pb.PostingList objects.
-	plPool *sync.Pool
-	// bplPool is a pool to store pb.BackupPostingList objects.
-	bplPool *sync.Pool
+	// plList is an array of pre-allocated pb.PostingList objects.
+	plList []*pb.PostingList
+	// bplList is an array of pre-allocated pb.BackupPostingList objects.
+	bplList []*pb.BackupPostingList
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
-	return &BackupProcessor{
-		DB: db,
+	bp := &BackupProcessor{
+		DB:      db,
 		Request: req,
-		plPool: &sync.Pool{
-			New: func() interface{} {
-				return &pb.PostingList{}
-			},
-		},
-		bplPool: &sync.Pool{
-			New: func() interface{} {
-				return &pb.BackupPostingList{}
-			},
-		},
+		plList:  make([]*pb.PostingList, backupNumGo),
+		bplList: make([]*pb.BackupPostingList, backupNumGo),
 	}
+
+	for i, _ := range bp.plList {
+		bp.plList[i] = &pb.PostingList{}
+	}
+	for i, _ := range bp.bplList {
+		bp.bplList[i] = &pb.BackupPostingList{}
+	}
+
+	return bp
 }
 
 // LoadResult holds the output of a Load operation.
@@ -117,7 +122,8 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
-	stream.KeyToList = pr.toBackupList
+	stream.NumGo = backupNumGo
+	stream.KeyToListWithThreadNum = pr.toBackupList
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
@@ -210,7 +216,8 @@ func (m *Manifest) GoString() string {
 		m.Since, m.Groups, m.Encrypted)
 }
 
-func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator, threadNum int) (
+	*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
 	item := itr.Item()
@@ -241,7 +248,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.
 		}
 		kv.Key = backupKey
 
-		backupPl, err := pr.toBackupPostingList(kv.Value)
+		backupPl, err := pr.toBackupPostingList(kv.Value, threadNum)
 		if err != nil {
 			return nil, err
 		}
@@ -285,15 +292,13 @@ func toBackupKey(key []byte) ([]byte, error) {
 	return backupKey, nil
 }
 
-func (pr *BackupProcessor) toBackupPostingList(val []byte) ([]byte, error) {
-	pl := pr.plPool.Get().(*pb.PostingList)
-	bpl := pr.bplPool.Get().(*pb.BackupPostingList)
+func (pr *BackupProcessor) toBackupPostingList(val []byte, threadNum int) ([]byte, error) {
+	pl := pr.plList[threadNum]
+	bpl := pr.bplList[threadNum]
 	defer func() {
-		// Put protobufs back into the pools.
+		// Reset the protobufs after use.
 		pl.Reset()
-		pr.plPool.Put(pl)
 		bpl.Reset()
-		pr.bplPool.Put(bpl)
 	}()
 
 	if err := pl.Unmarshal(val); err != nil {
