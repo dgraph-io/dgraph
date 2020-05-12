@@ -289,6 +289,9 @@ func deleteCompletion() CompletionFunc {
 		if fld, ok := resolved.Data.(map[string]interface{}); ok {
 			if rsp, ok := fld[resolved.Field.Name()].(map[string]interface{}); ok {
 				rsp["msg"] = "Deleted"
+				if rsp[schema.NumUid] == 0 {
+					rsp["msg"] = "No nodes were deleted"
+				}
 			}
 		}
 	})

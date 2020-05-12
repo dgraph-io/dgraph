@@ -95,7 +95,7 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.Data.AddUser.User))
 }
 
-func deleteUser(t *testing.T, accessToken, username string) {
+func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) {
 	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
 	delUser := `mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
@@ -110,7 +110,9 @@ func deleteUser(t *testing.T, accessToken, username string) {
 		},
 	}
 	b := makeRequest(t, accessToken, params)
-	require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+	if confirmDeletion {
+		require.JSONEq(t, `{"data":{"deleteUser":{"msg":"Deleted"}}}`, string(b))
+	}
 }
 
 func deleteGroup(t *testing.T, accessToken, name string) {
@@ -159,19 +161,13 @@ func TestPasswordReturn(t *testing.T) {
 }
 
 func TestGetCurrentUser(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
-
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 	require.Equal(t, string(getCurrentUser(t, accessJwt)),
 		`{"data":{"getCurrentUser":{"name":"groot"}}}`)
 
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, false)
 	glog.Infof("cleaned up db user state")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -189,26 +185,15 @@ func TestGetCurrentUser(t *testing.T) {
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
-
-	// clean up the user to allow repeated running of this test
-	deleteUser(t, accessJwt, userid)
-	glog.Infof("cleaned up db user state")
-
-	resp := createUser(t, accessJwt, userid, userpassword)
-	checkUserCount(t, resp, 1)
+	resetUser(t)
 
 	// adding the user again should fail
-	resp = createUser(t, accessJwt, userid, userpassword)
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := createUser(t, accessJwt, userid, userpassword)
 	checkUserCount(t, resp, 0)
 
 	// delete the user
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, true)
 
 	resp = createUser(t, accessJwt, userid, userpassword)
 	// now we should be able to create the user again
@@ -216,15 +201,10 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 }
 
 func resetUser(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 
 	// clean up the user to allow repeated running of this test
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, false)
 	glog.Infof("deleted user")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -1564,7 +1544,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, true)
 
 	gqlQuery := `
 	query {
