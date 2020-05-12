@@ -30,7 +30,7 @@ import (
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
-// RegisterVaultFlags registers the required encryption flags.
+// RegisterFlags registers the required encryption flags.
 func RegisterFlags(flag *pflag.FlagSet) {
 	flag.String("encryption_key_file", "",
 		"The file that stores the symmetric key. The key size must be 16, 24, or 32 bytes long. "+

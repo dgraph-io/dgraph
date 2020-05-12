@@ -18,8 +18,140 @@ import (
 	"os"
 	"testing"
 
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
+
+func ResetConfig(config *viper.Viper) {
+	config.Set("encryption_key_file", "")
+
+	config.Set("vault_addr", "http://localhost:8200")
+	config.Set("vault_roleID_file", "")
+	config.Set("vault_secretID_file", "")
+	config.Set("vault_path", "dgraph")
+	config.Set("vault_field", "enc_key")
+}
+
+func TestNewKeyReader(t *testing.T) {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	RegisterFlags(flags)
+	config.BindPFlags(flags)
+
+	// Vault and Local combination tests
+	// Both Local and Vault options is invalid.
+	ResetConfig(config)
+	config.Set("encryption_key_file", "blah")
+	config.Set("vault_roleID_file", "aaa")
+	config.Set("vault_secretID_file", "bbb")
+	kR, err := NewKeyReader(config)
+	require.Error(t, err)
+	require.Nil(t, kR)
+	t.Logf("%v", err)
+
+	// RoleID only is invalid.
+	ResetConfig(config)
+	config.Set("vault_roleID_file", "aaa")
+	kR, err = NewKeyReader(config)
+	require.Error(t, err)
+	require.Nil(t, kR)
+	t.Logf("%v", err)
+
+	// SecretID only is invalid.
+	ResetConfig(config)
+	config.Set("vault_secretID_file", "bbb")
+	kR, err = NewKeyReader(config)
+	require.Error(t, err)
+	require.Nil(t, kR)
+	t.Logf("%v", err)
+
+	// RoleID and SecretID given but RoleID file doesn't exist.
+	ResetConfig(config)
+	config.Set("vault_roleID_file", "aaa")
+	config.Set("vault_secretID_file", "bbb")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	//	require.IsType(t, &vault.vaultKeyReader{}, kR)
+	k, err := kR.ReadKey()
+	require.Nil(t, k)
+	require.Error(t, err)
+	t.Logf("%v", err)
+
+	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
+	ResetConfig(config)
+	config.Set("vault_roleID_file", "./dummy_role_id_file")
+	config.Set("vault_secretID_file", "bbb")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	//	require.IsType(t, &vault.vaultKeyReader{}, kR)
+	k, err = kR.ReadKey()
+	require.Nil(t, k)
+	require.Error(t, err)
+	t.Logf("%v", err)
+
+	// RoleID and SecretID given but RoleID file and SecretID file exists.
+	ResetConfig(config)
+	config.Set("vault_roleID_file", "./dummy_role_id_file")
+	config.Set("vault_secretID_file", "./dummy_secret_id_file")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	//	require.IsType(t, &vault.vaultKeyReader{}, kR)
+	k, err = kR.ReadKey()
+	require.Nil(t, k) // still fails because we need to mock Vault server.
+	require.Error(t, err)
+	t.Logf("%v", err)
+
+	// Bad Encryption Key File
+	ResetConfig(config)
+	config.Set("encryption_key_file", "blah")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	require.IsType(t, &localKeyReader{}, kR)
+	k, err = kR.ReadKey()
+	require.Nil(t, k)
+	require.Error(t, err)
+
+	// Nil Encryption Key File
+	ResetConfig(config)
+	config.Set("encryption_key_file", "")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.Nil(t, kR)
+	t.Logf("%v", err)
+
+	// Bad Length Encryption Key File.
+	ResetConfig(config)
+	config.Set("encryption_key_file", "./bad-length-enc-key")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	require.IsType(t, &localKeyReader{}, kR)
+	k, err = kR.ReadKey()
+	require.Nil(t, k)
+	require.Error(t, err)
+	t.Logf("%v", err)
+
+	// Good Encryption Key File.
+	ResetConfig(config)
+	config.Set("encryption_key_file", "./enc-key")
+	kR, err = NewKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kR)
+	require.IsType(t, &localKeyReader{}, kR)
+	k, err = kR.ReadKey()
+	require.NotNil(t, k)
+	require.NoError(t, err)
+	t.Logf("%v", err)
+}
+
+func keyReaderRun() {
+
+}
 
 func TestGetReaderWriter(t *testing.T) {
 	// Test GetWriter()
