@@ -2024,6 +2024,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			switch {
 			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
 				sg.UnknownAttr = true
+				// Create an empty result because the code below depends on it.
+				result = &pb.Result{}
 			case err != nil:
 				rch <- err
 				return

@@ -214,6 +214,7 @@ func RunAll(t *testing.T) {
 	t.Run("admin", admin)
 	t.Run("health", health)
 	t.Run("partial health", partialHealth)
+	t.Run("alias should work in admin", adminAlias)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
@@ -268,6 +269,7 @@ func RunAll(t *testing.T) {
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
+	t.Run("alias works for queries", queryWithAlias)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -302,6 +304,7 @@ func RunAll(t *testing.T) {
 	t.Run("query typename in mutation payload", queryTypenameInMutationPayload)
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
+	t.Run("alias works for mutations", mutationsWithAlias)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

@@ -574,7 +574,7 @@ func TestDeleteAuthRule(t *testing.T) {
 					"anyofterms": "Sensitive information",
 				},
 			},
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteUserSecret":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 	}
 	query := `
@@ -674,7 +674,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 					"anyofterms": "Ticket2",
 				},
 			},
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteTicket":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 		{
 			name: "ticket with edit permission",
