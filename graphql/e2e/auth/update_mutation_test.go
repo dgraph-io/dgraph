@@ -228,43 +228,22 @@ func TestUpdateOrRBACFilter(t *testing.T) {
 	ids := getAllProjects(t, []string{"user1"}, []string{"ADMIN"})
 
 	testCases := []TestCase{{
-		user: "user1",
-		role: "ADMIN",
-		result: `{
-			    "updateProject": {"project": [
-                              {
-                                "name": "Project1"
-                              },
-                              {
-                                "name": "Project2"
-                              }
-                            ]}
-                        }`,
+		user:   "user1",
+		role:   "ADMIN",
+		result: `{"updateProject": {"project": [{"name": "Project1"},{"name": "Project2"}]}}`,
 	}, {
-		user: "user1",
-		role: "USER",
-		result: `{
-			    "updateProject": {"project": [
-                              {
-                                "name": "Project1"
-                              }
-                            ]}
-                        }`,
+		user:   "user1",
+		role:   "USER",
+		result: `{"updateProject": {"project": [{"name": "Project1"}]}}`,
 	}, {
-		user: "user4",
-		role: "USER",
-		result: `{
-			    "updateProject": {"project": [
-                              {
-                                "name": "Project2"
-                              }
-                            ]}
-                        }`,
+		user:   "user4",
+		role:   "USER",
+		result: `{"updateProject": {"project": [{"name": "Project2"}]}}`,
 	}}
 
 	query := `
 	    mutation ($projs: [ID!]) {
-		    updateProject(input:{filter:{projID:$projs}, set:{random:"test"}}) {
+		    updateProject(input: {filter: {projID: $projs}, set: {random: "test"}}) {
 			project (order: {asc: name}) {
 				name
 			}
@@ -306,7 +285,7 @@ func TestUpdateRootFilter(t *testing.T) {
 
 	query := `
 	    mutation ($cols: [ID!]) {
-		    updateColumn(input:{filter:{colID:$cols}, set:{random:"test"}}) {
+		    updateColumn(input: {filter: {colID: $cols}, set: {random: "test"}}) {
 			column (order: {asc: name}) {
 				name
 			}
@@ -339,7 +318,7 @@ func TestUpdateRBACFilter(t *testing.T) {
 
 	query := `
 	    mutation ($ids: [ID!]) {
-		    updateLog(input:{filter:{id:$ids}, set:{random:"test"}}) {
+		    updateLog(input: {filter: {id: $ids}, set: {random: "test"}}) {
 			log (order: {asc: logs}) {
 				logs
 			}
@@ -382,7 +361,7 @@ func TestUpdateAndRBACFilter(t *testing.T) {
 
 	query := `
 	    mutation ($ids: [ID!]) {
-		    updateIssue(input:{filter:{id:$ids}, set:{random:"test"}}) {
+		    updateIssue(input: {filter: {id: $ids}, set: {random: "test"}}) {
 			issue (order: {asc: msg}) {
 				msg
 			}
@@ -410,37 +389,18 @@ func TestUpdateNestedFilter(t *testing.T) {
 	ids := getAllMovies(t, []string{"user1", "user2", "user3"}, []string{"ADMIN"})
 
 	testCases := []TestCase{{
-		user: "user1",
-		role: "USER",
-		result: `
-{
-   "updateMovie": {"movie": [
-      {
-         "content": "Movie2"
-      },
-      {
-         "content": "Movie3"
-      }
-   ]}
-}
-		`,
+		user:   "user1",
+		role:   "USER",
+		result: `{"updateMovie": {"movie": [{"content": "Movie2"}, {"content": "Movie3"}]}}`,
 	}, {
-		user: "user2",
-		role: "USER",
-		result: `
-{
-   "updateMovie": {"movie": [
-      { "content": "Movie1" },
-      { "content": "Movie2" },
-      { "content": "Movie3" }
-   ]}
-}
-		`,
+		user:   "user2",
+		role:   "USER",
+		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }]}}`,
 	}}
 
 	query := `
 	    mutation ($ids: [ID!]) {
-		    updateMovie(input:{filter:{id:$ids}, set:{random:"test"}}) {
+		    updateMovie(input: {filter: {id: $ids}, set: {random: "test"}}) {
 			movie (order: {asc: content}) {
 				content
 			}
