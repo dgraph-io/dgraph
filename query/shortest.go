@@ -19,6 +19,7 @@ package query
 import (
 	"container/heap"
 	"context"
+	"fmt"
 	"math"
 	"sync"
 
@@ -103,6 +104,16 @@ type nodeInfo struct {
 	node *queueItem
 }
 
+func printPQ(pq priorityQueue) {
+	for _, val := range pq {
+		fmt.Printf("IteminQ: %+v\n", val)
+		for _, vn := range *val.path.route {
+			fmt.Printf(" UID: %d ", vn.uid)
+		}
+		fmt.Printf("\n")
+	}
+
+}
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	fcs *pb.Facets, rerr error) {
 
@@ -325,6 +336,23 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	var stopExpansion bool
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
+		fmt.Printf("Item is: %+v\n", item)
+		fmt.Printf("Pathinfo is: \n")
+		for _, val := range *item.path.route {
+			fmt.Printf(" UID: %d ", val.uid)
+		}
+		fmt.Printf("\n")
+		fmt.Printf("NumHops: %d\n", numHops)
+		fmt.Println("Kroutes: ", kroutes)
+		for count, val := range kroutes {
+			fmt.Printf("Route: %d:\n", count)
+			for _, vl := range *val.route {
+				fmt.Printf(" UID: %d ", vl.uid)
+			}
+			fmt.Printf("\n")
+		}
+		fmt.Println("Length of queue: ", pq.Len())
+		printPQ(pq)
 		if item.uid == sg.Params.To {
 			// Ignore paths that do not meet the minimum weight requirement.
 			if item.cost < minWeight {
@@ -349,6 +377,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				case err = <-expandErr:
 					if err != nil {
 						if err == errStop {
+							fmt.Println("Stopped here")
 							stopExpansion = true
 						} else {
 							return nil, err
@@ -364,11 +393,12 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			if stopExpansion && len(kroutes) == numPaths {
+			if stopExpansion { //Can't be here.
 				continue
 			}
 		}
 		neighbours := adjacencyMap[item.uid]
+		fmt.Printf("Neighbours: %+v\n", neighbours)
 		for toUid, info := range neighbours {
 			cost := info.cost
 			// Skip neighbour if the cost is greater than the maximum weight allowed.
@@ -389,12 +419,30 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				// Use the curPath from pathPool. Set length appropriately.
 				*curPath = (*curPath)[:len(*item.path.route)+1]
 			}
+			fmt.Println("Curpath:")
+			for _, v := range *curPath {
+				fmt.Printf("Pathinfo: %+v\n", v)
+
+			}
+			fmt.Println("ItemPath:")
+			for _, v := range *item.path.route {
+				fmt.Printf("Item Pathinfo: %+v\n", v)
+
+			}
 			n := copy(*curPath, *item.path.route)
+
+			fmt.Println("Final Curpath:")
+			for _, v := range *curPath {
+				fmt.Printf("Pathinfo: %+v\n", v)
+
+			}
+			fmt.Println("Items copied: ", n)
 			(*curPath)[n] = pathInfo{
 				uid:   toUid,
 				attr:  info.attr,
 				facet: info.facet,
 			}
+			fmt.Println("Route added: ", (*curPath)[n])
 			node := &queueItem{
 				uid:  toUid,
 				cost: item.cost + cost,
@@ -403,11 +451,21 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 			heap.Push(&pq, node)
 		}
+		fmt.Printf("\n\n\n")
+
 		// Return the popped nodes path to pool.
 		pathPool.Put(item.path.route)
 	}
 
 	next <- false
+	fmt.Println("Final Routes are: ")
+	for count, val := range kroutes {
+		fmt.Printf("Route: %d:\n", count)
+		for _, vl := range *val.route {
+			fmt.Printf(" UID: %d ", vl.uid)
+		}
+		fmt.Printf("\n")
+	}
 
 	if len(kroutes) == 0 {
 		sg.DestUIDs = &pb.List{}
