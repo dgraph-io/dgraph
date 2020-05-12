@@ -117,6 +117,10 @@ func ParseAuthMeta(schema string) error {
 	return err
 }
 
+func GetHeader() string{
+	return metainfo.Header;
+}
+
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
 func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
 	authorizationJwt := r.Header.Get(metainfo.Header)
