@@ -257,11 +257,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
 	// merge the extensions we got from Mutate and Query into extM
-	if extM == nil {
-		extM = extQ
-	} else {
-		extM.Merge(extQ)
-	}
+	extM.Merge(extQ)
 
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
@@ -298,6 +294,9 @@ func deleteCompletion() CompletionFunc {
 		if fld, ok := resolved.Data.(map[string]interface{}); ok {
 			if rsp, ok := fld[resolved.Field.Name()].(map[string]interface{}); ok {
 				rsp["msg"] = "Deleted"
+				if rsp[schema.NumUid] == 0 {
+					rsp["msg"] = "No nodes were deleted"
+				}
 			}
 		}
 	})
