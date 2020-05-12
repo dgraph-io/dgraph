@@ -222,13 +222,13 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.Name()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.Name()))
 		})
 	}
 
@@ -606,7 +606,7 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.ResponseName()].(type) {
+	switch val := valToComplete[field.Name()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -640,7 +640,7 @@ func completeDgraphResult(
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
-			valToComplete[field.ResponseName()] = internalVal
+			valToComplete[field.Name()] = internalVal
 		}
 	case interface{}:
 		// no need to error in this case, this can be returned for custom HTTP query/mutation
@@ -649,12 +649,12 @@ func completeDgraphResult(
 			return dgraphError()
 		}
 
-		// valToComplete[field.ResponseName()] is nil, so resolving for the
+		// valToComplete[field.Name()] is nil, so resolving for the
 		// { } ---> "q": null
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.Name()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -831,7 +831,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// that we got from the remote endpoint with the right key in the object.
 		mu.Lock()
 		for idx, val := range vals {
-			val.(map[string]interface{})[f.Alias()] = result[idx]
+			val.(map[string]interface{})[f.Name()] = result[idx]
 			vals[idx] = val
 		}
 		mu.Unlock()
@@ -915,7 +915,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
 			if ok {
-				val[f.Alias()] = result
+				val[f.Name()] = result
 			}
 			mu.Unlock()
 			errChan <- errs
@@ -1193,7 +1193,7 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.ResponseName()]
+		val := res[f.Name()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection

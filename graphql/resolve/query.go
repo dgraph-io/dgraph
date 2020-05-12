@@ -71,7 +71,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 
 	resolved := qr.rewriteAndExecute(ctx, query)
 	if resolved.Data == nil {
-		resolved.Data = map[string]interface{}{query.ResponseName(): nil}
+		resolved.Data = map[string]interface{}{query.Name(): nil}
 	}
 
 	qr.resultCompleter.Complete(ctx, resolved)
@@ -82,7 +82,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:  map[string]interface{}{query.ResponseName(): nil},
+			Data:  map[string]interface{}{query.Name(): nil},
 			Field: query,
 			Err:   err,
 		}

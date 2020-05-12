@@ -194,7 +194,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
 	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
-		Attr: field.ResponseName(),
+		Attr: field.Name(),
 	}
 
 	if rbac == schema.Negative {
@@ -274,7 +274,7 @@ func rewriteAsGet(
 
 	if uid > 0 {
 		dgQuery = &gql.GraphQuery{
-			Attr: field.ResponseName(),
+			Attr: field.Name(),
 			Func: &gql.Function{
 				Name: "uid",
 				UID:  []uint64{uid},
@@ -286,7 +286,7 @@ func rewriteAsGet(
 
 	} else {
 		dgQuery = &gql.GraphQuery{
-			Attr: field.ResponseName(),
+			Attr: field.Name(),
 			Func: eqXidFunc,
 		}
 	}
@@ -308,7 +308,7 @@ func rewriteAsGet(
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	rbac := authRw.evaluateRBAC(field)
 	dgQuery := &gql.GraphQuery{
-		Attr: field.ResponseName(),
+		Attr: field.Name(),
 	}
 
 	if rbac == schema.Negative {
@@ -598,11 +598,7 @@ func addSelectionSetFrom(
 
 		child := &gql.GraphQuery{}
 
-		if f.Alias() != "" {
-			child.Alias = f.Alias()
-		} else {
-			child.Alias = f.Name()
-		}
+		child.Alias = f.Name()
 
 		if f.Type().Name() == schema.IDType {
 			child.Attr = "uid"
