@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
@@ -153,9 +154,14 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			gqlQuery := test.GetQuery(t, op)
 
 			authMeta.AuthVars = map[string]interface{}{
-				"USER": "user1",
 				"ROLE": tcase.Role,
 			}
+
+			// Skipping $USER for specific rules.
+			if !strings.HasPrefix(tcase.Name, "Query with missing variable") {
+				authMeta.AuthVars["USER"] = "user1"
+			}
+
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 

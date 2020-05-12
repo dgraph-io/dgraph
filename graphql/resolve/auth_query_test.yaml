@@ -399,3 +399,46 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Query with missing variable - top level"
+  gqlquery: |
+    query {
+      queryUserSecret {
+        id
+      }
+    }
+  dgquery: |-
+    query {
+      queryUserSecret()
+    }
+
+- name:  "Get with top level RBAC false"
+  gqlquery: |
+    query {
+      getLog(id: "0x123") {
+        id
+      }
+    }
+  dgquery: |-
+    query {
+      getLog()
+    }
+
+- name: "Query with missing variable - deep query"
+  gqlquery: |
+    query {
+      queryUser {
+        username
+        tickets {
+          id
+          title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryUser(func: type(User)) {
+        username : User.username
+        dgraph.uid : uid
+      }
+    }
