@@ -123,7 +123,9 @@ func (m *Movie) delete(t *testing.T, user, role string) {
 }
 
 func TestAddDeepFilter(t *testing.T) {
+	// Column can only be added if the user has ADMIN role attached to the corresponding project.
 	testCases := []TestCase{{
+		// Test case fails as there are no roles.
 		user:   "user6",
 		role:   "ADMIN",
 		result: ``,
@@ -134,6 +136,7 @@ func TestAddDeepFilter(t *testing.T) {
 			},
 		}},
 	}, {
+		// Test case fails as the role isn't assigned to the correct user.
 		user:   "user6",
 		role:   "USER",
 		result: ``,
@@ -226,7 +229,11 @@ func TestAddDeepFilter(t *testing.T) {
 }
 
 func TestAddOrRBACFilter(t *testing.T) {
+	// Column can only be added if the user has ADMIN role attached to the
+	// corresponding project or if the user is ADMIN.
+
 	testCases := []TestCase{{
+		// Test case passses as user is ADMIN.
 		user:   "user7",
 		role:   "ADMIN",
 		result: `{"addProject": {"project":[{"name":"project_add_1"}]}}`,
@@ -234,6 +241,7 @@ func TestAddOrRBACFilter(t *testing.T) {
 			Name: "project_add_1",
 		}},
 	}, {
+		// Test case fails as the role isn't assigned to the correct user
 		user:   "user7",
 		role:   "USER",
 		result: ``,
@@ -314,6 +322,84 @@ func TestAddOrRBACFilter(t *testing.T) {
 	}
 }
 
+func TestAddAndRBACFilterMultiple(t *testing.T) {
+	testCases := []TestCase{{
+		user:   "user8",
+		role:   "ADMIN",
+		result: `{"addIssue": {"issue":[{"msg":"issue_add_5"}, {"msg":"issue_add_6"}, {"msg":"issue_add_7"}]}}`,
+		variables: map[string]interface{}{"issues": []*Issue{{
+			Msg:   "issue_add_5",
+			Owner: &User{Username: "user8"},
+		}, {
+			Msg:   "issue_add_6",
+			Owner: &User{Username: "user8"},
+		}, {
+			Msg:   "issue_add_7",
+			Owner: &User{Username: "user8"},
+		}}},
+	}, {
+		user:   "user8",
+		role:   "ADMIN",
+		result: ``,
+		variables: map[string]interface{}{"issues": []*Issue{{
+			Msg:   "issue_add_8",
+			Owner: &User{Username: "user8"},
+		}, {
+			Msg:   "issue_add_9",
+			Owner: &User{Username: "user8"},
+		}, {
+			Msg:   "issue_add_10",
+			Owner: &User{Username: "user9"},
+		}}},
+	}}
+
+	query := `
+		mutation addIssue($issues: [AddIssueInput!]!) {
+			addIssue(input: $issues) {
+				issue (order: {asc: msg}) {
+				      id
+				      msg
+				}
+			}
+		}
+	`
+	var expected, result struct {
+		AddIssue struct {
+			Issue []*Issue
+		}
+	}
+
+	for _, tcase := range testCases {
+		getUserParams := &common.GraphQLParams{
+			Headers:   getJWT(t, tcase.user, tcase.role),
+			Query:     query,
+			Variables: tcase.variables,
+		}
+
+		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+		if tcase.result == "" {
+			require.Equal(t, len(gqlResponse.Errors), 1)
+			continue
+		}
+
+		require.Nil(t, gqlResponse.Errors)
+
+		err := json.Unmarshal([]byte(tcase.result), &expected)
+		require.NoError(t, err)
+		err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+		require.NoError(t, err)
+
+		opt := cmpopts.IgnoreFields(Issue{}, "Id")
+		if diff := cmp.Diff(expected, result, opt); diff != "" {
+			t.Errorf("result mismatch (-want +got):\n%s", diff)
+		}
+
+		for _, i := range result.AddIssue.Issue {
+			i.delete(t, tcase.user, tcase.role)
+		}
+	}
+}
+
 func TestAddAndRBACFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user7",
@@ -325,10 +411,18 @@ func TestAddAndRBACFilter(t *testing.T) {
 		}},
 	}, {
 		user:   "user7",
-		role:   "USER",
+		role:   "ADMIN",
 		result: ``,
 		variables: map[string]interface{}{"issue": &Issue{
 			Msg:   "issue_add_2",
+			Owner: &User{Username: "user8"},
+		}},
+	}, {
+		user:   "user7",
+		role:   "USER",
+		result: ``,
+		variables: map[string]interface{}{"issue": &Issue{
+			Msg:   "issue_add_3",
 			Owner: &User{Username: "user7"},
 		}},
 	}}
@@ -381,7 +475,9 @@ func TestAddAndRBACFilter(t *testing.T) {
 }
 
 func TestAddComplexFilter(t *testing.T) {
+	// To add a movie, it should be not hidden and either global or the user should be in the region
 	testCases := []TestCase{{
+		// Test case fails as the movie is hidden
 		user:   "user8",
 		role:   "USER",
 		result: ``,
@@ -390,6 +486,7 @@ func TestAddComplexFilter(t *testing.T) {
 			Hidden:  true,
 		}},
 	}, {
+		// Test case fails as the movie is not global and the user isn't in the region
 		user:   "user8",
 		role:   "USER",
 		result: ``,
@@ -402,6 +499,7 @@ func TestAddComplexFilter(t *testing.T) {
 			}},
 		}},
 	}, {
+		// Test case passes as the movie is global
 		user:   "user8",
 		role:   "USER",
 		result: `{"addMovie": {"movie": [{"content": "add_movie_3"}]}}`,
@@ -414,6 +512,7 @@ func TestAddComplexFilter(t *testing.T) {
 			}},
 		}},
 	}, {
+		// Test case passes as the user is in the region
 		user:   "user8",
 		role:   "USER",
 		result: `{"addMovie": {"movie": [{"content": "add_movie_4"}]}}`,
@@ -543,25 +642,22 @@ func TestAddRBACFilter(t *testing.T) {
 	}
 }
 
-func TestAddUserSecret(t *testing.T) {
+func TestAddGQLOnly(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
-		role:   "ADMIN",
 		result: `{"addUserSecret":{"usersecret":[{"aSecret":"secret1"}]}}`,
 		variables: map[string]interface{}{"user": &UserSecret{
 			ASecret: "secret1",
 			OwnedBy: "user1",
 		}},
-	},
-		{
-			user:   "user2",
-			role:   "ADMIN",
-			result: ``,
-			variables: map[string]interface{}{"user": &UserSecret{
-				ASecret: "secret2",
-				OwnedBy: "user1",
-			}},
-		}}
+	}, {
+		user:   "user2",
+		result: ``,
+		variables: map[string]interface{}{"user": &UserSecret{
+			ASecret: "secret2",
+			OwnedBy: "user1",
+		}},
+	}}
 
 	query := `
 		mutation addUser($user: AddUserSecretInput!) {
