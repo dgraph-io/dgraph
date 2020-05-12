@@ -611,7 +611,6 @@ func TestTwoShortestPathMinWeight(t *testing.T) {
 			}
 		}`
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `{"data": {"me":[]}}`, js)
 }
 
