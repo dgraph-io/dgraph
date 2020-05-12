@@ -609,6 +609,11 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		Var:  MutationQueryVar,
 		Attr: m.Name(),
 	}
+	rbac := authRw.evaluateRBAC(m.QueryField())
+	if rbac == schema.Negative {
+		dgQuery.Attr = m.ResponseName() + "()"
+		return dgQuery
+	}
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
 	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
 		Attr: "uid",
@@ -623,7 +628,11 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
-	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
+
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
+	}
+
 	return dgQuery
 }
 
