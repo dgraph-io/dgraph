@@ -49,16 +49,7 @@ type Todo @auth(
     dateCompleted: String @search 
     sharedWith: [User]
     owner: User @hasInverse(field: "todos")
-    somethingPrivate: String @auth(
-        query: { rule: """
-            query($X_MyApp_User: String!) { 
-                queryTodo {
-                    owner (filter: { username: { eq: $X_MyApp_User }}) {
-                        username
-                    }
-                }
-            }""" }
-    )
+    somethingPrivate: String
 }
 
 type User @auth(

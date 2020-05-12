@@ -36,9 +36,9 @@ func init() {
 
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
-		passwordDirectiveValidation)
+		passwordDirectiveValidation, conflictingDirectiveValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
-		fieldNameCheck, isValidFieldForList)
+		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check for list type value", listTypeCheck)
@@ -438,6 +438,23 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 	return fieldNamesString, errLocations
 }
 
+func conflictingDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
+	var hasAuth, hasRemote bool
+	for _, dir := range typ.Directives {
+		if dir.Name == authDirective {
+			hasAuth = true
+		}
+		if dir.Name == remoteDirective {
+			hasRemote = true
+		}
+	}
+	if hasAuth && hasRemote {
+		return gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
+			typ.Name, authDirective, remoteDirective)
+	}
+	return nil
+}
+
 func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	dirs := make([]string, 0)
 
@@ -537,6 +554,18 @@ func idCountCheck(typ *ast.Definition) *gqlerror.Error {
 		}
 	}
 
+	return nil
+}
+
+func hasAuthDirective(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	for _, directive := range field.Directives {
+		if directive.Name != authDirective {
+			continue
+		}
+		return gqlerror.ErrorPosf(field.Position,
+			"Type %s; Field %s: @%s directive is not allowed on fields",
+			typ.Name, field.Name, authDirective)
+	}
 	return nil
 }
 

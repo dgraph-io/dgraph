@@ -208,9 +208,14 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 		}
 	}
 
-	finalHeaders := make([]string, 0, len(headers))
+	finalHeaders := make([]string, 0, len(headers)+1)
 	for h := range headers {
 		finalHeaders = append(finalHeaders, h)
+	}
+
+	// Add Auth Header to allowed headers list
+	if authorization.GetHeader() != "" {
+		finalHeaders = append(finalHeaders, authorization.GetHeader())
 	}
 
 	allowed := x.AccessControlAllowedHeaders

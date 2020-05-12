@@ -51,6 +51,74 @@ type AuthContainer struct {
 	Delete *RuleNode
 }
 
+type RuleResult int
+
+const (
+	Uncertain RuleResult = iota
+	Positive
+	Negative
+)
+
+func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
+	if rq.Operator == "eq" {
+		if av[rq.Variable] == rq.Operand {
+			return Positive
+		}
+	}
+	return Negative
+}
+
+func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
+	if node == nil {
+		return Uncertain
+	}
+
+	hasUncertain := false
+	for _, rule := range node.Or {
+		val := rule.EvaluateRBACRules(av)
+		if val == Positive {
+			return Positive
+		} else if val == Uncertain {
+			hasUncertain = true
+		}
+	}
+
+	if len(node.Or) > 0 && !hasUncertain {
+		return Negative
+	}
+
+	for _, rule := range node.And {
+		val := rule.EvaluateRBACRules(av)
+		if val == Negative {
+			return Negative
+		} else if val == Uncertain {
+			hasUncertain = true
+		}
+	}
+
+	if len(node.And) > 0 && !hasUncertain {
+		return Positive
+	}
+
+	if node.Not != nil && node.Not.RBACRule != nil {
+		switch node.Not.EvaluateRBACRules(av) {
+		case Uncertain:
+			return Uncertain
+		case Positive:
+			return Negative
+		case Negative:
+			return Positive
+		}
+
+	}
+
+	if node.RBACRule != nil {
+		return node.RBACRule.EvaluateRBACRule(av)
+	}
+
+	return Uncertain
+}
+
 type TypeAuth struct {
 	Rules  *AuthContainer
 	Fields map[string]*AuthContainer

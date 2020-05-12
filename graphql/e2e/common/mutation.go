@@ -1812,7 +1812,7 @@ func manyMutationsWithQueryError(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -3069,4 +3069,37 @@ func mutationsHaveExtensions(t *testing.T) {
 	require.NoError(t, err)
 	deleteGqlType(t, "Category",
 		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
+}
+
+func mutationsWithAlias(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	aliasMutationParams := &GraphQLParams{
+		Query: `mutation alias($filter: CountryFilter!) {
+
+			upd: updateCountry(input: {
+				filter: $filter
+				set: { name: "Testland Alias" }
+			}) {
+				updatedCountry: country {
+					theName: name
+				}
+			}
+
+			del: deleteCountry(filter: $filter) { 
+				message: msg
+				uids: numUids 
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
+	}
+	multiMutationExpected := `{
+		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"del" : { "message": "Deleted", "uids": 1 }
+	}`
+
+	gqlResponse := aliasMutationParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
 }
