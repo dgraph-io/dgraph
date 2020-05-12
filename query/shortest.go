@@ -19,7 +19,6 @@ package query
 import (
 	"container/heap"
 	"context"
-	"fmt"
 	"math"
 	"sort"
 	"sync"
@@ -119,16 +118,6 @@ type nodeInfo struct {
 	node *queueItem
 }
 
-func printPQ(pq priorityQueue) {
-	for _, val := range pq {
-		fmt.Printf("IteminQ: %+v\n", val)
-		for _, vn := range *val.path.route {
-			fmt.Printf(" UID: %d ", vn.uid)
-		}
-		fmt.Printf("\n")
-	}
-
-}
 func (sg *SubGraph) getCost(matrix, list int) (cost float64,
 	fcs *pb.Facets, rerr error) {
 
@@ -375,7 +364,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				case err = <-expandErr:
 					if err != nil {
 						if err == errStop {
-							fmt.Println("Stopped here")
 							stopExpansion = true
 						} else {
 							return nil, err
@@ -437,14 +425,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 
 	next <- false
-	fmt.Println("Final Routes are: ")
-	for count, val := range kroutes {
-		fmt.Printf("Route: %d:\n", count)
-		for _, vl := range *val.route {
-			fmt.Printf(" UID: %d ", vl.uid)
-		}
-		fmt.Printf("\n")
-	}
 
 	if len(kroutes) == 0 {
 		sg.DestUIDs = &pb.List{}
@@ -541,6 +521,7 @@ func shortestPath(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 	var stopExpansion bool
 	var totalWeight float64
+
 	// We continue to pop from the priority queue either
 	// 1. Till we get the destination node in which case we would have gotten to it through the
 	//    shortest path.
