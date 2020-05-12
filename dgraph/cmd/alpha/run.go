@@ -515,6 +515,12 @@ func setupServer(closer *y.Closer) {
 }
 
 func run() {
+	if Alpha.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("alpha")
+		x.WrapPanics()
+	}
 	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
@@ -597,13 +603,6 @@ func run() {
 	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
-
-	if Alpha.Conf.GetBool("enable_sentry") {
-		x.InitSentry(enc.EeBuild)
-		defer x.FlushSentry()
-		x.ConfigureSentryScope("alpha")
-		x.WrapPanics()
-	}
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
