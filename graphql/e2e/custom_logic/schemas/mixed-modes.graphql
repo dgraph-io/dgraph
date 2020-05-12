@@ -10,7 +10,7 @@ type User {
       http: {
         url: "http://mock:8888/gqlUserNames"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($input: [UserInput]) { userNames(users: $input) }"
         body: "{ id: $id, age: $age }"
       }
@@ -22,7 +22,7 @@ type User {
         url: "http://mock:8888/cars"
         method: "GET"
         body: "{uid: $id}"
-        operation: "batch"
+        mode: BATCH
       }
     )
   schools: [School]
@@ -36,7 +36,7 @@ type School {
       http: {
         url: "http://mock:8888/gqlSchoolName"
         method: "POST"
-        operation: "single"
+        mode: SINGLE
         graphql: "query($id: ID!) { schoolName(id: $id) }"
       }
     )
@@ -46,7 +46,7 @@ type School {
         url: "http://mock:8888/class"
         method: "POST"
         body: "{sid: $id}"
-        operation: "single"
+        mode: SINGLE
       }
     )
   teachers: [Teacher]
@@ -65,7 +65,7 @@ type Teacher {
       http: {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($input: [TeacherInput]) { teacherNames(teachers: $input) }",
         body: "{ id: $tid, age: $age}"
       }

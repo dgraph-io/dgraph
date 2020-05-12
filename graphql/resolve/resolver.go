@@ -769,7 +769,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	}
 
-	if fconf.Operation == "batch" {
+	if fconf.Mode == schema.BATCH {
 		var requestInput interface{}
 		requestInput = inputs
 

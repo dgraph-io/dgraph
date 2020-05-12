@@ -43,9 +43,9 @@ enum HTTPMethod {
 	DELETE
 }
 
-enum Operation {
-	single
-	batch
+enum Mode {
+	BATCH
+	SINGLE
 }
 
 input CustomHTTP {
@@ -53,7 +53,7 @@ input CustomHTTP {
 	method: HTTPMethod!
 	body: String
 	graphql: String
-	operation: Operation
+	mode: Mode
 	forwardHeaders: [String!]
 	skipIntrospection: Boolean
 }
