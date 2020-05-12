@@ -50,11 +50,8 @@ type localKeyReader struct {
 }
 
 func (lkR *localKeyReader) ReadKey() ([]byte, error) {
-	if lkR == nil {
-		return nil, errors.Errorf("nil localKeyReader")
-	}
-	if lkR.keyFile == "" {
-		return nil, nil
+	if lkR == nil || lkR.keyFile == "" {
+		return nil, errors.Errorf("nil or bad localKeyReader")
 	}
 	k, err := ioutil.ReadFile(lkR.keyFile)
 	if err != nil {
@@ -79,8 +76,8 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 	var err error
 
 	keyFile := cfg.GetString("encryption_key_file")
-	roleID := cfg.GetString("vault_roleID")
-	secretID := cfg.GetString("vault_secretID")
+	roleID := cfg.GetString("vault_roleID_file")
+	secretID := cfg.GetString("vault_secretID_file")
 
 	if keyFile != "" {
 		keyReader = &localKeyReader{

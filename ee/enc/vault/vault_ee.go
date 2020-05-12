@@ -19,6 +19,8 @@
 package vault
 
 import (
+	"io/ioutil"
+
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -38,10 +40,10 @@ func RegisterFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
 	flag.String("vault_addr", "http://localhost:8200",
 		"Vault server's address in the form http://ip:port.")
-	flag.String("vault_roleID", "",
-		"Vault role-id used for approle auth.")
-	flag.String("vault_secretID", "",
-		"Vault secret-id used for approle auth.")
+	flag.String("vault_roleID_file", "",
+		"File containing Vault role-id used for approle auth.")
+	flag.String("vault_secretID_file", "",
+		"File containing Vault secret-id used for approle auth.")
 	flag.String("vault_path", "dgraph",
 		"Vault kv store path.")
 	flag.String("vault_field", "enc_key",
@@ -51,8 +53,8 @@ func RegisterFlags(flag *pflag.FlagSet) {
 func NewVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
 		Addr:     cfg.GetString("vault_addr"),
-		RoleID:   cfg.GetString("vault_roleID"),
-		SecretID: cfg.GetString("vault_secretID"),
+		RoleID:   cfg.GetString("vault_roleID_file"),
+		SecretID: cfg.GetString("vault_secretID_file"),
 		Path:     cfg.GetString("vault_path"),
 		Field:    cfg.GetString("vault_field"),
 	}
@@ -60,10 +62,25 @@ func NewVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	if v.RoleID != "" && v.SecretID != "" {
 		return v, nil
 	}
-	return nil, errors.Errorf("vault_roleID and vault_secretID must both be specified")
+	return nil, errors.Errorf("vault_roleID_file and vault_secretID_file must both be specified")
 }
 
+// ReadKey reads the key from the vault kv store.
 func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
+	if vKR == nil || vKR.RoleID == "" || vKR.SecretID == "" {
+		return nil, errors.Errorf("nil or bad vaultKeyReader")
+	}
+
+	// Read the files.
+	roleID, err := ioutil.ReadFile(vKR.RoleID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading role-id file (%v)", vKR.RoleID)
+	}
+	secretID, err := ioutil.ReadFile(vKR.SecretID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error reading secretid file (%v)", vKR.SecretID)
+	}
+
 	// Get a Vault Client.
 	vConfig := &api.Config{
 		Address: vKR.Addr,
@@ -75,8 +92,8 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 
 	// Login into the Vault with approle Auth.
 	data := map[string]interface{}{
-		"role_id":   vKR.RoleID,
-		"secret_id": vKR.SecretID,
+		"role_id":   string(roleID),
+		"secret_id": string(secretID),
 	}
 	resp, err := client.Logical().Write("auth/approle/login", data)
 	if err != nil {
