@@ -3074,3 +3074,122 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 
 	return filter
 }
+
+func queryTypenameInMutationPayload(t *testing.T) {
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				state {
+					__typename
+					xcode
+					name
+				}
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{
+		"addState": {
+			"state": [{
+				"__typename": "State",
+				"xcode": "S1",
+				"name": "State1"
+			}],
+			"__typename": "AddStatePayload"
+		}
+	}`
+	testutil.CompareJSON(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, 1, nil)
+}
+
+func ensureAliasInMutationPayload(t *testing.T) {
+	// querying __typename, numUids and state with alias
+	addStateParams := &GraphQLParams{
+		Query: `mutation {
+			addState(input: [{xcode: "S1", name: "State1"}]) {
+				type: __typename
+				count: numUids
+				op: state {
+					xcode
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := addStateParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	addStateExpected := `{"addState":{"type":"AddStatePayload","count":1,"op":[{"xcode":"S1"}]}}`
+	require.Equal(t, addStateExpected, string(gqlResponse.Data))
+
+	filter := map[string]interface{}{"xcode": map[string]interface{}{"eq": "S1"}}
+	deleteState(t, filter, 1, nil)
+}
+
+func mutationsHaveExtensions(t *testing.T) {
+	mutation := &GraphQLParams{
+		Query: `mutation {
+			addCategory(input: [{ name: "cat" }]) {
+				category {
+					id
+				}
+			}
+		}`,
+	}
+
+	touchedUidskey := "touched_uids"
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+
+	// cleanup
+	var resp struct {
+		AddCategory struct {
+			Category []category
+		}
+	}
+	err := json.Unmarshal(gqlResponse.Data, &resp)
+	require.NoError(t, err)
+	deleteGqlType(t, "Category",
+		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
+}
+
+func mutationsWithAlias(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	aliasMutationParams := &GraphQLParams{
+		Query: `mutation alias($filter: CountryFilter!) {
+
+			upd: updateCountry(input: {
+				filter: $filter
+				set: { name: "Testland Alias" }
+			}) {
+				updatedCountry: country {
+					theName: name
+				}
+			}
+
+			del: deleteCountry(filter: $filter) {
+				message: msg
+				uids: numUids
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
+	}
+	multiMutationExpected := `{
+		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"del" : { "message": "Deleted", "uids": 1 }
+	}`
+
+	gqlResponse := aliasMutationParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
+}

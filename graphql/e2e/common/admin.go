@@ -29,6 +29,7 @@ import (
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/require"
@@ -428,6 +429,63 @@ func health(t *testing.T) {
 	if diff := cmp.Diff(health, result.Health, opts...); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func partialHealth(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+            health {
+              instance
+              status
+              group
+            }
+        }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t, `{
+        "health": [
+          {
+            "instance": "zero",
+            "status": "healthy",
+            "group": "0"
+          },
+          {
+            "instance": "alpha",
+            "status": "healthy",
+            "group": "1"
+          }
+        ]
+      }`, string(gqlResponse.Data))
+}
+
+// The /admin endpoints should respond to alias
+func adminAlias(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+            dgraphHealth: health {
+              type: instance
+              status
+              inGroup: group
+            }
+        }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	requireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t, `{
+        "dgraphHealth": [
+          {
+            "type": "zero",
+            "status": "healthy",
+            "inGroup": "0"
+          },
+          {
+            "type": "alpha",
+            "status": "healthy",
+            "inGroup": "1"
+          }
+        ]
+      }`, string(gqlResponse.Data))
 }
 
 // The GraphQL /admin state result should be the same as /state

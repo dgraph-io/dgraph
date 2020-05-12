@@ -1401,3 +1401,43 @@ func queryPostWithAuthor(t *testing.T) {
 		`{"queryPost":[{"title":"Introducing GraphQL in Dgraph","author":{"name":"Ann Author"}}]}`,
 		string(gqlResponse.Data))
 }
+
+func queriesHaveExtensions(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+			queryPost {
+				title
+			}
+		}`,
+	}
+
+	touchedUidskey := "touched_uids"
+	gqlResponse := query.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
+	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
+}
+
+func queryWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			post : queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
+				type : __typename
+				postTitle : title
+				postAuthor : author {
+					theName : name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+			"post": [ {
+				"type": "Post",
+				"postTitle": "Introducing GraphQL in Dgraph",
+				"postAuthor": { "theName": "Ann Author" }}]}`,
+		string(gqlResponse.Data))
+}
