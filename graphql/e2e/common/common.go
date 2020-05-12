@@ -212,6 +212,7 @@ func RunAll(t *testing.T) {
 	// admin tests
 	t.Run("admin", admin)
 	t.Run("health", health)
+	t.Run("alias should work in admin", adminAlias)
 	t.Run("state", adminState)
 	t.Run("propagate client remote ip", clientInfoLogin)
 
@@ -264,6 +265,7 @@ func RunAll(t *testing.T) {
 	t.Run("query state by xid regex", queryStateByXidRegex)
 	t.Run("multiple operations", multipleOperations)
 	t.Run("query post with author", queryPostWithAuthor)
+	t.Run("alias works for queries", queryWithAlias)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -295,6 +297,7 @@ func RunAll(t *testing.T) {
 	t.Run("empty delete", mutationEmptyDelete)
 	t.Run("password in mutation", passwordTest)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
+	t.Run("alias works for mutations", mutationsWithAlias)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

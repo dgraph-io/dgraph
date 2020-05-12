@@ -177,7 +177,7 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 	case schema.AddMutation:
 		return len(a)
 	default:
-		mutated := extractMutated(r, m.ResponseName())
+		mutated := extractMutated(r, m.Name())
 		return len(mutated)
 	}
 }
@@ -188,7 +188,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:  map[string]interface{}{mutation.ResponseName(): nil},
+			Data:  map[string]interface{}{mutation.Name(): nil},
 			Field: mutation,
 			Err:   err,
 		}
@@ -242,10 +242,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
-				mutation.ResponseName(): map[string]interface{}{
-					schema.NumUid:                        numUids,
-					schema.Typename:                      mutation.TypeName,
-					mutation.QueryField().ResponseName(): nil,
+				mutation.Name(): map[string]interface{}{
+					schema.NumUid:                numUids,
+					mutation.QueryField().Name(): nil,
 				}},
 			Field: mutation,
 			Err:   err,
@@ -259,8 +258,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgRes := resolved.Data.(map[string]interface{})
 	dgRes[schema.NumUid] = numUids
 	dgRes[schema.Typename] = mutation.Type().Name()
-	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
-
+	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
 	resolved.Field = mutation
 	return resolved, resolverSucceeded
 }
@@ -269,7 +267,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 func deleteCompletion() CompletionFunc {
 	return CompletionFunc(func(ctx context.Context, resolved *Resolved) {
 		if fld, ok := resolved.Data.(map[string]interface{}); ok {
-			if rsp, ok := fld[resolved.Field.ResponseName()].(map[string]interface{}); ok {
+			if rsp, ok := fld[resolved.Field.Name()].(map[string]interface{}); ok {
 				rsp["msg"] = "Deleted"
 			}
 		}
