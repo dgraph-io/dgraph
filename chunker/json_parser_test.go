@@ -584,70 +584,149 @@ func TestNquadsFromJsonFacets3(t *testing.T) {
 
 // Test invalid facet format with scalar list predicate.
 func TestNquadsFromJsonFacets4(t *testing.T) {
-	json := `
-	[
+	type input struct {
+		Name     string
+		ErrorOut bool
+		Json     string
+	}
+
+	inputs := []input{
 		{
-			"name":"Alice",
-			"friend": ["Joshua", "David", "Josh"],
-			"friend|age": 20
-		}
-	]`
-
-	_, err := Parse([]byte(json), SetNquads)
-	require.Error(t, err)
-}
-
-// Test map facet format with predicate with normal predicate.
-func TestNquadsFromJsonFacets5(t *testing.T) {
-	json := `
-	[
-		{
-			"name":"Alice",
-			"friend": "Joshua",
-			"friend|age": {
-				"0": 20
-			}
-		}
-	]`
-
-	_, err := Parse([]byte(json), SetNquads)
-	require.Error(t, err)
-}
-
-// Test invalid type in map facet format for scalar list.
-func TestNquadsFromJsonFacets6(t *testing.T) {
-	json := `
-	[
-		{
-			"name":"Alice",
-			"friend": ["Joshua"],
-			"friend|age": {
-				"0": {
-					"1": 20
+			"facets_should_be_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": 20
 				}
-			}
-		}
-	]`
-
-	_, err := Parse([]byte(json), SetNquads)
-	require.Error(t, err)
-}
-
-// Test invalid index value in map facet format for scalar list.
-func TestNquadsFromJsonFacets7(t *testing.T) {
-	json := `
-	[
+			]`,
+		},
 		{
-			"name":"Alice",
-			"friend": ["Joshua"],
-			"friend|age": {
-				"a": 20
-			}
-		}
-	]`
+			"predicate_should_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": "Joshua",
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"only_scalar_values_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"0": {
+							"1": 20
+						}
+					}
+				}
+			]`,
+		},
+		{
+			"invalid_key_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"a": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"predicate_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": null,
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"empty_scalar_list",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": [],
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"facet_map_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": null
+				}
+			]`,
+		},
+		{
+			"facet_vales_should_not_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": ["20"]
+				}
+			]`,
+		},
+		{
+			// Facets with higher index will be ignored.
+			"facet_map_with_index_greater_than_scalarlist_length",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": {
+						"100": 30,
+						"20": 28
+					}
+				}
+			]`,
+		},
+	}
 
-	_, err := Parse([]byte(json), SetNquads)
-	require.Error(t, err)
+	for _, input := range inputs {
+		_, err := Parse([]byte(input.Json), SetNquads)
+		if input.ErrorOut {
+			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		} else {
+			require.NoError(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		}
+	}
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {

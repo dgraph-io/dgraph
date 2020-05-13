@@ -46,8 +46,7 @@ func stripSpaces(str string) string {
 	}, str)
 }
 
-func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Facet, error) {
-	key := fname[len(prefix):]
+func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error) {
 	var jsonValue interface{}
 	var valueType api.Facet_ValType
 	switch v := facetVal.(type) {
@@ -86,8 +85,7 @@ func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Fac
 		jsonValue = v
 		valueType = api.Facet_BOOL
 	default:
-		return nil, errors.Errorf("Facet value for key: %s can only be string/float64/bool.",
-			fname)
+		return nil, errors.Errorf("facet value can only be string/float64/bool.")
 	}
 
 	// Convert facet val interface{} to binary.
@@ -100,7 +98,7 @@ func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Fac
 }
 
 // parseMapFacets parses facets which are of map type. Facets for scalar list predicates are
-// specifed in map format. For example below prdicate nickname and kind facet associated with it.
+// specified in map format. For example below predicate nickname and kind facet associated with it.
 // Here nickname "bob" doesn't have any facet associated with it.
 // {
 //		"nickname": ["alice", "bob", "josh"],
@@ -109,7 +107,7 @@ func handleBasicFacetsType(fname, prefix string, facetVal interface{}) (*api.Fac
 //			"2": "official"
 // 		}
 // }
-// Parsed response would a slice of maps[int]*api.Facet, one map for each facet json.
+// Parsed response would a slice of maps[int]*api.Facet, one map for each facet.
 // Map key would be the index of scalar value for respective facets.
 func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Facet, error) {
 	// This happens at root.
@@ -128,19 +126,20 @@ func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Fac
 
 		fm, ok := facetVal.(map[string]interface{})
 		if !ok {
-			return nil,
-				errors.Errorf("facets format should be of type map for scalar list predicates")
+			return nil, errors.Errorf("facets format should be of type map for "+
+				"scalarlist predicates, found: %v for facet: %v", facetVal, fname)
 		}
 
 		idxMap := make(map[int]*api.Facet, len(fm))
 		for sidx, val := range fm {
-			facet, err := handleBasicFacetsType(fname, prefix, val)
+			key := fname[len(prefix):]
+			facet, err := handleBasicFacetsType(key, val)
 			if err != nil {
-				return nil, errors.Wrapf(err, "Index: %s", sidx)
+				return nil, errors.Wrapf(err, "facet: %s, index: %s", fname, sidx)
 			}
 			idx, err := strconv.Atoi(sidx)
 			if err != nil {
-				return nil, errors.Wrapf(err, "Index: %s", sidx)
+				return nil, errors.Wrapf(err, "facet: %s, index: %s", fname, sidx)
 			}
 			idxMap[idx] = facet
 		}
@@ -167,9 +166,10 @@ func parseBasicFacets(m map[string]interface{}, prefix string) ([]*api.Facet, er
 			continue
 		}
 
-		facet, err := handleBasicFacetsType(fname, prefix, facetVal)
+		key := fname[len(prefix):]
+		facet, err := handleBasicFacetsType(key, facetVal)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "facet: %s", fname)
 		}
 		facetsForPred = append(facetsForPred, facet)
 	}
@@ -452,7 +452,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		prefix := pred + x.FacetDelimeter
 		// TODO - Maybe do an initial pass and build facets for all predicates. Then we don't have
 		// to call parseFacets everytime.
-		// Only call parseBasicFacets when value type is not list.
+		// Only call parseBasicFacets when value type for the predicate is not list.
 		if _, ok := v.([]interface{}); !ok {
 			fts, err := parseBasicFacets(m, prefix)
 			if err != nil {
@@ -517,7 +517,27 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
-					// Also populate facets for it.
+					// Here populate facets from facetsMapSlice. Each map has mapping for single
+					// facet from item(one of predicate value) idx to *api.Facet.
+					// {
+					// 	"friend": ["Joshua", "David", "Josh"],
+					// 	"friend|from": {
+					// 		"0": "school"
+					// 	},
+					// 	"friend|age": {
+					// 		"1": 20
+					// 	}
+					// }
+					// facetMapSlice looks like below. First map is for friend|from facet and second
+					// map is for friend|age facet.
+					// [
+					// 		map[int]*api.Facet{
+					//			0: *api.Facet
+					// 		},
+					// 		map[int]*api.Facet{
+					//			1: *api.Facet
+					// 		}
+					// ]
 					var fts []*api.Facet
 					for _, fm := range facetsMapSlice {
 						if ft, ok := fm[idx]; ok {
