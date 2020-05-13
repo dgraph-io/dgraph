@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -171,18 +172,43 @@ func TestAuthRulesWithMissingJWT(t *testing.T) {
 			user:   "user1",
 			result: `{"queryProject":[{"name":"Project1"}]}`,
 		},
+		{name: "Query auth field with invalid JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryProject":[]}`,
+		},
 	}
+
 	for _, tcase := range testCases {
 		queryParams := &common.GraphQLParams{
 			Query: tcase.query,
 		}
 
-		if tcase.user != "" || tcase.role != "" {
+		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
+		if testInvalidKey {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			jwtVar := queryParams.Headers.Get(metaInfo.Header)
+
+			// Create a invalid JWT signature.
+			jwtVar = jwtVar + "A"
+			queryParams.Headers.Set(metaInfo.Header, jwtVar)
+		} else if tcase.user != "" || tcase.role != "" {
 			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
 		}
 
 		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		if testInvalidKey {
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"couldn't rewrite query queryProject because unable to parse jwt token")
+		} else {
+			require.Nil(t, gqlResponse.Errors)
+		}
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
@@ -533,6 +559,14 @@ func TestNestedFilter(t *testing.T) {
                "name": "Region4"
             }
          ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
+            }
+         ]
       }
    ]
 }
@@ -570,6 +604,14 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
+            }
+         ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
             }
          ]
       }

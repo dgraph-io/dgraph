@@ -68,7 +68,8 @@
 	{
 		"uid": "_:region5",
 		"dgraph.type": "Region",
-		"Region.name": "Region5"
+		"Region.name": "Region5",
+		"Region.global": true
 	},
 	{
 		"uid": "_:movie1",

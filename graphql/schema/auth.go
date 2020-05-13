@@ -77,6 +77,7 @@ func (node *RuleNode) staticEvaluation(av map[string]interface{}) {
 			return
 		}
 	}
+	node.Result = Uncertain
 }
 
 func (node *RuleNode) EvaluateStatic(av map[string]interface{}) RuleResult {
