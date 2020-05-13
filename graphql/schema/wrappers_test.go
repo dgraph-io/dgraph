@@ -19,6 +19,7 @@ package schema
 import (
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -789,6 +790,44 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 				})
 			require.NoError(t, err)
 			require.NotNil(t, op)
+		})
+	}
+}
+
+func TestAllowedHeadersList(t *testing.T) {
+	// TODO Add Custom logic forward headers tests
+	tcases := []struct {
+		name      string
+		schemaStr string
+		expected  string
+	}{
+		{
+			"auth header present in allowed headers list",
+			`
+	 type X @auth(
+        query: {rule: """
+          query { 
+            queryX(filter: { userRole: { eq: "ADMIN" } }) { 
+              __typename 
+            } 
+          }"""
+        }
+      ) {
+        username: String! @id
+        userRole: String @search(by: [hash])
+	  }
+	  # Authorization X-Test-Dgraph https://dgraph.io/jwt/claims RS256 "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----"
+	`,
+			"X-Test-Dgraph",
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			schHandler, errs := NewHandler(test.schemaStr)
+			require.NoError(t, errs)
+			_, err := FromString(schHandler.GQLSchema())
+			require.NoError(t, err)
+			require.True(t, strings.Contains(ah.headers, test.expected))
 		})
 	}
 }

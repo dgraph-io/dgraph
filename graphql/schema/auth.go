@@ -37,11 +37,13 @@ type RBACQuery struct {
 }
 
 type RuleNode struct {
-	Or       []*RuleNode
-	And      []*RuleNode
-	Not      *RuleNode
-	Rule     Query
-	RBACRule *RBACQuery
+	Or        []*RuleNode
+	And       []*RuleNode
+	Not       *RuleNode
+	Rule      Query
+	RBACRule  *RBACQuery
+	Result    RuleResult
+	Variables ast.VariableDefinitionList
 }
 
 type AuthContainer struct {
@@ -68,14 +70,23 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	return Negative
 }
 
-func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
+func (node *RuleNode) staticEvaluation(av map[string]interface{}) {
+	for _, v := range node.Variables {
+		if _, ok := av[v.Variable]; !ok {
+			node.Result = Negative
+			return
+		}
+	}
+}
+
+func (node *RuleNode) EvaluateStatic(av map[string]interface{}) RuleResult {
 	if node == nil {
 		return Uncertain
 	}
 
 	hasUncertain := false
 	for _, rule := range node.Or {
-		val := rule.EvaluateRBACRules(av)
+		val := rule.EvaluateStatic(av)
 		if val == Positive {
 			return Positive
 		} else if val == Uncertain {
@@ -88,7 +99,7 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 	}
 
 	for _, rule := range node.And {
-		val := rule.EvaluateRBACRules(av)
+		val := rule.EvaluateStatic(av)
 		if val == Negative {
 			return Negative
 		} else if val == Uncertain {
@@ -100,8 +111,14 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 		return Positive
 	}
 
-	if node.Not != nil && node.Not.RBACRule != nil {
-		switch node.Not.EvaluateRBACRules(av) {
+	if node.Not != nil {
+		// In the case of a non-RBAC query, the result indicates whether the query has all the
+		// variables in order to evaluate it. Hence, we don't need to negate the value.
+		result := node.Not.EvaluateStatic(av)
+		if node.Not.RBACRule == nil {
+			return result
+		}
+		switch result {
 		case Uncertain:
 			return Uncertain
 		case Positive:
@@ -109,14 +126,16 @@ func (node *RuleNode) EvaluateRBACRules(av map[string]interface{}) RuleResult {
 		case Negative:
 			return Positive
 		}
-
 	}
 
 	if node.RBACRule != nil {
 		return node.RBACRule.EvaluateRBACRule(av)
 	}
 
-	return Uncertain
+	if node.Rule != nil {
+		node.staticEvaluation(av)
+	}
+	return node.Result
 }
 
 type TypeAuth struct {
@@ -234,9 +253,9 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	if rule := val.Children.ForName("rule"); rule != nil {
 		var err error
 		if strings.HasPrefix(rule.Raw, RBACQueryPrefix) {
-			result.RBACRule, err = rbacValidateRule(typ, rule.Raw, rule.Position)
+			result.RBACRule, err = rbacValidateRule(typ, rule.Raw)
 		} else {
-			result.Rule, err = gqlValidateRule(s, typ, rule.Raw, rule.Position)
+			err = gqlValidateRule(s, typ, rule.Raw, result)
 		}
 		errResult = AppendGQLErrs(errResult, err)
 		numChildren++
@@ -250,8 +269,7 @@ func parseAuthNode(s *ast.Schema, typ *ast.Definition, val *ast.Value) (*RuleNod
 	return result, errResult
 }
 
-func rbacValidateRule(typ *ast.Definition, rule string,
-	position *ast.Position) (*RBACQuery, error) {
+func rbacValidateRule(typ *ast.Definition, rule string) (*RBACQuery, error) {
 	rbacRegex, err :=
 		regexp.Compile(`^{[\s]?(.*?)[\s]?:[\s]?{[\s]?(\w*)[\s]?:[\s]?"(.*)"[\s]?}[\s]?}$`)
 	if err != nil {
@@ -284,31 +302,26 @@ func rbacValidateRule(typ *ast.Definition, rule string,
 	return &query, nil
 }
 
-func gqlValidateRule(
-	s *ast.Schema,
-	typ *ast.Definition,
-	rule string,
-	position *ast.Position) (Query, error) {
-
+func gqlValidateRule(s *ast.Schema, typ *ast.Definition, rule string, node *RuleNode) error {
 	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: rule})
 	if gqlErr != nil {
-		return nil, gqlerror.Errorf("Type %s: @auth: failed to parse GraphQL rule "+
+		return gqlerror.Errorf("Type %s: @auth: failed to parse GraphQL rule "+
 			"[reason : %s]", typ.Name, gqlErr.Message)
 	}
 
 	if len(doc.Operations) != 1 {
-		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be "+
+		return gqlerror.Errorf("Type %s: @auth: a rule should be "+
 			"exactly one query, found %v GraphQL operations", typ.Name, len(doc.Operations))
 	}
-	op := doc.Operations[0]
 
+	op := doc.Operations[0]
 	if op == nil {
-		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be "+
+		return gqlerror.Errorf("Type %s: @auth: a rule should be "+
 			"exactly one query, found an empty GraphQL operation", typ.Name)
 	}
 
 	if op.Operation != "query" {
-		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be exactly"+
+		return gqlerror.Errorf("Type %s: @auth: a rule should be exactly"+
 			" one query, found an %s", typ.Name, op.Name)
 	}
 
@@ -319,31 +332,33 @@ func gqlValidateRule(
 			errs = AppendGQLErrs(errs, gqlerror.Errorf("Type %s: @auth: failed to "+
 				"validate GraphQL rule [reason : %s]", typ.Name, err.Message))
 		}
-		return nil, errs
+		return errs
 	}
 
 	if len(op.SelectionSet) != 1 {
-		return nil, gqlerror.Errorf("Type %s: @auth: a rule should be exactly one "+
+		return gqlerror.Errorf("Type %s: @auth: a rule should be exactly one "+
 			"query, found %v queries", typ.Name, len(op.SelectionSet))
 	}
 
 	f, ok := op.SelectionSet[0].(*ast.Field)
 	if !ok {
-		return nil, gqlerror.Errorf("Type %s: @auth: error couldn't generate query from rule",
+		return gqlerror.Errorf("Type %s: @auth: error couldn't generate query from rule",
 			typ.Name)
 	}
 
 	if f.Name != "query"+typ.Name {
-		return nil, gqlerror.Errorf("Type %s: @auth: expected only query%s "+
+		return gqlerror.Errorf("Type %s: @auth: expected only query%s "+
 			"rules,but found %s", typ.Name, typ.Name, f.Name)
 	}
 
-	return &query{
+	node.Rule = &query{
 		field: f,
 		op: &operation{op: op,
 			query: rule,
 			doc:   doc,
 			// need to fill in vars and schema at query time
 		},
-		sel: op.SelectionSet[0]}, nil
+		sel: op.SelectionSet[0]}
+	node.Variables = op.VariableDefinitions
+	return nil
 }
