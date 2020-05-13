@@ -60,7 +60,7 @@ type Options struct {
 	AllottedMemory float64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret []byte
+	HmacSecret x.SensitiveByteSlice
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
