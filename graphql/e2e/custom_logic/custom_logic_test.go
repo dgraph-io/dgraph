@@ -244,7 +244,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 			  url: "http://mock:8888/teacherName"
 			  method: "POST"
 			  body: "{tid: $tid}"
-			  operation: "single"
+			  mode: SINGLE
 			}
 		  )
 	  }
@@ -270,7 +270,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 					url: "http://mock:8888/userNames",
 					method: "GET",
 					body: "{uid: $name}",
-					operation: "batch"
+					mode: BATCH
 				})
 	}
 
@@ -280,7 +280,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 						url: "http://mock:8888/userNames",
 						method: "GET",
 						body: "{uid: $name}",
-						operation: "batch"
+						mode: BATCH
 					})
 		episodes: [Episode]
 	}`)
@@ -388,20 +388,20 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 						url: "http://mock:8888/userNames",
 						method: "GET",
 						body: "{uid: $id}",
-						operation: "batch"
+						mode: BATCH
 					})
 		age: Int! @search
 		cars: Car @custom(http: {
 						url: "http://mock:8888/carsWrongURL",
 						method: "GET",
 						body: "{uid: $id}",
-						operation: "batch"
+						mode: BATCH
 					})
 		bikes: MotorBike @custom(http: {
 						url: "http://mock:8888/bikesWrongURL",
 						method: "GET",
 						body: "{uid: $id}",
-						operation: "single"
+						mode: SINGLE
 					})
 	}`
 
@@ -940,7 +940,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			http: {
 			  url: "http://mock:8888/gqlUserNameWithError"
 			  method: "POST"
-			  operation: "single"
+			  mode: SINGLE
 			  graphql: "query($id: ID!) { userName(id: $id) }"
 			}
 		  )
@@ -950,7 +950,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			http: {
 			  url: "http://mock:8888/gqlCarsWithErrors"
 			  method: "POST"
-			  operation: "batch"
+			  mode: BATCH
 			  graphql: "query($input: [UserInput]) { cars(input: $input) }"
 			  body: "{ id: $id, age: $age}"
 			}
@@ -1279,7 +1279,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					url: "http://mock:8888/userNames",
 					method: "GET",
 					body: "{uid: $name}",
-					operation: "batch"
+					mode: BATCH
 				})
 	}
 
@@ -1289,7 +1289,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 						url: "http://mock:8888/userNames",
 						method: "GET",
 						body: "{uid: $name}",
-						operation: "batch"
+						mode: BATCH
 					})
 		episodes: [Episode]
 	}`
@@ -1385,7 +1385,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 					url: "http://mock:8888/userNames",
 					method: "GET",
 					body: "{uid: $name}",
-					operation: "batch"
+					mode: BATCH
 				})
 	}
 
@@ -1396,7 +1396,7 @@ func TestCustomFieldsWithXidShouldBeResolved(t *testing.T) {
 						url: "http://mock:8888/userNames",
 						method: "GET",
 						body: "{uid: $name}",
-						operation: "batch"
+						mode: BATCH
 					})
 		episodes: [Episode]
 	}`
@@ -1686,7 +1686,7 @@ func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
 		author: Author! @custom(http: {
 			url: "http://mock:8888/getPosts",
 			method: "POST",
-			operation: "batch"
+			mode: BATCH
 			graphql: "query ($abc: [PostInput]) { getPosts(input: $abc) }"
 			body: "{id: $id}"
 		})
@@ -1708,7 +1708,7 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 		comments: Post! @custom(http: {
 			url: "http://mock:8888/invalidInputForBatchedField",
 			method: "POST",
-			operation: "batch"
+			mode: BATCH
 			graphql: "query { getPosts(input: [{id: $id}]) }"
 			body: "{id: $id}"
 		})
@@ -1718,7 +1718,7 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
 	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, for batch operations, query"+
+		"; Field comments: inside graphql in @custom directive, for BATCH mode, query"+
 		" `getPosts` can have only one argument whose value should be a variable.\n",
 		res.Errors[0].Error())
 }
@@ -1731,7 +1731,7 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 		comments: String! @custom(http: {
 							url: "http://mock:8888/missingTypeForBatchedFieldInput",
 							method: "POST",
-							operation: "batch"
+							mode: BATCH
 							graphql: "query ($abc: [PostInput]) { getPosts(input: $abc) }"
 							body: "{id: $id}"
 						})
@@ -1754,7 +1754,7 @@ func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
 		comments: Post! @custom(http: {
 							url: "http://mock:8888/getPosts",
 							method: "POST",
-							operation: "batch"
+							mode: BATCH
 							graphql: "query { getPosts(input: [{name: $id}]) }"
 						})
 	}
@@ -1777,7 +1777,7 @@ func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
 		comments: Post! @custom(http: {
 							url: "http://mock:8888/getPostswithLike",
 							method: "POST",
-							operation: "batch"
+							mode: BATCH
 							graphql: "query { getPosts(input: [{id: $id, text: $likes}]) }"
 						})
 	}
@@ -1815,7 +1815,7 @@ func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
 		comments: Post! @custom(http: {
 							url: "http://mock:8888/getPosts",
 							method: "POST",
-							operation: "batch"
+							mode: BATCH
 							graphql: "query { getPosts(input: [{id: $id}]) }"
 						})
 	}
