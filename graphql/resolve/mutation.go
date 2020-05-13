@@ -189,6 +189,15 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 func (mr *dgraphResolver) rewriteAndExecute(
 	ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
+	var mutResp *dgoapi.Response
+	commit := false
+
+	defer func() {
+		if commit == false && mutResp != nil {
+			mutResp.Txn.Aborted = true
+			mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+		}
+	}()
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
@@ -209,7 +218,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Mutations: upsert.Mutations,
 	}
 
-	mutResp, err := mr.executor.Execute(ctx, req)
+	mutResp, err = mr.executor.Execute(ctx, req)
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -245,6 +254,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
 			resolverFailed
 	}
+	commit = true
 
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{
