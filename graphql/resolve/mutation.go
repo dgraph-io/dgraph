@@ -377,7 +377,7 @@ func authorizeNewNodes(
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
 
 		rn := newRw.selector(typ)
-		rbac := rn.EvaluateRBACRules(newRw.authVariables)
+		rbac := rn.EvaluateStatic(newRw.authVariables)
 
 		if rbac == schema.Negative {
 			return x.GqlErrorf("authorization failed")
