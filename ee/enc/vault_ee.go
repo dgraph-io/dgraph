@@ -27,14 +27,6 @@ import (
 	"github.com/spf13/viper"
 )
 
-type vaultKeyReader struct {
-	Addr     string
-	RoleID   string
-	SecretID string
-	Path     string
-	Field    string
-}
-
 // RegisterVaultFlags registers the required flags to integrate with Vault.
 func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
@@ -50,20 +42,29 @@ func registerVaultFlags(flag *pflag.FlagSet) {
 		"Vault kv store field whose value is the encryption key.")
 }
 
+// vaultKeyReader implements the KeyReader interface. It reads the key from vault server.
+type vaultKeyReader struct {
+	addr     string
+	roleID   string
+	secretID string
+	path     string
+	field    string
+}
+
 func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
-		Addr:     cfg.GetString("vault_addr"),
-		RoleID:   cfg.GetString("vault_roleID_file"),
-		SecretID: cfg.GetString("vault_secretID_file"),
-		Path:     cfg.GetString("vault_path"),
-		Field:    cfg.GetString("vault_field"),
+		addr:     cfg.GetString("vault_addr"),
+		roleID:   cfg.GetString("vault_roleID_file"),
+		secretID: cfg.GetString("vault_secretID_file"),
+		path:     cfg.GetString("vault_path"),
+		field:    cfg.GetString("vault_field"),
 	}
 
-	if v.Addr == "" || v.Path == "" || v.Field == "" {
+	if v.addr == "" || v.path == "" || v.field == "" {
 		return nil, errors.Errorf("vault_addr, vault_path or vault_field is missing")
 	}
 
-	if v.RoleID != "" && v.SecretID != "" {
+	if v.roleID != "" && v.secretID != "" {
 		return v, nil
 	}
 	return nil, errors.Errorf("vault_roleID_file and vault_secretID_file must both be specified")
@@ -76,18 +77,18 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 	}
 
 	// Read the files.
-	roleID, err := ioutil.ReadFile(vKR.RoleID)
+	roleID, err := ioutil.ReadFile(vKR.roleID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading role-id file (%v)", vKR.RoleID)
+		return nil, errors.Wrapf(err, "error reading role-id file (%v)", vKR.roleID)
 	}
-	secretID, err := ioutil.ReadFile(vKR.SecretID)
+	secretID, err := ioutil.ReadFile(vKR.secretID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading secretid file (%v)", vKR.SecretID)
+		return nil, errors.Wrapf(err, "error reading secretid file (%v)", vKR.secretID)
 	}
 
 	// Get a Vault Client.
 	vConfig := &api.Config{
-		Address: vKR.Addr,
+		Address: vKR.addr,
 	}
 	client, err := api.NewClient(vConfig)
 	if err != nil {
@@ -109,9 +110,9 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 	client.SetToken(resp.Auth.ClientToken)
 
 	// Read from KV store
-	secret, err := client.Logical().Read("secret/data/" + vKR.Path)
+	secret, err := client.Logical().Read("secret/data/" + vKR.path)
 	if err != nil {
-		return nil, errors.Wrapf(err, "while reading key from kv store at %v", vKR.Path)
+		return nil, errors.Wrapf(err, "while reading key from kv store at %v", vKR.path)
 	}
 
 	// Parse key from response
@@ -119,9 +120,9 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 	if !ok {
 		return nil, errors.Errorf("kv store read response from vault is bad")
 	}
-	kVal, ok := m[vKR.Field]
+	kVal, ok := m[vKR.field]
 	if !ok {
-		return nil, errors.Errorf("secret key not found at %v", vKR.Field)
+		return nil, errors.Errorf("secret key not found at %v", vKR.field)
 	}
 	kbyte := []byte(kVal.(string))
 

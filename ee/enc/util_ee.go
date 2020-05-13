@@ -44,6 +44,7 @@ type KeyReader interface {
 	ReadKey() ([]byte, error)
 }
 
+// localKeyReader implements the KeyReader interface. It reads the key from local files.
 type localKeyReader struct {
 	keyFile string
 }
