@@ -150,7 +150,7 @@ func init() {
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode")
+	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should only be done when alpha is under ludicrous mode)")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
