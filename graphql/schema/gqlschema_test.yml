@@ -899,22 +899,22 @@ invalid_schemas:
     ]
 
   -
-    name: "@custom directive with operation on Query/Mutation"
+    name: "@custom directive with mode on Query/Mutation"
     input: |
       type Author {
         id: ID!
       }
 
       type Query {
-        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "single"})
+        getAuthor1(id: ID): Author! @custom(http: {url: "http://google.com/", method: "GET", mode: SINGLE})
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1; operation field inside @custom directive can't be present on Query/Mutation.",
-     "locations":[{"line":6, "column":100}]},
+    {"message": "Type Query; Field getAuthor1; mode field inside @custom directive can't be present on Query/Mutation.",
+     "locations":[{"line":6, "column":94}]},
     ]
 
   -
-    name: "@custom directive with wrong value for operation"
+    name: "@custom directive with wrong value for mode"
     input: |
       type Author {
         id: ID!
@@ -922,11 +922,11 @@ invalid_schemas:
 
       type Post {
         id: ID!
-        author: Author! @custom(http: {url: "http://google.com/", method: "GET", operation: "random"})
+        author: Author! @custom(http: {url: "http://google.com/", method: "GET", mode: RANDOM})
       }
     errlist: [
-    {"message": "Type Post; Field author; operation field inside @custom directive can only be single/batch.",
-     "locations":[{"line":7, "column":88}]},
+    {"message": "Type Post; Field author; mode field inside @custom directive can only be SINGLE/BATCH.",
+     "locations":[{"line":7, "column":82}]},
     ]
 
   -
@@ -941,10 +941,10 @@ invalid_schemas:
         author: Author! @custom(http: {
           url: "http://google.com?a=$id",
           method: "GET",
-          operation: "batch"})
+          mode: BATCH})
       }
     errlist: [
-    {"message": "Type Post; Field author; has parameters in url inside @custom directive while operation is batch, url can't contain parameters if operation is batch.",
+    {"message": "Type Post; Field author; has parameters in url inside @custom directive while mode is BATCH, url can't contain parameters if mode is BATCH.",
      "locations":[{"line":8, "column":11}]},
     ]
 
@@ -1265,13 +1265,13 @@ invalid_schemas:
         author: Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          operation: "batch"
+          mode: BATCH,
           graphql: "query { getAuthor(postId: {id: $id}) }",
           body: "{id: $id}"
         })
       }
     errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, for batch operations, query `getAuthor` can have only one argument whose value should be a variable.",
+    {"message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
      "locations":[{"line":11, "column":15}]},
     ]
 
@@ -1440,7 +1440,7 @@ invalid_schemas:
         name: String! @custom(http: {
           url: "http://google.com",
           method: "POST",
-          operation: "batch",
+          mode: BATCH,
           graphql: "query ($abc: [AuthorInput]) { getName(obj: $abc) }"
           body: "{abc: $abc, id: $id}"
         })
@@ -1777,7 +1777,7 @@ invalid_schemas:
           url: "http://google.com"
           method: "POST"
           graphql: "query($id: ID!) { getName(obj: $input) }"
-          operation: "batch"
+          mode: BATCH
           body: "{ id: $id, age: $age }"
         })
       }
@@ -1796,7 +1796,7 @@ invalid_schemas:
           url: "http://google.com"
           method: "POST"
           graphql: "query($id: ID!) { getName(id: $id) }"
-          operation: "single"
+          mode: SINGLE
           skipIntrospection: "random"
         })
       }

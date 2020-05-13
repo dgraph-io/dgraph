@@ -1440,3 +1440,27 @@ func queriesHaveExtensions(t *testing.T) {
 	require.Contains(t, gqlResponse.Extensions, touchedUidskey)
 	require.Greater(t, int(gqlResponse.Extensions[touchedUidskey].(float64)), 0)
 }
+
+func queryWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			post : queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
+				type : __typename
+				postTitle : title
+				postAuthor : author {
+					theName : name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+			"post": [ {
+				"type": "Post",
+				"postTitle": "Introducing GraphQL in Dgraph",
+				"postAuthor": { "theName": "Ann Author" }}]}`,
+		string(gqlResponse.Data))
+}

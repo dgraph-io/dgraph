@@ -458,6 +458,35 @@ func partialHealth(t *testing.T) {
       }`, string(gqlResponse.Data))
 }
 
+// The /admin endpoints should respond to alias
+func adminAlias(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `query {
+            dgraphHealth: health {
+              type: instance
+              status
+              inGroup: group
+            }
+        }`,
+	}
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlAdminTestAdminURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t, `{
+        "dgraphHealth": [
+          {
+            "type": "zero",
+            "status": "healthy",
+            "inGroup": "0"
+          },
+          {
+            "type": "alpha",
+            "status": "healthy",
+            "inGroup": "1"
+          }
+        ]
+      }`, string(gqlResponse.Data))
+}
+
 // The GraphQL /admin state result should be the same as /state
 func adminState(t *testing.T) {
 	queryParams := &GraphQLParams{
