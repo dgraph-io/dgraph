@@ -19,12 +19,10 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"sync/atomic"
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -52,11 +50,7 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 
 	// input.LogRequest will be nil, when it is not specified explicitly in config request.
 	if input.LogRequest != nil {
-		if *input.LogRequest {
-			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 1)
-		} else {
-			atomic.StoreInt32(&x.WorkerConfig.LogRequest, 0)
-		}
+		worker.UpdateLogRequest(*input.LogRequest)
 	}
 
 	return &resolve.Resolved{
