@@ -246,7 +246,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	pred, found := l.schema.preds[nq.Predicate]
 
 	// We dont' need to generate conflict keys for predicate with noconflict directive.
-	if found && pred.NoConflict {
+	if found && pred.NoConflict || opt.ludicrousMode {
 		return nil, nil
 	}
 
