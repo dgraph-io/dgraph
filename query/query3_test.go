@@ -620,6 +620,260 @@ func TestKShortestPathDepthOnePath(t *testing.T) {
 		}
 	  }`, js)
 }
+
+func TestKShortestPathTwoPaths(t *testing.T) {
+	query := `
+	{
+		A as shortest(from: 51, to:55, numpaths: 2) {
+			connects
+		}
+		me(func: uid(A)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+			"me": [
+			  {
+				"name": "A"
+			  },
+			  {
+				"name": "D"
+			  },
+			  {
+				"name": "E"
+			  }
+			],
+			"_path_": [
+			  {
+				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "uid": "0x36"
+				},
+				"uid": "0x33",
+				"_weight_": 2
+			  },
+			  {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"uid": "0x36"
+				  },
+				  "uid": "0x34"
+				},
+				"uid": "0x33",
+				"_weight_": 3
+			  }
+			]
+		}
+	}`, js)
+}
+
+// There are 5 paths between 51 to 55 under "connects" predicate.
+// This tests checks if the algorithm is able to find all
+func TestKShortestPathFivePaths(t *testing.T) {
+	query := `
+	{
+		A as shortest(from: 51, to:55, numpaths: 5) {
+			connects
+		}
+		me(func: uid(A)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+		  "me": [
+			{
+			  "name": "A"
+			},
+			{
+			  "name": "D"
+			},
+			{
+			  "name": "E"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"connects": {
+				  "uid": "0x37"
+				},
+				"uid": "0x36"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 2
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "uid": "0x36"
+				},
+				"uid": "0x35"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "uid": "0x36"
+				},
+				"uid": "0x34"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"uid": "0x36"
+				  },
+				  "uid": "0x34"
+				},
+				"uid": "0x35"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 4
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"uid": "0x36"
+				  },
+				  "uid": "0x35"
+				},
+				"uid": "0x34"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 4
+			}
+		  ]
+		}
+	  }`, js)
+}
+
+// There are 5 paths between 51 to 55 under "connects" predicate.
+// This tests checks if the algorithm finds only 5 paths and doesn't add
+// cyclical paths when forced to search for 6 paths.
+func TestKShortestPathSixPaths(t *testing.T) {
+	query := `
+	{
+		A as shortest(from: 51, to:55, numpaths: 6) {
+			connects
+		}
+		me(func: uid(A)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+		  "me": [
+			{
+			  "name": "A"
+			},
+			{
+			  "name": "D"
+			},
+			{
+			  "name": "E"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "connects": {
+				"connects": {
+				  "uid": "0x37"
+				},
+				"uid": "0x36"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 2
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "uid": "0x36"
+				},
+				"uid": "0x34"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "uid": "0x36"
+				},
+				"uid": "0x35"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"uid": "0x36"
+				  },
+				  "uid": "0x35"
+				},
+				"uid": "0x34"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 4
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"uid": "0x36"
+				  },
+				  "uid": "0x34"
+				},
+				"uid": "0x35"
+			  },
+			  "uid": "0x33",
+			  "_weight_": 4
+			}
+		  ]
+		}
+	  }`, js)
+}
 func TestTwoShortestPath(t *testing.T) {
 
 	query := `
