@@ -19,7 +19,6 @@ import (
 	"io/ioutil"
 
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/ee/enc/vault"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -38,7 +37,7 @@ func RegisterFlags(flag *pflag.FlagSet) {
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// Register options for Vault stuff.
-	vault.RegisterFlags(flag)
+	registerVaultFlags(flag)
 }
 
 type KeyReader interface {
@@ -86,7 +85,7 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 		keyReaders++
 	}
 	if roleID != "" || secretID != "" {
-		keyReader, err = vault.NewVaultKeyReader(cfg)
+		keyReader, err = newVaultKeyReader(cfg)
 		if err != nil {
 			return nil, err
 		}

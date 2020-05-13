@@ -16,13 +16,13 @@
  * limitations under the License.
  */
 
-package vault
+package enc
 
 import (
 	"github.com/spf13/pflag"
 )
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.
-func RegisterVaultFlags(_ *pflag.FlagSet) {
+func registerVaultFlags(_ *pflag.FlagSet) {
 	return
 }

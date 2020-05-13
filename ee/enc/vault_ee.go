@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package vault
+package enc
 
 import (
 	"io/ioutil"
@@ -36,7 +36,7 @@ type vaultKeyReader struct {
 }
 
 // RegisterVaultFlags registers the required flags to integrate with Vault.
-func RegisterFlags(flag *pflag.FlagSet) {
+func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
 	flag.String("vault_addr", "http://localhost:8200",
 		"Vault server's address in the form http://ip:port.")
@@ -50,7 +50,7 @@ func RegisterFlags(flag *pflag.FlagSet) {
 		"Vault kv store field whose value is the encryption key.")
 }
 
-func NewVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
+func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
 		Addr:     cfg.GetString("vault_addr"),
 		RoleID:   cfg.GetString("vault_roleID_file"),
