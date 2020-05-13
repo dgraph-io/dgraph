@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -189,6 +190,16 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 func (mr *dgraphResolver) rewriteAndExecute(
 	ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
+	var mutResp *dgoapi.Response
+	commit := false
+
+	defer func() {
+		if !commit && mutResp != nil && mutResp.Txn != nil {
+			mutResp.Txn.Aborted = true
+			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			glog.Errorf("Error occured while aborting transaction: %f", err)
+		}
+	}()
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
@@ -209,7 +220,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Mutations: upsert.Mutations,
 	}
 
-	mutResp, err := mr.executor.Execute(ctx, req)
+	mutResp, err = mr.executor.Execute(ctx, req)
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -245,6 +256,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				schema.GQLWrapf(authErr, "mutation failed, couldn't commit transaction")),
 			resolverFailed
 	}
+	commit = true
 
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{
@@ -363,6 +375,18 @@ func authorizeNewNodes(
 		varName := newRw.varGen.Next(typ, "", "")
 		newRw.varName = varName
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
+
+		rn := newRw.selector(typ)
+		rbac := rn.EvaluateRBACRules(newRw.authVariables)
+
+		if rbac == schema.Negative {
+			return x.GqlErrorf("authorization failed")
+		}
+
+		if rbac == schema.Positive {
+			continue
+		}
+
 		if len(authQueries) == 0 {
 			continue
 		}
@@ -395,6 +419,7 @@ func authorizeNewNodes(
 
 		needsAuth = append(needsAuth, typeName)
 		authQrys[typeName] = append([]*gql.GraphQuery{typQuery, varQry}, authQueries...)
+
 	}
 
 	if len(needsAuth) == 0 {

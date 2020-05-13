@@ -132,17 +132,35 @@
 		"Role.permission": "EDIT"
 	},
 	{
+		"uid": "_:role5",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role6",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role7",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user4"}],
+		"Role.permission": "ADMIN"
+	},
+	{
 		"uid": "_:project1",
 		"dgraph.type": "Project",
 		"Project.name": "Project1",
-		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}, {"uid": "_:role4"}],
+		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}, {"uid": "_:role4"}, {"uid": "_:role5"}, {"uid": "_:role6"}],
 		"Project.columns": [{"uid": "_:column1"}]
 	},
 	{
 		"uid": "_:project2",
 		"dgraph.type": "Project",
 		"Project.name": "Project2",
-		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}],
+		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}, {"uid": "_:role7"}, {"uid": "_:role6"}],
 		"Project.columns": [{"uid": "_:column2"}, {"uid": "_:column3"}]
 	},
 	{

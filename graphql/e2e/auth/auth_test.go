@@ -42,69 +42,77 @@ var (
 )
 
 type User struct {
-	Username string
-	Age      uint64
-	IsPublic bool
-	Disabled bool
+	Username string `json:"username,omitempty"`
+	Age      uint64 `json:"age,omitempty"`
+	IsPublic bool   `json:"isPublic,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
 type Region struct {
-	Id    uint64
-	Name  string
-	Users []*User
+	Id     string  `json:"id,omitempty"`
+	Name   string  `json:"name,omitempty"`
+	Users  []*User `json:"users,omitempty"`
+	Global bool    `json:"global,omitempty"`
 }
 
 type Movie struct {
-	Id               uint64
-	Content          string
-	Disabled         bool
-	RegionsAvailable []*Region
+	Id               string    `json:"id,omitempty"`
+	Content          string    `json:"content,omitempty"`
+	Hidden           bool      `json:"hidden,omitempty"`
+	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
 }
 
 type Issue struct {
-	Id    uint64
-	Msg   string
-	Owner *User
+	Id    string `json:"id,omitempty"`
+	Msg   string `json:"msg,omitempty"`
+	Owner *User  `json:"owner,omitempty"`
 }
 
 type Log struct {
-	Id   uint64
-	Logs string
+	Id   string `json:"id,omitempty"`
+	Logs string `json:"logs,omitempty"`
 }
 
 type Role struct {
-	Id         uint64
-	Permission string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	Permission string  `json:"permission,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Ticket struct {
-	Id         uint64
-	OnColumn   Column
-	Title      string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	OnColumn   *Column `json:"onColumn,omitempty"`
+	Title      string  `json:"title,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Column struct {
-	ColID     string
-	InProject Project
-	Name      string
-	Tickets   []Ticket
+	ColID     string    `json:"colID,omitempty"`
+	InProject *Project  `json:"inProject,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
 type Project struct {
-	ProjID  uint64
-	Name    string
-	Roles   []Role
-	Columns []Column
+	ProjID  string    `json:"projID,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	Roles   []*Role   `json:"roles,omitempty"`
+	Columns []*Column `json:"columns,omitempty"`
 }
 
 type TestCase struct {
-	user   string
-	role   string
-	result string
-	name   string
-	filter map[string]interface{}
+	user      string
+	role      string
+	result    string
+	name      string
+	filter    map[string]interface{}
+	variables map[string]interface{}
 }
 
 type uidResult struct {
@@ -224,8 +232,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil})
+	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil, nil})
+	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil, nil})
 
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
