@@ -45,7 +45,7 @@ func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resol
 
 	if input.LruMB > 0 {
 		if err = worker.UpdateLruMb(input.LruMB); err != nil {
-			return resolve.EmptyResult(m, err), false
+			return emptyResult(m, err), false
 		}
 	}
 

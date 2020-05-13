@@ -84,8 +84,8 @@ type WorkerOptions struct {
 	StartTime time.Time
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
-	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
-	EncryptionKey SensitiveByteSlice
+	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
+	BadgerKeyFile string
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
 	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
