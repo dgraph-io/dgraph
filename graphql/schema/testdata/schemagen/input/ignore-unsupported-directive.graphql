@@ -3,13 +3,13 @@ enum Role {
   User
 }
 
-directive @auth(r: Role = User) on FIELD_DEFINITION
-directive @auth2(r: Role = User, b: Role = User) on FIELD_DEFINITION
-directive @auth3(r: Role = User, b: Role = User) on FIELD_DEFINITION
+directive @unkown1(r: Role = User) on OBJECT | FIELD_DEFINITION
+directive @unkown2(r: Role = User, b: Role = User) on FIELD_DEFINITION
+directive @unkown3(r: Role = User, b: Role = User) on FIELD_DEFINITION
 
-type Product @auth {
+type Product @unkown1 {
   id: ID!
-  price: Float! @search @auth(r: Admin) @auth2(r: User, b: Admin)
-  name: String! @auth(r: Admin) @search @auth2 @auth3 @dgraph(pred: "p")
-  name2: String! @auth(r: Admin) @search @auth2 @dgraph(pred: "p") @auth3
+  price: Float! @search @unkown1(r: Admin) @unkown2(r: User, b: Admin)
+  name: String! @unkown1(r: Admin) @search @unkown2 @unkown3 @dgraph(pred: "p")
+  name2: String! @unkown1(r: Admin) @search @unkown2 @dgraph(pred: "p") @unkown3
 }

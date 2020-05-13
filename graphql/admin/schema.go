@@ -72,6 +72,10 @@ func (asr *updateSchemaResolver) Rewrite(
 	if err != nil {
 		return nil, err
 	}
+	_, err = schema.FromString(schHandler.GQLSchema())
+	if err != nil {
+		return nil, err
+	}
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
@@ -106,6 +110,7 @@ func (asr *updateSchemaResolver) Execute(
 		return &dgoapi.Response{Json: b}, err
 	}
 
+	req.CommitNow = true
 	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
 		return nil, err
@@ -124,6 +129,10 @@ func (asr *updateSchemaResolver) Execute(
 	return resp, nil
 }
 
+func (asr *updateSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return asr.baseMutationExecutor.CommitOrAbort(ctx, tc)
+}
+
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
@@ -138,11 +147,15 @@ func (gsr *getSchemaResolver) Execute(
 	return &dgoapi.Response{Json: b}, err
 }
 
+func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
 func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(field.ResponseName()))
+	x.Check2(buf.WriteString(field.Name()))
 	x.Check2(buf.WriteString(`": [{`))
 
 	for i, sel := range field.SelectionSet() {
@@ -162,7 +175,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 			x.Check2(buf.WriteString(","))
 		}
 		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(sel.Name()))
 		x.Check2(buf.WriteString(`":`))
 		x.Check2(buf.Write(val))
 	}

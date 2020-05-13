@@ -116,13 +116,17 @@ func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.R
 
 }
 
+func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
 // of "null", errors and error propagation).  Exact JSON result (e.g. order) doesn't
 // matter here - that makes for easier to format and read tests for these many cases.
 //
 // The []bytes built by Resolve() have some other properties, such as ordering of
 // fields, which are tested by TestResponseOrder().
-func TestResolver(t *testing.T) {
+func TestGraphQLErrorPropagation(t *testing.T) {
 	b, err := ioutil.ReadFile("resolver_error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -141,65 +145,6 @@ func TestResolver(t *testing.T) {
 			}
 
 			require.JSONEq(t, tcase.Expected, resp.Data.String(), tcase.Explanation)
-		})
-	}
-}
-
-// Ordering of results and inserted null values matters in GraphQL:
-// https://graphql.github.io/graphql-spec/June2018/#sec-Serialized-Map-Ordering
-func TestResponseOrder(t *testing.T) {
-	query := `query {
-		 getAuthor(id: "0x1") {
-			 name
-			 dob
-			 postsNullable {
-				 title
-				 text
-			 }
-		 }
-	 }`
-
-	tests := []QueryCase{
-		{Name: "Response is in same order as GQL query",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [ ` +
-				`{ "title": "A Title", "text": "Some Text" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-		{Name: "Response is in same order as GQL query no matter Dgraph order",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "dob": "2000-01-01", "name": "A.N. Author", ` +
-				`"postsNullable": [ ` +
-				`{ "text": "Some Text", "title": "A Title" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-		{Name: "Inserted null is in GQL query order",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "name": "A.N. Author", ` +
-				`"postsNullable": [ ` +
-				`{ "title": "A Title" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": null, ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": null}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-	}
-
-	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
-
-			require.Nil(t, resp.Errors)
-			require.Equal(t, test.Expected, resp.Data.String())
 		})
 	}
 }
@@ -565,7 +510,7 @@ func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,
 	vars map[string]interface{},
-	ex *executor) *schema.Response {
+	ex DgraphExecutor) *schema.Response {
 	resolver := New(
 		gqlSchema,
 		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{

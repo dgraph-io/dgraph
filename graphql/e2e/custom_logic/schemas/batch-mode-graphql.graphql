@@ -10,8 +10,9 @@ type User {
       http: {
         url: "http://mock:8888/gqlUserNames"
         method: "POST"
-        operation: "batch"
-        graphql: "query { userNames(input: [{ id: $id, age: $age}]) }"
+        mode: BATCH
+        graphql: "query($uinput: [UserInput]) { userNames(users: $uinput) }"
+        body: "{ id: $id, age: $age }"
       }
     )
   age: Int! @search
@@ -20,8 +21,9 @@ type User {
       http: {
         url: "http://mock:8888/gqlCars"
         method: "POST"
-        operation: "batch"
-        graphql: "query { cars(input: [{ id: $id, age: $age}]) }"
+        mode: BATCH
+        graphql: "query($cinput: [UserInput]) { cars(users: $cinput) }"
+        body: "{ id: $id, age: $age }",
       }
     )
   schools: [School]
@@ -35,8 +37,9 @@ type School {
       http: {
         url: "http://mock:8888/gqlSchoolNames"
         method: "POST"
-        operation: "batch"
-        graphql: "query { schoolNames(input: [{ id: $id, age: $established}]) }"
+        mode: BATCH
+        graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }",
+        body: "{ id: $id, established: $established }"
       }
     )
   classes: [Class]
@@ -44,8 +47,9 @@ type School {
       http: {
         url: "http://mock:8888/gqlClasses"
         method: "POST"
-        operation: "batch"
-        graphql: "query { classes(input: [{ id: $id, age: $established}]) }"
+        mode: BATCH
+        graphql: "query($cinput: [SchoolInput]) { classes(schools: $cinput) }",
+        body: "{ id: $id, established: $established }"
       }
     )
   teachers: [Teacher]
@@ -64,8 +68,9 @@ type Teacher {
       http: {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
-        operation: "batch"
-        graphql: "query { teacherNames(input: [{ id: $tid, age: $age}]) }"
+        mode: BATCH
+        graphql: "query($tinput: [TeacherInput]) { teacherNames(teachers: $tinput) }"
+        body: "{ id: $tid, age: $age }"
       }
     )
 }

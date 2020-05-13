@@ -54,13 +54,23 @@ type MutationType string
 type FieldHTTPConfig struct {
 	URL    string
 	Method string
-	// would be nil if there is no http body
+	// would be nil if there is no body
 	Template       *interface{}
-	Operation      string
+	Mode           string
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
 	RemoteGqlQuery     string
+
+	// args required by the HTTP/GraphQL request. These should be present in the parent type
+	// in the case of resolving a field or in the parent field in case of a query/mutation
+	RequiredArgs map[string]bool
+
+	// For the following request
+	// graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }"
+	// the GraphqlBatchModeArgument would be sinput, we use it to know the GraphQL variable that
+	// we should send the data in.
+	GraphqlBatchModeArgument string
 }
 
 // Query/Mutation types and arg names
@@ -123,6 +133,7 @@ type Field interface {
 	IncludeInterfaceField(types []interface{}) bool
 	TypeName(dgraphTypes []interface{}) string
 	GetObjectName() string
+	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
 }
 
@@ -140,6 +151,7 @@ type Query interface {
 	Field
 	QueryType() QueryType
 	Rename(newName string)
+	AuthFor(typ Type, jwtVars map[string]interface{}) Query
 }
 
 // A Type is a GraphQL type like: Float, T, T! and [T!]!.  If it's not a list, then
@@ -159,6 +171,7 @@ type Type interface {
 	Interfaces() []string
 	EnsureNonNulls(map[string]interface{}, string) error
 	FieldOriginatedFrom(fieldName string) string
+	AuthRules() *TypeAuth
 	fmt.Stringer
 }
 
@@ -176,7 +189,7 @@ type FieldDefinition interface {
 
 type astType struct {
 	typ             *ast.Type
-	inSchema        *ast.Schema
+	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
 
@@ -192,6 +205,16 @@ type schema struct {
 	mutatedType map[string]*astType
 	// Map from typename to ast.Definition
 	typeNameAst map[string][]*ast.Definition
+	// customDirectives stores the mapping of typeName -> fieldName -> @custom definition.
+	// It is read-only.
+	// The outer map will contain typeName key only if one of the fields on that type has @custom.
+	// The inner map will contain fieldName key only if that field has @custom.
+	// It is pre-computed so that runtime queries and mutations can look it up quickly, and not do
+	// something like field.Directives.ForName("custom"), which results in iterating over all the
+	// directives of the field.
+	customDirectives map[string]map[string]*ast.Directive
+	// Map from typename to auth rules
+	authRules map[string]*TypeAuth
 }
 
 type operation struct {
@@ -216,7 +239,7 @@ type field struct {
 
 type fieldDefinition struct {
 	fieldDef        *ast.FieldDefinition
-	inSchema        *ast.Schema
+	inSchema        *schema
 	dgraphPredicate map[string]map[string]string
 }
 
@@ -229,7 +252,7 @@ func (s *schema) Queries(t QueryType) []string {
 	}
 	var result []string
 	for _, q := range s.schema.Query.Fields {
-		if queryType(q.Name, q.Directives.ForName(customDirective)) == t {
+		if queryType(q.Name, s.customDirectives["Query"][q.Name]) == t {
 			result = append(result, q.Name)
 		}
 	}
@@ -242,7 +265,7 @@ func (s *schema) Mutations(t MutationType) []string {
 	}
 	var result []string
 	for _, m := range s.schema.Mutation.Fields {
-		if mutationType(m.Name, m.Directives.ForName(customDirective)) == t {
+		if mutationType(m.Name, s.customDirectives["Mutation"][m.Name]) == t {
 			result = append(result, m.Name)
 		}
 	}
@@ -458,14 +481,14 @@ func dgraphMapping(sch *ast.Schema) map[string]map[string]string {
 	return dgraphPredicate
 }
 
-func mutatedTypeMapping(s *ast.Schema,
+func mutatedTypeMapping(s *schema,
 	dgraphPredicate map[string]map[string]string) map[string]*astType {
-	if s.Mutation == nil {
+	if s.schema.Mutation == nil {
 		return nil
 	}
 
-	m := make(map[string]*astType, len(s.Mutation.Fields))
-	for _, field := range s.Mutation.Fields {
+	m := make(map[string]*astType, len(s.schema.Mutation.Fields))
+	for _, field := range s.schema.Mutation.Fields {
 		mutatedTypeName := ""
 		switch {
 		case strings.HasPrefix(field.Name, "add"):
@@ -481,8 +504,8 @@ func mutatedTypeMapping(s *ast.Schema,
 		// the type from the definition of an object. We use Update and not Add here because
 		// Interfaces only have Update.
 		var def *ast.Definition
-		if def = s.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
-			def = s.Types["Add"+mutatedTypeName+"Payload"]
+		if def = s.schema.Types["Update"+mutatedTypeName+"Payload"]; def == nil {
+			def = s.schema.Types["Add"+mutatedTypeName+"Payload"]
 		}
 
 		if def == nil {
@@ -510,15 +533,57 @@ func typeMappings(s *ast.Schema) map[string][]*ast.Definition {
 	return typeNameAst
 }
 
-// AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
-func AsSchema(s *ast.Schema) Schema {
-	dgraphPredicate := dgraphMapping(s)
-	return &schema{
-		schema:          s,
-		dgraphPredicate: dgraphPredicate,
-		mutatedType:     mutatedTypeMapping(s, dgraphPredicate),
-		typeNameAst:     typeMappings(s),
+func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
+	customDirectives := make(map[string]map[string]*ast.Directive)
+
+	for _, typ := range s.Types {
+		for _, field := range typ.Fields {
+			for i, dir := range field.Directives {
+				if dir.Name == customDirective {
+					// remove custom directive from s
+					lastIndex := len(field.Directives) - 1
+					field.Directives[i] = field.Directives[lastIndex]
+					field.Directives = field.Directives[:lastIndex]
+					// now put it into mapping
+					var fieldMap map[string]*ast.Directive
+					if innerMap, ok := customDirectives[typ.Name]; !ok {
+						fieldMap = make(map[string]*ast.Directive)
+					} else {
+						fieldMap = innerMap
+					}
+					fieldMap[field.Name] = dir
+					customDirectives[typ.Name] = fieldMap
+					// break, as there can only be one @custom
+					break
+				}
+			}
+		}
 	}
+
+	return customDirectives
+}
+
+// AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
+func AsSchema(s *ast.Schema) (Schema, error) {
+
+	// Auth rules can't be effectively validated as part of the normal rules -
+	// because they need the fully generated schema to be checked against.
+	authRules, err := authRules(s)
+	if err != nil {
+		return nil, err
+	}
+
+	dgraphPredicate := dgraphMapping(s)
+	sch := &schema{
+		schema:           s,
+		dgraphPredicate:  dgraphPredicate,
+		typeNameAst:      typeMappings(s),
+		customDirectives: customMappings(s),
+		authRules:        authRules,
+	}
+	sch.mutatedType = mutatedTypeMapping(sch, dgraphPredicate)
+
+	return sch, nil
 }
 
 func responseName(f *ast.Field) string {
@@ -552,6 +617,10 @@ func (f *field) SetArgTo(arg string, val interface{}) {
 	if argument == nil {
 		f.field.Arguments = append(f.field.Arguments, &ast.Argument{Name: arg})
 	}
+}
+
+func (f *field) IsAuthQuery() bool {
+	return f.field.Arguments.ForName("dgraph.uid") != nil
 }
 
 func (f *field) ArgValue(name string) interface{} {
@@ -588,15 +657,7 @@ func (f *field) Include() bool {
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
-	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	if typeDef == nil {
-		return false, nil
-	}
-	tf := typeDef.Fields.ForName(f.Name())
-	if tf == nil {
-		return false, nil
-	}
-	custom := tf.Directives.ForName("custom")
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
 		return false, nil
 	}
@@ -635,13 +696,22 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	if graphqlArg == nil {
 		return true, rf
 	}
-	op := ""
-	operation := httpArg.Value.Children.ForName("operation")
-	if operation != nil {
-		op = operation.Raw
+	modeVal := ""
+	modeArg := httpArg.Value.Children.ForName(mode)
+	if modeArg != nil {
+		modeVal = modeArg.Raw
 	}
 
-	rf, _ = ParseRequiredArgsFromGQLRequest(graphqlArg.Raw, op)
+	if modeVal == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
+		var err error
+		rf, err = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
+		// This should not be returning an error since we should have validated this during schema
+		// update.
+		if err != nil {
+			return true, nil
+		}
+	}
 	return true, rf
 }
 
@@ -711,7 +781,7 @@ func (f *field) Type() Type {
 	}
 	return &astType{
 		typ:             t,
-		inSchema:        f.op.inSchema.schema,
+		inSchema:        f.op.inSchema,
 		dgraphPredicate: f.op.inSchema.dgraphPredicate,
 	}
 }
@@ -725,13 +795,17 @@ func (f *field) GetObjectName() string {
 }
 
 func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, error) {
-	typeDef := f.op.inSchema.schema.Types[f.GetObjectName()]
-	tf := typeDef.Fields.ForName(f.Name())
-	custom := tf.Directives.ForName(customDirective)
+	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	httpArg := custom.Arguments.ForName("http")
 	fconf := FieldHTTPConfig{
 		URL:    httpArg.Value.Children.ForName("url").Raw,
 		Method: httpArg.Value.Children.ForName("method").Raw,
+	}
+
+	fconf.Mode = SINGLE
+	op := httpArg.Value.Children.ForName(mode)
+	if op != nil {
+		fconf.Mode = op.Raw
 	}
 
 	// both body and graphql can't be present together
@@ -745,11 +819,19 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	}
 	// bodyTemplate will be empty if there was no body or graphql, like the case of a simple GET req
 	if bodyTemplate != "" {
-		bt, _, err := parseBodyTemplate(bodyTemplate)
+		bt, rf, err := parseBodyTemplate(bodyTemplate)
 		if err != nil {
 			return fconf, err
 		}
 		fconf.Template = bt
+		fconf.RequiredArgs = rf
+	}
+
+	if !isQueryOrMutation && graphqlArg != nil && fconf.Mode == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
+		// Safe to ignore the error here since we should already have validated that we can parse
+		// the required args from the GraphQL request during schema update.
+		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
@@ -767,7 +849,11 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			return fconf, gqlErr
 		}
 		// queryDoc will always have only one operation with only one field
-		fconf.RemoteGqlQueryName = queryDoc.Operations[0].SelectionSet[0].(*ast.Field).Name
+		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
+		if fconf.Mode == BATCH {
+			fconf.GraphqlBatchModeArgument = queryDoc.Operations[0].VariableDefinitions[0].Variable
+		}
+		fconf.RemoteGqlQueryName = qfield.Name
 		buf := &bytes.Buffer{}
 		buildGraphqlRequestFields(buf, f.field)
 		remoteQuery := graphqlArg.Raw
@@ -797,12 +883,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			if err = SubstituteVarsInBody(fconf.Template, bodyVars); err != nil {
 				return fconf, errors.Wrapf(err, "while substituting vars in Body")
 			}
-		}
-	} else {
-		fconf.Operation = "single"
-		op := httpArg.Value.Children.ForName("operation")
-		if op != nil {
-			fconf.Operation = op.Raw
 		}
 	}
 	return fconf, nil
@@ -883,6 +963,23 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return false
 }
 
+func (q *query) IsAuthQuery() bool {
+	return (*field)(q).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (q *query) AuthFor(typ Type, jwtVars map[string]interface{}) Query {
+	// copy the template, so that multiple queries can run rewriting for the rule.
+	return &query{
+		field: (*field)(q).field,
+		op: &operation{op: q.op.op,
+			query:    q.op.query,
+			doc:      q.op.doc,
+			inSchema: typ.(*astType).inSchema,
+			vars:     jwtVars,
+		},
+		sel: q.sel}
+}
+
 func (q *query) Rename(newName string) {
 	q.field.Name = newName
 }
@@ -952,7 +1049,7 @@ func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
 }
 
 func (q *query) QueryType() QueryType {
-	return queryType(q.Name(), q.field.Directives.ForName(customDirective))
+	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
 
 func queryType(name string, custom *ast.Directive) QueryType {
@@ -1090,7 +1187,7 @@ func (m *mutation) GetObjectName() string {
 }
 
 func (m *mutation) MutationType() MutationType {
-	return mutationType(m.Name(), m.field.Directives.ForName(customDirective))
+	return mutationType(m.Name(), m.op.inSchema.customDirectives["Mutation"][m.Name()])
 }
 
 func mutationType(name string, custom *ast.Directive) MutationType {
@@ -1124,10 +1221,18 @@ func (m *mutation) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 	return (*field)(m).IncludeInterfaceField(dgraphTypes)
 }
 
+func (m *mutation) IsAuthQuery() bool {
+	return (*field)(m).field.Arguments.ForName("dgraph.uid") != nil
+}
+
+func (t *astType) AuthRules() *TypeAuth {
+	return t.inSchema.authRules[t.Name()]
+}
+
 func (t *astType) Field(name string) FieldDefinition {
 	return &fieldDefinition{
 		// this ForName lookup is a loop in the underlying schema :-(
-		fieldDef:        t.inSchema.Types[t.Name()].Fields.ForName(name),
+		fieldDef:        t.inSchema.schema.Types[t.Name()].Fields.ForName(name),
 		inSchema:        t.inSchema,
 		dgraphPredicate: t.dgraphPredicate,
 	}
@@ -1136,7 +1241,7 @@ func (t *astType) Field(name string) FieldDefinition {
 func (t *astType) Fields() []FieldDefinition {
 	var result []FieldDefinition
 
-	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
 		result = append(result,
 			&fieldDefinition{
 				fieldDef:        fld,
@@ -1186,7 +1291,7 @@ func (fd *fieldDefinition) Inverse() FieldDefinition {
 	}
 
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[fd.Type().Name()]
 
 	// fld must exist if the schema passed our validation
 	fld := typ.Fields.ForName(invFieldArg.Value.Raw)
@@ -1218,7 +1323,7 @@ func (fd *fieldDefinition) ForwardEdge() FieldDefinition {
 
 	fedge := strings.Trim(name, "<~>")
 	// typ must exist if the schema passed GQL validation
-	typ := fd.inSchema.Types[fd.Type().Name()]
+	typ := fd.inSchema.schema.Types[fd.Type().Name()]
 
 	var fld *ast.FieldDefinition
 	// Have to range through all the fields and find the correct forward edge. This would be
@@ -1252,7 +1357,7 @@ func (t *astType) Name() string {
 }
 
 func (t *astType) DgraphName() string {
-	typeDef := t.inSchema.Types[t.typ.Name()]
+	typeDef := t.inSchema.schema.Types[t.typ.Name()]
 	name := typeName(typeDef)
 	if name != "" {
 		return name
@@ -1268,7 +1373,10 @@ func (t *astType) ListType() Type {
 	if t.typ == nil || t.typ.Elem == nil {
 		return nil
 	}
-	return &astType{typ: t.typ.Elem}
+	return &astType{
+		typ:             t.typ.Elem,
+		inSchema:        t.inSchema,
+		dgraphPredicate: t.dgraphPredicate}
 }
 
 // DgraphPredicate returns the name of the predicate in Dgraph that represents this
@@ -1306,7 +1414,7 @@ func (t *astType) String() string {
 }
 
 func (t *astType) IDField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1324,7 +1432,7 @@ func (t *astType) IDField() FieldDefinition {
 }
 
 func (t *astType) PasswordField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1341,7 +1449,7 @@ func (t *astType) PasswordField() FieldDefinition {
 }
 
 func (t *astType) XIDField() FieldDefinition {
-	def := t.inSchema.Types[t.Name()]
+	def := t.inSchema.schema.Types[t.Name()]
 	if def.Kind != ast.Object && def.Kind != ast.Interface {
 		return nil
 	}
@@ -1359,7 +1467,7 @@ func (t *astType) XIDField() FieldDefinition {
 }
 
 func (t *astType) Interfaces() []string {
-	interfaces := t.inSchema.Types[t.typ.Name()].Interfaces
+	interfaces := t.inSchema.schema.Types[t.typ.Name()].Interfaces
 	if len(interfaces) == 0 {
 		return nil
 	}
@@ -1368,7 +1476,7 @@ func (t *astType) Interfaces() []string {
 	// overwritten using @dgraph(type: ...)
 	names := make([]string, 0, len(interfaces))
 	for _, intr := range interfaces {
-		i := t.inSchema.Types[intr]
+		i := t.inSchema.schema.Types[intr]
 		name := intr
 		if n := typeName(i); n != "" {
 			name = n
@@ -1414,7 +1522,7 @@ func (t *astType) Interfaces() []string {
 // and then check ourselves that either there's an ID, or there's all the bits to
 // satisfy a valid post.
 func (t *astType) EnsureNonNulls(obj map[string]interface{}, exclusion string) error {
-	for _, fld := range t.inSchema.Types[t.Name()].Fields {
+	for _, fld := range t.inSchema.schema.Types[t.Name()].Fields {
 		if fld.Type.NonNull && !isID(fld) && !(fld.Name == exclusion) {
 			if val, ok := obj[fld.Name]; !ok || val == nil {
 				return errors.Errorf(
@@ -1742,13 +1850,13 @@ func SubstituteVarsInBody(jsonTemplate *interface{}, variables map[string]interf
 // If the field wasn't inherited, but belonged to this type, this type's name is returned.
 // Otherwise, empty string is returned.
 func (t *astType) FieldOriginatedFrom(fieldName string) string {
-	for _, implements := range t.inSchema.Implements[t.Name()] {
+	for _, implements := range t.inSchema.schema.Implements[t.Name()] {
 		if implements.Fields.ForName(fieldName) != nil {
 			return implements.Name
 		}
 	}
 
-	if t.inSchema.Types[t.Name()].Fields.ForName(fieldName) != nil {
+	if t.inSchema.schema.Types[t.Name()].Fields.ForName(fieldName) != nil {
 		return t.Name()
 	}
 
@@ -1790,25 +1898,17 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	writer.WriteString("}")
 }
 
-// ParseRequiredArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
-func ParseRequiredArgsFromGQLRequest(req string, operation string) (map[string]bool, error) {
-	// These errors should have already been checked during schema validation.
-	parsedQuery, gqlErr := parser.ParseQuery(&ast.Source{Input: req})
-	if gqlErr != nil {
-		return nil, gqlErr
-	}
-
-	query := parsedQuery.Operations[0].SelectionSet[0].(*ast.Field)
-
-	if operation == "batch" {
-		input := query.Arguments[0]
-		// We are validating the format during schema update so accessing the children is safe here.
-		_, rf, err := parseBodyTemplate(input.Value.Children[0].Value.String())
-		return rf, err
-	}
+// parseRequiredArgsFromGQLRequest parses a GraphQL request and gets the arguments required by it.
+func parseRequiredArgsFromGQLRequest(req string) (map[string]bool, error) {
+	// Single request would be of the form query($id: ID!) { userName(id: $id)}
+	// There are two ( here, one for defining the variables and other for the query arguments.
+	// We need to fetch the query arguments here.
 
 	// The request can contain nested arguments/variables as well, so we get the args here and
 	// then wrap them with { } to pass to parseBodyTemplate to get the required fields.
+
+	bracket := strings.Index(req, "{")
+	req = req[bracket:]
 	args := req[strings.Index(req, "(")+1 : strings.LastIndex(req, ")")]
 	_, rf, err := parseBodyTemplate("{" + args + "}")
 	return rf, err

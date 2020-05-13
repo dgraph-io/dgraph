@@ -66,16 +66,16 @@ func TestEncode(t *testing.T) {
 	enc := newEncoder()
 
 	t.Run("with uid list predicate", func(t *testing.T) {
-		root := enc.newNode()
-		friendNode1 := enc.newNodeWithAttr(enc.idForAttr("friend"))
+		root := enc.newNode(0)
+		friendNode1 := enc.newNode(enc.idForAttr("friend"))
 		enc.AddValue(friendNode1, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "alice"})
-		friendNode2 := enc.newNodeWithAttr(enc.idForAttr("friend"))
+		friendNode2 := enc.newNode(enc.idForAttr("friend"))
 		enc.AddValue(friendNode2, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "bob"})
 
-		enc.AddListChild(root, enc.idForAttr("friend"), friendNode1)
-		enc.AddListChild(root, enc.idForAttr("friend"), friendNode2)
+		enc.AddListChild(root, friendNode1)
+		enc.AddListChild(root, friendNode2)
 
 		buf := new(bytes.Buffer)
 		require.NoError(t, enc.encode(root, buf))
@@ -94,7 +94,7 @@ func TestEncode(t *testing.T) {
 	})
 
 	t.Run("with value list predicate", func(t *testing.T) {
-		root := enc.newNode()
+		root := enc.newNode(0)
 		enc.AddValue(root, enc.idForAttr("name"),
 			types.Val{Tid: types.StringID, Value: "alice"})
 		enc.AddValue(root, enc.idForAttr("name"),
@@ -113,13 +113,13 @@ func TestEncode(t *testing.T) {
 	})
 
 	t.Run("with uid predicate", func(t *testing.T) {
-		root := enc.newNode()
+		root := enc.newNode(0)
 
-		person := enc.newNode()
+		person := enc.newNode(enc.idForAttr("person"))
 		enc.AddValue(person, enc.idForAttr("name"), types.Val{Tid: types.StringID, Value: "alice"})
 		enc.AddValue(person, enc.idForAttr("age"), types.Val{Tid: types.IntID, Value: 25})
 
-		enc.AddListChild(root, enc.idForAttr("person"), person)
+		enc.AddListChild(root, person)
 
 		buf := new(bytes.Buffer)
 		require.NoError(t, enc.encode(root, buf))
