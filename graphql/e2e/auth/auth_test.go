@@ -727,7 +727,7 @@ func TestMain(m *testing.M) {
 		panic(errors.Wrapf(err, "Unable to read file %s.", jsonFile))
 	}
 
-	jwtAlgo := []string{authorization.HMAC256}
+	jwtAlgo := []string{authorization.HMAC256, authorization.RSA256}
 	for _, algo := range jwtAlgo {
 		authSchema, err := testutil.AppendAuthInfo(schema, algo, "./sample_public_key.pem")
 		if err != nil {
