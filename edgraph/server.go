@@ -808,7 +808,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
-	if glog.V(3) {
+	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
