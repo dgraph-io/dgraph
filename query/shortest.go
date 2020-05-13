@@ -20,7 +20,6 @@ import (
 	"container/heap"
 	"context"
 	"math"
-	"sort"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/algo"
@@ -66,14 +65,10 @@ type priorityQueue []*queueItem
 
 func (r route) indexOf(uid uint64) int {
 	u := *r.route
-	tmp := make([]pathInfo, len(u))
-	copy(tmp, u)
-	sort.Slice(tmp, func(i, j int) bool {
-		return tmp[i].uid < tmp[j].uid
-	})
-	i := sort.Search(len(tmp), func(i int) bool { return tmp[i].uid >= uid })
-	if i < len(tmp) && tmp[i].uid == uid {
-		return i
+	for i, val := range u {
+		if val.uid == uid {
+			return i
+		}
 	}
 	return -1
 }
@@ -338,6 +333,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// node.
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
+L:
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
@@ -380,7 +376,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			return nil, ctx.Err()
 		default:
 			if len(kroutes) == numPaths {
-				break
+				break L
 			}
 		}
 		neighbours := adjacencyMap[item.uid]
