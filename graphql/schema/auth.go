@@ -71,11 +71,6 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 }
 
 func (node *RuleNode) staticEvaluation(av map[string]interface{}) {
-	op := node.Rule.Operation()
-	if !op.IsQuery() {
-		return
-	}
-
 	for _, v := range node.Variables {
 		if _, ok := av[v.Variable]; !ok {
 			node.Result = Negative
