@@ -28,6 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -193,9 +194,10 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	commit := false
 
 	defer func() {
-		if commit == false && mutResp != nil {
+		if !commit && mutResp != nil {
 			mutResp.Txn.Aborted = true
-			mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			glog.Errorf("Error occured while aborting transaction: %f", err)
 		}
 	}()
 
