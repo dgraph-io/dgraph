@@ -59,6 +59,10 @@ func NewVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 		Field:    cfg.GetString("vault_field"),
 	}
 
+	if v.Addr == "" || v.Path == "" || v.Field == "" {
+		return nil, errors.Errorf("vault_addr, vault_path or vault_field is missing")
+	}
+
 	if v.RoleID != "" && v.SecretID != "" {
 		return v, nil
 	}
@@ -67,8 +71,8 @@ func NewVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 
 // ReadKey reads the key from the vault kv store.
 func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
-	if vKR == nil || vKR.RoleID == "" || vKR.SecretID == "" {
-		return nil, errors.Errorf("nil or bad vaultKeyReader")
+	if vKR == nil {
+		return nil, errors.Errorf("nil vaultKeyReader")
 	}
 
 	// Read the files.
