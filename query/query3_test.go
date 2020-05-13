@@ -624,7 +624,7 @@ func TestKShortestPathDepthOnePath(t *testing.T) {
 func TestKShortestPathTwoPaths(t *testing.T) {
 	query := `
 	{
-		A as shortest(from: 51, to:55, numpaths: 2) {
+		A as shortest(from: 51, to:55, numpaths: 2, depth:2) {
 			connects
 		}
 		me(func: uid(A)) {
