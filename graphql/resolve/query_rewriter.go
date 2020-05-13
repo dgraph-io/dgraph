@@ -192,7 +192,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateRBAC(field)
+	rbac := authRw.evaluateStaticRules(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
@@ -242,9 +242,9 @@ func rewriteAsGet(
 	auth *authRewriter) *gql.GraphQuery {
 
 	var dgQuery *gql.GraphQuery
-	rbac := auth.evaluateRBAC(field)
+	rbac := auth.evaluateStaticRules(field)
 	if rbac == schema.Negative {
-		return &gql.GraphQuery{}
+		return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
 	}
 
 	if xid == nil {
@@ -306,7 +306,7 @@ func rewriteAsGet(
 }
 
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateRBAC(field)
+	rbac := authRw.evaluateStaticRules(field)
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
@@ -433,14 +433,14 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
-func (authRw *authRewriter) evaluateRBAC(f schema.Field) schema.RuleResult {
+func (authRw *authRewriter) evaluateStaticRules(f schema.Field) schema.RuleResult {
 	if authRw == nil || authRw.isWritingAuth {
 		return schema.Uncertain
 	}
 
 	typ := f.Type()
 	rn := authRw.selector(typ)
-	return rn.EvaluateRBACRules(authRw.authVariables)
+	return rn.EvaluateStatic(authRw.authVariables)
 }
 
 func (authRw *authRewriter) rewriteRuleNode(
@@ -502,6 +502,10 @@ func (authRw *authRewriter) rewriteRuleNode(
 			Child: []*gql.FilterTree{filter},
 		}
 	case rn.Rule != nil:
+		if rn.Result == schema.Negative {
+			return nil, nil
+		}
+
 		// create a copy of the auth query that's specialized for the values from the JWT
 		qry := rn.Rule.AuthFor(typ, authRw.authVariables)
 
@@ -610,7 +614,7 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
-		rbac := auth.evaluateRBAC(f)
+		rbac := auth.evaluateStaticRules(f)
 
 		selectionAuth := addSelectionSetFrom(child, f, auth)
 		addedFields[f.Name()] = true

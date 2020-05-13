@@ -168,6 +168,46 @@ type Role {
   assignedTo: [User]
 }
 
+type Group @auth(
+    query:  { or : [
+        { rule: """
+        query($USER: String!) {
+            queryGroup {
+                users(filter: { username: { eq: $USER } }) {
+                    __typename
+                }
+            }
+        }"""},
+        {  rule: """
+        query($PERMISSION: Permission!) {
+            queryGroup(filter: { readPermission: { eq: $PERMISSION } }) {
+                __typename
+            }
+        }"""},
+        { and: [
+            { rule: """
+            query($USER: String!) {
+                queryGroup {
+                    createdBy(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }"""},
+            {  not: { rule: """
+            query($PERMISSION: Permission!) {
+                queryGroup(filter: { writePermission: { eq: $PERMISSION } }) {
+                    __typename
+                }
+            }"""} },
+        ]}
+    ]}){
+    id: ID!
+    readPermission: Permission @search
+    writePermission: Permission @search
+    users: [User]
+    createdBy: User
+}
+
 enum Permission {
   VIEW
   EDIT
