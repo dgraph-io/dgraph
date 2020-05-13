@@ -11,7 +11,7 @@ type User {
         url: "http://mock:8888/userName"
         method: "GET"
         body: "{uid: $id}"
-        operation: "single"
+        mode: SINGLE
       }
     )
   age: Int! @search
@@ -21,7 +21,7 @@ type User {
         url: "http://mock:8888/car"
         method: "GET"
         body: "{uid: $id}"
-        operation: "single"
+        mode: SINGLE
       }
     )
   schools: [School]
@@ -36,7 +36,7 @@ type School {
         url: "http://mock:8888/schoolName"
         method: "POST"
         body: "{sid: $id}"
-        operation: "single"
+        mode: SINGLE
       }
     )
   classes: [Class]
@@ -45,7 +45,7 @@ type School {
         url: "http://mock:8888/class"
         method: "POST"
         body: "{sid: $id}"
-        operation: "single"
+        mode: SINGLE
       }
     )
   teachers: [Teacher]
@@ -65,7 +65,7 @@ type Teacher {
         url: "http://mock:8888/teacherName"
         method: "POST"
         body: "{tid: $tid}"
-        operation: "single"
+        mode: SINGLE
       }
     )
 }

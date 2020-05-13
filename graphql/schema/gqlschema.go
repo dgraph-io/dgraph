@@ -43,6 +43,11 @@ const (
 	customDirective = "custom"
 	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
 
+	// custom directive args and fields
+	mode   = "mode"
+	BATCH  = "BATCH"
+	SINGLE = "SINGLE"
+
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
 
@@ -85,11 +90,17 @@ enum HTTPMethod {
 	DELETE
 }
 
+enum Mode {
+	BATCH
+	SINGLE
+}
+
 input CustomHTTP {
 	url: String!
 	method: HTTPMethod!
 	body: String
 	graphql: String
+	mode: Mode
 	forwardHeaders: [String!]
 	skipIntrospection: Boolean
 }

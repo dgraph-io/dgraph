@@ -49,11 +49,17 @@ enum HTTPMethod {
 	DELETE
 }
 
+enum Mode {
+	BATCH
+	SINGLE
+}
+
 input CustomHTTP {
 	url: String!
 	method: HTTPMethod!
 	body: String
 	graphql: String
+	mode: Mode
 	forwardHeaders: [String!]
 	skipIntrospection: Boolean
 }
