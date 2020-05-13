@@ -561,6 +561,65 @@ func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
 	`, js)
 }
 
+func TestKShortestPathDepthNoPath(t *testing.T) {
+	query := `
+	{
+		A as shortest(from: 1, to:1000, numpaths: 2, depth:2) {
+			follow
+		}
+		me(func: uid(A)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{"data": {"me":[]}}`, js)
+}
+
+func TestKShortestPathDepthOnePath(t *testing.T) {
+	query := `
+	{
+		A as shortest(from: 1, to:1000, numpaths: 2, depth:3) {
+			follow
+		}
+		me(func: uid(A)) {
+			name
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	require.JSONEq(t, `{
+		"data": {
+		  "me": [
+			{
+			  "name": "Michonne"
+			},
+			{
+			  "name": "Andrea"
+			},
+			{
+			  "name": "Bob"
+			},
+			{
+			  "name": "Alice"
+			}
+		  ],
+		  "_path_": [
+			{
+			  "follow": {
+				"follow": {
+				  "follow": {
+					"uid": "0x3e8"
+				  },
+				  "uid": "0x3e9"
+				},
+				"uid": "0x1f"
+			  },
+			  "uid": "0x1",
+			  "_weight_": 3
+			}
+		  ]
+		}
+	  }`, js)
+}
 func TestTwoShortestPath(t *testing.T) {
 
 	query := `
