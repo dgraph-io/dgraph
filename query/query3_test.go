@@ -1249,11 +1249,6 @@ func TestShortestPathWithDepth(t *testing.T) {
 			allPaths,
 		},
 		{
-			"3",
-			"10",
-			allPaths,
-		},
-		{
 			"10",
 			"10",
 			allPaths,
