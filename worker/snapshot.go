@@ -143,8 +143,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		// with the snapshot.
 		// TODO: what about deleted predicates and types that still might show in the
 		// receiver.
-		// TODO: what if the schema is already in the receiver. The update should probably
-		// be ignored.
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return false
