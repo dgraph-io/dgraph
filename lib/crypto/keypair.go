@@ -66,7 +66,7 @@ var ss58Prefix = []byte("SS58PRE")
 // see: https://github.com/paritytech/substrate/wiki/External-Address-Format-(SS58)
 // also see: https://github.com/paritytech/substrate/blob/master/primitives/core/src/crypto.rs#L275
 func PublicKeyToAddress(pub PublicKey) common.Address {
-	enc := pub.Encode()
+	enc := append([]byte{42}, pub.Encode()...)
 	hasher, err := blake2b.New(64, nil)
 	if err != nil {
 		return ""
