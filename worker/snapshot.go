@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -138,6 +139,20 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
+		// Type and Schema keys always have a timestamp of 1. They all need to be sent
+		// with the snapshot.
+		// TODO: what about deleted predicates and types that still might show in the
+		// receiver.
+		// TODO: what if the schema is already in the receiver. The update should probably
+		// be ignored.
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return false
+		}
+		if pk.IsSchema() || pk.IsType() {
+			return true
+		}
+
 		return item.Version() >= snap.SinceTs
 	}
 
