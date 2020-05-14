@@ -1232,13 +1232,12 @@ func TestShortestPathWithDepth(t *testing.T) {
 			"1",
 			shortestPath,
 		},
+		//The test cases below are for k-shortest path queries with varying depths.
 		{
 			"0",
 			"10",
 			emptyPath,
 		},
-		//The test cases below are for k-shortest path queries with varying depths. They don't pass
-		//right now and hence are commented out...
 		{
 			"1",
 			"10",
