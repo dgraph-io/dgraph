@@ -82,6 +82,7 @@ type options struct {
 	WhiteList     bool
 	Ratel         bool
 	RatelPort     int
+	TlsDir        string
 }
 
 var opts options
@@ -220,6 +221,15 @@ func getAlpha(idx int) service {
 			Type:     "bind",
 			Source:   opts.AclSecret,
 			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
+	}
+	if opts.TlsDir != "" {
+		svc.Command += " --tls_dir=/secret/tls"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.TlsDir,
+			Target:   "/secret/tls",
 			ReadOnly: true,
 		})
 	}
@@ -375,6 +385,8 @@ func main() {
 		"include ratel service")
 	cmd.PersistentFlags().IntVar(&opts.RatelPort, "ratel_port", 8000,
 		"Port to expose Ratel service")
+	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
+		"TLS Dir.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
