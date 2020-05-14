@@ -17,16 +17,19 @@
 package worker
 
 import (
+	"context"
 	"sync/atomic"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
 
@@ -77,6 +80,9 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 			return count, err
 		}
 		if kvs.Done {
+			if err := cleanupSchema(ctx, kvs); err != nil {
+				return count, err
+			}
 			glog.V(1).Infoln("All key-values have been received.")
 			break
 		}
@@ -103,6 +109,44 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
+}
+
+func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
+	if kvs == nil {
+		return nil
+	}
+
+	// Delete predicates that are in the schema but not in the snapshot. These predicates were
+	// deleted in between snapshots.
+	currPredicates := schema.State().Predicates()
+	snapshotPreds := make(map[string]struct{})
+	for _, pred := range kvs.Predicates {
+		snapshotPreds[pred] = struct{}{}
+	}
+	for _, pred := range currPredicates {
+		if _, ok := snapshotPreds[pred]; !ok {
+			if err := posting.DeletePredicate(ctx, pred); err != nil {
+				errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot")
+			}
+		}
+	}
+
+	// Delete types that are in the schema but not in the snapshot. These types were deleted in
+	// between snapshots.
+	currTypes := schema.State().Types()
+	snapshotTypes := make(map[string]struct{})
+	for _, typ := range kvs.Types {
+		snapshotTypes[typ] = struct{}{}
+	}
+	for _, typ := range currTypes {
+		if _, ok := snapshotTypes[typ]; !ok {
+			if err := schema.State().DeleteType(typ); err != nil {
+				errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot")
+			}
+		}
+	}
+
+	return nil
 }
 
 func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) error {
@@ -141,8 +185,6 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	stream.ChooseKey = func(item *badger.Item) bool {
 		// Type and Schema keys always have a timestamp of 1. They all need to be sent
 		// with the snapshot.
-		// TODO: what about deleted predicates and types that still might show in the
-		// receiver.
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return false
@@ -158,8 +200,14 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return err
 	}
 
-	// Indicate that sending is done.
-	if err := out.Send(&pb.KVS{Done: true}); err != nil {
+	// Indicate that sending is done. Send a list of all the predicate and types at the
+	// time of the snapshot so that the receiver can delete predicates
+	done := &pb.KVS{
+		Done:       true,
+		Predicates: schema.State().Predicates(),
+		Types:      schema.State().Types(),
+	}
+	if err := out.Send(done); err != nil {
 		return err
 	}
 
