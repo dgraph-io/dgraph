@@ -99,6 +99,7 @@ type options struct {
 	Ratel         bool
 	RatelPort     int
 	MemLimit      string
+	TlsDir        string
 }
 
 var opts options
@@ -282,6 +283,16 @@ func getAlpha(idx int) service {
 			Limits: limit{Memory: opts.MemLimit},
 		}
 	}
+	if opts.TlsDir != "" {
+		svc.Command += " --tls_dir=/secret/tls"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.TlsDir,
+			Target:   "/secret/tls",
+			ReadOnly: true,
+		})
+	}
+
 	return svc
 }
 
@@ -450,6 +461,8 @@ func main() {
 		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVarP(&opts.MemLimit, "mem", "", "32G",
 		"Limit memory provided to the docker containers, for example 8G.")
+	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
+		"TLS Dir.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
