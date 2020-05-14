@@ -59,15 +59,15 @@ func Parse(schema string) (AuthMeta, error) {
 		return meta, nil
 	}
 	lastComment := schema[lastCommentIdx:]
-	if !strings.HasPrefix(lastComment, "# Authorization") {
+	if !strings.HasPrefix(lastComment, "# Dgraph.Authorization") {
 		return meta, nil
 	}
 
 	// This regex matches authorization information present in the last line of the schema.
-	// Format: # Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
-	// Example: # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
+	// Example: # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
 	// On successful regex match the index for the following strings will be returned.
-	// [0][0]:[0][1] : # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// [0][0]:[0][1] : # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
 	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
 	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
 	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
@@ -117,8 +117,8 @@ func ParseAuthMeta(schema string) error {
 	return err
 }
 
-func GetHeader() string{
-	return metainfo.Header;
+func GetHeader() string {
+	return metainfo.Header
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
