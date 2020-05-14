@@ -15,22 +15,51 @@ package enc
 import (
 	//"io"
 	"crypto/cipher"
+	"net"
 	"os"
 	"testing"
 
+	"github.com/hashicorp/vault/api"
+	"github.com/hashicorp/vault/http"
+	"github.com/hashicorp/vault/vault"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
-func ResetConfig(config *viper.Viper) {
+func resetConfig(config *viper.Viper) {
 	config.Set("encryption_key_file", "")
 
-	config.Set("vault_addr", "http://localhost:8200")
-	config.Set("vault_roleID_file", "")
-	config.Set("vault_secretID_file", "")
-	config.Set("vault_path", "dgraph")
-	config.Set("vault_field", "enc_key")
+	config.Set(vaultAddr, "http://localhost:8200")
+	config.Set(vaultRoleIDFile, "")
+	config.Set(vaultSecretIDFile, "")
+	config.Set(vaultPath, "dgraph")
+	config.Set(vaultField, "enc_key")
+}
+
+func startVaultServer(t *testing.T, kvPath, kvField, kvEncKey string) (net.Listener, *api.Client) {
+	core, _, rootToken := vault.TestCoreUnsealed(t)
+	ln, addr := http.TestServer(t, core)
+	t.Logf("addr = %v", addr)
+
+	conf := api.DefaultConfig()
+	conf.Address = addr
+	client, err := api.NewClient(conf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.SetToken(rootToken)
+
+	err = client.Sys().EnableAuthWithOptions("approle/", &api.EnableAuthOptions{
+		Type: "approle",
+	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("approle enabled")
+
+	return ln, client
 }
 
 func TestNewKeyReader(t *testing.T) {
@@ -41,7 +70,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Vault and Local combination tests
 	// Both Local and Vault options is invalid.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("encryption_key_file", "blah")
 	config.Set("vault_roleID_file", "aaa")
 	config.Set("vault_secretID_file", "bbb")
@@ -51,7 +80,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// RoleID only is invalid.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("vault_roleID_file", "aaa")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
@@ -59,7 +88,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// SecretID only is invalid.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("vault_secretID_file", "bbb")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
@@ -67,7 +96,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// RoleID and SecretID given but RoleID file doesn't exist.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("vault_roleID_file", "aaa")
 	config.Set("vault_secretID_file", "bbb")
 	kR, err = NewKeyReader(config)
@@ -80,7 +109,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("vault_roleID_file", "./dummy_role_id_file")
 	config.Set("vault_secretID_file", "bbb")
 	kR, err = NewKeyReader(config)
@@ -92,8 +121,10 @@ func TestNewKeyReader(t *testing.T) {
 	require.Error(t, err)
 	t.Logf("%v", err)
 
-	// RoleID and SecretID given but RoleID file and SecretID file exists.
-	ResetConfig(config)
+	// RoleID and SecretID given but RoleID file and SecretID file exists and is valid.
+	resetConfig(config)
+	//nl, _ := startVaultServer(t, "dgraph", "enc_key", "1234567890123456")
+
 	config.Set("vault_roleID_file", "./dummy_role_id_file")
 	config.Set("vault_secretID_file", "./dummy_secret_id_file")
 	kR, err = NewKeyReader(config)
@@ -104,9 +135,10 @@ func TestNewKeyReader(t *testing.T) {
 	require.Nil(t, k) // still fails because we need to mock Vault server.
 	require.Error(t, err)
 	t.Logf("%v", err)
+	//nl.Close()
 
 	// Bad Encryption Key File
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("encryption_key_file", "blah")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
@@ -117,7 +149,7 @@ func TestNewKeyReader(t *testing.T) {
 	require.Error(t, err)
 
 	// Nil Encryption Key File
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("encryption_key_file", "")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
@@ -125,7 +157,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// Bad Length Encryption Key File.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("encryption_key_file", "./bad-length-enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
@@ -137,7 +169,7 @@ func TestNewKeyReader(t *testing.T) {
 	t.Logf("%v", err)
 
 	// Good Encryption Key File.
-	ResetConfig(config)
+	resetConfig(config)
 	config.Set("encryption_key_file", "./enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
@@ -147,10 +179,6 @@ func TestNewKeyReader(t *testing.T) {
 	require.NotNil(t, k)
 	require.NoError(t, err)
 	t.Logf("%v", err)
-}
-
-func keyReaderRun() {
-
 }
 
 func TestGetReaderWriter(t *testing.T) {

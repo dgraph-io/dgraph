@@ -27,18 +27,27 @@ import (
 	"github.com/spf13/viper"
 )
 
+// Configuration options of Vault.
+const (
+	vaultAddr         = "vault_addr"
+	vaultRoleIDFile   = "vault_roleID_file"
+	vaultSecretIDFile = "vault_secretID_file"
+	vaultPath         = "vault_path"
+	vaultField        = "vault_field"
+)
+
 // RegisterVaultFlags registers the required flags to integrate with Vault.
 func registerVaultFlags(flag *pflag.FlagSet) {
 	// The following are Vault options. Applicable for alpha, live, bulk, debug, restore sub-cmds
-	flag.String("vault_addr", "http://localhost:8200",
+	flag.String(vaultAddr, "http://localhost:8200",
 		"Vault server's address in the form http://ip:port.")
-	flag.String("vault_roleID_file", "",
+	flag.String(vaultRoleIDFile, "",
 		"File containing Vault role-id used for approle auth.")
-	flag.String("vault_secretID_file", "",
+	flag.String(vaultSecretIDFile, "",
 		"File containing Vault secret-id used for approle auth.")
-	flag.String("vault_path", "dgraph",
+	flag.String(vaultPath, "dgraph",
 		"Vault kv store path.")
-	flag.String("vault_field", "enc_key",
+	flag.String(vaultField, "enc_key",
 		"Vault kv store field whose value is the encryption key.")
 }
 
@@ -53,15 +62,15 @@ type vaultKeyReader struct {
 
 func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	v := &vaultKeyReader{
-		addr:     cfg.GetString("vault_addr"),
-		roleID:   cfg.GetString("vault_roleID_file"),
-		secretID: cfg.GetString("vault_secretID_file"),
-		path:     cfg.GetString("vault_path"),
-		field:    cfg.GetString("vault_field"),
+		addr:     cfg.GetString(vaultAddr),
+		roleID:   cfg.GetString(vaultRoleIDFile),
+		secretID: cfg.GetString(vaultSecretIDFile),
+		path:     cfg.GetString(vaultPath),
+		field:    cfg.GetString(vaultField),
 	}
 
 	if v.addr == "" || v.path == "" || v.field == "" {
-		return nil, errors.Errorf("vault_addr, vault_path or vault_field is missing")
+		return nil, errors.Errorf("%v, %v or %v is missing", vaultAddr, vaultPath, vaultField)
 	}
 
 	if v.roleID != "" && v.secretID != "" {
