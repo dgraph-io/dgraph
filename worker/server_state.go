@@ -70,6 +70,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
 	// TODO(ibrahim): Remove this once badger is updated in dgraph.
 	opt.ZSTDCompressionLevel = 1
+	opt.KeepL0InMemory = false
 
 	glog.Infof("Setting Badger table load option: %s", Config.BadgerTables)
 	switch Config.BadgerTables {
