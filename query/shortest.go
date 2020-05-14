@@ -63,9 +63,8 @@ var errFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*queueItem
 
-func (r route) indexOf(uid uint64) int {
-	u := *r.route
-	for i, val := range u {
+func (r *route) indexOf(uid uint64) int {
+	for i, val := range *r.route {
 		if val.uid == uid {
 			return i
 		}
@@ -333,7 +332,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// node.
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
-L:
+
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
@@ -375,9 +374,6 @@ L:
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			if len(kroutes) == numPaths {
-				break L
-			}
 		}
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
@@ -386,6 +382,7 @@ L:
 			if item.cost+cost > maxWeight {
 				continue
 			}
+			// Skip neighbour if it present in current path to remove cyclical paths
 			if len(*item.path.route) > 0 && item.path.indexOf(toUid) != -1 {
 				continue
 			}
