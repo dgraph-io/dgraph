@@ -332,7 +332,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	// node.
 	// map to store the min cost and parent of nodes.
 	var stopExpansion bool
-
 	for pq.Len() > 0 {
 		item := heap.Pop(&pq).(*queueItem)
 		if item.uid == sg.Params.To {
