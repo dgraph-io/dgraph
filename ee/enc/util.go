@@ -19,7 +19,6 @@
 package enc
 
 import (
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"io"
@@ -30,7 +29,6 @@ var EeBuild = false
 
 // ReadEncryptionKeyFile returns nil key for OSS build
 func ReadEncryptionKeyFile(filepath string) []byte {
-	x.AssertTruef(filepath == "", "encryption_key_file is an Enterprise only feature.")
 	return nil
 }
 

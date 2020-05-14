@@ -29,9 +29,13 @@ import (
 // EeBuild indicates if this is a Enterprise build.
 var EeBuild = true
 
+const (
+	encKeyFile = "encryption_key_file"
+)
+
 // RegisterFlags registers the required encryption flags.
 func RegisterFlags(flag *pflag.FlagSet) {
-	flag.String("encryption_key_file", "",
+	flag.String(encKeyFile, "",
 		"The file that stores the symmetric key. The key size must be 16, 24, or 32 bytes long. "+
 			"The key size determines the corresponding block size for AES encryption "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
@@ -75,9 +79,9 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 	var keyReader KeyReader
 	var err error
 
-	keyFile := cfg.GetString("encryption_key_file")
-	roleID := cfg.GetString("vaultRoleIDFile")
-	secretID := cfg.GetString("vaultSecretIDFile")
+	keyFile := cfg.GetString(encKeyFile)
+	roleID := cfg.GetString(vaultRoleIDFile)
+	secretID := cfg.GetString(vaultSecretIDFile)
 
 	if keyFile != "" {
 		keyReader = &localKeyReader{

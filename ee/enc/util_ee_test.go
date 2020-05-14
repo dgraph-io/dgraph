@@ -28,7 +28,7 @@ import (
 )
 
 func resetConfig(config *viper.Viper) {
-	config.Set("encryption_key_file", "")
+	config.Set(encKeyFile, "")
 
 	config.Set(vaultAddr, "http://localhost:8200")
 	config.Set(vaultRoleIDFile, "")
@@ -71,9 +71,9 @@ func TestNewKeyReader(t *testing.T) {
 	// Vault and Local combination tests
 	// Both Local and Vault options is invalid.
 	resetConfig(config)
-	config.Set("encryption_key_file", "blah")
+	config.Set(encKeyFile, "blah")
 	config.Set(vaultRoleIDFile, "aaa")
-	config.Set("vaultSecretIDFile", "bbb")
+	config.Set(vaultSecretIDFile, "bbb")
 	kR, err := NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -81,7 +81,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID only is invalid.
 	resetConfig(config)
-	config.Set("vaultRoleIDFile", "aaa")
+	config.Set(vaultRoleIDFile, "aaa")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -89,7 +89,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// SecretID only is invalid.
 	resetConfig(config)
-	config.Set("vaultSecretIDFile", "bbb")
+	config.Set(vaultSecretIDFile, "bbb")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -97,8 +97,8 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID and SecretID given but RoleID file doesn't exist.
 	resetConfig(config)
-	config.Set("vaultRoleIDFile", "aaa")
-	config.Set("vaultSecretIDFile", "bbb")
+	config.Set(vaultRoleIDFile, "aaa")
+	config.Set(vaultSecretIDFile, "bbb")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -110,8 +110,8 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
 	resetConfig(config)
-	config.Set("vaultRoleIDFile", "./dummy_role_id_file")
-	config.Set("vaultSecretIDFile", "bbb")
+	config.Set(vaultRoleIDFile, "./dummy_role_id_file")
+	config.Set(vaultSecretIDFile, "bbb")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -125,8 +125,8 @@ func TestNewKeyReader(t *testing.T) {
 	resetConfig(config)
 	//nl, _ := startVaultServer(t, "dgraph", "enc_key", "1234567890123456")
 
-	config.Set("vaultRoleIDFile", "./dummy_role_id_file")
-	config.Set("vaultSecretIDFile", "./dummy_secret_id_file")
+	config.Set(vaultRoleIDFile, "./dummy_role_id_file")
+	config.Set(vaultSecretIDFile, "./dummy_secret_id_file")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -139,7 +139,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Bad Encryption Key File
 	resetConfig(config)
-	config.Set("encryption_key_file", "blah")
+	config.Set(encKeyFile, "blah")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -150,7 +150,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Nil Encryption Key File
 	resetConfig(config)
-	config.Set("encryption_key_file", "")
+	config.Set(encKeyFile, "")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.Nil(t, kR)
@@ -158,7 +158,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Bad Length Encryption Key File.
 	resetConfig(config)
-	config.Set("encryption_key_file", "./bad-length-enc-key")
+	config.Set(encKeyFile, "./bad-length-enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -170,7 +170,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Good Encryption Key File.
 	resetConfig(config)
-	config.Set("encryption_key_file", "./enc-key")
+	config.Set(encKeyFile, "./enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
