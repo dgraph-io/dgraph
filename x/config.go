@@ -84,6 +84,11 @@ type WorkerOptions struct {
 	LudicrousMode bool
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
 	EncryptionKey []byte
+	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
+	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
+	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
+	// coming to alphas and 0 disables it.
+	LogRequest int32
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

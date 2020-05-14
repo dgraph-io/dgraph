@@ -632,10 +632,22 @@
         }
         dgraph.uid : uid
       }
+      Project(func: uid(Project3)) @filter(uid(Project4)) {
+        uid
+      }
+      Project3 as var(func: uid(0x123))
+      Project4 as var(func: uid(Project3)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
   authjson: |
     { 
-      "Column": [ { "uid": "0x456" } ] 
+      "Column": [ { "uid": "0x456" } ],
+      "Project": [ { "uid": "0x123" } ]
     }
 
 - name: "Add with deep auth on additional delete that fails"
@@ -690,7 +702,7 @@
   uids: |
     { 
       "Project1": "0x123",
-      "Column2": "0x456" 
+      "Column2": "0x456"
     }
   authquery: |-
     query {
@@ -708,10 +720,22 @@
         }
         dgraph.uid : uid
       }
+      Project(func: uid(Project3)) @filter(uid(Project4)) {
+        uid
+      }
+      Project3 as var(func: uid(0x123))
+      Project4 as var(func: uid(Project3)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
     }
   authjson: |
     { 
-      "Column": [ { "uid": "0x456" } ] 
+      "Column": [ { "uid": "0x456" } ],
+      "Project": [ { "uid": "0x123" } ]
     }  
   error:
     { "message": "couldn't rewrite query for mutation addProject because authorization failed" }

@@ -74,8 +74,8 @@
       getAuthor(id: "0x1") {
         name
       }
-      auth : getAuthor(id: "0x1") {
-        name
+      post : getPost(id: "0x2") {
+        text
       }
     }
   explanation: "Even if some queries result in null, we should return all the
@@ -83,7 +83,7 @@
   response: |
     { "getAuthor": [ { "uid": "0x1", "name": "A.N. Author" } ] }
   expected: |
-    { "getAuthor": { "name": "A.N. Author" }, "auth": null }
+    { "getAuthor": { "name": "A.N. Author" }, "post": null }
 
 -
   name: "Missing nullable field becomes null"

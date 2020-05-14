@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
 
@@ -41,69 +42,77 @@ var (
 )
 
 type User struct {
-	Username string
-	Age      uint64
-	IsPublic bool
-	Disabled bool
+	Username string `json:"username,omitempty"`
+	Age      uint64 `json:"age,omitempty"`
+	IsPublic bool   `json:"isPublic,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
 type Region struct {
-	Id    uint64
-	Name  string
-	Users []*User
+	Id     string  `json:"id,omitempty"`
+	Name   string  `json:"name,omitempty"`
+	Users  []*User `json:"users,omitempty"`
+	Global bool    `json:"global,omitempty"`
 }
 
 type Movie struct {
-	Id               uint64
-	Content          string
-	Disabled         bool
-	RegionsAvailable []*Region
+	Id               string    `json:"id,omitempty"`
+	Content          string    `json:"content,omitempty"`
+	Hidden           bool      `json:"hidden,omitempty"`
+	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
 }
 
 type Issue struct {
-	Id    uint64
-	Msg   string
-	Owner *User
+	Id    string `json:"id,omitempty"`
+	Msg   string `json:"msg,omitempty"`
+	Owner *User  `json:"owner,omitempty"`
 }
 
 type Log struct {
-	Id   uint64
-	Logs string
+	Id   string `json:"id,omitempty"`
+	Logs string `json:"logs,omitempty"`
 }
 
 type Role struct {
-	Id         uint64
-	Permission string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	Permission string  `json:"permission,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Ticket struct {
-	Id         uint64
-	OnColumn   Column
-	Title      string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	OnColumn   *Column `json:"onColumn,omitempty"`
+	Title      string  `json:"title,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Column struct {
-	ColID     string
-	InProject Project
-	Name      string
-	Tickets   []Ticket
+	ColID     string    `json:"colID,omitempty"`
+	InProject *Project  `json:"inProject,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
 type Project struct {
-	ProjID  uint64
-	Name    string
-	Roles   []Role
-	Columns []Column
+	ProjID  string    `json:"projID,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	Roles   []*Role   `json:"roles,omitempty"`
+	Columns []*Column `json:"columns,omitempty"`
 }
 
 type TestCase struct {
-	user   string
-	role   string
-	result string
-	name   string
-	filter map[string]interface{}
+	user      string
+	role      string
+	result    string
+	name      string
+	filter    map[string]interface{}
+	variables map[string]interface{}
 }
 
 type uidResult struct {
@@ -112,20 +121,59 @@ type uidResult struct {
 	}
 }
 
-func getJWT(t *testing.T, user, role string) string {
-	metaInfo.AuthVars = map[string]interface{}{
-		"USER": user,
-		"ROLE": role,
+func getJWT(t *testing.T, user, role string) http.Header {
+	metaInfo.AuthVars = map[string]interface{}{}
+	if user != "" {
+		metaInfo.AuthVars["USER"] = user
+	}
+
+	if role != "" {
+		metaInfo.AuthVars["ROLE"] = role
 	}
 
 	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
 	require.NoError(t, err)
-	return jwtToken
+
+	h := make(http.Header)
+	h.Add(metaInfo.Header, jwtToken)
+	return h
 }
 
 func TestOrRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user: "user1",
+		role: "ADMIN",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              },
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user1",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project1"
+                              }
+                            ]
+                        }`,
+	}, {
+		user: "user4",
+		role: "USER",
+		result: `{
+                            "queryProject": [
+                              {
+                                "name": "Project2"
+                              }
+                            ]
+                        }`,
+	}}
 
 	query := `
             query {
@@ -138,10 +186,9 @@ func TestOrRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -166,11 +213,10 @@ func getColID(t *testing.T, tcase TestCase) string {
 	}
 
 	getUserParams := &common.GraphQLParams{
-		Headers:   map[string][]string{},
+		Headers:   getJWT(t, tcase.user, tcase.role),
 		Query:     query,
 		Variables: map[string]interface{}{"name": tcase.name},
 	}
-	getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
@@ -186,8 +232,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil})
+	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil, nil})
+	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil, nil})
 
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
@@ -220,11 +266,10 @@ func TestRootGetFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   map[string][]string{},
+				Headers:   getJWT(t, tcase.user, tcase.role),
 				Query:     query,
 				Variables: map[string]interface{}{"id": tcase.name},
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -266,11 +311,10 @@ func TestDeepFilter(t *testing.T) {
 	for _, tcase := range tcases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers:   map[string][]string{},
+				Headers:   getJWT(t, tcase.user, tcase.role),
 				Query:     query,
 				Variables: map[string]interface{}{"name": tcase.name},
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -298,16 +342,46 @@ func TestRootFilter(t *testing.T) {
 		queryColumn(order: {asc: name}) {
 			name
 		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers: getJWT(t, tcase.user, tcase.role),
+				Query:   query,
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
 	}
+}
+
+func TestDeepRBACValue(t *testing.T) {
+	testCases := []TestCase{
+		{user: "user1", role: "USER", result: `{"queryUser": [{"username": "user1", "issues":[]}]}`},
+		{user: "user1", role: "ADMIN", result: `{"queryUser":[{"username":"user1","issues":[{"msg":"Issue1"}]}]}`},
+	}
+
+	query := `
+{
+  queryUser (filter:{username:{eq:"user1"}}) {
+    username
+    issues {
+      msg
+    }
+  }
+}
 	`
 
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -318,8 +392,11 @@ func TestRootFilter(t *testing.T) {
 }
 
 func TestRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{
+		{role: "USER", result: `{"queryLog": []}`},
+		{result: `{"queryLog": []}`},
+		{role: "ADMIN", result: `{"queryLog": [{"logs": "Log1"},{"logs": "Log2"}]}`}}
+
 	query := `
 		query {
                     queryLog (order: {asc: logs}) {
@@ -331,10 +408,9 @@ func TestRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -345,8 +421,19 @@ func TestRBACFilter(t *testing.T) {
 }
 
 func TestAndRBACFilter(t *testing.T) {
-	t.Skip()
-	testCases := []TestCase{}
+	testCases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"queryIssue": []}`,
+	}, {
+		user:   "user2",
+		role:   "ADMIN",
+		result: `{"queryIssue": [{"msg": "Issue2"}]}`,
+	}}
 	query := `
 		query {
                     queryIssue (order: {asc: msg}) {
@@ -358,10 +445,9 @@ func TestAndRBACFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -369,7 +455,6 @@ func TestAndRBACFilter(t *testing.T) {
 			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
 		})
 	}
-
 }
 
 func TestNestedFilter(t *testing.T) {
@@ -456,10 +541,9 @@ func TestNestedFilter(t *testing.T) {
 	for _, tcase := range testCases {
 		t.Run(tcase.role+tcase.user, func(t *testing.T) {
 			getUserParams := &common.GraphQLParams{
-				Headers: map[string][]string{},
+				Headers: getJWT(t, tcase.user, tcase.role),
 				Query:   query,
 			}
-			getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
@@ -490,7 +574,7 @@ func TestDeleteAuthRule(t *testing.T) {
 					"anyofterms": "Sensitive information",
 				},
 			},
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteUserSecret":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 	}
 	query := `
@@ -504,13 +588,12 @@ func TestDeleteAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: map[string][]string{},
+			Headers: getJWT(t, tcase.user, tcase.role),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
@@ -540,7 +623,7 @@ func AddDeleteDeepAuthTestData(t *testing.T) {
 	require.NoError(t, err)
 
 	userQuery := `{
-	query(func: type(User)) @filter(eq(User.username, "user1") or eq(User.username, "user3") or 
+	query(func: type(User)) @filter(eq(User.username, "user1") or eq(User.username, "user3") or
 		eq(User.username, "user5") ) {
     	uid
   	} }`
@@ -591,7 +674,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 					"anyofterms": "Ticket2",
 				},
 			},
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteTicket":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 		{
 			name: "ticket with edit permission",
@@ -615,13 +698,12 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 
 	for _, tcase := range testCases {
 		getUserParams := &common.GraphQLParams{
-			Headers: map[string][]string{},
+			Headers: getJWT(t, tcase.user, tcase.role),
 			Query:   query,
 			Variables: map[string]interface{}{
 				"filter": tcase.filter,
 			},
 		}
-		getUserParams.Headers.Add(metaInfo.Header, getJWT(t, tcase.user, tcase.role))
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 		require.Nil(t, gqlResponse.Errors)
