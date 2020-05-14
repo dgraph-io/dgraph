@@ -29,15 +29,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
-var (
-	// AdminMutationMWs are the middlewares which should be applied to mutations served by admin
-	// server unless some exceptional behaviour is required
-	AdminMutationMWs = MutationMiddlewares{
-		IpWhitelistingMW4Mutation, // its better to apply ip whitelisting before Guardian auth
-		GuardianAuthMW4Mutation,
-	}
-)
-
 // QueryMiddleware represents a middleware for queries
 type QueryMiddleware func(resolver QueryResolver) QueryResolver
 
@@ -73,6 +64,9 @@ type MutationMiddlewares []MutationMiddleware
 //
 // Then() treats nil as a QueryResolverFunc that resolves to &Resolved{Field: query}
 func (mws QueryMiddlewares) Then(resolver QueryResolver) QueryResolver {
+	if len(mws) == 0 {
+		return resolver
+	}
 	if resolver == nil {
 		resolver = QueryResolverFunc(func(ctx context.Context, query schema.Query) *Resolved {
 			return &Resolved{Field: query}
@@ -103,6 +97,9 @@ func (mws QueryMiddlewares) Then(resolver QueryResolver) QueryResolver {
 //
 // Then() treats nil as a MutationResolverFunc that resolves to (&Resolved{Field: mutation}, true)
 func (mws MutationMiddlewares) Then(resolver MutationResolver) MutationResolver {
+	if len(mws) == 0 {
+		return resolver
+	}
 	if resolver == nil {
 		resolver = MutationResolverFunc(func(ctx context.Context,
 			mutation schema.Mutation) (*Resolved, bool) {

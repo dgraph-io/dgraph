@@ -236,12 +236,17 @@ const (
 		response: Response
 	}
 
+	type Config {
+		lruMb: Float
+	}
+
 	` + adminTypes + `
 
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
 		state: MembershipState
+		config: Config
 
 		` + adminQueries + `
 	}
@@ -279,6 +284,55 @@ const (
 		` + adminMutations + `
 	}
  `
+)
+
+var (
+	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
+	// server unless some exceptional behaviour is required
+	commonAdminQueryMWs = resolve.QueryMiddlewares{
+		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
+		resolve.GuardianAuthMW4Query,
+	}
+	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
+	// admin server unless some exceptional behaviour is required
+	commonAdminMutationMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
+		resolve.GuardianAuthMW4Mutation,
+	}
+	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
+		"health":      {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
+		"state":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"config":      commonAdminQueryMWs,
+		"listBackups": commonAdminQueryMWs,
+		// not applying ip whitelisting to keep it in sync with /alter
+		"getGQLSchema": {resolve.GuardianAuthMW4Query},
+		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
+		// so no need to apply GuardianAuth Middleware
+		"queryGroup":     {resolve.IpWhitelistingMW4Query},
+		"queryUser":      {resolve.IpWhitelistingMW4Query},
+		"getGroup":       {resolve.IpWhitelistingMW4Query},
+		"getCurrentUser": {resolve.IpWhitelistingMW4Query},
+		"getUser":        {resolve.IpWhitelistingMW4Query},
+	}
+	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
+		"backup":   commonAdminMutationMWs,
+		"config":   commonAdminMutationMWs,
+		"draining": commonAdminMutationMWs,
+		"export":   commonAdminMutationMWs,
+		"login":    {resolve.IpWhitelistingMW4Mutation},
+		"restore":  commonAdminMutationMWs,
+		"shutdown": commonAdminMutationMWs,
+		// not applying ip whitelisting to keep it in sync with /alter
+		"updateGQLSchema": {resolve.GuardianAuthMW4Mutation},
+		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
+		// so no need to apply GuardianAuth Middleware
+		"addUser":     {resolve.IpWhitelistingMW4Mutation},
+		"addGroup":    {resolve.IpWhitelistingMW4Mutation},
+		"updateUser":  {resolve.IpWhitelistingMW4Mutation},
+		"updateGroup": {resolve.IpWhitelistingMW4Mutation},
+		"deleteUser":  {resolve.IpWhitelistingMW4Mutation},
+		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
+	}
 )
 
 type gqlSchema struct {
@@ -414,24 +468,30 @@ func newAdminResolver(
 
 func newAdminResolverFactory() resolve.ResolverFactory {
 
-	adminMutationResolvers := map[string]resolve.MutationResolver{
-		"backup":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveBackup)),
-		"config":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveConfig)),
-		"draining": resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveDraining)),
-		"export":   resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveExport)),
-		"login":    resolve.IpWhitelistingMW4Mutation(resolve.MutationResolverFunc(resolveLogin)),
-		"restore":  resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveRestore)),
-		"shutdown": resolve.AdminMutationMWs.Then(resolve.MutationResolverFunc(resolveShutdown)),
+	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
+		"backup":   resolveBackup,
+		"config":   resolveUpdateConfig,
+		"draining": resolveDraining,
+		"export":   resolveExport,
+		"login":    resolveLogin,
+		"restore":  resolveRestore,
+		"shutdown": resolveShutdown,
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
+		WithQueryMiddlewareConfig(adminQueryMWConfig).
+		WithMutationMiddlewareConfig(adminMutationMWConfig).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
-			// dgraph handles Guardian auth for health
-			return resolve.IpWhitelistingMW4Query(resolve.QueryResolverFunc(resolveHealth))
+			return resolve.QueryResolverFunc(resolveHealth)
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
-			// dgraph handles Guardian auth for state
-			return resolve.IpWhitelistingMW4Query(resolve.QueryResolverFunc(resolveState))
+			return resolve.QueryResolverFunc(resolveState)
+		}).
+		WithQueryResolver("config", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetConfig)
+		}).
+		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
@@ -456,11 +516,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 			})
 		}(resolver)
 	}
-
-	// Add admin query endpoints.
-	rf = rf.WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
-		return resolve.QueryResolverFunc(resolveListBackups)
-	})
 
 	return rf.WithSchemaIntrospection()
 }
@@ -603,11 +658,10 @@ func (as *adminServer) addConnectedAdminResolvers() {
 				baseMutationExecutor: dgEx,
 			}
 
-			// not applying ip whitelisting to keep it in sync with /alter
-			return resolve.GuardianAuthMW4Mutation(resolve.NewDgraphResolver(
+			return resolve.NewDgraphResolver(
 				updResolver,
 				updResolver,
-				resolve.StdMutationCompletion(m.Name())))
+				resolve.StdMutationCompletion(m.Name()))
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
@@ -615,34 +669,31 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					admin: as,
 				}
 
-				// not applying ip whitelisting to keep it in sync with /alter
-				return resolve.GuardianAuthMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					getResolver,
 					getResolver,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("queryGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.IpWhitelistingMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
-		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
-		// so need to apply GuardianAuth Middleware
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.IpWhitelistingMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.IpWhitelistingMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getCurrentUser",
 			func(q schema.Query) resolve.QueryResolver {
@@ -650,59 +701,59 @@ func (as *adminServer) addConnectedAdminResolvers() {
 					baseRewriter: qryRw,
 				}
 
-				return resolve.IpWhitelistingMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					cuResolver,
 					dgEx,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
-				return resolve.IpWhitelistingMW4Query(resolve.NewQueryResolver(
+				return resolve.NewQueryResolver(
 					qryRw,
 					dgEx,
-					resolve.StdQueryCompletion()))
+					resolve.StdQueryCompletion())
 			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewAddRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name())))
+					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					NewAddGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name())))
+					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewUpdateRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name())))
+					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					NewUpdateGroupRewriter(),
 					dgEx,
-					resolve.StdMutationCompletion(m.Name())))
+					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name())))
+					resolve.StdDeleteCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.IpWhitelistingMW4Mutation(resolve.NewDgraphResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
 					dgEx,
-					resolve.StdDeleteCompletion(m.Name())))
+					resolve.StdDeleteCompletion(m.Name()))
 			})
 }
 
