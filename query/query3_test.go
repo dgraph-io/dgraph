@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -680,18 +681,21 @@ func TestKShortestPathFivePaths(t *testing.T) {
 	query := `
 	{
 		A as shortest(from: 51, to:55, numpaths: 5) {
-			connects
+			connects @facets(weight)
 		}
 		me(func: uid(A)) {
 			name
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{
+	expected := `{
 		"data": {
 		  "me": [
 			{
 			  "name": "A"
+			},
+			{
+			  "name": "C"
 			},
 			{
 			  "name": "D"
@@ -704,12 +708,30 @@ func TestKShortestPathFivePaths(t *testing.T) {
 			{
 			  "connects": {
 				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "connects|weight": 1,
+				  "uid": "0x36"
+				},
+				"connects|weight": 1,
+				"uid": "0x35"
+			  },
+			  "connects|weight": 1,
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
 				  "uid": "0x37"
 				},
+				"connects|weight": 1,
 				"uid": "0x36"
 			  },
+			  "connects|weight": 10,
 			  "uid": "0x33",
-			  "_weight_": 2
+			  "_weight_": 11
 			},
 			{
 			  "connects": {
@@ -717,25 +739,15 @@ func TestKShortestPathFivePaths(t *testing.T) {
 				  "connects": {
 					"uid": "0x37"
 				  },
+				  "connects|weight": 1,
 				  "uid": "0x36"
 				},
-				"uid": "0x35"
-			  },
-			  "uid": "0x33",
-			  "_weight_": 3
-			},
-			{
-			  "connects": {
-				"connects": {
-				  "connects": {
-					"uid": "0x37"
-				  },
-				  "uid": "0x36"
-				},
+				"connects|weight": 10,
 				"uid": "0x34"
 			  },
+			  "connects|weight": 10,
 			  "uid": "0x33",
-			  "_weight_": 3
+			  "_weight_": 21
 			},
 			{
 			  "connects": {
@@ -744,14 +756,18 @@ func TestKShortestPathFivePaths(t *testing.T) {
 					"connects": {
 					  "uid": "0x37"
 					},
+					"connects|weight": 1,
 					"uid": "0x36"
 				  },
+				  "connects|weight": 10,
 				  "uid": "0x34"
 				},
+				"connects|weight": 10,
 				"uid": "0x35"
 			  },
+			  "connects|weight": 1,
 			  "uid": "0x33",
-			  "_weight_": 4
+			  "_weight_": 22
 			},
 			{
 			  "connects": {
@@ -760,18 +776,23 @@ func TestKShortestPathFivePaths(t *testing.T) {
 					"connects": {
 					  "uid": "0x37"
 					},
+					"connects|weight": 1,
 					"uid": "0x36"
 				  },
+				  "connects|weight": 1,
 				  "uid": "0x35"
 				},
+				"connects|weight": 10,
 				"uid": "0x34"
 			  },
+			  "connects|weight": 10,
 			  "uid": "0x33",
-			  "_weight_": 4
+			  "_weight_": 22
 			}
 		  ]
 		}
-	  }`, js)
+	  }`
+	testutil.CompareJSON(t, expected, js)
 }
 
 // There are 5 paths between 51 to 55 under "connects" predicate.
@@ -781,18 +802,21 @@ func TestKShortestPathSixPaths(t *testing.T) {
 	query := `
 	{
 		A as shortest(from: 51, to:55, numpaths: 6) {
-			connects
+			connects @facets(weight)
 		}
 		me(func: uid(A)) {
 			name
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{
+	expected := `{
 		"data": {
 		  "me": [
 			{
 			  "name": "A"
+			},
+			{
+			  "name": "C"
 			},
 			{
 			  "name": "D"
@@ -805,12 +829,30 @@ func TestKShortestPathSixPaths(t *testing.T) {
 			{
 			  "connects": {
 				"connects": {
+				  "connects": {
+					"uid": "0x37"
+				  },
+				  "connects|weight": 1,
+				  "uid": "0x36"
+				},
+				"connects|weight": 1,
+				"uid": "0x35"
+			  },
+			  "connects|weight": 1,
+			  "uid": "0x33",
+			  "_weight_": 3
+			},
+			{
+			  "connects": {
+				"connects": {
 				  "uid": "0x37"
 				},
+				"connects|weight": 1,
 				"uid": "0x36"
 			  },
+			  "connects|weight": 10,
 			  "uid": "0x33",
-			  "_weight_": 2
+			  "_weight_": 11
 			},
 			{
 			  "connects": {
@@ -818,25 +860,15 @@ func TestKShortestPathSixPaths(t *testing.T) {
 				  "connects": {
 					"uid": "0x37"
 				  },
+				  "connects|weight": 1,
 				  "uid": "0x36"
 				},
+				"connects|weight": 10,
 				"uid": "0x34"
 			  },
+			  "connects|weight": 10,
 			  "uid": "0x33",
-			  "_weight_": 3
-			},
-			{
-			  "connects": {
-				"connects": {
-				  "connects": {
-					"uid": "0x37"
-				  },
-				  "uid": "0x36"
-				},
-				"uid": "0x35"
-			  },
-			  "uid": "0x33",
-			  "_weight_": 3
+			  "_weight_": 21
 			},
 			{
 			  "connects": {
@@ -845,34 +877,43 @@ func TestKShortestPathSixPaths(t *testing.T) {
 					"connects": {
 					  "uid": "0x37"
 					},
+					"connects|weight": 1,
 					"uid": "0x36"
 				  },
-				  "uid": "0x35"
-				},
-				"uid": "0x34"
-			  },
-			  "uid": "0x33",
-			  "_weight_": 4
-			},
-			{
-			  "connects": {
-				"connects": {
-				  "connects": {
-					"connects": {
-					  "uid": "0x37"
-					},
-					"uid": "0x36"
-				  },
+				  "connects|weight": 10,
 				  "uid": "0x34"
 				},
+				"connects|weight": 10,
 				"uid": "0x35"
 			  },
+			  "connects|weight": 1,
 			  "uid": "0x33",
-			  "_weight_": 4
+			  "_weight_": 22
+			},
+			{
+			  "connects": {
+				"connects": {
+				  "connects": {
+					"connects": {
+					  "uid": "0x37"
+					},
+					"connects|weight": 1,
+					"uid": "0x36"
+				  },
+				  "connects|weight": 1,
+				  "uid": "0x35"
+				},
+				"connects|weight": 10,
+				"uid": "0x34"
+			  },
+			  "connects|weight": 10,
+			  "uid": "0x33",
+			  "_weight_": 22
 			}
 		  ]
 		}
-	  }`, js)
+	  }`
+	testutil.CompareJSON(t, expected, js)
 }
 func TestTwoShortestPath(t *testing.T) {
 
