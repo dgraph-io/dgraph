@@ -30,8 +30,8 @@ import (
 // Configuration options of Vault.
 const (
 	vaultAddr         = "vault_addr"
-	vaultRoleIDFile   = "vault_roleID_file"
-	vaultSecretIDFile = "vault_secretID_file"
+	vaultRoleIDFile   = "vaultRoleIDFile"
+	vaultSecretIDFile = "vaultSecretIDFile"
 	vaultPath         = "vault_path"
 	vaultField        = "vault_field"
 )
@@ -76,7 +76,7 @@ func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	if v.roleID != "" && v.secretID != "" {
 		return v, nil
 	}
-	return nil, errors.Errorf("vault_roleID_file and vault_secretID_file must both be specified")
+	return nil, errors.Errorf("vaultRoleIDFile and vaultSecretIDFile must both be specified")
 }
 
 // ReadKey reads the key from the vault kv store.

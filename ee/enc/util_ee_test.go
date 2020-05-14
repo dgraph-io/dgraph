@@ -72,8 +72,8 @@ func TestNewKeyReader(t *testing.T) {
 	// Both Local and Vault options is invalid.
 	resetConfig(config)
 	config.Set("encryption_key_file", "blah")
-	config.Set("vault_roleID_file", "aaa")
-	config.Set("vault_secretID_file", "bbb")
+	config.Set(vaultRoleIDFile, "aaa")
+	config.Set("vaultSecretIDFile", "bbb")
 	kR, err := NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -81,7 +81,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID only is invalid.
 	resetConfig(config)
-	config.Set("vault_roleID_file", "aaa")
+	config.Set("vaultRoleIDFile", "aaa")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -89,7 +89,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// SecretID only is invalid.
 	resetConfig(config)
-	config.Set("vault_secretID_file", "bbb")
+	config.Set("vaultSecretIDFile", "bbb")
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
@@ -97,8 +97,8 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID and SecretID given but RoleID file doesn't exist.
 	resetConfig(config)
-	config.Set("vault_roleID_file", "aaa")
-	config.Set("vault_secretID_file", "bbb")
+	config.Set("vaultRoleIDFile", "aaa")
+	config.Set("vaultSecretIDFile", "bbb")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -110,8 +110,8 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
 	resetConfig(config)
-	config.Set("vault_roleID_file", "./dummy_role_id_file")
-	config.Set("vault_secretID_file", "bbb")
+	config.Set("vaultRoleIDFile", "./dummy_role_id_file")
+	config.Set("vaultSecretIDFile", "bbb")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -125,8 +125,8 @@ func TestNewKeyReader(t *testing.T) {
 	resetConfig(config)
 	//nl, _ := startVaultServer(t, "dgraph", "enc_key", "1234567890123456")
 
-	config.Set("vault_roleID_file", "./dummy_role_id_file")
-	config.Set("vault_secretID_file", "./dummy_secret_id_file")
+	config.Set("vaultRoleIDFile", "./dummy_role_id_file")
+	config.Set("vaultSecretIDFile", "./dummy_secret_id_file")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)

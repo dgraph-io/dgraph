@@ -76,8 +76,8 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 	var err error
 
 	keyFile := cfg.GetString("encryption_key_file")
-	roleID := cfg.GetString("vault_roleID_file")
-	secretID := cfg.GetString("vault_secretID_file")
+	roleID := cfg.GetString("vaultRoleIDFile")
+	secretID := cfg.GetString("vaultSecretIDFile")
 
 	if keyFile != "" {
 		keyReader = &localKeyReader{
