@@ -15,13 +15,13 @@ package enc
 import (
 	//"io"
 	"crypto/cipher"
-	"net"
+	//"net"
 	"os"
 	"testing"
 
-	"github.com/hashicorp/vault/api"
-	"github.com/hashicorp/vault/http"
-	"github.com/hashicorp/vault/vault"
+	//"github.com/hashicorp/vault/api"
+	// "github.com/hashicorp/vault/http"
+	// "github.com/hashicorp/vault/vault"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -37,30 +37,30 @@ func resetConfig(config *viper.Viper) {
 	config.Set(vaultField, "enc_key")
 }
 
-func startVaultServer(t *testing.T, kvPath, kvField, kvEncKey string) (net.Listener, *api.Client) {
-	core, _, rootToken := vault.TestCoreUnsealed(t)
-	ln, addr := http.TestServer(t, core)
-	t.Logf("addr = %v", addr)
+// func startVaultServer(t *testing.T, kvPath, kvField, kvEncKey string) (net.Listener, *api.Client) {
+// 	core, _, rootToken := vault.TestCoreUnsealed(t)
+// 	ln, addr := http.TestServer(t, core)
+// 	t.Logf("addr = %v", addr)
 
-	conf := api.DefaultConfig()
-	conf.Address = addr
-	client, err := api.NewClient(conf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	client.SetToken(rootToken)
+// 	conf := api.DefaultConfig()
+// 	conf.Address = addr
+// 	client, err := api.NewClient(conf)
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	client.SetToken(rootToken)
 
-	err = client.Sys().EnableAuthWithOptions("approle/", &api.EnableAuthOptions{
-		Type: "approle",
-	})
+// 	err = client.Sys().EnableAuthWithOptions("approle/", &api.EnableAuthOptions{
+// 		Type: "approle",
+// 	})
 
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("approle enabled")
+// 	if err != nil {
+// 		t.Fatal(err)
+// 	}
+// 	t.Logf("approle enabled")
 
-	return ln, client
-}
+// 	return ln, client
+// }
 
 func TestNewKeyReader(t *testing.T) {
 	config := viper.New()
