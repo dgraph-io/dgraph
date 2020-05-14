@@ -820,7 +820,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 
 		if len(result) != len(vals) {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of"+
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of "+
 				"external request to be of size %v, got: %v for field: %s within type: %s.",
 				len(vals), len(result), f.Name(), f.GetObjectName()).WithLocations(f.Location())
 			errCh <- schema.AppendGQLErrs(errs, gqlErr)
@@ -1474,7 +1474,6 @@ func makeRequest(client *http.Client, method, url, body string,
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
-
 	return b, err
 }
 

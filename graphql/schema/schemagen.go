@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"bufio"
 	"fmt"
 	"sort"
 	"strings"
@@ -71,6 +72,30 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
+func parseSecrets(sch string) (map[string]string, error) {
+	m := make(map[string]string)
+	scanner := bufio.NewScanner(strings.NewReader(sch))
+	for scanner.Scan() {
+		text := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(text, "# Dgraph.Secret") {
+			continue
+		}
+		parts := strings.Fields(text)
+		if len(parts) != 4 {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
+
+		val := strings.Trim(parts[3], `"`)
+		m[parts[2]] = val
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+	}
+	return m, nil
+}
+
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
@@ -79,6 +104,11 @@ func NewHandler(input string) (Handler, error) {
 	}
 
 	if err := authorization.ParseAuthMeta(input); err != nil {
+		return nil, err
+	}
+
+	schemaSecrets, err := parseSecrets(input)
+	if err != nil {
 		return nil, err
 	}
 
@@ -156,9 +186,10 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	ah.Lock()
-	ah.headers = headers
-	defer ah.Unlock()
+	hc.Lock()
+	hc.allowed = headers
+	hc.secrets = schemaSecrets
+	defer hc.Unlock()
 
 	return &handler{
 		input:          input,
@@ -168,13 +199,17 @@ func NewHandler(input string) (Handler, error) {
 	}, nil
 }
 
-type allowedHeaders struct {
-	headers string // comma separated list of allowed headers
+type headersConfig struct {
+	// comma separated list of allowed headers. These are parsed from the forwardHeaders specified
+	// in the @custom directive. They are returned to the client as part of
+	// Access-Control-Allow-Headers.
+	allowed string
+	secrets map[string]string
 	sync.RWMutex
 }
 
-var ah = allowedHeaders{
-	headers: x.AccessControlAllowedHeaders,
+var hc = headersConfig{
+	allowed: x.AccessControlAllowedHeaders,
 }
 
 func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
@@ -228,9 +263,9 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 }
 
 func AllowedHeaders() string {
-	ah.RLock()
-	defer ah.RUnlock()
-	return ah.headers
+	hc.RLock()
+	defer hc.RUnlock()
+	return hc.allowed
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {

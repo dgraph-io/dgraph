@@ -837,9 +837,18 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		headers := http.Header{}
+		hc.RLock()
 		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+			// We try and fetch the value from the stored secrets. If there was a value specified
+			// in the request header, that takes precedence.
+			val := hc.secrets[h.Value.Raw]
+			reqHeaderVal := f.op.header.Get(h.Value.Raw)
+			if reqHeaderVal != "" {
+				val = reqHeaderVal
+			}
+			headers.Add(h.Value.Raw, val)
 		}
+		hc.RUnlock()
 		fconf.ForwardHeaders = headers
 	}
 
