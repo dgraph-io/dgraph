@@ -76,19 +76,33 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	// TODO: get init exit code to see if node was successfully initialized
 	t.Log("Gossamer init ok")
 
-	key := keyList[idx]
+	var key string
+	var cmd *exec.Cmd
 	rpcPort := strconv.Itoa(BaseRPCPort + idx*2) // needs *2 since previous node uses port for rpc and port+1 for WS
 
-	//nolint
-	cmd := exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
-		"--key", key,
-		"--datadir", dataDir+strconv.Itoa(idx),
-		"--rpchost", HOSTNAME,
-		"--rpcport", rpcPort,
-		"--rpcmods", "system,author,chain",
-		"--roles", "4",
-		"--rpc",
-	)
+	if idx >= len(keyList) {
+		//nolint
+		cmd = exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
+			"--datadir", dataDir+strconv.Itoa(idx),
+			"--rpchost", HOSTNAME,
+			"--rpcport", rpcPort,
+			"--rpcmods", "system,author,chain,state",
+			"--roles", "1", // no key provided, non-authority node
+			"--rpc",
+		)
+	} else {
+		key = keyList[idx]
+		//nolint
+		cmd = exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
+			"--key", key,
+			"--datadir", dataDir+strconv.Itoa(idx),
+			"--rpchost", HOSTNAME,
+			"--rpcport", rpcPort,
+			"--rpcmods", "system,author,chain,state",
+			"--roles", "4", // authority node
+			"--rpc",
+		)
+	}
 
 	// a new file will be created, it will be used for log the outputs from the node
 	f, err := os.Create(filepath.Join(dataDir+strconv.Itoa(idx), "gossamer.log"))

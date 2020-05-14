@@ -78,7 +78,7 @@ func DecodeRPC(t *testing.T, body []byte, target interface{}) error {
 	decoder = json.NewDecoder(bytes.NewReader(response.Result))
 	decoder.DisallowUnknownFields()
 
-	err = decoder.Decode(&target)
+	err = decoder.Decode(target)
 	require.Nil(t, err, "respBody", string(body))
 	return nil
 }

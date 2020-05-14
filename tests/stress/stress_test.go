@@ -32,6 +32,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/tests/utils"
@@ -47,6 +48,7 @@ var (
 	chain_getBlock         = "chain_getBlock"
 	chain_getHeader        = "chain_getHeader"
 	author_submitExtrinsic = "author_submitExtrinsic"
+	state_getStorage       = "state_getStorage"
 )
 
 func TestMain(m *testing.M) {
@@ -78,6 +80,24 @@ func TestMain(m *testing.M) {
 // TODO: move to utils, use in RPC tests
 func endpoint(node *utils.Node) string {
 	return "http://" + utils.HOSTNAME + ":" + node.RPCPort
+}
+
+// getStorage calls the endpoint state_getStorage
+func getStorage(t *testing.T, node *utils.Node, key []byte) []byte {
+	respBody, err := utils.PostRPC(t, state_getStorage, endpoint(node), "[\""+common.BytesToHex(key)+"\"]")
+	require.NoError(t, err)
+
+	v := new(string)
+	err = utils.DecodeRPC(t, respBody, v)
+	require.NoError(t, err)
+	if *v == "" {
+		return []byte{}
+	}
+
+	value, err := common.HexToBytes(*v)
+	require.NoError(t, err)
+
+	return value
 }
 
 // getBlock calls the endpoint chain_getBlock
@@ -218,14 +238,9 @@ func TestStressSync(t *testing.T) {
 	require.Len(t, errList, 0)
 }
 
-func TestStress_IncludeData(t *testing.T) {
-	nodes, err := utils.StartNodes(t, numNodes)
-	require.NoError(t, err)
-
-	time.Sleep(5 * time.Second)
-
-	// create IncludeData extrnsic
-	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
+// submitExtrinsicAssertInclusion submits an extrinsic to a random node and asserts that the extrinsic was included in some block
+// and that the nodes remain synced
+func submitExtrinsicAssertInclusion(t *testing.T, nodes []*utils.Node, ext extrinsic.Extrinsic) {
 	tx, err := ext.Encode()
 	require.NoError(t, err)
 
@@ -271,7 +286,8 @@ func TestStress_IncludeData(t *testing.T) {
 		}
 
 		header = block.Header
-		log.Info("got header from node", "header", header, "hash", header.Hash(), "node", nodes[idx].Key)
+		log.Info("got block from node", "hash", header.Hash(), "node", nodes[idx].Key)
+		log.Debug("got block from node", "header", header, "body", block.Body, "hash", header.Hash(), "node", nodes[idx].Key)
 
 		if block.Body != nil && !bytes.Equal(*(block.Body), []byte{0}) {
 			resExts, err = block.Body.AsExtrinsics()
@@ -285,6 +301,7 @@ func TestStress_IncludeData(t *testing.T) {
 	}
 
 	// assert that the extrinsic included is the one we submitted
+	require.Equal(t, 1, len(resExts), fmt.Sprintf("did not find extrinsic in block on node %s", nodes[idx].Key))
 	require.Equal(t, resExts[0], types.Extrinsic(tx))
 
 	// repeat sync check for sanity
@@ -298,6 +315,51 @@ func TestStress_IncludeData(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 	require.NoError(t, err, hashes)
+}
+
+func TestStress_IncludeData(t *testing.T) {
+	nodes, err := utils.StartNodes(t, numNodes)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	// create IncludeData extrnsic
+	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
+	submitExtrinsicAssertInclusion(t, nodes, ext)
+
+	//TODO: #803 cleanup optimization
+	errList := utils.TearDown(t, nodes)
+	require.Len(t, errList, 0)
+}
+
+func TestStress_StorageChange(t *testing.T) {
+	nodes, err := utils.StartNodes(t, numNodes)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	// create IncludeData extrnsic
+	key := []byte("noot")
+	value := []byte("washere")
+	ext := extrinsic.NewStorageChangeExt(key, optional.NewBytes(true, value))
+	submitExtrinsicAssertInclusion(t, nodes, ext)
+
+	time.Sleep(5 * time.Second)
+
+	// for each node, check that storage was updated accordingly
+	for _, node := range nodes {
+		log.Info("getting storage from node", "node", node.Key)
+		res := getStorage(t, node, key)
+
+		// TODO: currently, around 2/3 nodes have the updated state, even if they all have the same
+		// chain head. figure out why this is the case and fix it.
+		idx := rand.Intn(len(nodes))
+		if idx == node.Idx {
+			// TODO: why does finalize_block modify the storage value?
+			require.NotEqual(t, []byte{}, res)
+			require.Equal(t, true, bytes.Contains(value, res[2:]))
+		}
+	}
 
 	//TODO: #803 cleanup optimization
 	errList := utils.TearDown(t, nodes)

@@ -339,3 +339,13 @@ func (e *StorageChangeExt) Decode(r io.Reader) error {
 
 	return nil
 }
+
+// Key returns the extrinsic's key
+func (e *StorageChangeExt) Key() []byte {
+	return e.key
+}
+
+// Value returns the extrinsic's value
+func (e *StorageChangeExt) Value() *optional.Bytes {
+	return e.value
+}

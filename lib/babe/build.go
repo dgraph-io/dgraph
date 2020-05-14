@@ -166,12 +166,12 @@ func (b *Session) buildBlockBabeHeader(slot Slot) (*types.BabeHeader, error) {
 // for each extrinsic in queue, add it to the block, until the slot ends or the block is full.
 // if any extrinsic fails, it returns an empty array and an error.
 func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransaction, error) {
-	extrinsic := b.nextReadyExtrinsic()
+	next := b.nextReadyExtrinsic()
 	included := []*transaction.ValidTransaction{}
 
-	for !hasSlotEnded(slot) && extrinsic != nil {
-		log.Trace("[babe] build block", "applying extrinsic", extrinsic)
-		ret, err := b.rt.ApplyExtrinsic(extrinsic)
+	for !hasSlotEnded(slot) && next != nil {
+		log.Trace("[babe] build block", "applying extrinsic", next)
+		ret, err := b.rt.ApplyExtrinsic(next)
 		if err != nil {
 			return nil, err
 		}
@@ -192,12 +192,12 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 
 		}
 
-		log.Trace("[babe] build block applied extrinsic", "extrinsic", extrinsic)
+		log.Trace("[babe] build block applied extrinsic", "extrinsic", next)
 
 		// keep track of included transactions; re-add them to queue later if block building fails
 		t := b.transactionQueue.Pop()
 		included = append(included, t)
-		extrinsic = b.nextReadyExtrinsic()
+		next = b.nextReadyExtrinsic()
 	}
 
 	return included, nil

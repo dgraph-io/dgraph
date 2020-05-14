@@ -78,6 +78,12 @@ func HexToBytes(in string) ([]byte, error) {
 	return out, err
 }
 
+// BytesToHex turns a byte slice into a 0x prefixed hex string
+func BytesToHex(in []byte) string {
+	s := hex.EncodeToString(in)
+	return "0x" + s
+}
+
 // Concat concatenates two byte arrays
 // used instead of append to prevent modifying the original byte array
 func Concat(s1 []byte, s2 ...byte) []byte {

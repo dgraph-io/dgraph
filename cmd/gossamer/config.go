@@ -294,6 +294,7 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 	// check --rpcport flag and update node configuration
 	if port := ctx.GlobalUint(RPCPortFlag.Name); port != 0 {
 		cfg.Port = uint32(port)
+		cfg.WSPort = uint32(port) + 1000
 	}
 
 	// check --rpchost flag and update node configuration

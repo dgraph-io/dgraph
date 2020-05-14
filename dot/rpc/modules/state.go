@@ -209,14 +209,13 @@ func (sm *StateModule) GetStorage(r *http.Request, req *[]string, res *interface
 	// TODO implement change storage trie so that block hash parameter works (See issue #834)
 	pReq := *req
 	reqBytes, _ := common.HexToBytes(pReq[0]) // no need to catch error here
-
 	item, err := sm.storageAPI.GetStorage(reqBytes)
 	if err != nil {
 		return err
 	}
 
 	if len(item) > 0 {
-		*res = "0x" + hex.EncodeToString(item)
+		*res = common.BytesToHex(item)
 	} else {
 		*res = nil
 	}
