@@ -502,7 +502,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 			Child: []*gql.FilterTree{filter},
 		}
 	case rn.Rule != nil:
-		if rn.Result == schema.Negative {
+		if rn.EvaluateStatic(authRw.authVariables) == schema.Negative {
 			return nil, nil
 		}
 

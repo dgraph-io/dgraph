@@ -391,11 +391,11 @@ func TestUpdateNestedFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
-		result: `{"updateMovie": {"movie": [{"content": "Movie2"}, {"content": "Movie3"}]}}`,
+		result: `{"updateMovie": {"movie": [{"content": "Movie2"}, {"content": "Movie3"}, { "content": "Movie4" }]}}`,
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }]}}`,
+		result: `{"updateMovie": {"movie": [{ "content": "Movie1" }, { "content": "Movie2" }, { "content": "Movie3" }, { "content": "Movie4" }]}}`,
 	}}
 
 	query := `

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -113,6 +114,7 @@ type TestCase struct {
 	name      string
 	filter    map[string]interface{}
 	variables map[string]interface{}
+	query     string
 }
 
 type uidResult struct {
@@ -137,6 +139,89 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func TestAuthRulesWithMissingJWT(t *testing.T) {
+	testCases := []TestCase{
+		{name: "Query non auth field without JWT Token",
+			query: `
+			query {
+			  queryRole(filter: {permission: { eq: EDIT }}) {
+				permission
+			  }
+			}`,
+			result: `{"queryRole":[{"permission":"EDIT"}]}`,
+		},
+		{name: "Query auth field without JWT Token",
+			query: `
+			query {
+				queryMovie {
+					content
+				}
+			}`,
+			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+		},
+		{name: "Query empty auth field without JWT Token",
+			query: `
+			query {
+				queryReview {
+					comment
+				}
+			}`,
+			result: `{"queryReview":[{"comment":"Nice movie"}]}`,
+		},
+		{name: "Query auth field with partial JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+		{name: "Query auth field with invalid JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryProject":[]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Query: tcase.query,
+		}
+
+		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
+		if testInvalidKey {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			jwtVar := queryParams.Headers.Get(metaInfo.Header)
+
+			// Create a invalid JWT signature.
+			jwtVar = jwtVar + "A"
+			queryParams.Headers.Set(metaInfo.Header, jwtVar)
+		} else if tcase.user != "" || tcase.role != "" {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+		}
+
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		if testInvalidKey {
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"couldn't rewrite query queryProject because unable to parse jwt token")
+		} else {
+			require.Nil(t, gqlResponse.Errors)
+		}
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -232,9 +317,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil, nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil, nil})
-
+	idCol1 := getColID(t, TestCase{user: "user1", role: "USER", name: "Column1"})
+	idCol2 := getColID(t, TestCase{user: "user2", role: "USER", name: "Column2"})
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
 
@@ -482,6 +566,14 @@ func TestNestedFilter(t *testing.T) {
                "name": "Region4"
             }
          ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
+            }
+         ]
       }
    ]
 }
@@ -519,6 +611,14 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
+            }
+         ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
             }
          ]
       }
