@@ -138,8 +138,9 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 				case nil:
 					break LOOP
 				default:
-					glog.Warningf("Cannot delete removed predicate %s after streaming snapshot",
-						pred)
+					glog.Warningf(
+						"Cannot delete removed predicate %s after streaming snapshot: %v",
+						pred, err)
 					errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot",
 						pred)
 				}
