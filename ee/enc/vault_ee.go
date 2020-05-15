@@ -92,7 +92,7 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 	}
 	secretID, err := ioutil.ReadFile(vKR.secretID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading secretid file (%v)", vKR.secretID)
+		return nil, errors.Wrapf(err, "error reading secret-id file (%v)", vKR.secretID)
 	}
 
 	// Get a Vault Client.
@@ -120,8 +120,9 @@ func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
 
 	// Read from KV store
 	secret, err := client.Logical().Read("secret/data/" + vKR.path)
-	if err != nil {
-		return nil, errors.Wrapf(err, "while reading key from kv store at %v", vKR.path)
+	if err != nil || secret == nil {
+		return nil, errors.Errorf("error or nil secret on reading key at %v: "+
+			"err %v", vKR.path, err)
 	}
 
 	// Parse key from response
