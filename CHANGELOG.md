@@ -13,7 +13,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ### Fixed
 
 ## [20.03.2] - Unreleased
-[20.03.2]: https://github.com/dgraph-io/dgraph/compare/v20.03.2...v20.03.1
+[20.03.2]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.2
 
 ### Changed
 
@@ -30,6 +30,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix empty string checks. ([#5390][]) 
 - Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
 - Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
+- Use SensitiveByteSlice type for hmac secret. ([#5450][]) 
+- Fix protobuf headers check. ([#5381][])
 - Enterprise features
   - Print error when applying enterprise license fails. ([#5342][])
   - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
@@ -49,9 +51,11 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5053]: https://github.com/dgraph-io/dgraph/issues/5053
 [#5355]: https://github.com/dgraph-io/dgraph/issues/5355
 [#5368]: https://github.com/dgraph-io/dgraph/issues/5368
+[#5450]: https://github.com/dgraph-io/dgraph/issues/5450
+[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
 
 ## [1.2.4] - Unreleased
-[1.2.4]: https://github.com/dgraph-io/dgraph/compare/v21.2.4...v1.2.3
+[1.2.4]: https://github.com/dgraph-io/dgraph/compare/v21.2.3...v1.2.4
 
 ### Changed
 
@@ -64,6 +68,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix segmentation fault in query.go. ([#5377][]) 
 - Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
 - Fix empty string checks. ([#5396][])
+- Use SensitiveByteSlice type for hmac secret. ([#5451][])
+- Fix protobuf headers check. ([#5381][])
 
 [#5359]: https://github.com/dgraph-io/dgraph/issues/5359
 [#5405]: https://github.com/dgraph-io/dgraph/issues/5405
@@ -73,6 +79,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5396]: https://github.com/dgraph-io/dgraph/issues/5396
 [#5053]: https://github.com/dgraph-io/dgraph/issues/5053
 [#5368]: https://github.com/dgraph-io/dgraph/issues/5368
+[#5451]: https://github.com/dgraph-io/dgraph/issues/5451
+[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
 
 ## [20.03.1] - 2020-04-24
 [20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
