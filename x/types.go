@@ -17,7 +17,7 @@
 package x
 
 // SensitiveByteSlice implements the Stringer interface to redact its contents.
-// Use this type for sensitive info such as keys, passwords, or secrets so it doesn't leak 
+// Use this type for sensitive info such as keys, passwords, or secrets so it doesn't leak
 // as output such as logs.
 type SensitiveByteSlice []byte
 
