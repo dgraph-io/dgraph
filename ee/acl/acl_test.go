@@ -1805,6 +1805,7 @@ type graphQLAdminEndpointTestCase struct {
 	name               string
 	query              string
 	queryName          string
+	respIsArray        bool
 	testGuardianAccess bool
 	guardianErrs       x.GqlErrorList
 	// specifying this as empty string means it won't be compared with response data
@@ -1841,13 +1842,14 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					  }
 					}`,
 			queryName:          "listBackups",
+			respIsArray:        true,
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
 				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
 					"location : The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"listBackups": null}`,
+			guardianData: `{"listBackups": []}`,
 		},
 		{
 			name: "config update has guardian auth",
@@ -1994,7 +1996,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			params := testutil.GraphQLParams{Query: tcase.query}
 
 			// assert ACL error for non-guardians
-			assertNonGuardianFailure(t, tcase.queryName, true, params)
+			assertNonGuardianFailure(t, tcase.queryName, !tcase.respIsArray, params)
 
 			// for guardians, assert non-ACL error or success
 			if tcase.testGuardianAccess {
