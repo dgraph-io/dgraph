@@ -102,7 +102,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
-	if err := cleanupSchema(ctx, done); err != nil {
+	if err := deleteStalePreds(ctx, done); err != nil {
 		return count, err
 	}
 
@@ -115,13 +115,14 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	return count, nil
 }
 
-func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
 	if kvs == nil {
 		return nil
 	}
 
-	// Delete predicates that are in the schema but not in the snapshot. These predicates were
-	// deleted in between snapshots.
+	// Look for predicates present in the receiver but not in the list sent by the leader.
+	// These predicates were deleted in between snapshots and need to be deleted from the
+	// receiver to keep the schema in sync.
 	currPredicates := schema.State().Predicates()
 	snapshotPreds := make(map[string]struct{})
 	for _, pred := range kvs.Predicates {
@@ -141,15 +142,16 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 					glog.Warningf(
 						"Cannot delete removed predicate %s after streaming snapshot: %v",
 						pred, err)
-					errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot",
-						pred)
+					return errors.Wrapf(err,
+						"cannot delete removed predicate %s after streaming snapshot", pred)
 				}
 			}
 		}
 	}
 
-	// Delete types that are in the schema but not in the snapshot. These types were deleted in
-	// between snapshots.
+	// Look for types present in the receiver but not in the list sent by the leader.
+	// These types were deleted in between snapshots and need to be deleted from the
+	// receiver to keep the schema in sync.
 	currTypes := schema.State().Types()
 	snapshotTypes := make(map[string]struct{})
 	for _, typ := range kvs.Types {
@@ -158,7 +160,8 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 	for _, typ := range currTypes {
 		if _, ok := snapshotTypes[typ]; !ok {
 			if err := schema.State().DeleteType(typ); err != nil {
-				errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot", typ)
+				return errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot",
+					typ)
 			}
 		}
 	}
@@ -200,17 +203,21 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
+		if item.Version() >= snap.SinceTs {
+			return true
+		}
+
+		if item.Version() != 1 {
+			return false
+		}
+
 		// Type and Schema keys always have a timestamp of 1. They all need to be sent
 		// with the snapshot.
 		pk, err := x.Parse(item.Key())
 		if err != nil {
 			return false
 		}
-		if pk.IsSchema() || pk.IsType() {
-			return true
-		}
-
-		return item.Version() >= snap.SinceTs
+		return pk.IsSchema() || pk.IsType()
 	}
 
 	if err := stream.Orchestrate(out.Context()); err != nil {
