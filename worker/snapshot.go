@@ -126,7 +126,8 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 	for _, pred := range currPredicates {
 		if _, ok := snapshotPreds[pred]; !ok {
 			if err := posting.DeletePredicate(ctx, pred); err != nil {
-				errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot")
+				errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot",
+					pred)
 			}
 		}
 	}
@@ -141,7 +142,7 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 	for _, typ := range currTypes {
 		if _, ok := snapshotTypes[typ]; !ok {
 			if err := schema.State().DeleteType(typ); err != nil {
-				errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot")
+				errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot", typ)
 			}
 		}
 	}
