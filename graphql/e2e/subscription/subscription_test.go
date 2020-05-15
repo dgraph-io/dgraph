@@ -16,140 +16,140 @@
 
 package subscription_test
 
-import (
-	"encoding/json"
-	"testing"
-	"time"
+// import (
+// 	"encoding/json"
+// 	"testing"
+// 	"time"
 
-	"github.com/dgraph-io/dgraph/graphql/e2e/common"
-	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/stretchr/testify/require"
-)
+// 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
+// 	"github.com/dgraph-io/dgraph/graphql/schema"
+// 	"github.com/stretchr/testify/require"
+// )
 
-func TestSubscription(t *testing.T) {
-	graphQLEndpoint := "http://localhost:8180/graphql"
-	subscriptionEndpoint := "ws://localhost:8180/graphql"
-	adminEndpoint := "http://localhost:8180/admin"
+// func TestSubscription(t *testing.T) {
+// 	graphQLEndpoint := "http://localhost:8180/graphql"
+// 	subscriptionEndpoint := "ws://localhost:8180/graphql"
+// 	adminEndpoint := "http://localhost:8180/admin"
 
-	sch := `
-	type Product {
-		productID: ID!
-		name: String @search(by: [term])
-		reviews: [Review] @hasInverse(field: about)
-	}
-	
-	type Customer {
-		username: String! @id @search(by: [hash, regexp])
-		reviews: [Review] @hasInverse(field: by)
-	}
-	
-	type Review {
-		id: ID!
-		about: Product!
-		by: Customer!
-		comment: String @search(by: [fulltext])
-		rating: Int @search
-	}
-	`
-	add := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
-	require.Nil(t, addResult.Errors)
+// 	sch := `
+// 	type Product {
+// 		productID: ID!
+// 		name: String @search(by: [term])
+// 		reviews: [Review] @hasInverse(field: about)
+// 	}
 
-	add = &common.GraphQLParams{
-		Query: `mutation {
-			addProduct(input: [
-			  { name: "sanitizer"}
-			]) {
-			  product {
-				productID
-				name
-			  }
-			}
-		  }`,
-	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
-	require.Nil(t, addResult.Errors)
+// 	type Customer {
+// 		username: String! @id @search(by: [hash, regexp])
+// 		reviews: [Review] @hasInverse(field: by)
+// 	}
 
-	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
-		Query: `subscription{
-			getProduct(productID: "0x2"){
-			  name
-			}
-		  }`,
-	})
-	require.Nil(t, err)
+// 	type Review {
+// 		id: ID!
+// 		about: Product!
+// 		by: Customer!
+// 		comment: String @search(by: [fulltext])
+// 		rating: Int @search
+// 	}
+// 	`
+// 	add := &common.GraphQLParams{
+// 		Query: `mutation updateGQLSchema($sch: String!) {
+// 			updateGQLSchema(input: { set: { schema: $sch }}) {
+// 				gqlSchema {
+// 					schema
+// 				}
+// 			}
+// 		}`,
+// 		Variables: map[string]interface{}{"sch": sch},
+// 	}
+// 	addResult := add.ExecuteAsPost(t, adminEndpoint)
+// 	require.Nil(t, addResult.Errors)
 
-	res, err := subscriptionClient.RecvMsg()
-	require.NoError(t, err)
+// 	add = &common.GraphQLParams{
+// 		Query: `mutation {
+// 			addProduct(input: [
+// 			  { name: "sanitizer"}
+// 			]) {
+// 			  product {
+// 				productID
+// 				name
+// 			  }
+// 			}
+// 		  }`,
+// 	}
+// 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+// 	require.Nil(t, addResult.Errors)
 
-	touchedUidskey := "touched_uids"
-	var subscriptionResp common.GraphQLResponse
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
-	require.Nil(t, subscriptionResp.Errors)
+// 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+// 		Query: `subscription{
+// 			getProduct(productID: "0x2"){
+// 			  name
+// 			}
+// 		  }`,
+// 	})
+// 	require.Nil(t, err)
 
-	require.JSONEq(t, `{"getProduct":{"name":"sanitizer"}}`, string(subscriptionResp.Data))
-	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
-	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
+// 	res, err := subscriptionClient.RecvMsg()
+// 	require.NoError(t, err)
 
-	// Background indexing is happening so wait till it get indexed.
-	time.Sleep(time.Second * 2)
+// 	touchedUidskey := "touched_uids"
+// 	var subscriptionResp common.GraphQLResponse
+// 	err = json.Unmarshal(res, &subscriptionResp)
+// 	require.NoError(t, err)
+// 	require.Nil(t, subscriptionResp.Errors)
 
-	// Update the product to get the latest update.
-	add = &common.GraphQLParams{
-		Query: `mutation{
-			updateProduct(input:{filter:{name:{allofterms:"sanitizer"}}, set:{name:"mask"}},){
-			  product{
-				name
-			  }
-			}
-		  }		  
-		  `,
-	}
-	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
-	require.Nil(t, addResult.Errors)
+// 	require.JSONEq(t, `{"getProduct":{"name":"sanitizer"}}`, string(subscriptionResp.Data))
+// 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
+// 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
-	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
+// 	// Background indexing is happening so wait till it get indexed.
+// 	time.Sleep(time.Second * 2)
 
-	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
-	// from the previous unmarshal
-	subscriptionResp = common.GraphQLResponse{}
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
-	require.Nil(t, subscriptionResp.Errors)
+// 	// Update the product to get the latest update.
+// 	add = &common.GraphQLParams{
+// 		Query: `mutation{
+// 			updateProduct(input:{filter:{name:{allofterms:"sanitizer"}}, set:{name:"mask"}},){
+// 			  product{
+// 				name
+// 			  }
+// 			}
+// 		  }
+// 		  `,
+// 	}
+// 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+// 	require.Nil(t, addResult.Errors)
 
-	// Check the latest update.
-	require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
-	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
-	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
+// 	res, err = subscriptionClient.RecvMsg()
+// 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
-	// Change schema to terminate subscription..
-	add = &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult = add.ExecuteAsPost(t, adminEndpoint)
-	require.Nil(t, addResult.Errors)
+// 	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
+// 	// from the previous unmarshal
+// 	subscriptionResp = common.GraphQLResponse{}
+// 	err = json.Unmarshal(res, &subscriptionResp)
+// 	require.NoError(t, err)
+// 	require.Nil(t, subscriptionResp.Errors)
 
-	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
+// 	// Check the latest update.
+// 	require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
+// 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
+// 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
-	require.Nil(t, res)
-}
+// 	time.Sleep(2 * time.Second)
+// 	// Change schema to terminate subscription..
+// 	add = &common.GraphQLParams{
+// 		Query: `mutation updateGQLSchema($sch: String!) {
+// 			updateGQLSchema(input: { set: { schema: $sch }}) {
+// 				gqlSchema {
+// 					schema
+// 				}
+// 			}
+// 		}`,
+// 		Variables: map[string]interface{}{"sch": sch},
+// 	}
+// 	addResult = add.ExecuteAsPost(t, adminEndpoint)
+// 	require.Nil(t, addResult.Errors)
+
+// 	res, err = subscriptionClient.RecvMsg()
+// 	require.NoError(t, err)
+
+// 	require.Nil(t, res)
+// }
