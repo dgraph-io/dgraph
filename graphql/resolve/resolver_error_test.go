@@ -18,6 +18,7 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
@@ -78,6 +79,36 @@ type Post {
 	text: String
 	author: Author!
 }`
+
+func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	if len(req.Mutations) == 0 {
+		ex.failQuery--
+		if ex.failQuery == 0 {
+			return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
+		}
+
+		return &dgoapi.Response{Json: []byte(ex.resp)}, nil
+	}
+	ex.failMutation--
+	if ex.failMutation == 0 {
+		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
+	}
+
+	res, err := json.Marshal(ex.result)
+	if err != nil {
+		panic(err)
+	}
+
+	return &dgoapi.Response{
+		Json: []byte(res),
+		Uids: ex.assigned,
+	}, nil
+
+}
+
+func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
 
 func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	ex.failQuery--
@@ -450,8 +481,7 @@ func resolveWithClient(
 			Qrw: NewQueryRewriter(),
 			Arw: NewAddRewriter,
 			Urw: NewUpdateRewriter,
-			Qe:  ex,
-			Me:  ex,
+			Ex:  ex,
 		}))
 
 	return resolver.Resolve(context.Background(), &schema.Request{Query: gqlQuery, Variables: vars})
