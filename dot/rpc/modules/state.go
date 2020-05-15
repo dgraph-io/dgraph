@@ -82,7 +82,7 @@ type StateStorageKeysResponse [][]byte
 
 // StateMetadataResponse holds the metadata
 //TODO: Determine actual type
-type StateMetadataResponse []byte
+type StateMetadataResponse string
 
 // StorageChangeSetResponse is the struct that holds the block and changes
 type StorageChangeSetResponse struct {

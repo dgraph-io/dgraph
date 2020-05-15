@@ -22,16 +22,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewHTTPServer(t *testing.T) {
-
+	coreAPI := core.NewTestService(t, nil)
 	cfg := &HTTPServerConfig{
 		Modules: []string{"system"},
 		RPCPort: 8545,
 		RPCAPI:  NewService(),
+		CoreAPI: coreAPI,
 	}
+
 	s := NewHTTPServer(cfg)
 	err := s.Start()
 	require.Nil(t, err)

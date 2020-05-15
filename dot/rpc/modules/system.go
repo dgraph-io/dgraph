@@ -67,25 +67,34 @@ func NewSystemModule(net NetworkAPI) *SystemModule {
 
 // Chain returns the runtime chain
 func (sm *SystemModule) Chain(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = NOT_IMPLEMENTED
+	// TODO implement lookup of value
+	*res = "Development"
 	return nil
 }
 
 // Name returns the runtime name
 func (sm *SystemModule) Name(r *http.Request, req *EmptyRequest, res *StringResponse) error {
+	// TODO implement lookup of value
 	*res = "gossamer v0.0"
 	return nil
 }
 
 // Properties returns the runtime properties
-func (sm *SystemModule) Properties(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = NOT_IMPLEMENTED
+func (sm *SystemModule) Properties(r *http.Request, req *EmptyRequest, res *SystemPropertiesResponse) error {
+	// TODO implement lookup of this value
+	sp := SystemPropertiesResponse{
+		Ss58Format:    2,
+		TokenDecimals: 12,
+		TokenSymbol:   "KSM",
+	}
+	*res = sp
 	return nil
 }
 
 // Version returns the runtime version
 func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	*res = NOT_IMPLEMENTED
+	// TODO implement lookup of this
+	*res = "0.0.0"
 	return nil
 }
 

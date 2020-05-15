@@ -24,6 +24,8 @@ import (
 	"reflect"
 	"regexp"
 
+	"github.com/ChainSafe/gossamer/dot/types"
+
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
@@ -32,17 +34,6 @@ type ChainHashRequest string
 
 // ChainBlockNumberRequest interface is it can accept string or float64 or []
 type ChainBlockNumberRequest interface{}
-
-// ChainBlockResponse struct
-type ChainBlockResponse struct {
-	Block ChainBlock `json:"block"`
-}
-
-// ChainBlock struct to hold json instance of a block
-type ChainBlock struct {
-	Header ChainBlockHeaderResponse `json:"header"`
-	Body   []string                 `json:"extrinsics"`
-}
 
 // ChainBlockHeaderResponse struct
 type ChainBlockHeaderResponse struct {
@@ -56,6 +47,17 @@ type ChainBlockHeaderResponse struct {
 // ChainBlockHeaderDigest struct to hold digest logs
 type ChainBlockHeaderDigest struct {
 	Logs []string `json:"logs"`
+}
+
+// ChainBlock struct to hold json instance of a block
+type ChainBlock struct {
+	Header ChainBlockHeaderResponse `json:"header"`
+	Body   []string                 `json:"extrinsics"`
+}
+
+// ChainBlockResponse struct
+type ChainBlockResponse struct {
+	Block ChainBlock `json:"block"`
 }
 
 // ChainHashResponse interface to handle response
@@ -86,17 +88,8 @@ func (cm *ChainModule) GetBlock(r *http.Request, req *ChainHashRequest, res *Cha
 		return err
 	}
 
-	res.Block.Header.ParentHash = block.Header.ParentHash.String()
-	if block.Header.Number.Int64() == 0 {
-		res.Block.Header.Number = "0x0"
-	} else {
-		res.Block.Header.Number = "0x" + hex.EncodeToString(block.Header.Number.Bytes())
-	}
-	res.Block.Header.StateRoot = block.Header.StateRoot.String()
-	res.Block.Header.ExtrinsicsRoot = block.Header.ExtrinsicsRoot.String()
-	for _, item := range block.Header.Digest {
-		res.Block.Header.Digest.Logs = append(res.Block.Header.Digest.Logs, "0x"+hex.EncodeToString(item))
-	}
+	res.Block.Header = HeaderToJSON(*block.Header)
+
 	if *block.Body != nil {
 		ext, err := block.Body.AsExtrinsics()
 		if err != nil {
@@ -150,26 +143,25 @@ func (cm *ChainModule) GetHeader(r *http.Request, req *ChainHashRequest, res *Ch
 		return err
 	}
 
-	res.ParentHash = header.ParentHash.String()
-	if header.Number.Int64() == 0 {
-		res.Number = "0x0"
-	} else {
-		res.Number = "0x" + hex.EncodeToString(header.Number.Bytes())
-	}
-	res.StateRoot = header.StateRoot.String()
-	res.ExtrinsicsRoot = header.ExtrinsicsRoot.String()
-	for _, item := range header.Digest {
-		res.Digest.Logs = append(res.Digest.Logs, "0x"+hex.EncodeToString(item))
-	}
+	*res = HeaderToJSON(*header)
 	return nil
 }
 
-// SubscribeFinalizedHeads isn't implemented properly yet.
-func (cm *ChainModule) SubscribeFinalizedHeads(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) {
+// SubscribeFinalizedHeads handled by websocket handler, but this func should remain
+//  here so it's added to rpc_methods list
+func (cm *ChainModule) SubscribeFinalizedHeads(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) error {
+	return nil
 }
 
-// SubscribeNewHead isn't implemented properly yet.
-func (cm *ChainModule) SubscribeNewHead(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) {
+// SubscribeNewHead handled by websocket handler, but this func should remain
+//  here so it's added to rpc_methods list
+func (cm *ChainModule) SubscribeNewHead(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) error {
+	return nil
+}
+
+// SubscribeNewHeads isn't implemented properly yet.
+func (cm *ChainModule) SubscribeNewHeads(r *http.Request, req *EmptyRequest, res *ChainBlockHeaderResponse) error {
+	return nil
 }
 
 func (cm *ChainModule) hashLookup(req *ChainHashRequest) (common.Hash, error) {
@@ -233,4 +225,23 @@ func (cm *ChainModule) lookupHashByInterface(i interface{}) (string, error) {
 		return "", err
 	}
 	return h.String(), nil
+}
+
+// HeaderToJSON converts types.Header to ChainBlockHeaderResponse
+func HeaderToJSON(header types.Header) ChainBlockHeaderResponse {
+	res := ChainBlockHeaderResponse{
+		ParentHash:     header.ParentHash.String(),
+		StateRoot:      header.StateRoot.String(),
+		ExtrinsicsRoot: header.ExtrinsicsRoot.String(),
+		Digest:         ChainBlockHeaderDigest{},
+	}
+	if header.Number.Int64() == 0 {
+		res.Number = "0x0"
+	} else {
+		res.Number = "0x" + hex.EncodeToString(header.Number.Bytes())
+	}
+	for _, item := range header.Digest {
+		res.Digest.Logs = append(res.Digest.Logs, "0x"+hex.EncodeToString(item))
+	}
+	return res
 }

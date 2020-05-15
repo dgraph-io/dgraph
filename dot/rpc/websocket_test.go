@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
@@ -18,16 +19,18 @@ var testCalls = []struct {
 }{
 	{[]byte(`{"jsonrpc":"2.0","method":"system_name","params":[],"id":1}`), []byte(`{"id":1,"jsonrpc":"2.0","result":"gossamer v0.0"}` + "\n")},                                                       // working request
 	{[]byte(`{"jsonrpc":"2.0","method":"unknown","params":[],"id":1}`), []byte(`{"error":{"code":-32000,"data":null,"message":"rpc error method unknown not found"},"id":1,"jsonrpc":"2.0"}` + "\n")}, // unknown method
-	{[]byte{}, []byte(`{"error":{"code":-32700,"data":{"id":null,"jsonrpc":"","method":"","params":null},"message":"EOF"},"id":null,"jsonrpc":"2.0"}` + "\n")},                                        // empty request
+	{[]byte{}, []byte(`{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":null}` + "\n")},                                                                                      // empty request
+	{[]byte(`{"jsonrpc":"2.0","method":"chain_subscribeNewHeads","params":[],"id":1}`), []byte(`{"jsonrpc":"2.0","result":1,"id":1}` + "\n")},
 }
 
 func TestNewWebSocketServer(t *testing.T) {
-
+	coreAPI := core.NewTestService(t, nil)
 	cfg := &HTTPServerConfig{
-		Modules: []string{"system"},
+		Modules: []string{"system", "chain"},
 		RPCPort: 8545,
 		WSPort:  8546,
 		RPCAPI:  NewService(),
+		CoreAPI: coreAPI,
 	}
 	s := NewHTTPServer(cfg)
 	err := s.Start()

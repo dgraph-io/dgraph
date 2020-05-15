@@ -168,7 +168,7 @@ func TestStateModule_GetMetadata(t *testing.T) {
 func setupStateModule(t *testing.T) *StateModule {
 	// setup service
 	net := newNetworkService(t)
-	chain := newChainService(t)
+	chain := newTestChainService(t)
 	// init storage with test data
 	err := chain.Storage.SetStorage([]byte(`:key1`), []byte(`value1`))
 	require.NoError(t, err)
