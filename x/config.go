@@ -83,7 +83,7 @@ type WorkerOptions struct {
 	// LudicrousMode is super fast mode with fewer guarantees.
 	LudicrousMode bool
 	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
-	EncryptionKey []byte
+	EncryptionKey SensitiveByteSlice
 	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
 	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests

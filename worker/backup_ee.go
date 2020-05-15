@@ -117,7 +117,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 	if forceFull {
 		req.SinceTs = 0
 	} else {
-		if Config.EncryptionKey != nil {
+		if x.WorkerConfig.EncryptionKey != nil {
 			// If encryption key given, latest backup should be encrypted.
 			if latestManifest.Type != "" && !latestManifest.Encrypted {
 				err = errors.Errorf("latest manifest indicates the last backup was not encrypted " +
@@ -183,7 +183,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		m.BackupId = latestManifest.BackupId
 		m.BackupNum = latestManifest.BackupNum + 1
 	}
-	m.Encrypted = (Config.EncryptionKey != nil)
+	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
 
 	bp := &BackupProcessor{Request: req}
 	return bp.CompleteBackup(ctx, &m)

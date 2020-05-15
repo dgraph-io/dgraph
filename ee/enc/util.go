@@ -19,6 +19,7 @@
 package enc
 
 import (
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"io"
@@ -48,7 +49,7 @@ func RegisterFlags(_ *pflag.FlagSet) {
 }
 
 type KeyReader interface {
-	ReadKey() ([]byte, error)
+	ReadKey() (x.SensitiveByteSlice, error)
 }
 
 // NewKeyReader return nil KeyReader (i.e. no encryption).

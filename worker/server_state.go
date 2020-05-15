@@ -66,7 +66,7 @@ func InitServerState() {
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
-		WithEncryptionKey(Config.EncryptionKey)
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 
 	// Do not load bloom filters on DB open.
 	opt.LoadBloomsOnOpen = false
@@ -107,7 +107,7 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 func (s *ServerState) initStorage() {
 	var err error
 
-	if Config.EncryptionKey != nil {
+	if x.WorkerConfig.EncryptionKey != nil {
 		// non-nil key file
 		if !EnterpriseEnabled() {
 			// not licensed --> crash.

@@ -21,6 +21,7 @@ package enc
 import (
 	"io/ioutil"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -80,7 +81,7 @@ func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 }
 
 // ReadKey reads the key from the vault kv store.
-func (vKR *vaultKeyReader) ReadKey() ([]byte, error) {
+func (vKR *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	if vKR == nil {
 		return nil, errors.Errorf("nil vaultKeyReader")
 	}

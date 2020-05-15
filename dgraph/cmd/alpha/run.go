@@ -558,13 +558,12 @@ func run() {
 		return
 	}
 	// kR can be nil for the no-encryption scenario.
+	var key x.SensitiveByteSlice
 	if kR != nil {
-		var key []byte
 		if key, err = kR.ReadKey(); err != nil {
 			glog.Errorf("error: %v", err)
 			return
 		}
-		opts.EncryptionKey = key
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -620,7 +619,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		EncryptionKey:       worker.Config.EncryptionKey,
+		EncryptionKey:       key,
 	}
 
 	setupCustomTokenizers()

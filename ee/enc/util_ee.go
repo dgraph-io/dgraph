@@ -45,7 +45,7 @@ func RegisterFlags(flag *pflag.FlagSet) {
 }
 
 type KeyReader interface {
-	ReadKey() ([]byte, error)
+	ReadKey() (x.SensitiveByteSlice, error)
 }
 
 // localKeyReader implements the KeyReader interface. It reads the key from local files.
@@ -53,7 +53,7 @@ type localKeyReader struct {
 	keyFile string
 }
 
-func (lkR *localKeyReader) ReadKey() ([]byte, error) {
+func (lkR *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	if lkR == nil || lkR.keyFile == "" {
 		return nil, errors.Errorf("nil or bad localKeyReader")
 	}
@@ -104,7 +104,7 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 }
 
 // GetWriter wraps a crypto StreamWriter using the input key on the input Writer.
-func GetWriter(key []byte, w io.Writer) (io.Writer, error) {
+func GetWriter(key x.SensitiveByteSlice, w io.Writer) (io.Writer, error) {
 	// No encryption, return the input writer as is.
 	if key == nil {
 		return w, nil
@@ -127,7 +127,7 @@ func GetWriter(key []byte, w io.Writer) (io.Writer, error) {
 }
 
 // GetReader wraps a crypto StreamReader using the input key on the input Reader.
-func GetReader(key []byte, r io.Reader) (io.Reader, error) {
+func GetReader(key x.SensitiveByteSlice, r io.Reader) (io.Reader, error) {
 	// No encryption, return input reader as is.
 	if key == nil {
 		return r, nil
@@ -149,7 +149,7 @@ func GetReader(key []byte, r io.Reader) (io.Reader, error) {
 }
 
 // ReadEncryptionKeyFile returns the encryption key in the given file.
-func ReadEncryptionKeyFile(filepath string) []byte {
+func ReadEncryptionKeyFile(filepath string) x.SensitiveByteSlice {
 	if filepath == "" {
 		return nil
 	}
