@@ -168,7 +168,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		authInfo := `# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -184,7 +184,7 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
+	authInfo := "# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
 		string(keyData) + "\""
 	return append(schema, []byte(authInfo)...), nil
 }
