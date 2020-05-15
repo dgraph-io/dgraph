@@ -72,20 +72,6 @@ type Options struct {
 // Config holds an instance of the server options..
 var Config Options
 
-// String will generate the string output an Options struct without including
-// the HmacSecret field, which prevents revealing the secret during logging
-func (opt *Options) String() string {
-	if opt == nil {
-		return ""
-	}
-
-	return fmt.Sprintf("{PostingDir:%s BadgerTables:%s BadgerVlog:%s WALDir:%s MutationsMode:%d "+
-		"AuthToken:%s AllottedMemory:%.1fMB AccessJwtTtl:%v RefreshJwtTtl:%v "+
-		"AclRefreshInterval:%v}", opt.PostingDir, opt.BadgerTables, opt.BadgerVlog, opt.WALDir,
-		opt.MutationsMode, opt.AuthToken, opt.AllottedMemory, opt.AccessJwtTtl, opt.RefreshJwtTtl,
-		opt.AclRefreshInterval)
-}
-
 // SetConfiguration sets the server configuration to the given config.
 func SetConfiguration(newConfig *Options) {
 	if newConfig == nil {
