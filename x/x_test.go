@@ -26,8 +26,8 @@ import (
 func TestSensitiveByteSlice(t *testing.T) {
 	var v SensitiveByteSlice = SensitiveByteSlice("mysecretkey")
 
-	s := fmt.Sprintf("%s,%v", v, v)
-	require.EqualValues(t, "****,****", s)
+	s := fmt.Sprintf("%s,%v,%s,%+v", v, v, &v, &v)
+	require.EqualValues(t, "****,****,****,****", s)
 }
 
 func TestRemoveDuplicates(t *testing.T) {
