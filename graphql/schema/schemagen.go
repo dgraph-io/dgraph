@@ -173,7 +173,7 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
-	gqlErrList = postGQLValidation(sch, defns)
+	gqlErrList = postGQLValidation(sch, defns, schemaSecrets)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
@@ -204,6 +204,8 @@ type headersConfig struct {
 	// in the @custom directive. They are returned to the client as part of
 	// Access-Control-Allow-Headers.
 	allowed string
+	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
+	// to requests which resolve custom queries/mutations.
 	secrets map[string]string
 	sync.RWMutex
 }
