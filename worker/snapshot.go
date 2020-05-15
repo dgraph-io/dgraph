@@ -19,6 +19,7 @@ package worker
 import (
 	"context"
 	"sync/atomic"
+	"time"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
@@ -74,15 +75,14 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
+	var done *pb.KVS
 	for {
 		kvs, err := stream.Recv()
 		if err != nil {
 			return count, err
 		}
 		if kvs.Done {
-			if err := cleanupSchema(ctx, kvs); err != nil {
-				return count, err
-			}
+			done = kvs
 			glog.V(1).Infoln("All key-values have been received.")
 			break
 		}
@@ -100,6 +100,10 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 	if err := writer.Flush(); err != nil {
 		return 0, err
+	}
+
+	if err := cleanupSchema(ctx, done); err != nil {
+		return count, err
 	}
 
 	glog.Infof("Snapshot writes DONE. Sending ACK")
@@ -125,9 +129,20 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 	}
 	for _, pred := range currPredicates {
 		if _, ok := snapshotPreds[pred]; !ok {
-			if err := posting.DeletePredicate(ctx, pred); err != nil {
-				errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot",
-					pred)
+			for {
+				err := posting.DeletePredicate(ctx, pred)
+				switch err {
+				case badger.ErrBlockedWrites:
+					time.Sleep(time.Second)
+					continue
+				case nil:
+					break
+				default:
+					glog.Warningf("Cannot delete removed predicate %s after streaming snapshot",
+						pred)
+					errors.Wrapf(err, "cannot delete removed predicate %s after streaming snapshot",
+						pred)
+				}
 			}
 		}
 	}

@@ -147,7 +147,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 		}
 	}`
 	resMap = make(map[string][]map[string]int)
-	resp, err = testutil.RetryQuery(dg, q3)
+	resp, err = testutil.RetryBadQuery(dg, q3)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute address is not indexed")
 }
