@@ -501,12 +501,14 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
 	updRw := resolve.NewUpdateRewriter()
+	addRw := resolve.NewAddRewriter()
 	dgEx := resolve.NewDgraphExecutor()
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
 			updResolver := &updateSchemaResolver{
 				admin:                as,
+				baseAddRewriter:      addRw,
 				baseMutationRewriter: updRw,
 				baseMutationExecutor: dgEx,
 			}
