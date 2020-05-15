@@ -111,9 +111,9 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-	query: AuthRule, 
-	add: AuthRule, 
-	update: AuthRule, 
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
@@ -186,7 +186,8 @@ type directiveValidator func(
 	sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
-	dir *ast.Directive) *gqlerror.Error
+	dir *ast.Directive,
+	secrets map[string]string) *gqlerror.Error
 
 type searchTypeIndex struct {
 	gqlType string
@@ -297,7 +298,8 @@ var directiveValidators = map[string]directiveValidator{
 		sch *ast.Schema,
 		typ *ast.Definition,
 		field *ast.FieldDefinition,
-		dir *ast.Directive) *gqlerror.Error {
+		dir *ast.Directive,
+		secrets map[string]string) *gqlerror.Error {
 		return nil
 	},
 	// Just go get it printed into generated schema
@@ -305,7 +307,8 @@ var directiveValidators = map[string]directiveValidator{
 		sch *ast.Schema,
 		typ *ast.Definition,
 		field *ast.FieldDefinition,
-		dir *ast.Directive) *gqlerror.Error {
+		dir *ast.Directive,
+		secrets map[string]string) *gqlerror.Error {
 		return nil
 	},
 }
@@ -402,7 +405,8 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 // are easier to run once we know that the schema is GraphQL valid and that validation
 // has fleshed out the schema structure; we just need to check if it also satisfies
 // the extra rules.
-func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
+func postGQLValidation(schema *ast.Schema, definitions []string,
+	secrets map[string]string) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, defn := range definitions {
@@ -418,7 +422,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string) gqlerror.List {
 					continue
 				}
 				errs = appendIfNotNull(errs,
-					directiveValidators[dir.Name](schema, typ, field, dir))
+					directiveValidators[dir.Name](schema, typ, field, dir, secrets))
 			}
 		}
 	}
