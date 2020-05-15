@@ -4,18 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/pkg/errors"
 )
-
-type stateResolver struct {
-}
 
 type membershipState struct {
 	Counter    uint64         `json:"counter,omitempty"`
@@ -37,16 +35,12 @@ type clusterGroup struct {
 	Checksum   uint64       `json:"checksum,omitempty"`
 }
 
-func (hr *stateResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-	return nil, nil
-}
-
-func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	var buf bytes.Buffer
 	var resp *api.Response
 	var err error
 
-	x.Check2(buf.WriteString(`{ "state":`))
+	x.Check2(buf.WriteString(`"state":`))
 
 	if resp, err = (&edgraph.Server{}).State(ctx); err != nil {
 		err = errors.Errorf("%s: %s", x.Error, err.Error())
@@ -73,9 +67,11 @@ func (hr *stateResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]by
 			}
 		}
 	}
-	x.Check2(buf.WriteString(`}`))
 
-	return buf.Bytes(), err
+	return &resolve.Resolved{
+		Data: buf.Bytes(),
+		Err:  err,
+	}
 }
 
 // convertToGraphQLResp converts MembershipState proto to GraphQL layer response

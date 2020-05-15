@@ -18,52 +18,28 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
-type drainingResolver struct {
-	mutation schema.Mutation
-	enable   bool
-}
-
-func (dr *drainingResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveDraining(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got draining request through GraphQL admin API")
 
-	dr.mutation = m
 	enable := getDrainingInput(m)
-
-	dr.enable = enable
 	x.UpdateDrainingMode(enable)
-	return nil, nil, nil
-}
 
-func (dr *drainingResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	data, err := json.Marshal(map[string]interface{}{
+		m.Name(): response("Success", fmt.Sprintf("draining mode has been set to %v", enable))})
 
-	return nil, nil
-}
-
-func (dr *drainingResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (dr *drainingResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	buf := writeResponse(dr.mutation, "Success",
-		fmt.Sprintf("draining mode has been set to %v", dr.enable))
-	return buf, nil
+	return &resolve.Resolved{
+		Data: data,
+		Err:  err,
+	}, true
 }
 
 func getDrainingInput(m schema.Mutation) bool {

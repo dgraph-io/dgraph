@@ -22,22 +22,18 @@ import (
 
 	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
-type healthResolver struct {
-}
+func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
+	glog.Info("Got health request")
 
-func (hr *healthResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-	return nil, nil
-}
-
-func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
 	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "health":`))
+	x.Check2(buf.WriteString(`"health":`))
 
 	var resp *api.Response
 	var err error
@@ -48,7 +44,8 @@ func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]b
 		x.Check2(buf.Write(resp.GetJson()))
 	}
 
-	x.Check2(buf.WriteString(`}`))
-
-	return buf.Bytes(), err
+	return &resolve.Resolved{
+		Data: buf.Bytes(),
+		Err:  err,
+	}
 }

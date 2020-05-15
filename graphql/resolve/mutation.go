@@ -18,13 +18,16 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -94,17 +97,34 @@ type MutationRewriter interface {
 		result map[string]interface{}) (*gql.GraphQuery, error)
 }
 
-// A MutationExecutor can execute a mutation and returns the assigned map, the
-// mutated map and any errors.
-type MutationExecutor interface {
-	// Mutate performs the actual mutation and returns a map of newly assigned nodes,
-	// a map of variable->[]uid from upsert mutations and any errors.  If an error
-	// occurs, that indicates that the mutation failed in some way significant enough
-	// way as to not continue procissing this mutation or others in the same request.
-	Mutate(
-		ctx context.Context,
-		query *gql.GraphQuery,
-		mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error)
+// A DgraphExecutor can execute a mutation and returns the request response and any errors.
+type DgraphExecutor interface {
+	// Execute performs the actual mutation and returns a Dgraph response. If an error
+	// occurs, that indicates that the execution failed in some way significant enough
+	// way as to not continue processing this mutation or others in the same request.
+	Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
+}
+
+// An UpsertMutation is the query and mutations needed for a Dgraph upsert.
+// The node types is a blank node name -> Type mapping of nodes that could
+// be created by the upsert.
+type UpsertMutation struct {
+	Query     *gql.GraphQuery
+	Mutations []*dgoapi.Mutation
+	NewNodes  map[string]schema.Type
+}
+
+// DgraphExecutorFunc is an adapter that allows us to compose dgraph execution and
+// build a QueryExecuter from a function.  Based on the http.HandlerFunc pattern.
+type DgraphExecutorFunc func(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+
+// Execute calls qe(ctx, query)
+func (ex DgraphExecutorFunc) Execute(
+	ctx context.Context,
+	req *dgoapi.Request) (*dgoapi.Response, error) {
+
+	return ex(ctx, req)
 }
 
 // MutationResolverFunc is an adapter that allows to build a MutationResolver from
@@ -134,36 +154,33 @@ func (me MutationExecutionFunc) Mutate(
 	return me(ctx, query, mutations)
 }
 
-// NewMutationResolver creates a new mutation resolver.  The resolver runs the pipeline:
+// NewDgraphResolver creates a new mutation resolver.  The resolver runs the pipeline:
 // 1) rewrite the mutation using mr (return error if failed)
 // 2) execute the mutation with me (return error if failed)
 // 3) write a query for the mutation with mr (return error if failed)
 // 4) execute the query with qe (return error if failed)
 // 5) process the result with rc
-func NewMutationResolver(
+func NewDgraphResolver(
 	mr MutationRewriter,
-	qe QueryExecutor,
-	me MutationExecutor,
+	ex DgraphExecutor,
 	rc ResultCompleter) MutationResolver {
-	return &mutationResolver{
+	return &dgraphResolver{
 		mutationRewriter: mr,
-		queryExecutor:    qe,
-		mutationExecutor: me,
+		executor:         ex,
 		resultCompleter:  rc,
 	}
 }
 
-// mutationResolver can resolve a single GraphQL mutation field
-type mutationResolver struct {
+// dgraphResolver can resolve a single GraphQL mutation field
+type dgraphResolver struct {
 	mutationRewriter MutationRewriter
-	queryExecutor    QueryExecutor
-	mutationExecutor MutationExecutor
+	executor         DgraphExecutor
 	resultCompleter  ResultCompleter
 
 	numUids int
 }
 
-func (mr *mutationResolver) Resolve(
+func (mr *dgraphResolver) Resolve(
 	ctx context.Context, mutation schema.Mutation) (*Resolved, bool) {
 
 	span := otrace.FromContext(ctx)
@@ -208,7 +225,7 @@ func (mr *mutationResolver) Resolve(
 	}, success
 }
 
-func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
+func (mr *dgraphResolver) getNumUids(mutation schema.Mutation, assigned map[string]string,
 	result map[string]interface{}) {
 	switch mr.mutationRewriter.(type) {
 	case *AddRewriter:
@@ -220,18 +237,43 @@ func (mr *mutationResolver) getNumUids(mutation schema.Mutation, assigned map[st
 	}
 }
 
-func (mr *mutationResolver) rewriteAndExecute(
+func (mr *dgraphResolver) rewriteAndExecute(
 	ctx context.Context, mutation schema.Mutation) ([]byte, bool, error) {
+	var mutResp *dgoapi.Response
+	commit := false
+
+	defer func() {
+		if !commit && mutResp != nil && mutResp.Txn != nil {
+			mutResp.Txn.Aborted = true
+			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			glog.Errorf("Error occured while aborting transaction: %f", err)
+		}
+	}()
+
 	query, mutations, err := mr.mutationRewriter.Rewrite(mutation)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())
 	}
 
-	assigned, result, err := mr.mutationExecutor.Mutate(ctx, query, mutations)
+	req := &dgoapi.Request{
+		Query:     dgraph.AsString(query),
+		Mutations: mutations,
+	}
+
+	mutResp, err = mr.executor.Execute(ctx, req)
 	if err != nil {
 		return nil, resolverFailed,
 			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
+	}
+
+	assigned := mutResp.GetUids()
+	result := make(map[string]interface{})
+	if req.Query != "" && len(mutResp.GetJson()) != 0 {
+		if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
+			return nil, resolverFailed,
+				schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
+		}
 	}
 
 	mr.getNumUids(mutation, assigned, result)
@@ -244,11 +286,23 @@ func (mr *mutationResolver) rewriteAndExecute(
 		return nil, resolverFailed, errs
 	}
 
-	resp, err := mr.queryExecutor.Query(ctx, dgQuery)
+	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	if err != nil {
+		return nil, resolverFailed,
+			schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed", mutation.Name())
+	}
+	commit = true
+
+	resp, err := mr.executor.Execute(ctx,
+		&dgoapi.Request{
+			Query:    dgraph.AsString(dgQuery),
+			ReadOnly: true,
+		})
+
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	return resp, resolverSucceeded, errs
+	return resp.GetJson(), resolverSucceeded, errs
 }
 
 // deleteCompletion returns `{ "msg": "Deleted" }`

@@ -22,7 +22,9 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -74,7 +76,7 @@ func (qe QueryExecutionFunc) Query(ctx context.Context, query *gql.GraphQuery) (
 // 1) rewrite the query using qr (return error if failed)
 // 2) execute the rewritten query with qe (return error if failed)
 // 3) process the result with rc
-func NewQueryResolver(qr QueryRewriter, qe QueryExecutor, rc ResultCompleter) QueryResolver {
+func NewQueryResolver(qr QueryRewriter, qe DgraphExecutor, rc ResultCompleter) QueryResolver {
 	return &queryResolver{queryRewriter: qr, queryExecutor: qe, resultCompleter: rc}
 }
 
@@ -95,7 +97,7 @@ func NoOpQueryRewrite() QueryRewritingFunc {
 // a queryResolver can resolve a single GraphQL query field.
 type queryResolver struct {
 	queryRewriter   QueryRewriter
-	queryExecutor   QueryExecutor
+	queryExecutor   DgraphExecutor
 	resultCompleter ResultCompleter
 }
 
@@ -118,17 +120,31 @@ func (qr *queryResolver) rewriteAndExecute(
 		return nil, schema.GQLWrapf(err, "couldn't rewrite query %s", query.ResponseName())
 	}
 
-	resp, err := qr.queryExecutor.Query(ctx, dgQuery)
+	resp, err := qr.queryExecutor.Execute(ctx,
+		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return nil, schema.GQLWrapf(err, "Dgraph query failed")
 	}
 
-	return resp, nil
+	return resp.GetJson(), nil
 }
 
-func introspectionExecution(q schema.Query) QueryExecutionFunc {
-	return QueryExecutionFunc(func(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-		return schema.Introspect(q)
-	})
+func introspectionExecution(q schema.Query) *Resolved {
+	data, err := schema.Introspect(q)
+
+	return &Resolved{
+		Data: data,
+		Err:  err,
+	}
+}
+
+func (r *Resolved) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	resp := &dgoapi.Response{}
+	resp.Json = r.Data
+	return resp, r.Err
+}
+
+func (r *Resolved) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
 }

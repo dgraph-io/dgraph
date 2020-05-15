@@ -2,6 +2,7 @@ package admin
 
 import (
 	"fmt"
+
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -20,8 +21,7 @@ func NewUpdateGroupRewriter() resolve.MutationRewriter {
 // otherwise, it is created. It also ensures that only the last rule out of all
 // duplicate rules in input is preserved. A rule is duplicate if it has same predicate
 // name as another rule.
-func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery,
-	[]*dgoapi.Mutation, error) {
+func (urw *updateGroupRewriter) Rewrite(m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
 	inp := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	setArg := inp["set"]
 	delArg := inp["remove"]

@@ -27,7 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -104,13 +103,13 @@ type ResolverFns struct {
 	Arw func() MutationRewriter
 	Urw func() MutationRewriter
 	Drw MutationRewriter
-	Qe  QueryExecutor
-	Me  MutationExecutor
+	Ex  DgraphExecutor
 }
 
 // dgraphExecutor is an implementation of both QueryExecutor and MutationExecutor
 // that proxies query/mutation resolution through Query method in dgraph server.
 type dgraphExecutor struct {
+	dg *dgraph.DgraphEx
 }
 
 // adminhExecutor is an implementation of both QueryExecutor and MutationExecutor
@@ -118,6 +117,7 @@ type dgraphExecutor struct {
 // it doens't require authorization. Currently it's only used for quering
 // gqlschema during init.
 type adminExecutor struct {
+	dg *dgraph.DgraphEx
 }
 
 // A Resolved is the result of resolving a single query or mutation.
@@ -144,36 +144,37 @@ func (cf CompletionFunc) Complete(
 	return cf(ctx, field, result, err)
 }
 
-// DgraphAsQueryExecutor builds a QueryExecutor for proxying requests through dgraph.
-func DgraphAsQueryExecutor() QueryExecutor {
-	return &dgraphExecutor{}
+// NewDgraphExecutor builds a DgraphExecutor for proxying requests through dgraph.
+func NewDgraphExecutor() DgraphExecutor {
+	return newDgraphExecutor(&dgraph.DgraphEx{})
 }
 
-func AdminQueryExecutor() QueryExecutor {
-	return &adminExecutor{}
+func newDgraphExecutor(dg *dgraph.DgraphEx) DgraphExecutor {
+	return &dgraphExecutor{dg: dg}
 }
 
-// DgraphAsMutationExecutor builds a MutationExecutor.
-func DgraphAsMutationExecutor() MutationExecutor {
-	return &dgraphExecutor{}
+// NewAdminExecutor builds a DgraphExecutor for proxying requests through dgraph.
+func NewAdminExecutor() DgraphExecutor {
+	return &adminExecutor{dg: &dgraph.DgraphEx{}}
 }
 
-func (de *adminExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
+func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+	*dgoapi.Response, error) {
 	ctx = context.WithValue(ctx, edgraph.Authorize, false)
-	return dgraph.Query(ctx, query)
+	return aex.dg.Execute(ctx, req)
 }
 
-func (de *dgraphExecutor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return dgraph.Query(ctx, query)
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return aex.dg.CommitOrAbort(ctx, tc)
 }
 
-// Mutates the queries/mutations given and returns a map of new nodes assigned and result of the
-// performed queries/mutations
-func (de *dgraphExecutor) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	return dgraph.Mutate(ctx, query, mutations)
+func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
+	*dgoapi.Response, error) {
+	return de.dg.Execute(ctx, req)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return de.dg.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
@@ -210,29 +211,29 @@ func (rf *resolverFactory) WithConventionResolvers(
 	queries = append(queries, s.Queries(schema.PasswordQuery)...)
 	for _, q := range queries {
 		rf.WithQueryResolver(q, func(q schema.Query) QueryResolver {
-			return NewQueryResolver(fns.Qrw, fns.Qe,
+			return NewQueryResolver(fns.Qrw, fns.Ex,
 				StdQueryCompletion())
 		})
 	}
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Arw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(
+				fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Urw(), fns.Qe, fns.Me, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(
+				fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.DeleteMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewMutationResolver(
-				fns.Drw, NoOpQueryExecution(), fns.Me, StdDeleteCompletion(m.ResponseName()))
+			return NewDgraphResolver(
+				fns.Drw, fns.Ex, StdDeleteCompletion(m.ResponseName()))
 		})
 	}
 

@@ -17,7 +17,6 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -60,7 +59,7 @@ const (
 		schema: String!  @dgraph(type: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema that was generated from the 'schema' field.  
+		The GraphQL schema that was generated from the 'schema' field.
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
@@ -212,7 +211,7 @@ const (
 	input ConfigInput {
 
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		Estimated memory the LRU cache can take. Actual usage by the process would be
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
@@ -293,7 +292,8 @@ type adminServer struct {
 
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
-func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, web.IServeGraphQL) {
+func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL,
+	web.IServeGraphQL) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -307,6 +307,7 @@ func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, we
 		Arw: resolve.NewAddRewriter,
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
+		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, closer)
 	adminServer := web.NewServer(adminResolvers)
@@ -401,27 +402,28 @@ func newAdminResolver(
 }
 
 func newAdminResolverFactory() resolve.ResolverFactory {
+
+	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
+		"backup":   resolveBackup,
+		"config":   resolveConfig,
+		"draining": resolveDraining,
+		"export":   resolveExport,
+		"login":    resolveLogin,
+		"shutdown": resolveShutdown,
+	}
+
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
-			health := &healthResolver{}
-
-			return resolve.NewQueryResolver(
-				health,
-				health,
-				resolve.AliasQueryCompletion())
+			return resolve.QueryResolverFunc(resolveHealth)
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
-			state := &stateResolver{}
-
-			return resolve.NewQueryResolver(
-				state,
-				state,
-				resolve.AliasQueryCompletion())
+			return resolve.QueryResolverFunc(resolveState)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}, false
+					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)},
+						false
 				})
 		}).
 		WithQueryResolver("getGQLSchema", func(q schema.Query) resolve.QueryResolver {
@@ -429,86 +431,22 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 				func(ctx context.Context, query schema.Query) *resolve.Resolved {
 					return &resolve.Resolved{Err: errors.Errorf(errMsgServerNotReady)}
 				})
-		}).
-		WithMutationResolver("export", func(m schema.Mutation) resolve.MutationResolver {
-			export := &exportResolver{}
+		})
 
-			// export implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				export,
-				export,
-				export,
-				resolve.StdMutationCompletion(m.ResponseName()))
-		}).
-		WithMutationResolver("draining", func(m schema.Mutation) resolve.MutationResolver {
-			draining := &drainingResolver{}
+	for gqlMut, resolver := range adminMutationResolvers {
+		// gotta force go to evaluate the right function at each loop iteration
+		// otherwise you get variable capture issues
+		func(f resolve.MutationResolverFunc) {
+			rf.WithMutationResolver(gqlMut, func(m schema.Mutation) resolve.MutationResolver {
+				return f
+			})
+		}(resolver)
+	}
 
-			// draining implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				draining,
-				draining,
-				draining,
-				resolve.StdMutationCompletion(m.ResponseName()))
-		}).
-		WithMutationResolver("shutdown", func(m schema.Mutation) resolve.MutationResolver {
-			shutdown := &shutdownResolver{}
-
-			// shutdown implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				shutdown,
-				shutdown,
-				shutdown,
-				resolve.StdMutationCompletion(m.ResponseName()))
-		}).
-		WithMutationResolver("config", func(m schema.Mutation) resolve.MutationResolver {
-			config := &configResolver{}
-
-			// config implements the mutation rewriter, executor and query executor hence its
-			// passed thrice here.
-			return resolve.NewMutationResolver(
-				config,
-				config,
-				config,
-				resolve.StdMutationCompletion(m.ResponseName()))
-		}).
-		WithMutationResolver("backup", func(m schema.Mutation) resolve.MutationResolver {
-			backup := &backupResolver{}
-
-			// backup implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				backup,
-				backup,
-				backup,
-				resolve.StdMutationCompletion(m.ResponseName()))
-		}).
-		WithMutationResolver("login", func(m schema.Mutation) resolve.MutationResolver {
-			login := &loginResolver{}
-
-			// login implements the mutation rewriter, executor and query executor hence its passed
-			// thrice here.
-			return resolve.NewMutationResolver(
-				login,
-				login,
-				login,
-				resolve.StdQueryCompletion())
-		}).
-		WithSchemaIntrospection()
-
-	return rf
+	return rf.WithSchemaIntrospection()
 }
 
 func (as *adminServer) initServer() {
-	// It takes a few seconds for the Dgraph cluster to be up and running.
-	// Before that, trying to read the GraphQL schema will result in error:
-	// "Please retry again, server is not ready to accept requests."
-	// 5 seconds is a pretty reliable wait for a fresh instance to read the
-	// schema on a first try.
-	waitFor := 5 * time.Second
-
 	// Nothing else should be able to lock before here.  The admin resolvers aren't yet
 	// set up (they all just error), so we will obtain the lock here without contention.
 	// We then setup the admin resolvers and they must wait until we are done before the
@@ -516,7 +454,14 @@ func (as *adminServer) initServer() {
 	as.mux.Lock()
 	defer as.mux.Unlock()
 
+	// It takes a few seconds for the Dgraph cluster to be up and running.
+	// Before that, trying to read the GraphQL schema will result in error:
+	// "Please retry again, server is not ready to accept requests."
+	// 5 seconds is a pretty reliable wait for a fresh instance to read the
+	// schema on a first try.
+	waitFor := 5 * time.Second
 	as.addConnectedAdminResolvers()
+
 	for {
 		<-time.After(waitFor)
 
@@ -555,25 +500,18 @@ func (as *adminServer) initServer() {
 func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
-	addRw := resolve.NewAddRewriter()
 	updRw := resolve.NewUpdateRewriter()
-	qryExec := resolve.DgraphAsQueryExecutor()
-	mutExec := resolve.DgraphAsMutationExecutor()
-
-	as.fns.Qe = qryExec
-	as.fns.Me = mutExec
+	dgEx := resolve.NewDgraphExecutor()
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
 			updResolver := &updateSchemaResolver{
 				admin:                as,
-				baseAddRewriter:      addRw,
 				baseMutationRewriter: updRw,
-				baseMutationExecutor: mutExec,
+				baseMutationExecutor: dgEx,
 			}
 
-			return resolve.NewMutationResolver(
-				updResolver,
+			return resolve.NewDgraphResolver(
 				updResolver,
 				updResolver,
 				resolve.StdMutationCompletion(m.Name()))
@@ -581,9 +519,7 @@ func (as *adminServer) addConnectedAdminResolvers() {
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {
 				getResolver := &getSchemaResolver{
-					admin:        as,
-					baseRewriter: qryRw,
-					baseExecutor: resolve.AdminQueryExecutor(),
+					admin: as,
 				}
 
 				return resolve.NewQueryResolver(
@@ -595,21 +531,21 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getCurrentUser",
@@ -620,62 +556,56 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 				return resolve.NewQueryResolver(
 					cuResolver,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewAddRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					NewAddGroupRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewUpdateRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					NewUpdateGroupRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
-					resolve.NoOpQueryExecution(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
-					resolve.NoOpQueryExecution(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
 			})
 }
@@ -713,7 +643,6 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 }
 
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
-
 	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithConventionResolvers(gqlSchema, as.fns)
 	if as.withIntrospection {
@@ -723,29 +652,15 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
 }
 
-func writeResponse(m schema.Mutation, code, message string) []byte {
-	var buf bytes.Buffer
+func response(code, msg string) map[string]interface{} {
+	return map[string]interface{}{
+		"response": map[string]interface{}{"code": code, "message": msg}}
+}
 
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(m.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range m.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = code
-		case "message":
-			val = message
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
+func emptyResult(f schema.Field, err error) *resolve.Resolved {
+	data, err2 := json.Marshal(map[string]interface{}{f.Name(): nil})
+	return &resolve.Resolved{
+		Data: data,
+		Err:  schema.AppendGQLErrs(err, err2),
 	}
-	x.Check2(buf.WriteString("}]}"))
-
-	return buf.Bytes()
 }

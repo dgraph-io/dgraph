@@ -20,54 +20,36 @@ import (
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
-type configResolver struct {
-	mutation schema.Mutation
-}
-
 type configInput struct {
 	LruMB float64
 }
 
-func (cr *configResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got config request through GraphQL admin API")
 
-	cr.mutation = m
 	input, err := getConfigInput(m)
 	if err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
 
-	err = worker.UpdateLruMb(input.LruMB)
-	return nil, nil, err
-}
+	if input.LruMB > 0 {
+		if err = worker.UpdateLruMb(input.LruMB); err != nil {
+			return emptyResult(m, err), false
+		}
+	}
 
-func (cr *configResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
+	data, err := json.Marshal(map[string]interface{}{m.Name(): response("Success", "Config updated successfully")})
 
-	return nil, nil
-}
-
-func (cr *configResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (cr *configResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	buf := writeResponse(cr.mutation, "Success", "Config updated successfully")
-	return buf, nil
+	return &resolve.Resolved{
+		Data: data,
+		Err:  err,
+	}, true
 }
 
 func getConfigInput(m schema.Mutation) (*configInput, error) {
