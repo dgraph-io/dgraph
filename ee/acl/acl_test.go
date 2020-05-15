@@ -1725,31 +1725,6 @@ func TestWrongPermission(t *testing.T) {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 }
 
-func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
-	params testutil.GraphQLParams) {
-	resetUser(t)
-
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   userid,
-		Passwd:   userpassword,
-	})
-	require.NoError(t, err, "login failed")
-	resp := makeRequest(t, accessJwt, params)
-
-	require.Len(t, resp.Errors, 1)
-	require.Contains(t, resp.Errors[0].Message,
-		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
-			" User '%s' is not a member of guardians group.", userid))
-	if len(resp.Data) != 0 {
-		queryVal := "null"
-		if !respIsNull {
-			queryVal = "[]"
-		}
-		require.JSONEq(t, fmt.Sprintf(`{"%s": %s}`, queryName, queryVal), string(resp.Data))
-	}
-}
-
 func TestHealthForAcl(t *testing.T) {
 	params := testutil.GraphQLParams{
 		Query: `
@@ -1801,15 +1776,43 @@ func TestHealthForAcl(t *testing.T) {
 	}
 }
 
-func TestAclForAdminEndpoints(t *testing.T) {
-	tcases := []struct {
-		name               string
-		query              string
-		queryName          string
-		testGuardianAccess bool
-		guardianErrs       x.GqlErrorList
-		guardianData       string
-	}{
+func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
+	params testutil.GraphQLParams) {
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+	resp := makeRequest(t, accessJwt, params)
+
+	require.Len(t, resp.Errors, 1)
+	require.Contains(t, resp.Errors[0].Message,
+		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
+			" User '%s' is not a member of guardians group.", userid))
+	if len(resp.Data) != 0 {
+		queryVal := "null"
+		if !respIsNull {
+			queryVal = "[]"
+		}
+		require.JSONEq(t, fmt.Sprintf(`{"%s": %s}`, queryName, queryVal), string(resp.Data))
+	}
+}
+
+type graphQLAdminEndpointTestCase struct {
+	name               string
+	query              string
+	queryName          string
+	testGuardianAccess bool
+	guardianErrs       x.GqlErrorList
+	// specifying this as empty string means it won't be compared with response data
+	guardianData string
+}
+
+func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
+	tcases := []graphQLAdminEndpointTestCase{
 		{
 			name: "backup has guardian auth",
 			query: `
