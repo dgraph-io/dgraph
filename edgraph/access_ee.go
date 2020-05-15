@@ -161,7 +161,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return worker.Config.HmacSecret, nil
+		return []byte(worker.Config.HmacSecret), nil
 	})
 
 	if err != nil {
@@ -233,7 +233,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(worker.Config.HmacSecret)
+	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -248,7 +248,7 @@ func getRefreshJwt(userId string) (string, error) {
 		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(worker.Config.HmacSecret)
+	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}

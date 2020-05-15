@@ -442,3 +442,70 @@
         dgraph.uid : uid
       }
     }
+
+- name: "Query with missing variable - partial jwt token"
+  gqlquery: |
+    query {
+      queryProject {
+        name
+      }
+    }
+  role: "ADMIN"
+  dgquery: |-
+    query {
+      queryProject(func: type(Project)) {
+        name : Project.name
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Query with missing jwt token - type without auth directive"
+  gqlquery: |
+    query {
+      queryRole {
+        permission
+      }
+    }
+  dgquery: |-
+    query {
+      queryRole(func: type(Role)) {
+        permission : Role.permission
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Query with missing jwt token - type with auth directive"
+  gqlquery: |
+    query {
+      queryMovie {
+        content
+      }
+    }
+  dgquery: |-
+    query {
+      queryMovie(func: uid(Movie1)) @filter((NOT (uid(Movie2)) AND uid(Movie3))) {
+        content : Movie.content
+        dgraph.uid : uid
+      }
+      Movie1 as var(func: type(Movie))
+      Movie2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
+      Movie3 as var(func: uid(Movie1)) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Query with missing jwt token - type with empty auth directive"
+  gqlquery: |
+    query {
+      queryReview {
+        comment
+      }
+    }
+  dgquery: |-
+    query {
+      queryReview(func: type(Review)) {
+        comment : Review.comment
+        dgraph.uid : uid
+      }
+    }

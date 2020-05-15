@@ -162,8 +162,11 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 				authMeta.AuthVars["USER"] = "user1"
 			}
 
-			ctx, err := authMeta.AddClaimsToContext(context.Background())
-			require.NoError(t, err)
+			ctx := context.Background()
+			if !strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
+				ctx, err = authMeta.AddClaimsToContext(ctx)
+				require.NoError(t, err)
+			}
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)

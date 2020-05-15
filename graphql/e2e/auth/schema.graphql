@@ -166,6 +166,7 @@ type Movie @auth(
   content: String
   hidden: Boolean @search
   regionsAvailable: [Region]
+  reviews: [Review]
   random: String
 }
 
@@ -435,5 +436,10 @@ type Ticket @auth(
     onColumn: Column!
     title: String! @search(by: [term])
     assignedTo: [User!]
+}
+
+type Review @auth() {
+    id: ID!
+    comment: String!
 }
 
