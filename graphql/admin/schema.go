@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"runtime/debug"
 
 	"github.com/golang/glog"
 
@@ -114,8 +113,6 @@ func (asr *updateSchemaResolver) FromMutationResult(
 func (asr *updateSchemaResolver) Execute(
 	ctx context.Context,
 	req *dgoapi.Request) (*dgoapi.Response, error) {
-
-	debug.PrintStack()
 
 	asr.admin.mux.Lock()
 	defer asr.admin.mux.Unlock()
