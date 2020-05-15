@@ -36,7 +36,7 @@ func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved,
 	})
 
 	return &resolve.Resolved{
-		Data: data,
+		Data: data[1 : len(data)-1],
 		Err:  err,
 	}, true
 }

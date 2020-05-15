@@ -56,7 +56,7 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	data, err := json.Marshal(map[string]interface{}{m.Name(): response("Success", "Export completed.")})
 
 	return &resolve.Resolved{
-		Data: data,
+		Data: data[1 : len(data)-1],
 		Err:  err,
 	}, true
 }

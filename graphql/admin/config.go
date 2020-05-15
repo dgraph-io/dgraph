@@ -47,7 +47,7 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	data, err := json.Marshal(map[string]interface{}{m.Name(): response("Success", "Config updated successfully")})
 
 	return &resolve.Resolved{
-		Data: data,
+		Data: data[1 : len(data)-1],
 		Err:  err,
 	}, true
 }

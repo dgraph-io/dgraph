@@ -58,7 +58,7 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 				"refreshJWT": jwt.RefreshJwt}}})
 
 	return &resolve.Resolved{
-		Data: data,
+		Data: data[1 : len(data)-1],
 		Err:  err,
 	}, true
 
