@@ -1828,7 +1828,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
 				Message:   "resolving backup failed because you must specify a 'destination' value",
-				Locations: []x.Location{{Line: 3, Column: 5}},
+				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"backup": null}`,
 		},
@@ -1837,9 +1837,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					query {
 					  listBackups(input: {location: ""}) {
-						response {
-						  backupId
-						}
+					  	backupId
 					  }
 					}`,
 			queryName:          "listBackups",
@@ -1847,7 +1845,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			guardianErrs: x.GqlErrorList{{
 				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
 					"location : The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 5}},
+				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"listBackups": null}`,
 		},
@@ -1866,7 +1864,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
 				Message:   "resolving config failed because lru_mb must be at least 1024\n",
-				Locations: []x.Location{{Line: 3, Column: 5}},
+				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"config": null}`,
 		},
@@ -1921,7 +1919,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			testGuardianAccess: true,
 			guardianErrs: x.GqlErrorList{{
 				Message:   "resolving export failed because invalid export format: invalid",
-				Locations: []x.Location{{Line: 3, Column: 5}},
+				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"export": null}`,
 		},
@@ -1941,7 +1939,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			guardianErrs: x.GqlErrorList{{
 				Message: "resolving restore failed because failed to verify backup: while retrieving" +
 					" manifests: The path \"\" does not exist or it is inaccessible.",
-				Locations: []x.Location{{Line: 3, Column: 5}},
+				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
 			guardianData: `{"restore": null}`,
 		},
