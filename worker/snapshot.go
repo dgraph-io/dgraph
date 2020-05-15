@@ -129,14 +129,14 @@ func cleanupSchema(ctx context.Context, kvs *pb.KVS) error {
 	}
 	for _, pred := range currPredicates {
 		if _, ok := snapshotPreds[pred]; !ok {
+		LOOP:
 			for {
 				err := posting.DeletePredicate(ctx, pred)
 				switch err {
 				case badger.ErrBlockedWrites:
-					time.Sleep(time.Second)
-					continue
+					time.Sleep(1 * time.Second)
 				case nil:
-					break
+					break LOOP
 				default:
 					glog.Warningf("Cannot delete removed predicate %s after streaming snapshot",
 						pred)
