@@ -1828,12 +1828,12 @@ func TestBackupForAcl(t *testing.T) {
 	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
 }
 
-func TestConfigForAcl(t *testing.T) {
+func TestConfigUpdateForAcl(t *testing.T) {
 	params := testutil.GraphQLParams{
 		// query is wrong by choice, as we don't want to change lruMb :)
 		Query: `
 		mutation {
-		  config(input: {lruMb: 0}) {
+		  config(input: {lruMb: 1}) {
 			response {
 			  code
 			  message
@@ -1853,6 +1853,25 @@ func TestConfigForAcl(t *testing.T) {
 		Locations: []x.Location{{Line: 3, Column: 5}},
 	}}, resp.Errors)
 	require.JSONEq(t, `{"config": null}`, string(resp.Data))
+}
+
+func TestConfigGetForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		Query: `
+		query {
+		  config {
+			lruMb
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "config", true, params)
+
+	// assert success for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := makeRequest(t, accessJwt, params)
+	resp.RequireNoGraphQLErrors(t)
 }
 
 func TestDrainingForAcl(t *testing.T) {

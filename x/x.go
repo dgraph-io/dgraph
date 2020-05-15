@@ -37,6 +37,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
@@ -365,6 +367,21 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 
 		md.Append("accessJwt", accessJwt)
 		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	return ctx
+}
+
+// AttachRemoteIP adds any incoming IP data into the grpc context metadata
+func AttachRemoteIP(ctx context.Context, r *http.Request) context.Context {
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
+			ctx = peer.NewContext(ctx, &peer.Peer{
+				Addr: &net.TCPAddr{
+					IP:   net.ParseIP(ip),
+					Port: intPort,
+				},
+			})
+		}
 	}
 	return ctx
 }
