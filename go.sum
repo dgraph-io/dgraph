@@ -6,7 +6,6 @@ contrib.go.opencensus.io/exporter/prometheus v0.1.0 h1:SByaIoWwNgMdPSgl5sMqM2KDE
 contrib.go.opencensus.io/exporter/prometheus v0.1.0/go.mod h1:cGFniUXGZlKRjzOyuZJ6mgB+PgBcCIa79kEKR8YCW+A=
 github.com/99designs/gqlgen v0.11.0 h1:7MVbtFYo4IVV8ejJzqs9n+0VNP3HdJhJOaaxFV1OLnA=
 github.com/99designs/gqlgen v0.11.0/go.mod h1:vjFOyBZ7NwDl+GdSD4PFn7BQn5Fy7ohJwXn7Vk8zz+c=
-github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9 h1:HD8gA2tkByhMAwYaFAX9w2l7vxvBQ5NMoxDrkhqhtn4=
 github.com/AndreasBriese/bbloom v0.0.0-20190306092124-e2d15f34fcf9/go.mod h1:bOvUY6CB00SOBii9/FifXqc0awNKxLFCL/+pkDPuyl8=
 github.com/BurntSushi/toml v0.3.1 h1:WXkYYl6Yr3qBf1K79EBnL4mak0OimBfB0XUf9Vl28OQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
@@ -79,8 +78,6 @@ github.com/dgraph-io/badger v1.6.0 h1:DshxFxZWXUcO0xX476VJC07Xsr6ZCBVRHKZ93Oh7Ev
 github.com/dgraph-io/badger v1.6.0/go.mod h1:zwt7syl517jmP8s94KqSxTlM6IMsdhYy6psNgSztDR4=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200506081535-536fed1846d0 h1:4VBIyLibX6qFfz6wSbEvp4RBfoKETvHfIln18ROLiHI=
 github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200506081535-536fed1846d0/go.mod h1:3KY8+bsP8wI0OEnQJAKpd4wIJW/Mm32yw2j/9FUVnIM=
-github.com/dgraph-io/dgo v1.0.0 h1:DRuI66G+j0XWDOXly4v5PSk2dGkbIopAZIirRjq7lzI=
-github.com/dgraph-io/dgo v1.0.0/go.mod h1:6K5zUB6Lsml4SEStX+fPzGhJtCLX9XxbkHJLsGOXS1E=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453 h1:DTgOrw91nMIukDm/WEvdobPLl0LgeDd/JE66+24jBks=
 github.com/dgraph-io/dgo/v200 v200.0.0-20200401175452-e463f9234453/go.mod h1:Co+FwJrnndSrPORO8Gdn20dR7FPTfmXr0W/su0Ve/Ig=
 github.com/dgraph-io/ristretto v0.0.2-0.20200115201040-8f368f2f2ab3 h1:MQLRM35Pp0yAyBYksjbj1nZI/w6eyRY/mWoM1sFf4kU=
