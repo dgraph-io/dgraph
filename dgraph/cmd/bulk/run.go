@@ -192,7 +192,7 @@ func run() {
 	opt.MapBufSize <<= 20 // Convert from MB to B.
 
 	key := opt.EncryptionKey
-	opt.EncryptionKey = []byte("REDACTED")
+	opt.EncryptionKey = nil
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
 	fmt.Println(string(optBuf))
