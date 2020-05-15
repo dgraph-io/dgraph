@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"path/filepath"
 	"time"
 
