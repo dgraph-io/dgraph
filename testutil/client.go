@@ -173,6 +173,23 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	}
 }
 
+// RetryBadQuery will retry a query until it failse with a non-retryable error.
+func RetryBadQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
+	for {
+		txn := dg.NewTxn()
+		ctx := context.Background()
+		resp, err := txn.Query(ctx, q)
+		if err == nil || strings.Contains(err.Error(), "Please retry") {
+			time.Sleep(10 * time.Millisecond)
+			txn.Discard(ctx)
+			continue
+		}
+
+		txn.Discard(ctx)
+		return resp, err
+	}
+}
+
 // RetryMutation will retry a mutation until it succeeds or a non-retryable error is received.
 // The mutation should have CommitNow set to true.
 func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
