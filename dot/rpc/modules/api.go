@@ -45,6 +45,7 @@ type CoreAPI interface {
 	GetRuntimeVersion() (*runtime.VersionAPI, error)
 	IsBabeAuthority() bool
 	HandleSubmittedExtrinsic(types.Extrinsic) error
+	GetMetadata() ([]byte, error)
 }
 
 // RPCAPI is the interface for methods related to RPC service

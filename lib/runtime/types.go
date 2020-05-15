@@ -84,6 +84,8 @@ var (
 	CoreInitializeBlock = "Core_initialize_block"
 	// CoreExecuteBlock is the runtime API call Core_execute_block
 	CoreExecuteBlock = "Core_execute_block"
+	// Metadata_metadata is the runtime API call Metadata_metadata
+	Metadata_metadata = "Metadata_metadata"
 	// TaggedTransactionQueueValidateTransaction is the runtime API call TaggedTransactionQueue_validate_transaction
 	TaggedTransactionQueueValidateTransaction = "TaggedTransactionQueue_validate_transaction"
 	// AuraAPIAuthorities is the runtime API call AuraApi_authorities

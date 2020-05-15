@@ -65,3 +65,16 @@ func TestConcurrentRuntimeCalls(t *testing.T) {
 		_, _ = runtime.Exec(CoreVersion, []byte{})
 	}()
 }
+
+func TestRuntime_Exec_Metadata(t *testing.T) {
+	var expected []byte
+	runtime := NewTestRuntime(t, POLKADOT_RUNTIME_c768a7e4c70e)
+
+	ret, err := runtime.Exec(Metadata_metadata, []byte{})
+
+	// currently this is returning an error because runtime has not implemented Metadata_metadata yet
+	//  expect this to change when runtime changes
+	require.EqualError(t, err, "Failed to call the `Metadata_metadata` exported function.")
+	require.Equal(t, expected, ret)
+
+}

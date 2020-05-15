@@ -184,9 +184,12 @@ func (sm *StateModule) GetKeys(r *http.Request, req *StateStorageKeyRequest, res
 	// TODO implement change storage trie so that block hash parameter works (See issue #834)
 }
 
-// GetMetadata isn't implemented properly yet.
-func (sm *StateModule) GetMetadata(r *http.Request, req *StateRuntimeMetadataQuery, res *StateMetadataResponse) {
+// GetMetadata calls runtime Metadata_metadata function
+func (sm *StateModule) GetMetadata(r *http.Request, req *StateRuntimeMetadataQuery, res *string) error {
 	// TODO implement change storage trie so that block hash parameter works (See issue #834)
+	metadata, err := sm.coreAPI.GetMetadata()
+	*res = common.BytesToHex(metadata)
+	return err
 }
 
 // GetRuntimeVersion Get the runtime version at a given block.
