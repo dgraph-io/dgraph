@@ -110,7 +110,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
 	resetConfig(config)
-	config.Set(vaultRoleIDFile, "./dummy_role_id_file")
+	config.Set(vaultRoleIDFile, "./test-fixtures/dummy_role_id_file")
 	config.Set(vaultSecretIDFile, "bbb")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
@@ -125,8 +125,8 @@ func TestNewKeyReader(t *testing.T) {
 	resetConfig(config)
 	//nl, _ := startVaultServer(t, "dgraph", "enc_key", "1234567890123456")
 
-	config.Set(vaultRoleIDFile, "./dummy_role_id_file")
-	config.Set(vaultSecretIDFile, "./dummy_secret_id_file")
+	config.Set(vaultRoleIDFile, "./test-fixtures/dummy_role_id_file")
+	config.Set(vaultSecretIDFile, "./test-fixtures/dummy_secret_id_file")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -158,7 +158,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Bad Length Encryption Key File.
 	resetConfig(config)
-	config.Set(encKeyFile, "./bad-length-enc-key")
+	config.Set(encKeyFile, "./test-fixtures/bad-length-enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -170,7 +170,7 @@ func TestNewKeyReader(t *testing.T) {
 
 	// Good Encryption Key File.
 	resetConfig(config)
-	config.Set(encKeyFile, "./enc-key")
+	config.Set(encKeyFile, "./test-fixtures/enc-key")
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.NotNil(t, kR)
@@ -193,7 +193,7 @@ func TestGetReaderWriter(t *testing.T) {
 	require.Equal(t, f, neww)
 
 	// valid key
-	neww, err = GetWriter(ReadEncryptionKeyFile("./enc-key"), f)
+	neww, err = GetWriter(ReadEncryptionKeyFile("./test-fixtures/enc-key"), f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, neww)
 	require.IsType(t, cipher.StreamWriter{}, neww)
@@ -214,7 +214,7 @@ func TestGetReaderWriter(t *testing.T) {
 	require.Equal(t, f, newr)
 
 	// valid key
-	newr, err = GetReader(ReadEncryptionKeyFile("./enc-key"), f)
+	newr, err = GetReader(ReadEncryptionKeyFile("./test-fixtures/enc-key"), f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, newr)
 	require.IsType(t, cipher.StreamReader{}, newr)
