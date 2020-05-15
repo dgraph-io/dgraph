@@ -130,7 +130,7 @@ func (asr *updateSchemaResolver) Execute(
 		return nil, err
 	}
 
-	if asr.admin.schema.ID != "" {
+	if asr.admin.schema.ID == "" {
 		// should only be 1 assigned, but we don't know the name
 		for _, v := range resp.GetUids() {
 			asr.newSchema.ID = v
