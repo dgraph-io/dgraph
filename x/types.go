@@ -19,6 +19,7 @@ package x
 // SensitiveByteSlice implements the Stringer interface to redact its contents.
 // Use this type for sensitive info such as keys, passwords, secrets so it doesn't leak from memory.
 type SensitiveByteSlice []byte
+
 func (SensitiveByteSlice) String() string {
 	return "****"
 }
