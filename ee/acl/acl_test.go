@@ -1801,248 +1801,217 @@ func TestHealthForAcl(t *testing.T) {
 	}
 }
 
-func TestBackupForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// query is wrong by choice, as we don't want to do an actual backup here :)
-		Query: `
-		mutation {
-		  backup(input: {destination: ""}) {
-			response {
-			  code
-			  message
+func TestAclForAdminEndpoints(t *testing.T) {
+	tcases := []struct {
+		name               string
+		query              string
+		queryName          string
+		testGuardianAccess bool
+		guardianErrs       x.GqlErrorList
+		guardianData       string
+	}{
+		{
+			name: "backup has guardian auth",
+			query: `
+					mutation {
+					  backup(input: {destination: ""}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "backup",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving backup failed because you must specify a 'destination' value",
+				Locations: []x.Location{{Line: 3, Column: 5}},
+			}},
+			guardianData: `{"backup": null}`,
+		},
+		{
+			name: "listBackups has guardian auth",
+			query: `
+					query {
+					  listBackups(input: {location: ""}) {
+						response {
+						  backupId
+						}
+					  }
+					}`,
+			queryName:          "listBackups",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
+					"location : The path \"\" does not exist or it is inaccessible.",
+				Locations: []x.Location{{Line: 3, Column: 5}},
+			}},
+			guardianData: `{"listBackups": null}`,
+		},
+		{
+			name: "config update has guardian auth",
+			query: `
+					mutation {
+					  config(input: {lruMb: 1}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "config",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving config failed because lru_mb must be at least 1024\n",
+				Locations: []x.Location{{Line: 3, Column: 5}},
+			}},
+			guardianData: `{"config": null}`,
+		},
+		{
+			name: "config get has guardian auth",
+			query: `
+					query {
+					  config {
+						lruMb
+					  }
+					}`,
+			queryName:          "config",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "draining has guardian auth",
+			query: `
+					mutation {
+					  draining(enable: false) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "draining",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData: `{
+								"draining": {
+									"response": {
+										"code": "Success",
+										"message": "draining mode has been set to false"
+									}
+								}
+							}`,
+		},
+		{
+			name: "export has guardian auth",
+			query: `
+					mutation {
+					  export(input: {format: "invalid"}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "export",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving export failed because invalid export format: invalid",
+				Locations: []x.Location{{Line: 3, Column: 5}},
+			}},
+			guardianData: `{"export": null}`,
+		},
+		{
+			name: "restore has guardian auth",
+			query: `
+					mutation {
+					  restore(input: {location: "", backupId: "", keyFile: ""}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "restore",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving restore failed because failed to verify backup: while retrieving" +
+					" manifests: The path \"\" does not exist or it is inaccessible.",
+				Locations: []x.Location{{Line: 3, Column: 5}},
+			}},
+			guardianData: `{"restore": null}`,
+		},
+		{
+			name: "getGQLSchema has guardian auth",
+			query: `
+					query {
+					  getGQLSchema {
+						id
+					  }
+					}`,
+			queryName:          "getGQLSchema",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "updateGQLSchema has guardian auth",
+			query: `
+					mutation {
+					  updateGQLSchema(input: {set: {schema: ""}}) {
+						gqlSchema {
+						  id
+						}
+					  }
+					}`,
+			queryName:          "updateGQLSchema",
+			testGuardianAccess: false,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "shutdown has guardian auth",
+			query: `
+					mutation {
+					  shutdown {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "shutdown",
+			testGuardianAccess: false,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := testutil.GraphQLParams{Query: tcase.query}
+
+			// assert ACL error for non-guardians
+			assertNonGuardianFailure(t, tcase.queryName, true, params)
+
+			// for guardians, assert non-ACL error or success
+			if tcase.testGuardianAccess {
+				accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+				resp := makeRequest(t, accessJwt, params)
+
+				if tcase.guardianErrs == nil {
+					resp.RequireNoGraphQLErrors(t)
+				} else {
+					require.Equal(t, tcase.guardianErrs, resp.Errors)
+				}
+
+				if tcase.guardianData != "" {
+					require.JSONEq(t, tcase.guardianData, string(resp.Data))
+				}
 			}
-		  }
-		}`,
+		})
 	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "backup", true, params)
-
-	// assert non-ACL error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	require.Equal(t, x.GqlErrorList{{
-		Message:   "resolving backup failed because you must specify a 'destination' value",
-		Locations: []x.Location{{Line: 3, Column: 5}},
-	}}, resp.Errors)
-	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
-}
-
-func TestListBackupForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// query is wrong by choice, as we don't want to do an actual backup here :)
-		Query: `
-		mutation {
-		  listBackups(input: {location: ""}) {
-			response {
-			  backupId
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "listBackups", true, params)
-
-	// assert non-ACL error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving listBackups failed because Error: cannot read manfiests at location" +
-			" : The path \"\" does not exist or it is inaccessible.",
-		Locations: []x.Location{{Line: 3, Column: 5}},
-	}}, resp.Errors)
-	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
-}
-
-func TestConfigUpdateForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// query is wrong by choice, as we don't want to change lruMb :)
-		Query: `
-		mutation {
-		  config(input: {lruMb: 1}) {
-			response {
-			  code
-			  message
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "config", true, params)
-
-	// assert non-ACL error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	require.Equal(t, x.GqlErrorList{{
-		Message:   "resolving config failed because lru_mb must be at least 1024\n",
-		Locations: []x.Location{{Line: 3, Column: 5}},
-	}}, resp.Errors)
-	require.JSONEq(t, `{"config": null}`, string(resp.Data))
-}
-
-func TestConfigGetForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		Query: `
-		query {
-		  config {
-			lruMb
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "config", true, params)
-
-	// assert success for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	resp.RequireNoGraphQLErrors(t)
-}
-
-func TestDrainingForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// we don't want to enable draining mode here
-		Query: `
-		mutation {
-		  draining(enable: false) {
-			response {
-			  code
-			  message
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "draining", true, params)
-
-	// assert success for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	resp.RequireNoGraphQLErrors(t)
-	require.JSONEq(t, `{
-		"draining": {
-			"response": {
-				"code": "Success",
-				"message": "draining mode has been set to false"
-			}
-		}
-	}`, string(resp.Data))
-}
-
-func TestExportForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// we don't want to do an actual export
-		Query: `
-		mutation {
-		  export(input: {format: "invalid"}) {
-			response {
-			  code
-			  message
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "export", true, params)
-
-	// assert non-ACL error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	require.Equal(t, x.GqlErrorList{{
-		Message:   "resolving export failed because invalid export format: invalid",
-		Locations: []x.Location{{Line: 3, Column: 5}},
-	}}, resp.Errors)
-	require.JSONEq(t, `{"export": null}`, string(resp.Data))
-}
-
-func TestRestoreForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// we don't want to do an actual restore
-		Query: `
-		mutation {
-		  restore(input: {location: "", backupId: "", keyFile: ""}) {
-			response {
-			  code
-			  message
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "restore", true, params)
-
-	// assert non-ACL error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	require.Equal(t, x.GqlErrorList{{
-		Message: "resolving restore failed because failed to verify backup: while retrieving" +
-			" manifests: The path \"\" does not exist or it is inaccessible.",
-		Locations: []x.Location{{Line: 3, Column: 5}},
-	}}, resp.Errors)
-	require.JSONEq(t, `{"restore": null}`, string(resp.Data))
-}
-
-func TestGetSchemaForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// can't do a positive test, only negative test is possible for this,
-		// as we don't want to mess up the schema for other tests
-		Query: `
-		query {
-		  getGQLSchema {
-			id
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "getGQLSchema", true, params)
-
-	// assert no error for guardians
-	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
-	resp := makeRequest(t, accessJwt, params)
-	resp.RequireNoGraphQLErrors(t)
-}
-
-func TestUpdateSchemaForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// can't do a positive test, only negative test is possible for this,
-		// as we don't want to mess up the schema for other tests
-		Query: `
-		mutation {
-		  updateGQLSchema(input: {set: {schema: ""}}) {
-			gqlSchema {
-			  id
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "updateGQLSchema", true, params)
-}
-
-func TestShutdownForAcl(t *testing.T) {
-	params := testutil.GraphQLParams{
-		// can't do a positive test, only negative test is possible for this,
-		// as we don't want to really shutdown the test server
-		Query: `
-		mutation {
-		  shutdown {
-			response {
-			  code
-			  message
-			}
-		  }
-		}`,
-	}
-
-	// assert ACL error for non-guardians
-	assertNonGuardianFailure(t, "shutdown", true, params)
 }
 
 func TestAddUpdateGroupWithDuplicateRules(t *testing.T) {
