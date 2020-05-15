@@ -1828,6 +1828,33 @@ func TestBackupForAcl(t *testing.T) {
 	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
 }
 
+func TestListBackupForAcl(t *testing.T) {
+	params := testutil.GraphQLParams{
+		// query is wrong by choice, as we don't want to do an actual backup here :)
+		Query: `
+		mutation {
+		  listBackups(input: {location: ""}) {
+			response {
+			  backupId
+			}
+		  }
+		}`,
+	}
+
+	// assert ACL error for non-guardians
+	assertNonGuardianFailure(t, "listBackups", true, params)
+
+	// assert non-ACL error for guardians
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := makeRequest(t, accessJwt, params)
+	require.Equal(t, x.GqlErrorList{{
+		Message: "resolving listBackups failed because Error: cannot read manfiests at location" +
+			" : The path \"\" does not exist or it is inaccessible.",
+		Locations: []x.Location{{Line: 3, Column: 5}},
+	}}, resp.Errors)
+	require.JSONEq(t, `{"backup": null}`, string(resp.Data))
+}
+
 func TestConfigUpdateForAcl(t *testing.T) {
 	params := testutil.GraphQLParams{
 		// query is wrong by choice, as we don't want to change lruMb :)

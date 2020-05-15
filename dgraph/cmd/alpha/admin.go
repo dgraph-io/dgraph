@@ -142,8 +142,8 @@ func exportHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServ
 		Variables: map[string]interface{}{},
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
-	if resp.Errors != nil {
-		x.SetStatus(w, resp.Errors.Error(), "Export failed.")
+	if len(resp.Errors) != 0 {
+		x.SetStatus(w, resp.Errors[0].Message, "Export failed.")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -183,9 +183,9 @@ func memoryLimitPutHandler(w http.ResponseWriter, r *http.Request, adminServer w
 	}
 	resp := resolveWithAdminServer(gqlReq, r, adminServer)
 
-	if resp.Errors != nil {
+	if len(resp.Errors) != 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		x.Check2(fmt.Fprint(w, resp.Errors.Error()))
+		x.Check2(fmt.Fprint(w, resp.Errors[0].Message))
 		return
 	}
 	w.WriteHeader(http.StatusOK)
