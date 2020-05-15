@@ -54,14 +54,11 @@ type AuthMeta struct {
 
 func Parse(schema string) (AuthMeta, error) {
 	var meta AuthMeta
-	lastCommentIdx := strings.LastIndex(schema, "#")
-	if lastCommentIdx == -1 {
+	authInfoIdx := strings.LastIndex(schema, "# Dgraph.Authorization")
+	if authInfoIdx == -1 {
 		return meta, nil
 	}
-	lastComment := schema[lastCommentIdx:]
-	if !strings.HasPrefix(lastComment, "# Dgraph.Authorization") {
-		return meta, nil
-	}
+	authInfo := schema[authInfoIdx:]
 
 	// This regex matches authorization information present in the last line of the schema.
 	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
@@ -76,16 +73,16 @@ func Parse(schema string) (AuthMeta, error) {
 	if err != nil {
 		return meta, errors.Errorf("error while parsing jwt authorization info: %v", err)
 	}
-	idx := authMetaRegex.FindAllStringSubmatchIndex(lastComment, -1)
+	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
-		!strings.HasPrefix(lastComment, lastComment[idx[0][0]:idx[0][1]]) {
+		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
 		return meta, errors.Errorf("error while parsing jwt authorization info")
 	}
 
-	meta.Header = lastComment[idx[0][4]:idx[0][5]]
-	meta.Namespace = lastComment[idx[0][6]:idx[0][7]]
-	meta.Algo = lastComment[idx[0][8]:idx[0][9]]
-	meta.PublicKey = lastComment[idx[0][10]:idx[0][11]]
+	meta.Header = authInfo[idx[0][4]:idx[0][5]]
+	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
+	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
+	meta.PublicKey = authInfo[idx[0][10]:idx[0][11]]
 	if meta.Algo == HMAC256 {
 		return meta, nil
 	}
