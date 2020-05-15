@@ -32,10 +32,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
 - Use SensitiveByteSlice type for hmac secret. ([#5450][]) 
 - Fix protobuf headers check. ([#5381][])
+- Stream the full set of predicates and types during a snapshot. ([#5444][])
 - Enterprise features
   - Print error when applying enterprise license fails. ([#5342][])
   - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
 
+[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
 [#5305]: https://github.com/dgraph-io/dgraph/issues/5305
 [#5304]: https://github.com/dgraph-io/dgraph/issues/5304
 [#5359]: https://github.com/dgraph-io/dgraph/issues/5359
@@ -70,7 +72,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix empty string checks. ([#5396][])
 - Use SensitiveByteSlice type for hmac secret. ([#5451][])
 - Fix protobuf headers check. ([#5381][])
+- Stream the full set of predicates and types during a snapshot. ([#5444][])
 
+[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
 [#5359]: https://github.com/dgraph-io/dgraph/issues/5359
 [#5405]: https://github.com/dgraph-io/dgraph/issues/5405
 [#5327]: https://github.com/dgraph-io/dgraph/issues/5327
