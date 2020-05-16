@@ -102,16 +102,15 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16/24/32 bytes long."+
-			" The key size indicates the chosen AES encryption (AES-128/192/256 respectively). "+
-			" This key is used to encrypt the output data directories and to decrypt the input "+
-			" schema and data files (if encrytped). Enterprise feature.")
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
+
+	// Encryption and Vault options
+	enc.RegisterFlags(flag)
 }
 
 func run() {
+	var err error
 	opt := options{
 		DataFiles:              Bulk.Conf.GetString("files"),
 		DataFormat:             Bulk.Conf.GetString("format"),
@@ -142,17 +141,26 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	// OSS, non-nil key file --> crash
-	keyfile := Bulk.Conf.GetString("encryption_key_file")
-	if !enc.EeBuild && keyfile != "" {
-		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
+
+	var kR enc.KeyReader
+	if kR, err = enc.NewKeyReader(Bulk.Conf); err != nil {
+		fmt.Printf("error: %v", err)
+		return
+	}
+	// kR can be nil for the no-encryption scenario.
+	var key x.SensitiveByteSlice
+	if kR != nil {
+		if key, err = kR.ReadKey(); err != nil {
+			fmt.Printf("error: %v", err)
+			return
+		}
+	}
+	opt.EncryptionKey = key
+
+	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
+		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)
 	}
-	if opt.Encrypted && keyfile == "" {
-		fmt.Printf("Must use --encryption_key_file option with --encrypted option.\n")
-		os.Exit(1)
-	}
-	opt.EncryptionKey = enc.ReadEncryptionKeyFile(keyfile)
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
@@ -191,13 +199,7 @@ func run() {
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
 
-	// Copy key to local
-	key := opt.EncryptionKey
-	opt.EncryptionKey = nil
-	optBuf, err := json.MarshalIndent(&opt, "", "\t")
-	x.Check(err)
-	fmt.Println(string(optBuf))
-	opt.EncryptionKey = key
+	fmt.Printf("%+v", opt)
 	maxOpenFilesWarning()
 
 	go func() {
