@@ -72,7 +72,7 @@ type options struct {
 
 	// ........... Badger options ..........
 	// EncryptionKey is the key used for encryption. Enterprise only feature.
-	EncryptionKey []byte
+	EncryptionKey x.SensitiveByteSlice
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
 }
