@@ -36,8 +36,8 @@ const (
 // RegisterFlags registers the required encryption flags.
 func RegisterFlags(flag *pflag.FlagSet) {
 	flag.String(encKeyFile, "",
-		"The file that stores the symmetric key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
+		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
+			"The key size determines the chosen AES cipher "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// Register options for Vault stuff.
