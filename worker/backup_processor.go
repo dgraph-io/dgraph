@@ -123,7 +123,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
 	stream.NumGo = backupNumGo
-	stream.KeyToListWithThreadNum = pr.toBackupList
+	stream.KeyToList = pr.toBackupList
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
 		if err != nil {
@@ -216,7 +216,7 @@ func (m *Manifest) GoString() string {
 		m.Since, m.Groups, m.Encrypted)
 }
 
-func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator, threadNum int) (
+func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 	*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
@@ -248,7 +248,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator, thread
 		}
 		kv.Key = backupKey
 
-		backupPl, err := pr.toBackupPostingList(kv.Value, threadNum)
+		backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
 		if err != nil {
 			return nil, err
 		}
