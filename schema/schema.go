@@ -117,6 +117,10 @@ func (s *state) Delete(attr string) error {
 
 // DeleteType updates the schema in memory and disk
 func (s *state) DeleteType(typeName string) error {
+	if s == nil {
+		return nil
+	}
+
 	s.Lock()
 	defer s.Unlock()
 
@@ -265,6 +269,10 @@ func (s *state) IsIndexed(ctx context.Context, pred string) bool {
 
 // Predicates returns the list of predicates for given group
 func (s *state) Predicates() []string {
+	if s == nil {
+		return nil
+	}
+
 	s.RLock()
 	defer s.RUnlock()
 	var out []string
@@ -276,6 +284,10 @@ func (s *state) Predicates() []string {
 
 // Types returns the list of types.
 func (s *state) Types() []string {
+	if s == nil {
+		return nil
+	}
+
 	s.RLock()
 	defer s.RUnlock()
 	var out []string

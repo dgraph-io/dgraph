@@ -234,6 +234,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Teacher {
 		tid: ID!
@@ -263,6 +264,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Episode {
 		name: String! @id
@@ -300,6 +302,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
 }
+
 func addPerson(t *testing.T) *user {
 	addTeacherParams := &common.GraphQLParams{
 		Query: `mutation addPerson {

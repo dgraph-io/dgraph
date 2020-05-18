@@ -72,6 +72,9 @@ func (asr *updateSchemaResolver) Rewrite(
 	if err != nil {
 		return nil, err
 	}
+	// Disable subscription.
+	schHandler.DisableSubscription()
+
 	_, err = schema.FromString(schHandler.GQLSchema())
 	if err != nil {
 		return nil, err
