@@ -71,6 +71,12 @@ func (asr *updateSchemaResolver) Rewrite(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	_, err = schema.FromString(schHandler.GQLSchema())
+	if err != nil {
+		return nil, nil, err
+	}
+
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
