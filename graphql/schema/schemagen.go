@@ -36,6 +36,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	DisableSubscription()
 }
 
 type handler struct {
@@ -69,6 +70,10 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+func (s *handler) DisableSubscription() {
+	s.completeSchema.Subscription = nil
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns
@@ -208,9 +213,14 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 		}
 	}
 
-	finalHeaders := make([]string, 0, len(headers))
+	finalHeaders := make([]string, 0, len(headers)+1)
 	for h := range headers {
 		finalHeaders = append(finalHeaders, h)
+	}
+
+	// Add Auth Header to allowed headers list
+	if authorization.GetHeader() != "" {
+		finalHeaders = append(finalHeaders, authorization.GetHeader())
 	}
 
 	allowed := x.AccessControlAllowedHeaders

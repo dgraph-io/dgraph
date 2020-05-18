@@ -1146,31 +1146,31 @@ func customDirectiveValidation(sch *ast.Schema,
 			typ.Name, field.Name)
 	}
 
-	// 6. Validating operation
-	operation := httpArg.Value.Children.ForName("operation")
-	var isBatchOperation bool
-	if operation != nil {
+	// 6. Validating mode
+	mode := httpArg.Value.Children.ForName(mode)
+	var isBatchMode bool
+	if mode != nil {
 		if isQueryOrMutationType(typ) {
 			return gqlerror.ErrorPosf(
-				operation.Position,
-				"Type %s; Field %s; operation field inside @custom directive can't be "+
+				mode.Position,
+				"Type %s; Field %s; mode field inside @custom directive can't be "+
 					"present on Query/Mutation.", typ.Name, field.Name)
 		}
 
-		op := operation.Raw
-		if op != "single" && op != "batch" {
+		op := mode.Raw
+		if op != SINGLE && op != BATCH {
 			return gqlerror.ErrorPosf(
-				operation.Position,
-				"Type %s; Field %s; operation field inside @custom directive can only be "+
-					"single/batch.", typ.Name, field.Name)
+				mode.Position,
+				"Type %s; Field %s; mode field inside @custom directive can only be "+
+					"SINGLE/BATCH.", typ.Name, field.Name)
 		}
 
-		isBatchOperation = op == "batch"
-		if isBatchOperation && urlHasParams {
+		isBatchMode = op == BATCH
+		if isBatchMode && urlHasParams {
 			return gqlerror.ErrorPosf(
 				httpUrl.Position,
 				"Type %s; Field %s; has parameters in url inside @custom directive while"+
-					" operation is batch, url can't contain parameters if operation is batch.",
+					" mode is BATCH, url can't contain parameters if mode is BATCH.",
 				typ.Name, field.Name)
 		}
 	}
@@ -1191,7 +1191,7 @@ func customDirectiveValidation(sch *ast.Schema,
 					" @custom directive, method can only be POST if graphql field is present.",
 				typ.Name, field.Name, method.Raw)
 		}
-		if !isBatchOperation {
+		if !isBatchMode {
 			if body != nil {
 				return gqlerror.ErrorPosf(dir.Position,
 					"Type %s; Field %s; has both body and graphql field inside @custom directive, "+
@@ -1202,7 +1202,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			if body == nil {
 				return gqlerror.ErrorPosf(dir.Position,
 					"Type %s; Field %s; both body and graphql field inside @custom directive "+
-						"are required if operation is batch.",
+						"are required if mode is BATCH.",
 					typ.Name, field.Name)
 			}
 		}
@@ -1280,8 +1280,8 @@ func customDirectiveValidation(sch *ast.Schema,
 							field.Name, vd.Variable)
 					}
 				}
-			} else if !isBatchOperation {
-				// For batch operation we already verify that body should use fields defined inside the
+			} else if !isBatchMode {
+				// For BATCH mode we already verify that body should use fields defined inside the
 				// parent type.
 				requiredFields = make(map[string]bool)
 				for _, vd := range graphqlOpDef.VariableDefinitions {
@@ -1324,12 +1324,12 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 		// Validate that argument values used within remote query are from variable definitions.
 		if len(query.Arguments) > 0 {
-			// validate the specific input requirements for batch mode
-			if isBatchOperation {
+			// validate the specific input requirements for BATCH mode
+			if isBatchMode {
 				if len(query.Arguments) != 1 || query.Arguments[0].Value.Kind != ast.Variable {
 					return gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s: inside graphql in @custom directive, for batch "+
-							"operations, %s `%s` can have only one argument whose value should "+
+						"Type %s; Field %s: inside graphql in @custom directive, for BATCH "+
+							"mode, %s `%s` can have only one argument whose value should "+
 							"be a variable.",
 						typ.Name, field.Name, graphqlOpDef.Operation, query.Name)
 				}
@@ -1476,7 +1476,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			parentType:   typ,
 			parentField:  field,
 			graphqlOpDef: graphqlOpDef,
-			isBatch:      isBatchOperation,
+			isBatch:      isBatchMode,
 			url:          httpUrl.Raw,
 			schema:       sch,
 		}); err != nil {

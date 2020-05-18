@@ -56,7 +56,7 @@ type FieldHTTPConfig struct {
 	Method string
 	// would be nil if there is no body
 	Template       *interface{}
-	Operation      string
+	Mode           string
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
@@ -696,14 +696,14 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	if graphqlArg == nil {
 		return true, rf
 	}
-	op := ""
-	operation := httpArg.Value.Children.ForName("operation")
-	if operation != nil {
-		op = operation.Raw
+	modeVal := ""
+	modeArg := httpArg.Value.Children.ForName(mode)
+	if modeArg != nil {
+		modeVal = modeArg.Raw
 	}
 
-	if op == "single" {
-		// For batch mode, required args would have been parsed from the body above.
+	if modeVal == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
 		var err error
 		rf, err = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 		// This should not be returning an error since we should have validated this during schema
@@ -802,10 +802,10 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 
-	fconf.Operation = "single"
-	op := httpArg.Value.Children.ForName("operation")
+	fconf.Mode = SINGLE
+	op := httpArg.Value.Children.ForName(mode)
 	if op != nil {
-		fconf.Operation = op.Raw
+		fconf.Mode = op.Raw
 	}
 
 	// both body and graphql can't be present together
@@ -827,8 +827,8 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.RequiredArgs = rf
 	}
 
-	if !isQueryOrMutation && graphqlArg != nil && fconf.Operation == "single" {
-		// For batch mode, required args would have been parsed from the body above.
+	if !isQueryOrMutation && graphqlArg != nil && fconf.Mode == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
 		// Safe to ignore the error here since we should already have validated that we can parse
 		// the required args from the GraphQL request during schema update.
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
@@ -850,7 +850,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		}
 		// queryDoc will always have only one operation with only one field
 		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
-		if fconf.Operation == "batch" {
+		if fconf.Mode == BATCH {
 			fconf.GraphqlBatchModeArgument = queryDoc.Operations[0].VariableDefinitions[0].Variable
 		}
 		fconf.RemoteGqlQueryName = qfield.Name

@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -42,69 +43,78 @@ var (
 )
 
 type User struct {
-	Username string
-	Age      uint64
-	IsPublic bool
-	Disabled bool
+	Username string `json:"username,omitempty"`
+	Age      uint64 `json:"age,omitempty"`
+	IsPublic bool   `json:"isPublic,omitempty"`
+	Disabled bool   `json:"disabled,omitempty"`
+}
+
+type UserSecret struct {
+	Id      string `json:"id,omitempty"`
+	ASecret string `json:"aSecret,omitempty"`
+	OwnedBy string `json:"ownedBy,omitempty"`
 }
 
 type Region struct {
-	Id    uint64
-	Name  string
-	Users []*User
+	Id     string  `json:"id,omitempty"`
+	Name   string  `json:"name,omitempty"`
+	Users  []*User `json:"users,omitempty"`
+	Global bool    `json:"global,omitempty"`
 }
 
 type Movie struct {
-	Id               uint64
-	Content          string
-	Disabled         bool
-	RegionsAvailable []*Region
+	Id               string    `json:"id,omitempty"`
+	Content          string    `json:"content,omitempty"`
+	Hidden           bool      `json:"hidden,omitempty"`
+	RegionsAvailable []*Region `json:"regionsAvailable,omitempty"`
 }
 
 type Issue struct {
-	Id    uint64
-	Msg   string
-	Owner *User
+	Id    string `json:"id,omitempty"`
+	Msg   string `json:"msg,omitempty"`
+	Owner *User  `json:"owner,omitempty"`
 }
 
 type Log struct {
-	Id   uint64
-	Logs string
+	Id   string `json:"id,omitempty"`
+	Logs string `json:"logs,omitempty"`
 }
 
 type Role struct {
-	Id         uint64
-	Permission string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	Permission string  `json:"permission,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Ticket struct {
-	Id         uint64
-	OnColumn   Column
-	Title      string
-	AssignedTo []User
+	Id         string  `json:"id,omitempty"`
+	OnColumn   *Column `json:"onColumn,omitempty"`
+	Title      string  `json:"title,omitempty"`
+	AssignedTo []*User `json:"assignedTo,omitempty"`
 }
 
 type Column struct {
-	ColID     string
-	InProject Project
-	Name      string
-	Tickets   []Ticket
+	ColID     string    `json:"colID,omitempty"`
+	InProject *Project  `json:"inProject,omitempty"`
+	Name      string    `json:"name,omitempty"`
+	Tickets   []*Ticket `json:"tickets,omitempty"`
 }
 
 type Project struct {
-	ProjID  uint64
-	Name    string
-	Roles   []Role
-	Columns []Column
+	ProjID  string    `json:"projID,omitempty"`
+	Name    string    `json:"name,omitempty"`
+	Roles   []*Role   `json:"roles,omitempty"`
+	Columns []*Column `json:"columns,omitempty"`
 }
 
 type TestCase struct {
-	user   string
-	role   string
-	result string
-	name   string
-	filter map[string]interface{}
+	user      string
+	role      string
+	result    string
+	name      string
+	filter    map[string]interface{}
+	variables map[string]interface{}
+	query     string
 }
 
 type uidResult struct {
@@ -129,6 +139,89 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func TestAuthRulesWithMissingJWT(t *testing.T) {
+	testCases := []TestCase{
+		{name: "Query non auth field without JWT Token",
+			query: `
+			query {
+			  queryRole(filter: {permission: { eq: EDIT }}) {
+				permission
+			  }
+			}`,
+			result: `{"queryRole":[{"permission":"EDIT"}]}`,
+		},
+		{name: "Query auth field without JWT Token",
+			query: `
+			query {
+				queryMovie {
+					content
+				}
+			}`,
+			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+		},
+		{name: "Query empty auth field without JWT Token",
+			query: `
+			query {
+				queryReview {
+					comment
+				}
+			}`,
+			result: `{"queryReview":[{"comment":"Nice movie"}]}`,
+		},
+		{name: "Query auth field with partial JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+		{name: "Query auth field with invalid JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryProject":[]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Query: tcase.query,
+		}
+
+		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
+		if testInvalidKey {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			jwtVar := queryParams.Headers.Get(metaInfo.Header)
+
+			// Create a invalid JWT signature.
+			jwtVar = jwtVar + "A"
+			queryParams.Headers.Set(metaInfo.Header, jwtVar)
+		} else if tcase.user != "" || tcase.role != "" {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+		}
+
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		if testInvalidKey {
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"couldn't rewrite query queryProject because unable to parse jwt token")
+		} else {
+			require.Nil(t, gqlResponse.Errors)
+		}
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -224,9 +317,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil})
-
+	idCol1 := getColID(t, TestCase{user: "user1", role: "USER", name: "Column1"})
+	idCol2 := getColID(t, TestCase{user: "user2", role: "USER", name: "Column2"})
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
 
@@ -474,6 +566,14 @@ func TestNestedFilter(t *testing.T) {
                "name": "Region4"
             }
          ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
+            }
+         ]
       }
    ]
 }
@@ -511,6 +611,14 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
+            }
+         ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
             }
          ]
       }
@@ -566,7 +674,7 @@ func TestDeleteAuthRule(t *testing.T) {
 					"anyofterms": "Sensitive information",
 				},
 			},
-			result: `{"deleteUserSecret":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteUserSecret":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 	}
 	query := `
@@ -666,7 +774,7 @@ func TestDeleteDeepAuthRule(t *testing.T) {
 					"anyofterms": "Ticket2",
 				},
 			},
-			result: `{"deleteTicket":{"msg":"Deleted","numUids":0}}`,
+			result: `{"deleteTicket":{"msg":"No nodes were deleted","numUids":0}}`,
 		},
 		{
 			name: "ticket with edit permission",

@@ -10,7 +10,7 @@ type User {
       http: {
         url: "http://mock:8888/gqlUserNames"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($uinput: [UserInput]) { userNames(users: $uinput) }"
         body: "{ id: $id, age: $age }"
       }
@@ -21,7 +21,7 @@ type User {
       http: {
         url: "http://mock:8888/gqlCars"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($cinput: [UserInput]) { cars(users: $cinput) }"
         body: "{ id: $id, age: $age }",
       }
@@ -37,7 +37,7 @@ type School {
       http: {
         url: "http://mock:8888/gqlSchoolNames"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($sinput: [SchoolInput]) { schoolNames(schools: $sinput) }",
         body: "{ id: $id, established: $established }"
       }
@@ -47,7 +47,7 @@ type School {
       http: {
         url: "http://mock:8888/gqlClasses"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($cinput: [SchoolInput]) { classes(schools: $cinput) }",
         body: "{ id: $id, established: $established }"
       }
@@ -68,7 +68,7 @@ type Teacher {
       http: {
         url: "http://mock:8888/gqlTeacherNames"
         method: "POST"
-        operation: "batch"
+        mode: BATCH
         graphql: "query($tinput: [TeacherInput]) { teacherNames(teachers: $tinput) }"
         body: "{ id: $tid, age: $age }"
       }

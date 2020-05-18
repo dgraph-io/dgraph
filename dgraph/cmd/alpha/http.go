@@ -194,7 +194,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
+	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if queryTimeout != 0 {

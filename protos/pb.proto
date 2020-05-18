@@ -295,9 +295,14 @@ message Proposal {
 }
 
 message KVS {
- repeated badgerpb2.KV kv = 1;
- // done used to indicate if the stream of KVS is over.
- bool done      = 2;
+	repeated badgerpb2.KV kv = 1;
+
+	// done used to indicate if the stream of KVS is over.
+	bool done	= 2;
+	// predicates is the list of predicates known by the leader at the time of the snapshot.
+	repeated string predicates = 3;
+	// types is the list of types known by the leader at the time of the snapshot.
+	repeated string types = 4;
 }
 
 // Posting messages.
