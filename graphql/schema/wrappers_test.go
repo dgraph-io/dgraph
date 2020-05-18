@@ -884,6 +884,38 @@ func TestParseSecrets(t *testing.T) {
 				"comment: `# Dgraph.Secret RANDOM_TOKEN`, it should " +
 				"be `# Dgraph.Secret key value`"),
 		},
+		{
+			"should work along with authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims RS256 "key"
+			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+			`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			nil,
+		},
+		{
+			"should throw an error if multiple authorization values are specified",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization random https://dgraph.io/jwt/claims RS256 "key"
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims RS256 "key"
+			`,
+			nil,
+			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
+				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
+				` https://dgraph.io/jwt/claims RS256 "key"`),
+		},
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {

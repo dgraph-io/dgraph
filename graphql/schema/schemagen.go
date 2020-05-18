@@ -80,8 +80,18 @@ func (s *handler) DisableSubscription() {
 func parseSecrets(sch string) (map[string]string, error) {
 	m := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(sch))
+	seenAuthSecret := false
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(text, "# Dgraph.Authorization") {
+			if seenAuthSecret {
+				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+					"a schema, found second mention: %v", text)
+			}
+			seenAuthSecret = true
+			continue
+		}
 		if !strings.HasPrefix(text, "# Dgraph.Secret") {
 			continue
 		}
