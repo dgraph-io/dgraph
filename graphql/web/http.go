@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/graphql/api"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
@@ -153,6 +154,7 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	ctx = authorization.AttachAuthorizationJwt(ctx, r)
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {

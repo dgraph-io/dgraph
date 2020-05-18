@@ -381,6 +381,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 				  		name
 					}
 					posts {
+						postID
 						title
 						text
 						tags
@@ -429,7 +430,7 @@ func deepMutationsTest(t *testing.T, executeRequest requestExecutor) {
 	cleanUp(t,
 		[]*country{newCountry, anotherCountry},
 		[]*author{newAuth},
-		[]*post{newAuth.Posts[0], newAuth.Posts[0], patchSet.Posts[0]})
+		[]*post{newAuth.Posts[0], newAuth.Posts[1], result.UpdateAuthor.Author[0].Posts[1]})
 }
 
 func testMultipleMutations(t *testing.T) {
@@ -1073,9 +1074,8 @@ func deleteMutationWithMultipleIds(t *testing.T) {
 	country := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
-		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 		filter := map[string]interface{}{"id": []string{country.ID, anotherCountry.ID}}
-		deleteCountry(t, filter, deleteCountryExpected, nil)
+		deleteCountry(t, filter, 2, nil)
 	})
 
 	t.Run("check Country is deleted", func(t *testing.T) {
@@ -1088,9 +1088,8 @@ func deleteMutationWithSingleID(t *testing.T) {
 	newCountry := addCountry(t, postExecutor)
 	anotherCountry := addCountry(t, postExecutor)
 	t.Run("delete Country", func(t *testing.T) {
-		deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 		filter := map[string]interface{}{"id": []string{newCountry.ID}}
-		deleteCountry(t, filter, deleteCountryExpected, nil)
+		deleteCountry(t, filter, 1, nil)
 	})
 
 	// In this case anotherCountry shouldn't be deleted.
@@ -1110,14 +1109,13 @@ func deleteMutationByName(t *testing.T) {
 	}
 	updateCountry(t, filter, anotherCountry.Name, true)
 
-	deleteCountryExpected := `{"deleteCountry" : { "msg": "Deleted" } }`
 	t.Run("delete Country", func(t *testing.T) {
 		filter := map[string]interface{}{
 			"name": map[string]interface{}{
 				"regexp": "/" + newCountry.Name + "/",
 			},
 		}
-		deleteCountry(t, filter, deleteCountryExpected, nil)
+		deleteCountry(t, filter, 1, nil)
 	})
 
 	// In this case anotherCountry shouldn't be deleted.
@@ -1230,6 +1228,7 @@ func addMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
 func updateMutationReferences(t *testing.T) {
 	updateMutationUpdatesRefs(t, postExecutor)
 	updateMutationUpdatesRefsXID(t, postExecutor)
+	updateMutationOnlyUpdatesRefsIfDifferent(t, postExecutor)
 }
 
 func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
@@ -1276,6 +1275,55 @@ func updateMutationUpdatesRefs(t *testing.T, executeRequest requestExecutor) {
 		[]*country{newCountry},
 		[]*author{newAuthor, newAuthor2},
 		[]*post{newPost})
+}
+
+func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest requestExecutor) {
+	newCountry := addCountry(t, executeRequest)
+	newAuthor := addAuthor(t, newCountry.ID, executeRequest)
+	newPost := addPost(t, newAuthor.ID, newCountry.ID, executeRequest)
+
+	// update the post text, the mutation payload will also contain the author ... but,
+	// the only change should be in the post text
+	updateAuthorParams := &GraphQLParams{
+		Query: `mutation updatePost($id: ID!, $set: PostPatch!) {
+			updatePost(
+				input: {
+					filter: {postID: [$id]},
+					set: $set
+				}
+			) {
+			  	post { 
+					postID 
+					text
+					author { id }
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"id": newPost.PostID,
+			"set": map[string]interface{}{
+				"text":   "The Updated Text",
+				"author": newAuthor},
+		},
+	}
+	gqlResponse := executeRequest(t, graphqlURL, updateAuthorParams)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	// The expected post was updated
+	// The text is updated as expected
+	// The author is unchanged
+	expected := fmt.Sprintf(`
+		{ "updatePost": {  "post": [ 
+			{ 
+				"postID": "%s", 
+				"text": "The Updated Text",
+				"author": { "id": "%s" }
+			}
+		] } }`, newPost.PostID, newAuthor.ID)
+
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+
+	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost})
 }
 
 func updateMutationUpdatesRefsXID(t *testing.T, executeRequest requestExecutor) {
@@ -1387,7 +1435,7 @@ func deleteMutationSingleReference(t *testing.T, executeRequest requestExecutor)
 	require.NoError(t, err)
 
 	filter := map[string]interface{}{"id": []string{addResult.AddCountry.Country[0].ID}}
-	deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
+	deleteCountry(t, filter, 1, nil)
 
 	// the state doesn't belong to a country
 	getCatParams := &GraphQLParams{
@@ -1434,7 +1482,7 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 	}}
 	requireAuthor(t, newAuthor.ID, newAuthor, executeRequest)
 
-	deletePost(t, newPost.PostID, `{"deletePost" : { "msg": "Deleted" } }`, nil)
+	deletePost(t, newPost.PostID, 1, nil)
 
 	// the post isn't in the author's list of posts
 	newAuthor.Posts = []*post{}
@@ -1461,72 +1509,27 @@ func deleteMutationMultipleReferences(t *testing.T, executeRequest requestExecut
 func deleteCountry(
 	t *testing.T,
 	filter map[string]interface{},
-	deleteCountryExpected string,
+	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-
-	deleteCountryParams := &GraphQLParams{
-		Query: `mutation deleteCountry($filter: CountryFilter!) {
-			deleteCountry(filter: $filter) { msg }
-		}`,
-		Variables: map[string]interface{}{"filter": filter},
-	}
-
-	gqlResponse := deleteCountryParams.ExecuteAsPost(t, graphqlURL)
-	require.JSONEq(t, deleteCountryExpected, string(gqlResponse.Data))
-
-	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-		t.Errorf("errors mismatch (-want +got):\n%s", diff)
-	}
+	deleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteAuthor(
 	t *testing.T,
 	authorID string,
-	deleteAuthorExpected string,
+	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-
-	deleteAuthorParams := &GraphQLParams{
-		Query: `mutation deleteAuthor($filter: AuthorFilter!) {
-			deleteAuthor(filter: $filter) { msg }
-		}`,
-		Variables: map[string]interface{}{
-			"filter": map[string]interface{}{
-				"id": []string{authorID},
-			},
-		},
-	}
-
-	gqlResponse := deleteAuthorParams.ExecuteAsPost(t, graphqlURL)
-
-	require.JSONEq(t, deleteAuthorExpected, string(gqlResponse.Data))
-
-	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-		t.Errorf("errors mismatch (-want +got):\n%s", diff)
-	}
+	filter := map[string]interface{}{"id": []string{authorID}}
+	deleteGqlType(t, "Author", filter, expectedNumUids, expectedErrors)
 }
 
 func deletePost(
 	t *testing.T,
 	postID string,
-	deletePostExpected string,
+	expectedNumUids int,
 	expectedErrors x.GqlErrorList) {
-
-	deletePostParams := &GraphQLParams{
-		Query: `mutation deletePost($filter: PostFilter!) {
-			deletePost(filter: $filter) { msg }
-		}`,
-		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"postID": []string{postID},
-		}},
-	}
-
-	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
-
-	require.JSONEq(t, deletePostExpected, string(gqlResponse.Data))
-
-	if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
-		t.Errorf("errors mismatch (-want +got):\n%s", diff)
-	}
+	filter := map[string]interface{}{"postID": []string{postID}}
+	deleteGqlType(t, "Post", filter, expectedNumUids, expectedErrors)
 }
 
 func deleteWrongID(t *testing.T) {
@@ -1534,7 +1537,7 @@ func deleteWrongID(t *testing.T) {
 	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
 
 	expectedData := `{ "deleteCountry": {
-		"msg": "Deleted",
+		"msg": "No nodes were deleted",
 		"numUids": 0
 	} }`
 
@@ -1809,7 +1812,7 @@ func manyMutationsWithQueryError(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -1904,16 +1907,16 @@ func manyMutationsWithQueryError(t *testing.T) {
 func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*post) {
 	t.Run("cleaning up", func(t *testing.T) {
 		for _, post := range posts {
-			deletePost(t, post.PostID, `{"deletePost" : { "msg": "Deleted" } }`, nil)
+			deletePost(t, post.PostID, 1, nil)
 		}
 
 		for _, author := range authors {
-			deleteAuthor(t, author.ID, `{"deleteAuthor" : { "msg": "Deleted" } }`, nil)
+			deleteAuthor(t, author.ID, 1, nil)
 		}
 
 		for _, country := range countries {
 			filter := map[string]interface{}{"id": []string{country.ID}}
-			deleteCountry(t, filter, `{"deleteCountry" : { "msg": "Deleted" } }`, nil)
+			deleteCountry(t, filter, 1, nil)
 		}
 	})
 }
@@ -2245,55 +2248,17 @@ func queryInterfaceAfterAddMutation(t *testing.T) {
 
 func cleanupStarwars(t *testing.T, starshipID, humanID, droidID string) {
 	// Delete everything
-	multiMutationParams := &GraphQLParams{
-		Query: `mutation cleanup($starshipFilter: StarshipFilter!, $humanFilter: HumanFilter!,
-			$droidFilter: DroidFilter!) {
-		deleteStarship(filter: $starshipFilter) { msg }
-
-		deleteHuman(filter: $humanFilter) { msg }
-
-		deleteDroid(filter: $droidFilter) { msg }
-	}`,
-		Variables: map[string]interface{}{
-			"starshipFilter": map[string]interface{}{
-				"id": []string{starshipID},
-			},
-			"humanFilter": map[string]interface{}{
-				"id": []string{humanID},
-			},
-			"droidFilter": map[string]interface{}{
-				"id": []string{droidID},
-			},
-		},
+	if starshipID != "" {
+		starshipFilter := map[string]interface{}{"id": []string{starshipID}}
+		deleteGqlType(t, "Starship", starshipFilter, 1, nil)
 	}
-	multiMutationExpected := `{
-	"deleteStarship": { "msg": "Deleted" },
-	"deleteHuman" : { "msg": "Deleted" },
-	"deleteDroid": { "msg": "Deleted" }
-}`
-
-	gqlResponse := multiMutationParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	var expected, result struct {
-		DeleteStarhip struct {
-			Msg string
-		}
-		DeleteHuman struct {
-			Msg string
-		}
-		DeleteDroid struct {
-			Msg string
-		}
+	if humanID != "" {
+		humanFilter := map[string]interface{}{"id": []string{humanID}}
+		deleteGqlType(t, "Human", humanFilter, 1, nil)
 	}
-
-	err := json.Unmarshal([]byte(multiMutationExpected), &expected)
-	require.NoError(t, err)
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("result mismatch (-want +got):\n%s", diff)
+	if droidID != "" {
+		droidFilter := map[string]interface{}{"id": []string{droidID}}
+		deleteGqlType(t, "Droid", droidFilter, 1, nil)
 	}
 }
 
@@ -2401,8 +2366,17 @@ func deleteGqlType(
 
 		deleteField := fmt.Sprintf(`delete%s`, typeName)
 		deleteType := result[deleteField].(map[string]interface{})
-		require.Equal(t, "Deleted", deleteType["msg"])
-		require.Equal(t, expectedNumUids, int(deleteType["numUids"].(float64)))
+		gotNumUids := int(deleteType["numUids"].(float64))
+		require.Equal(t, expectedNumUids, gotNumUids,
+			"numUids mismatch while deleting %s (filter: %v) want: %d, got: %d", typeName, filter,
+			expectedNumUids, gotNumUids)
+		if expectedNumUids == 0 {
+			require.Equal(t, "No nodes were deleted", deleteType["msg"],
+				"while deleting %s (filter: %v)", typeName, filter)
+		} else {
+			require.Equal(t, "Deleted", deleteType["msg"], "while deleting %s (filter: %v)",
+				typeName, filter)
+		}
 	} else {
 		if diff := cmp.Diff(expectedErrors, gqlResponse.Errors); diff != "" {
 			t.Errorf("errors mismatch (-want +got):\n%s", diff)
@@ -2796,8 +2770,8 @@ func testNumUids(t *testing.T) {
 		require.Equal(t, deleteResult.DeletePost.Msg, "Deleted")
 	})
 
-	cleanUp(t, []*country{newCountry}, result.AddAuthor.Author,
-		result.AddAuthor.Author[0].Posts)
+	// no need to delete author and posts as they would be already deleted by above test
+	cleanUp(t, []*country{newCountry}, nil, nil)
 }
 
 func checkUser(t *testing.T, userObj, expectedObj *user) {
@@ -2828,21 +2802,7 @@ func checkUser(t *testing.T, userObj, expectedObj *user) {
 }
 
 func deleteUser(t *testing.T, userObj user) {
-	deletePostParams := &GraphQLParams{
-		Query: `mutation deleteUser($filter: UserFilter!) {
-			deleteUser(filter: $filter) { msg }
-		}`,
-		Variables: map[string]interface{}{"filter": map[string]interface{}{
-			"name": map[string]interface{}{
-				"eq": userObj.Name,
-			},
-		}},
-	}
-
-	gqlResponse := deletePostParams.ExecuteAsPost(t, graphqlURL)
-
-	RequireNoGQLErrors(t, gqlResponse)
-	require.JSONEq(t, `{"deleteUser": {"msg": "Deleted"}}`, string(gqlResponse.Data))
+	deleteGqlType(t, "User", getXidFilter("name", []string{userObj.Name}), 1, nil)
 }
 
 func passwordTest(t *testing.T) {
@@ -3109,4 +3069,37 @@ func mutationsHaveExtensions(t *testing.T) {
 	require.NoError(t, err)
 	deleteGqlType(t, "Category",
 		map[string]interface{}{"id": []string{resp.AddCategory.Category[0].ID}}, 1, nil)
+}
+
+func mutationsWithAlias(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	aliasMutationParams := &GraphQLParams{
+		Query: `mutation alias($filter: CountryFilter!) {
+
+			upd: updateCountry(input: {
+				filter: $filter
+				set: { name: "Testland Alias" }
+			}) {
+				updatedCountry: country {
+					theName: name
+				}
+			}
+
+			del: deleteCountry(filter: $filter) { 
+				message: msg
+				uids: numUids 
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
+	}
+	multiMutationExpected := `{
+		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"del" : { "message": "Deleted", "uids": 1 }
+	}`
+
+	gqlResponse := aliasMutationParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
 }

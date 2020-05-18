@@ -10,8 +10,8 @@ type User {
       http: {
         url: "http://mock:8888/gqlUserName"
         method: "POST"
-        operation: "single"
-        graphql: "query { userName(id: $id)}"
+        mode: SINGLE
+        graphql: "query($id: ID!) { userName(id: $id)}"
       }
     )
   age: Int! @search
@@ -20,8 +20,8 @@ type User {
       http: {
         url: "http://mock:8888/gqlCar"
         method: "POST"
-        operation: "single"
-        graphql: "query { car(id: $id)}"
+        mode: SINGLE
+        graphql: "query($id: ID!) { car(id: $id)}"
       }
     )
   schools: [School]
@@ -35,8 +35,8 @@ type School {
       http: {
         url: "http://mock:8888/gqlSchoolName"
         method: "POST"
-        operation: "single"
-        graphql: "query { schoolName(id: $id) }"
+        mode: SINGLE
+        graphql: "query($id: ID!) { schoolName(id: $id) }"
       }
     )
   classes: [Class]
@@ -44,8 +44,8 @@ type School {
       http: {
         url: "http://mock:8888/gqlClass"
         method: "POST"
-        operation: "single"
-        graphql: "query { class(id: $id) }"
+        mode: SINGLE
+        graphql: "query($id: ID!) { class(id: $id) }"
       }
     )
   teachers: [Teacher]
@@ -64,8 +64,8 @@ type Teacher {
       http: {
         url: "http://mock:8888/gqlTeacherName"
         method: "POST"
-        operation: "single"
-        graphql: "query { teacherName(id: $tid) }"
+        mode: SINGLE
+        graphql: "query($tid: ID!) { teacherName(id: $tid) }"
       }
     )
 }

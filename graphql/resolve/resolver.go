@@ -163,9 +163,17 @@ func (aex *adminExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	return aex.dg.Execute(ctx, req)
 }
 
+func (aex *adminExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return aex.dg.CommitOrAbort(ctx, tc)
+}
+
 func (de *dgraphExecutor) Execute(ctx context.Context, req *dgoapi.Request) (
 	*dgoapi.Response, error) {
 	return de.dg.Execute(ctx, req)
+}
+
+func (de *dgraphExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return de.dg.CommitOrAbort(ctx, tc)
 }
 
 func (rf *resolverFactory) WithQueryResolver(
@@ -214,13 +222,13 @@ func (rf *resolverFactory) WithConventionResolvers(
 
 	for _, m := range s.Mutations(schema.AddMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Arw(), fns.Ex, StdMutationCompletion(m.Name()))
 		})
 	}
 
 	for _, m := range s.Mutations(schema.UpdateMutation) {
 		rf.WithMutationResolver(m, func(m schema.Mutation) MutationResolver {
-			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.ResponseName()))
+			return NewDgraphResolver(fns.Urw(), fns.Ex, StdMutationCompletion(m.Name()))
 		})
 	}
 
@@ -415,6 +423,40 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	return resp
 }
 
+// ValidateSubscription will check the given subscription query is valid or not.
+func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
+	return errors.New("Subscriptions are not supported")
+	op, err := r.schema.Operation(req)
+	if err != nil {
+		return err
+	}
+
+	for _, q := range op.Queries() {
+		for _, field := range q.SelectionSet() {
+			if err := validateCustomFieldsRecursively(field); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// validateCustomFieldsRecursively will return err if the given field is custom or any of its
+// children is type of a custom field.
+func validateCustomFieldsRecursively(field schema.Field) error {
+	if has, _ := field.HasCustomDirective(); has {
+		return x.GqlErrorf("Custom field `%s` is not supported in graphql subscription",
+			field.Name()).WithLocations(field.Location())
+	}
+	for _, f := range field.SelectionSet() {
+		err := validateCustomFieldsRecursively(f)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func addResult(resp *schema.Response, res *Resolved) {
 	// Errors should report the "path" into the result where the error was found.
 	//
@@ -565,7 +607,7 @@ func completeDgraphResult(
 			schema.GQLWrapLocationf(err, field.Location(), "couldn't unmarshal Dgraph result"))
 	}
 
-	switch val := valToComplete[field.ResponseName()].(type) {
+	switch val := valToComplete[field.Name()].(type) {
 	case []interface{}:
 		if field.Type().ListType() == nil {
 			// Turn Dgraph list result to single object
@@ -599,7 +641,7 @@ func completeDgraphResult(
 						field.Name(), field.Type().String()).WithLocations(field.Location()))
 			}
 
-			valToComplete[field.ResponseName()] = internalVal
+			valToComplete[field.Name()] = internalVal
 		}
 	case interface{}:
 		// no need to error in this case, this can be returned for custom HTTP query/mutation
@@ -608,12 +650,12 @@ func completeDgraphResult(
 			return dgraphError()
 		}
 
-		// valToComplete[field.ResponseName()] is nil, so resolving for the
+		// valToComplete[field.Name()] is nil, so resolving for the
 		// { } ---> "q": null
 		// case
 	}
 
-	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.ResponseName()])
+	err = resolveCustomFields(field.SelectionSet(), valToComplete[field.Name()])
 	if err != nil {
 		errs = append(errs, schema.AsGQLErrors(err)...)
 	}
@@ -633,7 +675,7 @@ func copyTemplate(input interface{}) (interface{}, error) {
 
 	var result interface{}
 	if err := json.Unmarshal(b, &result); err != nil {
-		return nil, errors.Wrapf(err, "while unmarshaling into map: %s", b)
+		return nil, errors.Wrapf(err, "while unmarshalling into map: %s", b)
 	}
 	return result, nil
 }
@@ -692,14 +734,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 	// For GraphQL requests, we substitute arguments in the GraphQL query/mutation to make to
 	// the remote endpoint using the values of other fields obtained from Dgraph.
 	if graphql {
-		requiredArgs, err := schema.ParseRequiredArgsFromGQLRequest(fconf.RemoteGqlQuery,
-			fconf.Operation)
-		if err != nil {
-			errCh <- x.GqlErrorf("Evaluation of custom field failed while parsing required "+
-				"args from remote GraphQL query with an error: %s for field: %s within type: %s.",
-				err, f.Name(), f.GetObjectName()).WithLocations(f.Location())
-			return
-		}
+		requiredArgs := fconf.RequiredArgs
 		for i := 0; i < len(inputs); i++ {
 			vars := make(map[string]interface{})
 			// vals[i] has all the values fetched for this type from Dgraph, lets copy over the
@@ -735,15 +770,14 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	}
 
-	if fconf.Operation == "batch" {
+	if fconf.Mode == schema.BATCH {
 		var requestInput interface{}
 		requestInput = inputs
 
 		if graphql {
 			body := make(map[string]interface{})
 			body["query"] = fconf.RemoteGqlQuery
-			// For batch mode, the argument name is input which is a list of maps.
-			body["variables"] = map[string]interface{}{"input": requestInput}
+			body["variables"] = map[string]interface{}{fconf.GraphqlBatchModeArgument: requestInput}
 			requestInput = body
 		}
 
@@ -798,7 +832,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		// that we got from the remote endpoint with the right key in the object.
 		mu.Lock()
 		for idx, val := range vals {
-			val.(map[string]interface{})[f.Alias()] = result[idx]
+			val.(map[string]interface{})[f.Name()] = result[idx]
 			vals[idx] = val
 		}
 		mu.Unlock()
@@ -882,7 +916,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 			mu.Lock()
 			val, ok := vals[idx].(map[string]interface{})
 			if ok {
-				val[f.Alias()] = result
+				val[f.Name()] = result
 			}
 			mu.Unlock()
 			errChan <- errs
@@ -1160,7 +1194,7 @@ func completeObject(
 		x.Check2(buf.WriteString(f.ResponseName()))
 		x.Check2(buf.WriteString(`": `))
 
-		val := res[f.ResponseName()]
+		val := res[f.Name()]
 		if f.Name() == schema.Typename {
 			// From GraphQL spec:
 			// https://graphql.github.io/graphql-spec/June2018/#sec-Type-Name-Introspection

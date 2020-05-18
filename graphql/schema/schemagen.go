@@ -22,6 +22,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -35,6 +36,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	DisableSubscription()
 }
 
 type handler struct {
@@ -59,7 +61,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema), nil
+	return AsSchema(gqlSchema)
 }
 
 func (s *handler) GQLSchema() string {
@@ -70,11 +72,19 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
+func (s *handler) DisableSubscription() {
+	s.completeSchema.Subscription = nil
+}
+
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
+	}
+
+	if err := authorization.ParseAuthMeta(input); err != nil {
+		return nil, err
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -195,17 +205,22 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 
 	for _, defn := range definitions {
 		typ := sch.Types[defn]
-		custom := typ.Directives.ForName("custom")
+		custom := typ.Directives.ForName(customDirective)
 		setHeaders(custom)
 		for _, field := range typ.Fields {
-			custom := field.Directives.ForName("custom")
+			custom := field.Directives.ForName(customDirective)
 			setHeaders(custom)
 		}
 	}
 
-	finalHeaders := make([]string, 0, len(headers))
+	finalHeaders := make([]string, 0, len(headers)+1)
 	for h := range headers {
 		finalHeaders = append(finalHeaders, h)
+	}
+
+	// Add Auth Header to allowed headers list
+	if authorization.GetHeader() != "" {
+		finalHeaders = append(finalHeaders, authorization.GetHeader())
 	}
 
 	allowed := x.AccessControlAllowedHeaders
