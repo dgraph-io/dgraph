@@ -46,6 +46,7 @@ func stripSpaces(str string) string {
 	}, str)
 }
 
+// handleBasicFacetsType parses a facetVal to string/float64/bool/datetime type.
 func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error) {
 	var jsonValue interface{}
 	var valueType api.Facet_ValType
@@ -85,7 +86,7 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 		jsonValue = v
 		valueType = api.Facet_BOOL
 	default:
-		return nil, errors.Errorf("facet value can only be string/float64/bool.")
+		return nil, errors.Errorf("facet value can only be string/number/bool.")
 	}
 
 	// Convert facet val interface{} to binary.
@@ -149,9 +150,9 @@ func parseMapFacets(m map[string]interface{}, prefix string) ([]map[int]*api.Fac
 	return mapSlice, nil
 }
 
-// parseBasicFacets parses facets which should be of type string/json.Number/bool.
+// parseScalarFacets parses facets which should be of type string/json.Number/bool.
 // It returns []*api.Facet, one *api.Facet for each facet.
-func parseBasicFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
+func parseScalarFacets(m map[string]interface{}, prefix string) ([]*api.Facet, error) {
 	// This happens at root.
 	if prefix == "" {
 		return nil, nil
@@ -454,7 +455,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		// to call parseFacets everytime.
 		// Only call parseBasicFacets when value type for the predicate is not list.
 		if _, ok := v.([]interface{}); !ok {
-			fts, err := parseBasicFacets(m, prefix)
+			fts, err := parseScalarFacets(m, prefix)
 			if err != nil {
 				return mr, err
 			}
@@ -574,7 +575,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 		}
 	}
 
-	fts, err := parseBasicFacets(m, parentPred+x.FacetDelimeter)
+	fts, err := parseScalarFacets(m, parentPred+x.FacetDelimeter)
 	mr.fcts = fts
 	return mr, err
 }
