@@ -1294,8 +1294,8 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 					set: $set
 				}
 			) {
-			  	post {
-					postID
+			  	post { 
+					postID 
 					text
 					author { id }
 				}
@@ -1315,9 +1315,9 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 	// The text is updated as expected
 	// The author is unchanged
 	expected := fmt.Sprintf(`
-		{ "updatePost": {  "post": [
-			{
-				"postID": "%s",
+		{ "updatePost": {  "post": [ 
+			{ 
+				"postID": "%s", 
 				"text": "The Updated Text",
 				"author": { "id": "%s" }
 			}
