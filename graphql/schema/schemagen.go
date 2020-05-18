@@ -199,7 +199,7 @@ func NewHandler(input string) (Handler, error) {
 	hc.Lock()
 	hc.allowed = headers
 	hc.secrets = schemaSecrets
-	defer hc.Unlock()
+	hc.Unlock()
 
 	return &handler{
 		input:          input,
