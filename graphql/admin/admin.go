@@ -468,6 +468,15 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	xidInSchemaVar := "XidInSchema"
 	gqlType := "dgraph.graphql"
 
+	/*
+		query {
+		  ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
+		    uid
+		    dgraph.graphql.schema
+		    XidInSchema as dgraph.graphql.xid
+		  }
+		}
+	*/
 	qry := &gql.GraphQuery{
 		Attr: existingSchemaVar,
 		Var:  existingSchemaVar,
@@ -482,6 +491,22 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		},
 	}
 
+	/*
+		mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
+			set {
+				"uid": "uid(ExistingGQLSchema)",
+				"dgraph.graphql.xid": "dgraph.graphql.schema"
+			}
+		}
+		mutation @if(eq(len(ExistingGQLSchema),0) AND eq(len(XidInSchema),0))
+			set {
+				"uid": "_:XidInSchema",
+				"dgraph.type": ["dgraph.graphql"],
+				"dgraph.graphql.xid": "dgraph.graphql.schema",
+				"dgraph.graphql.schema": ""
+			}
+		}
+	*/
 	mutations := []*dgoapi.Mutation{
 		{
 			SetJson: []byte(fmt.Sprintf(`
