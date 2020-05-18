@@ -294,7 +294,6 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 	// check --rpcport flag and update node configuration
 	if port := ctx.GlobalUint(RPCPortFlag.Name); port != 0 {
 		cfg.Port = uint32(port)
-		cfg.WSPort = uint32(port) + 1000
 	}
 
 	// check --rpchost flag and update node configuration
@@ -305,6 +304,16 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 	// check --rpcmods flag and update node configuration
 	if modules := ctx.GlobalString(RPCModulesFlag.Name); modules != "" {
 		cfg.Modules = strings.Split(ctx.GlobalString(RPCModulesFlag.Name), ",")
+	}
+
+	if wsport := ctx.GlobalUint(WSPortFlag.Name); wsport != 0 {
+		cfg.WSPort = uint32(wsport)
+	}
+
+	if wsenabled := ctx.GlobalBool(WSEnabledFlag.Name); wsenabled {
+		cfg.WSEnabled = true
+	} else {
+		cfg.WSEnabled = false
 	}
 
 	// format rpc modules
@@ -318,6 +327,8 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 		"port", cfg.Port,
 		"host", cfg.Host,
 		"modules", cfg.Modules,
+		"ws", cfg.WSEnabled,
+		"wsport", cfg.WSPort,
 	)
 }
 

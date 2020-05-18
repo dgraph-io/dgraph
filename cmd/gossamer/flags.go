@@ -135,6 +135,14 @@ var (
 		Name:  "rpcmods",
 		Usage: "API modules to enable via HTTP-RPC, comma separated list",
 	}
+	WSPortFlag = cli.IntFlag{
+		Name:  "wsport",
+		Usage: "Websockets server listening port",
+	}
+	WSEnabledFlag = cli.BoolFlag{
+		Name:  "ws",
+		Usage: "Enable the websockets server",
+	}
 )
 
 // Account management flags
@@ -206,6 +214,8 @@ var (
 		RPCHostFlag,
 		RPCPortFlag,
 		RPCModulesFlag,
+		WSEnabledFlag,
+		WSPortFlag,
 	}
 )
 

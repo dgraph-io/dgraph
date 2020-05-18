@@ -46,6 +46,7 @@ type HTTPServerConfig struct {
 	RPCAPI                 modules.RPCAPI
 	Host                   string
 	RPCPort                uint32
+	WSEnabled              bool
 	WSPort                 uint32
 	Modules                []string
 	WSSubscriptions        map[uint32]*WebSocketSubscription
@@ -122,6 +123,10 @@ func (h *HTTPServer) Start() error {
 		}
 	}()
 
+	if !h.serverConfig.WSEnabled {
+		return nil
+	}
+
 	log.Info("[rpc] Starting WebSocket Server...", "host", h.serverConfig.Host, "port", h.serverConfig.WSPort)
 	ws := mux.NewRouter()
 	ws.Handle("/", h)
@@ -145,6 +150,8 @@ func (h *HTTPServer) Start() error {
 
 // Stop stops the server
 func (h *HTTPServer) Stop() error {
-	close(h.serverConfig.BlockAddedReceiverDone) // notify sender we're done receiving so it can close
+	if h.serverConfig.WSEnabled {
+		close(h.serverConfig.BlockAddedReceiverDone) // notify sender we're done receiving so it can close
+	}
 	return nil
 }

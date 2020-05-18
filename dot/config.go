@@ -76,11 +76,12 @@ type CoreConfig struct {
 
 // RPCConfig is to marshal/unmarshal toml RPC config vars
 type RPCConfig struct {
-	Enabled bool     `toml:"enabled"`
-	Port    uint32   `toml:"port"`
-	Host    string   `toml:"host"`
-	Modules []string `toml:"modules"`
-	WSPort  uint32   `toml:"ws-port"`
+	Enabled   bool     `toml:"enabled"`
+	Port      uint32   `toml:"port"`
+	Host      string   `toml:"host"`
+	Modules   []string `toml:"modules"`
+	WSPort    uint32   `toml:"ws-port"`
+	WSEnabled bool     `toml:"ws-enabled"`
 }
 
 // String will return the json representation for a Config

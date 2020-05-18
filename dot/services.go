@@ -164,6 +164,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		RPCAPI:              rpcService,
 		Host:                cfg.RPC.Host,
 		RPCPort:             cfg.RPC.Port,
+		WSEnabled:           cfg.RPC.WSEnabled,
 		WSPort:              cfg.RPC.WSPort,
 		Modules:             cfg.RPC.Modules,
 	}
