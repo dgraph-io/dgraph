@@ -1594,7 +1594,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			"#######################\n# Generated Mutations\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
 	}
-	if len(schema.Subscription.Fields) > 0 {
+
+	if schema.Subscription != nil && len(schema.Subscription.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Subscriptions\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))
