@@ -135,7 +135,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 		}
 	}`
 	resMap = make(map[string][]map[string]int)
-	resp, err = testutil.RetryQuery(dg, q2)
+	_, err = testutil.RetryQuery(dg, q2)
 	require.NoError(t, err)
 
 	// Trying to perform a query using the address index should not work since that
@@ -147,7 +147,7 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 		}
 	}`
 	resMap = make(map[string][]map[string]int)
-	resp, err = testutil.RetryBadQuery(dg, q3)
+	_, err = testutil.RetryBadQuery(dg, q3)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "Attribute address is not indexed")
 }
