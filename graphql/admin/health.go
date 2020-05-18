@@ -17,38 +17,32 @@
 package admin
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
-type healthResolver struct {
-}
+func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
+	glog.Info("Got health request")
 
-func (hr *healthResolver) Rewrite(ctx context.Context, q schema.Query) (*gql.GraphQuery, error) {
-	return nil, nil
-}
-
-func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-	x.Check2(buf.WriteString(`{ "health":`))
-
-	var resp *api.Response
-	var err error
-	if resp, err = (&edgraph.Server{}).Health(ctx, true); err != nil {
-		err = errors.Errorf("%s: %s", x.Error, err.Error())
-		x.Check2(buf.Write([]byte(` null `)))
-	} else {
-		x.Check2(buf.Write(resp.GetJson()))
+	resp, err := (&edgraph.Server{}).Health(ctx, true)
+	if err != nil {
+		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
 
-	x.Check2(buf.WriteString(`}`))
+	var health []map[string]interface{}
+	err = json.Unmarshal(resp.GetJson(), &health)
 
-	return buf.Bytes(), err
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{q.Name(): health},
+		Field: q,
+		Err:   err,
+	}
+
 }
