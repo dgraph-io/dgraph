@@ -1134,6 +1134,15 @@ func main() {
 	})
 	http.HandleFunc("/invalidfield", commonGraphqlHandler("invalidfield"))
 	http.HandleFunc("/nestedinvalid", commonGraphqlHandler("nestedinvalid"))
+	http.HandleFunc("/validatesecrettoken", func(w http.ResponseWriter, r *http.Request) {
+		if h := r.Header.Get("Github-Api-Token"); h != "random-api-token" {
+			return
+		}
+		rh := &relay.Handler{
+			Schema: graphql.MustParseSchema(graphqlResponses["validinputfield"].Schema, &query{}),
+		}
+		rh.ServeHTTP(w, r)
+	})
 
 	// for mutations
 	http.HandleFunc("/setCountry", commonGraphqlHandler("setcountry"))

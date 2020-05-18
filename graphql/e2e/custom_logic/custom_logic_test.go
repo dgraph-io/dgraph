@@ -196,6 +196,25 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Equal(t, expected, string(result.Data))
 }
 
+func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+		type Query {
+			myCustom(yo: CountryInput!): [Country!]!
+			  @custom(
+				http: {
+				  url: "http://mock:8888/validatesecrettoken"
+				  method: "POST"
+				  forwardHeaders: ["Content-Type", "GITHUB-API-TOKEN"]
+				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
+				}
+			  )
+		  }
+
+		# Dgraph.Secret GITHUB-API-TOKEN "random-api-token"
+		  `
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+}
+
 func TestServerShouldAllowForwardHeaders(t *testing.T) {
 	schema := `
 	type User {
