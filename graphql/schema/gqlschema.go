@@ -43,6 +43,11 @@ const (
 	customDirective = "custom"
 	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
 
+	// custom directive args and fields
+	mode   = "mode"
+	BATCH  = "BATCH"
+	SINGLE = "SINGLE"
+
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
 
@@ -85,11 +90,17 @@ enum HTTPMethod {
 	DELETE
 }
 
+enum Mode {
+	BATCH
+	SINGLE
+}
+
 input CustomHTTP {
 	url: String!
 	method: HTTPMethod!
 	body: String
 	graphql: String
+	mode: Mode
 	forwardHeaders: [String!]
 	skipIntrospection: Boolean
 }
@@ -1583,7 +1594,8 @@ func Stringify(schema *ast.Schema, originalTypes []string) string {
 			"#######################\n# Generated Mutations\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Mutation) + "\n"))
 	}
-	if len(schema.Subscription.Fields) > 0 {
+
+	if schema.Subscription != nil && len(schema.Subscription.Fields) > 0 {
 		x.Check2(sch.WriteString(
 			"#######################\n# Generated Subscriptions\n#######################\n\n"))
 		x.Check2(sch.WriteString(generateObjectString(schema.Subscription)))

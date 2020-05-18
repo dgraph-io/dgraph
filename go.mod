@@ -24,7 +24,6 @@ require (
 	github.com/dgryski/go-groupvarint v0.0.0-20190318181831-5ce5df8ca4e1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/getsentry/sentry-go v0.6.0
-	github.com/go-ini/ini v1.39.0 // indirect
 	github.com/go-sql-driver/mysql v0.0.0-20190330032241-c0f6b444ad8f
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/geo v0.0.0-20170810003146-31fb0106dc4a
@@ -37,7 +36,7 @@ require (
 	github.com/gorilla/websocket v1.4.1
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
 	github.com/graph-gophers/graphql-transport-ws v0.0.0-20190611222414-40c048432299
-	github.com/minio/minio-go v0.0.0-20181109183348-774475480ffe
+	github.com/minio/minio-go/v6 v6.0.55
 	github.com/mitchellh/panicwrap v1.0.0
 	github.com/paulmach/go.geojson v0.0.0-20170327170536-40612a87147b
 	github.com/philhofer/fwd v1.0.0 // indirect

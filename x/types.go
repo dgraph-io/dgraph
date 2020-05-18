@@ -1,5 +1,5 @@
 /*
- * Copyright 2019 Dgraph Labs, Inc. and Contributors
+ * Copyright 2015-2020 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,13 @@
  * limitations under the License.
  */
 
-package testutil
+package x
 
-import (
-	"github.com/minio/minio-go/v6"
-)
+// SensitiveByteSlice implements the Stringer interface to redact its contents.
+// Use this type for sensitive info such as keys, passwords, or secrets so it doesn't leak
+// as output such as logs.
+type SensitiveByteSlice []byte
 
-var (
-	accessKey     = "accesskey"
-	secretKey     = "secretkey"
-	minioEndpoint = "localhost:9001"
-)
-
-// NewMinioClient returns a minio client.
-func NewMinioClient() (*minio.Client, error) {
-	return minio.New(minioEndpoint, accessKey, secretKey, false)
+func (SensitiveByteSlice) String() string {
+	return "****"
 }

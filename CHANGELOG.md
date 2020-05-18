@@ -12,6 +12,87 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
+## [20.03.2] - 2020-05-15
+[20.03.2]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.2
+
+### Changed
+
+- Sentry Improvements: Segregate dev and prod events into their own Sentry projects. Remove Panic back-traces, Set the type of exception to the panic message. ([#5305][])
+- /health endpoint now shows EE Features available and GraphQL changes. ([#5304][]) 
+- Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][]) 
+- Initialize sentry at the beginning of alpha.Run(). ([#5429][])  
+
+### Fixed
+
+- Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5326][])
+- graphql: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
+- Fix segmentation fault in query.go. ([#5377][])
+- Fix empty string checks. ([#5390][]) 
+- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
+- Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
+- Fix protobuf headers check. ([#5381][])
+- Stream the full set of predicates and types during a snapshot. ([#5444][])
+- Enterprise features
+  - Print error when applying enterprise license fails. ([#5342][])
+  - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
+
+### Security
+
+- Use SensitiveByteSlice type for hmac secret. ([#5450][])
+
+
+[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
+[#5305]: https://github.com/dgraph-io/dgraph/issues/5305
+[#5304]: https://github.com/dgraph-io/dgraph/issues/5304
+[#5359]: https://github.com/dgraph-io/dgraph/issues/5359
+[#5429]: https://github.com/dgraph-io/dgraph/issues/5429
+[#5342]: https://github.com/dgraph-io/dgraph/issues/5342
+[#5326]: https://github.com/dgraph-io/dgraph/issues/5326
+[#5356]: https://github.com/dgraph-io/dgraph/issues/5356
+[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
+[#5384]: https://github.com/dgraph-io/dgraph/issues/5384
+[#5390]: https://github.com/dgraph-io/dgraph/issues/5390
+[#5394]: https://github.com/dgraph-io/dgraph/issues/5394
+[#5405]: https://github.com/dgraph-io/dgraph/issues/5405
+[#5053]: https://github.com/dgraph-io/dgraph/issues/5053
+[#5355]: https://github.com/dgraph-io/dgraph/issues/5355
+[#5368]: https://github.com/dgraph-io/dgraph/issues/5368
+[#5450]: https://github.com/dgraph-io/dgraph/issues/5450
+[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
+
+## [1.2.4] - 2020-05-15
+[1.2.4]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.4
+
+### Changed
+
+- Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][])
+- Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
+
+### Fixed
+
+- Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5327][])
+- Fix segmentation fault in query.go. ([#5377][]) 
+- Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
+- Fix empty string checks. ([#5396][])
+- Fix protobuf headers check. ([#5381][])
+- Stream the full set of predicates and types during a snapshot. ([#5444][])
+
+### Security
+
+- Use SensitiveByteSlice type for hmac secret. ([#5451][])
+
+[#5444]: https://github.com/dgraph-io/dgraph/issues/5444
+[#5359]: https://github.com/dgraph-io/dgraph/issues/5359
+[#5405]: https://github.com/dgraph-io/dgraph/issues/5405
+[#5327]: https://github.com/dgraph-io/dgraph/issues/5327
+[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
+[#5394]: https://github.com/dgraph-io/dgraph/issues/5394
+[#5396]: https://github.com/dgraph-io/dgraph/issues/5396
+[#5053]: https://github.com/dgraph-io/dgraph/issues/5053
+[#5368]: https://github.com/dgraph-io/dgraph/issues/5368
+[#5451]: https://github.com/dgraph-io/dgraph/issues/5451
+[#5381]: https://github.com/dgraph-io/dgraph/issues/5381
+
 ## [20.03.1] - 2020-04-24
 [20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
 

@@ -76,13 +76,6 @@ type Credentials struct {
 	Anonymous    bool
 }
 
-func (creds *Credentials) hasCredentials() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.AccessKey != "" || creds.SecretKey != "" || creds.SessionToken != ""
-}
-
 func (creds *Credentials) isAnonymous() bool {
 	if creds == nil {
 		return false

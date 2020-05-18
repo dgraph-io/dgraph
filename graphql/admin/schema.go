@@ -72,6 +72,13 @@ func (asr *updateSchemaResolver) Rewrite(
 	if err != nil {
 		return nil, err
 	}
+	// Disable subscription.
+	schHandler.DisableSubscription()
+
+	_, err = schema.FromString(schHandler.GQLSchema())
+	if err != nil {
+		return nil, err
+	}
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
@@ -151,7 +158,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(field.ResponseName()))
+	x.Check2(buf.WriteString(field.Name()))
 	x.Check2(buf.WriteString(`": [{`))
 
 	for i, sel := range field.SelectionSet() {
@@ -171,7 +178,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 			x.Check2(buf.WriteString(","))
 		}
 		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(sel.Name()))
 		x.Check2(buf.WriteString(`":`))
 		x.Check2(buf.Write(val))
 	}
