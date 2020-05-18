@@ -1,0 +1,19 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: dgraph-ha-cluster
+  region: us-east-2
+managedNodeGroups:
+  - name: dgraph-ha-cluster-workers
+    minSize: 3
+    maxSize: 6
+    desiredCapacity: 3
+    labels: {role: worker}
+    tags:
+      nodegroup-role: worker
+    iam:
+      withAddonPolicies:
+        # allow k8s update Route53 if external-dns installed
+        externalDNS: true
+        # access ACM (AWS Cert Mngr) for LoadBalancer or Ingress
+        certManager: true

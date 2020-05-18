@@ -45,6 +45,7 @@ import (
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -711,15 +712,16 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	}
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
-		Instance: "alpha",
-		Address:  x.WorkerConfig.MyAddr,
-		Status:   "healthy",
-		Group:    strconv.Itoa(int(worker.GroupId())),
-		Version:  x.Version(),
-		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho: time.Now().Unix(),
-		Ongoing:  worker.GetOngoingTasks(),
-		Indexing: schema.GetIndexingPredicates(),
+		Instance:   "alpha",
+		Address:    x.WorkerConfig.MyAddr,
+		Status:     "healthy",
+		Group:      strconv.Itoa(int(worker.GroupId())),
+		Version:    x.Version(),
+		Uptime:     int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:   time.Now().Unix(),
+		Ongoing:    worker.GetOngoingTasks(),
+		Indexing:   schema.GetIndexingPredicates(),
+		EeFeatures: ee.GetEEFeaturesList(),
 	})
 
 	var err error
@@ -765,7 +767,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
-	if glog.V(3) {
+	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)

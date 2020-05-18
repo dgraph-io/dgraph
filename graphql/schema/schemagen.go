@@ -20,7 +20,10 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
@@ -57,7 +60,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema), nil
+	return AsSchema(gqlSchema)
 }
 
 func (s *handler) GQLSchema() string {
@@ -68,11 +71,15 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-// NewHandler processes the input schema.  If there are no errors, it returns
+// NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
+	}
+
+	if err := authorization.ParseAuthMeta(input); err != nil {
+		return nil, err
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -113,12 +120,20 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
+	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+			remoteDir := defn.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
+				continue
+			}
+		}
+		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
 	expandSchema(doc)
@@ -133,9 +148,17 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
-	dgSchema := genDgSchema(sch, defns)
+	headers := getAllowedHeaders(sch, defns)
+	dgSchema := genDgSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete)
 
-	completeSchema(sch, defns)
+	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
+		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
+
+	ah.Lock()
+	ah.headers = headers
+	defer ah.Unlock()
 
 	return &handler{
 		input:          input,
@@ -143,6 +166,71 @@ func NewHandler(input string) (Handler, error) {
 		completeSchema: sch,
 		originalDefs:   defns,
 	}, nil
+}
+
+type allowedHeaders struct {
+	headers string // comma separated list of allowed headers
+	sync.RWMutex
+}
+
+var ah = allowedHeaders{
+	headers: x.AccessControlAllowedHeaders,
+}
+
+func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+	headers := make(map[string]struct{})
+
+	setHeaders := func(dir *ast.Directive) {
+		if dir == nil {
+			return
+		}
+
+		httpArg := dir.Arguments.ForName("http")
+		if httpArg == nil {
+			return
+		}
+		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		if forwardHeaders == nil {
+			return
+		}
+		for _, h := range forwardHeaders.Children {
+			headers[h.Value.Raw] = struct{}{}
+		}
+	}
+
+	for _, defn := range definitions {
+		typ := sch.Types[defn]
+		custom := typ.Directives.ForName(customDirective)
+		setHeaders(custom)
+		for _, field := range typ.Fields {
+			custom := field.Directives.ForName(customDirective)
+			setHeaders(custom)
+		}
+	}
+
+	finalHeaders := make([]string, 0, len(headers)+1)
+	for h := range headers {
+		finalHeaders = append(finalHeaders, h)
+	}
+
+	// Add Auth Header to allowed headers list
+	if authorization.GetHeader() != "" {
+		finalHeaders = append(finalHeaders, authorization.GetHeader())
+	}
+
+	allowed := x.AccessControlAllowedHeaders
+	customHeaders := strings.Join(finalHeaders, ",")
+	if len(customHeaders) > 0 {
+		allowed += "," + customHeaders
+	}
+
+	return allowed
+}
+
+func AllowedHeaders() string {
+	ah.RLock()
+	defer ah.RUnlock()
+	return ah.headers
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {

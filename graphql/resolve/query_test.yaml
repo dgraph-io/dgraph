@@ -15,68 +15,47 @@
     }
 
 -
-  name: "UID alias"
-  gqlquery: |
-    query {
-      getAuthor(id: "0x1") {
-        id
-        uid: name
-      }
-    }
-  dgquery: |-
-    query {
-      getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        id : uid
-        uid : Author.name
-        dgraph.uid : uid
-      }
-    }
-
--
-  name: "UID alias without id"
-  gqlquery: |
-    query {
-      getAuthor(id: "0x1") {
-        uid: name
-      }
-    }
-  dgquery: |-
-    query {
-      getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        uid : Author.name
-        dgraph.uid : uid
-      }
-    }
-
-
--
-  name: "ID query with query alias"
+  name: "Alias is ignored in query rewriting - get"
   gqlquery: |
     query {
       author : getAuthor(id: "0x1") {
-        name
-      }
-    }
-  dgquery: |-
-    query {
-      author(func: uid(0x1)) @filter(type(Author)) {
-        name : Author.name
-        dgraph.uid : uid
-      }
-    }
-
--
-  name: "ID query with field alias"
-  gqlquery: |
-    query {
-      getAuthor(id: "0x1") {
-        authName : name
+        anAlias : name
+        postAlias : posts {
+          titleAlias : title
+        }
       }
     }
   dgquery: |-
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        authName : Author.name
+        name : Author.name
+        posts : Author.posts {
+          title : Post.title
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Alias is ignored in query rewriting - query"
+  gqlquery: |
+    query {
+      author : queryAuthor {
+        anAlias : name
+        postAlias : posts {
+          titleAlias : title
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        name : Author.name
+        posts : Author.posts {
+          title : Post.title
+          dgraph.uid : uid
+        }
         dgraph.uid : uid
       }
     }
@@ -95,7 +74,6 @@
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         id : uid
         name : Author.name
-        dgraph.uid : uid
       }
     }
 
@@ -125,41 +103,16 @@
     }
 
 -
-  name: "ID query with depth and alias"
-  gqlquery: |
-    query {
-      getAuthor(id: "0x1") {
-        name
-        allPosts : posts {
-          postTitle : title
-          postText : text
-        }
-      }
-    }
-  dgquery: |-
-    query {
-      getAuthor(func: uid(0x1)) @filter(type(Author)) {
-        name : Author.name
-        allPosts : Author.posts {
-          postTitle : Post.title
-          postText : Post.text
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
-
--
   name: "ID query deep"
   gqlquery: |
     query {
       getAuthor(id: "0x1") {
         name
-        allPosts : posts {
+        posts {
           title
           text
           author {
-            authorID : id
+            id
             name
           }
         }
@@ -169,13 +122,12 @@
     query {
       getAuthor(func: uid(0x1)) @filter(type(Author)) {
         name : Author.name
-        allPosts : Author.posts {
+        posts : Author.posts {
           title : Post.title
           text : Post.text
           author : Post.author {
-            authorID : uid
+            id : uid
             name : Author.name
-            dgraph.uid : uid
           }
           dgraph.uid : uid
         }
@@ -719,7 +671,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -743,7 +694,6 @@
         ename : Employee.ename
         dob : Human.dob
         female : Human.female
-        dgraph.uid : uid
       }
     }
 
@@ -765,7 +715,6 @@
         name : Character.name
         ename : Employee.ename
         dob : Human.dob
-        dgraph.uid : uid
       }
     }
 
@@ -790,7 +739,6 @@
         name : Character.name
         female : Human.female
         ename : Employee.ename
-        dgraph.uid : uid
       }
     }
 
@@ -819,7 +767,6 @@
         female : Human.female
         ename : Employee.ename
         movies : Director.movies
-        dgraph.uid : uid
       }
     }
 
@@ -1166,5 +1113,109 @@
       }
       checkPwd(func: eq(User.name, "user1")) @filter(type(User)) {
         pwd as checkpwd(User.pwd, "Password")
+      }
+    }
+
+
+- name: "Rewrite without custom fields"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        id
+        author
+        title
+        content
+        ups
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        id : uid
+        author : Comment.author
+        title : Comment.title
+        ups : Comment.ups
+        url : Comment.url
+      }
+    }
+- name: "Include fields needed by custom directive"
+  gqlquery: |
+    query {
+      getComment(id: "0x1") {
+        content
+        relatedUsers {
+          name
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getComment(func: uid(0x1)) @filter(type(Comment)) {
+        author : Comment.author
+        id : uid
+        url : Comment.url
+      }
+    }
+- name: "Rewrite without custom fields deep"
+  gqlquery: |-
+    query {
+      getPost(postID: "0x1") {
+        postID
+        comments {
+          id
+          author
+          title
+          content
+          ups
+          url
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        postID : uid
+        comments : Post.comments {
+          id : uid
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          url : Comment.url
+        }
+      }
+    }
+- name: "Include fields needed by custom directive deep"
+  gqlquery: |-
+    query {
+      getPost(postID: "0x1") {
+        postID
+        comments {
+          author
+          title
+          content
+          ups
+          relatedUsers {
+            name
+          }
+        }
+      }
+    }
+  dgquery: |
+    query {
+      getPost(func: uid(0x1)) @filter(type(Post)) {
+        postID : uid
+        comments : Post.comments {
+          author : Comment.author
+          title : Comment.title
+          ups : Comment.ups
+          id : uid
+          url : Comment.url
+        }
       }
     }

@@ -68,7 +68,7 @@ const (
 		schema: String!  @dgraph(pred: "dgraph.graphql.schema")
 
 		"""
-		The GraphQL schema that was generated from the 'schema' field.  
+		The GraphQL schema that was generated from the 'schema' field.
 		This is the schema that is being served by Dgraph at /graphql.
 		"""
 		generatedSchema: String!
@@ -124,6 +124,11 @@ const (
 		List of predicates for which indexes are built in the background.
 		"""
 		indexing: [String]
+
+		"""
+		List of Enterprise Features that are enabled.
+		"""
+		ee_features: [String]
 	}
 
 	type MembershipState {
@@ -215,10 +220,16 @@ const (
 	input ConfigInput {
 
 		"""
-		Estimated memory the LRU cache can take. Actual usage by the process would be 
+		Estimated memory the LRU cache can take. Actual usage by the process would be
 		more than specified here. (default -1 means no set limit)
 		"""
 		lruMb: Float
+
+		"""
+		True value of logRequest enables logging of all the requests coming to alphas.
+		False value of logRequest disables above.
+		"""
+		logRequest: Boolean
 	}
 
 	type ConfigPayload {
@@ -443,6 +454,11 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 			})
 		}(resolver)
 	}
+
+	// Add admin query endpoints.
+	rf = rf.WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
+		return resolve.QueryResolverFunc(resolveListBackups)
+	})
 
 	return rf.WithSchemaIntrospection()
 }

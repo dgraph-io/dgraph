@@ -72,6 +72,10 @@ func (asr *updateSchemaResolver) Rewrite(
 	if err != nil {
 		return nil, err
 	}
+	_, err = schema.FromString(schHandler.GQLSchema())
+	if err != nil {
+		return nil, err
+	}
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
@@ -106,18 +110,27 @@ func (asr *updateSchemaResolver) Execute(
 		return &dgoapi.Response{Json: b}, err
 	}
 
+	req.CommitNow = true
 	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema})
-	if err != nil {
-		return nil, schema.GQLWrapf(err,
-			"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
+	if asr.newDgraphSchema != "" {
+		// The schema could be empty if it only has custom types/queries/mutations.
+		_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema,
+			RunInBackground: false})
+		if err != nil {
+			return nil, schema.GQLWrapf(err,
+				"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
+		}
 	}
 
 	return resp, nil
+}
+
+func (asr *updateSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return asr.baseMutationExecutor.CommitOrAbort(ctx, tc)
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
@@ -134,11 +147,15 @@ func (gsr *getSchemaResolver) Execute(
 	return &dgoapi.Response{Json: b}, err
 }
 
+func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
 func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(field.ResponseName()))
+	x.Check2(buf.WriteString(field.Name()))
 	x.Check2(buf.WriteString(`": [{`))
 
 	for i, sel := range field.SelectionSet() {
@@ -158,7 +175,7 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 			x.Check2(buf.WriteString(","))
 		}
 		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
+		x.Check2(buf.WriteString(sel.Name()))
 		x.Check2(buf.WriteString(`":`))
 		x.Check2(buf.Write(val))
 	}

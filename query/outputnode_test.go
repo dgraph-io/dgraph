@@ -38,13 +38,13 @@ func TestEncodeMemory(t *testing.T) {
 
 	for i := 0; i < runtime.NumCPU(); i++ {
 		enc := newEncoder()
-		n := enc.newNode()
+		n := enc.newNode(0)
 		require.NotNil(t, n)
 		for i := 0; i < 15000; i++ {
 			enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 				types.ValueForType(types.StringID))
-			enc.AddListChild(n, enc.idForAttr(fmt.Sprintf("another long child %06d", i)),
-				enc.newNode())
+			enc.AddListChild(n,
+				enc.newNode(enc.idForAttr(fmt.Sprintf("another long child %06d", i))))
 		}
 		wg.Add(1)
 		go func() {
@@ -68,25 +68,25 @@ func TestNormalizeJSONLimit(t *testing.T) {
 	}
 
 	enc := newEncoder()
-	n := enc.newNodeWithAttr(enc.idForAttr("root"))
+	n := enc.newNode(enc.idForAttr("root"))
 	require.NotNil(t, n)
 	for i := 0; i < 1000; i++ {
 		enc.AddValue(n, enc.idForAttr(fmt.Sprintf("very long attr name %06d", i)),
 			types.ValueForType(types.StringID))
-		child1 := enc.newNodeWithAttr(enc.idForAttr("child1"))
-		enc.AddListChild(n, enc.idForAttr("child1"), child1)
+		child1 := enc.newNode(enc.idForAttr("child1"))
+		enc.AddListChild(n, child1)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child1, enc.idForAttr(fmt.Sprintf("long child1 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
-		child2 := enc.newNodeWithAttr(enc.idForAttr("child2"))
-		enc.AddListChild(n, enc.idForAttr("child2"), child2)
+		child2 := enc.newNode(enc.idForAttr("child2"))
+		enc.AddListChild(n, child2)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child2, enc.idForAttr(fmt.Sprintf("long child2 attr %06d", j)),
 				types.ValueForType(types.StringID))
 		}
-		child3 := enc.newNodeWithAttr(enc.idForAttr("child3"))
-		enc.AddListChild(n, enc.idForAttr("child3"), child3)
+		child3 := enc.newNode(enc.idForAttr("child3"))
+		enc.AddListChild(n, child3)
 		for j := 0; j < 100; j++ {
 			enc.AddValue(child3, enc.idForAttr(fmt.Sprintf("long child3 attr %06d", j)),
 				types.ValueForType(types.StringID))
@@ -150,8 +150,7 @@ func TestFastJsonNode(t *testing.T) {
 	list := true
 
 	enc := newEncoder()
-	fj := enc.newNode()
-	enc.setAttr(fj, attrId)
+	fj := enc.newNode(attrId)
 	require.NoError(t, enc.setScalarVal(fj, scalarVal))
 	enc.setList(fj, list)
 
@@ -161,8 +160,7 @@ func TestFastJsonNode(t *testing.T) {
 	require.Equal(t, scalarVal, sv)
 	require.Equal(t, list, enc.getList(fj))
 
-	fj2 := enc.newNode()
-	enc.setAttr(fj2, attrId)
+	fj2 := enc.newNode(attrId)
 	require.NoError(t, enc.setScalarVal(fj2, scalarVal))
 	enc.setList(fj2, list)
 
@@ -180,7 +178,7 @@ func BenchmarkFastJsonNodeEmpty(b *testing.B) {
 		enc := newEncoder()
 		var fj fastJsonNode
 		for i := 0; i < 2e6; i++ {
-			fj = enc.newNode()
+			fj = enc.newNode(0)
 		}
 		_ = fj
 	}
@@ -208,7 +206,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 			ch, err = enc.makeScalarNode(enc.idForAttr(testAttr), val, false)
 			require.NoError(b, err)
 		} else {
-			ch := enc.newNodeWithAttr(enc.idForAttr(testAttr))
+			ch := enc.newNode(enc.idForAttr(testAttr))
 			buildTestTree(b, enc, level+1, maxlevel, ch)
 		}
 		enc.appendAttrs(fj, ch)
@@ -218,7 +216,7 @@ func buildTestTree(b *testing.B, enc *encoder, level, maxlevel int, fj fastJsonN
 func BenchmarkFastJsonNode2Chilren(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		enc := newEncoder()
-		root := enc.newNodeWithAttr(enc.idForAttr(testAttr))
+		root := enc.newNode(enc.idForAttr(testAttr))
 		buildTestTree(b, enc, 1, 20, root)
 	}
 }
