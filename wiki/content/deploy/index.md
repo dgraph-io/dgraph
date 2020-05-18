@@ -2155,6 +2155,8 @@ Route53's health checks can be leveraged to create standard CloudWatch alarms to
 
 Considering that the endpoints to monitor are publicly accessible and you have the AWS credentials and [awscli](https://aws.amazon.com/cli/) setup, we’ll go through an example of setting up a simple CloudWatch alarm configured to alert via email for the Alpha endpoint `alpha.acme.org:8080/health`. Dgraph Zero's `/health` endpoint can also be monitored in a similar way.
 
+
+
 #### Create the Route53 Health Check
 ```sh
 aws route53 create-health-check \
@@ -2181,27 +2183,31 @@ The response to the above command would be the ID of the created health check.
 ```
 Make a note of the health check ID. This will be used to integrate CloudWatch alarms with the health check.
 
+{{% notice "note" %}}
+Currently, Route53 metrics are only (available)[https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/monitoring-health-checks.html] in the **US East (N. Virginia)** region. The Cloudwatch Alarm (and the SNS Topic) should therefore be created in `us-east-1`.
+{{% /notice %}}
+
 #### [Optional] Creating an SNS Topic
 SNS topics are used to create message delivery channels. If you do not have any SNS topics configured, one can be created by running the following command:
 
 ```sh
-aws sns create-topic --name ops --query 'TopicArn'
+aws sns create-topic --region=us-east-1 --name ops --query 'TopicArn'
 ```
 
 The response to the above command would be as follows:
 ```sh
-"arn:aws:sns:ap-south-1:313054824302:ops"
+"arn:aws:sns:us-east-1:123456789012:ops"
 ```
 Be sure to make a note of the topic ARN. This would be used to configure the CloudWatch alarm's action parameter.
 
 Run the following command to subscribe your email to the SNS topic:
 ```sh
 aws sns subscribe \
-    --topic-arn arn:aws:sns:ap-south-1:313054824302:ops \
+    --topic-arn arn:aws:sns:us-east-1:123456789012:ops \
     --protocol email \
     --notification-endpoint ops@acme.org
 ```
-Once the subscription is confirmed, CloudWatch can be configured to use the SNS topic to trigger the alarm notification.
+The subscription will need to be confirmed through *AWS Notification - Subscription Confirmation* sent through email. Once the subscription is confirmed, CloudWatch can be configured to use the SNS topic to trigger the alarm notification.
 
 
 
@@ -2209,6 +2215,7 @@ Once the subscription is confirmed, CloudWatch can be configured to use the SNS 
 The following command creates a CloudWatch alarm with `--alarm-actions` set to the ARN of the SNS topic and the `--dimensions` of the alarm set to the health check ID.
 ```sh
 aws cloudwatch put-metric-alarm \
+    --region=us-east-1 \
     --alarm-name dgraph-alpha \
     --alarm-description "Alarm for when Alpha is down" \
     --metric-name HealthCheckStatus \
@@ -2220,7 +2227,7 @@ aws cloudwatch put-metric-alarm \
     --comparison-operator LessThanThreshold \
     --evaluation-periods 1 \
     --treat-missing-data breaching \
-    --alarm-actions arn:aws:sns:ap-south-1:313054824302:ops
+    --alarm-actions arn:aws:sns:us-east-1:123456789012:ops
 ```
 
 One can verify the alarm status from the CloudWatch or Route53 consoles.
