@@ -17,6 +17,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"sync"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -24,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -61,36 +63,47 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
+	errCh := make(chan error, len(currentGroups))
+	wg := sync.WaitGroup{}
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-		if err := proposeRestoreOrSend(ctx, reqCopy); err != nil {
-			// In case of an error, return but don't cancel the context.
-			// After the timeout expires, the Done channel will be closed.
-			// If the channel is closed due to a deadline issue, we can
-			// ignore the requests for the groups that did not error out.
-			return err
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			proposeRestoreOrSend(ctx, reqCopy, errCh)
+		}()
+	}
+	wg.Wait()
+	close(errCh)
+
+	for err := range errCh {
+		if err != nil {
+			return errors.Wrapf(err, "cannot complete restore proposal")
 		}
 	}
 
 	return nil
 }
 
-func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
+func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest, errCh chan error) {
 	if groups().ServesGroup(req.GetGroupId()) {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
-		return err
+		errCh <- err
+		return
 	}
 
 	pl := groups().Leader(req.GetGroupId())
 	if pl == nil {
-		return conn.ErrNoConnection
+		errCh <- conn.ErrNoConnection
+		return
 	}
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
-	return err
+	errCh <- err
 }
 
 // Restore implements the Worker interface.
