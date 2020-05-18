@@ -46,7 +46,6 @@ func stripSpaces(str string) string {
 	}, str)
 }
 
-// handleBasicFacetsType parses facetVal of type number/bool/string.
 func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error) {
 	var jsonValue interface{}
 	var valueType api.Facet_ValType
@@ -86,7 +85,7 @@ func handleBasicFacetsType(key string, facetVal interface{}) (*api.Facet, error)
 		jsonValue = v
 		valueType = api.Facet_BOOL
 	default:
-		return nil, errors.Errorf("facet value can only be string/number/bool.")
+		return nil, errors.Errorf("facet value can only be string/float64/bool.")
 	}
 
 	// Convert facet val interface{} to binary.
@@ -184,7 +183,7 @@ type mapResponse struct {
 	fcts []*api.Facet // facets on the edge connecting this node to the source if any.
 }
 
-func handleScalarType(k string, v interface{}, op int, nq *api.NQuad) error {
+func handleBasicType(k string, v interface{}, op int, nq *api.NQuad) error {
 	switch v := v.(type) {
 	case json.Number:
 		if strings.ContainsAny(v.String(), ".Ee") {
@@ -468,7 +467,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 		switch v := v.(type) {
 		case string, json.Number, bool:
-			if err := handleScalarType(pred, v, op, &nq); err != nil {
+			if err := handleBasicType(pred, v, op, &nq); err != nil {
 				return mr, err
 			}
 			buf.Push(&nq)
@@ -515,7 +514,7 @@ func (buf *NQuadBuffer) mapToNquads(m map[string]interface{}, op int, parentPred
 
 				switch iv := item.(type) {
 				case string, float64, json.Number:
-					if err := handleScalarType(pred, iv, op, &nq); err != nil {
+					if err := handleBasicType(pred, iv, op, &nq); err != nil {
 						return mr, err
 					}
 					// Here populate facets from facetsMapSlice. Each map has mapping for single
