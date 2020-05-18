@@ -18,6 +18,7 @@ package posting
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"math"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
 )
 
 // incrRollupi is used to batch keys for rollup incrementally.
@@ -273,6 +275,28 @@ func NewPlCache() error {
 		},
 	})
 	return err
+
+	go func() {
+		m := plCache.Metrics
+
+		ticker := time.NewTicker(5 * time.Second)
+		for range ticker.C {
+			ostats.Record(context.Background(),
+				x.CacheInUse.M(int64(m.CostAdded()-m.CostEvicted())),
+				x.CacheAddedKeys.M(int64(m.KeysAdded())),
+				x.CacheEvictedKeys.M(int64(m.KeysEvicted())),
+				x.CacheUpdatedKeys.M(int64(m.KeysUpdated())),
+				x.CacheHits.M(int64(m.Hits())),
+				x.CacheHitRatio.M(m.Ratio()),
+				x.CacheMiss.M(int64(m.Misses())),
+				x.CacheAddedBytes.M(int64(m.CostAdded())),
+				x.CacheEvictedBytes.M(int64(m.CostEvicted())),
+				x.CacheDroppedSet.M(int64(m.SetsDropped())),
+				x.CacheRejectedSet.M(int64(m.SetsRejected())),
+				x.CacheDroppedGets.M(int64(m.GetsDropped())),
+				x.CacheKeptGets.M(int64(m.GetsKept())))
+		}
+	}()
 }
 
 // ClearCache will clear the entire list cache.
