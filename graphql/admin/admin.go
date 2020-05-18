@@ -20,10 +20,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 	"sync"
 	"time"
+
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -447,37 +448,67 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 
 func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	varName := "GQLSchema"
+	existingSchemaVar := "ExistingGQLSchema"
+	xidInSchemaVar := "XidInSchema"
 	gqlType := "dgraph.graphql"
-
+	/*
+	   query {
+	     ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
+	       uid
+	       dgraph.graphql.schema
+	       XidInSchema as dgraph.graphql.xid
+	     }
+	   }
+	*/
 	qry := &gql.GraphQuery{
-		Attr: varName,
-		Var:  varName,
+		Attr: existingSchemaVar,
+		Var:  existingSchemaVar,
 		Func: &gql.Function{
-			Name: "eq",
-			Args: []gql.Arg{
-				{Value: gqlSchemaXidKey},
-				{Value: fmt.Sprintf("%q", gqlSchemaXidVal)},
-			},
+			Name: "type",
+			Args: []gql.Arg{{Value: gqlType}},
 		},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: gqlType}},
-			},
+		Children: []*gql.GraphQuery{
+			{Attr: "uid"},
+			{Attr: gqlSchemaPred},
+			{Attr: gqlSchemaXidKey, Var: xidInSchemaVar},
 		},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: gqlSchemaPred}},
 	}
-
+	/*
+	   mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
+	      set {
+	         "uid": "uid(ExistingGQLSchema)",
+	         "dgraph.graphql.xid": "dgraph.graphql.schema"
+	      }
+	   }
+	   mutation @if(eq(len(ExistingGQLSchema),0) AND eq(len(XidInSchema),0))
+	      set {
+	         "uid": "_:XidInSchema",
+	         "dgraph.type": ["dgraph.graphql"],
+	         "dgraph.graphql.xid": "dgraph.graphql.schema",
+	         "dgraph.graphql.schema": ""
+	      }
+	   }
+	*/
 	mutations := []*dgoapi.Mutation{
 		{
 			SetJson: []byte(fmt.Sprintf(`
-			{
-				"uid": "_:%s",
-				"dgraph.type": ["%s"],
-				"%s": "%s",
-				"%s": ""
-			}`, varName, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
-			Cond: fmt.Sprintf(`@if(eq(len(%s),0))`, varName),
+         {
+            "uid": "uid(%s)",
+            "%s": "%s"
+         }`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
+		},
+		{
+			SetJson: []byte(fmt.Sprintf(`
+         {
+            "uid": "_:%s",
+            "dgraph.type": ["%s"],
+            "%s": "%s",
+            "%s": ""
+         }`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
 		},
 	}
 
@@ -500,6 +531,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 
 	// the Alphas which didn't create the gql schema node, will get the uid here.
 	gqlSchemaNode := result[varName].([]interface{})[0].(map[string]interface{})
+
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
 		Schema: gqlSchemaNode[gqlSchemaPred].(string),

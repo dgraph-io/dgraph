@@ -20,10 +20,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/gogo/protobuf/jsonpb"
 	"io/ioutil"
 	"net/http"
 	"testing"
+
+	"github.com/gogo/protobuf/jsonpb"
 
 	"github.com/dgraph-io/dgo/v2"
 	"github.com/dgraph-io/dgo/v2/protos/api"
@@ -319,6 +320,7 @@ func admin(t *testing.T) {
 	addGQLSchema(t, client)
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
+	gqlSchemaNodeHasXid(t, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -564,4 +566,19 @@ func adminState(t *testing.T) {
 	require.Equal(t, state.License.User, result.State.License.User)
 	require.Equal(t, state.License.ExpiryTs, result.State.License.ExpiryTs)
 	require.Equal(t, state.License.Enabled, result.State.License.Enabled)
+}
+
+func gqlSchemaNodeHasXid(t *testing.T, client *dgo.Dgraph) {
+	resp, err := client.NewReadOnlyTxn().Query(context.Background(), `query {
+      gqlSchema(func: type(dgraph.graphql)) {
+         dgraph.graphql.xid
+      }
+   }`)
+	require.NoError(t, err)
+	// confirm that there is only one node of type dgraph.graphql and it has xid.
+	require.JSONEq(t, `{
+      "gqlSchema": [{
+         "dgraph.graphql.xid": "dgraph.graphql.schema"
+      }]
+   }`, string(resp.GetJson()))
 }
