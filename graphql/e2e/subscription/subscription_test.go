@@ -27,9 +27,9 @@ import (
 )
 
 const (
-	graphQLEndpoint      = "http://localhost:8080/graphql"
-	subscriptionEndpoint = "ws://localhost:8080/graphql"
-	adminEndpoint        = "http://localhost:8080/admin"
+	graphQLEndpoint      = "http://localhost:8180/graphql"
+	subscriptionEndpoint = "ws://localhost:8180/graphql"
+	adminEndpoint        = "http://localhost:8180/admin"
 	sch                  = `
 	type Product {
 		productID: ID!
