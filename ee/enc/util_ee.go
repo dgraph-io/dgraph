@@ -97,7 +97,8 @@ func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
 		keyReaders++
 	}
 	if keyReaders == 2 {
-		return nil, errors.Errorf("cannot have local and vault key readers. re-check the configuration")
+		return nil, errors.Errorf("cannot have local and vault key readers. " +
+			"re-check the configuration")
 	}
 	glog.Infof("KeyReader instantiated of type %T", keyReader)
 	return keyReader, nil

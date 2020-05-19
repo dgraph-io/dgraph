@@ -31,8 +31,8 @@ import (
 // Configuration options of Vault.
 const (
 	vaultAddr         = "vault_addr"
-	vaultRoleIDFile   = "vault_roleID_file"
-	vaultSecretIDFile = "vault_secretID_file"
+	vaultRoleIDFile   = "vault_roleid_file"
+	vaultSecretIDFile = "vault_secretid_file"
 	vaultPath         = "vault_path"
 	vaultField        = "vault_field"
 )
@@ -77,28 +77,29 @@ func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 	if v.roleID != "" && v.secretID != "" {
 		return v, nil
 	}
-	return nil, errors.Errorf("%v and %v must both be specified", vaultRoleIDFile, vaultSecretIDFile)
+	return nil, errors.Errorf("%v and %v must both be specified",
+		vaultRoleIDFile, vaultSecretIDFile)
 }
 
 // ReadKey reads the key from the vault kv store.
-func (vKR *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
-	if vKR == nil {
+func (vkr *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
+	if vkr == nil {
 		return nil, errors.Errorf("nil vaultKeyReader")
 	}
 
 	// Read the files.
-	roleID, err := ioutil.ReadFile(vKR.roleID)
+	roleID, err := ioutil.ReadFile(vkr.roleID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading role-id file (%v)", vKR.roleID)
+		return nil, errors.Wrapf(err, "error reading role-id file (%v)", vkr.roleID)
 	}
-	secretID, err := ioutil.ReadFile(vKR.secretID)
+	secretID, err := ioutil.ReadFile(vkr.secretID)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading secret-id file (%v)", vKR.secretID)
+		return nil, errors.Wrapf(err, "error reading secret-id file (%v)", vkr.secretID)
 	}
 
 	// Get a Vault Client.
 	vConfig := &api.Config{
-		Address: vKR.addr,
+		Address: vkr.addr,
 	}
 	client, err := api.NewClient(vConfig)
 	if err != nil {
@@ -120,10 +121,10 @@ func (vKR *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	client.SetToken(resp.Auth.ClientToken)
 
 	// Read from KV store
-	secret, err := client.Logical().Read("secret/data/" + vKR.path)
+	secret, err := client.Logical().Read("secret/data/" + vkr.path)
 	if err != nil || secret == nil {
 		return nil, errors.Errorf("error or nil secret on reading key at %v: "+
-			"err %v", vKR.path, err)
+			"err %v", vkr.path, err)
 	}
 
 	// Parse key from response
@@ -131,9 +132,9 @@ func (vKR *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	if !ok {
 		return nil, errors.Errorf("kv store read response from vault is bad")
 	}
-	kVal, ok := m[vKR.field]
+	kVal, ok := m[vkr.field]
 	if !ok {
-		return nil, errors.Errorf("secret key not found at %v", vKR.field)
+		return nil, errors.Errorf("secret key not found at %v", vkr.field)
 	}
 	kbyte := []byte(kVal.(string))
 
