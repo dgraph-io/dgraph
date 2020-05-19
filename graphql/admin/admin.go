@@ -447,7 +447,6 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 }
 
 func upsertEmptyGQLSchema() (*gqlSchema, error) {
-	varName := "GQLSchema"
 	existingSchemaVar := "ExistingGQLSchema"
 	xidInSchemaVar := "XidInSchema"
 	gqlType := "dgraph.graphql"
@@ -519,7 +518,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	}
 
 	// the Alpha which created the gql schema node will get the uid here
-	uid, ok := resp.GetUids()[varName]
+	uid, ok := resp.GetUids()[xidInSchemaVar]
 	if ok {
 		return &gqlSchema{ID: uid}, nil
 	}
@@ -530,7 +529,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	}
 
 	// the Alphas which didn't create the gql schema node, will get the uid here.
-	gqlSchemaNode := result[varName].([]interface{})[0].(map[string]interface{})
+	gqlSchemaNode := result[xidInSchemaVar].([]interface{})[0].(map[string]interface{})
 
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
