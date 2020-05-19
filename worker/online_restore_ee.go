@@ -114,7 +114,6 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &emptyRes, nil
 }
 
-// TODO(DGRAPH-1220): Online restores support passing the backup id.
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
