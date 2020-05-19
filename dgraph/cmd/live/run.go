@@ -216,7 +216,9 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString(val))
+	uid, _ := l.alloc.AssignUid(sb.String())
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
