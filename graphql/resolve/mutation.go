@@ -25,6 +25,7 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 )
 
@@ -103,6 +104,7 @@ type DgraphExecutor interface {
 	// occurs, that indicates that the execution failed in some way significant enough
 	// way as to not continue processing this mutation or others in the same request.
 	Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error)
+	CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error
 }
 
 // An UpsertMutation is the query and mutations needed for a Dgraph upsert.
@@ -185,6 +187,16 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 func (mr *dgraphResolver) rewriteAndExecute(
 	ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
+	var mutResp *dgoapi.Response
+	commit := false
+
+	defer func() {
+		if !commit && mutResp != nil && mutResp.Txn != nil {
+			mutResp.Txn.Aborted = true
+			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+			glog.Errorf("Error occured while aborting transaction: %f", err)
+		}
+	}()
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
@@ -206,7 +218,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Mutations: upsert.Mutations,
 	}
 
-	mutResp, err := mr.executor.Execute(ctx, req)
+	mutResp, err = mr.executor.Execute(ctx, req)
 	if err != nil {
 		gqlErr := schema.GQLWrapLocationf(
 			err, mutation.Location(), "mutation %s failed", mutation.Name())
@@ -230,6 +242,14 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	if dgQuery == nil && err != nil {
 		return emptyResult(errs), resolverFailed
 	}
+
+	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	if err != nil {
+		return emptyResult(
+				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
+			resolverFailed
+	}
+	commit = true
 
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
