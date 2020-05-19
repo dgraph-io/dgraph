@@ -292,13 +292,14 @@ func run() {
 
 		// Stop all HTTP requests.
 		_ = httpListener.Close()
+		// Try to generate a snapshot before the shutdown.
+		st.node.trySnapshot(0)
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
 		// Stop Raft store.
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
-		st.node.trySnapshot(0)
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")
