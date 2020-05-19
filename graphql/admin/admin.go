@@ -464,29 +464,59 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 }
 
 func upsertEmptyGQLSchema() (*gqlSchema, error) {
-	varName := "GQLSchema"
+	existingSchemaVar := "ExistingGQLSchema"
+	xidInSchemaVar := "XidInSchema"
 	gqlType := "dgraph.graphql"
 
+	/*
+		query {
+		  ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
+		    uid
+		    dgraph.graphql.schema
+		    XidInSchema as dgraph.graphql.xid
+		  }
+		}
+	*/
 	qry := &gql.GraphQuery{
-		Attr: varName,
-		Var:  varName,
+		Attr: existingSchemaVar,
+		Var:  existingSchemaVar,
 		Func: &gql.Function{
-			Name: "eq",
-			Args: []gql.Arg{
-				{Value: gqlSchemaXidKey},
-				{Value: fmt.Sprintf("%q", gqlSchemaXidVal)},
-			},
+			Name: "type",
+			Args: []gql.Arg{{Value: gqlType}},
 		},
-		Filter: &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "type",
-				Args: []gql.Arg{{Value: gqlType}},
-			},
+		Children: []*gql.GraphQuery{
+			{Attr: "uid"},
+			{Attr: gqlSchemaPred},
+			{Attr: gqlSchemaXidKey, Var: xidInSchemaVar},
 		},
-		Children: []*gql.GraphQuery{{Attr: "uid"}, {Attr: gqlSchemaPred}},
 	}
 
+	/*
+		mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
+			set {
+				"uid": "uid(ExistingGQLSchema)",
+				"dgraph.graphql.xid": "dgraph.graphql.schema"
+			}
+		}
+		mutation @if(eq(len(ExistingGQLSchema),0) AND eq(len(XidInSchema),0))
+			set {
+				"uid": "_:XidInSchema",
+				"dgraph.type": ["dgraph.graphql"],
+				"dgraph.graphql.xid": "dgraph.graphql.schema",
+				"dgraph.graphql.schema": ""
+			}
+		}
+	*/
 	mutations := []*dgoapi.Mutation{
+		{
+			SetJson: []byte(fmt.Sprintf(`
+			{
+				"uid": "uid(%s)",
+				"%s": "%s"
+			}`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
+		},
 		{
 			SetJson: []byte(fmt.Sprintf(`
 			{
@@ -494,8 +524,9 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 				"dgraph.type": ["%s"],
 				"%s": "%s",
 				"%s": ""
-			}`, varName, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
-			Cond: fmt.Sprintf(`@if(eq(len(%s),0))`, varName),
+			}`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
+			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
+				xidInSchemaVar),
 		},
 	}
 
@@ -505,8 +536,8 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		return nil, err
 	}
 
-	// the Alpha which created the gql schema node will get the uid here
-	uid, ok := resp.GetUids()[varName]
+	// the Alpha which created a new gql schema node with xid will get the uid here
+	uid, ok := resp.GetUids()[xidInSchemaVar]
 	if ok {
 		return &gqlSchema{ID: uid}, nil
 	}
@@ -516,8 +547,8 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 	}
 
-	// the Alphas which didn't create the gql schema node, will get the uid here.
-	gqlSchemaNode := result[varName].([]interface{})[0].(map[string]interface{})
+	// the Alphas which didn't create a new gql schema node, will get the uid here.
+	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
 		Schema: gqlSchemaNode[gqlSchemaPred].(string),
