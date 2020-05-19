@@ -102,7 +102,8 @@ func parseSecrets(sch string) (map[string]string, error) {
 		}
 
 		val := strings.Trim(parts[3], `"`)
-		m[parts[2]] = val
+		key := strings.Trim(parts[2], `"`)
+		m[key] = val
 	}
 
 	if err := scanner.Err(); err != nil {

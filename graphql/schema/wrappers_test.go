@@ -897,7 +897,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+			# Dgraph.Secret  "GITHUB_API_TOKEN"   some-super-secret-token
 			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
@@ -932,7 +932,9 @@ func TestParseSecrets(t *testing.T) {
 				return
 			}
 			require.Equal(t, test.expectedSecrets, s)
-			require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+			if test.expectedAuthHeader != "" {
+				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+			}
 		})
 	}
 }
