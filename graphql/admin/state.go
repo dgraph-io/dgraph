@@ -37,7 +37,7 @@ type clusterGroup struct {
 func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	resp, err := (&edgraph.Server{}).State(ctx)
 	if err != nil {
-		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
+		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
 
 	// unmarshal it back to MembershipState proto in order to map to graphql response
@@ -46,19 +46,19 @@ func resolveState(ctx context.Context, q schema.Query) *resolve.Resolved {
 	err = u.Unmarshal(bytes.NewReader(resp.GetJson()), &ms)
 
 	if err != nil {
-		return emptyResult(q, err)
+		return resolve.EmptyResult(q, err)
 	}
 
 	// map to graphql response structure
 	state := convertToGraphQLResp(ms)
 	b, err := json.Marshal(state)
 	if err != nil {
-		return emptyResult(q, err)
+		return resolve.EmptyResult(q, err)
 	}
 	var resultState map[string]interface{}
 	err = json.Unmarshal(b, &resultState)
 	if err != nil {
-		return emptyResult(q, err)
+		return resolve.EmptyResult(q, err)
 	}
 
 	return &resolve.Resolved{

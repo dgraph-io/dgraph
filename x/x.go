@@ -37,6 +37,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/peer"
+
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200"
@@ -367,6 +369,41 @@ func AttachAccessJwt(ctx context.Context, r *http.Request) context.Context {
 		ctx = metadata.NewIncomingContext(ctx, md)
 	}
 	return ctx
+}
+
+// AttachRemoteIP adds any incoming IP data into the grpc context metadata
+func AttachRemoteIP(ctx context.Context, r *http.Request) context.Context {
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
+			ctx = peer.NewContext(ctx, &peer.Peer{
+				Addr: &net.TCPAddr{
+					IP:   net.ParseIP(ip),
+					Port: intPort,
+				},
+			})
+		}
+	}
+	return ctx
+}
+
+// IsIpWhitelisted checks if the given ipString is within the whitelisted ip range
+func IsIpWhitelisted(ipString string) bool {
+	ip := net.ParseIP(ipString)
+
+	if ip == nil {
+		return false
+	}
+
+	if ip.IsLoopback() {
+		return true
+	}
+
+	for _, ipRange := range WorkerConfig.WhiteListedIPRanges {
+		if bytes.Compare(ip, ipRange.Lower) >= 0 && bytes.Compare(ip, ipRange.Upper) <= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Write response body, transparently compressing if necessary.

@@ -236,12 +236,17 @@ const (
 		response: Response
 	}
 
+	type Config {
+		lruMb: Float
+	}
+
 	` + adminTypes + `
 
 	type Query {
 		getGQLSchema: GQLSchema
 		health: [NodeState]
 		state: MembershipState
+		config: Config
 
 		` + adminQueries + `
 	}
@@ -279,6 +284,55 @@ const (
 		` + adminMutations + `
 	}
  `
+)
+
+var (
+	// commonAdminQueryMWs are the middlewares which should be applied to queries served by admin
+	// server unless some exceptional behaviour is required
+	commonAdminQueryMWs = resolve.QueryMiddlewares{
+		resolve.IpWhitelistingMW4Query, // good to apply ip whitelisting before Guardian auth
+		resolve.GuardianAuthMW4Query,
+	}
+	// commonAdminMutationMWs are the middlewares which should be applied to mutations served by
+	// admin server unless some exceptional behaviour is required
+	commonAdminMutationMWs = resolve.MutationMiddlewares{
+		resolve.IpWhitelistingMW4Mutation, // good to apply ip whitelisting before Guardian auth
+		resolve.GuardianAuthMW4Mutation,
+	}
+	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
+		"health":      {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
+		"state":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"config":      commonAdminQueryMWs,
+		"listBackups": commonAdminQueryMWs,
+		// not applying ip whitelisting to keep it in sync with /alter
+		"getGQLSchema": {resolve.GuardianAuthMW4Query},
+		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
+		// so no need to apply GuardianAuth Middleware
+		"queryGroup":     {resolve.IpWhitelistingMW4Query},
+		"queryUser":      {resolve.IpWhitelistingMW4Query},
+		"getGroup":       {resolve.IpWhitelistingMW4Query},
+		"getCurrentUser": {resolve.IpWhitelistingMW4Query},
+		"getUser":        {resolve.IpWhitelistingMW4Query},
+	}
+	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
+		"backup":   commonAdminMutationMWs,
+		"config":   commonAdminMutationMWs,
+		"draining": commonAdminMutationMWs,
+		"export":   commonAdminMutationMWs,
+		"login":    {resolve.IpWhitelistingMW4Mutation},
+		"restore":  commonAdminMutationMWs,
+		"shutdown": commonAdminMutationMWs,
+		// not applying ip whitelisting to keep it in sync with /alter
+		"updateGQLSchema": {resolve.GuardianAuthMW4Mutation},
+		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
+		// so no need to apply GuardianAuth Middleware
+		"addUser":     {resolve.IpWhitelistingMW4Mutation},
+		"addGroup":    {resolve.IpWhitelistingMW4Mutation},
+		"updateUser":  {resolve.IpWhitelistingMW4Mutation},
+		"updateGroup": {resolve.IpWhitelistingMW4Mutation},
+		"deleteUser":  {resolve.IpWhitelistingMW4Mutation},
+		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
+	}
 )
 
 type gqlSchema struct {
@@ -416,7 +470,7 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 
 	adminMutationResolvers := map[string]resolve.MutationResolverFunc{
 		"backup":   resolveBackup,
-		"config":   resolveConfig,
+		"config":   resolveUpdateConfig,
 		"draining": resolveDraining,
 		"export":   resolveExport,
 		"login":    resolveLogin,
@@ -425,11 +479,19 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	}
 
 	rf := resolverFactoryWithErrorMsg(errResolverNotFound).
+		WithQueryMiddlewareConfig(adminQueryMWConfig).
+		WithMutationMiddlewareConfig(adminMutationMWConfig).
 		WithQueryResolver("health", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveHealth)
 		}).
 		WithQueryResolver("state", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveState)
+		}).
+		WithQueryResolver("config", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveGetConfig)
+		}).
+		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
@@ -448,17 +510,12 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	for gqlMut, resolver := range adminMutationResolvers {
 		// gotta force go to evaluate the right function at each loop iteration
 		// otherwise you get variable capture issues
-		func(f resolve.MutationResolverFunc) {
+		func(f resolve.MutationResolver) {
 			rf.WithMutationResolver(gqlMut, func(m schema.Mutation) resolve.MutationResolver {
 				return f
 			})
 		}(resolver)
 	}
-
-	// Add admin query endpoints.
-	rf = rf.WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
-		return resolve.QueryResolverFunc(resolveListBackups)
-	})
 
 	return rf.WithSchemaIntrospection()
 }
@@ -765,12 +822,4 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 func response(code, msg string) map[string]interface{} {
 	return map[string]interface{}{
 		"response": map[string]interface{}{"code": code, "message": msg}}
-}
-
-func emptyResult(f schema.Field, err error) *resolve.Resolved {
-	return &resolve.Resolved{
-		Data:  map[string]interface{}{f.Name(): nil},
-		Field: f,
-		Err:   err,
-	}
 }
