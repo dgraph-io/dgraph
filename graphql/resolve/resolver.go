@@ -980,7 +980,16 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 
 	idFieldName := idField.Name()
-
+	castInterfaceToSlice := func(tmpVals interface{}) []interface{} {
+		var fieldVals []interface{}
+		switch tv := tmpVals.(type) {
+		case []interface{}:
+			fieldVals = tv
+		case interface{}:
+			fieldVals = []interface{}{tv}
+		}
+		return fieldVals
+	}
 	// Here we walk through the array and collect all unique values for this field. In the
 	// example at the start of the function, we could be collecting all unique classes
 	// across all users. This is where the batching happens so that we make one call per
@@ -995,13 +1004,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		var fieldVals []interface{}
-		switch tv := tmpVals.(type) {
-		case []interface{}:
-			fieldVals = tv
-		case interface{}:
-			fieldVals = []interface{}{tv}
-		}
+		fieldVals := castInterfaceToSlice(tmpVals)
 		for _, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
 			if !ok {
@@ -1040,13 +1043,7 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		var fieldVals []interface{}
-		switch tv := tmpVals.(type) {
-		case []interface{}:
-			fieldVals = tv
-		case interface{}:
-			fieldVals = []interface{}{tv}
-		}
+		fieldVals := castInterfaceToSlice(tmpVals)
 		for idx, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
 			if !ok {

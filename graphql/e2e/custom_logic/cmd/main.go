@@ -145,6 +145,10 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid URL", r.URL.String())
 	}
 
+	if expectedRequest.body == "" && r.Body != http.NoBody {
+		return getError("Expected No body", "but got some body to read")
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return getError("Unable to read request body", err.Error())

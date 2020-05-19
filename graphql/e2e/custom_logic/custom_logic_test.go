@@ -2022,15 +2022,9 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 		tweets: [SearchTweets] @hasInverse(field: user)
 	}
 	
-	type RemoteUser@remote {
+	type RemoteUser @remote {
 		id: ID!
 		name: String
-		screen_name: String
-		location: String
-		description: String
-		followers_count: Int
-		statuses_count: Int
-		friends_count: Int
 	}
 	
 	type Followers@remote{
