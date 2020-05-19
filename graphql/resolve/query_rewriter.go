@@ -433,12 +433,20 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
-func (authRw *authRewriter) evaluateStaticRules(f schema.Field) schema.RuleResult {
+func (authRw *authRewriter) evaluateStaticRules(val interface{}) schema.RuleResult {
 	if authRw == nil || authRw.isWritingAuth {
 		return schema.Uncertain
 	}
 
-	typ := f.Type()
+	var typ schema.Type
+	switch v := val.(type) {
+	case schema.Field:
+		typ = v.Type()
+	case schema.Type:
+		typ = v
+	default:
+		return schema.Uncertain
+	}
 	rn := authRw.selector(typ)
 	return rn.EvaluateStatic(authRw.authVariables)
 }
