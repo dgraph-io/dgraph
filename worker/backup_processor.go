@@ -59,10 +59,10 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		bplList: make([]*pb.BackupPostingList, backupNumGo),
 	}
 
-	for i, _ := range bp.plList {
+	for i := range bp.plList {
 		bp.plList[i] = &pb.PostingList{}
 	}
-	for i, _ := range bp.bplList {
+	for i := range bp.bplList {
 		bp.bplList[i] = &pb.BackupPostingList{}
 	}
 
