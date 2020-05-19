@@ -80,16 +80,16 @@ func (s *handler) DisableSubscription() {
 func parseSecrets(sch string) (map[string]string, error) {
 	m := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(sch))
-	seenAuthSecret := false
+	authSecret := ""
 	for scanner.Scan() {
 		text := strings.TrimSpace(scanner.Text())
 
 		if strings.HasPrefix(text, "# Dgraph.Authorization") {
-			if seenAuthSecret {
+			if authSecret != "" {
 				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
 					"a schema, found second mention: %v", text)
 			}
-			seenAuthSecret = true
+			authSecret = text
 			continue
 		}
 		if !strings.HasPrefix(text, "# Dgraph.Secret") {
@@ -108,6 +108,11 @@ func parseSecrets(sch string) (map[string]string, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
+	if authSecret != "" {
+		if err := authorization.ParseAuthMeta(authSecret); err != nil {
+			return nil, err
+		}
+	}
 	return m, nil
 }
 
@@ -116,10 +121,6 @@ func parseSecrets(sch string) (map[string]string, error) {
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
-	}
-
-	if err := authorization.ParseAuthMeta(input); err != nil {
-		return nil, err
 	}
 
 	schemaSecrets, err := parseSecrets(input)
