@@ -428,7 +428,7 @@ type Column @auth(
       }"""},
 ) {
   colID: ID!
-  inProject: Project!  # @auth(update: { rule: "DENY" })
+  inProject: Project! # @auth(update: { rule: "DENY" })
   name: String! @search(by: [hash])
   tickets: [Ticket] @hasInverse(field: onColumn)
   random: String
