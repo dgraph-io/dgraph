@@ -491,21 +491,21 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	mutations := []*dgoapi.Mutation{
 		{
 			SetJson: []byte(fmt.Sprintf(`
-         {
-            "uid": "uid(%s)",
-            "%s": "%s"
-         }`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
+                        {
+                           "uid": "uid(%s)",
+                           "%s": "%s"
+                        }`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
 				xidInSchemaVar),
 		},
 		{
 			SetJson: []byte(fmt.Sprintf(`
-         {
-            "uid": "_:%s",
-            "dgraph.type": ["%s"],
-            "%s": "%s",
-            "%s": ""
-         }`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
+                        {
+                           "uid": "_:%s",
+                           "dgraph.type": ["%s"],
+                           "%s": "%s",
+                           "%s": ""
+                        }`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
 				xidInSchemaVar),
 		},
@@ -529,7 +529,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	}
 
 	// the Alphas which didn't create the gql schema node, will get the uid here.
-	gqlSchemaNode := result[xidInSchemaVar].([]interface{})[0].(map[string]interface{})
+	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
 
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
