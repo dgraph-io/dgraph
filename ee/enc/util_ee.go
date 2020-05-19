@@ -53,13 +53,16 @@ type localKeyReader struct {
 	keyFile string
 }
 
-func (lkR *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
-	if lkR == nil || lkR.keyFile == "" {
-		return nil, errors.Errorf("nil or bad localKeyReader")
+func (lkr *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
+	if lkr == nil {
+		return nil, errors.Errorf("nil localKeyReader")
 	}
-	k, err := ioutil.ReadFile(lkR.keyFile)
+	if lkr.keyFile == "" {
+		return nil, errors.Errorf("bad localKeyReader")
+	}
+	k, err := ioutil.ReadFile(lkr.keyFile)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading encryption key file (%v)", lkR.keyFile)
+		return nil, errors.Wrapf(err, "error reading encryption key file (%v)", lkr.keyFile)
 	}
 	// len must be 16,24,32 bytes if given. All other lengths are invalid.
 	klen := len(k)

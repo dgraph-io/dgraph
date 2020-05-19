@@ -77,7 +77,6 @@ func TestNewKeyReader(t *testing.T) {
 	kR, err := NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
-	t.Logf("%v", err)
 
 	// RoleID only is invalid.
 	resetConfig(config)
@@ -85,7 +84,6 @@ func TestNewKeyReader(t *testing.T) {
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
-	t.Logf("%v", err)
 
 	// SecretID only is invalid.
 	resetConfig(config)
@@ -93,7 +91,6 @@ func TestNewKeyReader(t *testing.T) {
 	kR, err = NewKeyReader(config)
 	require.Error(t, err)
 	require.Nil(t, kR)
-	t.Logf("%v", err)
 
 	// RoleID and SecretID given but RoleID file doesn't exist.
 	resetConfig(config)
@@ -106,7 +103,6 @@ func TestNewKeyReader(t *testing.T) {
 	k, err := kR.ReadKey()
 	require.Nil(t, k)
 	require.Error(t, err)
-	t.Logf("%v", err)
 
 	// RoleID and SecretID given but RoleID file exists. SecretID file doesn't exists.
 	resetConfig(config)
@@ -119,7 +115,6 @@ func TestNewKeyReader(t *testing.T) {
 	k, err = kR.ReadKey()
 	require.Nil(t, k)
 	require.Error(t, err)
-	t.Logf("%v", err)
 
 	// RoleID and SecretID given but RoleID file and SecretID file exists and is valid.
 	resetConfig(config)
@@ -134,7 +129,6 @@ func TestNewKeyReader(t *testing.T) {
 	k, err = kR.ReadKey()
 	require.Nil(t, k) // still fails because we need to mock Vault server.
 	require.Error(t, err)
-	t.Logf("%v", err)
 	//nl.Close()
 
 	// Bad Encryption Key File
@@ -154,7 +148,6 @@ func TestNewKeyReader(t *testing.T) {
 	kR, err = NewKeyReader(config)
 	require.NoError(t, err)
 	require.Nil(t, kR)
-	t.Logf("%v", err)
 
 	// Bad Length Encryption Key File.
 	resetConfig(config)
@@ -166,7 +159,6 @@ func TestNewKeyReader(t *testing.T) {
 	k, err = kR.ReadKey()
 	require.Nil(t, k)
 	require.Error(t, err)
-	t.Logf("%v", err)
 
 	// Good Encryption Key File.
 	resetConfig(config)
@@ -178,7 +170,6 @@ func TestNewKeyReader(t *testing.T) {
 	k, err = kR.ReadKey()
 	require.NotNil(t, k)
 	require.NoError(t, err)
-	t.Logf("%v", err)
 }
 
 func TestGetReaderWriter(t *testing.T) {

@@ -570,15 +570,15 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	var kR enc.KeyReader
-	if kR, err = enc.NewKeyReader(Alpha.Conf); err != nil {
+	var kr enc.KeyReader
+	if kr, err = enc.NewKeyReader(Alpha.Conf); err != nil {
 		glog.Errorf("error: %v", err)
 		return
 	}
 	// kR can be nil for the no-encryption scenario.
 	var key x.SensitiveByteSlice
-	if kR != nil {
-		if key, err = kR.ReadKey(); err != nil {
+	if kr != nil {
+		if key, err = kr.ReadKey(); err != nil {
 			glog.Errorf("error: %v", err)
 			return
 		}

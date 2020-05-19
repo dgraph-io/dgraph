@@ -191,6 +191,7 @@ func run() {
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
 
+	// Copy key to local
 	key := opt.EncryptionKey
 	opt.EncryptionKey = nil
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")

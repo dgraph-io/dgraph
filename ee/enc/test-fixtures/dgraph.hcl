@@ -4,4 +4,3 @@ path "secret/dgraph" {
 path "secret/data/dgraph" {
  capabilities = ["read", "list"]
 }
-
