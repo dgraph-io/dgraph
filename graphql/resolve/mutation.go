@@ -258,7 +258,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgRes := resolved.Data.(map[string]interface{})
 	dgRes[schema.NumUid] = numUids
 	dgRes[schema.Typename] = mutation.Type().Name()
-	resolved.Data = map[string]interface{}{mutation.ResponseName(): dgRes}
+	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
 	resolved.Field = mutation
 	return resolved, resolverSucceeded
 }

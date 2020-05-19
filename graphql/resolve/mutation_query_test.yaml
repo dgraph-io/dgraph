@@ -42,6 +42,7 @@ ADD_UPDATE_MUTATION:
             name : Author.name
             dgraph.uid : uid
           }
+          dgraph.uid : uid
         }
       }
 
@@ -93,38 +94,6 @@ ADD_UPDATE_MUTATION:
       }
 
   -
-<<<<<<< HEAD
-    name: "deep with alias"
-    gqlquery: |
-      mutation {
-        ADD_UPDATE_MUTATION {
-          post {
-            postID
-            title
-            postAuthor: author {
-              authorID: id
-              authorName: name
-            }
-          }
-        }
-      }
-    dgquery: |-
-      query {
-        post(func: uid(0x4)) {
-          postID : uid
-          title : Post.title
-          postAuthor : Post.author {
-            authorID : uid
-            authorName : Author.name
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-      }
-
-  -
-=======
->>>>>>> cb01b0d76... graphql: move alias to end of graphql pipeline (#5369)
     name: "can do deep filter"
     gqlquery: |
       mutation {
