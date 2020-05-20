@@ -1356,7 +1356,7 @@ func completeValue(
 					return nil, valueCoercionError(v)
 				}
 			case bool:
-				if v == false {
+				if !v {
 					val = 0
 				} else {
 					val = 1
@@ -1381,7 +1381,7 @@ func completeValue(
 		case "Float":
 			switch v := val.(type) {
 			case bool:
-				if v == false {
+				if !v {
 					val = 0.0
 				} else {
 					val = 1.0
