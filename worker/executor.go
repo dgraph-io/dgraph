@@ -124,13 +124,13 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 	e.Lock()
 	defer e.Unlock()
 	select {
-	case <- e.closer.HasBeenClosed():
+	case <-e.closer.HasBeenClosed():
 		return
 	default:
 		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
 		for attr, payload := range payloadMap {
 			e.getChannelUnderLock(attr) <- payload
-		}		
+		}
 	}
 
 }
