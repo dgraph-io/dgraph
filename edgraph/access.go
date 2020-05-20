@@ -65,7 +65,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
-func authorizeGuardians(ctx context.Context) error {
+func AuthorizeGuardians(ctx context.Context) error {
 	// always allow access
 	return nil
 }

@@ -40,7 +40,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 
 	input, err := getRestoreInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	req := pb.RestoreRequest{
@@ -54,7 +54,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	}
 	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{

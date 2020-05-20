@@ -693,7 +693,7 @@ func TestKShortestPathTwoPaths(t *testing.T) {
 	query := `
 	{
 		A as shortest(from: 51, to:55, numpaths: 2, depth:2) {
-			connects
+			connects @facets(weight)
 		}
 		me(func: uid(A)) {
 			name
@@ -702,44 +702,44 @@ func TestKShortestPathTwoPaths(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `{
 		"data": {
-			"me": [
-			  {
-				"name": "A"
-			  },
-			  {
-				"name": "D"
-			  },
-			  {
-				"name": "E"
-			  }
-			],
-			"_path_": [
-			  {
-				"connects": {
-				  "connects": {
-					"uid": "0x37"
-				  },
-				  "uid": "0x36"
-				},
-				"uid": "0x33",
-				"_weight_": 2
-			  },
-			  {
-				"connects": {
-				  "connects": {
-					"connects": {
-					  "uid": "0x37"
-					},
-					"uid": "0x36"
-				  },
-				  "uid": "0x34"
-				},
-				"uid": "0x33",
-				"_weight_": 3
-			  }
-			]
+		 "me": [
+		  {"name": "A"},
+		  {"name": "C"},
+		  {"name": "D"},
+		  {"name": "E"}
+		 ],
+		 "_path_": [
+		  {
+		   "connects": {
+			"connects": {
+			 "connects": {
+			  "uid": "0x37",
+			  "connects|weight": 1
+			 },
+			 "uid": "0x36",
+			 "connects|weight": 1
+			},
+			"uid": "0x35",
+			"connects|weight": 1
+		   },
+		   "uid": "0x33",
+		   "_weight_": 3
+		  },
+		  {
+		   "connects": {
+			"connects": {
+			 "uid": "0x37",
+			 "connects|weight": 1
+			},
+			"uid": "0x36",
+			"connects|weight": 10
+		   },
+		   "uid": "0x33",
+		   "_weight_": 11
+		  }
+		 ]
 		}
-	}`, js)
+	   }`, js)
 }
 
 // There are 5 paths between 51 to 55 under "connects" predicate.
@@ -1120,16 +1120,16 @@ func TestShortestPathWithDepth(t *testing.T) {
 						"connects": {
 							"connects": {
 								"uid": "0x34",
-								"connects|weight": 1
+								"connects|weight": 2
 							},
-							"uid": "0x36",
-							"connects|weight": 1
+							"connects|weight": 1,
+							"uid": "0x36"
 						},
 						"uid": "0x35",
 						"connects|weight": 1
 					},
 					"uid": "0x33",
-					"_weight_": 3
+					"_weight_": 4
 				}
 			]
 		}
@@ -1137,93 +1137,80 @@ func TestShortestPathWithDepth(t *testing.T) {
 
 	emptyPath := `{"data":{"path":[]}}`
 
-	allPaths := `
-	{
-		"data":{
-			"path":[
-				{
-					"uid":"0x33",
-					"name":"A"
-				},
-				{
-					"uid":"0x35",
-					"name":"C"
-				},
-				{
-					"uid":"0x36",
-					"name":"D"
-				},
-				{
-					"uid":"0x34",
-					"name":"B"
-				}
-			],
-			"_path_":[
-				{
-					"connects":{
-						"connects":{
-							"connects":{
-								"uid":"0x34",
-								"connects|weight":1
-							},
-							"uid":"0x36",
-							"connects|weight":1
-						},
-						"uid":"0x35",
-						"connects|weight":1
-					},
-					"uid":"0x33",
-					"_weight_":3
-				},
-				{
-					"connects":{
-						"connects":{
-							"uid":"0x34",
-							"connects|weight":10
-						},
-						"uid":"0x35",
-						"connects|weight":1
-					},
-					"uid":"0x33",
-					"_weight_":11
-				},
-				{
-					"connects":{
-						"uid":"0x34",
-						"connects|weight":11
-					},
-					"uid":"0x33",
-					"_weight_":11
-				},
-				{
-					"connects":{
-						"connects":{
-							"uid":"0x34",
-							"connects|weight":1
-						},
-						"uid":"0x36",
-						"connects|weight":10
-					},
-					"uid":"0x33",
-					"_weight_":11
-				},
-				{
-					"connects":{
-						"connects":{
-							"connects":{
-								"uid":"0x34",
-								"connects|weight":10
-							},
-							"uid":"0x35",
-							"connects|weight":10
-						},
-						"uid":"0x36",
-						"connects|weight":10
-					},
-					"uid":"0x33",
-					"_weight_":30
-				}
-			]
+	allPaths := `{
+		"data": {
+		 "path": [
+		  {"uid": "0x33","name": "A"},
+		  {"uid": "0x35","name": "C"},
+		  {"uid": "0x36","name": "D"},
+		  {"uid": "0x34","name": "B"}
+		 ],
+		 "_path_": [
+		  {
+		   "connects": {
+			"connects": {
+			 "connects": {
+			  "uid": "0x34",
+			  "connects|weight": 2
+			 },
+			 "uid": "0x36",
+			 "connects|weight": 1
+			},
+			"uid": "0x35",
+			"connects|weight": 1
+		   },
+		   "uid": "0x33",
+		   "_weight_": 4
+		  },
+		  {
+		   "connects": {
+			"connects": {
+			 "uid": "0x34",
+			 "connects|weight": 10
+			},
+			"uid": "0x35",
+			"connects|weight": 1
+		   },
+		   "uid": "0x33",
+		   "_weight_": 11
+		  },
+		  {
+		   "connects": {
+			"uid": "0x34",
+			"connects|weight": 11
+		   },
+		   "uid": "0x33",
+		   "_weight_": 11
+		  },
+		  {
+		   "connects": {
+			"connects": {
+			 "uid": "0x34",
+			 "connects|weight": 2
+			},
+			"uid": "0x36",
+			"connects|weight": 10
+		   },
+		   "uid": "0x33",
+		   "_weight_": 12
+		  },
+		  {
+		   "connects": {
+			"connects": {
+			 "connects": {
+			  "uid": "0x34",
+			  "connects|weight": 10
+			 },
+			 "uid": "0x35",
+			 "connects|weight": 10
+			},
+			"uid": "0x36",
+			"connects|weight": 10
+		   },
+		   "uid": "0x33",
+		   "_weight_": 30
+		  }
+		 ]
 		}
 	}
 	`
@@ -1325,10 +1312,10 @@ func TestShortestPathWithDepth_direct_path_is_shortest(t *testing.T) {
 				{
 					"connects": {
 						"uid": "0x34",
-						"connects|weight": 1
+						"connects|weight": 2
 					},
 					"uid": "0x36",
-					"_weight_": 1
+					"_weight_": 2
 				}
 			]
 		}

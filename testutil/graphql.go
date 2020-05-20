@@ -78,6 +78,38 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	require.Nil(t, result.Errors)
 }
 
+func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwt(t, params, "")
+}
+
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
+	accessToken string) *GraphQLResponse {
+	adminUrl := "http://" + SockAddrHttp + "/admin"
+
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if accessToken != "" {
+		req.Header.Set("X-Dgraph-AccessToken", accessToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var gqlResp GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
+}
+
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}
