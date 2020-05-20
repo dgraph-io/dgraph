@@ -92,12 +92,6 @@ func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	if ok {
 		return ch
 	}
-
-	// Create a new channel for `pred`.
-	ch, ok = e.predChan[pred]
-	if ok {
-		return ch
-	}
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
