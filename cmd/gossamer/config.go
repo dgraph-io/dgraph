@@ -21,12 +21,11 @@ import (
 	"strconv"
 	"strings"
 
+	database "github.com/ChainSafe/chaindb"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
-
-	database "github.com/ChainSafe/chaindb"
 	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
@@ -95,6 +94,9 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	setDotNetworkConfig(ctx, &cfg.Network)
 	setDotRPCConfig(ctx, &cfg.RPC)
 
+	// set system info
+	setSystemInfoConfig(ctx, cfg)
+
 	return cfg, nil
 }
 
@@ -111,6 +113,9 @@ func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 
 	// set init configuration values
 	setDotInitConfig(ctx, &cfg.Init)
+
+	// set system info
+	setSystemInfoConfig(ctx, cfg)
 
 	// ensure configuration values match genesis and overwrite with genesis
 	updateDotConfigFromGenesisJSON(ctx, cfg)
@@ -136,6 +141,9 @@ func createExportConfig(ctx *cli.Context) (cfg *dot.Config) {
 	setDotCoreConfig(ctx, &cfg.Core)
 	setDotNetworkConfig(ctx, &cfg.Network)
 	setDotRPCConfig(ctx, &cfg.RPC)
+
+	// set system info
+	setSystemInfoConfig(ctx, cfg)
 
 	return cfg
 }
@@ -330,6 +338,19 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 		"ws", cfg.WSEnabled,
 		"wsport", cfg.WSPort,
 	)
+}
+
+func setSystemInfoConfig(ctx *cli.Context, cfg *dot.Config) {
+	// load system information
+	if ctx.App != nil {
+		cfg.System.SystemName = ctx.App.Name
+		cfg.System.SystemVersion = ctx.App.Version
+	}
+
+	// TODO lookup system properties from genesis file and set here (See issue #865)
+	cfg.System.NodeName = cfg.Global.Name
+	props := make(map[string]interface{})
+	cfg.System.SystemProperties = props
 }
 
 // updateDotConfigFromGenesisJSON updates the configuration based on the genesis file values

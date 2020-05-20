@@ -59,3 +59,11 @@ type RPCAPI interface {
 type RuntimeAPI interface {
 	ValidateTransaction(e types.Extrinsic) (*transaction.Validity, error)
 }
+
+// SystemAPI is the interface for handling system methods
+type SystemAPI interface {
+	SystemName() string
+	SystemVersion() string
+	NodeName() string
+	Properties() map[string]interface{}
+}

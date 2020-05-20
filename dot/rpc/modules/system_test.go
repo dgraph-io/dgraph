@@ -59,7 +59,7 @@ func newNetworkService(t *testing.T) *network.Service {
 // Test RPC's System.Health() response
 func TestSystemModule_Health(t *testing.T) {
 	net := newNetworkService(t)
-	sys := NewSystemModule(net)
+	sys := NewSystemModule(net, nil)
 
 	res := &SystemHealthResponse{}
 	sys.Health(nil, nil, res)
@@ -72,7 +72,7 @@ func TestSystemModule_Health(t *testing.T) {
 // Test RPC's System.NetworkState() response
 func TestSystemModule_NetworkState(t *testing.T) {
 	net := newNetworkService(t)
-	sys := NewSystemModule(net)
+	sys := NewSystemModule(net, nil)
 
 	res := &SystemNetworkStateResponse{}
 	sys.NetworkState(nil, nil, res)
@@ -87,7 +87,7 @@ func TestSystemModule_NetworkState(t *testing.T) {
 // Test RPC's System.Peers() response
 func TestSystemModule_Peers(t *testing.T) {
 	net := newNetworkService(t)
-	sys := NewSystemModule(net)
+	sys := NewSystemModule(net, nil)
 
 	res := &SystemPeersResponse{}
 	sys.Peers(nil, nil, res)

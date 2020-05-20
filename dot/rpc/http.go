@@ -44,6 +44,7 @@ type HTTPServerConfig struct {
 	RuntimeAPI             modules.RuntimeAPI
 	TransactionQueueAPI    modules.TransactionQueueAPI
 	RPCAPI                 modules.RPCAPI
+	SystemAPI              modules.SystemAPI
 	Host                   string
 	RPCPort                uint32
 	WSEnabled              bool
@@ -81,7 +82,7 @@ func (h *HTTPServer) RegisterModules(mods []string) {
 		var srvc interface{}
 		switch mod {
 		case "system":
-			srvc = modules.NewSystemModule(h.serverConfig.NetworkAPI)
+			srvc = modules.NewSystemModule(h.serverConfig.NetworkAPI, h.serverConfig.SystemAPI)
 		case "author":
 			srvc = modules.NewAuthorModule(h.serverConfig.CoreAPI, h.serverConfig.RuntimeAPI, h.serverConfig.TransactionQueueAPI)
 		case "chain":

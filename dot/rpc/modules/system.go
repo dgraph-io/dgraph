@@ -22,12 +22,10 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
-// NOT_IMPLEMENTED used as placeholder for not implemented yet funcs
-const NOT_IMPLEMENTED = "not yet implemented"
-
 // SystemModule is an RPC module providing access to core API points
 type SystemModule struct {
 	networkAPI NetworkAPI
+	systemAPI  SystemAPI
 }
 
 // EmptyRequest represents an RPC request with no fields
@@ -51,50 +49,35 @@ type SystemPeersResponse struct {
 	Peers []common.PeerInfo `json:"peers"`
 }
 
-// SystemPropertiesResponse struct to marshal json
-type SystemPropertiesResponse struct {
-	Ss58Format    int    `json:"ss58Format"`
-	TokenDecimals int    `json:"tokenDecimals"`
-	TokenSymbol   string `json:"tokenSymbol"`
-}
-
 // NewSystemModule creates a new API instance
-func NewSystemModule(net NetworkAPI) *SystemModule {
+func NewSystemModule(net NetworkAPI, sys SystemAPI) *SystemModule {
 	return &SystemModule{
 		networkAPI: net, // TODO: migrate to network state
+		systemAPI:  sys,
 	}
 }
 
 // Chain returns the runtime chain
-func (sm *SystemModule) Chain(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	// TODO implement lookup of value
-	*res = "Development"
+func (sm *SystemModule) Chain(r *http.Request, req *EmptyRequest, res *string) error {
+	*res = sm.systemAPI.NodeName()
 	return nil
 }
 
 // Name returns the runtime name
-func (sm *SystemModule) Name(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	// TODO implement lookup of value
-	*res = "gossamer v0.0"
+func (sm *SystemModule) Name(r *http.Request, req *EmptyRequest, res *string) error {
+	*res = sm.systemAPI.SystemName()
 	return nil
 }
 
 // Properties returns the runtime properties
-func (sm *SystemModule) Properties(r *http.Request, req *EmptyRequest, res *SystemPropertiesResponse) error {
-	// TODO implement lookup of this value
-	sp := SystemPropertiesResponse{
-		Ss58Format:    2,
-		TokenDecimals: 12,
-		TokenSymbol:   "KSM",
-	}
-	*res = sp
+func (sm *SystemModule) Properties(r *http.Request, req *EmptyRequest, res *interface{}) error {
+	*res = sm.systemAPI.Properties()
 	return nil
 }
 
 // Version returns the runtime version
-func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *StringResponse) error {
-	// TODO implement lookup of this
-	*res = "0.0.0"
+func (sm *SystemModule) Version(r *http.Request, req *EmptyRequest, res *string) error {
+	*res = sm.systemAPI.SystemVersion()
 	return nil
 }
 

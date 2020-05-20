@@ -30,7 +30,9 @@ type Service struct {
 
 // NewService create a new instance of Service
 func NewService() *Service {
-	return &Service{rpcMethods: []string{}}
+	return &Service{
+		rpcMethods: []string{},
+	}
 }
 
 // Methods returns list of methods available via RPC call

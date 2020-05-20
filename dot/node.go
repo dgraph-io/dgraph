@@ -235,13 +235,19 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	}
 
+	// System Service
+
+	// create system service and append to node services
+	sysSrvc := createSystemService(&cfg.System)
+	nodeSrvcs = append(nodeSrvcs, sysSrvc)
+
 	// RPC Service
 
 	// check if rpc service is enabled
 	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt)
+		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
 		nodeSrvcs = append(nodeSrvcs, rpcSrvc)
 
 	} else {

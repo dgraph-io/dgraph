@@ -24,21 +24,22 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/node/gssmr"
 	"github.com/ChainSafe/gossamer/node/ksmcc"
-
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 )
 
 // Config is a collection of configurations throughout the system
 type Config struct {
-	Global  GlobalConfig  `toml:"global"`
-	Init    InitConfig    `toml:"init"`
-	Account AccountConfig `toml:"account"`
-	Core    CoreConfig    `toml:"core"`
-	Network NetworkConfig `toml:"network"`
-	RPC     RPCConfig     `toml:"rpc"`
+	Global  GlobalConfig     `toml:"global"`
+	Init    InitConfig       `toml:"init"`
+	Account AccountConfig    `toml:"account"`
+	Core    CoreConfig       `toml:"core"`
+	Network NetworkConfig    `toml:"network"`
+	RPC     RPCConfig        `toml:"rpc"`
+	System  types.SystemInfo `toml:"-"`
 }
 
 // GlobalConfig is to marshal/unmarshal toml global config vars
@@ -132,6 +133,10 @@ func GssmrConfig() *Config {
 			Modules: gssmr.DefaultRPCModules,
 			WSPort:  gssmr.DefaultRPCWSPort,
 		},
+		System: types.SystemInfo{
+			NodeName:         gssmr.DefaultName,
+			SystemProperties: make(map[string]interface{}),
+		},
 	}
 }
 
@@ -166,6 +171,10 @@ func KsmccConfig() *Config {
 			Host:    ksmcc.DefaultRPCHTTPHost,
 			Modules: ksmcc.DefaultRPCModules,
 			WSPort:  ksmcc.DefaultRPCWSPort,
+		},
+		System: types.SystemInfo{
+			NodeName:         ksmcc.DefaultName,
+			SystemProperties: make(map[string]interface{}),
 		},
 	}
 }
