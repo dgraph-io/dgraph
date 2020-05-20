@@ -86,17 +86,14 @@ func (e *executor) shutdown() {
 	}
 }
 
-func (e *executor) getChannel(pred string) (ch chan *subMutation) {
-	e.RLock()
+// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
+func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
-	e.RUnlock()
 	if ok {
 		return ch
 	}
 
 	// Create a new channel for `pred`.
-	e.Lock()
-	defer e.Unlock()
 	ch, ok = e.predChan[pred]
 	if ok {
 		return ch
@@ -126,7 +123,14 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 	// Lock() in case the channel gets closed from underneath us.
 	e.Lock()
 	defer e.Unlock()
-	for attr, payload := range payloadMap {
-		e.getChannel(attr) <- payload
+	select {
+	case <- e.closer.HasBeenClosed():
+		return
+	default:
+		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
+		for attr, payload := range payloadMap {
+			e.getChannelUnderLock(attr) <- payload
+		}		
 	}
+
 }
