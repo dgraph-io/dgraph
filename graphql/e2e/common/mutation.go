@@ -3074,3 +3074,36 @@ func getXidFilter(xidKey string, xidVals []string) map[string]interface{} {
 
 	return filter
 }
+
+func mutationsWithAlias(t *testing.T) {
+	newCountry := addCountry(t, postExecutor)
+	aliasMutationParams := &GraphQLParams{
+		Query: `mutation alias($filter: CountryFilter!) {
+
+			upd: updateCountry(input: {
+				filter: $filter
+				set: { name: "Testland Alias" }
+			}) {
+				updatedCountry: country {
+					theName: name
+				}
+			}
+
+			del: deleteCountry(filter: $filter) {
+				message: msg
+				uids: numUids
+			}
+		}`,
+		Variables: map[string]interface{}{
+			"filter": map[string]interface{}{"id": []string{newCountry.ID}}},
+	}
+	multiMutationExpected := `{
+		"upd": { "updatedCountry": [{ "theName": "Testland Alias" }] },
+		"del" : { "message": "Deleted", "uids": 1 }
+	}`
+
+	gqlResponse := aliasMutationParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, multiMutationExpected, string(gqlResponse.Data))
+}

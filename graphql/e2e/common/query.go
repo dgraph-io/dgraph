@@ -1401,3 +1401,27 @@ func queryPostWithAuthor(t *testing.T) {
 		`{"queryPost":[{"title":"Introducing GraphQL in Dgraph","author":{"name":"Ann Author"}}]}`,
 		string(gqlResponse.Data))
 }
+
+func queryWithAlias(t *testing.T) {
+	queryPostParams := &GraphQLParams{
+		Query: `query {
+			post : queryPost (filter: {title : { anyofterms : "Introducing" }} ) {
+				type : __typename
+				postTitle : title
+				postAuthor : author {
+					theName : name
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := queryPostParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	testutil.CompareJSON(t,
+		`{
+			"post": [ {
+				"type": "Post",
+				"postTitle": "Introducing GraphQL in Dgraph",
+				"postAuthor": { "theName": "Ann Author" }}]}`,
+		string(gqlResponse.Data))
+}
