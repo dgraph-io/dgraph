@@ -1312,6 +1312,15 @@ func completeValue(
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
+		valueCoercionError := func(val interface{}) x.GqlErrorList {
+			gqlErr := x.GqlErrorf(
+				"Error coercing value '%+v' for field '%s' to type %s.",
+				val, field.Name(), field.Type()).
+				WithLocations(field.Location())
+			gqlErr.Path = copyPath(path)
+			return x.GqlErrorList{gqlErr}
+		}
+
 		switch field.Type().Name() {
 		case "String", "ID":
 			switch v := val.(type) {
@@ -1321,8 +1330,9 @@ func completeValue(
 				val = strconv.FormatInt(v, 10)
 			case bool:
 				val = strconv.FormatBool(v)
+			case string:
 			default:
-				// TODO - Throw an error.
+				return nil, valueCoercionError(v)
 			}
 		case "Boolean":
 			switch v := val.(type) {
@@ -1332,7 +1342,9 @@ func completeValue(
 				val = v > 0
 			case string:
 				val = len(v) > 0
+			case bool:
 			default:
+				return nil, valueCoercionError(v)
 			}
 		case "Int":
 			switch v := val.(type) {
@@ -1341,7 +1353,7 @@ func completeValue(
 				if truncated == v {
 					val = int(truncated)
 				} else {
-					// TODO - Raise field error
+					return nil, valueCoercionError(v)
 				}
 			case bool:
 				if v == false {
@@ -1354,15 +1366,18 @@ func completeValue(
 				// An error can be encountered if we had an integer value that can't be fit into
 				// a 32 bit integer.
 				if err != nil {
-					// TODO - Raise field error
+					return nil, valueCoercionError(v)
 					// TODO - What if string was 123.00
 				}
 				val = i
 			case int64:
 				if v > math.MaxInt32 || v < math.MinInt32 {
-					// TODO - Raise a field error.
+					return nil, valueCoercionError(v)
 				}
+			default:
+				return nil, valueCoercionError(v)
 			}
+
 		case "Float":
 			switch v := val.(type) {
 			case bool:
@@ -1374,11 +1389,14 @@ func completeValue(
 			case string:
 				i, err := strconv.ParseFloat(v, 64)
 				if err != nil {
-					// TODO - Raise field error
+					return nil, valueCoercionError(v)
 				}
 				val = i
 			case int64:
 				val = float64(v)
+			case float64:
+			default:
+				return nil, valueCoercionError(v)
 			}
 		default:
 		}

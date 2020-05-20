@@ -20,6 +20,8 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -82,6 +84,28 @@ func TestValueCoercion(t *testing.T) {
 			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
 			Response: `{ "getPost": { "numLikes": false }}`,
 			Expected: `{ "getPost": { "numLikes": 0}}`},
+		{Name: "a field error should return an error when float can't be coerced to int" +
+			" without losing data",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 123.23 }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
+				Locations: []x.Location{{1, 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
+		{Name: "a field error should return an error when when it can't be coerced as int32" +
+			" from a string",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": "123.23" }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
+				Locations: []x.Location{{1, 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
 
 		// test bool/int/string can be coerced to Float
 		{Name: "int value should be coerced to float",
@@ -108,7 +132,10 @@ func TestValueCoercion(t *testing.T) {
 		t.Run(test.Name, func(t *testing.T) {
 			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
 
-			require.Nilf(t, resp.Errors, "%+v", resp.Errors)
+			if diff := cmp.Diff(test.Errors, resp.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+
 			require.JSONEq(t, test.Expected, resp.Data.String())
 		})
 	}
