@@ -21,7 +21,9 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1310,6 +1312,77 @@ func completeValue(
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
+		switch field.Type().Name() {
+		case "String", "ID":
+			switch v := val.(type) {
+			case float64:
+				val = strconv.FormatFloat(v, 'f', -1, 64)
+			case int64:
+				val = strconv.FormatInt(v, 10)
+			case bool:
+				val = strconv.FormatBool(v)
+			default:
+				// TODO - Throw an error.
+			}
+		case "Boolean":
+			switch v := val.(type) {
+			case float64:
+				val = v > 0
+			case int64:
+				val = v > 0
+			case string:
+				val = len(v) > 0
+			default:
+			}
+		case "Int":
+			switch v := val.(type) {
+			case float64:
+				truncated := math.Trunc(v)
+				if truncated == v {
+					val = int(truncated)
+				} else {
+					// TODO - Raise field error
+				}
+			case bool:
+				if v == false {
+					val = 0
+				} else {
+					val = 1
+				}
+			case string:
+				i, err := strconv.ParseInt(v, 10, 32)
+				// An error can be encountered if we had an integer value that can't be fit into
+				// a 32 bit integer.
+				if err != nil {
+					// TODO - Raise field error
+					// TODO - What if string was 123.00
+				}
+				val = i
+			case int64:
+				if v > math.MaxInt32 || v < math.MinInt32 {
+					// TODO - Raise a field error.
+				}
+			}
+		case "Float":
+			switch v := val.(type) {
+			case bool:
+				if v == false {
+					val = 0.0
+				} else {
+					val = 1.0
+				}
+			case string:
+				i, err := strconv.ParseFloat(v, 64)
+				if err != nil {
+					// TODO - Raise field error
+				}
+				val = i
+			case int64:
+				val = float64(v)
+			}
+		default:
+		}
+
 		// val is a scalar
 
 		// Can this ever error?  We can't have an unsupported type or value because
@@ -1344,7 +1417,7 @@ func completeValue(
 // completeValue() is applied to every list element, but
 // the type of field can only be a scalar list like [String], or an object
 // list like [Person], so schematically the final result is either
-// [ completValue("..."), completValue("..."), ... ]
+// [ completeValue("..."), completeValue("..."), ... ]
 // or
 // [ completeObject({...}), completeObject({...}), ... ]
 // depending on the type of list.

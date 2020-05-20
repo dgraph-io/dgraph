@@ -23,6 +23,97 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestValueCoercion(t *testing.T) {
+	tests := []QueryCase{
+		// test int/float/bool can be coerced to String
+		{Name: "int value should be coerced to string",
+			GQLQuery: `query { getAuthor(id: "0x1") { name } }`,
+			Response: `{ "getAuthor": { "name": 2 }}`,
+			Expected: `{ "getAuthor": { "name": "2"}}`},
+		{Name: "float value should be coerced to string",
+			GQLQuery: `query { getAuthor(id: "0x1") { name } }`,
+			Response: `{ "getAuthor": { "name": 2.134 }}`,
+			Expected: `{ "getAuthor": { "name": "2.134"}}`},
+		{Name: "bool value should be coerced to string",
+			GQLQuery: `query {  getAuthor(id: "0x1") { name} }`,
+			Response: `{ "getAuthor": { "name": false } }`,
+			Expected: `{ "getAuthor": { "name": "false"}}`},
+
+		// test int/float/string can be coerced to Boolean
+		{Name: "int value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 2 }}`,
+			Expected: `{ "getPost": { "isPublished": true}}`},
+		{Name: "int value should be coerced to bool with false value for 0",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 0 }}`,
+			Expected: `{ "getPost": { "isPublished": false}}`},
+		{Name: "float value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 2.134 }}`,
+			Expected: `{ "getPost": { "isPublished": true}}`},
+		{Name: "float value should be coerced to bool with false value for 0",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 0.000 }}`,
+			Expected: `{ "getPost": { "isPublished": false}}`},
+		{Name: "string value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": "name" }}`,
+			Expected: `{ "getPost": { "isPublished": true }}`},
+		{Name: "string value should be coerced to bool false value when empty",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": "" }}`,
+			Expected: `{ "getPost": { "isPublished": false }}`},
+
+		// test bool/float/string can be coerced to Int
+		{Name: "float value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 2.000 }}`,
+			Expected: `{ "getPost": { "numLikes": 2}}`},
+		{Name: "string value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": "23" }}`,
+			Expected: `{ "getPost": { "numLikes": 23}}`},
+		{Name: "bool true value should be coerced to int value 1",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": true }}`,
+			Expected: `{ "getPost": { "numLikes": 1}}`},
+		{Name: "bool false value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": false }}`,
+			Expected: `{ "getPost": { "numLikes": 0}}`},
+
+		// test bool/int/string can be coerced to Float
+		{Name: "int value should be coerced to float",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": 2 }}`,
+			Expected: `{ "getAuthor": { "reputation": 2.0 }}`},
+		{Name: "string value should be coerced to float",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": "23.123" }}`,
+			Expected: `{ "getAuthor": { "reputation": 23.123 }}`},
+		{Name: "bool true value should be coerced to float value 1.0",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": true }}`,
+			Expected: `{ "getAuthor": { "reputation": 1.0 }}`},
+		{Name: "bool false value should be coerced to float value 0.0",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": false }}`,
+			Expected: `{ "getAuthor": { "reputation": 0.0}}`},
+	}
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+
+			require.Nilf(t, resp.Errors, "%+v", resp.Errors)
+			require.JSONEq(t, test.Expected, resp.Data.String())
+		})
+	}
+}
+
 func TestQueryAlias(t *testing.T) {
 	tests := []QueryCase{
 		{Name: "top level alias",
@@ -38,10 +129,10 @@ func TestQueryAlias(t *testing.T) {
 			Response: `{"getAuthor": [{"name": "A.N. Author", "posts": [{"title": "A Post"}]}]}`,
 			Expected: `{"getAuthor": {"name": "A.N. Author", "posts": [{"theTitle": "A Post"}]}}`},
 		{Name: "many aliases",
-			GQLQuery: `query { 
+			GQLQuery: `query {
 				auth : getAuthor(id: "0x1") { name myPosts : posts { theTitle : title } }
 				post : getPost(postID: "0x2") { postTitle: title } }`,
-			Response: `{ 
+			Response: `{
 				"getAuthor": [{"name": "A.N. Author", "posts": [{"title": "A Post"}]}],
 				"getPost": [ { "title": "A Post" } ] }`,
 			Expected: `{"auth": {"name": "A.N. Author", "myPosts": [{"theTitle": "A Post"}]},` +
@@ -106,7 +197,7 @@ func TestMutationAlias(t *testing.T) {
 			mutQryResp: map[string]interface{}{
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [ { "title": "A Post" } ] }`,
-			expected: `{ 
+			expected: `{
 				"add1": { "thePosts" : [{ "postTitle": "A Post"}] },
 				"add2": { "otherPosts" : [{ "t": "A Post"}] } }`,
 		},
