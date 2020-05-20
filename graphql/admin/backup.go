@@ -17,22 +17,15 @@
 package admin
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
-
-type backupResolver struct {
-	mutation schema.Mutation
-}
 
 type backupInput struct {
 	Destination  string
@@ -43,14 +36,12 @@ type backupInput struct {
 	ForceFull    bool
 }
 
-func (br *backupResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got backup request")
 
-	br.mutation = m
 	input, err := getBackupInput(m)
 	if err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
 
 	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
@@ -61,50 +52,14 @@ func (br *backupResolver) Rewrite(
 		Anonymous:    input.Anonymous,
 	}, input.ForceFull)
 
-	return nil, nil, err
-}
-
-func (br *backupResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (br *backupResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (br *backupResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	var buf bytes.Buffer
-
-	x.Check2(buf.WriteString(`{ "`))
-	x.Check2(buf.WriteString(br.mutation.SelectionSet()[0].ResponseName() + `": [{`))
-
-	for i, sel := range br.mutation.SelectionSet()[0].SelectionSet() {
-		var val string
-		switch sel.Name() {
-		case "code":
-			val = "Success"
-		case "message":
-			val = "Backup completed."
-		}
-		if i != 0 {
-			x.Check2(buf.WriteString(","))
-		}
-		x.Check2(buf.WriteString(`"`))
-		x.Check2(buf.WriteString(sel.ResponseName()))
-		x.Check2(buf.WriteString(`":`))
-		x.Check2(buf.WriteString(`"` + val + `"`))
+	if err != nil {
+		return emptyResult(m, err), false
 	}
-	x.Check2(buf.WriteString("}]}"))
 
-	return buf.Bytes(), nil
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{m.Name(): response("Success", "Backup completed.")},
+		Field: m,
+	}, true
 }
 
 func getBackupInput(m schema.Mutation) (*backupInput, error) {

@@ -20,63 +20,43 @@ import (
 	"context"
 	"encoding/json"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
 
-type exportResolver struct {
-	mutation schema.Mutation
-}
-
 type exportInput struct {
 	Format string
 }
 
-func (er *exportResolver) Rewrite(
-	m schema.Mutation) (*gql.GraphQuery, []*dgoapi.Mutation, error) {
+func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+
 	glog.Info("Got export request through GraphQL admin API")
 
-	er.mutation = m
 	input, err := getExportInput(m)
 	if err != nil {
-		return nil, nil, err
+		return emptyResult(m, err), false
 	}
 
 	format := worker.DefaultExportFormat
 	if input.Format != "" {
 		format = worker.NormalizeExportFormat(input.Format)
 		if format == "" {
-			return nil, nil, errors.Errorf("invalid export format: %v", input.Format)
+			return emptyResult(m, errors.Errorf("invalid export format: %v", input.Format)), false
 		}
 	}
 
 	err = worker.ExportOverNetwork(context.Background(), format)
-	return nil, nil, errors.Wrapf(err, "export failed")
-}
+	if err != nil {
+		return emptyResult(m, err), false
+	}
 
-func (er *exportResolver) FromMutationResult(
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	return nil, nil
-}
-
-func (er *exportResolver) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-
-	return nil, nil, nil
-}
-
-func (er *exportResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	buf := writeResponse(er.mutation, "Success", "Export completed.")
-	return buf, nil
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{m.Name(): response("Success", "Export completed.")},
+		Field: m,
+	}, true
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {
