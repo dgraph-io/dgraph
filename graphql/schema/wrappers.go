@@ -841,7 +841,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		for _, h := range forwardHeaders.Children {
 			// We try and fetch the value from the stored secrets. If there was a value specified
 			// in the request header, that takes precedence.
-			val := hc.secrets[h.Value.Raw]
+			val := string(hc.secrets[h.Value.Raw])
 			reqHeaderVal := f.op.header.Get(h.Value.Raw)
 			if reqHeaderVal != "" {
 				val = reqHeaderVal

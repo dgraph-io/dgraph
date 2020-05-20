@@ -18,6 +18,7 @@ package schema
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -931,6 +932,7 @@ func TestParseSecrets(t *testing.T) {
 				require.EqualError(t, err, test.err.Error())
 				return
 			}
+			fmt.Println(s)
 			require.Equal(t, test.expectedSecrets, s)
 			if test.expectedAuthHeader != "" {
 				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())

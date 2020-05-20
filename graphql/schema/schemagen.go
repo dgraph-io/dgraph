@@ -124,9 +124,14 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	schemaSecrets, err := parseSecrets(input)
+	secrets, err := parseSecrets(input)
 	if err != nil {
 		return nil, err
+	}
+	// lets obfuscate the value of the secrets from here on.
+	schemaSecrets := make(map[string]x.SensitiveByteSlice, len(secrets))
+	for k, v := range secrets {
+		schemaSecrets[k] = x.SensitiveByteSlice([]byte(v))
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -223,7 +228,7 @@ type headersConfig struct {
 	allowed string
 	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
 	// to requests which resolve custom queries/mutations.
-	secrets map[string]string
+	secrets map[string]x.SensitiveByteSlice
 	sync.RWMutex
 }
 

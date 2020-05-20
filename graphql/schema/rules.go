@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
@@ -630,7 +631,8 @@ func listValidityCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerro
 }
 
 func hasInverseValidation(sch *ast.Schema, typ *ast.Definition,
-	field *ast.FieldDefinition, dir *ast.Directive, secrets map[string]string) *gqlerror.Error {
+	field *ast.FieldDefinition, dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	invTypeName := field.Type.Name()
 	if sch.Types[invTypeName].Kind != ast.Object && sch.Types[invTypeName].Kind != ast.Interface {
@@ -802,7 +804,7 @@ func searchValidation(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]string) *gqlerror.Error {
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	arg := dir.Arguments.ForName(searchArgs)
 	if arg == nil {
@@ -874,7 +876,7 @@ func searchValidation(
 }
 
 func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.FieldDefinition,
-	dir *ast.Directive, secrets map[string]string) *gqlerror.Error {
+	dir *ast.Directive, secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	if isID(field) {
 		return gqlerror.ErrorPosf(
@@ -980,7 +982,7 @@ func passwordValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]string) *gqlerror.Error {
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	return passwordDirectiveValidation(typ)
 }
@@ -989,7 +991,7 @@ func remoteDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]string) *gqlerror.Error {
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 	return nil
 }
 
@@ -997,7 +999,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]string) *gqlerror.Error {
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	// 1. Validating custom directive itself
 	search := field.Directives.ForName(searchDirective)
@@ -1483,7 +1485,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			for _, h := range forwardHeaders.Children {
 				// We try and fetch the value from the stored secrets.
 				val := secrets[h.Value.Raw]
-				headers.Add(h.Value.Raw, val)
+				headers.Add(h.Value.Raw, string(val))
 			}
 		}
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
@@ -1508,7 +1510,7 @@ func idValidation(sch *ast.Schema,
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]string) *gqlerror.Error {
+	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
 	if field.Type.String() != "String!" {
 		return gqlerror.ErrorPosf(
