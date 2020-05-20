@@ -112,6 +112,7 @@ func (asr *updateSchemaResolver) Execute(
 		return &dgoapi.Response{Json: b}, err
 	}
 
+	req.CommitNow = true
 	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
 	if err != nil {
 		return nil, err
@@ -126,6 +127,10 @@ func (asr *updateSchemaResolver) Execute(
 	return resp, nil
 }
 
+func (asr *updateSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return asr.baseMutationExecutor.CommitOrAbort(ctx, tc)
+}
+
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 	gsr.gqlQuery = gqlQuery
@@ -138,6 +143,10 @@ func (gsr *getSchemaResolver) Execute(
 
 	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
 	return &dgoapi.Response{Json: b}, err
+}
+
+func (gsr *getSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
 }
 
 func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
