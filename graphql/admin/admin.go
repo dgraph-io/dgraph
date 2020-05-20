@@ -18,6 +18,7 @@ package admin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -30,6 +31,7 @@ import (
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -312,6 +314,7 @@ func NewServers(withIntrospection bool, closer *y.Closer) (web.IServeGraphQL, we
 		Arw: resolve.NewAddRewriter,
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
+		Ex:  resolve.NewDgraphExecutor(),
 	}
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, closer)
 	adminServer := web.NewServer(adminResolvers)
@@ -488,36 +491,44 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	mutations := []*dgoapi.Mutation{
 		{
 			SetJson: []byte(fmt.Sprintf(`
-         {
-            "uid": "uid(%s)",
-            "%s": "%s"
-         }`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
+                        {
+                           "uid": "uid(%s)",
+                           "%s": "%s"
+                        }`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
 				xidInSchemaVar),
 		},
 		{
 			SetJson: []byte(fmt.Sprintf(`
-         {
-            "uid": "_:%s",
-            "dgraph.type": ["%s"],
-            "%s": "%s",
-            "%s": ""
-         }`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
+                        {
+                           "uid": "_:%s",
+                           "dgraph.type": ["%s"],
+                           "%s": "%s",
+                           "%s": ""
+                        }`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
 			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
 				xidInSchemaVar),
 		},
 	}
-	assigned, result, err := resolve.AdminMutationExecutor().Mutate(context.Background(), qry,
-		mutations)
+
+	resp, err := resolve.NewAdminExecutor().Execute(context.Background(),
+		&dgoapi.Request{Query: dgraph.AsString(qry), Mutations: mutations, CommitNow: true})
 	if err != nil {
 		return nil, err
 	}
-	// the Alpha which created a new gql schema node with xid will get the uid here
-	uid, ok := assigned[xidInSchemaVar]
+
+	// the Alpha which created the gql schema node will get the uid here
+	uid, ok := resp.GetUids()[xidInSchemaVar]
 	if ok {
 		return &gqlSchema{ID: uid}, nil
 	}
-	// the Alphas which didn't create a new gql schema node, will get the uid here.
+
+	result := make(map[string]interface{})
+	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
+		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
+	}
+
+	// the Alphas which didn't create the gql schema node, will get the uid here.
 	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
 	return &gqlSchema{
 		ID:     gqlSchemaNode["uid"].(string),
@@ -592,22 +603,17 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
 	updRw := resolve.NewUpdateRewriter()
-	qryExec := resolve.DgraphAsQueryExecutor()
-	mutExec := resolve.DgraphAsMutationExecutor()
-
-	as.fns.Qe = qryExec
-	as.fns.Me = mutExec
+	dgEx := resolve.NewDgraphExecutor()
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
 			updResolver := &updateSchemaResolver{
 				admin:                as,
 				baseMutationRewriter: updRw,
-				baseMutationExecutor: mutExec,
+				baseMutationExecutor: dgEx,
 			}
 
-			return resolve.NewMutationResolver(
-				updResolver,
+			return resolve.NewDgraphResolver(
 				updResolver,
 				updResolver,
 				resolve.StdMutationCompletion(m.Name()))
@@ -627,21 +633,21 @@ func (as *adminServer) addConnectedAdminResolvers() {
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("queryUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getGroup",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getCurrentUser",
@@ -652,62 +658,56 @@ func (as *adminServer) addConnectedAdminResolvers() {
 
 				return resolve.NewQueryResolver(
 					cuResolver,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithQueryResolver("getUser",
 			func(q schema.Query) resolve.QueryResolver {
 				return resolve.NewQueryResolver(
 					qryRw,
-					qryExec,
+					dgEx,
 					resolve.StdQueryCompletion())
 			}).
 		WithMutationResolver("addUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewAddRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("addGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					NewAddGroupRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewUpdateRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("updateGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					NewUpdateGroupRewriter(),
-					resolve.DgraphAsQueryExecutor(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdMutationCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteUser",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
-					resolve.NoOpQueryExecution(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
 			}).
 		WithMutationResolver("deleteGroup",
 			func(m schema.Mutation) resolve.MutationResolver {
-				return resolve.NewMutationResolver(
+				return resolve.NewDgraphResolver(
 					resolve.NewDeleteRewriter(),
-					resolve.NoOpQueryExecution(),
-					resolve.DgraphAsMutationExecutor(),
+					dgEx,
 					resolve.StdDeleteCompletion(m.Name()))
 			})
 }
