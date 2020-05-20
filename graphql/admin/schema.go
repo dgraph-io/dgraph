@@ -75,7 +75,7 @@ func (asr *updateSchemaResolver) Rewrite(
 
 	_, err = schema.FromString(schHandler.GQLSchema())
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	asr.newDgraphSchema = schHandler.DGSchema()
