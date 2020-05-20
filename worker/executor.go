@@ -123,6 +123,9 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 		payload.edges = append(payload.edges, edge)
 	}
 
+	// Lock() in case the channel gets closed from underneath us.
+	e.Lock()
+	defer e.Unlock()
 	for attr, payload := range payloadMap {
 		e.getChannel(attr) <- payload
 	}
