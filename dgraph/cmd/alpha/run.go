@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/web"
+
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -76,6 +78,9 @@ var (
 
 	// Alpha is the sub-command invoked when running "dgraph alpha".
 	Alpha x.SubCommand
+
+	// need this here to refer it in admin_backup.go
+	adminServer web.IServeGraphQL
 )
 
 func init() {
@@ -453,11 +458,6 @@ func setupServer(closer *y.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
-	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
-
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
@@ -474,25 +474,43 @@ func setupServer(closer *y.Closer) {
 	// The global epoch is set to maxUint64 while exiting the server.
 	// By using this information polling goroutine terminates the subscription.
 	globalEpoch := uint64(0)
-	mainServer, adminServer := admin.NewServers(introspection, &globalEpoch, closer)
+	var mainServer web.IServeGraphQL
+	mainServer, adminServer = admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
+		http.MethodGet:     true,
+		http.MethodPost:    true,
+		http.MethodOptions: true,
+	}, adminAuthHandler(adminServer.HTTPHandler())))
 
-	whitelist := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !handlerInit(w, r, map[string]bool{
-				http.MethodPost:    true,
-				http.MethodGet:     true,
-				http.MethodOptions: true,
-			}) {
-				return
-			}
-			h.ServeHTTP(w, r)
-		})
-	}
-	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
-	http.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
-	})
+	})))
+
+	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			shutDownHandler(w, r, adminServer)
+		}))))
+
+	http.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+		http.MethodPut:  true,
+		http.MethodPost: true,
+	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		drainingHandler(w, r, adminServer)
+	}))))
+
+	http.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			exportHandler(w, r, adminServer)
+		}))))
+
+	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+		http.MethodGet: true,
+		http.MethodPut: true,
+	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		memoryLimitHandler(w, r, adminServer)
+	}))))
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)

@@ -321,6 +321,7 @@ func admin(t *testing.T) {
 	addGQLSchema(t, client)
 	updateSchema(t, client)
 	updateSchemaThroughAdminSchemaEndpt(t, client)
+	gqlSchemaNodeHasXid(t, client)
 }
 
 func schemaIsInInitialState(t *testing.T, client *dgo.Dgraph) {
@@ -364,6 +365,21 @@ func updateSchemaThroughAdminSchemaEndpt(t *testing.T, client *dgo.Dgraph) {
 	require.JSONEq(t, adminSchemaEndptSchema, string(resp.GetJson()))
 
 	introspect(t, adminSchemaEndptGQLSchema)
+}
+
+func gqlSchemaNodeHasXid(t *testing.T, client *dgo.Dgraph) {
+	resp, err := client.NewReadOnlyTxn().Query(context.Background(), `query {
+		gqlSchema(func: type(dgraph.graphql)) {
+			dgraph.graphql.xid
+		}
+	}`)
+	require.NoError(t, err)
+	// confirm that there is only one node of type dgraph.graphql and it has xid.
+	require.JSONEq(t, `{
+		"gqlSchema": [{
+			"dgraph.graphql.xid": "dgraph.graphql.schema"
+		}]
+	}`, string(resp.GetJson()))
 }
 
 func introspect(t *testing.T, expected string) {

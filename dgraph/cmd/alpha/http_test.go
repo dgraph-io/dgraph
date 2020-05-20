@@ -735,7 +735,7 @@ func TestHealth(t *testing.T) {
 	require.True(t, info[0].Uptime > int64(time.Duration(1)))
 }
 
-func setDrainingMode(t *testing.T, enable bool) {
+func setDrainingMode(t *testing.T, enable bool, accessJwt string) {
 	drainingRequest := `mutation drain($enable: Boolean) {
 		draining(enable: $enable) {
 			response {
@@ -743,22 +743,13 @@ func setDrainingMode(t *testing.T, enable bool) {
 			}
 		}
 	}`
-	adminUrl := fmt.Sprintf("%s/admin", addr)
-	params := testutil.GraphQLParams{
+	params := &testutil.GraphQLParams{
 		Query:     drainingRequest,
 		Variables: map[string]interface{}{"enable": enable},
 	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"draining":{"response":{"code":"Success"}}}}`,
-		string(b))
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	resp.RequireNoGraphQLErrors(t)
+	require.JSONEq(t, `{"draining":{"response":{"code":"Success"}}}`, string(resp.Data))
 }
 
 func TestDrainingMode(t *testing.T) {
@@ -800,10 +791,12 @@ func TestDrainingMode(t *testing.T) {
 
 	}
 
-	setDrainingMode(t, true)
+	grootJwt, _ := testutil.GrootHttpLogin(addr + "/admin")
+
+	setDrainingMode(t, true, grootJwt)
 	runRequests(true)
 
-	setDrainingMode(t, false)
+	setDrainingMode(t, false, grootJwt)
 	runRequests(false)
 }
 
