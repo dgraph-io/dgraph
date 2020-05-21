@@ -1374,6 +1374,11 @@ func completeValue(
 				if v > math.MaxInt32 || v < math.MinInt32 {
 					return nil, valueCoercionError(v)
 				}
+			case int:
+				// numUids are added as int, so we need special handling for that.
+				if v > math.MaxInt32 || v < math.MinInt32 {
+					return nil, valueCoercionError(v)
+				}
 			default:
 				return nil, valueCoercionError(v)
 			}
