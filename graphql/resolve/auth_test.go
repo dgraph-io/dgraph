@@ -533,20 +533,3 @@ func TestAuthSchemaRewriting(t *testing.T) {
 		})
 	}
 }
-
-func TestAuthRewriting(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	result, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "../e2e/auth/sample_public_key.pem")
-	require.NoError(t, err)
-	strSchema := string(result)
-
-	authMeta, err := authorization.Parse(strSchema)
-	metaInfo := &testutil.AuthMeta{
-		PublicKey: authMeta.PublicKey,
-		Namespace: authMeta.Namespace,
-		Algo:      authMeta.Algo,
-	}
-	mutationAdd(t, strSchema, metaInfo)
-}
