@@ -48,11 +48,7 @@ func RegisterFlags(_ *pflag.FlagSet) {
 	return
 }
 
-type KeyReader interface {
-	ReadKey() (x.SensitiveByteSlice, error)
-}
-
-// NewKeyReader return nil KeyReader (i.e. no encryption).
-func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
+// ReadKey reads the key. Nil for OSS.
+func ReadKey(_ *viper.Viper) (x.SensitiveByteSlice, error) {
 	return nil, nil
 }

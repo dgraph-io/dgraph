@@ -764,20 +764,11 @@ func run() {
 		dir = opt.wdir
 		isWal = true
 	}
-	var kR enc.KeyReader
-	if kR, err = enc.NewKeyReader(Debug.Conf); err != nil {
-		fmt.Printf("error: %v", err)
+	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
 		return
 	}
-	// kR can be nil for the no-encryption scenario.
-	var key x.SensitiveByteSlice
-	if kR != nil {
-		if key, err = kR.ReadKey(); err != nil {
-			fmt.Printf("error: %v", err)
-			return
-		}
-	}
-	opt.key = key
+
 	bopts := badger.DefaultOptions(dir).
 		WithTableLoadingMode(options.MemoryMap).
 		WithReadOnly(opt.readOnly).WithEncryptionKey(opt.key)

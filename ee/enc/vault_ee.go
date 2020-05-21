@@ -82,7 +82,7 @@ func newVaultKeyReader(cfg *viper.Viper) (*vaultKeyReader, error) {
 }
 
 // ReadKey reads the key from the vault kv store.
-func (vkr *vaultKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
+func (vkr *vaultKeyReader) readKey() (x.SensitiveByteSlice, error) {
 	if vkr == nil {
 		return nil, errors.Errorf("nil vaultKeyReader")
 	}

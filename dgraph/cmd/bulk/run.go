@@ -140,22 +140,10 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-
-	var kR enc.KeyReader
-	if kR, err = enc.NewKeyReader(Bulk.Conf); err != nil {
-		fmt.Printf("error: %v", err)
+	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
+		fmt.Printf("unable to ready key %v", err)
 		return
 	}
-	// kR can be nil for the no-encryption scenario.
-	var key x.SensitiveByteSlice
-	if kR != nil {
-		if key, err = kR.ReadKey(); err != nil {
-			fmt.Printf("error: %v", err)
-			return
-		}
-	}
-	opt.EncryptionKey = key
-
 	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
 		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)

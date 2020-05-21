@@ -420,21 +420,10 @@ func run() error {
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
 		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
 	}
-	var kR enc.KeyReader
-	if kR, err = enc.NewKeyReader(Live.Conf); err != nil {
-		glog.Errorf("error: %v", err)
+	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
 		return err
 	}
-	// kR can be nil for the no-encryption scenario.
-	var key x.SensitiveByteSlice
-	if kR != nil {
-		if key, err = kR.ReadKey(); err != nil {
-			glog.Errorf("error: %v", err)
-			return err
-		}
-	}
-	opt.key = key
-
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {
 			glog.Errorf("Error while starting HTTP server: %+v", err)
