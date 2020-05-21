@@ -62,7 +62,7 @@ func (lkr *localKeyReader) readKey() (x.SensitiveByteSlice, error) {
 	}
 	k, err := ioutil.ReadFile(lkr.keyFile)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading encryption key file (%v)", lkr.keyFile)
+		return nil, errors.Errorf("error reading file %v", err)
 	}
 	// len must be 16,24,32 bytes if given. All other lengths are invalid.
 	klen := len(k)

@@ -141,7 +141,7 @@ func run() {
 		os.Exit(0)
 	}
 	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
-		fmt.Printf("unable to ready key %v", err)
+		fmt.Printf("unable to read key %v", err)
 		return
 	}
 	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
