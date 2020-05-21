@@ -398,6 +398,8 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		return err
 	}
 
+	log.Debug("[core] added block from BABE", "header", block.Header, "body", block.Body)
+
 	msg := &network.BlockAnnounceMessage{
 		ParentHash:     block.Header.ParentHash,
 		Number:         block.Header.Number,

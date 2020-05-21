@@ -36,6 +36,15 @@ type Slot struct {
 	number   uint64
 }
 
+// NewSlot returns a new Slot
+func NewSlot(start, duration, number uint64) *Slot {
+	return &Slot{
+		start:    start,
+		duration: duration,
+		number:   number,
+	}
+}
+
 // NextEpochDescriptor contains information about the next epoch.
 // It is broadcast as part of the consensus digest in the first block of the epoch.
 type NextEpochDescriptor struct {

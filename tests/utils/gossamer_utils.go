@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
+	log "github.com/ChainSafe/log15"
 )
 
 //TODO: #799
@@ -36,7 +37,6 @@ var (
 	basePort = 7000
 
 	// BaseRPCPort is the starting RPC port for test nodes
-	// It increases by 2 for each node added, since node a port uses --rpcport as the HTTP port and --rpcport + 1 as the websockets port
 	BaseRPCPort = 8540
 )
 
@@ -66,19 +66,19 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	)
 
 	//add step for init
-	t.Log("Going to init gossamer", "cmdInit", cmdInit)
+	log.Info("Going to init gossamer", "cmdInit", cmdInit)
 	stdOutInit, err := cmdInit.CombinedOutput()
 	if err != nil {
-		t.Error("Could not init gossamer", "err", err, "output", string(stdOutInit))
+		log.Error("Could not init gossamer", "err", err, "output", string(stdOutInit))
 		return nil, err
 	}
 
 	// TODO: get init exit code to see if node was successfully initialized
-	t.Log("Gossamer init ok")
+	log.Info("Gossamer init ok")
 
 	var key string
 	var cmd *exec.Cmd
-	rpcPort := strconv.Itoa(BaseRPCPort + idx*2) // needs *2 since previous node uses port for rpc and port+1 for WS
+	rpcPort := strconv.Itoa(BaseRPCPort + idx)
 
 	if idx >= len(keyList) {
 		//nolint
@@ -107,7 +107,8 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	// a new file will be created, it will be used for log the outputs from the node
 	f, err := os.Create(filepath.Join(dataDir+strconv.Itoa(idx), "gossamer.log"))
 	if err != nil {
-		t.Fatalf("Error when trying to set a log file for gossamer output: %v", err)
+		log.Error("Error when trying to set a log file for gossamer output", "error", err)
+		return nil, err
 	}
 
 	//this is required to be able to have multiple inputs into same file
@@ -116,14 +117,14 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	cmd.Stdout = multiWriter
 	cmd.Stderr = multiWriter
 
-	t.Log("Going to execute gossamer", "cmd", cmd)
+	log.Info("Going to execute gossamer", "cmd", cmd)
 	err = cmd.Start()
 	if err != nil {
-		t.Error("Could not execute gossamer cmd", "err", err)
+		log.Error("Could not execute gossamer cmd", "err", err)
 		return nil, err
 	}
 
-	t.Log("wait few secs for node to come up", "cmd.Process.Pid", cmd.Process.Pid)
+	log.Info("wait few secs for node to come up", "cmd.Process.Pid", cmd.Process.Pid)
 	var started bool
 
 	for i := 0; i < 10; i++ {
@@ -132,14 +133,14 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 			started = true
 			break
 		} else {
-			t.Log("Waiting for Gossamer to start", "err", err)
+			log.Info("Waiting for Gossamer to start", "err", err)
 		}
 	}
 
 	if started {
-		t.Log("Gossamer started", "key", key, "cmd.Process.Pid", cmd.Process.Pid)
+		log.Info("Gossamer started", "key", key, "cmd.Process.Pid", cmd.Process.Pid)
 	} else {
-		t.Fatal("Gossamer didn't start!", "err", err)
+		log.Crit("Gossamer didn't start!", "err", err)
 	}
 
 	return &Node{
@@ -187,14 +188,13 @@ func StartNodes(t *testing.T, num int) ([]*Node, error) {
 
 	tempDir, err := ioutil.TempDir("", "gossamer-stress-")
 	if err != nil {
-		t.Log("failed to create tempDir")
 		return nil, err
 	}
 
 	for i := 0; i < num; i++ {
 		node, err := RunGossamer(t, i, tempDir+strconv.Itoa(i))
 		if err != nil {
-			t.Log("failed to runGossamer", "i", i)
+			log.Error("failed to run gossamer", "i", i)
 			return nil, err
 		}
 
@@ -210,7 +210,7 @@ func TearDown(t *testing.T, nodes []*Node) (errorList []error) {
 		cmd := nodes[i].Process
 		err := KillProcess(t, cmd)
 		if err != nil {
-			t.Log("failed to killGossamer", "i", i, "cmd", cmd)
+			log.Error("failed to kill gossamer", "i", i, "cmd", cmd)
 			errorList = append(errorList, err)
 		}
 	}

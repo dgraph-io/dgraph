@@ -93,8 +93,10 @@ func ext_malloc(context unsafe.Pointer, size int32) int32 {
 	// Allocate memory
 	res, err := runtimeCtx.allocator.Allocate(uint32(size))
 	if err != nil {
-		log.Error("[ext_malloc]", "Error:", err)
-		panic(err)
+		// TODO: figure out why the runtime is asking for an allocation greater than the max possible.
+		// may be due to gossamer inputting some invalid data. #866
+		log.Crit("[ext_malloc]", "error", err)
+		return MaxPossibleAllocation - 1
 	}
 
 	return int32(res)

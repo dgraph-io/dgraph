@@ -17,6 +17,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/hex"
 	"math/big"
 	"sync"
@@ -26,11 +27,14 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
+	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -532,4 +536,114 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 	require.Nil(t, err)
 
 	require.Equal(t, int64(0), res)
+}
+
+func newBlockBuilder(t *testing.T, cfg *babe.SessionConfig) *babe.Session {
+	if cfg.Runtime == nil {
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+	}
+
+	if cfg.Keypair == nil {
+		kp, err := sr25519.GenerateKeypair()
+		require.Nil(t, err)
+		cfg.Keypair = kp
+	}
+
+	cfg.Kill = make(chan struct{})
+	cfg.SyncLock = &sync.Mutex{}
+
+	cfg.AuthData = []*types.AuthorityData{
+		{
+			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
+			Weight: 1,
+		},
+	}
+
+	b, err := babe.NewSession(cfg)
+	require.NoError(t, err)
+
+	return b
+}
+
+func TestExecuteBlock(t *testing.T) {
+	tt := trie.NewEmptyTrie()
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
+
+	// load authority into runtime
+	kp, err := sr25519.GenerateKeypair()
+	require.NoError(t, err)
+
+	pubkey := kp.Public().Encode()
+	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	require.NoError(t, err)
+
+	cfg := &SyncerConfig{
+		Runtime: rt,
+	}
+
+	syncer := newTestSyncer(t, cfg)
+
+	bcfg := &babe.SessionConfig{
+		Runtime:          syncer.runtime,
+		TransactionQueue: syncer.transactionQueue,
+		Keypair:          kp,
+	}
+
+	builder := newBlockBuilder(t, bcfg)
+	parent, err := syncer.blockState.BestBlockHeader()
+	require.NoError(t, err)
+
+	slot := babe.NewSlot(1, 0, 0)
+	block, err := builder.BuildBlock(parent, *slot)
+	require.NoError(t, err)
+
+	_, err = syncer.executeBlock(block)
+	require.NoError(t, err)
+}
+
+func TestExecuteBlock_WithExtrinsic(t *testing.T) {
+	tt := trie.NewEmptyTrie()
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
+
+	// load authority into runtime
+	kp, err := sr25519.GenerateKeypair()
+	require.NoError(t, err)
+
+	pubkey := kp.Public().Encode()
+	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
+	require.NoError(t, err)
+
+	cfg := &SyncerConfig{
+		Runtime: rt,
+	}
+
+	syncer := newTestSyncer(t, cfg)
+
+	bcfg := &babe.SessionConfig{
+		Runtime:          syncer.runtime,
+		TransactionQueue: syncer.transactionQueue,
+		Keypair:          kp,
+	}
+
+	key := []byte("noot")
+	value := []byte("washere")
+	ext := extrinsic.NewStorageChangeExt(key, optional.NewBytes(true, value))
+	enc, err := ext.Encode()
+	require.NoError(t, err)
+
+	tx := transaction.NewValidTransaction(enc, new(transaction.Validity))
+	_, err = syncer.transactionQueue.Push(tx)
+	require.NoError(t, err)
+
+	builder := newBlockBuilder(t, bcfg)
+	parent, err := syncer.blockState.BestBlockHeader()
+	require.NoError(t, err)
+
+	slot := babe.NewSlot(uint64(time.Now().Unix()), 100000, 1)
+	block, err := builder.BuildBlock(parent, *slot)
+	require.NoError(t, err)
+
+	require.Equal(t, true, bytes.Contains(*block.Body, enc))
+	_, err = syncer.executeBlock(block)
+	require.NoError(t, err)
 }

@@ -49,6 +49,11 @@ func (b *Block) Encode() ([]byte, error) {
 		return nil, err
 	}
 
+	// the scale encoding of an empty array of arrays is 0
+	if len(b.Header.Digest) == 0 {
+		enc = append(enc, 0)
+	}
+
 	// fix since scale doesn't handle *types.Body types, but does handle []byte
 	encBody, err := scale.Encode([]byte(*b.Body))
 	if err != nil {
@@ -62,4 +67,14 @@ func (b *Block) Encode() ([]byte, error) {
 func (b *Block) Decode(in []byte) error {
 	_, err := scale.Decode(in, b)
 	return err
+}
+
+// DeepCopy returns a copy of the block
+func (b *Block) DeepCopy() *Block {
+	bc := make([]byte, len(*b.Body))
+	copy(bc, *b.Body)
+	return &Block{
+		Header: b.Header.DeepCopy(),
+		Body:   NewBody(bc),
+	}
 }

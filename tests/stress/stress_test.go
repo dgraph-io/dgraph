@@ -43,12 +43,13 @@ import (
 )
 
 var (
-	numNodes               = 3
-	maxRetries             = 8
-	chain_getBlock         = "chain_getBlock"
-	chain_getHeader        = "chain_getHeader"
-	author_submitExtrinsic = "author_submitExtrinsic"
-	state_getStorage       = "state_getStorage"
+	numNodes                 = 3
+	maxRetries               = 24
+	chain_getBlock           = "chain_getBlock"
+	chain_getHeader          = "chain_getHeader"
+	author_submitExtrinsic   = "author_submitExtrinsic"
+	author_pendingExtrinsics = "author_pendingExtrinsics"
+	state_getStorage         = "state_getStorage"
 )
 
 func TestMain(m *testing.M) {
@@ -80,6 +81,17 @@ func TestMain(m *testing.M) {
 // TODO: move to utils, use in RPC tests
 func endpoint(node *utils.Node) string {
 	return "http://" + utils.HOSTNAME + ":" + node.RPCPort
+}
+
+func getPendingExtrinsics(t *testing.T, node *utils.Node) [][]byte {
+	respBody, err := utils.PostRPC(t, author_pendingExtrinsics, endpoint(node), "[]")
+	require.NoError(t, err)
+
+	exts := new(modules.PendingExtrinsicsResponse)
+	err = utils.DecodeRPC(t, respBody, exts)
+	require.NoError(t, err)
+
+	return *exts
 }
 
 // getStorage calls the endpoint state_getStorage
@@ -214,6 +226,22 @@ func compareChainHeads(t *testing.T, nodes []*utils.Node) (map[common.Hash][]str
 	return hashes, err
 }
 
+// compareChainHeadsWithRetry calls compareChainHeads, retrying up to maxRetries times if it errors.
+func compareChainHeadsWithRetry(t *testing.T, nodes []*utils.Node) {
+	var hashes map[common.Hash][]string
+	var err error
+
+	for i := 0; i < maxRetries; i++ {
+		hashes, err = compareChainHeads(t, nodes)
+		if err == nil {
+			break
+		}
+
+		time.Sleep(time.Second)
+	}
+	require.NoError(t, err, hashes)
+}
+
 func TestStressSync(t *testing.T) {
 	t.Log("going to start TestStressSync")
 	nodes, err := utils.StartNodes(t, numNodes)
@@ -255,66 +283,62 @@ func submitExtrinsicAssertInclusion(t *testing.T, nodes []*utils.Node, ext extri
 
 	var hash modules.ExtrinsicHashResponse
 	utils.DecodeRPC(t, respBody, &hash)
-	log.Info("submitted transaction", "hash", hash)
+	log.Info("submitted transaction", "hash", hash, "node", nodes[idx].Key)
+	t.Logf("submitted transaction to node %s", nodes[idx].Key)
 
 	// wait for nodes to build block + sync, then get headers
-	time.Sleep(time.Second * 5)
-	var hashes map[common.Hash][]string
+	time.Sleep(time.Second * 10)
+
 	for i := 0; i < maxRetries; i++ {
-		hashes, err = compareChainHeads(t, nodes)
-		if err == nil {
+		exts := getPendingExtrinsics(t, nodes[idx])
+		if len(exts) == 0 {
 			break
 		}
 
 		time.Sleep(time.Second)
 	}
-	require.NoError(t, err, hashes)
 
 	header := getChainHead(t, nodes[idx])
 	log.Info("got header from node", "header", header, "hash", header.Hash(), "node", nodes[idx].Key)
 
 	// search from child -> parent blocks for extrinsic
-	time.Sleep(time.Second * 5)
 	var resExts []types.Extrinsic
 	i := 0
 	for header.ExtrinsicsRoot == trie.EmptyHash && i != maxRetries {
-		block := getBlock(t, nodes[idx], header.ParentHash)
-		if block == nil {
-			// couldn't get block, increment retry counter
-			i++
-			continue
+		// check all nodes, since it might have been included on any of the block producers
+		var block *types.Block
+
+		for j := 0; j < len(nodes); j++ {
+			block = getBlock(t, nodes[j], header.ParentHash)
+			if block == nil {
+				// couldn't get block, increment retry counter
+				i++
+				continue
+			}
+
+			header = block.Header
+			log.Info("got block from node", "hash", header.Hash(), "node", nodes[j].Key)
+			log.Debug("got block from node", "header", header, "body", block.Body, "hash", header.Hash(), "node", nodes[j].Key)
+
+			if block.Body != nil && !bytes.Equal(*(block.Body), []byte{0}) {
+				resExts, err = block.Body.AsExtrinsics()
+				require.NoError(t, err, block.Body)
+				break
+			}
+
+			if header.Hash() == prevHeader.Hash() && j == len(nodes)-1 {
+				t.Fatal("could not find extrinsic in any blocks")
+			}
 		}
 
-		header = block.Header
-		log.Info("got block from node", "hash", header.Hash(), "node", nodes[idx].Key)
-		log.Debug("got block from node", "header", header, "body", block.Body, "hash", header.Hash(), "node", nodes[idx].Key)
-
-		if block.Body != nil && !bytes.Equal(*(block.Body), []byte{0}) {
-			resExts, err = block.Body.AsExtrinsics()
-			require.NoError(t, err, block.Body)
+		if block != nil && block.Body != nil && !bytes.Equal(*(block.Body), []byte{0}) {
 			break
-		}
-
-		if header.Hash() == prevHeader.Hash() {
-			t.Fatal("could not find extrinsic in any blocks")
 		}
 	}
 
 	// assert that the extrinsic included is the one we submitted
-	require.Equal(t, 1, len(resExts), fmt.Sprintf("did not find extrinsic in block on node %s", nodes[idx].Key))
+	require.Equal(t, 1, len(resExts), "did not find extrinsic in block on any node")
 	require.Equal(t, resExts[0], types.Extrinsic(tx))
-
-	// repeat sync check for sanity
-	time.Sleep(time.Second * 5)
-	for i = 0; i < maxRetries; i++ {
-		hashes, err = compareChainHeads(t, nodes)
-		if err == nil {
-			break
-		}
-
-		time.Sleep(time.Second)
-	}
-	require.NoError(t, err, hashes)
 }
 
 func TestStress_IncludeData(t *testing.T) {
@@ -327,6 +351,8 @@ func TestStress_IncludeData(t *testing.T) {
 	ext := extrinsic.NewIncludeDataExt([]byte("nootwashere"))
 	submitExtrinsicAssertInclusion(t, nodes, ext)
 
+	compareChainHeadsWithRetry(t, nodes)
+
 	//TODO: #803 cleanup optimization
 	errList := utils.TearDown(t, nodes)
 	require.Len(t, errList, 0)
@@ -336,6 +362,12 @@ func TestStress_StorageChange(t *testing.T) {
 	nodes, err := utils.StartNodes(t, numNodes)
 	require.NoError(t, err)
 
+	defer func() {
+		//TODO: #803 cleanup optimization
+		errList := utils.TearDown(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
 	time.Sleep(5 * time.Second)
 
 	// create IncludeData extrnsic
@@ -344,24 +376,24 @@ func TestStress_StorageChange(t *testing.T) {
 	ext := extrinsic.NewStorageChangeExt(key, optional.NewBytes(true, value))
 	submitExtrinsicAssertInclusion(t, nodes, ext)
 
-	time.Sleep(5 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	// for each node, check that storage was updated accordingly
+	errs := []error{}
 	for _, node := range nodes {
 		log.Info("getting storage from node", "node", node.Key)
 		res := getStorage(t, node, key)
 
-		// TODO: currently, around 2/3 nodes have the updated state, even if they all have the same
-		// chain head. figure out why this is the case and fix it.
-		idx := rand.Intn(len(nodes))
-		if idx == node.Idx {
-			// TODO: why does finalize_block modify the storage value?
-			require.NotEqual(t, []byte{}, res)
-			require.Equal(t, true, bytes.Contains(value, res[2:]))
+		// TODO: why does finalize_block modify the storage value?
+		if bytes.Equal(res, []byte{}) {
+			t.Logf("could not get storage value from node %s", node.Key)
+			errs = append(errs, fmt.Errorf("could not get storage value from node %s\n", node.Key)) //nolint
+		} else {
+			t.Logf("got storage value from node %s: %v", node.Key, res)
 		}
 	}
 
-	//TODO: #803 cleanup optimization
-	errList := utils.TearDown(t, nodes)
-	require.Len(t, errList, 0)
+	require.Equal(t, 0, len(errs), errs)
+
+	compareChainHeadsWithRetry(t, nodes)
 }

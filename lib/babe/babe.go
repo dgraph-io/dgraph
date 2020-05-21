@@ -303,6 +303,10 @@ func (b *Session) handleSlot(slotNum uint64) {
 		return
 	}
 
+	// there is a chance that the best block header may change in the course of building the block,
+	// so let's copy it first.
+	parent := parentHeader.DeepCopy()
+
 	currentSlot := Slot{
 		start:    uint64(time.Now().Unix()),
 		duration: b.config.SlotDuration,
@@ -310,8 +314,9 @@ func (b *Session) handleSlot(slotNum uint64) {
 	}
 
 	// TODO: move block authorization check here
+	log.Debug("[babe] going to build block", "parent", parent)
 
-	block, err := b.buildBlock(parentHeader, currentSlot)
+	block, err := b.buildBlock(parent, currentSlot)
 	if err != nil {
 		log.Error("[babe] block authoring", "error", err)
 	} else {
@@ -319,7 +324,7 @@ func (b *Session) handleSlot(slotNum uint64) {
 
 		hash := block.Header.Hash()
 		log.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
-		log.Debug("[babe] built block", "header", block.Header, "body", block.Body)
+		log.Debug("[babe] built block", "header", block.Header, "body", block.Body, "parent", parent)
 
 		err = b.safeSend(*block)
 		if err != nil {

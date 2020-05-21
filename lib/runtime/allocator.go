@@ -85,7 +85,7 @@ func NewAllocator(mem *wasm.Memory, ptrOffset uint32) *FreeingBumpHeapAllocator 
 func (fbha *FreeingBumpHeapAllocator) Allocate(size uint32) (uint32, error) {
 	// test for space allocation
 	if size > MaxPossibleAllocation {
-		err := errors.New("size to large")
+		err := errors.New("size too large")
 		return 0, err
 	}
 	itemSize := nextPowerOf2GT8(size)

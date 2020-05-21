@@ -36,7 +36,7 @@ func TestChainGetHeader_Genesis(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	expected := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         "0x0",
+		Number:         "0x00",
 		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		Digest:         ChainBlockHeaderDigest{},
@@ -92,7 +92,7 @@ func TestChainGetBlock_Genesis(t *testing.T) {
 	svc := NewChainModule(chain.Block)
 	header := &ChainBlockHeaderResponse{
 		ParentHash:     "0x0000000000000000000000000000000000000000000000000000000000000000",
-		Number:         "0x0",
+		Number:         "0x00",
 		StateRoot:      "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		ExtrinsicsRoot: "0x03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314",
 		Digest:         ChainBlockHeaderDigest{},

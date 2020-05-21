@@ -428,7 +428,7 @@ func TestShouldNotAllocateIfRequestSizeTooLarge(t *testing.T) {
 
 	// then
 	if err != nil {
-		if err.Error() != "size to large" {
+		if err.Error() != "size too large" {
 			t.Error("Didn't get expected error")
 		}
 	} else {
