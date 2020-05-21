@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
