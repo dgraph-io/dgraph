@@ -235,6 +235,18 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
+func getRootQuery(query *gql.GraphQuery, rootName string) (*gql.GraphQuery, bool) {
+	for _, q := range query.Children {
+		if q.Attr == rootName {
+			return q, true
+		}
+		if childQuery, ok := getRootQuery(q, rootName); ok {
+			return childQuery, true
+		}
+	}
+	return query, false
+}
+
 func rewriteAsGet(
 	field schema.Field,
 	uid uint64,
@@ -256,11 +268,10 @@ func rewriteAsGet(
 		if dgQuery.Attr != "" {
 			addTypeFilter(dgQuery, field.Type())
 		} else {
-			addTypeFilter(dgQuery.Children[1], field.Type())
+			rootQuery, _ := getRootQuery(dgQuery, field.Name())
+			addTypeFilter(rootQuery, field.Type())
 		}
-
 		return dgQuery
-
 	}
 
 	xidArgName := field.XIDArg()
