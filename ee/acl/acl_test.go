@@ -1757,7 +1757,7 @@ func TestHealthForAcl(t *testing.T) {
 			Status   string
 			Version  string
 			UpTime   int64
-			Group    string
+			Group    int32
 		}
 	}
 	err := json.Unmarshal(resp.Data, &guardianResp)
@@ -1772,7 +1772,7 @@ func TestHealthForAcl(t *testing.T) {
 		require.Equal(t, "healthy", v.Status)
 		require.NotEmpty(t, v.Version)
 		require.NotEmpty(t, v.UpTime)
-		require.NotEmpty(t, v.Group)
+		require.Contains(t, []int32{0, 1, 2}, v.Group)
 	}
 }
 
