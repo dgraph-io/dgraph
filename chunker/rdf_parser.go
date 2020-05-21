@@ -97,7 +97,7 @@ L:
 		item := it.Item()
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = strings.Trim(item.Val, " ")
+			rnq.Subject = strings.TrimSpace(item.Val)
 
 		case itemSubjectFunc:
 			var err error
@@ -113,10 +113,10 @@ L:
 
 		case itemPredicate:
 			// Here we split predicate and lang directive (ex: "name@en"), if needed.
-			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.TrimSpace(item.Val))
 
 		case itemObject:
-			rnq.ObjectId = strings.Trim(item.Val, " ")
+			rnq.ObjectId = strings.TrimSpace(item.Val)
 
 		case itemStar:
 			switch {
@@ -144,9 +144,9 @@ L:
 				return rnq, errors.Errorf("If predicate/subject is *, value should be * as well")
 			}
 
-			val := strings.Trim(item.Val, " ")
+			val := strings.TrimSpace(item.Val)
 			// TODO: Check if this condition is required.
-			if strings.Trim(val, " ") == "*" {
+			if val == "*" {
 				return rnq, errors.Errorf("itemObject can't be *")
 			}
 			// Lets find out the storage type from the type map.
@@ -190,7 +190,7 @@ L:
 			break L
 
 		case itemLabel:
-			rnq.Label = strings.Trim(item.Val, " ")
+			rnq.Label = strings.TrimSpace(item.Val)
 
 		case itemLeftRound:
 			it.Prev() // backup '('
