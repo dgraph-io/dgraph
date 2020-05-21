@@ -474,9 +474,11 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		}
 
 		if !pk.IsType() {
+			fmt.Printf("attr: %s\n", pk.Attr)
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}
+			fmt.Printf("served attr: %s\n", pk.Attr)
 		}
 
 		// We need to ensure that schema keys are separately identifiable, so they can be
@@ -565,11 +567,11 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
 				}
 				if len(vals) == 1 {
-					val, ok := vals[0].Value.(string)
+					val, ok := vals[0].Value.([]byte)
 					if !ok {
 						return nil, errors.Errorf("cannot read value of dgraph.type entry")
 					}
-					if val == "dgraph.graphql" {
+					if string(val) == "dgraph.graphql" {
 						return nil, nil
 					}
 				}
@@ -655,6 +657,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 	if err := schemaWriter.Close(); err != nil {
+		return err
+	}
+	if err := gqlSchemaWriter.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
