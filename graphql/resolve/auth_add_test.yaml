@@ -755,14 +755,9 @@
         "random": "random123"
       }
     }
-  uids: |
-    { "log1": "0x123" }
-  authquery: |-
-    query {
-      log()
-    }
-  authjson: |
-    { "log1": [ { "uid": "0x123" }] }
+  error:
+    { "message": "couldn't rewrite query for mutation addLog because no new node was created"}
+
 
 - name: "Add with top level RBAC true."
   gqlquery: |
@@ -935,14 +930,8 @@
         uid
       }
     }
-  uids: |
-    { "user1": "0x123" }
-  authquery: |-
-    query {
-      issue()
-    }
-  authjson: |
-    { "user1": [ { "uid": "0x123" }] }
+  error:
+    { "message": "couldn't rewrite query for mutation addIssue because no new node was created"}
 
 - name: "Add with top level not RBAC false."
   gqlquery: |
@@ -960,14 +949,8 @@
         "visible": true
       }
     }
-  uids: |
-    { "log1": "0x123" }
-  authquery: |-
-    query {
-      complexlog()
-    }
-  authjson: |
-    { "log1": [ { "uid": "0x123" }] }
+  error:
+    { "message": "couldn't rewrite query for mutation addComplexLog because no new node was created"}
 
 - name: "Add with top level not RBAC true."
   gqlquery: |
