@@ -1350,6 +1350,8 @@ func completeValue(
 		case "Int":
 			switch v := val.(type) {
 			case float64:
+				// Lets try to see if this a whole number, otherwise return error because we
+				// might be losing informating by truncating it.
 				truncated := math.Trunc(v)
 				if truncated == v {
 					val = int(truncated)
@@ -1363,14 +1365,20 @@ func completeValue(
 					val = 1
 				}
 			case string:
-				i, err := strconv.ParseInt(v, 10, 32)
-				// An error can be encountered if we had an integer value that can't be fit into
-				// a 32 bit integer.
+				i, err := strconv.ParseFloat(v, 32)
+				// An error can be encountered if we had a value that can't be fit into
+				// a 32 bit floating point number.
 				if err != nil {
 					return nil, valueCoercionError(v)
-					// TODO - What if string was 123.00
 				}
-				val = i
+				// Lets try to see if this a whole number, otherwise return error because we
+				// might be losing informating by truncating it.
+				truncated := math.Trunc(i)
+				if truncated == i {
+					val = int(truncated)
+				} else {
+					return nil, valueCoercionError(v)
+				}
 			case int64:
 				if v > math.MaxInt32 || v < math.MinInt32 {
 					return nil, valueCoercionError(v)
