@@ -474,11 +474,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		}
 
 		if !pk.IsType() {
-			fmt.Printf("attr: %s\n", pk.Attr)
 			if servesTablet, err := groups().ServesTablet(pk.Attr); err != nil || !servesTablet {
 				return false
 			}
-			fmt.Printf("served attr: %s\n", pk.Attr)
 		}
 
 		// We need to ensure that schema keys are separately identifiable, so they can be
@@ -528,10 +526,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 		case pk.Attr == "dgraph.graphql.xid":
 			// Ignore this predicate.
-			glog.V(2).Infof("Ignoring key %v for predicate dgraph.graphql.xid",
-				hex.Dump(item.Key()))
 
 		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
+			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, errors.Wrapf(err, "cannot read posting list for GraphQL schema")

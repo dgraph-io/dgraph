@@ -466,7 +466,6 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	tablet, ok := g.tablets[key]
 	g.RUnlock()
 	if ok {
-		fmt.Printf("tablets %v\n", g.tablets)
 		return tablet, nil
 	}
 
