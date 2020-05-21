@@ -30,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/types"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/api"
@@ -1315,7 +1316,7 @@ func completeValue(
 		valueCoercionError := func(val interface{}) x.GqlErrorList {
 			gqlErr := x.GqlErrorf(
 				"Error coercing value '%+v' for field '%s' to type %s.",
-				val, field.Name(), field.Type()).
+				val, field.Name(), field.Type().Name()).
 				WithLocations(field.Location())
 			gqlErr.Path = copyPath(path)
 			return x.GqlErrorList{gqlErr}
@@ -1403,7 +1404,38 @@ func completeValue(
 			default:
 				return nil, valueCoercionError(v)
 			}
+		case "DateTime":
+			switch v := val.(type) {
+			case string:
+				if _, err := types.ParseTime(v); err != nil {
+					return nil, valueCoercionError(v)
+				}
+			default:
+				return nil, valueCoercionError(v)
+			}
 		default:
+			enumValues := field.EnumValues()
+			// At this point we should only get fields which are of ENUM type, so we can return
+			// an error if we don't get any enum values.
+			if len(enumValues) == 0 {
+				return nil, valueCoercionError(val)
+			}
+			switch v := val.(type) {
+			case string:
+				// Lets check that the enum value is valid.
+				valid := false
+				for _, ev := range enumValues {
+					if ev == v {
+						valid = true
+						break
+					}
+				}
+				if !valid {
+					return nil, valueCoercionError(val)
+				}
+			default:
+				return nil, valueCoercionError(v)
+			}
 		}
 
 		// val is a scalar
