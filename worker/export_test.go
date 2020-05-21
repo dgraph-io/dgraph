@@ -80,6 +80,9 @@ func populateGraphExport(t *testing.T) {
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 		`<7> <name> "node_to_delete" .`,
+		`<8> <dgraph.graphql.schema> "type Example { name: String }" .`,
+		`<8> <dgraph.graphql.xid> "dgraph.graphql.schema" .`,
+		`<8> <dgraph.type> "dgraph.graphql" .`,
 	}
 	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
 	edgeToDelete := `<7> <name> "node_to_delete" .`
@@ -116,8 +119,11 @@ func populateGraphExport(t *testing.T) {
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
-	schema.ParseBytes([]byte(schemaStr), 1)
-
+	schema.ParseBytes([]byte(schemaStr + "\n" + `
+		dgraph.type: string @index(exact) .
+		dgraph.graphql.xid: string @index(exact) @upsert .
+		dgraph.graphql.schema: string . 
+	`), 1)
 	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
 
