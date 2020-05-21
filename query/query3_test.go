@@ -338,26 +338,26 @@ func TestKShortestPathWeighted(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-			"data": {
-			  "_path_": [
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.1,
-					  "path": {
-						"uid": "0x3e9"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 0.3
-				}
-			  ]
-			}
+		  "data": {
+		    "_path_": [
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "uid": "0x3e9",
+		              "path|weight": 0.1
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 0.3
+		      }
+		    ]
+		  }
 		}
 	`, js)
 }
@@ -375,26 +375,26 @@ func TestKShortestPathWeightedMinMaxNoEffect(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-			"data": {
-			  "_path_": [
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.1,
-					  "path": {
-						"uid": "0x3e9"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 0.3
-				}
-			  ]
-			}
+		  "data": {
+		    "_path_": [
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "uid": "0x3e9",
+		              "path|weight": 0.1
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 0.3
+		      }
+		    ]
+		  }
 		}
 	`, js)
 }
@@ -451,74 +451,74 @@ func TestKShortestPathWeighted1(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-			"data": {
-			  "_path_": [
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.1,
-					  "path": {
-						"path|weight": 0.1,
-						"path": {
-						  "path|weight": 0.6,
-						  "path": {
-							"uid": "0x3eb"
-						  },
-						  "uid": "0x3ea"
-						},
-						"uid": "0x3e9"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 1
-				},
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.7,
-					  "path": {
-						"path|weight": 0.6,
-						"path": {
-						  "uid": "0x3eb"
-						},
-						"uid": "0x3ea"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 1.5
-				},
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.1,
-					  "path": {
-						"path|weight": 1.5,
-						"path": {
-						  "uid": "0x3eb"
-						},
-						"uid": "0x3e9"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 1.8
-				}
-			  ]
-			}
+		  "data": {
+		    "_path_": [
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "path": {
+		                "path": {
+		                  "uid": "0x3eb",
+		                  "path|weight": 0.6
+		                },
+		                "uid": "0x3ea",
+		                "path|weight": 0.1
+		              },
+		              "uid": "0x3e9",
+		              "path|weight": 0.1
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 1
+		      },
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "path": {
+		                "uid": "0x3eb",
+		                "path|weight": 0.6
+		              },
+		              "uid": "0x3ea",
+		              "path|weight": 0.7
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 1.5
+		      },
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "path": {
+		                "uid": "0x3eb",
+		                "path|weight": 1.5
+		              },
+		              "uid": "0x3e9",
+		              "path|weight": 0.1
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 1.8
+		      }
+		    ]
+		  }
 		}
 	`, js)
 }
@@ -534,30 +534,30 @@ func TestKShortestPathWeighted1MinMaxWeight(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-			"data": {
-			  "_path_": [
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.7,
-					  "path": {
-						"path|weight": 0.6,
-						"path": {
-						  "uid": "0x3eb"
-						},
-						"uid": "0x3ea"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 1.5
-				}
-			  ]
-			}
+		  "data": {
+		    "_path_": [
+		      {
+		        "path": {
+		          "path": {
+		            "path": {
+		              "path": {
+		                "uid": "0x3eb",
+		                "path|weight": 0.6
+		              },
+		              "uid": "0x3ea",
+		              "path|weight": 0.7
+		            },
+		            "uid": "0x3e8",
+		            "path|weight": 0.1
+		          },
+		          "uid": "0x1f",
+		          "path|weight": 0.1
+		        },
+		        "uid": "0x1",
+		        "_weight_": 1.5
+		      }
+		    ]
+		  }
 		}
 	`, js)
 }
@@ -713,27 +713,27 @@ func TestKShortestPathTwoPaths(t *testing.T) {
 		   "connects": {
 			"connects": {
 			 "connects": {
-			  "uid": "0x37"
+			  "uid": "0x37",
+			  "connects|weight": 1
 			 },
-			 "connects|weight": 1,
-			 "uid": "0x36"
+			 "uid": "0x36",
+			 "connects|weight": 1
 			},
-			"connects|weight": 1,
-			"uid": "0x35"
+			"uid": "0x35",
+			"connects|weight": 1
 		   },
-		   "connects|weight": 1,
 		   "uid": "0x33",
 		   "_weight_": 3
 		  },
 		  {
 		   "connects": {
 			"connects": {
-			 "uid": "0x37"
+			 "uid": "0x37",
+			 "connects|weight": 1
 			},
-			"connects|weight": 1,
-			"uid": "0x36"
+			"uid": "0x36",
+			"connects|weight": 10
 		   },
-		   "connects|weight": 10,
 		   "uid": "0x33",
 		   "_weight_": 11
 		  }
@@ -755,102 +755,112 @@ func TestKShortestPathAllPaths(t *testing.T) {
 		me(func: uid(A)) {name}}`,
 	} {
 		js := processQueryNoErr(t, q)
-		expected := `{
-			"data": {
-			 "me": [
-			  {"name": "A"},
-			  {"name": "C"},
-			  {"name": "D"},
-			  {"name": "E"}
-			 ],
-			 "_path_": [
-			  {
-			   "connects": {
-				"connects": {
-				 "connects": {
-				  "uid": "0x37"
-				 },
-				 "connects|weight": 1,
-				 "uid": "0x36"
-				},
-				"connects|weight": 1,
-				"uid": "0x35"
-			   },
-			   "connects|weight": 1,
-			   "uid": "0x33",
-			   "_weight_": 3
-			  },
-			  {
-			   "connects": {
-				"connects": {
-				 "uid": "0x37"
-				},
-				"connects|weight": 1,
-				"uid": "0x36"
-			   },
-			   "connects|weight": 10,
-			   "uid": "0x33",
-			   "_weight_": 11
-			  },
-			  {
-			   "connects": {
-				"connects": {
-				 "connects": {
-				  "connects": {
-				   "uid": "0x37"
-				  },
-				  "connects|weight": 1,
-				  "uid": "0x36"
-				 },
-				 "connects|weight": 10,
-				 "uid": "0x34"
-				},
-				"connects|weight": 10,
-				"uid": "0x35"
-			   },
-			   "connects|weight": 1,
-			   "uid": "0x33",
-			   "_weight_": 22
-			  },
-			  {
-			   "connects": {
-				"connects": {
-				 "connects": {
-				  "uid": "0x37"
-				 },
-				 "connects|weight": 1,
-				 "uid": "0x36"
-				},
-				"connects|weight": 10,
-				"uid": "0x34"
-			   },
-			   "connects|weight": 11,
-			   "uid": "0x33",
-			   "_weight_": 22
-			  },
-			  {
-			   "connects": {
-				"connects": {
-				 "connects": {
-				  "connects": {
-				   "uid": "0x37"
-				  },
-				  "connects|weight": 1,
-				  "uid": "0x36"
-				 },
-				 "connects|weight": 1,
-				 "uid": "0x35"
-				},
-				"connects|weight": 10,
-				"uid": "0x34"
-			   },
-			   "connects|weight": 11,
-			   "uid": "0x33",
-			   "_weight_": 23
-			  }
-			 ]
+		expected := `
+		{
+			"data":{
+				"me":[
+					{
+						"name":"A"
+					},
+					{
+						"name":"C"
+					},
+					{
+						"name":"D"
+					},
+					{
+						"name":"E"
+					}
+				],
+				"_path_":[
+					{
+						"connects":{
+							"connects":{
+								"connects":{
+									"uid":"0x37",
+									"connects|weight":1
+								},
+								"uid":"0x36",
+								"connects|weight":1
+							},
+							"uid":"0x35",
+							"connects|weight":1
+						},
+						"uid":"0x33",
+						"_weight_":3
+					},
+					{
+						"connects":{
+							"connects":{
+								"uid":"0x37",
+								"connects|weight":1
+							},
+							"uid":"0x36",
+							"connects|weight":10
+						},
+						"uid":"0x33",
+						"_weight_":11
+					},
+					{
+						"connects":{
+							"connects":{
+								"connects":{
+									"connects":{
+										"uid":"0x37",
+										"connects|weight":1
+									},
+									"uid":"0x36",
+									"connects|weight":10
+								},
+								"uid":"0x34",
+								"connects|weight":10
+							},
+							"uid":"0x35",
+							"connects|weight":1
+						},
+						"uid":"0x33",
+						"_weight_":22
+					},
+					{
+						"connects":{
+							"connects":{
+								"connects":{
+									"uid":"0x37",
+									"connects|weight":1
+								},
+								"uid":"0x36",
+								"connects|weight":10
+							},
+							"uid":"0x34",
+							"connects|weight":11
+						},
+						"uid":"0x33",
+						"_weight_":22
+					},
+					{
+						"connects":{
+							"connects":{
+								"connects":{
+									"connects":{
+										"uid":"0x37",
+										"connects|weight":1
+									},
+									"uid":"0x36",
+									"connects|weight":1
+								},
+								"uid":"0x35",
+								"connects|weight":10
+							},
+							"uid":"0x34",
+							"connects|weight":11
+						},
+						"uid":"0x33",
+						"_weight_":23
+					}
+				]
 			}
-		   }`
+		}
+		`
 		testutil.CompareJSON(t, expected, js)
 	}
 }
@@ -1073,9 +1083,9 @@ func TestShortestPathWithDepth(t *testing.T) {
 			"_path_": [
 				{
 					"connects": {
-						"uid": "0x34"
+						"uid": "0x34",
+						"connects|weight": 11
 					},
-					"connects|weight": 11,
 					"uid": "0x33",
 					"_weight_": 11
 				}
@@ -1109,15 +1119,15 @@ func TestShortestPathWithDepth(t *testing.T) {
 					"connects": {
 						"connects": {
 							"connects": {
-								"uid": "0x34"
+								"uid": "0x34",
+								"connects|weight": 2
 							},
-							"connects|weight": 2,
+							"connects|weight": 1,
 							"uid": "0x36"
 						},
-						"connects|weight": 1,
-						"uid": "0x35"
+						"uid": "0x35",
+						"connects|weight": 1
 					},
-					"connects|weight": 1,
 					"uid": "0x33",
 					"_weight_": 4
 				}
@@ -1140,47 +1150,47 @@ func TestShortestPathWithDepth(t *testing.T) {
 		   "connects": {
 			"connects": {
 			 "connects": {
-			  "uid": "0x34"
+			  "uid": "0x34",
+			  "connects|weight": 2
 			 },
-			 "connects|weight": 2,
-			 "uid": "0x36"
+			 "uid": "0x36",
+			 "connects|weight": 1
 			},
-			"connects|weight": 1,
-			"uid": "0x35"
+			"uid": "0x35",
+			"connects|weight": 1
 		   },
-		   "connects|weight": 1,
 		   "uid": "0x33",
 		   "_weight_": 4
 		  },
 		  {
 		   "connects": {
 			"connects": {
-			 "uid": "0x34"
+			 "uid": "0x34",
+			 "connects|weight": 10
 			},
-			"connects|weight": 10,
-			"uid": "0x35"
+			"uid": "0x35",
+			"connects|weight": 1
 		   },
-		   "connects|weight": 1,
 		   "uid": "0x33",
 		   "_weight_": 11
 		  },
 		  {
 		   "connects": {
-			"uid": "0x34"
+			"uid": "0x34",
+			"connects|weight": 11
 		   },
-		   "connects|weight": 11,
 		   "uid": "0x33",
 		   "_weight_": 11
 		  },
 		  {
 		   "connects": {
 			"connects": {
-			 "uid": "0x34"
+			 "uid": "0x34",
+			 "connects|weight": 2
 			},
-			"connects|weight": 2,
-			"uid": "0x36"
+			"uid": "0x36",
+			"connects|weight": 10
 		   },
-		   "connects|weight": 10,
 		   "uid": "0x33",
 		   "_weight_": 12
 		  },
@@ -1188,21 +1198,22 @@ func TestShortestPathWithDepth(t *testing.T) {
 		   "connects": {
 			"connects": {
 			 "connects": {
-			  "uid": "0x34"
+			  "uid": "0x34",
+			  "connects|weight": 10
 			 },
-			 "connects|weight": 10,
-			 "uid": "0x35"
+			 "uid": "0x35",
+			 "connects|weight": 10
 			},
-			"connects|weight": 10,
-			"uid": "0x36"
+			"uid": "0x36",
+			"connects|weight": 10
 		   },
-		   "connects|weight": 10,
 		   "uid": "0x33",
 		   "_weight_": 30
 		  }
 		 ]
 		}
-	   }`
+	}
+	`
 
 	tests := []struct {
 		depth, numpaths, output string
@@ -1300,9 +1311,9 @@ func TestShortestPathWithDepth_direct_path_is_shortest(t *testing.T) {
 			"_path_": [
 				{
 					"connects": {
-						"uid": "0x34"
+						"uid": "0x34",
+						"connects|weight": 2
 					},
-					"connects|weight": 2,
 					"uid": "0x36",
 					"_weight_": 2
 				}
@@ -1393,15 +1404,15 @@ func TestShortestPathWithDepth_no_direct_path(t *testing.T) {
 					"connects": {
 						"connects": {
 							"connects": {
-								"uid": "0x37"
+								"uid": "0x37",
+								"connects|weight": 1
 							},
-							"connects|weight": 1,
-							"uid": "0x36"
+							"uid": "0x36",
+							"connects|weight": 1
 						},
-						"connects|weight": 1,
-						"uid": "0x35"
+						"uid": "0x35",
+						"connects|weight": 1
 					},
-					"connects|weight": 1,
 					"uid": "0x33",
 					"_weight_": 3
 				}
@@ -1470,46 +1481,48 @@ func TestShortestPathWithDepth_test_for_hoppy_behavior(t *testing.T) {
 		}
 	}`
 
-	shortestPath := `{
-		"data": {
-			"path": [
-				{
-					"uid": "0x38",
-					"name": "F"
-				},
-				{
-					"uid": "0x3a",
-					"name": "H"
-				},
-				{
-					"uid": "0x3b",
-					"name": "I"
-				},
-				{
-					"uid": "0x3c",
-					"name": "J"
-				}
-			],
-			"_path_": [
-				{
-					"connects": {
-						"connects": {
-							"connects": {
-								"uid": "0x3c"
-							},
-							"connects|weight": 1,
-							"uid": "0x3b"
-						},
-						"connects|weight": 1,
-						"uid": "0x3a"
-					},
-					"connects|weight": 1,
-					"uid": "0x38",
-					"_weight_": 3
-				}
-			]
+	shortestPath := `
+		{
+		    "data": {
+		        "path": [
+		            {
+		                "uid": "0x38",
+		                "name": "F"
+		            },
+		            {
+		                "uid": "0x3a",
+		                "name": "H"
+		            },
+		            {
+		                "uid": "0x3b",
+		                "name": "I"
+		            },
+		            {
+		                "uid": "0x3c",
+		                "name": "J"
+		            }
+		        ],
+		        "_path_": [
+		            {
+		                "connects": {
+		                    "connects": {
+		                        "connects": {
+		                            "uid": "0x3c",
+		                            "connects|weight": 1
+		                        },
+		                        "uid": "0x3b",
+		                        "connects|weight": 1
+		                    },
+		                    "uid": "0x3a",
+		                    "connects|weight": 1
+		                },
+		                "uid": "0x38",
+		                "_weight_": 3
+		            }
+		        ]
+		    }
 		}
-	}`
+	`
 
 	tests := []struct {
 		name, depth, output string
@@ -1621,47 +1634,47 @@ func TestShortestPathWeights(t *testing.T) {
 	js := processQueryNoErr(t, query)
 	require.JSONEq(t, `
 		{
-			"data": {
-			  "me": [
-				{
-				  "name": "Michonne"
-				},
-				{
-				  "name": "Andrea"
-				},
-				{
-				  "name": "Alice"
-				},
-				{
-				  "name": "Bob"
-				},
-				{
-				  "name": "Matt"
-				}
-			  ],
-			  "_path_": [
-				{
-				  "path|weight": 0.1,
-				  "path": {
-					"path|weight": 0.1,
-					"path": {
-					  "path|weight": 0.1,
-					  "path": {
-						"path|weight": 0.1,
-						"path": {
-						  "uid": "0x3ea"
-						},
-						"uid": "0x3e9"
-					  },
-					  "uid": "0x3e8"
-					},
-					"uid": "0x1f"
-				  },
-				  "uid": "0x1",
-				  "_weight_": 0.4
-				}
-			  ]
-			}
+		    "data": {
+		        "me": [
+		            {
+		                "name": "Michonne"
+		            },
+		            {
+		                "name": "Andrea"
+		            },
+		            {
+		                "name": "Alice"
+		            },
+		            {
+		                "name": "Bob"
+		            },
+		            {
+		                "name": "Matt"
+		            }
+		        ],
+		        "_path_": [
+		            {
+		                "path": {
+		                    "path": {
+		                        "path": {
+		                            "path": {
+		                                "uid": "0x3ea",
+		                                "path|weight": 0.1
+		                            },
+		                            "uid": "0x3e9",
+		                            "path|weight": 0.1
+		                        },
+		                        "uid": "0x3e8",
+		                        "path|weight": 0.1
+		                    },
+		                    "uid": "0x1f",
+		                    "path|weight": 0.1
+		                },
+		                "uid": "0x1",
+		                "_weight_": 0.4
+		            }
+		        ]
+		    }
 		}
 	`, js)
 }
