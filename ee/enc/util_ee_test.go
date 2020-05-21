@@ -37,6 +37,7 @@ func resetConfig(config *viper.Viper) {
 	config.Set(vaultField, "enc_key")
 }
 
+// TODO: The function below allows instantiating a real Vault server. But results in go.mod issues.
 // func startVaultServer(t *testing.T, kvPath, kvField, kvEncKey string) (net.Listener, *api.Client) {
 // 	core, _, rootToken := vault.TestCoreUnsealed(t)
 // 	ln, addr := http.TestServer(t, core)
