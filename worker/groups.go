@@ -461,8 +461,6 @@ func (g *groupi) ServesTablet(key string) (bool, error) {
 
 // Do not modify the returned Tablet
 func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
-	emptyTablet := pb.Tablet{}
-
 	// TODO: Remove all this later, create a membership state and apply it
 	g.RLock()
 	tablet, ok := g.tablets[key]
@@ -480,7 +478,7 @@ func (g *groupi) Tablet(key string) (*pb.Tablet, error) {
 	out, err := zc.ShouldServe(context.Background(), tablet)
 	if err != nil {
 		glog.Errorf("Error while ShouldServe grpc call %v", err)
-		return &emptyTablet, err
+		return nil, err
 	}
 
 	// Do not store tablets with group ID 0, as they are just dummy tablets for
