@@ -82,6 +82,16 @@ func NewKeypairFromSeed(seed []byte) (*Keypair, error) {
 	return NewKeypair(edpriv), nil
 }
 
+// NewKeypairFromPrivateKeyString returns a Keypair given a 0x prefixed private key string
+func NewKeypairFromPrivateKeyString(in string) (*Keypair, error) {
+	privBytes, err := common.HexToBytes(in)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewKeypairFromSeed(privBytes)
+}
+
 // GenerateKeypair returns a new ed25519 keypair
 func GenerateKeypair() (*Keypair, error) {
 	buf := make([]byte, SeedLength)

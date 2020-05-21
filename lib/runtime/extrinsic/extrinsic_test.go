@@ -43,7 +43,7 @@ var alice, _ = common.HexToHash("0xd43593c715fdd31c61141abd04a99fd6822c8558854cc
 var bob, _ = common.HexToHash("0x90b5ab205c6974c9ea841be688864633dc9ca8a357843eeacf2314649965fe22")
 
 func TestTransfer_AsSignedExtrinsic(t *testing.T) {
-	kr, err := keystore.NewKeyring()
+	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
 
 	transfer := NewTransfer(alice, bob, 1000, 1)

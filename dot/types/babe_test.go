@@ -22,7 +22,7 @@ func TestAuthorityDataRaw(t *testing.T) {
 }
 
 func TestAuthorityData(t *testing.T) {
-	kr, err := keystore.NewKeyring()
+	kr, err := keystore.NewSr25519Keyring()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestAuthorityData(t *testing.T) {
 }
 
 func TestAuthorityData_ToRaw(t *testing.T) {
-	kr, err := keystore.NewKeyring()
+	kr, err := keystore.NewSr25519Keyring()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -298,7 +298,7 @@ func TestInitNode_LoadBalances(t *testing.T) {
 		t.Fatal("core service is nil")
 	}
 
-	kr, _ := keystore.NewKeyring()
+	kr, _ := keystore.NewSr25519Keyring()
 	alice := kr.Alice.Public().Encode()
 	ab := [32]byte{}
 	copy(ab[:], alice)

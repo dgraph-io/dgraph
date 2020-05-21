@@ -20,11 +20,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 )
 
-func TestNewKeyring(t *testing.T) {
-	kr, err := NewKeyring()
+func TestNewSr25519Keyring(t *testing.T) {
+	kr, err := NewSr25519Keyring()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,6 +35,22 @@ func TestNewKeyring(t *testing.T) {
 		key := v.Field(i).Interface().(*sr25519.Keypair).Private().Hex()
 		if key != privateKeys[i] {
 			t.Fatalf("Fail: got %s expected %s", key, privateKeys[i])
+		}
+	}
+}
+
+func TestNewEd25519Keyring(t *testing.T) {
+	kr, err := NewEd25519Keyring()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	v := reflect.ValueOf(kr).Elem()
+	for i := 0; i < v.NumField()-1; i++ {
+		key := v.Field(i).Interface().(*ed25519.Keypair).Private().Hex()
+		// ed25519 private keys are stored in uncompressed format
+		if key[:66] != privateKeys[i] {
+			t.Fatalf("Fail: got %s expected %s", key[:66], privateKeys[i])
 		}
 	}
 }

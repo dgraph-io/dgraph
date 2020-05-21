@@ -18,7 +18,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var kr, _ = keystore.NewKeyring()
+var kr, _ = keystore.NewSr25519Keyring()
 
 func TestExportRuntime(t *testing.T) {
 	fp := "runtime.out"
