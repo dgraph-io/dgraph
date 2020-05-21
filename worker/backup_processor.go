@@ -86,7 +86,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	var maxVersion uint64
 
-	newhandler, err := enc.GetWriter(Config.BadgerKeyFile, handler)
+	newhandler, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, handler)
 	if err != nil {
 		return &emptyRes, err
 	}

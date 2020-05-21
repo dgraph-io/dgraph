@@ -361,7 +361,7 @@ func (writer *fileWriter) open(fpath string) error {
 		return err
 	}
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	w, err := enc.GetWriter(Config.BadgerKeyFile, writer.bw)
+	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
 		return err
 	}

@@ -115,10 +115,7 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -552,6 +549,7 @@ func setupServer(closer *y.Closer) {
 }
 
 func run() {
+	var err error
 	if Alpha.Conf.GetBool("enable_sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
@@ -563,20 +561,27 @@ func run() {
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
-		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PostingDir:             Alpha.Conf.GetString("postings"),
+		WALDir:                 Alpha.Conf.GetString("wal"),
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opts.BadgerKeyFile != "" {
-		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
+	var kr enc.KeyReader
+	if kr, err = enc.NewKeyReader(Alpha.Conf); err != nil {
+		glog.Errorf("error: %v", err)
+		return
+	}
+	// kR can be nil for the no-encryption scenario.
+	var key x.SensitiveByteSlice
+	if kr != nil {
+		if key, err = kr.ReadKey(); err != nil {
+			glog.Errorf("error: %v", err)
+			return
+		}
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -632,7 +637,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		BadgerKeyFile:       worker.Config.BadgerKeyFile,
+		EncryptionKey:       key,
 	}
 
 	setupCustomTokenizers()

@@ -198,7 +198,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			r, err := enc.GetReader(req.GetKeyFile(), r)
+			r, err := enc.GetReader(enc.ReadEncryptionKeyFile(req.GetKeyFile()), r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
