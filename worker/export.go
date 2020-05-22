@@ -546,7 +546,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			}
 			kv := &bpb.KV{
 				Value:   val,
-				Version: 3, // GrqphQL schema value
+				Version: 3, // GraphQL schema value
 			}
 			return listWrap(kv), nil
 
