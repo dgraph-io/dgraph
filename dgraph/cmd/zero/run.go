@@ -292,10 +292,10 @@ func run() {
 
 		// Stop all HTTP requests.
 		_ = httpListener.Close()
-		// Try to generate a snapshot before the shutdown.
-		st.node.trySnapshot(0)
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Try to generate a snapshot before the shutdown.
+		st.node.trySnapshot(0)
 		// Stop Raft store.
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
