@@ -35,6 +35,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/web"
+
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
@@ -76,6 +78,9 @@ var (
 
 	// Alpha is the sub-command invoked when running "dgraph alpha".
 	Alpha x.SubCommand
+
+	// need this here to refer it in admin_backup.go
+	adminServer web.IServeGraphQL
 )
 
 func init() {
@@ -110,10 +115,7 @@ they form a Raft group and provide synchronous replication.
 			" mmap consumes more RAM, but provides better performance.")
 	flag.Int("badger.compression_level", 3,
 		"The compression level for Badger. A higher value uses more resources.")
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
+	enc.RegisterFlags(flag)
 
 	// Snapshot and Transactions.
 	flag.Int("snapshot_after", 10000,
@@ -453,11 +455,6 @@ func setupServer(closer *y.Closer) {
 	// TODO: Figure out what this is for?
 	http.HandleFunc("/debug/store", storeStatsHandler)
 
-	http.HandleFunc("/admin/shutdown", shutDownHandler)
-	http.HandleFunc("/admin/draining", drainingHandler)
-	http.HandleFunc("/admin/export", exportHandler)
-	http.HandleFunc("/admin/config/lru_mb", memoryLimitHandler)
-
 	introspection := Alpha.Conf.GetBool("graphql_introspection")
 
 	// Global Epoch is a lockless synchronization mechanism for graphql service.
@@ -474,25 +471,43 @@ func setupServer(closer *y.Closer) {
 	// The global epoch is set to maxUint64 while exiting the server.
 	// By using this information polling goroutine terminates the subscription.
 	globalEpoch := uint64(0)
-	mainServer, adminServer := admin.NewServers(introspection, &globalEpoch, closer)
+	var mainServer web.IServeGraphQL
+	mainServer, adminServer = admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
+	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
+		http.MethodGet:     true,
+		http.MethodPost:    true,
+		http.MethodOptions: true,
+	}, adminAuthHandler(adminServer.HTTPHandler())))
 
-	whitelist := func(h http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !handlerInit(w, r, map[string]bool{
-				http.MethodPost:    true,
-				http.MethodGet:     true,
-				http.MethodOptions: true,
-			}) {
-				return
-			}
-			h.ServeHTTP(w, r)
-		})
-	}
-	http.Handle("/admin", whitelist(adminServer.HTTPHandler()))
-	http.HandleFunc("/admin/schema", func(w http.ResponseWriter, r *http.Request) {
+	http.Handle("/admin/schema", adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter,
+		r *http.Request) {
 		adminSchemaHandler(w, r, adminServer)
-	})
+	})))
+
+	http.Handle("/admin/shutdown", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			shutDownHandler(w, r, adminServer)
+		}))))
+
+	http.Handle("/admin/draining", allowedMethodsHandler(allowedMethods{
+		http.MethodPut:  true,
+		http.MethodPost: true,
+	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		drainingHandler(w, r, adminServer)
+	}))))
+
+	http.Handle("/admin/export", allowedMethodsHandler(allowedMethods{http.MethodGet: true},
+		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			exportHandler(w, r, adminServer)
+		}))))
+
+	http.Handle("/admin/config/lru_mb", allowedMethodsHandler(allowedMethods{
+		http.MethodGet: true,
+		http.MethodPut: true,
+	}, adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		memoryLimitHandler(w, r, adminServer)
+	}))))
 
 	addr := fmt.Sprintf("%s:%d", laddr, httpPort())
 	glog.Infof("Bringing up GraphQL HTTP API at %s/graphql", addr)
@@ -534,6 +549,7 @@ func setupServer(closer *y.Closer) {
 }
 
 func run() {
+	var err error
 	if Alpha.Conf.GetBool("enable_sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
@@ -545,20 +561,27 @@ func run() {
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),
 		BadgerVlog:             Alpha.Conf.GetString("badger.vlog"),
-		BadgerKeyFile:          Alpha.Conf.GetString("encryption_key_file"),
 		BadgerCompressionLevel: Alpha.Conf.GetInt("badger.compression_level"),
-
-		PostingDir: Alpha.Conf.GetString("postings"),
-		WALDir:     Alpha.Conf.GetString("wal"),
+		PostingDir:             Alpha.Conf.GetString("postings"),
+		WALDir:                 Alpha.Conf.GetString("wal"),
 
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opts.BadgerKeyFile != "" {
-		glog.Fatalf("Cannot enable encryption: %s", x.ErrNotSupported)
+	var kr enc.KeyReader
+	if kr, err = enc.NewKeyReader(Alpha.Conf); err != nil {
+		glog.Errorf("error: %v", err)
+		return
+	}
+	// kR can be nil for the no-encryption scenario.
+	var key x.SensitiveByteSlice
+	if kr != nil {
+		if key, err = kr.ReadKey(); err != nil {
+			glog.Errorf("error: %v", err)
+			return
+		}
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -614,7 +637,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		BadgerKeyFile:       worker.Config.BadgerKeyFile,
+		EncryptionKey:       key,
 	}
 
 	setupCustomTokenizers()

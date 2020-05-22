@@ -54,12 +54,12 @@ type ResolverFactory interface {
 	mutationResolverFor(mutation schema.Mutation) MutationResolver
 
 	// WithQueryResolver adds a new query resolver.  Each time query name is resolved
-	// resolver is called to create a new instane of a QueryResolver to resolve the
+	// resolver is called to create a new instance of a QueryResolver to resolve the
 	// query.
 	WithQueryResolver(name string, resolver func(schema.Query) QueryResolver) ResolverFactory
 
 	// WithMutationResolver adds a new query resolver.  Each time mutation name is resolved
-	// resolver is called to create a new instane of a MutationResolver to resolve the
+	// resolver is called to create a new instance of a MutationResolver to resolve the
 	// mutation.
 	WithMutationResolver(
 		name string, resolver func(schema.Mutation) MutationResolver) ResolverFactory
@@ -67,6 +67,15 @@ type ResolverFactory interface {
 	// WithConventionResolvers adds a set of our convention based resolvers to the
 	// factory.  The registration happens only once.
 	WithConventionResolvers(s schema.Schema, fns *ResolverFns) ResolverFactory
+
+	// WithQueryMiddlewareConfig adds the configuration to use to apply middlewares before resolving
+	// queries. The config should be a mapping of the name of query to its middlewares.
+	WithQueryMiddlewareConfig(config map[string]QueryMiddlewares) ResolverFactory
+
+	// WithMutationMiddlewareConfig adds the configuration to use to apply middlewares before
+	// resolving mutations. The config should be a mapping of the name of mutation to its
+	// middlewares.
+	WithMutationMiddlewareConfig(config map[string]MutationMiddlewares) ResolverFactory
 
 	// WithSchemaIntrospection adds schema introspection capabilities to the factory.
 	// So __schema and __type queries can be resolved.
@@ -96,6 +105,9 @@ type RequestResolver struct {
 type resolverFactory struct {
 	queryResolvers    map[string]func(schema.Query) QueryResolver
 	mutationResolvers map[string]func(schema.Mutation) MutationResolver
+
+	queryMiddlewareConfig    map[string]QueryMiddlewares
+	mutationMiddlewareConfig map[string]MutationMiddlewares
 
 	// returned if the factory gets asked for resolver for a field that it doesn't
 	// know about.
@@ -250,6 +262,22 @@ func (rf *resolverFactory) WithConventionResolvers(
 	return rf
 }
 
+func (rf *resolverFactory) WithQueryMiddlewareConfig(
+	config map[string]QueryMiddlewares) ResolverFactory {
+	if len(config) != 0 {
+		rf.queryMiddlewareConfig = config
+	}
+	return rf
+}
+
+func (rf *resolverFactory) WithMutationMiddlewareConfig(
+	config map[string]MutationMiddlewares) ResolverFactory {
+	if len(config) != 0 {
+		rf.mutationMiddlewareConfig = config
+	}
+	return rf
+}
+
 // NewResolverFactory returns a ResolverFactory that resolves requests via
 // query/mutation rewriting and execution through Dgraph.  If the factory gets asked
 // to resolve a query/mutation it doesn't know how to rewrite, it uses
@@ -260,6 +288,9 @@ func NewResolverFactory(
 	return &resolverFactory{
 		queryResolvers:    make(map[string]func(schema.Query) QueryResolver),
 		mutationResolvers: make(map[string]func(schema.Mutation) MutationResolver),
+
+		queryMiddlewareConfig:    make(map[string]QueryMiddlewares),
+		mutationMiddlewareConfig: make(map[string]MutationMiddlewares),
 
 		queryError:    queryError,
 		mutationError: mutationError,
@@ -282,16 +313,18 @@ func StdDeleteCompletion(name string) CompletionFunc {
 }
 
 func (rf *resolverFactory) queryResolverFor(query schema.Query) QueryResolver {
+	mws := rf.queryMiddlewareConfig[query.Name()]
 	if resolver, ok := rf.queryResolvers[query.Name()]; ok {
-		return resolver(query)
+		return mws.Then(resolver(query))
 	}
 
 	return rf.queryError
 }
 
 func (rf *resolverFactory) mutationResolverFor(mutation schema.Mutation) MutationResolver {
+	mws := rf.mutationMiddlewareConfig[mutation.Name()]
 	if resolver, ok := rf.mutationResolvers[mutation.Name()]; ok {
-		return resolver(mutation)
+		return mws.Then(resolver(mutation))
 	}
 
 	return rf.mutationError
@@ -1549,4 +1582,12 @@ func (h *httpMutationResolver) Resolve(ctx context.Context, mutation schema.Muta
 	bool) {
 	resolved := (*httpResolver)(h).Resolve(ctx, mutation)
 	return resolved, resolved.Err == nil || resolved.Err.Error() == ""
+}
+
+func EmptyResult(f schema.Field, err error) *Resolved {
+	return &Resolved{
+		Data:  map[string]interface{}{f.Name(): nil},
+		Field: f,
+		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
+	}
 }

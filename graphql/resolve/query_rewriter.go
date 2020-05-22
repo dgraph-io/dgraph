@@ -192,7 +192,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateStaticRules(field)
+	rbac := authRw.evaluateStaticRules(field.Type())
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
@@ -242,7 +242,7 @@ func rewriteAsGet(
 	auth *authRewriter) *gql.GraphQuery {
 
 	var dgQuery *gql.GraphQuery
-	rbac := auth.evaluateStaticRules(field)
+	rbac := auth.evaluateStaticRules(field.Type())
 	if rbac == schema.Negative {
 		return &gql.GraphQuery{Attr: field.ResponseName() + "()"}
 	}
@@ -306,7 +306,7 @@ func rewriteAsGet(
 }
 
 func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
-	rbac := authRw.evaluateStaticRules(field)
+	rbac := authRw.evaluateStaticRules(field.Type())
 	dgQuery := &gql.GraphQuery{
 		Attr: field.Name(),
 	}
@@ -433,12 +433,11 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
-func (authRw *authRewriter) evaluateStaticRules(f schema.Field) schema.RuleResult {
+func (authRw *authRewriter) evaluateStaticRules(typ schema.Type) schema.RuleResult {
 	if authRw == nil || authRw.isWritingAuth {
 		return schema.Uncertain
 	}
 
-	typ := f.Type()
 	rn := authRw.selector(typ)
 	return rn.EvaluateStatic(authRw.authVariables)
 }
@@ -614,7 +613,7 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
-		rbac := auth.evaluateStaticRules(f)
+		rbac := auth.evaluateStaticRules(f.Type())
 
 		selectionAuth := addSelectionSetFrom(child, f, auth)
 		addedFields[f.Name()] = true
