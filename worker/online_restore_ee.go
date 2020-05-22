@@ -17,7 +17,6 @@ import (
 	"context"
 	"io"
 	"net/url"
-	"sync"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -63,22 +62,17 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
 	errCh := make(chan error, len(currentGroups))
-	wg := sync.WaitGroup{}
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
 
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
-			proposeRestoreOrSend(ctx, reqCopy, errCh)
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
 		}()
 	}
-	wg.Wait()
-	close(errCh)
 
-	for err := range errCh {
-		if err != nil {
+	for range currentGroups {
+		if err := <-errCh; err != nil {
 			return errors.Wrapf(err, "cannot complete restore proposal")
 		}
 	}
@@ -86,23 +80,21 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
-func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest, errCh chan error) {
+func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	if groups().ServesGroup(req.GetGroupId()) {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
-		errCh <- err
-		return
+		return err
 	}
 
 	pl := groups().Leader(req.GetGroupId())
 	if pl == nil {
-		errCh <- conn.ErrNoConnection
-		return
+		return conn.ErrNoConnection
 	}
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
-	errCh <- err
+	return err
 }
 
 // Restore implements the Worker interface.
