@@ -862,11 +862,7 @@ func (n *node) rampMeter() {
 		}
 	}()
 	for {
-		var exPending int64
-		if x.WorkerConfig.LudicrousMode {
-			exPending = atomic.LoadInt64(&n.ex.pendingSize)
-		}
-		if exPending+atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
 			return
 		}
 		time.Sleep(3 * time.Millisecond)

@@ -22,6 +22,7 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
@@ -106,9 +107,27 @@ func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	return ch
 }
 
-func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
-	payloadMap := make(map[string]*subMutation)
+const maxPendingEdgesSize int64 = 1 << 30 // 1 GB
 
+func (e *executor) rampMeter() {
+	start := time.Now()
+	defer func() {
+		if dur := time.Since(start); dur > time.Second {
+			glog.Infof("Blocked pushing to executor chans for %v", dur.Round(time.Millisecond))
+		}
+	}()
+	for {
+		if atomic.LoadInt64(&e.pendingSize) <= maxPendingEdgesSize {
+			return
+		}
+		time.Sleep(3 * time.Millisecond)
+	}
+}
+
+func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+	e.rampMeter()
+
+	payloadMap := make(map[string]*subMutation)
 	var esize int64
 	for _, edge := range edges {
 		payload, ok := payloadMap[edge.Attr]
