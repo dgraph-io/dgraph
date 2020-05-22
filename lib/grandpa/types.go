@@ -17,39 +17,76 @@
 package grandpa
 
 import (
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/ChainSafe/gossamer/lib/crypto"
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 )
 
-// Voter struct
-//nolint:structcheck
+type subround = byte
+
+var prevote subround = 0
+var precommit subround = 1 //nolint
+
+// Voter represents a GRANDPA voter
 type Voter struct {
-	key     crypto.Keypair //nolint:unused
-	voterID uint64         //nolint:unused
+	key *ed25519.PublicKey
+	id  uint64 //nolint:unused
 }
 
-// State struct
-//nolint:structcheck
+// State represents a GRANDPA state
 type State struct {
-	voters  []Voter //nolint:unused
-	counter uint64  //nolint:unused
-	round   uint64  //nolint:unused
+	voters []*Voter // set of voters
+	setID  uint64   // authority set ID
+	round  uint64   // voting round number
 }
 
-// Vote struct
-// nolint:structcheck
+// Vote represents a vote for a block with the given hash and number
 type Vote struct {
-	hash   common.Hash //nolint:unused
-	number uint64      //nolint:unused
+	hash   common.Hash
+	number uint64
 }
 
-// VoteMessage struct
-//nolint:structcheck
+// NewVote returns a new Vote given a block hash and number
+func NewVote(hash common.Hash, number uint64) *Vote {
+	return &Vote{
+		hash:   hash,
+		number: number,
+	}
+}
+
+// NewVoteFromHeader returns a new Vote for a given header
+func NewVoteFromHeader(h *types.Header) *Vote {
+	return &Vote{
+		hash:   h.Hash(),
+		number: uint64(h.Number.Int64()),
+	}
+}
+
+// FullVote represents a vote with additional information about the state
+// this is encoded and signed and the signature is included in SignedMessage
+type FullVote struct {
+	stage byte
+	vote  *Vote
+	round uint64
+	setID uint64
+}
+
+// VoteMessage represents a network-level vote message
+// https://github.com/paritytech/substrate/blob/master/client/finality-grandpa/src/communication/gossip.rs#L336
 type VoteMessage struct {
-	round   uint64   //nolint:unused
-	counter uint64   //nolint:unused
-	pubkey  [32]byte //nolint:unused // ed25519 public key
-	stage   byte     //nolint:unused  // 0 for pre-vote, 1 for pre-commit
+	setID   uint64
+	round   uint64
+	stage   byte // 0 for pre-vote, 1 for pre-commit
+	message *SignedMessage
+}
+
+// SignedMessage represents a block hash and number signed by an authority
+// https://github.com/paritytech/substrate/blob/master/client/finality-grandpa/src/lib.rs#L146
+type SignedMessage struct {
+	hash        common.Hash
+	number      uint64
+	signature   [64]byte // ed25519.SignatureLength
+	authorityID ed25519.PublicKeyBytes
 }
 
 // Justification struct

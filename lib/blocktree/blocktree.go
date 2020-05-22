@@ -205,3 +205,17 @@ func (bt *BlockTree) deepestLeaf() *node { //nolint
 func (bt *BlockTree) DeepestBlockHash() Hash {
 	return bt.leaves.deepestLeaf().hash
 }
+
+// IsDescendantOf returns true if the child is a descendant of parent, false otherwise.
+// it returns an error if either the child or parent are not in the blocktree.
+func (bt *BlockTree) IsDescendantOf(parent, child Hash) (bool, error) {
+	pn := bt.getNode(parent)
+	if pn == nil {
+		return false, ErrStartNodeNotFound
+	}
+	cn := bt.getNode(child)
+	if cn == nil {
+		return false, ErrEndNodeNotFound
+	}
+	return cn.isDescendantOf(pn), nil
+}

@@ -280,6 +280,17 @@ func (bs *BlockState) GetBlockBody(hash common.Hash) (*types.Body, error) {
 	return types.NewBody(data), nil
 }
 
+// GetFinalizedHead returns the latest finalized block header
+// TODO: relies on GRANDPA implementation. currently returns genesis header.
+func (bs *BlockState) GetFinalizedHead() (*types.Header, error) {
+	b, err := bs.GetBlockByNumber(big.NewInt(0))
+	if err != nil {
+		return nil, err
+	}
+
+	return b.Header, nil
+}
+
 // SetBlockBody will add a block body to the db
 func (bs *BlockState) SetBlockBody(hash common.Hash, body *types.Body) error {
 	bs.lock.Lock()
@@ -503,6 +514,16 @@ func (bs *BlockState) SubChain(start, end common.Hash) ([]common.Hash, error) {
 	}
 
 	return bs.bt.SubBlockchain(start, end)
+}
+
+// IsDescendantOf returns true if child is a descendant of parent, false otherwise.
+// it returns an error if parent or child are not in the blocktree.
+func (bs *BlockState) IsDescendantOf(parent, child common.Hash) (bool, error) {
+	if bs.bt == nil {
+		return false, fmt.Errorf("blocktree is nil")
+	}
+
+	return bs.bt.IsDescendantOf(parent, child)
 }
 
 func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {

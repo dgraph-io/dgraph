@@ -318,3 +318,16 @@ func TestBlockTree_GetAllBlocksAtDepth(t *testing.T) {
 		t.Fatalf("Fail: did not get all expected hashes got %v expected %v", hashes, expected)
 	}
 }
+
+func TestBlockTree_IsDecendantOf(t *testing.T) {
+	// Create tree with depth 4 (with 4 nodes)
+	bt, hashes := createFlatTree(t, 4)
+
+	isDescendant, err := bt.IsDescendantOf(bt.head.hash, hashes[3])
+	require.NoError(t, err)
+	require.True(t, isDescendant)
+
+	isDescendant, err = bt.IsDescendantOf(hashes[3], bt.head.hash)
+	require.NoError(t, err)
+	require.False(t, isDescendant)
+}
