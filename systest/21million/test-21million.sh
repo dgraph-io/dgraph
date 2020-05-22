@@ -147,7 +147,6 @@ go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 if [[ $FOUND_DIFFS -eq 1 ]]; then
     Info "no diffs found in query results"
 else
-    Info "found some diffs in query results"
     Info "Cluster logs for alpha1"
     docker logs alpha1
     Info "Cluster logs for alpha2"
@@ -156,6 +155,7 @@ else
     docker logs alpha3
     Info "Cluster logs for zero1"
     docker logs zero1
+    Info "found some diffs in query results"
 fi
 
 if [[ $CLEANUP == all ]]; then
