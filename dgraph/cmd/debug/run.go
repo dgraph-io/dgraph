@@ -56,7 +56,7 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
-	badgerKeyFile string
+	keyFile       string
 
 	// Options related to the WAL.
 	wdir           string
@@ -87,7 +87,7 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
-	flag.StringVarP(&opt.badgerKeyFile, "encryption_key_file", "k", "",
+	flag.StringVarP(&opt.keyFile, "encryption_key_file", "k", "",
 		"File where the encryption key is stored.")
 
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
@@ -767,7 +767,7 @@ func run() {
 	}
 	bopts := badger.DefaultOptions(dir).
 		WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(opt.readOnly).WithEncryptionKey(enc.ReadEncryptionKeyFile(opt.badgerKeyFile))
+		WithReadOnly(opt.readOnly).WithEncryptionKey(enc.ReadEncryptionKeyFile(opt.keyFile))
 
 	// TODO(Ibrahim): Remove this once badger is updated.
 	bopts.ZSTDCompressionLevel = 1

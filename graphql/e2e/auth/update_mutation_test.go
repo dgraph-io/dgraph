@@ -25,8 +25,6 @@ import (
 )
 
 func getAllProjects(t *testing.T, users, roles []string) []string {
-	ids := make(map[string]struct{})
-
 	var result struct {
 		QueryProject []*Project
 	}
@@ -41,6 +39,7 @@ func getAllProjects(t *testing.T, users, roles []string) []string {
 		`,
 	}
 
+	ids := make(map[string]struct{})
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = getJWT(t, user, role)
@@ -64,34 +63,45 @@ func getAllProjects(t *testing.T, users, roles []string) []string {
 	return keys
 }
 
-func getAllColumns(t *testing.T, users, roles []string) []string {
+func getAllColumns(t *testing.T, users, roles []string) ([]*Column, []string) {
 	ids := make(map[string]struct{})
-
-	var result struct {
-		QueryColumn []*Column
-	}
-
 	getParams := &common.GraphQLParams{
 		Query: `
 			query queryColumn {
 				queryColumn {
 					colID
+					name
+					inProject {
+						projID
+					}
+					tickets {
+						id
+					}
 				}
 			}
 		`,
 	}
 
+	var result struct {
+		QueryColumn []*Column
+	}
+	var columns []*Column
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = getJWT(t, user, role)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
 
 			for _, i := range result.QueryColumn {
+				if _, ok := ids[i.ColID]; ok {
+					continue
+				}
 				ids[i.ColID] = struct{}{}
+				i.ColID = ""
+				columns = append(columns, i)
 			}
 		}
 	}
@@ -101,37 +111,46 @@ func getAllColumns(t *testing.T, users, roles []string) []string {
 		keys = append(keys, key)
 	}
 
-	return keys
+	return columns, keys
 }
 
-func getAllIssues(t *testing.T, users, roles []string) []string {
+func getAllIssues(t *testing.T, users, roles []string) ([]*Issue, []string) {
 	ids := make(map[string]struct{})
-
-	var result struct {
-		QueryIssue []*Issue
-	}
-
 	getParams := &common.GraphQLParams{
 		Query: `
 			query queryIssue {
 				queryIssue {
 					id
+					msg
+					random
+					owner {
+						username
+					}
 				}
 			}
 		`,
 	}
 
+	var result struct {
+		QueryIssue []*Issue
+	}
+	var issues []*Issue
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = getJWT(t, user, role)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
 
 			for _, i := range result.QueryIssue {
+				if _, ok := ids[i.Id]; ok {
+					continue
+				}
 				ids[i.Id] = struct{}{}
+				i.Id = ""
+				issues = append(issues, i)
 			}
 		}
 	}
@@ -141,37 +160,46 @@ func getAllIssues(t *testing.T, users, roles []string) []string {
 		keys = append(keys, key)
 	}
 
-	return keys
+	return issues, keys
 }
 
-func getAllMovies(t *testing.T, users, roles []string) []string {
+func getAllMovies(t *testing.T, users, roles []string) ([]*Movie, []string) {
 	ids := make(map[string]struct{})
-
-	var result struct {
-		QueryMovie []*Movie
-	}
-
 	getParams := &common.GraphQLParams{
 		Query: `
 			query queryMovie {
 				queryMovie {
 					id
+					content
+					hidden
+					regionsAvailable {
+						id
+					}
 				}
 			}
 		`,
 	}
 
+	var result struct {
+		QueryMovie []*Movie
+	}
+	var movies []*Movie
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = getJWT(t, user, role)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
 
 			for _, i := range result.QueryMovie {
+				if _, ok := ids[i.Id]; ok {
+					continue
+				}
 				ids[i.Id] = struct{}{}
+				i.Id = ""
+				movies = append(movies, i)
 			}
 		}
 	}
@@ -181,37 +209,43 @@ func getAllMovies(t *testing.T, users, roles []string) []string {
 		keys = append(keys, key)
 	}
 
-	return keys
+	return movies, keys
 }
 
-func getAllLogs(t *testing.T, users, roles []string) []string {
+func getAllLogs(t *testing.T, users, roles []string) ([]*Log, []string) {
 	ids := make(map[string]struct{})
-
-	var result struct {
-		QueryLog []*Log
-	}
-
 	getParams := &common.GraphQLParams{
 		Query: `
 			query queryLog {
 				queryLog {
 					id
+					logs
+					random
 				}
 			}
 		`,
 	}
 
+	var result struct {
+		QueryLog []*Log
+	}
+	var logs []*Log
 	for _, user := range users {
 		for _, role := range roles {
 			getParams.Headers = getJWT(t, user, role)
 			gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 			require.Nil(t, gqlResponse.Errors)
 
-			err := json.Unmarshal([]byte(gqlResponse.Data), &result)
+			err := json.Unmarshal(gqlResponse.Data, &result)
 			require.NoError(t, err)
 
 			for _, i := range result.QueryLog {
+				if _, ok := ids[i.Id]; ok {
+					continue
+				}
 				ids[i.Id] = struct{}{}
+				i.Id = ""
+				logs = append(logs, i)
 			}
 		}
 	}
@@ -221,7 +255,7 @@ func getAllLogs(t *testing.T, users, roles []string) []string {
 		keys = append(keys, key)
 	}
 
-	return keys
+	return logs, keys
 }
 
 func TestUpdateOrRBACFilter(t *testing.T) {
@@ -267,7 +301,7 @@ func TestUpdateOrRBACFilter(t *testing.T) {
 }
 
 func TestUpdateRootFilter(t *testing.T) {
-	ids := getAllColumns(t, []string{"user1", "user2", "user4"}, []string{"USER"})
+	_, ids := getAllColumns(t, []string{"user1", "user2", "user4"}, []string{"USER"})
 
 	testCases := []TestCase{{
 		user:   "user1",
@@ -310,7 +344,7 @@ func TestUpdateRootFilter(t *testing.T) {
 }
 
 func TestUpdateRBACFilter(t *testing.T) {
-	ids := getAllLogs(t, []string{"user1"}, []string{"ADMIN"})
+	_, ids := getAllLogs(t, []string{"user1"}, []string{"ADMIN"})
 
 	testCases := []TestCase{
 		{role: "USER", result: `{"updateLog": {"log": []}}`},
@@ -343,7 +377,7 @@ func TestUpdateRBACFilter(t *testing.T) {
 }
 
 func TestUpdateAndRBACFilter(t *testing.T) {
-	ids := getAllIssues(t, []string{"user1", "user2"}, []string{"ADMIN"})
+	_, ids := getAllIssues(t, []string{"user1", "user2"}, []string{"ADMIN"})
 
 	testCases := []TestCase{{
 		user:   "user1",
@@ -386,7 +420,7 @@ func TestUpdateAndRBACFilter(t *testing.T) {
 }
 
 func TestUpdateNestedFilter(t *testing.T) {
-	ids := getAllMovies(t, []string{"user1", "user2", "user3"}, []string{"ADMIN"})
+	_, ids := getAllMovies(t, []string{"user1", "user2", "user3"}, []string{"ADMIN"})
 
 	testCases := []TestCase{{
 		user:   "user1",

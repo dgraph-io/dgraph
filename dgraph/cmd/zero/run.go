@@ -235,9 +235,6 @@ func run() {
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 
-	// zero out from memory
-	kvOpt.EncryptionKey = nil
-
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
 	// Initialize the servers.

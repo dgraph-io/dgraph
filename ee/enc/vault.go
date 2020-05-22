@@ -1,4 +1,4 @@
-// +build !oss
+// +build oss
 
 /*
  * Copyright 2020 Dgraph Labs, Inc. and Contributors
@@ -16,26 +16,13 @@
  * limitations under the License.
  */
 
-package ee
+package enc
 
 import (
-	"github.com/dgraph-io/dgraph/worker"
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/pflag"
 )
 
-// GetEEFeaturesList returns a list of Enterprise Features that are available.
-func GetEEFeaturesList() []string {
-	if !worker.EnterpriseEnabled() {
-		return nil
-	}
-	var ee []string
-	if len(worker.Config.HmacSecret) > 0 {
-		ee = append(ee, "acl")
-	}
-	if x.WorkerConfig.EncryptionKey != nil {
-		ee = append(ee, "encryption_at_rest", "encrypted_backup_restore", "encrypted_export")
-	} else {
-		ee = append(ee, "backup_restore")
-	}
-	return ee
+// RegisterVaultFlags registers the required flags to integrate with Vault.
+func registerVaultFlags(_ *pflag.FlagSet) {
+	return
 }
