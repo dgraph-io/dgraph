@@ -132,3 +132,17 @@ func (n *node) isDescendantOf(parent *node) bool {
 	}
 	return false
 }
+
+func (n *node) highestCommonAncestor(other *node) *node {
+	for curr := n; curr != nil; curr = curr.parent {
+		if curr.hash == other.hash {
+			return curr
+		}
+
+		if other.isDescendantOf(curr) {
+			return curr
+		}
+	}
+
+	return nil
+}

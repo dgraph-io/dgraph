@@ -47,7 +47,7 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 	}
 
-	num := 0
+	num := 77
 
 	// create tree branches
 	for _, branch := range branches {

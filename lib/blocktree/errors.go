@@ -24,3 +24,6 @@ var ErrNilDescendant = errors.New("descendant node is nil")
 
 // ErrDescendantNotFound is returned if a descendant in a subchain cannot be found
 var ErrDescendantNotFound = errors.New("could not find descendant node")
+
+// ErrNodeNotFound is returned if a node with given hash doesn't exist
+var ErrNodeNotFound = errors.New("could not find node")
