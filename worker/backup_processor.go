@@ -295,11 +295,8 @@ func toBackupKey(key []byte) ([]byte, error) {
 func (pr *BackupProcessor) toBackupPostingList(val []byte, threadNum int) ([]byte, error) {
 	pl := pr.plList[threadNum]
 	bpl := pr.bplList[threadNum]
-	defer func() {
-		// Reset the protobufs after use.
-		pl.Reset()
-		bpl.Reset()
-	}()
+	pl.Reset()
+	bpl.Reset()
 
 	if err := pl.Unmarshal(val); err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list")
