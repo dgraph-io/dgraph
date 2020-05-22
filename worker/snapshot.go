@@ -220,16 +220,20 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return pk.IsSchema() || pk.IsType()
 	}
 
+	// Get the list of all the predicate and types at the time of the snapshot so that the receiver
+	// can delete predicates
+	predicates := schema.State().Predicates()
+	types := schema.State().Types()
+
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 
-	// Indicate that sending is done. Send a list of all the predicate and types at the
-	// time of the snapshot so that the receiver can delete predicates
+	// Indicate that sending is done.
 	done := &pb.KVS{
 		Done:       true,
-		Predicates: schema.State().Predicates(),
-		Types:      schema.State().Types(),
+		Predicates: predicates,
+		Types:      types,
 	}
 	if err := out.Send(done); err != nil {
 		return err
