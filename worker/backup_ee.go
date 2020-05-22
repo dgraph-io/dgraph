@@ -46,7 +46,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 		return nil, err
 	}
 
-	bp := &backup.Processor{DB: pstore, Request: req}
+	bp := backup.NewBackupProcessor(pstore, req)
 	return bp.WriteBackup(ctx)
 }
 
