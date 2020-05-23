@@ -144,7 +144,7 @@ if [[ ! -z "$TEAMCITY_VERSION" ]]; then
 fi
 go test -v -tags standalone $SAVEDIR $QUIET || FOUND_DIFFS=1
 
-if [[ $FOUND_DIFFS -eq 1 ]]; then
+if [[ $FOUND_DIFFS -eq 0 ]]; then
     Info "no diffs found in query results"
 else
     Info "Cluster logs for alpha1"
