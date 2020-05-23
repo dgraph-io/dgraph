@@ -181,7 +181,19 @@ func TestGetReaderWriter(t *testing.T) {
 	require.Equal(t, f, neww)
 
 	// valid key
-	neww, err = GetWriter(ReadEncryptionKeyFile("./test-fixtures/enc-key"), f)
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	RegisterFlags(flags)
+	config.BindPFlags(flags)
+	config.Set(encKeyFile, "./test-fixtures/enc-key")
+	kr, err := newKeyReader(config)
+	require.NoError(t, err)
+	require.NotNil(t, kr)
+	require.IsType(t, &localKeyReader{}, kr)
+	k, err := kr.readKey()
+	require.NotNil(t, k)
+	require.NoError(t, err)
+	neww, err = GetWriter(k, f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, neww)
 	require.IsType(t, cipher.StreamWriter{}, neww)
@@ -202,7 +214,7 @@ func TestGetReaderWriter(t *testing.T) {
 	require.Equal(t, f, newr)
 
 	// valid key
-	newr, err = GetReader(ReadEncryptionKeyFile("./test-fixtures/enc-key"), f)
+	newr, err = GetReader(k, f)
 	require.NoError(t, err)
 	require.NotEqual(t, f, newr)
 	require.IsType(t, cipher.StreamReader{}, newr)

@@ -32,6 +32,8 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
@@ -311,7 +313,17 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, enc.ReadEncryptionKeyFile("../../../ee/enc/test-fixtures/enc-key"))
+	// Get key.
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
+	k, err := enc.ReadKey(config)
+	require.NotNil(t, k)
+	require.NoError(t, err)
+
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
 }

@@ -28,11 +28,6 @@ import (
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
 
-// ReadEncryptionKeyFile returns nil key for OSS build
-func ReadEncryptionKeyFile(filepath string) []byte {
-	return nil
-}
-
 // GetWriter returns the Writer as is for OSS Builds.
 func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 	return w, nil

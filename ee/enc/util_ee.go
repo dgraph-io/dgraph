@@ -171,19 +171,3 @@ func GetReader(key x.SensitiveByteSlice, r io.Reader) (io.Reader, error) {
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
 }
-
-// ReadEncryptionKeyFile returns the encryption key in the given file.
-func ReadEncryptionKeyFile(filepath string) x.SensitiveByteSlice {
-	if filepath == "" {
-		return nil
-	}
-	k, err := ioutil.ReadFile(filepath)
-	x.Checkf(err, "Error reading encryption key file (%v)", filepath)
-
-	// len must be 16,24,32 bytes if given. All other lengths are invalid.
-	klen := len(k)
-	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
-		"Invalid encryption key length = %v", klen)
-
-	return k
-}
