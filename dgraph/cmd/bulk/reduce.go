@@ -58,6 +58,7 @@ func (r *reducer) run() error {
 	x.AssertTrue(len(dirs) == r.opt.ReduceShards)
 	x.AssertTrue(len(r.opt.shardOutputDirs) == r.opt.ReduceShards)
 
+	r.dbs = make([]*badger.DB, r.opt.ReduceShards)
 	thr := y.NewThrottle(r.opt.NumReducers)
 	for i := 0; i < r.opt.ReduceShards; i++ {
 		if err := thr.Do(); err != nil {
@@ -128,7 +129,7 @@ func (r *reducer) createBadger(i int) *badger.DB {
 	// Zero out the key from memory.
 	opt.EncryptionKey = nil
 
-	r.dbs = append(r.dbs, db)
+	r.dbs[i] = db
 	return db
 }
 
