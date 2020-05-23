@@ -208,12 +208,19 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 	// Copy from the request.
 	config.Set("encryption_key_file", req.EncryptionKeyFile)
-	config.Set("vault_addr", req.VaultAddr)
 	config.Set("vault_roleid_file", req.VaultRoleidFile)
 	config.Set("vault_secretid_file", req.VaultSecretidFile)
-	config.Set("vault_path", req.VaultPath)
-	config.Set("vault_field", req.VaultField)
 
+	// Override only if non-nil
+	if req.VaultAddr != "" {
+		config.Set("vault_addr", req.VaultAddr)
+	}
+	if req.VaultPath != "" {
+		config.Set("vault_path", req.VaultPath)
+	}
+	if req.VaultField != "" {
+		config.Set("vault_field", req.VaultField)
+	}
 	return config, nil
 }
 
@@ -226,7 +233,7 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 			}
 			key, err := enc.ReadKey(cfg)
 			if err != nil {
-				return 0, errors.Wrapf(err, "unable to ready key")
+				return 0, errors.Wrapf(err, "unable to read key")
 			}
 			r, err = enc.GetReader(key, r)
 			if err != nil {
