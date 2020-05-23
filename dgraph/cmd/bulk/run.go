@@ -117,7 +117,7 @@ func run() {
 		DataFiles:              Bulk.Conf.GetString("files"),
 		DataFormat:             Bulk.Conf.GetString("format"),
 		SchemaFile:             Bulk.Conf.GetString("schema"),
-		GqlSchemaFile:          Bulk.Conf.GetString("gql_schema"),
+		GqlSchemaFile:          Bulk.Conf.GetString("graphql_schema"),
 		Encrypted:              Bulk.Conf.GetBool("encrypted"),
 		OutDir:                 Bulk.Conf.GetString("out"),
 		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),

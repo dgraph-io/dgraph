@@ -27,6 +27,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"time"
 
@@ -280,17 +281,17 @@ func (ld *loader) processGqlSchema(loadType chunker.InputFormat) {
 
 	rdfSchema := `_:gqlschema <dgraph.type> "dgraph.graphql" .
 	_:gqlschema <dgraph.graphql.xid> "dgraph.graphql.schema" .
-	_:gqlschema <dgraph.graphql.schema> "%s" .
+	_:gqlschema <dgraph.graphql.schema> %s .
 	`
 
 	jsonSchema := `{
 		"dgraph.type": "dgraph.graphql",
 		"dgraph.graphql.xid": "dgraph.graphql.schema",
-		"dgraph.graphql.schema": "%s"
+		"dgraph.graphql.schema": %s
 	}`
 
 	gqlBuf := &bytes.Buffer{}
-	schema := string(buf)
+	schema := strconv.Quote(string(buf))
 	switch loadType {
 	case chunker.RdfFormat:
 		x.Check2(gqlBuf.Write([]byte(fmt.Sprintf(rdfSchema, schema))))
