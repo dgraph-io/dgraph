@@ -198,11 +198,13 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 }
 
 // create a config object from the request for use with enc package.
-func getEncConfig(req *pb.RestoreRequest) *viper.Viper {
+func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	config := viper.New()
 	flags := &pflag.FlagSet{}
 	enc.RegisterFlags(flags)
-	config.BindPFlags(flags)
+	if err := config.BindPFlags(flags); err != nil {
+		return nil, errors.Wrapf(err, "bad config bind")
+	}
 
 	// Copy from the request.
 	config.Set("encryption_key_file", req.EncryptionKeyFile)
@@ -212,13 +214,17 @@ func getEncConfig(req *pb.RestoreRequest) *viper.Viper {
 	config.Set("vault_path", req.VaultPath)
 	config.Set("vault_field", req.VaultField)
 
-	return config
+	return config, nil
 }
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			key, err := enc.ReadKey(getEncConfig(req))
+			cfg, err := getEncConfig()
+			if err != nil {
+				return 0, errors.Wrapf(err, "unable to get encryption config")
+			}
+			key, err := enc.ReadKey(cfg)
 			if err != nil {
 				return 0, errors.Wrapf(err, "unable to ready key")
 			}
