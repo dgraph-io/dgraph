@@ -26,6 +26,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
@@ -195,16 +197,38 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
+// create a config object from the request for use with enc package.
+func getEncConfig(req *pb.RestoreRequest) *viper.Viper {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+
+	// Copy from the request.
+	config.Set("encryption_key_file", req.EncryptionKeyFile)
+	config.Set("vault_addr", req.VaultAddr)
+	config.Set("vault_roleid_file", req.VaultRoleidFile)
+	config.Set("vault_secretid_file", req.VaultSecretidFile)
+	config.Set("vault_path", req.VaultPath)
+	config.Set("vault_field", req.VaultField)
+
+	return config
+}
+
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			r, err := enc.GetReader(enc.ReadEncryptionKeyFile(req.GetKeyFile()), r)
+			key, err := enc.ReadKey(getEncConfig(req))
+			if err != nil {
+				return 0, errors.Wrapf(err, "unable to ready key")
+			}
+			r, err = enc.GetReader(key, r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot create gzip reader")
+				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
 			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)
