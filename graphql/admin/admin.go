@@ -96,7 +96,7 @@ const (
 
 		"""
 		The group this node belongs to in the Dgraph cluster.
-		See : https://docs.dgraph.io/deploy/#cluster-setup.
+		See : https://dgraph.io/docs/deploy/#cluster-setup.
 		"""
 		group: Int
 
@@ -262,7 +262,7 @@ const (
 		"""
 		Starts an export of all data in the cluster.  Export format should be 'rdf' (the default
 		if no format is given), or 'json'.
-		See : https://docs.dgraph.io/deploy/#export-database
+		See : https://dgraph.io/docs/deploy/#export-database
 		"""
 		export(input: ExportInput!): ExportPayload
 
