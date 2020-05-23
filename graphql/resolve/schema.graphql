@@ -39,6 +39,11 @@ type Post {
         postType: PostType @search
         author: Author!
         category: Category @hasInverse(field: posts)
+        ps: PostSecret
+}
+
+type PostSecret {
+       title: String! @id
 }
 
 type Category {

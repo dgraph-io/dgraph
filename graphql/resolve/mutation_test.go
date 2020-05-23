@@ -23,6 +23,7 @@ import (
 	"strings"
 	"testing"
 
+	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
@@ -45,7 +46,9 @@ type testCase struct {
 	GQLVariables    string
 	Explanation     string
 	DGMutations     []*dgraphMutation
+	DGMutationsSec  []*dgraphMutation
 	DGQuery         string
+	DGQuerySec      string
 	Error           *x.GqlError
 	ValidationError *x.GqlError
 }
@@ -112,6 +115,19 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
+	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
+		require.Len(t, generated, len(test))
+		for i, expected := range test {
+			require.Equal(t, expected.Cond, generated[i].Cond)
+			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
+				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
+			}
+			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+				require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
+			}
+		}
+	}
+
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
 			// -- Arrange --
@@ -132,24 +148,21 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(context.Background(), mut)
-			q := upsert.Query
-			muts := upsert.Mutations
 
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
+				require.NotNil(t, err)
+				require.NotNil(t, tcase.Error)
 				require.Equal(t, tcase.Error.Error(), err.Error())
-			} else {
-				require.Equal(t, tcase.DGQuery, dgraph.AsString(q))
-				require.Len(t, muts, len(tcase.DGMutations))
-				for i, expected := range tcase.DGMutations {
-					require.Equal(t, expected.Cond, muts[i].Cond)
-					if len(muts[i].SetJson) > 0 || expected.SetJSON != "" {
-						require.JSONEq(t, expected.SetJSON, string(muts[i].SetJson))
-					}
-					if len(muts[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
-						require.JSONEq(t, expected.DeleteJSON, string(muts[i].DeleteJson))
-					}
-				}
+				return
+			}
+
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(upsert[0].Query))
+			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
+
+			if len(upsert) > 1 {
+				require.Equal(t, tcase.DGQuerySec, dgraph.AsString(upsert[1].Query))
+				compareMutations(t, tcase.DGMutationsSec, upsert[1].Mutations)
 			}
 		})
 	}

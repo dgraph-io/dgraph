@@ -837,27 +837,31 @@
       State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
         uid
       }
+    }
+
+  dgmutations:
+    - setjson: |
+        {
+          "State.code": "dg",
+          "State.name": "Dgraph",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State3"
+        }
+      cond: "@if(eq(len(State3), 0))"
+
+  dgquerysec: |-
+    query {
+      State3 as State3(func: eq(State.code, "dg")) @filter(type(State)) {
+        uid
+      }
       var(func: uid(State3)) {
         Country4 as State.country
       }
     }
-  dgmutations:
-    - setjson: |
-        {
-          "uid": "_:Country1",
-          "dgraph.type": ["Country"],
-          "Country.name": "Dgraph Land",
-          "Country.states": [ {
-            "uid": "_:State3",
-            "dgraph.type": ["State"],
-            "State.code": "dg",
-            "State.name": "Dgraph",
-            "State.country": {
-              "uid": "_:Country1"
-            }
-          } ]
-        }
-      cond: "@if(eq(len(State3), 0))"
+
+  dgmutationssec:
     - setjson: |
         {
           "uid": "_:Country1",
@@ -1072,21 +1076,25 @@
         uid
       }
     }
+  dgquerysec: |-
+    query {
+      District3 as District3(func: eq(District.code, "D1")) @filter(type(District)) {
+        uid
+      }
+    }
   dgmutations:
     - setjson: |
         {
-          "City.name":"Bengaluru",
-          "City.district":{
-              "District.code":"D1",
-              "District.cities":[{"uid":"_:City1"}],
-              "District.name":"Dist1",
-              "dgraph.type":["District"],
-              "uid":"_:District3"
-            },
-          "dgraph.type":["City"],
-          "uid":"_:City1"
+          "District.code": "D1",
+          "District.name": "Dist1",
+          "dgraph.type": [
+            "District"
+          ],
+          "uid": "_:District3"
         }
       cond: "@if(eq(len(District3), 0))"
+
+  dgmutationssec:
     - setjson: |
         {
           "City.name":"Bengaluru",
@@ -1103,24 +1111,14 @@
           "City.name":"NY",
           "City.district":{
               "District.cities":[{"uid":"_:City4"}],
-              "dgraph.type":["District"],
-              "uid":"_:District3"
-            },
-          "dgraph.type":["City"],
-          "uid":"_:City4"
-        }
-      cond: "@if(eq(len(District3), 0))"
-    - setjson: |
-        {
-          "City.name":"NY",
-          "City.district":{
-              "District.cities":[{"uid":"_:City4"}],
               "uid":"uid(District3)"
             },
           "dgraph.type":["City"],
           "uid":"_:City4"
         }
       cond: "@if(eq(len(District3), 1))"
+
+
 
 - name: "Deep Mutation Duplicate XIDs with same object with @hasInverse Test"
   gqlmutation: |
@@ -1166,7 +1164,6 @@
   does not have the @hasInverse field of List type, it should return error."
   error:
     message: |-
-      failed to rewrite mutation payload because duplicate XID found: S1
       failed to rewrite mutation payload because duplicate XID found: S1
       failed to rewrite mutation payload because duplicate XID found: S2
 
@@ -1379,23 +1376,35 @@
         "states": [ { "code": "abc", "name": "Alphabet" } ]
       }
     }
+
+  dgquery: |-
+    query {
+      State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+    }
   dgmutations:
     - setjson: |
-        { 
-          "uid" : "_:Country1",
-          "dgraph.type": ["Country"],
-          "Country.name": "A Country",
-          "Country.states": [
-            {
-              "uid": "_:State3",
-              "dgraph.type": ["State"],
-              "State.code": "abc",
-              "State.name": "Alphabet",
-              "State.country": { "uid": "_:Country1" }
-            }
-          ]
+        {
+          "State.code": "abc",
+          "State.name": "Alphabet",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State3"
         }
       cond: "@if(eq(len(State3), 0))"
+
+  dgquerysec: |-
+    query {
+      State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
+      }
+      var(func: uid(State3)) {
+        Country4 as State.country
+      }
+    }
+  dgmutationssec:
     - setjson: |
         { 
           "uid" : "_:Country1",
@@ -1416,15 +1425,6 @@
           }
         ]
       cond: "@if(eq(len(State3), 1))"
-  dgquery: |-
-    query {
-      State3 as State3(func: eq(State.code, "abc")) @filter(type(State)) {
-        uid
-      }
-      var(func: uid(State3)) {
-        Country4 as State.country
-      }
-    }
 
 - name: "Additional Deletes - deep mutation"
   gqlmutation: |
@@ -1447,26 +1447,17 @@
     }
   dgmutations:
     - setjson: |
-        { 
-          "uid":"_:Author1",
-          "dgraph.type":["Author"],
-          "Author.name":"A.N. Author",
-          "Author.country": {
-            "uid": "_:Country2",
-            "dgraph.type": ["Country"],
-            "Country.name": "A Country",
-            "Country.states": [
-              {
-                "uid": "_:State4",
-                "dgraph.type": ["State"],
-                "State.code": "abc",
-                "State.name": "Alphabet",
-                "State.country": { "uid": "_:Country2" }
-              }
-            ]
-          }
+        {
+          "State.code": "abc",
+          "State.name": "Alphabet",
+          "dgraph.type": [
+            "State"
+          ],
+          "uid": "_:State4"
         }
       cond: "@if(eq(len(State4), 0))"
+
+  dgmutationssec:
     - setjson: |
         { 
           "uid":"_:Author1",
@@ -1492,12 +1483,19 @@
           }
         ]
       cond: "@if(eq(len(State4), 1))"
-  dgquery: |-
+
+  dgquerysec: |-
     query {
       State4 as State4(func: eq(State.code, "abc")) @filter(type(State)) {
         uid
       }
       var(func: uid(State4)) {
         Country5 as State.country
+      }
+    }
+  dgquery: |-
+    query {
+      State4 as State4(func: eq(State.code, "abc")) @filter(type(State)) {
+        uid
       }
     }

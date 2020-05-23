@@ -225,8 +225,7 @@ func newXidMetadata() *xidMetadata {
 //   } ],
 //   "Author.friends":[ {"uid":"0x123"} ],
 // }
-func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*UpsertMutation, error) {
-
+func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
 
 	if m.IsArgListType(schema.InputArgName) {
@@ -236,8 +235,8 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 	varGen := NewVariableGenerator()
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	xidMd := newXidMetadata()
-	mrw.frags = [][]*mutationFragment{rewriteObject(mutatedType, nil, "", varGen, true, val,
-		xidMd)}
+	obj := rewriteObject(mutatedType, nil, "", varGen, true, val, xidMd)
+	mrw.frags = [][]*mutationFragment{obj.get()}
 	mutations, err := mutationsFromFragments(
 		mrw.frags[0],
 		func(frag *mutationFragment) ([]byte, error) {
@@ -255,24 +254,25 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) (*Upsert
 		Mutations: mutations,
 	}
 
-	return upsert, schema.GQLWrapf(err, "failed to rewrite mutation payload")
+	return []*UpsertMutation{upsert}, schema.GQLWrapf(err, "failed to rewrite mutation payload")
 }
 
-func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutation, error) {
+func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) ([]*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	varGen := NewVariableGenerator()
 	xidMd := newXidMetadata()
 	var errs error
-	var mutationsAll []*dgoapi.Mutation
+
+	mutationsAllSec := []*dgoapi.Mutation{}
+	queriesSec := &gql.GraphQuery{}
+
+	mutationsAll := []*dgoapi.Mutation{}
 	queries := &gql.GraphQuery{}
 
-	for _, i := range val {
-		obj := i.(map[string]interface{})
-		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
-		mrw.frags = append(mrw.frags, frag)
-
+	buildMutations := func(mutationsAll []*dgoapi.Mutation, queries *gql.GraphQuery,
+		frag []*mutationFragment, keepError bool) []*dgoapi.Mutation {
 		mutations, err := mutationsFromFragments(
 			frag,
 			func(frag *mutationFragment) ([]byte, error) {
@@ -293,18 +293,44 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) (*UpsertMutat
 		if qry != nil {
 			queries.Children = append(queries.Children, qry.Children...)
 		}
+
+		return mutationsAll
+	}
+
+	for _, i := range val {
+		obj := i.(map[string]interface{})
+		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
+		mrw.frags = append(mrw.frags, frag.get())
+
+		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
+		mutationsAllSec = buildMutations(mutationsAllSec, queriesSec, frag.secondPass, true)
 	}
 
 	if len(queries.Children) == 0 {
 		queries = nil
 	}
 
-	upsert := &UpsertMutation{
-		Query:     queries,
-		Mutations: mutationsAll,
+	if len(queriesSec.Children) == 0 {
+		queriesSec = nil
 	}
 
-	return upsert, errs
+	result := []*UpsertMutation{}
+
+	if len(mutationsAll) > 0 {
+		result = append(result, &UpsertMutation{
+			Query:     queries,
+			Mutations: mutationsAll,
+		})
+	}
+
+	if len(mutationsAllSec) > 0 {
+		result = append(result, &UpsertMutation{
+			Query:     queriesSec,
+			Mutations: mutationsAllSec,
+		})
+	}
+
+	return result, errs
 }
 
 // FromMutationResult rewrites the query part of a GraphQL add mutation into a Dgraph query.
@@ -373,7 +399,7 @@ func (mrw *AddRewriter) FromMutationResult(
 // See AddRewriter for how the set and remove fragments get created.
 func (urw *UpdateRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) (*UpsertMutation, error) {
+	m schema.Mutation) ([]*UpsertMutation, error) {
 
 	mutatedType := m.MutatedType()
 
@@ -389,62 +415,97 @@ func (urw *UpdateRewriter) Rewrite(
 	srcUID := MutationQueryVarUID
 
 	xidMd := newXidMetadata()
-	var errSet, errDel error
-	var mutSet, mutDel []*dgoapi.Mutation
+	var errs error
 	varGen := NewVariableGenerator()
 
+	buildMutation := func(setFrag, delFrag []*mutationFragment, keepError bool) *UpsertMutation {
+		var mutSet, mutDel []*dgoapi.Mutation
+		queries := []*gql.GraphQuery{upsertQuery}
+
+		if setArg != nil {
+			urw.setFrags = append(urw.setFrags, setFrag...)
+			addUpdateCondition(setFrag)
+			var errSet error
+			mutSet, errSet = mutationsFromFragments(
+				setFrag,
+				func(frag *mutationFragment) ([]byte, error) {
+					return json.Marshal(frag.fragment)
+				},
+				func(frag *mutationFragment) ([]byte, error) {
+					if len(frag.deletes) > 0 {
+						return json.Marshal(frag.deletes)
+					}
+					return nil, nil
+				})
+
+			if keepError {
+				errs = schema.AppendGQLErrs(errs, errSet)
+			}
+
+			q1 := queryFromFragments(setFrag)
+			if q1 != nil {
+				queries = append(queries, q1.Children...)
+			}
+		}
+
+		if delArg != nil {
+			urw.delFrags = append(urw.delFrags, delFrag...)
+			addUpdateCondition(delFrag)
+			var errDel error
+			mutDel, errDel = mutationsFromFragments(
+				urw.delFrags,
+				func(frag *mutationFragment) ([]byte, error) {
+					return nil, nil
+				},
+				func(frag *mutationFragment) ([]byte, error) {
+					return json.Marshal(frag.fragment)
+				})
+
+			if keepError {
+				errs = schema.AppendGQLErrs(errs, errDel)
+			}
+
+			q2 := queryFromFragments(delFrag)
+			if q2 != nil {
+				queries = append(queries, q2.Children...)
+			}
+		}
+
+		return &UpsertMutation{
+			Query:     &gql.GraphQuery{Children: queries},
+			Mutations: append(mutSet, mutDel...),
+		}
+	}
+
+	var setFragF, setFragS, delFragF, delFragS []*mutationFragment
+
 	if setArg != nil {
-		urw.setFrags =
-			rewriteObject(mutatedType, nil, srcUID, varGen, true,
-				setArg.(map[string]interface{}), xidMd)
-		addUpdateCondition(urw.setFrags)
-		mutSet, errSet = mutationsFromFragments(
-			urw.setFrags,
-			func(frag *mutationFragment) ([]byte, error) {
-				return json.Marshal(frag.fragment)
-			},
-			func(frag *mutationFragment) ([]byte, error) {
-				if len(frag.deletes) > 0 {
-					return json.Marshal(frag.deletes)
-				}
-				return nil, nil
-			})
+		setFrag := rewriteObject(mutatedType, nil, srcUID, varGen, true,
+			setArg.(map[string]interface{}), xidMd)
+		setFragF = setFrag.firstPass
+		setFragS = setFrag.secondPass
 	}
 
 	if delArg != nil {
-		urw.delFrags =
-			rewriteObject(mutatedType, nil, srcUID, varGen, false,
-				delArg.(map[string]interface{}), xidMd)
-		addUpdateCondition(urw.delFrags)
-		mutDel, errDel = mutationsFromFragments(
-			urw.delFrags,
-			func(frag *mutationFragment) ([]byte, error) {
-				return nil, nil
-			},
-			func(frag *mutationFragment) ([]byte, error) {
-				return json.Marshal(frag.fragment)
-			})
+		delFrag := rewriteObject(mutatedType, nil, srcUID, varGen, false,
+			delArg.(map[string]interface{}), xidMd)
+		delFragF = delFrag.firstPass
+		delFragS = delFrag.secondPass
 	}
 
-	queries := []*gql.GraphQuery{upsertQuery}
+	result := []*UpsertMutation{}
 
-	q1 := queryFromFragments(urw.setFrags)
-	if q1 != nil {
-		queries = append(queries, q1.Children...)
+	firstPass := buildMutation(setFragF, delFragF, false)
+	if len(firstPass.Mutations) > 0 {
+		result = append(result, firstPass)
 	}
 
-	q2 := queryFromFragments(urw.delFrags)
-	if q2 != nil {
-		queries = append(queries, q2.Children...)
+	secondPass := buildMutation(setFragS, delFragS, true)
+	if len(secondPass.Mutations) > 0 {
+		result = append(result, secondPass)
 	}
 
-	upsert := &UpsertMutation{
-		Query:     &gql.GraphQuery{Children: queries},
-		Mutations: append(mutSet, mutDel...),
-	}
-
-	return upsert,
-		schema.GQLWrapf(schema.AppendGQLErrs(errSet, errDel), "failed to rewrite mutation payload")
+	return result, schema.GQLWrapf(errs, "failed to rewrite mutation payload")
 }
 
 // FromMutationResult rewrites the query part of a GraphQL update mutation into a Dgraph query.
@@ -567,7 +628,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation) *gql.GraphQuery {
 
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) (*UpsertMutation, error) {
+	m schema.Mutation) ([]*UpsertMutation, error) {
 
 	if m.MutationType() != schema.DeleteMutation {
 		return nil, errors.Errorf(
@@ -621,7 +682,7 @@ func (drw *deleteRewriter) Rewrite(
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
-	return upsert, err
+	return []*UpsertMutation{upsert}, err
 }
 
 func (drw *deleteRewriter) FromMutationResult(
@@ -707,6 +768,17 @@ func queryFromFragments(frags []*mutationFragment) *gql.GraphQuery {
 	return qry
 }
 
+type mutationRes struct {
+	firstPass  []*mutationFragment
+	secondPass []*mutationFragment
+}
+
+func (mr *mutationRes) get() []*mutationFragment {
+	k := mr.firstPass
+	k = append(k, mr.secondPass...)
+	return k
+}
+
 // rewriteObject rewrites obj to a list of mutation fragments.  See AddRewriter.Rewrite
 // for a description of what those fragments look like.
 //
@@ -729,7 +801,7 @@ func rewriteObject(
 	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	obj map[string]interface{},
-	xidMetadata *xidMetadata) []*mutationFragment {
+	xidMetadata *xidMetadata) *mutationRes {
 
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
@@ -740,8 +812,9 @@ func rewriteObject(
 	if id != nil {
 		if idVal, ok := obj[id.Name()]; ok {
 			if idVal != nil {
-				return []*mutationFragment{
-					asIDReference(idVal, srcField, srcUID, variable, withAdditionalDeletes, varGen)}
+				return &mutationRes{secondPass: []*mutationFragment{
+					asIDReference(idVal, srcField, srcUID, variable,
+						withAdditionalDeletes, varGen)}}
 			}
 			delete(obj, id.Name())
 		}
@@ -757,7 +830,7 @@ func rewriteObject(
 			if !ok {
 				errFrag := newFragment(nil)
 				errFrag.err = errors.New("encountered an XID that isn't a string")
-				return []*mutationFragment{errFrag}
+				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
@@ -779,7 +852,7 @@ func rewriteObject(
 					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
-					return []*mutationFragment{errFrag}
+					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 				}
 			} else {
 				// if not encountered till now, add it to the map
@@ -805,8 +878,8 @@ func rewriteObject(
 			} else {
 				name = id.Name()
 			}
-			return invalidObjectFragment(fmt.Errorf("%s is not provided", name),
-				xidFrag, variable, xidString)
+			return &mutationRes{secondPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
+				xidFrag, variable, xidString)}
 		}
 	}
 
@@ -822,14 +895,18 @@ func rewriteObject(
 		if err := typ.EnsureNonNulls(obj, exclude); err != nil {
 			// This object is either an invalid deep mutation or it's an xid reference
 			// and asXIDReference must to apply or it's an error.
-			return invalidObjectFragment(err, xidFrag, variable, xidString)
+			return &mutationRes{secondPass: invalidObjectFragment(err, xidFrag, variable, xidString)}
 		}
 	}
 
 	if !atTopLevel && !withAdditionalDeletes {
 		// For remove op (!withAdditionalDeletes), we don't need to generate a new
 		// blank node.
-		return []*mutationFragment{xidFrag}
+		if xidFrag != nil {
+			return &mutationRes{secondPass: []*mutationFragment{xidFrag}}
+		} else {
+			return &mutationRes{}
+		}
 	}
 
 	var myUID string
@@ -841,15 +918,16 @@ func rewriteObject(
 		newObj["dgraph.type"] = dgraphTypes
 		myUID = fmt.Sprintf("_:%s", variable)
 
-		addInverseLink(newObj, srcField, srcUID)
+		if xid == nil {
+			addInverseLink(newObj, srcField, srcUID)
+		}
 	} else {
 		myUID = srcUID
 	}
 
 	newObj["uid"] = myUID
-
 	frag := newFragment(newObj)
-	results := []*mutationFragment{frag}
+	results := &mutationRes{secondPass: []*mutationFragment{frag}}
 
 	// if xidString != "", then we are adding with an xid.  In which case, we have to ensure
 	// as part of the upsert that the xid doesn't already exist.
@@ -867,11 +945,22 @@ func rewriteObject(
 			nil)
 	}
 
+	if xid != nil && !atTopLevel {
+		results = &mutationRes{
+			firstPass: []*mutationFragment{frag},
+		}
+		if xidFrag != nil {
+			frag.queries = []*gql.GraphQuery{
+				xidQuery(variable, xidString, xid.Name(), typ),
+			}
+		}
+	}
+
 	// if this object has an xid, then we don't need to rewrite its children if we have encountered
 	// it earlier
 	if xidString == "" || xidEncounteredFirstTime {
 		for field, val := range obj {
-			var frags []*mutationFragment
+			var frags *mutationRes
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
@@ -888,6 +977,7 @@ func rewriteObject(
 				frags =
 					rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes,
 						val, xidMetadata)
+
 			case []interface{}:
 				// This field is either:
 				// 1) A list of objects: e.g. if the schema said `categories: [Categories]`
@@ -912,15 +1002,24 @@ func rewriteObject(
 				//   e.g. to remove the text or
 				//   { "friends": null, ... }
 				//   to remove all friends
-				frags = []*mutationFragment{newFragment(val)}
+				if xid != nil && !atTopLevel {
+					frags = &mutationRes{firstPass: []*mutationFragment{newFragment(val)}}
+				} else {
+					frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
+				}
 			}
 
-			results = squashFragments(squashIntoObject(fieldName), results, frags)
+			results.firstPass = squashFragments(squashIntoObject(fieldName), results.firstPass, frags.firstPass)
+			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
 		}
 	}
 
 	if xidFrag != nil {
-		results = append(results, xidFrag)
+		results.secondPass = append(results.secondPass, xidFrag)
+	}
+
+	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
+		results.firstPass = []*mutationFragment{}
 	}
 
 	return results
@@ -1256,25 +1355,28 @@ func rewriteList(
 	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	objects []interface{},
-	xidMetadata *xidMetadata) []*mutationFragment {
+	xidMetadata *xidMetadata) *mutationRes {
 
-	frags := []*mutationFragment{newFragment(make([]interface{}, 0))}
+	result := &mutationRes{}
+
+	result.secondPass = []*mutationFragment{newFragment(make([]interface{}, 0))}
 
 	for _, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frags = squashFragments(squashIntoList, frags,
-				rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, xidMetadata))
+			frag := rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, xidMetadata)
+			result.firstPass = appendFragments(result.firstPass, frag.firstPass)
+			result.secondPass = squashFragments(squashIntoList, result.secondPass, frag.secondPass)
 		default:
 			// All objects in the list must be of the same type.  GraphQL validation makes sure
 			// of that. So this must be a list of scalar values (lists of lists aren't allowed).
-			return []*mutationFragment{
+			return &mutationRes{secondPass: []*mutationFragment{
 				newFragment(objects),
-			}
+			}}
 		}
 	}
 
-	return frags
+	return result
 }
 
 func newFragment(f interface{}) *mutationFragment {
@@ -1310,6 +1412,24 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 		asObject[label] = v
 		return asObject
 	}
+}
+
+func appendFragments(left, right []*mutationFragment) []*mutationFragment {
+	if len(left) == 0 {
+		return right
+	}
+
+	if len(right) == 0 {
+		return left
+	}
+
+	for _, i := range right {
+		left[0].queries = append(left[0].queries, i.queries...)
+		i.queries = []*gql.GraphQuery{}
+	}
+
+	left = append(left, right...)
+	return left
 }
 
 // squashFragments takes two lists of mutationFragments and produces a single list
@@ -1420,6 +1540,7 @@ func squashFragments(
 	for _, r := range right {
 		queries = append(queries, r.queries...)
 	}
+
 	result[0].queries = queries
 
 	return result
