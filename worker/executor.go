@@ -20,11 +20,13 @@ package worker
 
 import (
 	"context"
+	"strconv"
 	"sync"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -36,17 +38,23 @@ type subMutation struct {
 
 type executor struct {
 	sync.RWMutex
-	predChan map[string]chan *subMutation
-	closer   *y.Closer
+	edgesChan []chan *subMutation
+	closer    *y.Closer
 }
 
 func newExecutor() *executor {
-	ex := &executor{
-		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
+	e := &executor{
+		edgesChan: make([]chan *subMutation, 32), /* TODO: no of chans can be made configurable */
+		closer:    y.NewCloser(0),
 	}
-	go ex.shutdown()
-	return ex
+
+	for i := 0; i < len(e.edgesChan); i++ {
+		e.edgesChan[i] = make(chan *subMutation, 1000)
+		e.closer.AddRunning(1)
+		go e.processMutationCh(e.edgesChan[i])
+	}
+	go e.shutdown()
+	return e
 }
 
 func (e *executor) processMutationCh(ch chan *subMutation) {
@@ -79,51 +87,45 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 func (e *executor) shutdown() {
 	<-e.closer.HasBeenClosed()
-	e.RLock()
-	defer e.RUnlock()
-	for _, ch := range e.predChan {
+	e.Lock()
+	defer e.Unlock()
+	for _, ch := range e.edgesChan {
 		close(ch)
 	}
 }
 
-// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
-	ch, ok := e.predChan[pred]
-	if ok {
-		return ch
-	}
-	ch = make(chan *subMutation, 1000)
-	e.predChan[pred] = ch
-	e.closer.AddRunning(1)
-	go e.processMutationCh(ch)
-	return ch
+// getChannelID obtains the channel for the given edge.
+func (e *executor) getChannelID(edge *pb.DirectedEdge) int {
+	cid := z.MemHashString(edge.Attr+strconv.FormatUint(edge.Entity, 10)) % uint64(len(e.edgesChan))
+	return int(cid)
 }
 
 func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
-	payloadMap := make(map[string]*subMutation)
+	payloadMap := make(map[int]*subMutation)
 
 	for _, edge := range edges {
-		payload, ok := payloadMap[edge.Attr]
+		cid := e.getChannelID(edge)
+		payload, ok := payloadMap[cid]
 		if !ok {
-			payloadMap[edge.Attr] = &subMutation{
+			payloadMap[cid] = &subMutation{
 				ctx:     ctx,
 				startTs: startTs,
 			}
-			payload = payloadMap[edge.Attr]
+			payload = payloadMap[cid]
 		}
 		payload.edges = append(payload.edges, edge)
 	}
 
-	// Lock() in case the channel gets closed from underneath us.
-	e.Lock()
-	defer e.Unlock()
+	// RLock() in case the channel gets closed from underneath us.
+	e.RLock()
+	defer e.RUnlock()
 	select {
 	case <-e.closer.HasBeenClosed():
 		return
 	default:
-		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
-		for attr, payload := range payloadMap {
-			e.getChannelUnderLock(attr) <- payload
+		// Closer is not closed. And we have the RLock, so sending on channel should be safe.
+		for cid, payload := range payloadMap {
+			e.edgesChan[cid] <- payload
 		}
 	}
 
