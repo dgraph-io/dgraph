@@ -658,10 +658,7 @@ func (f *field) Include() bool {
 }
 
 func (f *field) Cascade() bool {
-	if f.field.Directives.ForName(cascadeDirective) == nil {
-		return false
-	}
-	return true
+	return f.field.Directives.ForName(cascadeDirective) != nil
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
