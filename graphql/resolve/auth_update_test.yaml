@@ -458,7 +458,7 @@
       log()
     }
 
-- name: "Update with top level RBAC false."
+- name: "Update with top level RBAC true."
   gqlquery: |
     mutation updateLog($log: UpdateLogInput!) {
       updateLog(input: $log) {
@@ -576,7 +576,7 @@
       }
     }
 
-- name: "Update with top level And RBAC true."
+- name: "Update with top level And RBAC false."
   gqlquery: |
     mutation updateIssue($issue: UpdateIssueInput!) {
       updateIssue(input: $issue) {

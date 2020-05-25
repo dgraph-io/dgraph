@@ -776,15 +776,13 @@
       }
     }
   uids: |
-    { "log1": "0x123" }
+    { "Log1": "0x123" }
   authquery: |-
     query {
-      log(func: uid()) {
+      log(func: uid(0x123)) {
         id : uid
       }
     }
-  authjson: |
-    { "log1": [ { "uid": "0x123" }] }
 
 - name: "Add with top level OR RBAC true."
   gqlquery: |
@@ -802,10 +800,6 @@
         "name": "Project1"
       }
     }
-  json: |
-    {
-      "Ticket3": [ { "uid": "0x789" } ]
-    }
   uids: |
     {
       "Project1": "0x123"
@@ -815,10 +809,6 @@
       project(func: uid(0x123)) {
         projID : uid
       }
-    }
-  authjson: |
-    {
-      "Project": [ { "uid": "0x123" } ]
     }
 
 - name: "Add with top level OR RBAC false."
@@ -836,10 +826,6 @@
       "proj": {
         "name": "Project1"
       }
-    }
-  json: |
-    {
-      "Ticket3": [ { "uid": "0x789" } ]
     }
   uids: |
     {
@@ -889,21 +875,23 @@
         uid
       }
     }
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
   uids: |
-    { "user1": "0x123" }
+    { "Issue1": "0x789" }
   authquery: |-
     query {
-      issue(func: uid(Issue1)) @filter(uid(Issue2)) {
-        id : uid
+      Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
       }
-      Issue1 as var(func: uid())
+      Issue1 as var(func: uid(0x789))
       Issue2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }
     }
   authjson: |
-    { "user1": [ { "uid": "0x123" }] }
+    { "Issue": [ { "uid": "0x789" }] }
 
 - name: "Add with top level And RBAC false."
   gqlquery: |
@@ -930,6 +918,8 @@
         uid
       }
     }
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
   error:
     { "message": "couldn't rewrite query for mutation addIssue because no new node was created"}
 
@@ -969,12 +959,10 @@
       }
     }
   uids: |
-    { "log1": "0x123" }
+    { "ComplexLog1": "0x123" }
   authquery: |-
     query {
-      complexlog(func: uid()) {
+      complexlog(func: uid(0x123)) {
         id : uid
       }
     }
-  authjson: |
-    { "log1": [ { "uid": "0x123" }] }
