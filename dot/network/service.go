@@ -410,3 +410,8 @@ func (s *Service) Peers() []common.PeerInfo {
 	}
 	return peers
 }
+
+// NodeRoles Returns the roles the node is running as.
+func (s *Service) NodeRoles() byte {
+	return s.cfg.Roles
+}

@@ -101,3 +101,26 @@ func (sm *SystemModule) Peers(r *http.Request, req *EmptyRequest, res *SystemPee
 	res.Peers = peers
 	return nil
 }
+
+// NodeRoles Returns the roles the node is running as.
+func (sm *SystemModule) NodeRoles(r *http.Request, req *EmptyRequest, res *[]interface{}) error {
+	resultArray := []interface{}{}
+
+	role := sm.networkAPI.NodeRoles()
+	switch role {
+	case 1:
+		resultArray = append(resultArray, "Full")
+	case 2:
+		resultArray = append(resultArray, "LightClient")
+	case 4:
+		resultArray = append(resultArray, "Authority")
+	default:
+		resultArray = append(resultArray, "UnknownRole")
+		uknrole := []interface{}{}
+		uknrole = append(uknrole, role)
+		resultArray = append(resultArray, uknrole)
+	}
+
+	*res = resultArray
+	return nil
+}

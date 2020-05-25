@@ -30,6 +30,7 @@ type NetworkAPI interface {
 	Health() common.Health
 	NetworkState() common.NetworkState
 	Peers() []common.PeerInfo
+	NodeRoles() byte
 }
 
 // TransactionQueueAPI ...

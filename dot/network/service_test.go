@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common/variadic"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/stretchr/testify/require"
 )
 
 var TestProtocolID = "/gossamer/test/0"
@@ -258,4 +259,16 @@ func TestHandleMessage_BlockResponse(t *testing.T) {
 	case <-time.After(TestMessageTimeout):
 		t.Error("timeout waiting for message")
 	}
+}
+
+func TestService_NodeRoles(t *testing.T) {
+	dataDir := utils.NewTestDataDir(t, "node")
+	cfg := &Config{
+		DataDir: dataDir,
+		Roles:   1,
+	}
+	svc := createTestService(t, cfg)
+
+	role := svc.NodeRoles()
+	require.Equal(t, cfg.Roles, role)
 }
