@@ -113,30 +113,28 @@ func init() {
 
 func run() {
 	opt := options{
-		DataFiles:        Bulk.Conf.GetString("files"),
-		DataFormat:       Bulk.Conf.GetString("format"),
-		SchemaFile:       Bulk.Conf.GetString("schema"),
-		Encrypted:        Bulk.Conf.GetBool("encrypted"),
-		OutDir:           Bulk.Conf.GetString("out"),
-		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
-		TmpDir:           Bulk.Conf.GetString("tmp"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:      Bulk.Conf.GetInt("reducers"),
-		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		HttpAddr:         Bulk.Conf.GetString("http"),
-		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:        Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:          Bulk.Conf.GetBool("new_uids"),
-		ClientDir:        Bulk.Conf.GetString("xidmap"),
-
-		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
+		DataFiles:              Bulk.Conf.GetString("files"),
+		DataFormat:             Bulk.Conf.GetString("format"),
+		SchemaFile:             Bulk.Conf.GetString("schema"),
+		Encrypted:              Bulk.Conf.GetBool("encrypted"),
+		OutDir:                 Bulk.Conf.GetString("out"),
+		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),
+		TmpDir:                 Bulk.Conf.GetString("tmp"),
+		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:            Bulk.Conf.GetInt("reducers"),
+		Version:                Bulk.Conf.GetBool("version"),
+		StoreXids:              Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:               Bulk.Conf.GetString("zero"),
+		HttpAddr:               Bulk.Conf.GetString("http"),
+		IgnoreErrors:           Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:              Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:           Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers:       Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:                Bulk.Conf.GetBool("new_uids"),
+		ClientDir:              Bulk.Conf.GetString("xidmap"),
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
 
@@ -145,14 +143,16 @@ func run() {
 		os.Exit(0)
 	}
 	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opt.BadgerKeyFile != "" {
+	keyfile := Bulk.Conf.GetString("encryption_key_file")
+	if !enc.EeBuild && keyfile != "" {
 		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
 		os.Exit(1)
 	}
-	if opt.Encrypted && opt.BadgerKeyFile == "" {
+	if opt.Encrypted && keyfile == "" {
 		fmt.Printf("Must use --encryption_key_file option with --encrypted option.\n")
 		os.Exit(1)
 	}
+	opt.EncryptionKey = enc.ReadEncryptionKeyFile(keyfile)
 	if opt.SchemaFile == "" {
 		fmt.Fprint(os.Stderr, "Schema file must be specified.\n")
 		os.Exit(1)
@@ -191,10 +191,13 @@ func run() {
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
 
+	// Copy key to local
+	key := opt.EncryptionKey
+	opt.EncryptionKey = nil
 	optBuf, err := json.MarshalIndent(&opt, "", "\t")
 	x.Check(err)
 	fmt.Println(string(optBuf))
-
+	opt.EncryptionKey = key
 	maxOpenFilesWarning()
 
 	go func() {
