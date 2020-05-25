@@ -43,6 +43,7 @@ type TransactionQueueAPI interface {
 // CoreAPI is the interface for the core methods
 type CoreAPI interface {
 	InsertKey(kp crypto.Keypair)
+	HasKey(pubKeyStr string, keyType string) (bool, error)
 	GetRuntimeVersion() (*runtime.VersionAPI, error)
 	IsBabeAuthority() bool
 	HandleSubmittedExtrinsic(types.Extrinsic) error

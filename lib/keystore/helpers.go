@@ -252,3 +252,53 @@ func UnlockKeys(ks *Keystore, dir string, unlock string, password string) error 
 
 	return nil
 }
+
+// DetermineKeyType takes string as defined in https://github.com/w3f/PSPs/blob/psp-rpc-api/psp-002.md#Key-types
+//  and returns the crypto.KeyType
+func DetermineKeyType(t string) crypto.KeyType {
+	// TODO: create separate keystores for different key types, issue #768
+	switch t {
+	case "babe":
+		return crypto.Sr25519Type
+	case "gran":
+		return crypto.Ed25519Type
+	case "acco":
+		return crypto.Sr25519Type
+	case "aura":
+		return crypto.Sr25519Type
+	case "imon":
+		return crypto.Sr25519Type
+	case "audi":
+		return crypto.Sr25519Type
+	case "dumy":
+		return crypto.Sr25519Type
+	}
+	return "unknown keytype"
+}
+
+// HasKey returns true if given hex encoded public key string is found in keystore, false otherwise, error if there
+//  are issues decoding string
+func HasKey(pubKeyStr string, keyType string, keystore *Keystore) (bool, error) {
+	keyBytes, err := common.HexToBytes(pubKeyStr)
+	if err != nil {
+		return false, err
+	}
+	cKeyType := DetermineKeyType(keyType)
+
+	var pubKey crypto.PublicKey
+	// TODO: consider handling for different key types, see issue #768
+	switch cKeyType {
+	case crypto.Sr25519Type:
+		pubKey, err = sr25519.NewPublicKey(keyBytes)
+	case crypto.Ed25519Type:
+		pubKey, err = ed25519.NewPublicKey(keyBytes)
+	default:
+		err = fmt.Errorf("unknown key type: %s", keyType)
+	}
+
+	if err != nil {
+		return false, err
+	}
+	key := keystore.Get(pubKey.Address())
+	return key != nil, nil
+}

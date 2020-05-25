@@ -19,6 +19,7 @@ package keystore
 import (
 	"testing"
 
+	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/stretchr/testify/require"
 )
 
@@ -27,4 +28,25 @@ func TestLoadKeystore(t *testing.T) {
 	require.Nil(t, err)
 
 	require.Equal(t, 1, ks.NumSr25519Keys())
+}
+
+var testKeyTypes = []struct {
+	testType     string
+	expectedType string
+}{
+	{testType: "babe", expectedType: crypto.Sr25519Type},
+	{testType: "gran", expectedType: crypto.Ed25519Type},
+	{testType: "acco", expectedType: crypto.Sr25519Type},
+	{testType: "aura", expectedType: crypto.Sr25519Type},
+	{testType: "imon", expectedType: crypto.Sr25519Type},
+	{testType: "audi", expectedType: crypto.Sr25519Type},
+	{testType: "dumy", expectedType: crypto.Sr25519Type},
+	{testType: "xxxx", expectedType: "unknown keytype"},
+}
+
+func TestDetermineKeyType(t *testing.T) {
+	for _, test := range testKeyTypes {
+		output := DetermineKeyType(test.testType)
+		require.Equal(t, test.expectedType, output)
+	}
 }

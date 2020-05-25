@@ -122,7 +122,8 @@ func TestStartService(t *testing.T) {
 	err := s.Start()
 	require.Nil(t, err)
 
-	s.Stop()
+	err = s.Stop()
+	require.NoError(t, err)
 }
 
 func TestNotAuthority(t *testing.T) {
@@ -208,4 +209,36 @@ func TestCheckForRuntimeChanges(t *testing.T) {
 
 	err = s.checkForRuntimeChanges()
 	require.Nil(t, err)
+}
+
+func TestService_HasKey(t *testing.T) {
+	ks := keystore.NewKeystore()
+	kr, err := keystore.NewSr25519Keyring()
+	require.NoError(t, err)
+	ks.Insert(kr.Alice)
+
+	cfg := &Config{
+		Keystore: ks,
+	}
+	svc := NewTestService(t, cfg)
+
+	res, err := svc.HasKey(kr.Alice.Public().Hex(), "babe")
+	require.NoError(t, err)
+	require.True(t, res)
+}
+
+func TestService_HasKey_UnknownType(t *testing.T) {
+	ks := keystore.NewKeystore()
+	kr, err := keystore.NewSr25519Keyring()
+	require.NoError(t, err)
+	ks.Insert(kr.Alice)
+
+	cfg := &Config{
+		Keystore: ks,
+	}
+	svc := NewTestService(t, cfg)
+
+	res, err := svc.HasKey(kr.Alice.Public().Hex(), "xxxx")
+	require.EqualError(t, err, "unknown key type: xxxx")
+	require.False(t, res)
 }
