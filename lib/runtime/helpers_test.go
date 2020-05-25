@@ -19,6 +19,7 @@ import (
 )
 
 var kr, _ = keystore.NewSr25519Keyring()
+var maxRetries = 10
 
 func TestExportRuntime(t *testing.T) {
 	fp := "runtime.out"
@@ -266,14 +267,16 @@ func TestFinalizeBlock(t *testing.T) {
 	}
 
 	err := rt.InitializeBlock(header)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
-	res, err := rt.FinalizeBlock()
-	if err != nil {
-		t.Fatal(err)
+	var res *types.Header
+	for i := 0; i < maxRetries; i++ {
+		res, err = rt.FinalizeBlock()
+		if err == nil {
+			break
+		}
 	}
+	require.NoError(t, err)
 
 	res.Number = header.Number
 
@@ -368,7 +371,12 @@ func TestApplyExtrinsic_StorageChange_Set(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("testvalue"), val)
 
-	_, err = rt.FinalizeBlock()
+	for i := 0; i < maxRetries; i++ {
+		_, err = rt.FinalizeBlock()
+		if err == nil {
+			break
+		}
+	}
 	require.NoError(t, err)
 
 	val, err = rt.storage.GetStorage([]byte("testkey"))

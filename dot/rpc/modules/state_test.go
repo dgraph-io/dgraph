@@ -17,6 +17,7 @@ package modules
 
 import (
 	"fmt"
+	"sort"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/lib/common"
@@ -57,6 +58,9 @@ func TestStateModule_GetPairs_All(t *testing.T) {
 
 	err := sm.GetPairs(nil, &req, &res)
 	require.NoError(t, err)
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].([]string)[0] < res[j].([]string)[0]
+	})
 	require.Equal(t, expected, res)
 
 }
