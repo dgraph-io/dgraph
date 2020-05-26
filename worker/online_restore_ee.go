@@ -61,15 +61,19 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
+	errCh := make(chan error, len(currentGroups))
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-		if err := proposeRestoreOrSend(ctx, reqCopy); err != nil {
-			// In case of an error, return but don't cancel the context.
-			// After the timeout expires, the Done channel will be closed.
-			// If the channel is closed due to a deadline issue, we can
-			// ignore the requests for the groups that did not error out.
-			return err
+
+		go func() {
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+		}()
+	}
+
+	for range currentGroups {
+		if err := <-errCh; err != nil {
+			return errors.Wrapf(err, "cannot complete restore proposal")
 		}
 	}
 
@@ -114,7 +118,6 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &emptyRes, nil
 }
 
-// TODO(DGRAPH-1220): Online restores support passing the backup id.
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
@@ -199,7 +202,7 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			r, err := enc.GetReader(req.GetKeyFile(), r)
+			r, err := enc.GetReader(enc.ReadEncryptionKeyFile(req.GetKeyFile()), r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}

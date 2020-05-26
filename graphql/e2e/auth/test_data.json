@@ -5,7 +5,8 @@
 		"User.age": 10,
 		"User.username": "user1",
 		"User.isPublic": true,
-		"User.disabled": false
+		"User.disabled": false,
+		"User.issues": [{"uid": "_:issue1"}]
 	},
 	{
 		"uid": "_:user2",
@@ -13,7 +14,8 @@
 		"User.age": 11,
 		"User.username": "user2",
 		"User.isPublic": true,
-		"User.disabled": true
+		"User.disabled": true,
+		"User.issues": [{"uid": "_:issue2"}]
 	},
 	{
 		"uid": "_:user3",
@@ -30,6 +32,14 @@
 		"User.username": "user4",
 		"User.isPublic": false,
 		"User.disabled": true
+	},
+	{
+		"uid": "_:user5",
+		"dgraph.type": "User",
+		"User.age": 99,
+		"User.username": "user5",
+		"User.isPublic": true,
+		"User.disabled": false
 	},
 	{
 		"uid": "_:region1",
@@ -56,6 +66,12 @@
 		"Region.users": [{"uid": "_:user4"}, {"uid": "_:user1"}]
 	},
 	{
+		"uid": "_:region5",
+		"dgraph.type": "Region",
+		"Region.name": "Region5",
+		"Region.global": true
+	},
+	{
 		"uid": "_:movie1",
 		"dgraph.type": "Movie",
 		"Movie.content": "Movie1",
@@ -74,6 +90,18 @@
 		"Movie.content": "Movie3",
 		"Movie.regionsAvailable": [{"uid": "_:region1"}, {"uid": "_:region4"}],
 		"Movie.disabled": true
+	},
+	{
+		"uid": "_:movie4",
+		"dgraph.type": "Movie",
+		"Movie.content": "Movie4",
+		"Movie.regionsAvailable": [{"uid": "_:region5"}],
+		"Movie.reviews" : [{"uid": "_:review1"}]
+	},
+	{
+		"uid": "_:review1",
+		"dgraph.type": "Review",
+		"Review.comment": "Nice movie"
 	},
 	{
 		"uid": "_:issue1",
@@ -98,6 +126,17 @@
 		"Log.logs": "Log2"
 	},
 	{
+		"uid": "_:complexlog1",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog1",
+		"ComplexLog.visible": true
+	},
+	{
+		"uid": "_:complexlog2",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog2"
+	},
+	{
 		"uid": "_:role1",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
@@ -116,17 +155,41 @@
 		"Role.permission": "VIEW"
 	},
 	{
+		"uid": "_:role4",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user5"}],
+		"Role.permission": "EDIT"
+	},
+	{
+		"uid": "_:role5",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role6",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user3"}, {"uid": "_:user2"}],
+		"Role.permission": "ADMIN"
+	},
+	{
+		"uid": "_:role7",
+		"dgraph.type": "Role",
+		"Role.assignedTo": [{"uid": "_:user4"}],
+		"Role.permission": "ADMIN"
+	},
+	{
 		"uid": "_:project1",
 		"dgraph.type": "Project",
 		"Project.name": "Project1",
-		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}],
+		"Project.roles": [{"uid": "_:role1"}, {"uid": "_:role2"}, {"uid": "_:role4"}, {"uid": "_:role5"}, {"uid": "_:role6"}],
 		"Project.columns": [{"uid": "_:column1"}]
 	},
 	{
 		"uid": "_:project2",
 		"dgraph.type": "Project",
 		"Project.name": "Project2",
-		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}],
+		"Project.roles": [{"uid": "_:role3"}, {"uid": "_:role2"}, {"uid": "_:role7"}, {"uid": "_:role6"}],
 		"Project.columns": [{"uid": "_:column2"}, {"uid": "_:column3"}]
 	},
 	{
@@ -151,13 +214,6 @@
 		"ticket.tickets": [{"uid": "_:ticket4"}]
 	},
 	{
-		"uid": "_:ticket1",
-		"dgraph.type": "Ticket",
-		"Ticket.onColumn": {"uid": "_:column1"},
-		"Ticket.title": "Ticket1",
-		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user3"}]
-	},
-	{
 		"uid": "_:ticket2",
 		"dgraph.type": "Ticket",
 		"Ticket.onColumn": {"uid": "_:column1"},
@@ -177,5 +233,11 @@
 		"Ticket.onColumn": {"uid": "_:column3"},
 		"Ticket.title": "Ticket4",
 		"ticket.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user4"}]
+	},
+	{
+		"uid": "_:usersecret2",
+		"dgraph.type": "UserSecret",
+		"UserSecret.aSecret": "Sensitive information",
+		"UserSecret.ownedBy": "user1"
 	}
 ]

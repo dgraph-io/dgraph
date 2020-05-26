@@ -68,6 +68,7 @@ type options struct {
 	verbose        bool
 	httpAddr       string
 	bufferSize     int
+	ludicrousMode  bool
 }
 
 type predicate struct {
@@ -149,6 +150,7 @@ func init() {
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
+	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should only be done when alpha is under ludicrous mode)")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -185,7 +187,7 @@ func processSchemaFile(ctx context.Context, file string, keyfile string,
 	x.CheckfNoTrace(err)
 	defer f.Close()
 
-	reader, err := enc.GetReader(keyfile, f)
+	reader, err := enc.GetReader(enc.ReadEncryptionKeyFile(keyfile), f)
 	x.Check(err)
 	if strings.HasSuffix(strings.ToLower(file), ".gz") {
 		reader, err = gzip.NewReader(reader)
@@ -250,7 +252,7 @@ func (l *loader) allocateUids(nqs []*api.NQuad) {
 func (l *loader) processFile(ctx context.Context, filename string, keyfile string) error {
 	fmt.Printf("Processing data file %q\n", filename)
 
-	rd, cleanup := chunker.FileReader(filename, keyfile)
+	rd, cleanup := chunker.FileReader(filename, enc.ReadEncryptionKeyFile(keyfile))
 	defer cleanup()
 
 	loadType := chunker.DataFormat(filename, opt.dataFormat)
@@ -416,6 +418,7 @@ func run() error {
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
+		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
 	}
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {

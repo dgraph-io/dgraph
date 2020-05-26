@@ -715,7 +715,7 @@ func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 
 	var healthAll []pb.HealthInfo
 	if all {
-		if err := authorizeGuardians(ctx); err != nil {
+		if err := AuthorizeGuardians(ctx); err != nil {
 			return nil, err
 		}
 		pool := conn.GetPools().GetAll()
@@ -754,7 +754,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeGuardians(ctx); err != nil {
+	if err := AuthorizeGuardians(ctx); err != nil {
 		return nil, err
 	}
 
@@ -783,7 +783,7 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
-	if glog.V(3) {
+	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)

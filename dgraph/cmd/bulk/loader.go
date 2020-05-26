@@ -71,8 +71,8 @@ type options struct {
 	shardOutputDirs []string
 
 	// ........... Badger options ..........
-	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
-	BadgerKeyFile string
+	// EncryptionKey is the key used for encryption. Enterprise only feature.
+	EncryptionKey x.SensitiveByteSlice
 	// BadgerCompressionlevel is the compression level to use while writing to badger.
 	BadgerCompressionLevel int
 }
@@ -149,11 +149,11 @@ func readSchema(opt *options) *schema.ParsedSchema {
 	x.Check(err)
 	defer f.Close()
 
-	keyfile := opt.BadgerKeyFile
+	key := opt.EncryptionKey
 	if !opt.Encrypted {
-		keyfile = ""
+		key = nil
 	}
-	r, err := enc.GetReader(keyfile, f)
+	r, err := enc.GetReader(key, f)
 	x.Check(err)
 	if filepath.Ext(opt.SchemaFile) == ".gz" {
 		r, err = gzip.NewReader(r)
@@ -214,11 +214,11 @@ func (ld *loader) mapStage() {
 		go func(file string) {
 			defer thr.Done(nil)
 
-			keyfile := ld.opt.BadgerKeyFile
+			key := ld.opt.EncryptionKey
 			if !ld.opt.Encrypted {
-				keyfile = ""
+				key = nil
 			}
-			r, cleanup := chunker.FileReader(file, keyfile)
+			r, cleanup := chunker.FileReader(file, key)
 			defer cleanup()
 
 			chunk := chunker.NewChunker(loadType, 1000)

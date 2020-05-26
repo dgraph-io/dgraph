@@ -18,10 +18,17 @@ package testutil
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
 	"testing"
+	"time"
+
+	"github.com/pkg/errors"
+
+	"github.com/dgrijalva/jwt-go"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
 
@@ -71,9 +78,129 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	require.Nil(t, result.Errors)
 }
 
-func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
+func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwt(t, params, "")
+}
+
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
+	accessToken string) *GraphQLResponse {
+	adminUrl := "http://" + SockAddrHttp + "/admin"
+
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if accessToken != "" {
+		req.Header.Set("X-Dgraph-AccessToken", accessToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var gqlResp GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
+}
+
+type clientCustomClaims struct {
+	Namespace     string
+	AuthVariables map[string]interface{}
+	jwt.StandardClaims
+}
+
+func (c clientCustomClaims) MarshalJSON() ([]byte, error) {
+	// Encode the original
+	m, err := json.Marshal(c.StandardClaims)
+	if err != nil {
+		return nil, err
+	}
+
+	// Decode it back to get a map
+	var a interface{}
+	err = json.Unmarshal(m, &a)
+	if err != nil {
+		return nil, err
+	}
+
+	b, ok := a.(map[string]interface{})
+	if !ok {
+		return nil, errors.Errorf("error while marshalling custom claim json.")
+	}
+
+	// Set the proper namespace and delete additional data.
+	b[c.Namespace] = c.AuthVariables
+	delete(b, "AuthVariables")
+	delete(b, "Namespace")
+
+	// Return encoding of the map
+	return json.Marshal(b)
+}
+
+type AuthMeta struct {
+	PublicKey string
+	Namespace string
+	Algo      string
+	Header    string
+	AuthVars  map[string]interface{}
+}
+
+func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
+	claims := clientCustomClaims{
+		a.Namespace,
+		a.AuthVars,
+		jwt.StandardClaims{
+			ExpiresAt: time.Now().Add(time.Minute).Unix(),
+			Issuer:    "test",
+		},
+	}
+
+	var signedString string
+	var err error
+	if a.Algo == "HS256" {
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+		signedString, err = token.SignedString([]byte(a.PublicKey))
+		return signedString, err
+	}
+	if a.Algo != "RS256" {
+		return signedString, err
+
+	}
+	keyData, err := ioutil.ReadFile(privateKeyFile)
+	if err != nil {
+		return signedString, errors.Errorf("unable to read private key file: %v", err)
+	}
+
+	privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
+	if err != nil {
+		return signedString, errors.Errorf("unable to parse private key: %v", err)
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	signedString, err = token.SignedString(privateKey)
+	return signedString, err
+}
+
+func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
+	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem")
+	if err != nil {
+		return ctx, err
+	}
+
+	md := metadata.New(nil)
+	md.Append("authorizationJwt", token)
+	return metadata.NewIncomingContext(ctx, md), nil
+}
+
+func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		authInfo := `# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -81,7 +208,7 @@ func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
 		return schema, nil
 	}
 
-	keyData, err := ioutil.ReadFile("../e2e/auth/sample_public_key.pem")
+	keyData, err := ioutil.ReadFile(publicKeyFile)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +216,7 @@ func AppendAuthInfo(schema []byte, algo string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" + string(keyData) + "\""
+	authInfo := "# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
+		string(keyData) + "\""
 	return append(schema, []byte(authInfo)...), nil
 }

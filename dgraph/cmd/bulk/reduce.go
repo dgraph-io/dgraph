@@ -37,7 +37,6 @@ import (
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/codec"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
@@ -103,7 +102,7 @@ func (r *reducer) run() error {
 }
 
 func (r *reducer) createBadger(i int) *badger.DB {
-	if r.opt.BadgerKeyFile != "" {
+	if r.opt.EncryptionKey != nil {
 		// Need to set zero addr in WorkerConfig before checking the license.
 		x.WorkerConfig.ZeroAddr = []string{r.opt.ZeroAddr}
 
@@ -111,14 +110,14 @@ func (r *reducer) createBadger(i int) *badger.DB {
 			// Crash since the enterprise license is not enabled..
 			log.Fatal("Enterprise License needed for the Encryption feature.")
 		} else {
-			log.Printf("Encryption feature enabled. Using encryption key file: %v", r.opt.BadgerKeyFile)
+			log.Printf("Encryption feature enabled.")
 		}
 	}
 
 	opt := badger.DefaultOptions(r.opt.shardOutputDirs[i]).WithSyncWrites(false).
 		WithTableLoadingMode(bo.MemoryMap).WithValueThreshold(1 << 10 /* 1 KB */).
 		WithLogger(nil).WithMaxCacheSize(1 << 20).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(r.opt.BadgerKeyFile)).WithCompression(bo.None)
+		WithEncryptionKey(r.opt.EncryptionKey).WithCompression(bo.None)
 
 	// Overwrite badger options based on the options provided by the user.
 	r.setBadgerOptions(&opt)

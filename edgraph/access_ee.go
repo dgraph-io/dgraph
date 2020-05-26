@@ -161,7 +161,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, errors.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return worker.Config.HmacSecret, nil
+		return []byte(worker.Config.HmacSecret), nil
 	})
 
 	if err != nil {
@@ -233,7 +233,7 @@ func getAccessJwt(userId string, groups []acl.Group) (string, error) {
 		"exp": time.Now().Add(worker.Config.AccessJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(worker.Config.HmacSecret)
+	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -248,7 +248,7 @@ func getRefreshJwt(userId string) (string, error) {
 		"exp":    time.Now().Add(worker.Config.RefreshJwtTtl).Unix(),
 	})
 
-	jwtString, err := token.SignedString(worker.Config.HmacSecret)
+	jwtString, err := token.SignedString([]byte(worker.Config.HmacSecret))
 	if err != nil {
 		return "", errors.Errorf("unable to encode jwt to string: %v", err)
 	}
@@ -794,8 +794,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	return nil
 }
 
-// authorizeGuardians authorizes the operation for users which belong to Guardians group.
-func authorizeGuardians(ctx context.Context) error {
+// AuthorizeGuardians authorizes the operation for users which belong to Guardians group.
+func AuthorizeGuardians(ctx context.Context) error {
 	if len(worker.Config.HmacSecret) == 0 {
 		// the user has not turned on the acl feature
 		return nil

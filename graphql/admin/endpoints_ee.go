@@ -360,10 +360,12 @@ const adminTypes = `
 
 	type DeleteUserPayload {
 		msg: String
+		numUids: Int
 	}
 
 	type DeleteGroupPayload {
 		msg: String
+		numUids: Int
 	}`
 
 const adminMutations = `

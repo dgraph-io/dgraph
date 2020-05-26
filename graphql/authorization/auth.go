@@ -41,71 +41,81 @@ const (
 )
 
 var (
-	metainfo = &AuthMeta{}
+	metainfo AuthMeta
 )
 
 type AuthMeta struct {
-	HMACPublicKey string
-	RSAPublicKey  *rsa.PublicKey
-	Header        string
-	Namespace     string
-	Algo          string
+	PublicKey    string
+	RSAPublicKey *rsa.PublicKey
+	Header       string
+	Namespace    string
+	Algo         string
 }
 
-func (m *AuthMeta) Parse(schema string) error {
-	lastCommentIdx := strings.LastIndex(schema, "#")
-	if lastCommentIdx == -1 {
-		return nil
+func Parse(schema string) (AuthMeta, error) {
+	var meta AuthMeta
+	authInfoIdx := strings.LastIndex(schema, "# Dgraph.Authorization")
+	if authInfoIdx == -1 {
+		return meta, nil
 	}
-	lastComment := schema[lastCommentIdx:]
-	if !strings.HasPrefix(lastComment, "# Authorization") {
-		return nil
-	}
+	authInfo := schema[authInfoIdx:]
 
 	// This regex matches authorization information present in the last line of the schema.
-	// Format: # Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
-	// Example: # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
+	// Example: # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
 	// On successful regex match the index for the following strings will be returned.
-	// [0][0]:[0][1] : # Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// [0][0]:[0][1] : # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
 	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
 	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
 	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
 	authMetaRegex, err :=
 		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
 	if err != nil {
-		return errors.Errorf("error while parsing jwt authorization info: %v", err)
+		return meta, errors.Errorf("error while parsing jwt authorization info: %v", err)
 	}
-	idx := authMetaRegex.FindAllStringSubmatchIndex(lastComment, -1)
+	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
 	if len(idx) != 1 || len(idx[0]) != 12 ||
-		!strings.HasPrefix(lastComment, lastComment[idx[0][0]:idx[0][1]]) {
-		return errors.Errorf("error while parsing jwt authorization info")
+		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
+		return meta, errors.Errorf("error while parsing jwt authorization info")
 	}
 
-	m.Header = lastComment[idx[0][4]:idx[0][5]]
-	m.Namespace = lastComment[idx[0][6]:idx[0][7]]
-	m.Algo = lastComment[idx[0][8]:idx[0][9]]
-
-	key := lastComment[idx[0][10]:idx[0][11]]
-	if m.Algo == HMAC256 {
-		m.HMACPublicKey = key
-		return nil
+	meta.Header = authInfo[idx[0][4]:idx[0][5]]
+	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
+	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
+	meta.PublicKey = authInfo[idx[0][10]:idx[0][11]]
+	if meta.Algo == HMAC256 {
+		return meta, nil
 	}
-	if m.Algo != RSA256 {
-		return errors.Errorf(
-			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", m.Algo)
+
+	if meta.Algo != RSA256 {
+		return meta, errors.Errorf(
+			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", meta.Algo)
+	}
+	return meta, nil
+}
+
+func ParseAuthMeta(schema string) error {
+	var err error
+	metainfo, err = Parse(schema)
+	if err != nil {
+		return err
+	}
+
+	if metainfo.Algo != RSA256 {
+		return err
 	}
 
 	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
 	// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
 	// To fix this we replace "\n" with new line's ASCII value.
-	bytekey := bytes.ReplaceAll([]byte(key), []byte{92, 110}, []byte{10})
+	bytekey := bytes.ReplaceAll([]byte(metainfo.PublicKey), []byte{92, 110}, []byte{10})
 
-	m.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
+	metainfo.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
 	return err
 }
 
-func ParseAuthMeta(schema string) error {
-	return metainfo.Parse(schema)
+func GetHeader() string {
+	return metainfo.Header
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -161,7 +171,6 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
-
 	return validateToken(jwtToken[0])
 }
 
@@ -180,7 +189,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 			}
 			if algo == HMAC256 {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(metainfo.HMACPublicKey), nil
+					return []byte(metainfo.PublicKey), nil
 				}
 			} else if algo == RSA256 {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
