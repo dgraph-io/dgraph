@@ -861,7 +861,7 @@ func rampMeter(address *int64, maxSize int64, component string) {
 	start := time.Now()
 	defer func() {
 		if dur := time.Since(start); dur > time.Second {
-			glog.Infof("Blocked pushing to %s for %v", nodeApplyChan, dur.Round(time.Millisecond))
+			glog.Infof("Blocked pushing to %s for %v", component, dur.Round(time.Millisecond))
 		}
 	}()
 	for {
