@@ -84,11 +84,11 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 }
 
 func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) {
-	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
 	delUser := `
 	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
 			msg
+			numUids
 		}
 	}`
 
@@ -102,16 +102,16 @@ func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool
 	resp.RequireNoGraphQLErrors(t)
 
 	if confirmDeletion {
-		require.JSONEq(t, `{"deleteUser":{"msg":"Deleted"}}`, string(resp.Data))
+		require.JSONEq(t, `{"deleteUser":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
 	}
 }
 
 func deleteGroup(t *testing.T, accessToken, name string) {
-	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
 	delGroup := `
 	mutation deleteUser($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
 			msg
+			numUids
 		}
 	}`
 
@@ -124,7 +124,7 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 	resp := makeRequest(t, accessToken, params)
 	resp.RequireNoGraphQLErrors(t)
 
-	require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted"}}`, string(resp.Data))
+	require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
 }
 
 func TestInvalidGetUser(t *testing.T) {

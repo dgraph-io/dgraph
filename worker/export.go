@@ -361,7 +361,7 @@ func (writer *fileWriter) open(fpath string) error {
 		return err
 	}
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	w, err := enc.GetWriter(Config.BadgerKeyFile, writer.bw)
+	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
 	if err != nil {
 		return err
 	}
@@ -444,7 +444,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		}
 		pk, err := x.Parse(item.Key())
 		if err != nil {
-			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err,
+				hex.EncodeToString(item.Key()))
 			return false
 		}
 
@@ -475,7 +476,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		if err != nil {
-			glog.Errorf("error %v while parsing key %v during export. Skip.", err, hex.EncodeToString(item.Key()))
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err,
+				hex.EncodeToString(item.Key()))
 			return nil, err
 		}
 		e := &exporter{

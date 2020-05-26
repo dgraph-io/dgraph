@@ -80,6 +80,12 @@ type Log struct {
 	Logs string `json:"logs,omitempty"`
 }
 
+type ComplexLog struct {
+	Id      string `json:"id,omitempty"`
+	Logs    string `json:"logs,omitempty"`
+	Visible bool   `json:"visible,omitempty"`
+}
+
 type Role struct {
 	Id         string  `json:"id,omitempty"`
 	Permission string  `json:"permission,omitempty"`
