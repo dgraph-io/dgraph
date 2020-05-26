@@ -165,10 +165,13 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 				return err
 			}
 			su, ok := schema.State().Get(ctx, edge.Attr)
-			if !ok && x.IsInInternalNamespace(edge.Attr) {
-				return errors.Errorf("Can't store predicate `%s` as it is prefixed with `dgraph.`"+
-					" which is reserved as the namespace for dgraph's internal types/predicates.",
-					edge.Attr)
+			if !ok {
+				if x.IsInInternalNamespace(edge.Attr) {
+					return errors.Errorf("Can't store predicate `%s` as it is prefixed with `dgraph.`"+
+						" which is reserved as the namespace for dgraph's internal types/predicates.",
+						edge.Attr)
+				}
+				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {
 				return err
 			}
