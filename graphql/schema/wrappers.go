@@ -1159,6 +1159,8 @@ func (m *mutation) QueryField() Field {
 		if f.Name() == NumUid || f.Name() == Typename {
 			continue
 		}
+		// if @cascade was given on mutation itself, then it should get applied for the query which
+		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
 		if m.Cascade() && !f.Cascade() {
 			field := f.(*field).field
 			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
