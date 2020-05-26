@@ -61,4 +61,11 @@ func TestAlterInInternalNamespace(t *testing.T) {
 	require.Error(t, err, "altering predicate in dgraph namespace shouldn't have succeeded")
 	require.Contains(t, err.Error(), "Can't alter predicate `dgraph.name` as it is prefixed with "+
 		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
+
+	_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`_:new <dgraph.name> "Alice" .`),
+	})
+	require.Error(t, err, "storing predicate in dgraph namespace shouldn't have succeeded")
+	require.Contains(t, err.Error(), "Can't store predicate `dgraph.name` as it is prefixed with "+
+		"`dgraph.` which is reserved as the namespace for dgraph's internal types/predicates.")
 }
