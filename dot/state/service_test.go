@@ -21,6 +21,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -46,50 +48,40 @@ func TestService_Start(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	tr := trie.NewEmptyTrie()
 
 	genesisData := new(genesis.Data)
 
 	err = state.Initialize(genesisData, genesisHeader, tr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	err = state.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
-	state.Stop()
+	err = state.Stop()
+	require.Nil(t, err)
 }
 
 func TestMemDB_Start(t *testing.T) {
 	state := newTestMemDBService()
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	tr := trie.NewEmptyTrie()
 
 	genesisData := new(genesis.Data)
 
 	err = state.Initialize(genesisData, genesisHeader, tr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	err = state.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
-	state.Stop()
+	err = state.Stop()
+	require.Nil(t, err)
 }
 
 func TestService_BlockTree(t *testing.T) {
@@ -101,36 +93,30 @@ func TestService_BlockTree(t *testing.T) {
 	stateA := NewService(testDir)
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	genesisData := new(genesis.Data)
 
 	tr := trie.NewEmptyTrie()
 	err = stateA.Initialize(genesisData, genesisHeader, tr)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	err = stateA.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
 	// add blocks to state
 	AddBlocksToState(t, stateA.Block, 10)
 
-	stateA.Stop()
+	err = stateA.Stop()
+	require.Nil(t, err)
 
 	stateB := NewService(testDir)
 
 	err = stateB.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.Nil(t, err)
 
-	stateB.Stop()
+	err = stateB.Stop()
+	require.Nil(t, err)
 
 	if !reflect.DeepEqual(stateA.Block.BestBlockHash(), stateB.Block.BestBlockHash()) {
 		t.Fatalf("Fail: got %s expected %s", stateA.Block.BestBlockHash(), stateB.Block.BestBlockHash())

@@ -193,10 +193,11 @@ func TestCheckForRuntimeChanges(t *testing.T) {
 		Runtime:          rt,
 		Keystore:         ks,
 		TransactionQueue: transaction.NewPriorityQueue(),
-		IsBabeAuthority:  false,
+		IsBabeAuthority:  true,
 	}
 
 	s := NewTestService(t, cfg)
+	s.started = 1
 
 	_, err = runtime.GetRuntimeBlob(runtime.TESTS_FP, runtime.TEST_WASM_URL)
 	require.Nil(t, err)

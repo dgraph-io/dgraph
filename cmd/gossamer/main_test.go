@@ -22,13 +22,17 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"sync"
+	"syscall"
 	"testing"
 	"text/template"
 	"time"
 
+	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/docker/docker/pkg/reexec"
 	"github.com/stretchr/testify/require"
 )
@@ -112,6 +116,19 @@ func (tt *TestExecCommand) ExpectExit() {
 	}
 }
 
+func (tt *TestExecCommand) GetOutput() (stdout []byte, stderr []byte) {
+	tt.withSigTimeout(func() {
+		stdout, _ = ioutil.ReadAll(tt.stdout)
+		stderr = tt.stderr.buf.Bytes()
+	})
+	tt.WaitExit()
+	if tt.Cleanup != nil {
+		tt.Cleanup()
+	}
+
+	return stdout, stderr
+}
+
 func (tt *TestExecCommand) WaitExit() {
 	tt.Err = tt.cmd.Wait()
 }
@@ -125,8 +142,25 @@ func (tt *TestExecCommand) withKillTimeout(fn func()) {
 	fn()
 }
 
+func (tt *TestExecCommand) withSigTimeout(fn func()) {
+	timeout := time.AfterFunc(5*time.Second, func() {
+		tt.Log("process timeout, will signal")
+		tt.Signal()
+	})
+	defer timeout.Stop()
+	fn()
+}
+
 func (tt *TestExecCommand) Kill() {
 	_ = tt.cmd.Process.Kill()
+	if tt.Cleanup != nil {
+		tt.Cleanup()
+	}
+}
+
+func (tt *TestExecCommand) Signal() {
+	err := tt.cmd.Process.Signal(syscall.SIGINT)
+	require.Nil(tt.T, err)
 	if tt.Cleanup != nil {
 		tt.Cleanup()
 	}
@@ -193,7 +227,58 @@ func TestInvalidCommand(t *testing.T) {
 	}
 }
 
-// TODO: TestGossmaerCommand test "gossamer" does not error
+func TestGossamerCommand(t *testing.T) {
+	basePort := 7000
+	genesisPath := utils.GetGssmrGenesisPath()
+
+	tempDir, err := ioutil.TempDir("", "gossamer-maintest-")
+	require.Nil(t, err)
+
+	gossamer := runTestGossamer(t,
+		"init",
+		"--datadir", tempDir,
+		"--genesis", genesisPath,
+		"--force",
+	)
+
+	stdout, stderr := gossamer.GetOutput()
+	t.Log("init gossamer output, ", "stdout", string(stdout), "stderr", string(stderr))
+
+	expectedMessages := []string{
+		"[dot] node initialized",
+	}
+
+	for _, m := range expectedMessages {
+		require.Contains(t, string(stdout), m)
+	}
+
+	for i := 0; i < 10; i++ {
+
+		t.Log("Going to gossamer cmd", "iteration", i)
+
+		// start
+		gossamer = runTestGossamer(t,
+			"--port", strconv.Itoa(basePort),
+			"--key", "alice",
+			"--datadir", tempDir,
+			"--roles", "4",
+		)
+
+		time.Sleep(10 * time.Second)
+
+		stdout, stderr = gossamer.GetOutput()
+		log.Println("Run gossamer output, ", "stdout", string(stdout), "stderr", string(stderr))
+
+		expectedMessages = []string{
+			"SIGABRT: abort",
+		}
+
+		for _, m := range expectedMessages {
+			require.NotContains(t, string(stderr), m)
+		}
+	}
+
+}
 
 // TODO: TestExportCommand test "gossamer export" does not error
 

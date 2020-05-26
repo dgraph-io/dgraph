@@ -110,7 +110,8 @@ func TestWatchForBlocks(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	number := big.NewInt(12)
 	blockNumberIn <- number
@@ -149,7 +150,8 @@ func TestWatchForBlocks_NotHighestSeen(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	number := big.NewInt(12)
 	blockNumberIn <- number
@@ -175,7 +177,8 @@ func TestWatchForBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	number := big.NewInt(12)
 	blockNumberIn <- number
@@ -225,7 +228,8 @@ func TestWatchForBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	number := big.NewInt(12)
 	blockNumberIn <- number
@@ -281,7 +285,8 @@ func TestWatchForResponses(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	syncer.highestSeenBlock = big.NewInt(16)
 
@@ -359,7 +364,8 @@ func TestWatchForResponses_MissingBlocks(t *testing.T) {
 	}
 
 	syncer := newTestSyncer(t, cfg)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	syncer.highestSeenBlock = big.NewInt(16)
 
@@ -416,7 +422,8 @@ func TestWatchForResponses_MissingBlocks(t *testing.T) {
 
 func TestRemoveIncludedExtrinsics(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
-	syncer.Start()
+	err := syncer.Start()
+	require.Nil(t, err)
 
 	ext := []byte("nootwashere")
 	tx := &transaction.ValidTransaction{

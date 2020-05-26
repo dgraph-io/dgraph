@@ -163,7 +163,10 @@ func gossamerAction(ctx *cli.Context) error {
 	log.Info("[cmd] starting node...", "name", node.Name)
 
 	// start node
-	node.Start()
+	err = node.Start()
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

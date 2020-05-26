@@ -17,11 +17,14 @@
 package dot
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"os/signal"
 	"path"
+	"sync"
+	"sync/atomic"
 	"syscall"
 
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -37,11 +40,11 @@ import (
 
 // Node is a container for all the components of a node.
 type Node struct {
-	Name      string
-	Services  *services.ServiceRegistry // registry of all node services
-	IsStarted chan struct{}             // signals node startup complete
-	stop      chan struct{}             // used to signal node shutdown
-	syncChan  chan *big.Int
+	Name     string
+	Services *services.ServiceRegistry // registry of all node services
+	syncChan chan *big.Int
+	wg       sync.WaitGroup
+	started  uint32
 }
 
 // InitNode initializes a new dot node from the provided dot node configuration
@@ -258,11 +261,9 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	}
 
 	node := &Node{
-		Name:      cfg.Global.Name,
-		Services:  services.NewServiceRegistry(),
-		IsStarted: make(chan struct{}),
-		stop:      nil,
-		syncChan:  syncChan,
+		Name:     cfg.Global.Name,
+		Services: services.NewServiceRegistry(),
+		syncChan: syncChan,
 	}
 
 	for _, srvc := range nodeSrvcs {
@@ -273,14 +274,11 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 }
 
 // Start starts all dot node services
-func (n *Node) Start() {
+func (n *Node) Start() error {
 	log.Info("[dot] starting node services...")
 
 	// start all dot node services
 	n.Services.StartAll()
-
-	// open node stop channel
-	n.stop = make(chan struct{})
 
 	go func() {
 		sigc := make(chan os.Signal, 1)
@@ -292,11 +290,14 @@ func (n *Node) Start() {
 		os.Exit(130)
 	}()
 
-	// move on when routine catches SIGINT or SIGTERM calls
-	close(n.IsStarted)
+	if ok := atomic.CompareAndSwapUint32(&n.started, 0, 1); !ok {
+		return errors.New("failed to change Node status from stopped to started")
+	}
 
-	// wait for node stop channel to be closed
-	<-n.stop
+	n.wg.Add(1)
+	n.wg.Wait()
+
+	return nil
 }
 
 // Stop stops all dot node services
@@ -305,10 +306,11 @@ func (n *Node) Stop() {
 	// stop all node services
 	n.Services.StopAll()
 
-	// close node stop channel if not already closed
-	if n.stop != nil {
-		close(n.stop)
-	}
+	defer func() {
+		if ok := atomic.CompareAndSwapUint32(&n.started, 1, 0); !ok {
+			log.Error("failed to change Node status from started to stopped")
+		}
 
-	close(n.syncChan)
+		n.wg.Done()
+	}()
 }

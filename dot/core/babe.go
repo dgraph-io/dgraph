@@ -43,11 +43,11 @@ func (s *Service) initializeBabeSession() (*babe.Session, error) {
 	newBlocks := make(chan types.Block)
 	s.blkRec = newBlocks
 
-	epochDone := make(chan struct{})
-	s.epochDone = epochDone
-
 	babeKill := make(chan struct{})
 	s.babeKill = babeKill
+
+	go s.receiveBlocks()
+	go s.handleBabeSession()
 
 	keys := s.keys.Sr25519Keypairs()
 
@@ -67,7 +67,7 @@ func (s *Service) initializeBabeSession() (*babe.Session, error) {
 		StorageState:     s.storageState,
 		TransactionQueue: s.transactionQueue,
 		AuthData:         authData,
-		Done:             epochDone,
+		EpochDone:        s.epochDone,
 		Kill:             babeKill,
 		StartSlot:        bestSlot + 1,
 		SyncLock:         s.syncLock,

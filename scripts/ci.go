@@ -131,7 +131,7 @@ func test() {
 	cmd.Stderr, cmd.Stdout = os.Stderr, os.Stdout
 
 	if err := cmd.Run(); err != nil {
-		log.Fatal("Error: Could not build Gossamer. ", "error: ", err, ", cmd: ", cmd)
+		log.Fatal("Error: Could not test Gossamer. ", "error: ", err, ", cmd: ", cmd)
 	}
 }
 

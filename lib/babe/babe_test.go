@@ -21,7 +21,11 @@ import (
 	"math/big"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -54,8 +58,9 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 		cfg.Kill = make(chan struct{})
 	}
 
-	if cfg.Done == nil {
-		cfg.Done = make(chan struct{})
+	if cfg.EpochDone == nil {
+		cfg.EpochDone = new(sync.WaitGroup)
+		cfg.EpochDone.Add(1)
 	}
 
 	if cfg.NewBlocks == nil {
@@ -119,10 +124,9 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 
 func TestKill(t *testing.T) {
 	killChan := make(chan struct{})
-	doneChan := make(chan struct{})
+
 	cfg := &SessionConfig{
 		Kill: killChan,
-		Done: doneChan,
 	}
 
 	babesession := createTestSession(t, cfg)
@@ -131,12 +135,23 @@ func TestKill(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	close(killChan)
-	<-doneChan
-
-	if !babesession.closed {
-		t.Fatalf("did not kill session")
+	if atomic.LoadUint32(&babesession.started) == uint32(0) {
+		t.Fatalf("did not start session")
 	}
+
+	close(killChan)
+
+	babeSessionKilled := true
+	for i := 0; i < 10; i++ {
+		time.Sleep(1 * time.Second)
+		if atomic.LoadUint32(&babesession.started) == uint32(1) {
+			babeSessionKilled = false
+		} else {
+			break
+		}
+	}
+
+	require.True(t, babeSessionKilled, "did not kill session")
 }
 
 func TestCalculateThreshold(t *testing.T) {

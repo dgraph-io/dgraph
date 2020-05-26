@@ -17,9 +17,11 @@
 package core
 
 import (
+	"errors"
 	"math/big"
 	mrand "math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -63,7 +65,7 @@ type Syncer struct {
 
 	// Core service control
 	chanLock *sync.Mutex
-	stopped  bool
+	started  uint32
 
 	// BABE verification
 	verifier Verifier
@@ -114,7 +116,6 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		lock:             cfg.Lock,
 		chanLock:         cfg.ChanLock,
 		synced:           true,
-		stopped:          false,
 		requestStart:     1,
 		highestSeenBlock: big.NewInt(0),
 		transactionQueue: cfg.TransactionQueue,
@@ -124,20 +125,29 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 }
 
 // Start begins the syncer
-func (s *Syncer) Start() {
+func (s *Syncer) Start() error {
+	if ok := atomic.CompareAndSwapUint32(&s.started, 0, 1); !ok {
+		return errors.New("failed to change Syncer from stopped to started")
+	}
+
 	go s.watchForBlocks()
 	go s.watchForResponses()
+
+	return nil
 }
 
 // Stop stops the syncer
-func (s *Syncer) Stop() {
-	// stop goroutines
-	s.stopped = true
+func (s *Syncer) Stop() error {
+	if ok := atomic.CompareAndSwapUint32(&s.started, 1, 0); !ok {
+		return errors.New("failed to change Syncer from started to stopped")
+	}
+
+	return nil
 }
 
 func (s *Syncer) watchForBlocks() {
 	for {
-		if s.stopped {
+		if atomic.LoadUint32(&s.started) == uint32(0) {
 			return
 		}
 
@@ -165,7 +175,7 @@ func (s *Syncer) watchForBlocks() {
 
 func (s *Syncer) watchForResponses() {
 	for {
-		if s.stopped {
+		if atomic.LoadUint32(&s.started) == uint32(0) {
 			return
 		}
 
@@ -239,15 +249,17 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 func (s *Syncer) safeMsgSend(msg network.Message) error {
 	s.chanLock.Lock()
 	defer s.chanLock.Unlock()
-	if s.stopped {
+
+	if atomic.LoadUint32(&s.started) == uint32(0) {
 		return ErrServiceStopped
 	}
+
 	s.msgOut <- msg
 	return nil
 }
 
 func (s *Syncer) sendBlockRequest() {
-	//generate random ID
+	// generate random ID
 	s1 := rand.NewSource(uint64(time.Now().UnixNano()))
 	seed := rand.New(s1).Uint64()
 	randomID := mrand.New(mrand.NewSource(int64(seed))).Uint64()
