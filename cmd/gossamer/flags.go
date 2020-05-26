@@ -58,10 +58,10 @@ var (
 		Name:  "name",
 		Usage: "Node implementation name",
 	}
-	// NodeFlag node implementation id used to load default node configuration
-	NodeFlag = cli.StringFlag{
-		Name:  "node",
-		Usage: "Node implementation id used to load default node configuration",
+	// ChainFlag is chain id used to load default configuration for specified chain
+	ChainFlag = cli.StringFlag{
+		Name:  "chain",
+		Usage: "Chain id used to load default configuration for specified chain",
 	}
 	// ConfigFlag TOML configuration file
 	ConfigFlag = cli.StringFlag{
@@ -190,7 +190,7 @@ var (
 	GlobalFlags = []cli.Flag{
 		VerbosityFlag,
 		NameFlag,
-		NodeFlag,
+		ChainFlag,
 		ConfigFlag,
 		DataDirFlag,
 	}

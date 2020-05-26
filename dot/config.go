@@ -24,9 +24,10 @@ import (
 	"reflect"
 	"unicode"
 
+	"github.com/ChainSafe/gossamer/chain/gssmr"
+	"github.com/ChainSafe/gossamer/chain/ksmcc"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/node/gssmr"
-	"github.com/ChainSafe/gossamer/node/ksmcc"
+
 	log "github.com/ChainSafe/log15"
 	"github.com/naoina/toml"
 )

@@ -56,7 +56,7 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	}
 
 	gossamerCMD := filepath.Join(currentDir, "../..", "bin/gossamer")
-	genesisPath := filepath.Join(currentDir, "../..", "node/gssmr/genesis.json")
+	genesisPath := filepath.Join(currentDir, "../..", "chain/gssmr/genesis.json")
 
 	//nolint
 	cmdInit := exec.Command(gossamerCMD, "init",

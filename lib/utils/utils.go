@@ -147,8 +147,8 @@ func KeystoreFilepaths(datadir string) ([]string, error) {
 
 // GetGssmrGenesisPath gets the gssmr genesis path
 func GetGssmrGenesisPath() string {
-	path1 := "../node/gssmr/genesis.json"
-	path2 := "../../node/gssmr/genesis.json"
+	path1 := "../chain/gssmr/genesis.json"
+	path2 := "../../chain/gssmr/genesis.json"
 
 	var fp string
 
@@ -163,8 +163,8 @@ func GetGssmrGenesisPath() string {
 
 // GetKsmccGenesisPath gets the ksmcc genesis path
 func GetKsmccGenesisPath() string {
-	path1 := "../node/ksmcc/genesis.json"
-	path2 := "../../node/ksmcc/genesis.json"
+	path1 := "../chain/ksmcc/genesis.json"
+	path2 := "../../chain/ksmcc/genesis.json"
 
 	var fp string
 

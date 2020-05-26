@@ -24,11 +24,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const GssmrConfigPath = "../node/gssmr/config.toml"
-const GssmrGenesisPath = "../node/gssmr/genesis.json"
+const GssmrConfigPath = "../chain/gssmr/config.toml"
+const GssmrGenesisPath = "../chain/gssmr/genesis.json"
 
-const KsmccConfigPath = "../node/ksmcc/config.toml"
-const KsmccGenesisPath = "../node/ksmcc/genesis.json"
+const KsmccConfigPath = "../chain/ksmcc/config.toml"
+const KsmccGenesisPath = "../chain/ksmcc/genesis.json"
 
 // TestLoadConfig tests loading a toml configuration file
 func TestLoadConfig(t *testing.T) {

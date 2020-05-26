@@ -4,7 +4,7 @@ id = "gssmr"
 datadir = "~/.gossamer/gssmr"
 
 [init]
-genesis = "./node/gssmr/genesis.json"
+genesis = "./chain/gssmr/genesis.json"
 
 [account]
 key = ""

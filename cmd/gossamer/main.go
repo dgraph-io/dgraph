@@ -41,7 +41,7 @@ var (
 		Flags:     ExportFlags,
 		Category:  "EXPORT",
 		Description: "The export command exports configuration values from the command flags to a TOML configuration file.\n" +
-			"\tUsage: gossamer export --config node/test/config.toml --datadir ~/.gossamer/test",
+			"\tUsage: gossamer export --config chain/test/config.toml --datadir ~/.gossamer/test",
 	}
 	// initCommand defines the "init" subcommand (ie, `gossamer init`)
 	initCommand = cli.Command{

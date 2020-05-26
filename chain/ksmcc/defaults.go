@@ -14,24 +14,24 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package gssmr
+package ksmcc
 
 var (
 	// GlobalConfig
 
 	// DefaultName Default node name
-	DefaultName = string("gssmr")
-	// DefaultID Default node ID
-	DefaultID = string("gssmr")
+	DefaultName = string("ksmcc")
+	// DefaultID Default chain ID
+	DefaultID = string("ksmcc")
 	// DefaultConfig Default toml configuration path
-	DefaultConfig = string("./node/gssmr/config.toml")
+	DefaultConfig = string("./chain/ksmcc/config.toml")
 	// DefaultDataDir Default node data directory
-	DefaultDataDir = string("~/.gossamer/gssmr")
+	DefaultDataDir = string("~/.gossamer/ksmcc")
 
 	// InitConfig
 
 	// DefaultGenesis Default genesis configuration path
-	DefaultGenesis = string("./node/gssmr/genesis.json")
+	DefaultGenesis = string("./chain/ksmcc/genesis.json")
 
 	// AccountConfig
 
@@ -43,9 +43,9 @@ var (
 	// CoreConfig
 
 	// DefaultAuthority true if BABE block producer
-	DefaultAuthority = true
+	DefaultAuthority = false
 	// DefaultRoles Default node roles
-	DefaultRoles = byte(4) // authority node (see Table D.2)
+	DefaultRoles = byte(1) // full node (see Table D.2)
 
 	// NetworkConfig
 
@@ -54,7 +54,7 @@ var (
 	// DefaultNetworkBootnodes network bootnodes
 	DefaultNetworkBootnodes = []string(nil)
 	// DefaultNetworkProtocolID network protocol
-	DefaultNetworkProtocolID = string("/gossamer/gssmr/0")
+	DefaultNetworkProtocolID = string("/gossamer/ksmcc/0")
 	// DefaultNoBootstrap disables bootstrap
 	DefaultNoBootstrap = false
 	// DefaultNoMDNS disables mDNS discovery
@@ -67,7 +67,7 @@ var (
 	// DefaultRPCHTTPPort rpc port
 	DefaultRPCHTTPPort = uint32(8545)
 	// DefaultRPCModules rpc modules
-	DefaultRPCModules = []string{"system", "author", "chain", "state"}
+	DefaultRPCModules = []string{"system"}
 	// DefaultRPCWSPort rpc websocket port
 	DefaultRPCWSPort = uint32(8546)
 )

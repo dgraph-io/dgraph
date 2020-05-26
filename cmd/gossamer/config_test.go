@@ -40,8 +40,8 @@ import (
 
 // TODO: TestSetDotRPCConfig - add cmd config tests
 
-// TestConfigFromNodeFlag tests createDotConfig using the --node flag
-func TestConfigFromNodeFlag(t *testing.T) {
+// TestConfigFromChainFlag tests createDotConfig using the --chain flag
+func TestConfigFromChainFlag(t *testing.T) {
 	testApp := cli.NewApp()
 	testApp.Writer = ioutil.Discard
 
@@ -52,14 +52,14 @@ func TestConfigFromNodeFlag(t *testing.T) {
 		expected    *dot.Config
 	}{
 		{
-			"Test gossamer --node gssmr",
-			[]string{"node"},
+			"Test gossamer --chain gssmr",
+			[]string{"chain"},
 			[]interface{}{"gssmr"},
 			dot.GssmrConfig(),
 		},
 		{
-			"Test gossamer --node ksmcc",
-			[]string{"node"},
+			"Test gossamer --chain ksmcc",
+			[]string{"chain"},
 			[]interface{}{"ksmcc"},
 			dot.KsmccConfig(),
 		},
@@ -145,8 +145,8 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			},
 		},
 		{
-			"Test gossamer --node",
-			[]string{"config", "node"},
+			"Test gossamer --chain",
+			[]string{"config", "chain"},
 			[]interface{}{testCfgFile.Name(), "ksmcc"},
 			dot.GlobalConfig{
 				Name:    testCfg.Global.Name,
@@ -155,7 +155,7 @@ func TestGlobalConfigFromFlags(t *testing.T) {
 			},
 		},
 		{
-			"Test gossamer --node",
+			"Test gossamer --name",
 			[]string{"config", "name"},
 			[]interface{}{testCfgFile.Name(), "test_name"},
 			dot.GlobalConfig{
