@@ -151,7 +151,7 @@ func (bt *BlockTree) String() string {
 		return true
 	})
 
-	metadata := fmt.Sprintf("Leaves: %s", leaves)
+	metadata := fmt.Sprintf("Leaves:\n %s", leaves)
 
 	return fmt.Sprintf("%s\n%s\n", metadata, tree.Print())
 }
@@ -206,8 +206,22 @@ func (bt *BlockTree) DeepestBlockHash() Hash {
 	return bt.leaves.deepestLeaf().hash
 }
 
+// IsDescendantOf returns true if the child is a descendant of parent, false otherwise.
+// it returns an error if either the child or parent are not in the blocktree.
+func (bt *BlockTree) IsDescendantOf(parent, child Hash) (bool, error) {
+	pn := bt.getNode(parent)
+	if pn == nil {
+		return false, ErrStartNodeNotFound
+	}
+	cn := bt.getNode(child)
+	if cn == nil {
+		return false, ErrEndNodeNotFound
+	}
+	return cn.isDescendantOf(pn), nil
+}
+
 // Leaves returns the leaves of the blocktree as an array
-func (bt *BlockTree) Leaves() []common.Hash {
+func (bt *BlockTree) Leaves() []Hash {
 	lm := bt.leaves.toMap()
 	la := make([]common.Hash, len(lm))
 	i := 0
@@ -221,7 +235,7 @@ func (bt *BlockTree) Leaves() []common.Hash {
 }
 
 // HighestCommonAncestor returns the highest block that is a Ancestor to both a and b
-func (bt *BlockTree) HighestCommonAncestor(a, b common.Hash) (Hash, error) {
+func (bt *BlockTree) HighestCommonAncestor(a, b Hash) (Hash, error) {
 	an := bt.getNode(a)
 	if an == nil {
 		return common.Hash{}, ErrNodeNotFound
@@ -232,18 +246,4 @@ func (bt *BlockTree) HighestCommonAncestor(a, b common.Hash) (Hash, error) {
 	}
 
 	return an.highestCommonAncestor(bn).hash, nil
-}
-
-// IsDescendantOf returns true if the child is a descendant of parent, false otherwise.
-// it returns an error if either the child or parent are not in the blocktree.
-func (bt *BlockTree) IsDescendantOf(parent, child Hash) (bool, error) {
-	pn := bt.getNode(parent)
-	if pn == nil {
-		return false, ErrStartNodeNotFound
-	}
-	cn := bt.getNode(child)
-	if cn == nil {
-		return false, ErrEndNodeNotFound
-	}
-	return cn.isDescendantOf(pn), nil
 }

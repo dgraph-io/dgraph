@@ -526,6 +526,21 @@ func (bs *BlockState) IsDescendantOf(parent, child common.Hash) (bool, error) {
 	return bs.bt.IsDescendantOf(parent, child)
 }
 
+// HighestCommonAncestor returns the block with the highest number that is an ancestor of both a and b
+func (bs *BlockState) HighestCommonAncestor(a, b common.Hash) (common.Hash, error) {
+	return bs.bt.HighestCommonAncestor(a, b)
+}
+
+// Leaves returns the leaves of the blocktree as an array
+func (bs *BlockState) Leaves() []common.Hash {
+	return bs.bt.Leaves()
+}
+
+// BlocktreeAsString returns the blocktree as a string
+func (bs *BlockState) BlocktreeAsString() string {
+	return bs.bt.String()
+}
+
 func (bs *BlockState) setBestBlockHashKey(hash common.Hash) error {
 	return StoreBestBlockHash(bs.db.db, hash)
 }

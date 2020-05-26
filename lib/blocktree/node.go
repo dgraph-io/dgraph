@@ -87,7 +87,7 @@ func (n *node) getNodesWithDepth(depth *big.Int, hashes []common.Hash) []common.
 	return hashes
 }
 
-// subChain recursively searches for a chain with head n and end descendant
+// subChain searches for a chain with head n and descendant going from child -> parent
 func (n *node) subChain(descendant *node) ([]*node, error) {
 	if descendant == nil {
 		return nil, ErrNilDescendant
@@ -110,11 +110,9 @@ func (n *node) subChain(descendant *node) ([]*node, error) {
 	return nil, ErrDescendantNotFound
 }
 
-// TODO: This would improved by using parent in node struct and searching child -> parent
-// TODO: verify that parent and child exist in the DB
 // isDescendantOf traverses the tree following all possible paths until it determines if n is a descendant of parent
 func (n *node) isDescendantOf(parent *node) bool {
-	if parent == nil {
+	if parent == nil || n == nil {
 		return false
 	}
 

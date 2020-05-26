@@ -119,7 +119,6 @@ func TestNode_isDecendantOf(t *testing.T) {
 	if bt.head.isDescendantOf(leaf) {
 		t.Error("root should not be descendant of anything")
 	}
-
 }
 
 func TestBlockTree_LongestPath(t *testing.T) {
@@ -319,6 +318,19 @@ func TestBlockTree_GetAllBlocksAtDepth(t *testing.T) {
 	}
 }
 
+func TestBlockTree_IsDecendantOf(t *testing.T) {
+	// Create tree with depth 4 (with 4 nodes)
+	bt, hashes := createFlatTree(t, 4)
+
+	isDescendant, err := bt.IsDescendantOf(bt.head.hash, hashes[3])
+	require.NoError(t, err)
+	require.True(t, isDescendant)
+
+	isDescendant, err = bt.IsDescendantOf(hashes[3], bt.head.hash)
+	require.NoError(t, err)
+	require.False(t, isDescendant)
+}
+
 func TestBlockTree_HighestCommonAncestor(t *testing.T) {
 	header := &types.Header{
 		ParentHash: zeroHash,
@@ -379,17 +391,4 @@ func TestBlockTree_HighestCommonAncestor_SameChain(t *testing.T) {
 	p, err := bt.HighestCommonAncestor(a, b)
 	require.NoError(t, err)
 	require.Equal(t, b, p)
-}
-
-func TestBlockTree_IsDecendantOf(t *testing.T) {
-	// Create tree with depth 4 (with 4 nodes)
-	bt, hashes := createFlatTree(t, 4)
-
-	isDescendant, err := bt.IsDescendantOf(bt.head.hash, hashes[3])
-	require.NoError(t, err)
-	require.True(t, isDescendant)
-
-	isDescendant, err = bt.IsDescendantOf(hashes[3], bt.head.hash)
-	require.NoError(t, err)
-	require.False(t, isDescendant)
 }

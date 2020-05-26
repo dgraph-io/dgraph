@@ -17,6 +17,9 @@
 package grandpa
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
@@ -40,6 +43,43 @@ type State struct {
 	round  uint64   // voting round number
 }
 
+// NewState returns a new GRANDPA state
+func NewState(voters []*Voter, setID, round uint64) *State {
+	return &State{
+		voters: voters,
+		setID:  setID,
+		round:  round,
+	}
+}
+
+// pubkeyToVoter returns a Voter given a public key
+func (s *State) pubkeyToVoter(pk *ed25519.PublicKey) (*Voter, error) {
+	max := uint64(2^64) - 1
+	id := max
+
+	for i, v := range s.voters {
+		if bytes.Equal(pk.Encode(), v.key.Encode()) {
+			id = uint64(i)
+			break
+		}
+	}
+
+	if id == max {
+		return nil, ErrVoterNotFound
+	}
+
+	return &Voter{
+		key: pk,
+		id:  id,
+	}, nil
+}
+
+// threshold returns the 2/3 |voters| threshold value
+// TODO: determine rounding, is currently set to floor
+func (s *State) threshold() uint64 {
+	return uint64(2 * len(s.voters) / 3)
+}
+
 // Vote represents a vote for a block with the given hash and number
 type Vote struct {
 	hash   common.Hash
@@ -60,6 +100,29 @@ func NewVoteFromHeader(h *types.Header) *Vote {
 		hash:   h.Hash(),
 		number: uint64(h.Number.Int64()),
 	}
+}
+
+// NewVoteFromHash returns a new Vote given a hash and a blockState
+func NewVoteFromHash(hash common.Hash, blockState BlockState) (*Vote, error) {
+	has, err := blockState.HasHeader(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	if !has {
+		return nil, ErrBlockDoesNotExist
+	}
+
+	h, err := blockState.GetHeader(hash)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewVoteFromHeader(h), nil
+}
+
+func (v *Vote) String() string {
+	return fmt.Sprintf("hash=0x%s number=%d", v.hash, v.number)
 }
 
 // FullVote represents a vote with additional information about the state

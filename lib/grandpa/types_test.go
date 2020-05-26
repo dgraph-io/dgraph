@@ -17,16 +17,21 @@
 package grandpa
 
 import (
-	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/common"
+	"testing"
+
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/lib/keystore"
+
+	"github.com/stretchr/testify/require"
 )
 
-// BlockState is the interface required by GRANDPA into the block state
-type BlockState interface {
-	HasHeader(hash common.Hash) (bool, error)
-	GetHeader(hash common.Hash) (*types.Header, error)
-	IsDescendantOf(parent, child common.Hash) (bool, error)
-	HighestCommonAncestor(a, b common.Hash) (common.Hash, error)
-	GetFinalizedHead() (*types.Header, error)
-	Leaves() []common.Hash
+func TestPubkeyToVoter(t *testing.T) {
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	state := NewState(voters, 0, 0)
+	voter, err := state.pubkeyToVoter(kr.Alice.Public().(*ed25519.PublicKey))
+	require.NoError(t, err)
+	require.Equal(t, voters[0], voter)
 }
