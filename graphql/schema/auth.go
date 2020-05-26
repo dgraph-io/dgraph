@@ -42,7 +42,6 @@ type RuleNode struct {
 	Not       *RuleNode
 	Rule      Query
 	RBACRule  *RBACQuery
-	Result    RuleResult
 	Variables ast.VariableDefinitionList
 }
 
@@ -70,13 +69,13 @@ func (rq *RBACQuery) EvaluateRBACRule(av map[string]interface{}) RuleResult {
 	return Negative
 }
 
-func (node *RuleNode) staticEvaluation(av map[string]interface{}) {
+func (node *RuleNode) staticEvaluation(av map[string]interface{}) RuleResult {
 	for _, v := range node.Variables {
 		if _, ok := av[v.Variable]; !ok {
-			node.Result = Negative
-			return
+			return Negative
 		}
 	}
+	return Uncertain
 }
 
 func (node *RuleNode) EvaluateStatic(av map[string]interface{}) RuleResult {
@@ -133,9 +132,9 @@ func (node *RuleNode) EvaluateStatic(av map[string]interface{}) RuleResult {
 	}
 
 	if node.Rule != nil {
-		node.staticEvaluation(av)
+		return node.staticEvaluation(av)
 	}
-	return node.Result
+	return Uncertain
 }
 
 type TypeAuth struct {

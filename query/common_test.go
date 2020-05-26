@@ -686,7 +686,7 @@ func populateCluster() {
 		<510> <newfriend> <511> .
 		<510> <newfriend> <512> .
 
-		<51> <connects> <52>  (weight=10) .
+		<51> <connects> <52>  (weight=11) .
 		<51> <connects> <53>  (weight=1) .
 		<51> <connects> <54>  (weight=10) .
 
@@ -699,7 +699,7 @@ func populateCluster() {
 		<52> <connects> <54>  (weight=10) .
 
 		<54> <connects> <51>  (weight=10) .
-		<54> <connects> <52>  (weight=1) .
+		<54> <connects> <52>  (weight=2) .
 		<54> <connects> <53>  (weight=10) .
 		<54> <connects> <55>  (weight=1) .
 

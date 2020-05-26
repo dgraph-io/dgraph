@@ -615,7 +615,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		return dgQuery
 	}
 
-	rbac := authRw.evaluateStaticRules(m.QueryField())
+	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
 		dgQuery.Attr = m.ResponseName() + "()"
 		return dgQuery

@@ -19,43 +19,45 @@
 package alpha
 
 import (
-	"context"
 	"net/http"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/worker"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+
+	"github.com/dgraph-io/dgraph/graphql/web"
+
 	"github.com/dgraph-io/dgraph/x"
 )
 
 func init() {
-	http.HandleFunc("/admin/backup", backupHandler)
+	http.Handle("/admin/backup", allowedMethodsHandler(allowedMethods{http.MethodPost: true},
+		adminAuthHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			backupHandler(w, r, adminServer)
+		}))))
 }
 
 // backupHandler handles backup requests coming from the HTTP endpoint.
-func backupHandler(w http.ResponseWriter, r *http.Request) {
-	if !handlerInit(w, r, map[string]bool{
-		http.MethodPost: true,
-	}) {
-		return
+func backupHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	gqlReq := &schema.Request{
+		Query: `
+		mutation backup($input: BackupInput!) {
+		  backup(input: $input) {
+			response {
+			  code
+			}
+		  }
+		}`,
+		Variables: map[string]interface{}{"input": map[string]interface{}{
+			"destination":  r.FormValue("destination"),
+			"accessKey":    r.FormValue("access_key"),
+			"secretKey":    r.FormValue("secret_key"),
+			"sessionToken": r.FormValue("session_token"),
+			"anonymous":    r.FormValue("anonymous") == "true",
+			"forceFull":    r.FormValue("force_full") == "true",
+		}},
 	}
-
-	destination := r.FormValue("destination")
-	accessKey := r.FormValue("access_key")
-	secretKey := r.FormValue("secret_key")
-	sessionToken := r.FormValue("session_token")
-	anonymous := r.FormValue("anonymous") == "true"
-	forceFull := r.FormValue("force_full") == "true"
-
-	req := pb.BackupRequest{
-		Destination:  destination,
-		AccessKey:    accessKey,
-		SecretKey:    secretKey,
-		SessionToken: sessionToken,
-		Anonymous:    anonymous,
-	}
-
-	if err := worker.ProcessBackupRequest(context.Background(), &req, forceFull); err != nil {
-		x.SetStatus(w, err.Error(), "Backup failed.")
+	resp := resolveWithAdminServer(gqlReq, r, adminServer)
+	if resp.Errors != nil {
+		x.SetStatus(w, resp.Errors.Error(), "Backup failed.")
 		return
 	}
 

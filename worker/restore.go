@@ -47,7 +47,7 @@ func RunRestore(pdir, location, backupId, keyfile string) LoadResult {
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
 
 			dir := filepath.Join(pdir, fmt.Sprintf("p%d", groupId))
-			r, err := enc.GetReader(keyfile, r)
+			r, err := enc.GetReader(enc.ReadEncryptionKeyFile(keyfile), r)
 			if err != nil {
 				return 0, err
 			}

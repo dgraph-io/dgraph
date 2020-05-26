@@ -45,7 +45,7 @@ func extractName(ctx context.Context) (string, error) {
 			return nil, errors.Errorf("unexpected signing method: %v",
 				token.Header["alg"])
 		}
-		return worker.Config.HmacSecret, nil
+		return []byte(worker.Config.HmacSecret), nil
 	})
 
 	if err != nil {

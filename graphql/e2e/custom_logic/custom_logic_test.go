@@ -234,6 +234,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Teacher {
 		tid: ID!
@@ -263,6 +264,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Episode {
 		name: String! @id
@@ -300,6 +302,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 	_, err = client.RecvMsg()
 	require.Contains(t, err.Error(), "Custom field `anotherName` is not supported in graphql subscription")
 }
+
 func addPerson(t *testing.T) *user {
 	addTeacherParams := &common.GraphQLParams{
 		Query: `mutation addPerson {
@@ -360,7 +363,7 @@ func TestCustomQueryWithNonExistentURLShouldReturnError(t *testing.T) {
 			Message: "Evaluation of custom field failed because external request returned an " +
 				"error: unexpected status code: 404 for field: myFavoriteMovies within" +
 				" type: Query.",
-			Locations: []x.Location{{3, 3}},
+			Locations: []x.Location{{Line: 3, Column: 3}},
 		},
 	}, result.Errors)
 }
@@ -444,10 +447,10 @@ func TestCustomQueryShouldPropagateErrorFromFields(t *testing.T) {
 	expectedErrors := x.GqlErrorList{
 		&x.GqlError{Message: "Evaluation of custom field failed because external request " +
 			"returned an error: unexpected status code: 404 for field: cars within type: Person.",
-			Locations: []x.Location{{6, 4}}},
+			Locations: []x.Location{{Line: 6, Column: 4}}},
 		&x.GqlError{Message: "Evaluation of custom field failed because external request returned" +
 			" an error: unexpected status code: 404 for field: bikes within type: Person.",
-			Locations: []x.Location{{9, 4}}},
+			Locations: []x.Location{{Line: 9, Column: 4}}},
 	}
 	require.Contains(t, result.Errors, expectedErrors[0])
 	require.Contains(t, result.Errors, expectedErrors[1])

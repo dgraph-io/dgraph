@@ -235,9 +235,6 @@ func run() {
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
 
-	// zero out from memory
-	kvOpt.EncryptionKey = nil
-
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
 	// Initialize the servers.
@@ -294,11 +291,12 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Try to generate a snapshot before the shutdown.
+		st.node.trySnapshot(0)
 		// Stop Raft store.
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
-		st.node.trySnapshot(0)
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")

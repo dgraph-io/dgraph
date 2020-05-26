@@ -36,6 +36,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	DisableSubscription()
 }
 
 type handler struct {
@@ -69,6 +70,10 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
+}
+
+func (s *handler) DisableSubscription() {
+	s.completeSchema.Subscription = nil
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns

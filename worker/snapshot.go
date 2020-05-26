@@ -17,16 +17,21 @@
 package worker
 
 import (
+	"context"
 	"sync/atomic"
+	"time"
 
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -70,12 +75,14 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 
 	// We can use count to check the number of posting lists returned in tests.
 	count := 0
+	var done *pb.KVS
 	for {
 		kvs, err := stream.Recv()
 		if err != nil {
 			return count, err
 		}
 		if kvs.Done {
+			done = kvs
 			glog.V(1).Infoln("All key-values have been received.")
 			break
 		}
@@ -95,6 +102,10 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 		return 0, err
 	}
 
+	if err := deleteStalePreds(ctx, done); err != nil {
+		return count, err
+	}
+
 	glog.Infof("Snapshot writes DONE. Sending ACK")
 	// Send an acknowledgement back to the leader.
 	if err := stream.Send(&pb.Snapshot{Done: true}); err != nil {
@@ -102,6 +113,60 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	}
 	glog.Infof("Populated snapshot with %d keys.\n", count)
 	return count, nil
+}
+
+func deleteStalePreds(ctx context.Context, kvs *pb.KVS) error {
+	if kvs == nil {
+		return nil
+	}
+
+	// Look for predicates present in the receiver but not in the list sent by the leader.
+	// These predicates were deleted in between snapshots and need to be deleted from the
+	// receiver to keep the schema in sync.
+	currPredicates := schema.State().Predicates()
+	snapshotPreds := make(map[string]struct{})
+	for _, pred := range kvs.Predicates {
+		snapshotPreds[pred] = struct{}{}
+	}
+	for _, pred := range currPredicates {
+		if _, ok := snapshotPreds[pred]; !ok {
+		LOOP:
+			for {
+				err := posting.DeletePredicate(ctx, pred)
+				switch err {
+				case badger.ErrBlockedWrites:
+					time.Sleep(1 * time.Second)
+				case nil:
+					break LOOP
+				default:
+					glog.Warningf(
+						"Cannot delete removed predicate %s after streaming snapshot: %v",
+						pred, err)
+					return errors.Wrapf(err,
+						"cannot delete removed predicate %s after streaming snapshot", pred)
+				}
+			}
+		}
+	}
+
+	// Look for types present in the receiver but not in the list sent by the leader.
+	// These types were deleted in between snapshots and need to be deleted from the
+	// receiver to keep the schema in sync.
+	currTypes := schema.State().Types()
+	snapshotTypes := make(map[string]struct{})
+	for _, typ := range kvs.Types {
+		snapshotTypes[typ] = struct{}{}
+	}
+	for _, typ := range currTypes {
+		if _, ok := snapshotTypes[typ]; !ok {
+			if err := schema.State().DeleteType(typ); err != nil {
+				return errors.Wrapf(err, "cannot delete removed type %s after streaming snapshot",
+					typ)
+			}
+		}
+	}
+
+	return nil
 }
 
 func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) error {
@@ -138,15 +203,39 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 		return out.Send(kvs)
 	}
 	stream.ChooseKey = func(item *badger.Item) bool {
-		return item.Version() >= snap.SinceTs
+		if item.Version() >= snap.SinceTs {
+			return true
+		}
+
+		if item.Version() != 1 {
+			return false
+		}
+
+		// Type and Schema keys always have a timestamp of 1. They all need to be sent
+		// with the snapshot.
+		pk, err := x.Parse(item.Key())
+		if err != nil {
+			return false
+		}
+		return pk.IsSchema() || pk.IsType()
 	}
+
+	// Get the list of all the predicate and types at the time of the snapshot so that the receiver
+	// can delete predicates
+	predicates := schema.State().Predicates()
+	types := schema.State().Types()
 
 	if err := stream.Orchestrate(out.Context()); err != nil {
 		return err
 	}
 
 	// Indicate that sending is done.
-	if err := out.Send(&pb.KVS{Done: true}); err != nil {
+	done := &pb.KVS{
+		Done:       true,
+		Predicates: predicates,
+		Types:      types,
+	}
+	if err := out.Send(done); err != nil {
 		return err
 	}
 
