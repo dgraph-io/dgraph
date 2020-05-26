@@ -1579,6 +1579,7 @@ func queryWithCascade(t *testing.T) {
 					  queryAuthor(filter: {id: $ids}) {
 						reputation
 						posts @cascade {
+						  title
 						  text
 						}
 					  }
@@ -1588,6 +1589,7 @@ func queryWithCascade(t *testing.T) {
 							"queryAuthor": [{
 								"reputation": 4.5,
 								"posts": [{
+									"title": "A show about nothing",
 									"text": "Got ya!"
 								}]
 							},{
@@ -1596,6 +1598,7 @@ func queryWithCascade(t *testing.T) {
 							},{
 								"reputation": null,
 								"posts": [{
+									"title": "Ha! Cosmo Kramer",
 									"text": "Giddy up!"
 								}]
 							}]

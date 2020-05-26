@@ -721,6 +721,29 @@
     }
 
 -
+  name: "Cascade directive on root query and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade {
+        dob
+        posts @cascade {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade {
+        dob : Author.dob
+        posts : Author.posts @cascade {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "getHuman which implements an interface"
   gqlquery: |
     query {
