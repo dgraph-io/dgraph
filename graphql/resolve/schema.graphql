@@ -207,3 +207,20 @@ type Mutation {
                 method: "DELETE"
         })
 }
+
+interface X {
+    id: ID!
+    username: String! @id
+    age: Int
+}
+type Y implements X @auth(
+    query: { rule: """
+      query($USER: String!) {
+        queryY(filter: { username: { eq: $USER } }) {
+          __typename
+        }
+      }
+    """ }
+){
+  userRole: String @search(by: [hash])
+}

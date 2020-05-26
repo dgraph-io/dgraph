@@ -162,6 +162,7 @@ type Type interface {
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
+	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
 	DgraphName() string
@@ -1464,6 +1465,27 @@ func (t *astType) XIDField() FieldDefinition {
 	}
 
 	return nil
+}
+
+// InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.
+func (t *astType) InterfaceImplHasAuthRules() bool {
+	schema := t.inSchema.schema
+	types := schema.Types
+	if typ, ok := types[t.Name()]; !ok || typ.Kind != ast.Interface {
+		return false
+	}
+
+	for implName, implements := range schema.Implements {
+		for _, intrface := range implements {
+			if intrface.Name != t.Name() {
+				continue
+			}
+			if val, ok := t.inSchema.authRules[implName]; ok && val.Rules != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (t *astType) Interfaces() []string {
