@@ -113,7 +113,7 @@
   name: "Add Multiple Mutations with embedded value"
   gqlmutation: |
     mutation addAuthor {
-      addAuthor(input: [{ name: "A.N. Author", posts: []},
+      addAuthor(input: [{ name: "A.N. Author", posts: []}, 
                         { name: "Different Author", posts: []}]) {
         author {
           name
