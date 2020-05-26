@@ -109,12 +109,11 @@ func parseSecrets(sch string) (map[string]string, error) {
 	if err := scanner.Err(); err != nil {
 		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
 	}
-	if authSecret != "" {
-		if err := authorization.ParseAuthMeta(authSecret); err != nil {
-			return nil, err
-		}
+	if authSecret == "" {
+		return m, nil
 	}
-	return m, nil
+	err := authorization.ParseAuthMeta(authSecret)
+	return m, err
 }
 
 // NewHandler processes the input schema. If there are no errors, it returns

@@ -164,7 +164,8 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 verifyHeaders(id: ID!): [Movie] @custom(http: {
 				 url: "http://mock:8888/verifyHeaders",
 				 method: "GET",
-				 forwardHeaders: ["X-App-Token", "X-User-Id", "Github-Api-Token"]
+				 forwardHeaders: ["X-App-Token", "X-User-Id"],
+				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
 		 })
 	 }
 
@@ -204,7 +205,8 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 				http: {
 				  url: "http://mock:8888/validatesecrettoken"
 				  method: "POST"
-				  forwardHeaders: ["Content-Type", "GITHUB-API-TOKEN"]
+				  forwardHeaders: ["Content-Type"]
+				  secretHeaders: ["GITHUB-API-TOKEN"]
 				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
 				}
 			  )
@@ -917,7 +919,7 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 					method: "GET"
 					body: "{uid: $id}"
 					mode: SINGLE,
-					forwardHeaders: ["GITHUB-API-TOKEN"]
+					secretHeaders: ["GITHUB-API-TOKEN"]
 				}
 			)
 		age: Int! @search
@@ -928,7 +930,7 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 			method: "GET"
 			body: "{uid: $id}"
 			mode: BATCH,
-			forwardHeaders: ["STRIPE-API-KEY"]
+			secretHeaders: ["STRIPE-API-KEY"]
 			}
 		)
   	}

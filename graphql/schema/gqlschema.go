@@ -102,6 +102,7 @@ input CustomHTTP {
 	graphql: String
 	mode: Mode
 	forwardHeaders: [String!]
+	secretHeaders: [String!]
 	skipIntrospection: Boolean
 }
 

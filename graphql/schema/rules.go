@@ -1479,10 +1479,10 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 	}
 	if graphql != nil && !skip && graphqlOpDef != nil {
-		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 		headers := http.Header{}
-		if forwardHeaders != nil {
-			for _, h := range forwardHeaders.Children {
+		if secretHeaders != nil {
+			for _, h := range secretHeaders.Children {
 				// We try and fetch the value from the stored secrets.
 				val := secrets[h.Value.Raw]
 				headers.Add(h.Value.Raw, string(val))

@@ -834,22 +834,24 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
-	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
-	if forwardHeaders != nil {
-		headers := http.Header{}
+	fconf.ForwardHeaders = http.Header{}
+	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+	if secretHeaders != nil {
 		hc.RLock()
-		for _, h := range forwardHeaders.Children {
-			// We try and fetch the value from the stored secrets. If there was a value specified
-			// in the request header, that takes precedence.
+		for _, h := range secretHeaders.Children {
 			val := string(hc.secrets[h.Value.Raw])
-			reqHeaderVal := f.op.header.Get(h.Value.Raw)
-			if reqHeaderVal != "" {
-				val = reqHeaderVal
-			}
-			headers.Add(h.Value.Raw, val)
+			fconf.ForwardHeaders.Set(h.Value.Raw, val)
 		}
 		hc.RUnlock()
-		fconf.ForwardHeaders = headers
+	}
+
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		for _, h := range forwardHeaders.Children {
+			// We would override the header if it was also specified as part of secretHeaders.
+			reqHeaderVal := f.op.header.Get(h.Value.Raw)
+			fconf.ForwardHeaders.Set(h.Value.Raw, reqHeaderVal)
+		}
 	}
 
 	if graphqlArg != nil {
