@@ -2359,6 +2359,14 @@ mutation {
 
 Currently, "rdf" and "json" are the only formats supported.
 
+#### Encrypting Exports
+
+Export is available wherever an Alpha is running. To encrypt an export, the Alpha must be configured with the `encryption-key-file`.
+
+{{% notice "note" %}}
+The `encryption-key-file` was used for `encryption-at-rest` and will now also be used for encrypted backups and exports.
+{{% /notice %}}
+
 ### Shutting Down Database
 
 A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
