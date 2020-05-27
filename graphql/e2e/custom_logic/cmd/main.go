@@ -145,6 +145,10 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Invalid URL", r.URL.String())
 	}
 
+	if expectedRequest.body == "" && r.Body != http.NoBody {
+		return getError("Expected No body", "but got some body to read")
+	}
+
 	b, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return getError("Unable to read request body", err.Error())
@@ -284,6 +288,31 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
+}
+
+func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/twitterfollowers?screen_name=manishrjain",
+		body:      "",
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write([]byte(`
+	{
+		"users": [{
+			"id": 1231723732206411776,
+			"name": "hi_balaji",
+			"screen_name": "hi_balaji",
+			"location": "",
+			"description": "",
+			"followers_count": 0,
+			"friends_count": 117,
+			"statuses_count": 0
+		}]
+	}`)))
 }
 
 func favMoviesCreateHandler(w http.ResponseWriter, r *http.Request) {
@@ -1052,6 +1081,7 @@ func main() {
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
 
 	// for mutations
 	http.HandleFunc("/favMoviesCreate", favMoviesCreateHandler)
