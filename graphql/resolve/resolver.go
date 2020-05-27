@@ -816,11 +816,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else {
-			if err := json.Unmarshal(b, &result); err != nil {
-				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-				return
-			}
+		} else if err := json.Unmarshal(b, &result); err != nil {
+			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+			return
 		}
 
 		if len(result) != len(vals) {
@@ -909,11 +907,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else {
-				if err := json.Unmarshal(b, &result); err != nil {
-					errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-					return
-				}
+			} else if err := json.Unmarshal(b, &result); err != nil {
+				errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				return
 			}
 
 			mu.Lock()
