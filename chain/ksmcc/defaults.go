@@ -25,8 +25,8 @@ var (
 	DefaultID = string("ksmcc")
 	// DefaultConfig Default toml configuration path
 	DefaultConfig = string("./chain/ksmcc/config.toml")
-	// DefaultDataDir Default node data directory
-	DefaultDataDir = string("~/.gossamer/ksmcc")
+	// DefaultBasePath Default node base directory path
+	DefaultBasePath = string("~/.gossamer/ksmcc")
 
 	// InitConfig
 

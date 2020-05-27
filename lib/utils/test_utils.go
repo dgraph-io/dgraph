@@ -43,10 +43,10 @@ func NewTestDir(t *testing.T) string {
 	return testDir
 }
 
-// NewTestDataDir create new test data directory
-func NewTestDataDir(t *testing.T, name string) string {
+// NewTestBasePath create new test data directory
+func NewTestBasePath(t *testing.T, name string) string {
 	testDir := path.Join(TestDir, t.Name())
-	dataDir := path.Join(testDir, name)
+	basePath := path.Join(testDir, name)
 
 	err := os.Mkdir(TestDir, os.ModePerm)
 	if err != nil && !PathExists(TestDir) {
@@ -58,12 +58,12 @@ func NewTestDataDir(t *testing.T, name string) string {
 		fmt.Println(fmt.Errorf("failed to create test directory: %s", err))
 	}
 
-	err = os.Mkdir(dataDir, os.ModePerm)
-	if err != nil && !PathExists(dataDir) {
+	err = os.Mkdir(basePath, os.ModePerm)
+	if err != nil && !PathExists(basePath) {
 		fmt.Println(fmt.Errorf("failed to create test data directory: %s", err))
 	}
 
-	return dataDir
+	return basePath
 }
 
 // RemoveTestDir removes the test data directory

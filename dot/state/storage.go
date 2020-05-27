@@ -61,7 +61,7 @@ func NewStorageDB(db database.Database) *StorageDB {
 	}
 }
 
-// NewStorageState creates a new StorageState backed by the given trie and database located at dataDir.
+// NewStorageState creates a new StorageState backed by the given trie and database located at basePath.
 func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) {
 	if db == nil {
 		return nil, fmt.Errorf("cannot have nil database")

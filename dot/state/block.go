@@ -74,7 +74,7 @@ func NewBlockDB(db database.Database) *BlockDB {
 	}
 }
 
-// NewBlockState will create a new BlockState backed by the database located at dataDir
+// NewBlockState will create a new BlockState backed by the database located at basePath
 func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("block tree is nil")
@@ -95,7 +95,7 @@ func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, 
 	return bs, nil
 }
 
-// NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at dataDir
+// NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at basePath
 func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*BlockState, error) {
 	bs := &BlockState{
 		bt: blocktree.NewBlockTreeFromGenesis(header, db),

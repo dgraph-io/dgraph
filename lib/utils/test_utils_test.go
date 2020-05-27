@@ -35,13 +35,13 @@ func TestNewTestDir(t *testing.T) {
 	RemoveTestDir(t)
 }
 
-// TestNewTestDataDir tests the NewTestDataDir method
-func TestNewTestDataDir(t *testing.T) {
-	dataDir := "test"
+// TestNewTestBasePath tests the NewTestBasePath method
+func TestNewTestBasePath(t *testing.T) {
+	basePath := "test"
 
-	testDir := NewTestDataDir(t, dataDir)
+	testDir := NewTestBasePath(t, basePath)
 
-	expected := path.Join(TestDir, t.Name(), dataDir)
+	expected := path.Join(TestDir, t.Name(), basePath)
 
 	require.Equal(t, expected, testDir)
 	require.Equal(t, PathExists(testDir), true)

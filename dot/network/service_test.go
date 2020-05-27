@@ -94,13 +94,13 @@ func createTestService(t *testing.T, cfg *Config) (srvc *Service) {
 
 // test network service starts
 func TestStartService(t *testing.T) {
-	dataDir := utils.NewTestDataDir(t, "node")
+	basePath := utils.NewTestBasePath(t, "node")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	config := &Config{
-		DataDir:     dataDir,
+		BasePath:    basePath,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -112,7 +112,7 @@ func TestStartService(t *testing.T) {
 
 // test broacast messages from core service
 func TestBroadcastMessages(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
@@ -120,7 +120,7 @@ func TestBroadcastMessages(t *testing.T) {
 	msgRecA := make(chan Message)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -134,12 +134,12 @@ func TestBroadcastMessages(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	msgSendB := make(chan Message)
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
@@ -186,7 +186,7 @@ func TestBroadcastMessages(t *testing.T) {
 }
 
 func TestHandleMessage_BlockResponse(t *testing.T) {
-	dataDir := utils.NewTestDataDir(t, "nodeA")
+	basePath := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
@@ -194,7 +194,7 @@ func TestHandleMessage_BlockResponse(t *testing.T) {
 	msgSend := make(chan Message, 4)
 
 	config := &Config{
-		DataDir:     dataDir,
+		BasePath:    basePath,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -262,10 +262,10 @@ func TestHandleMessage_BlockResponse(t *testing.T) {
 }
 
 func TestService_NodeRoles(t *testing.T) {
-	dataDir := utils.NewTestDataDir(t, "node")
+	basePath := utils.NewTestBasePath(t, "node")
 	cfg := &Config{
-		DataDir: dataDir,
-		Roles:   1,
+		BasePath: basePath,
+		Roles:    1,
 	}
 	svc := createTestService(t, cfg)
 

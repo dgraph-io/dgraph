@@ -49,7 +49,7 @@ type Node struct {
 }
 
 // RunGossamer will start a gossamer instance and check if its online and returns CMD, otherwise return err
-func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
+func RunGossamer(t *testing.T, idx int, basePath string) (*Node, error) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 
 	//nolint
 	cmdInit := exec.Command(gossamerCMD, "init",
-		"--datadir", dataDir+strconv.Itoa(idx),
+		"--basepath", basePath+strconv.Itoa(idx),
 		"--genesis", genesisPath,
 		"--force",
 	)
@@ -83,7 +83,7 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	if idx >= len(keyList) {
 		//nolint
 		cmd = exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
-			"--datadir", dataDir+strconv.Itoa(idx),
+			"--basepath", basePath+strconv.Itoa(idx),
 			"--rpchost", HOSTNAME,
 			"--rpcport", rpcPort,
 			"--rpcmods", "system,author,chain,state",
@@ -95,7 +95,7 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 		//nolint
 		cmd = exec.Command(gossamerCMD, "--port", strconv.Itoa(basePort+idx),
 			"--key", key,
-			"--datadir", dataDir+strconv.Itoa(idx),
+			"--basepath", basePath+strconv.Itoa(idx),
 			"--rpchost", HOSTNAME,
 			"--rpcport", rpcPort,
 			"--rpcmods", "system,author,chain,state",
@@ -105,7 +105,7 @@ func RunGossamer(t *testing.T, idx int, dataDir string) (*Node, error) {
 	}
 
 	// a new file will be created, it will be used for log the outputs from the node
-	f, err := os.Create(filepath.Join(dataDir+strconv.Itoa(idx), "gossamer.log"))
+	f, err := os.Create(filepath.Join(basePath+strconv.Itoa(idx), "gossamer.log"))
 	if err != nil {
 		log.Error("Error when trying to set a log file for gossamer output", "error", err)
 		return nil, err

@@ -65,9 +65,9 @@ func DecodePrivateKey(in []byte, keytype crypto.KeyType) (priv crypto.PrivateKey
 }
 
 // GenerateKeypair create a new keypair with the corresponding type and saves
-// it to datadir/keystore/[public key].key in json format encrypted using the
+// it to basepath/keystore/[public key].key in json format encrypted using the
 // specified password and returns the resulting filepath of the new key
-func GenerateKeypair(keytype string, datadir string, password []byte) (string, error) {
+func GenerateKeypair(keytype string, basepath string, password []byte) (string, error) {
 	if keytype == "" {
 		keytype = crypto.Sr25519Type
 	}
@@ -91,7 +91,7 @@ func GenerateKeypair(keytype string, datadir string, password []byte) (string, e
 		}
 	}
 
-	keyPath, err := utils.KeystoreDir(datadir)
+	keyPath, err := utils.KeystoreDir(basepath)
 	if err != nil {
 		return "", fmt.Errorf("failed to get keystore directory: %s", err)
 	}

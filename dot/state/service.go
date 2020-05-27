@@ -78,13 +78,13 @@ func (s *Service) Initialize(data *genesis.Data, header *types.Header, t *trie.T
 	} else {
 
 		// get data directory from service
-		datadir, err := filepath.Abs(s.dbPath)
+		basepath, err := filepath.Abs(s.dbPath)
 		if err != nil {
-			return fmt.Errorf("failed to read datadir: %s", err)
+			return fmt.Errorf("failed to read basepath: %s", err)
 		}
 
 		// initialize database using data directory
-		db, err = database.NewBadgerDB(datadir)
+		db, err = database.NewBadgerDB(basepath)
 		if err != nil {
 			return fmt.Errorf("failed to create database: %s", err)
 		}
@@ -175,13 +175,13 @@ func (s *Service) Start() error {
 
 	db := s.db
 	if !s.isMemDB {
-		datadir, err := filepath.Abs(s.dbPath)
+		basepath, err := filepath.Abs(s.dbPath)
 		if err != nil {
 			return err
 		}
 
 		// initialize database
-		db, err = database.NewBadgerDB(datadir)
+		db, err = database.NewBadgerDB(basepath)
 		if err != nil {
 			return err
 		}

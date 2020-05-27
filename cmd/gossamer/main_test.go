@@ -236,7 +236,7 @@ func TestGossamerCommand(t *testing.T) {
 
 	gossamer := runTestGossamer(t,
 		"init",
-		"--datadir", tempDir,
+		"--basepath", tempDir,
 		"--genesis", genesisPath,
 		"--force",
 	)
@@ -260,7 +260,7 @@ func TestGossamerCommand(t *testing.T) {
 		gossamer = runTestGossamer(t,
 			"--port", strconv.Itoa(basePort),
 			"--key", "alice",
-			"--datadir", tempDir,
+			"--basepath", tempDir,
 			"--roles", "4",
 		)
 

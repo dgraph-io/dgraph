@@ -297,10 +297,10 @@ func TestImportKey_ShouldFail(t *testing.T) {
 }
 
 func TestImportKey(t *testing.T) {
-	dataDir := utils.NewTestDataDir(t, "keystore")
+	basePath := utils.NewTestBasePath(t, "keystore")
 	defer utils.RemoveTestDir(t)
 
-	keypath := dataDir
+	keypath := basePath
 
 	importkeyfile, err := GenerateKeypair("sr25519", keypath, testPassword)
 	if err != nil {
@@ -309,12 +309,12 @@ func TestImportKey(t *testing.T) {
 
 	defer os.RemoveAll(importkeyfile)
 
-	keyfile, err := ImportKeypair(importkeyfile, dataDir)
+	keyfile, err := ImportKeypair(importkeyfile, basePath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	keys, err := utils.KeystoreFilepaths(dataDir)
+	keys, err := utils.KeystoreFilepaths(basePath)
 	if err != nil {
 		t.Fatal(err)
 	}

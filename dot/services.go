@@ -37,7 +37,7 @@ import (
 func createStateService(cfg *Config) (*state.Service, error) {
 	log.Info("[dot] creating state service...")
 
-	stateSrvc := state.NewService(cfg.Global.DataDir)
+	stateSrvc := state.NewService(cfg.Global.BasePath)
 
 	// start state service (initialize state database)
 	err := stateSrvc.Start()
@@ -122,7 +122,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 	networkConfig := network.Config{
 		BlockState:   stateSrvc.Block,
 		NetworkState: stateSrvc.Network,
-		DataDir:      cfg.Global.DataDir,
+		BasePath:     cfg.Global.BasePath,
 		Roles:        cfg.Core.Roles,
 		Port:         cfg.Network.Port,
 		Bootnodes:    cfg.Network.Bootnodes,

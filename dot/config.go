@@ -45,9 +45,9 @@ type Config struct {
 
 // GlobalConfig is to marshal/unmarshal toml global config vars
 type GlobalConfig struct {
-	Name    string `toml:"name"`
-	ID      string `toml:"id"`
-	DataDir string `toml:"datadir"`
+	Name     string `toml:"name"`
+	ID       string `toml:"id"`
+	BasePath string `toml:"basepath"`
 }
 
 // InitConfig is the configuration for the node initialization
@@ -102,13 +102,13 @@ func RPCServiceEnabled(cfg *Config) bool {
 	return cfg.RPC.Enabled
 }
 
-// GssmrConfig returns a new test configuration using the provided datadir
+// GssmrConfig returns a new test configuration using the provided basepath
 func GssmrConfig() *Config {
 	return &Config{
 		Global: GlobalConfig{
-			Name:    gssmr.DefaultName,
-			ID:      gssmr.DefaultID,
-			DataDir: gssmr.DefaultDataDir,
+			Name:     gssmr.DefaultName,
+			ID:       gssmr.DefaultID,
+			BasePath: gssmr.DefaultBasePath,
 		},
 		Init: InitConfig{
 			Genesis: gssmr.DefaultGenesis,
@@ -145,9 +145,9 @@ func GssmrConfig() *Config {
 func KsmccConfig() *Config {
 	return &Config{
 		Global: GlobalConfig{
-			Name:    ksmcc.DefaultName,
-			ID:      ksmcc.DefaultID,
-			DataDir: ksmcc.DefaultDataDir,
+			Name:     ksmcc.DefaultName,
+			ID:       ksmcc.DefaultID,
+			BasePath: ksmcc.DefaultBasePath,
 		},
 		Init: InitConfig{
 			Genesis: ksmcc.DefaultGenesis,

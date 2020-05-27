@@ -30,8 +30,8 @@ import (
 // DefaultKeyFile the default value for KeyFile
 const DefaultKeyFile = "node.key"
 
-// DefaultDataDir the default value for Config.DataDir
-const DefaultDataDir = "~/.gossamer/gssmr"
+// DefaultBasePath the default value for Config.BasePath
+const DefaultBasePath = "~/.gossamer/gssmr"
 
 // DefaultPort the default value for Config.Port
 const DefaultPort = uint32(7000)
@@ -53,8 +53,8 @@ var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service
 type Config struct {
-	// DataDir the data directory for the node
-	DataDir string
+	// BasePath the data directory for the node
+	BasePath string
 	// Roles a bitmap value that represents the different roles for the sender node (see Table D.2)
 	Roles byte
 
@@ -103,8 +103,8 @@ func (c *Config) build() error {
 		return err
 	}
 
-	if c.DataDir == "" {
-		c.DataDir = DefaultDataDir
+	if c.BasePath == "" {
+		c.BasePath = DefaultBasePath
 	}
 
 	if c.Roles == 0 {
@@ -155,7 +155,7 @@ func (c *Config) buildIdentity() error {
 	if c.RandSeed == 0 {
 
 		// attempt to load existing key
-		key, err := loadKey(c.DataDir)
+		key, err := loadKey(c.BasePath)
 		if err != nil {
 			return err
 		}
@@ -165,11 +165,11 @@ func (c *Config) buildIdentity() error {
 			log.Info(
 				"[network] Generating p2p identity",
 				"RandSeed", c.RandSeed,
-				"KeyFile", path.Join(c.DataDir, DefaultKeyFile),
+				"KeyFile", path.Join(c.BasePath, DefaultKeyFile),
 			)
 
 			// generate key
-			key, err = generateKey(c.RandSeed, c.DataDir)
+			key, err = generateKey(c.RandSeed, c.BasePath)
 			if err != nil {
 				return err
 			}
@@ -181,11 +181,11 @@ func (c *Config) buildIdentity() error {
 		log.Info(
 			"[network] Generating p2p identity from seed",
 			"RandSeed", c.RandSeed,
-			"KeyFile", path.Join(c.DataDir, DefaultKeyFile),
+			"KeyFile", path.Join(c.BasePath, DefaultKeyFile),
 		)
 
 		// generate temporary deterministic key
-		key, err := generateKey(c.RandSeed, c.DataDir)
+		key, err := generateKey(c.RandSeed, c.BasePath)
 		if err != nil {
 			return err
 		}

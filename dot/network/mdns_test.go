@@ -28,13 +28,13 @@ var TestMDNSTimeout = time.Second
 
 // test mdns discovery service (discovers and connects)
 func TestMDNS(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -46,10 +46,10 @@ func TestMDNS(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,

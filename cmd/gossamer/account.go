@@ -48,7 +48,7 @@ func accountAction(ctx *cli.Context) error {
 		return err
 	}
 
-	datadir := cfg.Global.DataDir
+	basepath := cfg.Global.BasePath
 
 	// check --generate flag and generate new keypair
 	if keygen := ctx.Bool(GenerateFlag.Name); keygen {
@@ -75,7 +75,7 @@ func accountAction(ctx *cli.Context) error {
 		}
 
 		var file string
-		file, err = keystore.GenerateKeypair(keytype, datadir, password)
+		file, err = keystore.GenerateKeypair(keytype, basepath, password)
 		if err != nil {
 			log.Error("[cmd] failed to generate keypair", "error", err)
 			return err
@@ -89,7 +89,7 @@ func accountAction(ctx *cli.Context) error {
 		log.Info("[cmd] importing keypair...")
 
 		// import keypair
-		_, err = keystore.ImportKeypair(keyimport, datadir)
+		_, err = keystore.ImportKeypair(keyimport, basepath)
 		if err != nil {
 			log.Error("[cmd] failed to import key", "error", err)
 			return err
@@ -98,7 +98,7 @@ func accountAction(ctx *cli.Context) error {
 
 	// check if --list is set
 	if keylist := ctx.Bool(ListFlag.Name); keylist {
-		_, err = utils.KeystoreFilepaths(datadir)
+		_, err = utils.KeystoreFilepaths(basepath)
 		if err != nil {
 			log.Error("[cmd] failed to list keys", "error", err)
 			return err
@@ -111,7 +111,7 @@ func accountAction(ctx *cli.Context) error {
 // unlockKeystore compares the length of passwords to the length of accounts,
 // prompts the user for a password if no password is provided, and then unlocks
 // the accounts within the provided keystore
-func unlockKeystore(ks *keystore.Keystore, datadir string, unlock string, password string) error {
+func unlockKeystore(ks *keystore.Keystore, basepath string, unlock string, password string) error {
 	var passwords []string
 
 	if password != "" {
@@ -130,7 +130,7 @@ func unlockKeystore(ks *keystore.Keystore, datadir string, unlock string, passwo
 			password = string(bytes)
 		}
 
-		err := keystore.UnlockKeys(ks, datadir, unlock, password)
+		err := keystore.UnlockKeys(ks, basepath, unlock, password)
 		if err != nil {
 			return fmt.Errorf("failed to unlock keys: %s", err)
 		}

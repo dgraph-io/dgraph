@@ -43,7 +43,7 @@ func newNetworkService(t *testing.T) *network.Service {
 	cfg := &network.Config{
 		NoStatus:     true,
 		NetworkState: &state.NetworkState{},
-		DataDir:      testDir,
+		BasePath:     testDir,
 		MsgRec:       make(chan network.Message),
 		MsgSend:      make(chan network.Message),
 		SyncChan:     make(chan *big.Int),

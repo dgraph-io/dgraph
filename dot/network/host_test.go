@@ -26,13 +26,13 @@ import (
 
 // test host connect method
 func TestConnect(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -45,10 +45,10 @@ func TestConnect(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
@@ -98,13 +98,13 @@ func TestConnect(t *testing.T) {
 
 // test host bootstrap method on start
 func TestBootstrap(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -119,10 +119,10 @@ func TestBootstrap(t *testing.T) {
 
 	addrA := nodeA.host.multiaddrs()[0]
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	configB := &Config{
-		DataDir:   dataDirB,
+		BasePath:  basePathB,
 		Port:      7002,
 		RandSeed:  2,
 		Bootnodes: []string{addrA.String()},
@@ -165,13 +165,13 @@ func TestBootstrap(t *testing.T) {
 
 // test host ping method
 func TestPing(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -184,10 +184,10 @@ func TestPing(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
@@ -233,13 +233,13 @@ func TestPing(t *testing.T) {
 
 // test host send method
 func TestSend(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -252,12 +252,12 @@ func TestSend(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	msgSendB := make(chan Message)
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
@@ -307,13 +307,13 @@ func TestSend(t *testing.T) {
 
 // test host broadcast method
 func TestBroadcast(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -326,12 +326,12 @@ func TestBroadcast(t *testing.T) {
 	nodeA.noGossip = true
 	nodeA.noStatus = true
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	msgSendB := make(chan Message)
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,
@@ -360,12 +360,12 @@ func TestBroadcast(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dataDirC := utils.NewTestDataDir(t, "")
+	basePathC := utils.NewTestBasePath(t, "")
 
 	msgSendC := make(chan Message)
 
 	configC := &Config{
-		DataDir:     dataDirC,
+		BasePath:    basePathC,
 		Port:        7003,
 		RandSeed:    3,
 		NoBootstrap: true,
@@ -426,7 +426,7 @@ func TestBroadcast(t *testing.T) {
 
 // test host send method with existing stream
 func TestExistingStream(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
@@ -434,7 +434,7 @@ func TestExistingStream(t *testing.T) {
 	msgSendA := make(chan Message)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -453,12 +453,12 @@ func TestExistingStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	msgSendB := make(chan Message)
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		Port:        7002,
 		RandSeed:    2,
 		NoBootstrap: true,

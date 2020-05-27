@@ -29,13 +29,13 @@ import (
 
 // TestRequestedBlockIDs tests adding and removing block ids from requestedBlockIDs
 func TestRequestedBlockIDs(t *testing.T) {
-	dataDir := utils.NewTestDataDir(t, "node")
+	basePath := utils.NewTestBasePath(t, "node")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
 	config := &Config{
-		DataDir:     dataDir,
+		BasePath:    basePath,
 		Port:        7001,
 		RandSeed:    1,
 		NoBootstrap: true,
@@ -61,7 +61,7 @@ func TestRequestedBlockIDs(t *testing.T) {
 // have a peer send a message status with a block ahead
 // test exchanged messages after peer connected are correct
 func TestHandleStatusMessage(t *testing.T) {
-	dataDirA := utils.NewTestDataDir(t, "nodeA")
+	basePathA := utils.NewTestBasePath(t, "nodeA")
 
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
@@ -71,7 +71,7 @@ func TestHandleStatusMessage(t *testing.T) {
 	syncChan := make(chan *big.Int)
 
 	configA := &Config{
-		DataDir:     dataDirA,
+		BasePath:    basePathA,
 		BlockState:  newMockBlockState(heightA),
 		Port:        7001,
 		RandSeed:    1,
@@ -105,13 +105,13 @@ func TestHandleStatusMessage(t *testing.T) {
 	// simulate host status message sent from core service on startup
 	msgRecA <- testStatusMessage
 
-	dataDirB := utils.NewTestDataDir(t, "nodeB")
+	basePathB := utils.NewTestBasePath(t, "nodeB")
 
 	heightB := big.NewInt(1)
 	msgRecB := make(chan Message)
 
 	configB := &Config{
-		DataDir:     dataDirB,
+		BasePath:    basePathB,
 		BlockState:  newMockBlockState(heightB),
 		Port:        7002,
 		RandSeed:    2,
