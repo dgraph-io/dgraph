@@ -1797,8 +1797,7 @@ func substituteSingleVarInBody(key string, valPtr *interface{},
 	return nil
 }
 
-func substituteVarInMapInBody(object map[string]interface{},
-	variables map[string]interface{}) error {
+func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:
