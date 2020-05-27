@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"strings"
@@ -784,6 +785,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 	} else {
 		for i := 0; i < len(inputs); i++ {
+			if fconf.Template == nil {
+				continue
+			}
 			temp, err := copyTemplate(*fconf.Template)
 			if err != nil {
 				errCh <- err
@@ -846,11 +850,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 				errCh <- schema.AppendGQLErrs(errs, keyNotFoundError(f, fconf.RemoteGqlQueryName))
 				return
 			}
-		} else {
-			if err := json.Unmarshal(b, &result); err != nil {
-				errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-				return
-			}
+		} else if err := json.Unmarshal(b, &result); err != nil {
+			errCh <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+			return
 		}
 
 		if len(result) != len(vals) {
@@ -939,11 +941,9 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 						keyNotFoundError(f, fconf.RemoteGqlQueryName))
 					return
 				}
-			} else {
-				if err := json.Unmarshal(b, &result); err != nil {
-					errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
-					return
-				}
+			} else if err := json.Unmarshal(b, &result); err != nil {
+				errChan <- x.GqlErrorList{jsonUnmarshalError(err, f)}
+				return
 			}
 
 			mu.Lock()
@@ -1010,7 +1010,16 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 	}
 
 	idFieldName := idField.Name()
-
+	castInterfaceToSlice := func(tmpVals interface{}) []interface{} {
+		var fieldVals []interface{}
+		switch tv := tmpVals.(type) {
+		case []interface{}:
+			fieldVals = tv
+		case interface{}:
+			fieldVals = []interface{}{tv}
+		}
+		return fieldVals
+	}
 	// Here we walk through the array and collect all unique values for this field. In the
 	// example at the start of the function, we could be collecting all unique classes
 	// across all users. This is where the batching happens so that we make one call per
@@ -1021,10 +1030,11 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		fieldVals, ok := val[f.Name()].([]interface{})
+		tmpVals, ok := val[f.Name()]
 		if !ok {
 			continue
 		}
+		fieldVals := castInterfaceToSlice(tmpVals)
 		for _, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
 			if !ok {
@@ -1059,10 +1069,11 @@ func resolveNestedFields(f schema.Field, vals []interface{}, mu *sync.RWMutex,
 		if !ok {
 			continue
 		}
-		fieldVals, ok := val[f.Name()].([]interface{})
+		tmpVals, ok := val[f.Name()]
 		if !ok {
 			continue
 		}
+		fieldVals := castInterfaceToSlice(tmpVals)
 		for idx, fieldVal := range fieldVals {
 			fv, ok := fieldVal.(map[string]interface{})
 			if !ok {
@@ -1485,7 +1496,14 @@ func (hr *httpResolver) Resolve(ctx context.Context, field schema.Field) *Resolv
 
 func makeRequest(client *http.Client, method, url, body string,
 	header http.Header) ([]byte, error) {
-	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
+	var reqBody io.Reader
+	if body == "" || body == "null" {
+		reqBody = http.NoBody
+	} else {
+		reqBody = bytes.NewBufferString(body)
+	}
+
+	req, err := http.NewRequest(method, url, reqBody)
 	if err != nil {
 		return nil, err
 	}

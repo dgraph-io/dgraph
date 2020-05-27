@@ -1490,17 +1490,15 @@ func (l *List) PartSplits() []uint64 {
 }
 
 // ToBackupPostingList converts a posting list into its representation used for storing backups.
-func ToBackupPostingList(l *pb.PostingList) *pb.BackupPostingList {
-	bl := pb.BackupPostingList{}
-	if l == nil {
-		return &bl
+func ToBackupPostingList(l *pb.PostingList, bl *pb.BackupPostingList) {
+	if l == nil || bl == nil {
+		return
 	}
 
 	bl.Uids = codec.Decode(l.Pack, 0)
 	bl.Postings = l.Postings
 	bl.CommitTs = l.CommitTs
 	bl.Splits = l.Splits
-	return &bl
 }
 
 // FromBackupPostingList converts a posting list in the format used for backups to a

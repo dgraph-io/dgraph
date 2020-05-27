@@ -2006,3 +2006,86 @@ func TestForNestedInvalidInputObject(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Contains(t, res.Errors.Error(), "expected type for the field name is Int! but got String! in type StateInput")
 }
+
+func TestRestCustomLogicInDeepNestedField(t *testing.T) {
+	schema := `
+	type SearchTweets {
+		id: ID!
+		text: String!
+		user: User 
+	}
+	
+	type User {
+		id: ID!
+		screen_name: String! @id
+		followers: Followers @custom(http:{
+			url: "http://mock:8888/twitterfollowers?screen_name=$screen_name"
+			method: "GET",
+		})
+		tweets: [SearchTweets] @hasInverse(field: user)
+	}
+	
+	type RemoteUser @remote {
+		id: ID!
+		name: String
+	}
+	
+	type Followers@remote{
+		users: [RemoteUser]
+	}
+	`
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation{
+			addUser(input:[{
+			  screen_name:"manishrjain",
+			  tweets:[{
+				text:"hello twitter"
+			  }]
+			}]){
+			  numUids
+			}
+		  }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	params = &common.GraphQLParams{
+		Query: `
+		query{
+			querySearchTweets{
+			  text
+			  user{
+				screen_name
+				followers{
+				  users{
+					name
+				  }
+				}
+			  }
+			}
+		  }`,
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, string(result.Data), `
+	{
+		"querySearchTweets": [{
+			"text": "hello twitter",
+			"user": {
+				"screen_name": "manishrjain",
+				"followers": {
+					"users": [{
+						"name": "hi_balaji"
+					}]
+				}
+			}
+		}]
+	}`)
+}
