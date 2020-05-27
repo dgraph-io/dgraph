@@ -22,6 +22,7 @@ import (
 	"context"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
@@ -37,6 +38,8 @@ type subMutation struct {
 }
 
 type executor struct {
+	pendingSize int64
+
 	sync.RWMutex
 	edgesChan []chan *subMutation
 	closer    *y.Closer
@@ -62,8 +65,10 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
+		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
+			esize += int64(edge.Size())
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
 				if err == nil {
@@ -82,6 +87,8 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
+
+		atomic.AddInt64(&e.pendingSize, -esize)
 	}
 }
 
@@ -100,9 +107,16 @@ func (e *executor) getChannelID(edge *pb.DirectedEdge) int {
 	return int(cid)
 }
 
-func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
-	payloadMap := make(map[int]*subMutation)
+const (
+	maxPendingEdgesSize int64 = 64 << 20
+	executorAddEdges          = "executor.addEdges"
+)
 
+func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)
+
+	payloadMap := make(map[int]*subMutation)
+	var esize int64
 	for _, edge := range edges {
 		cid := e.getChannelID(edge)
 		payload, ok := payloadMap[cid]
@@ -114,6 +128,7 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 			payload = payloadMap[cid]
 		}
 		payload.edges = append(payload.edges, edge)
+		esize += int64(edge.Size())
 	}
 
 	// RLock() in case the channel gets closed from underneath us.
@@ -129,4 +144,5 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 		}
 	}
 
+	atomic.AddInt64(&e.pendingSize, esize)
 }
