@@ -130,7 +130,19 @@ func TestValueCoercion(t *testing.T) {
 			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
 			Response: `{ "getPost": { "numLikes": false }}`,
 			Expected: `{ "getPost": { "numLikes": 0}}`},
-		{Name: "a field error should return an error when float can't be coerced to int" +
+		{Name: "field should return an error when it is greater than int32" +
+			" without losing data",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 2147483648 }}`,
+			Errors: x.GqlErrorList{{
+				Message: "Error coercing value '2.147483648e+09' for field 'numLikes' to type" +
+					" Int.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
+		{Name: "field should return an error when float can't be coerced to int" +
 			" without losing data",
 			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
 			Response: `{ "getPost": { "numLikes": 123.23 }}`,
@@ -141,7 +153,7 @@ func TestValueCoercion(t *testing.T) {
 			}},
 			Expected: `{"getPost": {"numLikes": null}}`,
 		},
-		{Name: "a field error should return an error when when it can't be coerced as int32" +
+		{Name: "field should return an error when when it can't be coerced as int32" +
 			" from a string",
 			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
 			Response: `{ "getPost": { "numLikes": "123.23" }}`,
@@ -172,15 +184,6 @@ func TestValueCoercion(t *testing.T) {
 			Expected: `{ "getAuthor": { "reputation": 0.0}}`},
 
 		// test bool/int/string/datetime can be coerced to Datetime
-		{Name: "int value should raise an error when tried to be coerced to datetime",
-			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
-			Response: `{ "getAuthor": { "dob": 2 }}`,
-			Errors: x.GqlErrorList{{
-				Message:   "Error coercing value '2' for field 'dob' to type DateTime.",
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
-				Path:      []interface{}{"getAuthor", "dob"},
-			}},
-			Expected: `{ "getAuthor": { "dob": null }}`},
 		{Name: "float value should raise an error when tried to be coerced to datetime",
 			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
 			Response: `{ "getAuthor": { "dob": "23.123" }}`,
@@ -208,6 +211,14 @@ func TestValueCoercion(t *testing.T) {
 				Path:      []interface{}{"getAuthor", "dob"},
 			}},
 			Expected: `{ "getAuthor": { "dob": null}}`},
+		{Name: "int value should be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": 2 }}`,
+			Expected: `{ "getAuthor": { "dob": "1970-01-01T05:30:02+05:30"}}`},
+		{Name: "float value that can be truncated safely should be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": 2.0 }}`,
+			Expected: `{ "getAuthor": { "dob": "1970-01-01T05:30:02+05:30"}}`},
 		{Name: "val string value should be coerced to datetime",
 			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
 			Response: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+00:00" }}`,

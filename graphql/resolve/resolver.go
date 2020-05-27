@@ -1313,6 +1313,8 @@ func completeValue(
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
+		// val is a scalar
+
 		valueCoercionError := func(val interface{}) x.GqlErrorList {
 			gqlErr := x.GqlErrorf(
 				"Error coercing value '%+v' for field '%s' to type %s.",
@@ -1338,9 +1340,9 @@ func completeValue(
 		case "Boolean":
 			switch v := val.(type) {
 			case float64:
-				val = v > 0
+				val = v != 0
 			case int64:
-				val = v > 0
+				val = v != 0
 			case string:
 				val = len(v) > 0
 			case bool:
@@ -1354,15 +1356,19 @@ func completeValue(
 				// might be losing informating by truncating it.
 				truncated := math.Trunc(v)
 				if truncated == v {
-					val = int(truncated)
+					tv := int(truncated)
+					if tv > math.MaxInt32 || tv < math.MinInt32 {
+						return nil, valueCoercionError(v)
+					}
+					val = tv
 				} else {
 					return nil, valueCoercionError(v)
 				}
 			case bool:
-				if !v {
-					val = 0
-				} else {
+				if v {
 					val = 1
+				} else {
+					val = 0
 				}
 			case string:
 				i, err := strconv.ParseFloat(v, 32)
@@ -1395,10 +1401,10 @@ func completeValue(
 		case "Float":
 			switch v := val.(type) {
 			case bool:
-				if !v {
-					val = 0.0
-				} else {
+				if v {
 					val = 1.0
+				} else {
+					val = 0.0
 				}
 			case string:
 				i, err := strconv.ParseFloat(v, 64)
@@ -1418,6 +1424,18 @@ func completeValue(
 				if _, err := types.ParseTime(v); err != nil {
 					return nil, valueCoercionError(v)
 				}
+			case float64:
+				truncated := math.Trunc(v)
+				if truncated == v {
+					// Lets interpret int values as unix timestamp.
+					t := time.Unix(int64(truncated), 0)
+					val = t.Format(time.RFC3339)
+				} else {
+					return nil, valueCoercionError(v)
+				}
+			case int64:
+				t := time.Unix(v, 0)
+				val = t.Format(time.RFC3339)
 			default:
 				return nil, valueCoercionError(v)
 			}
@@ -1446,11 +1464,9 @@ func completeValue(
 			}
 		}
 
-		// val is a scalar
-
 		// Can this ever error?  We can't have an unsupported type or value because
 		// we just unmarshaled this val.
-		json, err := json.Marshal(val)
+		b, err := json.Marshal(val)
 		if err != nil {
 			gqlErr := x.GqlErrorf(
 				"Error marshalling value for field '%s' (type %s).  "+
@@ -1466,7 +1482,7 @@ func completeValue(
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
-		return json, nil
+		return b, nil
 	}
 }
 
