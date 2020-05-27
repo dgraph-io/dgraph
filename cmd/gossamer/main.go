@@ -50,7 +50,7 @@ var (
 		Usage:     "Initialize node databases and load genesis data to state",
 		ArgsUsage: "",
 		Flags:     InitFlags,
-		Category:  "INITIALIZATION",
+		Category:  "INIT",
 		Description: "The init command initializes the node databases and loads the genesis data from the genesis configuration file to state.\n" +
 			"\tUsage: gossamer init --genesis genesis.json",
 	}
@@ -58,9 +58,9 @@ var (
 	accountCommand = cli.Command{
 		Action:   FixFlagOrder(accountAction),
 		Name:     "account",
-		Usage:    "manage gossamer keystore",
+		Usage:    "Create and manage node keystore accounts",
 		Flags:    AccountFlags,
-		Category: "KEYSTORE",
+		Category: "ACCOUNT",
 		Description: "The account command is used to manage the gossamer keystore.\n" +
 			"\tTo generate a new sr25519 account: gossamer account --generate\n" +
 			"\tTo generate a new ed25519 account: gossamer account --generate --ed25519\n" +

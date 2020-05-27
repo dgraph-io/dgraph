@@ -47,9 +47,9 @@ var (
 
 // Global node configuration flags
 var (
-	// VerbosityFlag cli service settings
-	VerbosityFlag = cli.StringFlag{
-		Name:  "verbosity",
+	// LogFlag cli service settings
+	LogFlag = cli.StringFlag{
+		Name:  "log",
 		Usage: "Supports levels crit (silent) to trce (trace)",
 		Value: log.LvlInfo.String(),
 	}
@@ -94,7 +94,7 @@ var (
 	// BootnodesFlag Network service settings
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Comma separated enode URLs for network discovery bootstrap",
+		Usage: "Comma separated node URLs for network discovery bootstrap",
 	}
 	// ProtocolFlag Set protocol id
 	ProtocolFlag = cli.StringFlag{
@@ -104,12 +104,12 @@ var (
 	// NoBootstrapFlag Disables network bootstrapping
 	NoBootstrapFlag = cli.BoolFlag{
 		Name:  "nobootstrap",
-		Usage: "Disables network bootstrapping (mdns still enabled)",
+		Usage: "Disables network bootstrapping (mDNS still enabled)",
 	}
-	// NoMDNSFlag Disables network mdns
+	// NoMDNSFlag Disables network mDNS
 	NoMDNSFlag = cli.BoolFlag{
 		Name:  "nomdns",
-		Usage: "Disables network mdns discovery",
+		Usage: "Disables network mDNS discovery",
 	}
 )
 
@@ -188,7 +188,7 @@ var (
 var (
 	// GlobalFlags are flags that are valid for use with the root command and all subcommands
 	GlobalFlags = []cli.Flag{
-		VerbosityFlag,
+		LogFlag,
 		NameFlag,
 		ChainFlag,
 		ConfigFlag,
@@ -262,21 +262,21 @@ func FixFlagOrder(f func(ctx *cli.Context) error) func(*cli.Context) error {
 
 			// check if flag is set as global or local flag
 			if ctx.GlobalIsSet(flagName) {
-				// log global flag if verbosity equals trace
-				if ctx.String(VerbosityFlag.Name) == trace {
+				// log global flag if log equals trace
+				if ctx.String(LogFlag.Name) == trace {
 					log.Trace("[cmd] global flag set", "name", flagName)
 				}
 			} else if ctx.IsSet(flagName) {
 				// check if global flag using set as global flag
 				err := ctx.GlobalSet(flagName, ctx.String(flagName))
 				if err == nil {
-					// log fixed global flag if verbosity equals trace
-					if ctx.String(VerbosityFlag.Name) == trace {
+					// log fixed global flag if log equals trace
+					if ctx.String(LogFlag.Name) == trace {
 						log.Trace("[cmd] global flag fixed", "name", flagName)
 					}
 				} else {
-					// if not global flag, log local flag if verbosity equals trace
-					if ctx.String(VerbosityFlag.Name) == trace {
+					// if not global flag, log local flag if log equals trace
+					if ctx.String(LogFlag.Name) == trace {
 						log.Trace("[cmd] local flag set", "name", flagName)
 					}
 				}

@@ -88,26 +88,26 @@ func TestStartLogger(t *testing.T) {
 		expected    error
 	}{
 		{
-			"Test gossamer --verbosity info",
-			[]string{"verbosity"},
+			"Test gossamer --log info",
+			[]string{"log"},
 			[]interface{}{"info"},
 			nil,
 		},
 		{
-			"Test gossamer --verbosity debug",
-			[]string{"verbosity"},
+			"Test gossamer --log debug",
+			[]string{"log"},
 			[]interface{}{"debug"},
 			nil,
 		},
 		{
-			"Test gossamer --verbosity trace",
-			[]string{"verbosity"},
+			"Test gossamer --log trace",
+			[]string{"log"},
 			[]interface{}{"trace"},
 			nil,
 		},
 		{
-			"Test gossamer --verbosity blah",
-			[]string{"verbosity"},
+			"Test gossamer --log blah",
+			[]string{"log"},
 			[]interface{}{"blah"},
 			fmt.Errorf("Unknown level: blah"),
 		},

@@ -43,23 +43,23 @@ func TestFixFlagOrder(t *testing.T) {
 		values      []interface{}
 	}{
 		{
-			"Test gossamer --config --genesis --verbosity --force",
-			[]string{"config", "genesis", "verbosity", "force"},
+			"Test gossamer --config --genesis --log --force",
+			[]string{"config", "genesis", "log", "force"},
 			[]interface{}{testConfig.Name(), genFile.Name(), "trace", true},
 		},
 		{
-			"Test gossamer --config --genesis --force --verbosity",
-			[]string{"config", "genesis", "force", "verbosity"},
+			"Test gossamer --config --genesis --force --log",
+			[]string{"config", "genesis", "force", "log"},
 			[]interface{}{testConfig.Name(), genFile.Name(), true, "trace"},
 		},
 		{
-			"Test gossamer --config --force --genesis --verbosity",
-			[]string{"config", "force", "genesis", "verbosity"},
+			"Test gossamer --config --force --genesis --log",
+			[]string{"config", "force", "genesis", "log"},
 			[]interface{}{testConfig.Name(), true, genFile.Name(), "trace"},
 		},
 		{
-			"Test gossamer --force --config --genesis --verbosity",
-			[]string{"force", "config", "genesis", "verbosity"},
+			"Test gossamer --force --config --genesis --log",
+			[]string{"force", "config", "genesis", "log"},
 			[]interface{}{true, testConfig.Name(), genFile.Name(), "trace"},
 		},
 	}

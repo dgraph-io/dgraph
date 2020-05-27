@@ -67,7 +67,7 @@ build:
 
 # init: Initialize gossamer using the default genesis and toml configuration files
 init:
-	./bin/gossamer init --verbosity debug
+	./bin/gossamer init --log debug
 
 ## start: Starts application from binary executable in `./bin/gossamer`
 start:
