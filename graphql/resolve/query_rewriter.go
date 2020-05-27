@@ -214,6 +214,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
+	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
 		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
@@ -293,6 +294,7 @@ func rewriteAsGet(
 	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
 	addUID(dgQuery)
 	addTypeFilter(dgQuery, field.Type())
+	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
 		dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
@@ -339,6 +341,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 	addUID(dgQuery)
+	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
 		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
@@ -613,6 +616,7 @@ func addSelectionSetFrom(
 		addFilter(child, f.Type(), filter)
 		addOrder(child, f)
 		addPagination(child, f)
+		addCascadeDirective(child, f)
 		rbac := auth.evaluateStaticRules(f.Type())
 
 		selectionAuth := addSelectionSetFrom(child, f, auth)
@@ -701,6 +705,10 @@ func addPagination(q *gql.GraphQuery, field schema.Field) {
 	if offset != nil {
 		q.Args["offset"] = fmt.Sprintf("%v", offset)
 	}
+}
+
+func addCascadeDirective(q *gql.GraphQuery, field schema.Field) {
+	q.Cascade = field.Cascade()
 }
 
 func convertIDs(idsSlice []interface{}) []uint64 {

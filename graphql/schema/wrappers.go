@@ -122,6 +122,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
+	Cascade() bool
 	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
@@ -656,6 +657,10 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
+func (f *field) Cascade() bool {
+	return f.field.Directives.ForName(cascadeDirective) != nil
+}
+
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
@@ -1012,6 +1017,10 @@ func (q *query) Include() bool {
 	return true
 }
 
+func (q *query) Cascade() bool {
+	return (*field)(q).Cascade()
+}
+
 func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
@@ -1117,6 +1126,10 @@ func (m *mutation) Include() bool {
 	return true
 }
 
+func (m *mutation) Cascade() bool {
+	return (*field)(m).Cascade()
+}
+
 func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
 }
@@ -1145,6 +1158,12 @@ func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
 		if f.Name() == NumUid || f.Name() == Typename {
 			continue
+		}
+		// if @cascade was given on mutation itself, then it should get applied for the query which
+		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
+		if m.Cascade() && !f.Cascade() {
+			field := f.(*field).field
+			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
 		}
 		return f
 	}

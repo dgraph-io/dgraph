@@ -34,14 +34,15 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective = "dgraph"
-	dgraphTypeArg   = "type"
-	dgraphPredArg   = "pred"
-	idDirective     = "id"
-	secretDirective = "secret"
-	authDirective   = "auth"
-	customDirective = "custom"
-	remoteDirective = "remote" // types with this directive are not stored in Dgraph.
+	dgraphDirective  = "dgraph"
+	dgraphTypeArg    = "type"
+	dgraphPredArg    = "pred"
+	idDirective      = "id"
+	secretDirective  = "secret"
+	authDirective    = "auth"
+	customDirective  = "custom"
+	remoteDirective  = "remote" // types with this directive are not stored in Dgraph.
+	cascadeDirective = "cascade"
 
 	// custom directive args and fields
 	mode   = "mode"
@@ -117,6 +118,7 @@ directive @auth(
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int
