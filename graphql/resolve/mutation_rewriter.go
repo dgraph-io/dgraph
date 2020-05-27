@@ -1003,6 +1003,9 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
+			if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+				fieldName = fieldName[1 : len(fieldName)-1]
+			}
 
 			switch val := val.(type) {
 			case map[string]interface{}:

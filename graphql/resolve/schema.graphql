@@ -207,3 +207,8 @@ type Mutation {
                 method: "DELETE"
         })
 }
+
+type Message {
+  content: String! @dgraph(pred: "post")
+  author: String @dgraph(pred: "<职业>")
+}
