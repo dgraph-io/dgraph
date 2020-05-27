@@ -186,12 +186,17 @@ func TestBlockTree_DeepestLeaf(t *testing.T) {
 
 	bt, _ := createTestBlockTree(header, 8, nil)
 
+	deepest := big.NewInt(0)
+
 	bt.leaves.smap.Range(func(h, n interface{}) bool {
 		leaf := h.(Hash)
 		node := n.(*node)
 		node.arrivalTime = arrivalTime
 		arrivalTime--
-		expected = leaf
+		if node.depth.Cmp(deepest) >= 0 {
+			expected = leaf
+		}
+
 		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
 		return true
 	})
@@ -204,13 +209,16 @@ func TestBlockTree_DeepestLeaf(t *testing.T) {
 	r := *rand.New(rand.NewSource(rand.Int63()))
 	earliestTime := uint64(1 << 63)
 
+	deepest = big.NewInt(0)
+
 	bt.leaves.smap.Range(func(h, n interface{}) bool {
 		leaf := h.(Hash)
 		node := n.(*node)
 		node.arrivalTime = uint64(r.Intn(256))
-		if node.arrivalTime < earliestTime {
+		if node.arrivalTime < earliestTime && node.depth.Cmp(deepest) >= 0 {
 			earliestTime = node.arrivalTime
 			expected = node.hash
+			deepest = node.depth
 		}
 		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
 		return true

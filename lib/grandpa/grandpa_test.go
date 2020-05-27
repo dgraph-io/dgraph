@@ -757,3 +757,41 @@ func TestGetPreVotedBlock_EvenMoreCandidates(t *testing.T) {
 	require.Equal(t, expected, block.hash)
 	require.Equal(t, uint64(5), block.number)
 }
+
+func TestIsCompletable(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	gs, err := NewService(st.Block, voters)
+	require.NoError(t, err)
+
+	var leaves []common.Hash
+	for {
+		state.AddBlocksToState(t, st.Block, 8)
+		leaves = gs.blockState.Leaves()
+		if len(leaves) > 1 {
+			break
+		}
+	}
+
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
+
+	for i, k := range kr.Keys {
+		voter := k.Public().(*ed25519.PublicKey).AsBytes()
+
+		if i < 6 {
+			gs.votes[voter] = voteA
+		} else {
+			gs.votes[voter] = voteB
+		}
+	}
+
+	completable, err := gs.isCompletable()
+	require.NoError(t, err)
+	require.True(t, completable)
+}

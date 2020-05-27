@@ -50,6 +50,39 @@ func NewService(blockState BlockState, voters []*Voter) (*Service, error) {
 	}, nil
 }
 
+func (s *Service) isCompletable() (bool, error) {
+	votes := s.getVotes()
+	prevoted, err := s.getPreVotedBlock()
+	if err != nil {
+		return false, err
+	}
+
+	for _, v := range votes {
+		// check if the current block is a descendant of prevoted block
+		isDescendant, err := s.blockState.IsDescendantOf(prevoted.hash, v.hash)
+		if err != nil {
+			return false, err
+		}
+
+		if !isDescendant {
+			continue
+		}
+
+		// if it's a descendant, check if has >=2/3 votes
+		c, err := s.getTotalVotesForBlock(v.hash)
+		if err != nil {
+			return false, err
+		}
+
+		if c > s.state.threshold() {
+			// round isn't completable
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // getPreVotedBlock returns the current pre-voted block B.
 // the pre-voted block is the block with the highest block number in the set of all the blocks with
 // total votes >= 2/3 the total number of voters, where the total votes is determined by getTotalVotesForBlock.
