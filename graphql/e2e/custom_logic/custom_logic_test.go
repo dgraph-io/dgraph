@@ -164,9 +164,14 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 verifyHeaders(id: ID!): [Movie] @custom(http: {
 				 url: "http://mock:8888/verifyHeaders",
 				 method: "GET",
-				 forwardHeaders: ["X-App-Token", "X-User-Id"]
+				 forwardHeaders: ["X-App-Token", "X-User-Id"],
+				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
 		 })
-	 }`
+	 }
+
+		 # Dgraph.Secret Github-Api-Token random-fake-token
+		 # Dgraph.Secret X-App-Token should-be-overriden
+	 `
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
 
@@ -190,6 +195,26 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Nil(t, result.Errors)
 	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
 	require.Equal(t, expected, string(result.Data))
+}
+
+func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+		type Query {
+			myCustom(yo: CountryInput!): [Country!]!
+			  @custom(
+				http: {
+				  url: "http://mock:8888/validatesecrettoken"
+				  method: "POST"
+				  forwardHeaders: ["Content-Type"]
+				  secretHeaders: ["GITHUB-API-TOKEN"]
+				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
+				}
+			  )
+		  }
+
+		# Dgraph.Secret GITHUB-API-TOKEN "random-api-token"
+		  `
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
 }
 
 func TestServerShouldAllowForwardHeaders(t *testing.T) {
@@ -876,6 +901,67 @@ func readFile(t *testing.T, name string) string {
 	b, err := ioutil.ReadFile(name)
 	require.NoError(t, err)
 	return string(b)
+}
+
+func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
+	schema := `
+	type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888/checkHeadersForUserName"
+					method: "GET"
+					body: "{uid: $id}"
+					mode: SINGLE,
+					secretHeaders: ["GITHUB-API-TOKEN"]
+				}
+			)
+		age: Int! @search
+		cars: Car
+		@custom(
+			http: {
+			url: "http://mock:8888/checkHeadersForCars"
+			method: "GET"
+			body: "{uid: $id}"
+			mode: BATCH,
+			secretHeaders: ["STRIPE-API-KEY"]
+			}
+		)
+  	}
+
+# Dgraph.Secret GITHUB-API-TOKEN some-api-token
+# Dgraph.Secret STRIPE-API-KEY some-api-key
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	users := addUsers(t)
+
+	queryUser := `
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
+			name
+			age
+			cars {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {

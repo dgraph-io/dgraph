@@ -136,6 +136,37 @@ func getError(key, val string) error {
 	return fmt.Errorf(`{ "errors": [{"message": "%s: %s"}] }`, key, val)
 }
 
+func compareHeaders(headers map[string][]string, actual http.Header) error {
+	if headers == nil {
+		return nil
+	}
+	actualHeaderLen := len(actual)
+	expectedHeaderLen := len(headers)
+	if actualHeaderLen != expectedHeaderLen {
+		return getError(fmt.Sprintf("Wanted %d headers in request, got", expectedHeaderLen),
+			strconv.Itoa(actualHeaderLen))
+	}
+
+	for k, v := range headers {
+		rv, ok := actual[k]
+		if !ok {
+			return getError("Required header not found", k)
+		}
+
+		if v == nil {
+			continue
+		}
+
+		sort.Strings(rv)
+		sort.Strings(v)
+
+		if !reflect.DeepEqual(rv, v) {
+			return getError(fmt.Sprintf("Unexpected value for %s header", k), fmt.Sprint(rv))
+		}
+	}
+	return nil
+}
+
 func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 	if r.Method != expectedRequest.method {
 		return getError("Invalid HTTP method", r.Method)
@@ -157,34 +188,7 @@ func verifyRequest(r *http.Request, expectedRequest expectedRequest) error {
 		return getError("Unexpected value for request body", string(b))
 	}
 
-	if expectedRequest.headers != nil {
-		actualHeaderLen := len(r.Header)
-		expectedHeaderLen := len(expectedRequest.headers)
-		if actualHeaderLen != expectedHeaderLen {
-			return getError(fmt.Sprintf("Wanted %d headers in request, got", expectedHeaderLen),
-				strconv.Itoa(actualHeaderLen))
-		}
-
-		for k, v := range expectedRequest.headers {
-			rv, ok := r.Header[k]
-			if !ok {
-				return getError("Required header not found", k)
-			}
-
-			if v == nil {
-				continue
-			}
-
-			sort.Strings(rv)
-			sort.Strings(v)
-
-			if !reflect.DeepEqual(rv, v) {
-				return getError(fmt.Sprintf("Unexpected value for %s header", k), fmt.Sprint(rv))
-			}
-		}
-	}
-
-	return nil
+	return compareHeaders(expectedRequest.headers, r.Header)
 }
 
 // bool parameter in return signifies whether it is an introspection query or not:
@@ -277,10 +281,11 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		urlSuffix: "/verifyHeaders",
 		body:      "",
 		headers: map[string][]string{
-			"X-App-Token":     {"app-token"},
-			"X-User-Id":       {"123"},
-			"Accept-Encoding": nil,
-			"User-Agent":      nil,
+			"X-App-Token":      {"app-token"},
+			"X-User-Id":        {"123"},
+			"Github-Api-Token": {"random-fake-token"},
+			"Accept-Encoding":  nil,
+			"User-Agent":       nil,
 		},
 	})
 	if err != nil {
@@ -670,6 +675,34 @@ func schoolNamesHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	check2(fmt.Fprint(w, string(b)))
+}
+
+func deleteCommonHeaders(headers http.Header) {
+	delete(headers, "Accept-Encoding")
+	delete(headers, "Content-Length")
+	delete(headers, "User-Agent")
+}
+
+func carsHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
+	deleteCommonHeaders(r.Header)
+	if err := compareHeaders(map[string][]string{
+		"Stripe-Api-Key": []string{"some-api-key"},
+	}, r.Header); err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(fmt.Fprint(w, `[{"name": "foo"},{"name": "foo"},{"name": "foo"}]`))
+}
+
+func userNameHandlerWithHeaders(w http.ResponseWriter, r *http.Request) {
+	deleteCommonHeaders(r.Header)
+	if err := compareHeaders(map[string][]string{
+		"Github-Api-Token": []string{"some-api-token"},
+	}, r.Header); err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(fmt.Fprint(w, `"foo"`))
 }
 
 func carsHandler(w http.ResponseWriter, r *http.Request) {
@@ -1092,12 +1125,14 @@ func main() {
 	// for testing batch mode
 	http.HandleFunc("/userNames", userNamesHandler)
 	http.HandleFunc("/cars", carsHandler)
+	http.HandleFunc("/checkHeadersForCars", carsHandlerWithHeaders)
 	http.HandleFunc("/classes", classesHandler)
 	http.HandleFunc("/teacherNames", teacherNamesHandler)
 	http.HandleFunc("/schoolNames", schoolNamesHandler)
 
 	// for testing single mode
 	http.HandleFunc("/userName", userNameHandler)
+	http.HandleFunc("/checkHeadersForUserName", userNameHandlerWithHeaders)
 	http.HandleFunc("/car", carHandler)
 	http.HandleFunc("/class", classHandler)
 	http.HandleFunc("/teacherName", teacherNameHandler)
@@ -1129,6 +1164,15 @@ func main() {
 	})
 	http.HandleFunc("/invalidfield", commonGraphqlHandler("invalidfield"))
 	http.HandleFunc("/nestedinvalid", commonGraphqlHandler("nestedinvalid"))
+	http.HandleFunc("/validatesecrettoken", func(w http.ResponseWriter, r *http.Request) {
+		if h := r.Header.Get("Github-Api-Token"); h != "random-api-token" {
+			return
+		}
+		rh := &relay.Handler{
+			Schema: graphql.MustParseSchema(graphqlResponses["validinputfield"].Schema, &query{}),
+		}
+		rh.ServeHTTP(w, r)
+	})
 
 	// for mutations
 	http.HandleFunc("/setCountry", commonGraphqlHandler("setcountry"))

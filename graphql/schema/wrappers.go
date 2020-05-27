@@ -839,13 +839,24 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
+	fconf.ForwardHeaders = http.Header{}
+	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+	if secretHeaders != nil {
+		hc.RLock()
+		for _, h := range secretHeaders.Children {
+			val := string(hc.secrets[h.Value.Raw])
+			fconf.ForwardHeaders.Set(h.Value.Raw, val)
+		}
+		hc.RUnlock()
+	}
+
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
-		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+			// We would override the header if it was also specified as part of secretHeaders.
+			reqHeaderVal := f.op.header.Get(h.Value.Raw)
+			fconf.ForwardHeaders.Set(h.Value.Raw, reqHeaderVal)
 		}
-		fconf.ForwardHeaders = headers
 	}
 
 	if graphqlArg != nil {
