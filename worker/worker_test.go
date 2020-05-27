@@ -374,6 +374,9 @@ func TestMain(m *testing.M) {
 	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
 	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
 	gr.tablets[""] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)
