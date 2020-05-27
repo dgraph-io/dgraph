@@ -73,7 +73,7 @@ const adminTypes = `
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
 		"""
-		encryptionKeyFile: String!
+		encryptionKeyFile: String
 
 		"""
 		Vault server address where the key is stored. This server must be accessible
