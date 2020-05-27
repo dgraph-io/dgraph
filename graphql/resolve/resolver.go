@@ -1428,13 +1428,13 @@ func completeValue(
 				truncated := math.Trunc(v)
 				if truncated == v {
 					// Lets interpret int values as unix timestamp.
-					t := time.Unix(int64(truncated), 0)
+					t := time.Unix(int64(truncated), 0).UTC()
 					val = t.Format(time.RFC3339)
 				} else {
 					return nil, valueCoercionError(v)
 				}
 			case int64:
-				t := time.Unix(v, 0)
+				t := time.Unix(v, 0).UTC()
 				val = t.Format(time.RFC3339)
 			default:
 				return nil, valueCoercionError(v)
