@@ -1805,7 +1805,47 @@ invalid_schemas:
       "locations":[{"line":7, "column":15}]},
     ]
 
+  - name: "@auth on interface"
+    input: |
+      interface X @auth(
+      query: { rule: """
+                 query($USER: String!) {
+                     queryX(filter: { username: { eq: $USER } }) {
+                        __typename
+                     }
+                 }
+                 """ }
+      ){
+        username: String! @id
+        age: Int
+      }
+      type Y implements X {
+        userRole: String @search(by: [hash])
+      }
+    errlist: [
+    {"message": "Interface X; @auth directive is not allowed on interfaces.",
+     "locations":[{"line":1, "column":11}]},
+    ]
+
 valid_schemas:
+  - name: "@auth on interface implementation"
+    input: |
+      interface X {
+        username: String! @id
+        age: Int
+      }
+      type Y implements X @auth(
+      query: { rule: """
+                 query($USER: String!) {
+                     queryY(filter: { username: { eq: $USER } }) {
+                        __typename
+                     }
+                 }
+                 """ }
+      ){
+        userRole: String @search(by: [hash])
+      }
+
   -
     name: "hasInverse directive on singleton"
     input: |

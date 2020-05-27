@@ -163,6 +163,7 @@ type Type interface {
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
+	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
 	DgraphName() string
@@ -1496,6 +1497,27 @@ func (t *astType) XIDField() FieldDefinition {
 	return nil
 }
 
+// InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.
+func (t *astType) InterfaceImplHasAuthRules() bool {
+	schema := t.inSchema.schema
+	types := schema.Types
+	if typ, ok := types[t.Name()]; !ok || typ.Kind != ast.Interface {
+		return false
+	}
+
+	for implName, implements := range schema.Implements {
+		for _, intrface := range implements {
+			if intrface.Name != t.Name() {
+				continue
+			}
+			if val, ok := t.inSchema.authRules[implName]; ok && val.Rules != nil {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (t *astType) Interfaces() []string {
 	interfaces := t.inSchema.schema.Types[t.typ.Name()].Interfaces
 	if len(interfaces) == 0 {
@@ -1805,8 +1827,7 @@ func substituteSingleVarInBody(key string, valPtr *interface{},
 	return nil
 }
 
-func substituteVarInMapInBody(object map[string]interface{},
-	variables map[string]interface{}) error {
+func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:

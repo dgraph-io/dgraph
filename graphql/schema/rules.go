@@ -111,6 +111,15 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 		}
 	}
 
+	checkConflictingDirectivesOnInterface := func(def *ast.Definition) {
+		for _, directive := range def.Directives {
+			if directive.Name == authDirective {
+				errs = append(errs, gqlerror.ErrorPosf(def.Position,
+					"Interface %s; @auth directive is not allowed on interfaces.", def.Name))
+			}
+		}
+	}
+
 	checkConflictingFieldsInImplementedInterfacesError := func(typ *ast.Definition) {
 		fieldsToReport := make(map[string][]string)
 		interfaces := typ.Interfaces
@@ -157,6 +166,7 @@ func dgraphDirectivePredicateValidation(gqlSch *ast.Schema, definitions []string
 			typName := typeName(def)
 			if def.Kind == ast.Interface {
 				interfacePreds[def.Name] = make(map[string]bool)
+				checkConflictingDirectivesOnInterface(def)
 			} else {
 				checkConflictingFieldsInImplementedInterfacesError(def)
 			}

@@ -790,6 +790,34 @@
     }
 
 -
+  name: "Get Query on interface whose implementation contains Auth rules."
+  gqlquery: |
+    query {
+      getX(id: "0x1") {
+        username
+        age
+      }
+    }
+  dgquery: |-
+    query {
+      getX()
+    }
+
+-
+  name: "Query on interface whose implementation contains Auth rules."
+  gqlquery: |
+    query {
+      queryX {
+        username
+        age
+      }
+    }
+  dgquery: |-
+    query {
+      queryX()
+    }
+
+-
   name: "filter with order for type which implements an interface"
   gqlquery: |
     query {

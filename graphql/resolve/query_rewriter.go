@@ -60,6 +60,10 @@ func (qr *queryRewriter) Rewrite(
 		selector:      queryAuthSelector,
 	}
 
+	if gqlQuery.Type().InterfaceImplHasAuthRules() {
+		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
+	}
+
 	switch gqlQuery.QueryType() {
 	case schema.GetQuery:
 
