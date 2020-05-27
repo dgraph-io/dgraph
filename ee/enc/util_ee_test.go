@@ -27,6 +27,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func getEncConfig() *viper.Viper {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	RegisterFlags(flags)
+	config.BindPFlags(flags)
+	return config
+}
+
 func resetConfig(config *viper.Viper) {
 	config.Set(encKeyFile, "")
 
@@ -64,11 +72,7 @@ func resetConfig(config *viper.Viper) {
 // }
 
 func TestNewKeyReader(t *testing.T) {
-	config := viper.New()
-	flags := &pflag.FlagSet{}
-	RegisterFlags(flags)
-	config.BindPFlags(flags)
-
+	config := getEncConfig()
 	// Vault and Local combination tests
 	// Both Local and Vault options is invalid.
 	resetConfig(config)
@@ -181,10 +185,7 @@ func TestGetReaderWriter(t *testing.T) {
 	require.Equal(t, f, neww)
 
 	// valid key
-	config := viper.New()
-	flags := &pflag.FlagSet{}
-	RegisterFlags(flags)
-	config.BindPFlags(flags)
+	config := getEncConfig()
 	config.Set(encKeyFile, "./test-fixtures/enc-key")
 	kr, err := newKeyReader(config)
 	require.NoError(t, err)

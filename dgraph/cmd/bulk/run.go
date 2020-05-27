@@ -185,8 +185,6 @@ func run() {
 	}
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
-
-	fmt.Printf("%+v", opt)
 	maxOpenFilesWarning()
 
 	go func() {

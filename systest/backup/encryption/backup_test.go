@@ -314,10 +314,7 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	require.NoError(t, os.RemoveAll(restoreDir))
 
 	// Get key.
-	config := viper.New()
-	flags := &pflag.FlagSet{}
-	enc.RegisterFlags(flags)
-	config.BindPFlags(flags)
+	config := getEncConfig()
 	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
 	k, err := enc.ReadKey(config)
 	require.NotNil(t, k)
@@ -326,6 +323,14 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
+}
+
+func getEncConfig() *viper.Viper {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+	return config
 }
 
 func dirSetup(t *testing.T) {
