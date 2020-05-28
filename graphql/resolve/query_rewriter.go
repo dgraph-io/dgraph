@@ -235,16 +235,29 @@ func addArgumentsToField(dgQuery *gql.GraphQuery, field schema.Field) {
 	addPagination(dgQuery, field)
 }
 
-func getRootQuery(query *gql.GraphQuery, rootName string) (*gql.GraphQuery, bool) {
+func addTopLevelTypeFilter(query *gql.GraphQuery, field schema.Field) {
+	if query.Attr != "" {
+		addTypeFilter(query, field.Type())
+		return
+	}
+
+	var rootQuery *gql.GraphQuery
 	for _, q := range query.Children {
-		if q.Attr == rootName {
-			return q, true
+		if q.Attr == field.Name() {
+			rootQuery = q
+			break
 		}
-		if childQuery, ok := getRootQuery(q, rootName); ok {
-			return childQuery, true
+		for _, cq := range q.Children {
+			if cq.Attr == field.Name() {
+				rootQuery = cq
+				break
+			}
 		}
 	}
-	return query, false
+
+	if rootQuery != nil {
+		addTypeFilter(rootQuery, field.Type())
+	}
 }
 
 func rewriteAsGet(
@@ -262,15 +275,9 @@ func rewriteAsGet(
 	if xid == nil {
 		dgQuery = rewriteAsQueryByIds(field, []uint64{uid}, auth)
 
-		// If the top level query is the named get, put the type filter there, otherwise
-		// auth has been written into the query, then there will be a blank top level
-		// and multiple children, of which the second is the actual get
-		if dgQuery.Attr != "" {
-			addTypeFilter(dgQuery, field.Type())
-		} else {
-			rootQuery, _ := getRootQuery(dgQuery, field.Name())
-			addTypeFilter(rootQuery, field.Type())
-		}
+		// Add the type filter to the top level get query. When the auth has been written into the
+		// query the top level get query may be present in query's children.
+		addTopLevelTypeFilter(dgQuery, field)
 		return dgQuery
 	}
 
