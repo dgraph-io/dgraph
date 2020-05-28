@@ -25,6 +25,80 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestErrorOnIncorrectValueType(t *testing.T) {
+	tests := []QueryCase{
+		{Name: "return error when object returned instead of scalar value",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": {"id": "0x1"} }}`,
+			Expected: `{ "getAuthor": { "dob": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   errExpectedScalar,
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "dob"},
+			}}},
+
+		{Name: "return error when array is returned instead of scalar value",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": [{"id": "0x1"}] }}`,
+			Expected: `{ "getAuthor": { "dob": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   errExpectedObject,
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "dob"},
+			}}},
+
+		{Name: "return error when scalar is returned instead of object value",
+			GQLQuery: `query { getAuthor(id: "0x1") { country { name } } }`,
+			Response: `{ "getAuthor": { "country": "Rwanda" }}`,
+			Expected: `{ "getAuthor": { "country": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value 'Rwanda' for field 'country' to type Country.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "country"},
+			}}},
+		{Name: "return error when array is returned instead of object value",
+			GQLQuery: `query { getAuthor(id: "0x1") { country { name } } }`,
+			Response: `{ "getAuthor": { "country": [{"name": "Rwanda"}] }}`,
+			Expected: `{ "getAuthor": { "country": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   errExpectedObject,
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "country"},
+			}}},
+
+		{Name: "return error when scalar is returned instead of array value",
+			GQLQuery: `query { getAuthor(id: "0x1") { posts { text } } }`,
+			Response: `{ "getAuthor": { "posts": "Rwanda" }}`,
+			Expected: `{ "getAuthor": { "posts": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value 'Rwanda' for field 'posts' to type Post.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "posts"},
+			}}},
+		{Name: "return error when object is returned instead of array value",
+			GQLQuery: `query { getAuthor(id: "0x1") { posts { text } } }`,
+			Response: `{ "getAuthor": { "posts": {"text": "Random post"} }}`,
+			Expected: `{ "getAuthor": { "posts": null }}`,
+			Errors: x.GqlErrorList{{
+				Message:   errExpectedList,
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "posts"},
+			}}},
+	}
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+			if diff := cmp.Diff(test.Errors, resp.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+
+			require.JSONEq(t, test.Expected, resp.Data.String())
+		})
+	}
+}
+
 func TestValueCoercion(t *testing.T) {
 	tests := []QueryCase{
 		// test int/float/bool can be coerced to String
