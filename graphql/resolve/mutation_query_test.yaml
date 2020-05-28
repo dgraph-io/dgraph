@@ -150,6 +150,93 @@ ADD_UPDATE_MUTATION:
         }
       }
 
+  -
+    name: "cascade directive on mutation payload"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION @cascade {
+          post {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @cascade {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "cascade directive on mutation query field"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post @cascade {
+            title
+            text
+            author {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) @cascade {
+          title : Post.title
+          text : Post.text
+          author : Post.author {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
+  -
+    name: "cascade directive inside mutation query"
+    gqlquery: |
+      mutation {
+        ADD_UPDATE_MUTATION {
+          post {
+            title
+            text
+            author @cascade {
+              name
+              dob
+            }
+          }
+        }
+      }
+    dgquery: |-
+      query {
+        post(func: uid(0x4)) {
+          title : Post.title
+          text : Post.text
+          author : Post.author @cascade {
+            name : Author.name
+            dob : Author.dob
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+
 UPDATE_MUTATION:
   -
     name: "filter update result"

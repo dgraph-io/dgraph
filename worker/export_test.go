@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"math"
 	"net/http"
@@ -46,6 +47,10 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/x"
+)
+
+const (
+	gqlSchema = "type Example { name: String }"
 )
 
 var personType = &pb.TypeUpdate{
@@ -80,6 +85,9 @@ func populateGraphExport(t *testing.T) {
 		`<5> <name> "" .`,
 		`<6> <name> "Ding!\u0007Ding!\u0007Ding!\u0007" .`,
 		`<7> <name> "node_to_delete" .`,
+		fmt.Sprintf("<8> <dgraph.graphql.schema> \"%s\" .", gqlSchema),
+		`<8> <dgraph.graphql.xid> "dgraph.graphql.schema" .`,
+		`<8> <dgraph.type> "dgraph.graphql" .`,
 	}
 	// This triplet will be deleted to ensure deleted nodes do not affect the output of the export.
 	edgeToDelete := `<7> <name> "node_to_delete" .`
@@ -116,7 +124,7 @@ func populateGraphExport(t *testing.T) {
 }
 
 func initTestExport(t *testing.T, schemaStr string) {
-	schema.ParseBytes([]byte(schemaStr), 1)
+	require.NoError(t, schema.ParseBytes([]byte(schemaStr), 1))
 
 	val, err := (&pb.SchemaUpdate{ValueType: pb.Posting_UID}).Marshal()
 	require.NoError(t, err)
@@ -153,16 +161,19 @@ func initTestExport(t *testing.T, schemaStr string) {
 	require.NoError(t, txn.CommitAt(1, nil))
 }
 
-func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles []string) {
+func getExportFileList(t *testing.T, bdir string) (dataFiles, schemaFiles, gqlSchema []string) {
 	searchDir := bdir
 	err := filepath.Walk(searchDir, func(path string, f os.FileInfo, err error) error {
 		if f.IsDir() {
 			return nil
 		}
 		if path != bdir {
-			if strings.Contains(path, "schema") {
+			switch {
+			case strings.Contains(path, "gql_schema"):
+				gqlSchema = append(gqlSchema, path)
+			case strings.Contains(path, "schema"):
 				schemaFiles = append(schemaFiles, path)
-			} else {
+			default:
 				dataFiles = append(dataFiles, path)
 			}
 		}
@@ -198,11 +209,24 @@ func checkExportSchema(t *testing.T, schemaFileList []string) {
 	require.True(t, proto.Equal(result.Types[0], personType))
 }
 
+func checkExportGqlSchema(t *testing.T, gqlSchemaFiles []string) {
+	require.Equal(t, 1, len(gqlSchemaFiles))
+	file := gqlSchemaFiles[0]
+	f, err := os.Open(file)
+	require.NoError(t, err)
+
+	r, err := gzip.NewReader(f)
+	require.NoError(t, err)
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	require.Equal(t, gqlSchema, buf.String())
+}
+
 func TestExportRdf(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
 	initTestExport(t, `
-		name:string @index .
-		age:int.
+		name: string @index(exact) .
+		age: int .
 		`)
 
 	bdir, err := ioutil.TempDir("", "export")
@@ -219,7 +243,7 @@ func TestExportRdf(t *testing.T) {
 	err = export(context.Background(), &pb.ExportRequest{ReadTs: readTs, GroupId: 1, Format: "rdf"})
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -294,11 +318,12 @@ func TestExportRdf(t *testing.T) {
 	require.Equal(t, 9, count)
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
 
 func TestExportJson(t *testing.T) {
 	// Index the name predicate. We ensure it doesn't show up on export.
-	initTestExport(t, "name:string @index .")
+	initTestExport(t, "name: string @index(exact) .")
 
 	bdir, err := ioutil.TempDir("", "export")
 	require.NoError(t, err)
@@ -315,7 +340,7 @@ func TestExportJson(t *testing.T) {
 	err = export(context.Background(), &req)
 	require.NoError(t, err)
 
-	fileList, schemaFileList := getExportFileList(t, bdir)
+	fileList, schemaFileList, gqlSchema := getExportFileList(t, bdir)
 
 	file := fileList[0]
 	f, err := os.Open(file)
@@ -342,6 +367,7 @@ func TestExportJson(t *testing.T) {
 	require.JSONEq(t, wantJson, string(gotJson))
 
 	checkExportSchema(t, schemaFileList)
+	checkExportGqlSchema(t, gqlSchema)
 }
 
 const exportRequest = `mutation export($format: String!) {

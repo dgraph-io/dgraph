@@ -371,13 +371,13 @@ const adminTypes = `
 const adminMutations = `
 
 	"""
-	Start a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
+	Start a binary backup.  See : https://dgraph.io/docs/enterprise-features/#binary-backups
 	"""
 	backup(input: BackupInput!) : BackupPayload
 
 	"""
 	Start restoring a binary backup.  See :
-		https://docs.dgraph.io/enterprise-features/#binary-backups
+		https://dgraph.io/docs/enterprise-features/#binary-backups
 	"""
 	restore(input: RestoreInput!) : RestorePayload
 
