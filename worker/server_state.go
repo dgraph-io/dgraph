@@ -154,7 +154,6 @@ func (s *ServerState) initStorage() {
 			WithMaxCacheSize(1 << 30).
 			WithKeepBlockIndicesInCache(true).
 			WithKeepBlocksInCache(true)
-
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
