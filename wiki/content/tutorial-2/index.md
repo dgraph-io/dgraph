@@ -322,7 +322,7 @@ Let's run the recursive traversal query after replacing the placeholder with the
 {{% load-img "/images/tutorials/2/h-recursive-traversal.png" "recurse" %}}
 
 
-[Check out the docs](https://docs.dgraph.io/query-language/#recurse-query) for detailed instructions on using the `recurse` directive.
+[Check out the docs](https://dgraph.io/docs/query-language/#recurse-query) for detailed instructions on using the `recurse` directive.
 
 #### Edges have directions
 

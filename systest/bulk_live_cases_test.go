@@ -566,6 +566,6 @@ func DONOTRUNTestGoldenData(t *testing.T) {
 	// queries will have to be modified.
 
 	// TODO: Add tests similar to those in
-	// https://docs.dgraph.io/query-language/. These test most of the main
+	// https://dgraph.io/docs/query-language/. These test most of the main
 	// functionality of dgraph.
 }

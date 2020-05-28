@@ -100,12 +100,12 @@ func (opt *Options) validate() {
 			glog.Infof(
 				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
 					"For more information on --lru_mb please read "+
-					"https://docs.dgraph.io/deploy/#config\n",
+					"https://dgraph.io/docs/deploy/#config\n",
 				opt.AllottedMemory, AvailableMemory)
 		}
 	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
-			"For more information on --lru_mb please read https://docs.dgraph.io/deploy/#config",
+			"For more information on --lru_mb please read https://dgraph.io/docs/deploy/#config",
 		MinAllottedMemory, opt.AllottedMemory)
 }
