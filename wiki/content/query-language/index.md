@@ -6,11 +6,11 @@ Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/g
 
 GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.
 
-## Take a Tour - https://tour.dgraph.io
+## Take a Tour - https://dgraph.io/tour/
 
 This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraphQL+- but need to check syntax, or indices, or functions, etc.
 
-{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io{{% /notice %}}
+{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://dgraph.io/tour/{{% /notice %}}
 
 
 ### Running examples

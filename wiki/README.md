@@ -1,6 +1,6 @@
 # Dgraph Wiki
 
-If you are looking for Dgraph documentation, you might find https://docs.dgraph.io much more readable.
+If you are looking for Dgraph documentation, you might find https://dgraph.io/docs/ much more readable.
 
 ## Contributing
 

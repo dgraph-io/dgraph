@@ -702,7 +702,7 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		require.Nilf(t, gqlResponse.Errors, "%+v", gqlResponse.Errors)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)

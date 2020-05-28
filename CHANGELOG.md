@@ -1650,7 +1650,7 @@ upgrading or rolling back. The underlying data format has been changed.**
 
 - This version switches Badger Options to reasonable settings for p and w directories. This removes the need to expose `--badger.options` option and removes the `none` option from `--badger.vlog`. ([#2605](https://github.com/dgraph-io/dgraph/issues/2605))
 - Add support for ignoring parse errors in bulk loader with the option `--ignore_error`. ([#2599](https://github.com/dgraph-io/dgraph/issues/2599))
-- Introduction of new command `dgraph cert` to simplify initial TLS setup. See [TLS configuration docs](https://docs.dgraph.io/deploy/#tls-configuration) for more info.
+- Introduction of new command `dgraph cert` to simplify initial TLS setup. See [TLS configuration docs](https://dgraph.io/docs/deploy/#tls-configuration) for more info.
 - Add `expand(_forward_)` and `expand(_reverse_)` to GraphQL+- query language. If `_forward_` is passed as an argument to `expand()`, all predicates at that level (minus any reverse predicates) are retrieved.
 If `_reverse_` is passed as an argument to `expand()`, only the reverse predicates are retrieved.
 
@@ -1999,15 +1999,15 @@ For `/commit` API, keys are passed in the body.
 
 ### Added
 
-* Dgraph adds support for distributed ACID transactions (a blog post is in works). Transactions can be done via the Go, Java or HTTP clients (JS client coming). See [docs here](https://docs.dgraph.io/clients/).
-* Support for Indexing via [Custom tokenizers](https://docs.dgraph.io/query-language/#indexing-with-custom-tokenizers).
+* Dgraph adds support for distributed ACID transactions (a blog post is in works). Transactions can be done via the Go, Java or HTTP clients (JS client coming). See [docs here](https://dgraph.io/docs/clients/).
+* Support for Indexing via [Custom tokenizers](https://dgraph.io/docs/query-language/#indexing-with-custom-tokenizers).
 * Support for CJK languages in the full-text index.
 
 ### Changed
 
 #### Running Dgraph
 
-* We have consolidated all the `server`, `zero`, `live/bulk-loader` binaries into a single `dgraph` binary for convenience. Instructions for running Dgraph can be found in the [docs](https://docs.dgraph.io/get-started/).
+* We have consolidated all the `server`, `zero`, `live/bulk-loader` binaries into a single `dgraph` binary for convenience. Instructions for running Dgraph can be found in the [docs](https://dgraph.io/docs/get-started/).
 * For Dgraph server, Raft ids can be assigned automatically. A user can optionally still specify an ID, via `--idx` flag.
 * `--peer` flag which was used to specify another Zero instance’s IP address is being replaced by `--zero` flag to indicate the address corresponds to Dgraph zero.
 * `port`, `grpc_port` and `worker_port` flags have been removed from Dgraph server and Zero. The ports are:
@@ -2032,14 +2032,14 @@ Users can set `port_offset` flag, to modify these fixed ports.
 }
 ```
 * Facets response structure has been modified and is a lot flatter. Facet key is now `predicate|facet_name`.
-Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#example-Txn-Mutate-Facets) and [HTTP](https://docs.dgraph.io/query-language/#facets-edge-attributes).
+Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#example-Txn-Mutate-Facets) and [HTTP](https://dgraph.io/docs/query-language/#facets-edge-attributes).
 * Query latency is now returned as numeric (ns) instead of string.
-* [`Recurse`](https://docs.dgraph.io/query-language/#recurse-query) is now a directive. So queries with `recurse` keyword at root won't work anymore.
-* Syntax for [`count` at root](https://docs.dgraph.io/query-language/#count) has changed. You need to ask for `count(uid)`, instead of `count()`.
+* [`Recurse`](https://dgraph.io/docs/query-language/#recurse-query) is now a directive. So queries with `recurse` keyword at root won't work anymore.
+* Syntax for [`count` at root](https://dgraph.io/docs/query-language/#count) has changed. You need to ask for `count(uid)`, instead of `count()`.
 
 #### Mutations
 
-* Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://docs.dgraph.io/clients/#transactions).
+* Mutations can only be done via `Mutate` Grpc endpoint or via [`/mutate` HTTP handler](https://dgraph.io/docs/clients/#transactions).
 * `Mutate` Grpc endpoint can be used to set/ delete JSON, or set/ delete a list of N-Quads and set/ delete raw RDF strings.
 * Mutation blocks don't require the mutation keyword anymore. Here is an example of the new syntax.
 ```
@@ -2050,7 +2050,7 @@ Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#ex
   }
 }
 ```
-* [`Upsert`](https://docs.dgraph.io/v0.8.3/query-language/#upsert) directive and [mutation variables](https://docs.dgraph.io/v0.8.3/query-language/#variables-in-mutations) go away. Both these functionalities can now easily be achieved via transactions.
+* [`Upsert`](https://dgraph.io/docs/v0.8.3/query-language/#upsert) directive and [mutation variables](https://dgraph.io/docs/v0.8.3/query-language/#variables-in-mutations) go away. Both these functionalities can now easily be achieved via transactions.
 
 #### Schema
 
@@ -2063,7 +2063,7 @@ Examples for [Go client](https://godoc.org/github.com/dgraph-io/dgraph/client#ex
 * `Query` Grpc endpoint returns response in JSON under `Json` field instead of protocol buffer. `client.Unmarshal` method also goes away from the Go client. Users can use `json.Unmarshal` for unmarshalling the response.
 * Response for predicate of type `geo` can be unmarshalled into a struct. Example [here](https://godoc.org/github.com/dgraph-io/dgraph/client#example-package--SetObject).
 * `Node` and `Edge` structs go away along with the `SetValue...` methods. We recommend using [`SetJson`](https://godoc.org/github.com/dgraph-io/dgraph/client#example-package--SetObject) and `DeleteJson` fields to do mutations.
-* Examples of how to use transactions using the client can be found at https://docs.dgraph.io/clients/#go.
+* Examples of how to use transactions using the client can be found at https://dgraph.io/docs/clients/#go.
 
 ### Removed
 - Embedded dgraph goes away. We haven’t seen much usage of this feature. And it adds unnecessary maintenance overhead to the code.

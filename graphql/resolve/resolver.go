@@ -22,13 +22,16 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
+	"github.com/dgraph-io/dgraph/types"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/api"
@@ -856,7 +859,7 @@ func resolveCustomField(f schema.Field, vals []interface{}, mu *sync.RWMutex, er
 		}
 
 		if len(result) != len(vals) {
-			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of"+
+			gqlErr := x.GqlErrorf("Evaluation of custom field failed because expected result of "+
 				"external request to be of size %v, got: %v for field: %s within type: %s.",
 				len(vals), len(result), f.Name(), f.GetObjectName()).WithLocations(f.Location())
 			errCh <- schema.AppendGQLErrs(errs, gqlErr)
@@ -1322,10 +1325,14 @@ func completeValue(
 		}
 
 		// val is a scalar
+		val, gqlErr := coerceScalar(val, field, path)
+		if len(gqlErr) != 0 {
+			return nil, gqlErr
+		}
 
 		// Can this ever error?  We can't have an unsupported type or value because
 		// we just unmarshaled this val.
-		json, err := json.Marshal(val)
+		b, err := json.Marshal(val)
 		if err != nil {
 			gqlErr := x.GqlErrorf(
 				"Error marshalling value for field '%s' (type %s).  "+
@@ -1341,8 +1348,167 @@ func completeValue(
 			return nil, x.GqlErrorList{gqlErr}
 		}
 
-		return json, nil
+		return b, nil
 	}
+}
+
+// coerceScalar coerces a scalar value to field.Type() if possible according to the coercion rules
+// defined in the GraphQL spec. If this is not possible, then it returns an error.
+func coerceScalar(val interface{}, field schema.Field, path []interface{}) (interface{},
+	x.GqlErrorList) {
+
+	valueCoercionError := func(val interface{}) x.GqlErrorList {
+		gqlErr := x.GqlErrorf(
+			"Error coercing value '%+v' for field '%s' to type %s.",
+			val, field.Name(), field.Type().Name()).
+			WithLocations(field.Location())
+		gqlErr.Path = copyPath(path)
+		return x.GqlErrorList{gqlErr}
+	}
+
+	switch field.Type().Name() {
+	case "String", "ID":
+		switch v := val.(type) {
+		case float64:
+			val = strconv.FormatFloat(v, 'f', -1, 64)
+		case int64:
+			val = strconv.FormatInt(v, 10)
+		case bool:
+			val = strconv.FormatBool(v)
+		case string:
+		default:
+			return nil, valueCoercionError(v)
+		}
+	case "Boolean":
+		switch v := val.(type) {
+		case float64:
+			val = v != 0
+		case int64:
+			val = v != 0
+		case string:
+			val = len(v) > 0
+		case bool:
+		default:
+			return nil, valueCoercionError(v)
+		}
+	case "Int":
+		switch v := val.(type) {
+		case float64:
+			// The spec says that we can coerce a Float value to Int, if we don't lose information.
+			// See: https: //spec.graphql.org/June2018/#sec-Float
+			// Lets try to see if this a whole number, otherwise return error because we
+			// might be losing informating by truncating it.
+			truncated := math.Trunc(v)
+			if truncated == v {
+				tv := int(truncated)
+				if tv > math.MaxInt32 || tv < math.MinInt32 {
+					return nil, valueCoercionError(v)
+				}
+				val = tv
+			} else {
+				return nil, valueCoercionError(v)
+			}
+		case bool:
+			if v {
+				val = 1
+			} else {
+				val = 0
+			}
+		case string:
+			i, err := strconv.ParseFloat(v, 32)
+			// An error can be encountered if we had a value that can't be fit into
+			// a 32 bit floating point number.
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			// Lets try to see if this a whole number, otherwise return error because we
+			// might be losing informating by truncating it.
+			truncated := math.Trunc(i)
+			if truncated == i {
+				val = int(truncated)
+			} else {
+				return nil, valueCoercionError(v)
+			}
+		case int64:
+			if v > math.MaxInt32 || v < math.MinInt32 {
+				return nil, valueCoercionError(v)
+			}
+		case int:
+			// numUids are added as int, so we need special handling for that. Other number values
+			// in a JSON object are automatically unmarshaled as float so they are handle above.
+			if v > math.MaxInt32 || v < math.MinInt32 {
+				return nil, valueCoercionError(v)
+			}
+		default:
+			return nil, valueCoercionError(v)
+		}
+
+	case "Float":
+		switch v := val.(type) {
+		case bool:
+			if v {
+				val = 1.0
+			} else {
+				val = 0.0
+			}
+		case string:
+			i, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return nil, valueCoercionError(v)
+			}
+			val = i
+		case int64:
+			val = float64(v)
+		case float64:
+		default:
+			return nil, valueCoercionError(v)
+		}
+	case "DateTime":
+		switch v := val.(type) {
+		case string:
+			if _, err := types.ParseTime(v); err != nil {
+				return nil, valueCoercionError(v)
+			}
+		case float64:
+			truncated := math.Trunc(v)
+			if truncated == v {
+				// Lets interpret int values as unix timestamp.
+				t := time.Unix(int64(truncated), 0).UTC()
+				val = t.Format(time.RFC3339)
+			} else {
+				return nil, valueCoercionError(v)
+			}
+		case int64:
+			t := time.Unix(v, 0).UTC()
+			val = t.Format(time.RFC3339)
+		default:
+			return nil, valueCoercionError(v)
+		}
+	default:
+		enumValues := field.EnumValues()
+		// At this point we should only get fields which are of ENUM type, so we can return
+		// an error if we don't get any enum values.
+		if len(enumValues) == 0 {
+			return nil, valueCoercionError(val)
+		}
+		switch v := val.(type) {
+		case string:
+			// Lets check that the enum value is valid.
+			valid := false
+			for _, ev := range enumValues {
+				if ev == v {
+					valid = true
+					break
+				}
+			}
+			if !valid {
+				return nil, valueCoercionError(val)
+			}
+		default:
+			return nil, valueCoercionError(v)
+		}
+	}
+	return val, nil
 }
 
 // completeList applies the completion algorithm to a list field and result.
@@ -1355,7 +1521,7 @@ func completeValue(
 // completeValue() is applied to every list element, but
 // the type of field can only be a scalar list like [String], or an object
 // list like [Person], so schematically the final result is either
-// [ completValue("..."), completValue("..."), ... ]
+// [ completeValue("..."), completeValue("..."), ... ]
 // or
 // [ completeObject({...}), completeObject({...}), ... ]
 // depending on the type of list.
@@ -1526,7 +1692,6 @@ func makeRequest(client *http.Client, method, url, body string,
 	defer resp.Body.Close()
 
 	b, err := ioutil.ReadAll(resp.Body)
-
 	return b, err
 }
 
