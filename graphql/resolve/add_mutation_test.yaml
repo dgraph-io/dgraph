@@ -27,6 +27,265 @@
         }
 
 -
+  name: "Add deep mutation with variables"
+  gqlmutation: |
+    mutation addAuthor($auth: AddAuthorInput!) {
+      addAuthor(input: [$auth]) {
+        author {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    { "auth":
+      { "name": "A.N. Author",
+        "posts": [{
+                "title": "post1",
+                "ps": {"title": "ps1"}
+        }, {
+                "title": "post2",
+                "ps": {"title": "ps2"}
+        }, {
+                "title": "post3",
+                "ps": {"title": "ps3"}
+        }, {
+                "title": "post4",
+                "ps": {"title": "ps4"}
+        }, {
+                "title": "post5",
+                "ps": {"title": "ps5"}
+        }, {
+                "title": "post6",
+                "ps": {"title": "ps6"}
+        }, {
+                "title": "post7",
+                "ps": {"title": "ps7"}
+        }, {
+                "title": "post8",
+                "ps": {"title": "ps8"}
+        }]
+      }
+    }
+  explanation: "A uid and type should get injected and all data transformed to
+    underlying Dgraph edge names"
+  dgquery: |-
+    query {
+      PostSecret4 as PostSecret4(func: eq(PostSecret.title, "ps1")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret7 as PostSecret7(func: eq(PostSecret.title, "ps2")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret10 as PostSecret10(func: eq(PostSecret.title, "ps3")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret13 as PostSecret13(func: eq(PostSecret.title, "ps4")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret16 as PostSecret16(func: eq(PostSecret.title, "ps5")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret19 as PostSecret19(func: eq(PostSecret.title, "ps6")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret22 as PostSecret22(func: eq(PostSecret.title, "ps7")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret25 as PostSecret25(func: eq(PostSecret.title, "ps8")) @filter(type(PostSecret)) {
+        uid
+      }
+    }
+  dgquerysec: |-
+    query {
+      PostSecret4 as PostSecret4(func: eq(PostSecret.title, "ps1")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret7 as PostSecret7(func: eq(PostSecret.title, "ps2")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret10 as PostSecret10(func: eq(PostSecret.title, "ps3")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret13 as PostSecret13(func: eq(PostSecret.title, "ps4")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret16 as PostSecret16(func: eq(PostSecret.title, "ps5")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret19 as PostSecret19(func: eq(PostSecret.title, "ps6")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret22 as PostSecret22(func: eq(PostSecret.title, "ps7")) @filter(type(PostSecret)) {
+        uid
+      }
+      PostSecret25 as PostSecret25(func: eq(PostSecret.title, "ps8")) @filter(type(PostSecret)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "PostSecret.title": "ps1",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret4"
+        }
+      cond: "@if(eq(len(PostSecret4), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps2",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret7"
+        }
+      cond: "@if(eq(len(PostSecret7), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps3",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret10"
+        }
+      cond: "@if(eq(len(PostSecret10), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps4",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret13"
+        }
+      cond: "@if(eq(len(PostSecret13), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps5",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret16"
+        }
+      cond: "@if(eq(len(PostSecret16), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps6",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret19"
+        }
+      cond: "@if(eq(len(PostSecret19), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps7",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret22"
+        }
+      cond: "@if(eq(len(PostSecret22), 0))"
+    - setjson: |
+        {
+          "PostSecret.title": "ps8",
+          "dgraph.type": [
+            "PostSecret" 
+            ],
+          "uid": "_:PostSecret25"
+        }
+      cond: "@if(eq(len(PostSecret25), 0))"
+  dgmutationssec:
+    - setjson: |
+        {
+          "Author.name": "A.N. Author",
+          "Author.posts": [{
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret4)"
+            },
+            "Post.title": "post1",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post2"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret7)"
+            },
+            "Post.title": "post2",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post5"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret10)"
+            },
+            "Post.title": "post3",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post8"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret13)"
+            },
+            "Post.title": "post4",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post11"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret16)"
+            },
+            "Post.title": "post5",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post14"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret19)"
+            },
+            "Post.title": "post6",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post17"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret22)"
+            },
+            "Post.title": "post7",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post20"
+          }, {
+            "Post.author": {
+              "uid": "_:Author1"
+            },
+            "Post.ps": {
+              "uid": "uid(PostSecret25)"
+            },
+            "Post.title": "post8",
+            "dgraph.type": ["Post"],
+            "uid": "_:Post23"
+          }],
+          "dgraph.type": ["Author"],
+          "uid": "_:Author1"
+        }
+      cond: "@if(eq(len(PostSecret4), 1) AND eq(len(PostSecret7), 1) AND eq(len(PostSecret10), 1) AND eq(len(PostSecret13), 1) AND eq(len(PostSecret16), 1) AND eq(len(PostSecret19), 1) AND eq(len(PostSecret22), 1) AND eq(len(PostSecret25), 1))"
+
+-
   name: "Add multiple mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: [AddAuthorInput!]!) {
