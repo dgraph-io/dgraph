@@ -24,12 +24,12 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Added
 - Adds ludicrous mode to live loader. ([#5419][]) 
-- Graphql: adds transactions to graphql mutations ([#5485][])
+- GraphQL: adds transactions to graphql mutations ([#5485][])
 
 ### Fixed
 
 - Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5326][])
-- Graphql: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
+- GraphQL: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
 - Fix segmentation fault in query.go. ([#5377][])
 - Fix empty string checks. ([#5390][]) 
 - Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
@@ -45,8 +45,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - During shutdown, generate snapshot before closing raft node. ([#5476][])
 - Get lists of predicates and types before sending the snapshot. ([#5488][]) 
 - Fix panic for sending on a closed channel. ([#5479][])
-- Graphql: fix password rewriting. ([#5483][]) 
-- Graphql: Fix non-unique schema issue. ([#5481][]) 
+- GraphQL: fix password rewriting. ([#5483][]) 
+- GraphQL: Fix non-unique schema issue. ([#5481][]) 
 - Enterprise features
   - Print error when applying enterprise license fails. ([#5342][])
   - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
