@@ -12,8 +12,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-## [20.03.2] - 2020-05-15
-[20.03.2]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.2
+## [20.03.3] - 2020-05-28
+[20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
 
 ### Changed
 
@@ -22,16 +22,32 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Return error response if encoded response is > 4GB in size. Replace idMap with idSlice in encoder. ([#5359][]) 
 - Initialize sentry at the beginning of alpha.Run(). ([#5429][])  
 
+### Added
+- Adds ludicrous mode to live loader. ([#5419][]) 
+- GraphQL: adds transactions to graphql mutations ([#5485][])
+
 ### Fixed
 
 - Export: Ignore deleted predicates from schema. Fixes [#5053][]. ([#5326][])
-- graphql: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
+- GraphQL: ensure upserts don't have accidental edge removal. Fixes [#5355][]. ([#5356][])
 - Fix segmentation fault in query.go. ([#5377][])
 - Fix empty string checks. ([#5390][]) 
 - Update group checksums when combining multiple deltas. Fixes [#5368][]. ([#5394][]) 
 - Change the default ratio of traces from 1 to 0.01. ([#5405][]) 
 - Fix protobuf headers check. ([#5381][])
 - Stream the full set of predicates and types during a snapshot. ([#5444][])
+- Support passing GraphQL schema to bulk loader. Fixes [#5235][]. ([#5521][]) 
+- Export GraphQL schema to separate file. Fixes [#5235][]. ([#5528][]) 
+- Fix memory leak in live loader. ([#5473][]) 
+- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][]) 
+- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][]) 
+- Use pre-allocated protobufs during backups. ([#5404][]) 
+- During shutdown, generate snapshot before closing raft node. ([#5476][])
+- Get lists of predicates and types before sending the snapshot. ([#5488][]) 
+- Fix panic for sending on a closed channel. ([#5479][])
+- Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
+- GraphQL: fix password rewriting. ([#5483][]) 
+- GraphQL: Fix non-unique schema issue. ([#5481][]) 
 - Enterprise features
   - Print error when applying enterprise license fails. ([#5342][])
   - Apply the option enterprise_license only after the node's Raft is initialized and it is the leader. Don't apply the     trial license if a license already exists. Disallow the enterprise_license option for OSS build and bail out. Apply the option even if there is a license from a previous life of the Zero. ([#5384][])
@@ -59,9 +75,25 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5368]: https://github.com/dgraph-io/dgraph/issues/5368
 [#5450]: https://github.com/dgraph-io/dgraph/issues/5450
 [#5381]: https://github.com/dgraph-io/dgraph/issues/5381
+[#5528]: https://github.com/dgraph-io/dgraph/issues/5528
+[#5473]: https://github.com/dgraph-io/dgraph/issues/5473
+[#5494]: https://github.com/dgraph-io/dgraph/issues/5494
+[#5469]: https://github.com/dgraph-io/dgraph/issues/5469
+[#5404]: https://github.com/dgraph-io/dgraph/issues/5404
+[#5476]: https://github.com/dgraph-io/dgraph/issues/5476
+[#5488]: https://github.com/dgraph-io/dgraph/issues/5488
+[#5483]: https://github.com/dgraph-io/dgraph/issues/5483
+[#5481]: https://github.com/dgraph-io/dgraph/issues/5481
+[#5481]: https://github.com/dgraph-io/dgraph/issues/5481
+[#5235]: https://github.com/dgraph-io/dgraph/issues/5235
+[#5419]: https://github.com/dgraph-io/dgraph/issues/5419
+[#5485]: https://github.com/dgraph-io/dgraph/issues/5485
+[#5479]: https://github.com/dgraph-io/dgraph/issues/5479
+[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
+[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
 
-## [1.2.4] - 2020-05-15
-[1.2.4]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.4
+## [1.2.5] - 2020-05-28
+[1.2.5]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.5
 
 ### Changed
 
@@ -76,6 +108,13 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix empty string checks. ([#5396][])
 - Fix protobuf headers check. ([#5381][])
 - Stream the full set of predicates and types during a snapshot. ([#5444][])
+- Use pre-allocated protobufs during backups. ([#5508][])
+- Replace strings.Trim with strings.TrimFunc in ParseRDF. ([#5494][]) 
+- Return nil instead of emptyTablet in groupi.Tablet(). ([#5469][]) 
+- During shutdown, generate snapshot before closing raft node. ([#5476][]) 
+- Get lists of predicates and types before sending the snapshot. ([#5488][]) 
+- Move runVlogGC to x and use it in zero as well. ([#5468][]) 
+- Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
 
 ### Security
 
@@ -92,6 +131,22 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5368]: https://github.com/dgraph-io/dgraph/issues/5368
 [#5451]: https://github.com/dgraph-io/dgraph/issues/5451
 [#5381]: https://github.com/dgraph-io/dgraph/issues/5381
+[#5327]: https://github.com/dgraph-io/dgraph/issues/5327
+[#5377]: https://github.com/dgraph-io/dgraph/issues/5377
+[#5508]: https://github.com/dgraph-io/dgraph/issues/5508
+[#5494]: https://github.com/dgraph-io/dgraph/issues/5494
+[#5469]: https://github.com/dgraph-io/dgraph/issues/5469
+[#5476]: https://github.com/dgraph-io/dgraph/issues/5476
+[#5488]: https://github.com/dgraph-io/dgraph/issues/5488
+[#5468]: https://github.com/dgraph-io/dgraph/issues/5468
+[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
+[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
+
+## [20.03.2] - 2020-05-15
+This release was removed
+
+## [1.2.4] - 2020-05-15
+This release was removed
 
 ## [20.03.1] - 2020-04-24
 [20.03.1]: https://github.com/dgraph-io/dgraph/compare/v20.03.0...v20.03.1
