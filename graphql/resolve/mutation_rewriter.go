@@ -767,8 +767,7 @@ func deleteAuthSelector(t schema.Type) *schema.RuleNode {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder mutationBuilder,
-	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
@@ -1107,8 +1106,7 @@ func asIDReference(
 	ctx context.Context,
 	val interface{},
 	srcField schema.FieldDefinition,
-	srcUID string,
-	variable string,
+	srcUID, variable string,
 	withAdditionalDeletes bool,
 	varGen *VariableGenerator) *mutationFragment {
 
