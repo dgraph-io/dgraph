@@ -18,8 +18,8 @@
 
 ## Getting Started
 
-- Read the [Getting Started Guide](https://docs.dgraph.io/get-started/)
-- [Take the Dgraph tour](https://tour.dgraph.io)
+- Read the [Getting Started Guide](https://dgraph.io/docs/get-started/)
+- [Take the Dgraph tour](https://dgraph.io/tour/)
 
 ## Setting Up the Development Environment
 
@@ -91,7 +91,7 @@ Commit timestamp : 2019-12-16 18:24:50 -0800
 Branch           : HEAD
 Go version       : go1.13.5
 
-For Dgraph official documentation, visit https://docs.dgraph.io.
+For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 
@@ -126,7 +126,7 @@ Commit timestamp : 2019-12-16 20:52:06 -0800
 Branch           : master
 Go version       : go1.13.5
 
-For Dgraph official documentation, visit https://docs.dgraph.io.
+For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 

@@ -27,7 +27,7 @@ Dgraph is an open-source, scalable, distributed, highly available and fast graph
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="https://tour.dgraph.io" target="_blank">
+            <a href="https://dgraph.io/tour/" target="_blank">
               Tour of Dgraph
             </a>
           </div>

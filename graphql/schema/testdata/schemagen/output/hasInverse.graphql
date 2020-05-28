@@ -61,6 +61,7 @@ input CustomHTTP {
 	graphql: String
 	mode: Mode
 	forwardHeaders: [String!]
+	secretHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -70,12 +71,13 @@ directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFI
 directive @id on FIELD_DEFINITION
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
-	query: AuthRule, 
-	add: AuthRule, 
-	update: AuthRule, 
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
 	delete:AuthRule) on OBJECT
 directive @custom(http: CustomHTTP) on FIELD_DEFINITION
 directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int

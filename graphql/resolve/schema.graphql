@@ -36,7 +36,7 @@ type Post {
         tags: [String] @search(by: [exact])
         numLikes: Int @search
         isPublished: Boolean @search
-        postType: PostType @search
+        postType: [PostType] @search
         author: Author!
 	category: Category @hasInverse(field: posts)
 	comments: [Comment]
@@ -211,4 +211,21 @@ type Mutation {
 type Message {
     content: String! @dgraph(pred: "post")
     author: String @dgraph(pred: "<职业>")
+}
+
+interface X {
+    id: ID!
+    username: String! @id
+    age: Int
+}
+type Y implements X @auth(
+    query: { rule: """
+      query($USER: String!) {
+        queryY(filter: { username: { eq: $USER } }) {
+          __typename
+        }
+      }
+    """ }
+){
+  userRole: String @search(by: [hash])
 }
