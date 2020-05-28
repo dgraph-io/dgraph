@@ -529,7 +529,8 @@ func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
 // 2. Fields with @custom directive.
 // to be a valid type. Otherwise its not possible to add objects of that type.
 func nonIdFieldsCheck(typ *ast.Definition) *gqlerror.Error {
-	if isQueryOrMutation(typ.Name) || typ.Kind == ast.Enum || typ.Kind == ast.Interface {
+	if isQueryOrMutation(typ.Name) || typ.Kind == ast.Enum || typ.Kind == ast.Interface ||
+		typ.Kind == ast.InputObject {
 		return nil
 	}
 

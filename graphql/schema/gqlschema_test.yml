@@ -2050,7 +2050,6 @@ valid_schemas:
       }
       input AuthorUpdate {
         id: ID!
-        name: String!
       }
 
       type Query {
@@ -2122,4 +2121,18 @@ valid_schemas:
         f3: [String]! @dgraph(pred: "f3")
         f4: [String!]! @dgraph(pred: "f4")
         f5: String @dgraph(pred: "X.f5")
+      }
+
+  -
+    name: "@custom directive with variable definitions in operation in graphql"
+    input: |
+      type Author {
+        id: ID!
+        age: Int!
+        name: String! @custom(http: {
+          url: "http://google.com/",
+          method: "POST",
+          graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
+          skipIntrospection: true
+        })
       }
