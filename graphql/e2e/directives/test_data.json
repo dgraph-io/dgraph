@@ -99,5 +99,11 @@
         "dgraph.type": "State",
         "State.name": "Nusa",
         "State.xcode": "nusa"
+    },
+    {
+        "uid":"_:Message1",
+        "dgraph.type": "Message",
+        "职业":"author1",
+        "post":"content1"
     }
 ]

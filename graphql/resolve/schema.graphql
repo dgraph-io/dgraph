@@ -209,6 +209,6 @@ type Mutation {
 }
 
 type Message {
-  content: String! @dgraph(pred: "post")
-  author: String @dgraph(pred: "<职业>")
+    content: String! @dgraph(pred: "post")
+    author: String @dgraph(pred: "<职业>")
 }

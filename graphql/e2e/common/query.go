@@ -1464,3 +1464,20 @@ func queryWithAlias(t *testing.T) {
 				"postAuthor": { "theName": "Ann Author" }}]}`,
 		string(gqlResponse.Data))
 }
+
+func DgraphDirectivesWithSpecialCharacters(t *testing.T) {
+	queryParams := &GraphQLParams{
+		Query: `
+		query {
+			queryMessage {
+				content
+				author
+			}
+		}`,
+	}
+	result := "{\"queryMessage\":[{\"content\":\"content1\",\"author\":\"author1\"}]}"
+	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
