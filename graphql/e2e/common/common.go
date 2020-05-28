@@ -740,6 +740,7 @@ func addSchema(url, schema string) error {
 				}
 			}
 		}
+		Errors []interface{}
 	}
 
 	err = json.Unmarshal(resp, &addResult)
@@ -747,8 +748,53 @@ func addSchema(url, schema string) error {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
 	}
 
+	if len(addResult.Errors) > 0 {
+		return errors.Errorf("%v", addResult.Errors)
+	}
+
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
-		return errors.New("GraphQL schema mutation failed")
+		time.Sleep(5 * time.Second)
+		// wait for a bit and then query the schema, as the update isn't reflected instantaneously
+		// in memory
+		query := &GraphQLParams{
+			Query: `query {
+						getGQLSchema {
+							schema
+						}
+					}`,
+		}
+
+		req, err := query.createGQLPost(url)
+		if err != nil {
+			return errors.Wrap(err, "error creating GraphQL query")
+		}
+
+		resp, err = runGQLRequest(req)
+		if err != nil {
+			return errors.Wrap(err, "error running GraphQL query")
+		}
+
+		var queryResult struct {
+			Data struct {
+				GetGQLSchema struct {
+					Schema string
+				}
+			}
+			Errors []interface{}
+		}
+
+		err = json.Unmarshal(resp, &queryResult)
+		if err != nil {
+			return errors.Wrap(err, "error trying to unmarshal GraphQL query result")
+		}
+
+		if len(queryResult.Errors) > 0 {
+			return errors.Errorf("%v", queryResult.Errors)
+		}
+
+		if queryResult.Data.GetGQLSchema.Schema == "" {
+			return errors.New("GraphQL schema mutation failed")
+		}
 	}
 
 	return nil
