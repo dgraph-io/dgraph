@@ -88,8 +88,8 @@ var (
 	Metadata_metadata = "Metadata_metadata"
 	// TaggedTransactionQueueValidateTransaction is the runtime API call TaggedTransactionQueue_validate_transaction
 	TaggedTransactionQueueValidateTransaction = "TaggedTransactionQueue_validate_transaction"
-	// AuraAPIAuthorities is the runtime API call AuraApi_authorities
-	AuraAPIAuthorities = "AuraApi_authorities" // TODO: deprecated with newest runtime, should be Grandpa_authorities
+	// GrandpaAuthorities is the runtime API call GrandpaApi_grandpa_authorities
+	GrandpaAuthorities = "GrandpaApi_grandpa_authorities"
 	// BabeAPIConfiguration is the runtime API call BabeApi_configuration
 	BabeAPIConfiguration = "BabeApi_configuration"
 	// BlockBuilderInherentExtrinsics is the runtime API call BlockBuilder_inherent_extrinsics

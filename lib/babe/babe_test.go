@@ -35,13 +35,20 @@ import (
 	"github.com/ChainSafe/gossamer/lib/trie"
 )
 
+var emptyHash = trie.EmptyHash
+
 var genesisHeader = &types.Header{
 	Number:    big.NewInt(0),
-	StateRoot: trie.EmptyHash,
+	StateRoot: emptyHash,
+}
+
+var emptyHeader = &types.Header{
+	Number: big.NewInt(0),
 }
 
 func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
-	rt := runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+	tt := trie.NewEmptyTrie()
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt)
 
 	babeCfg, err := rt.BabeConfiguration()
 	if err != nil {
@@ -98,7 +105,7 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 
 		genesisData := new(genesis.Data)
 
-		err = dbSrv.Initialize(genesisData, genesisHeader, trie.NewEmptyTrie())
+		err = dbSrv.Initialize(genesisData, genesisHeader, tt)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -276,7 +283,7 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		C1:                 1,
 		C2:                 10,
 		GenesisAuthorities: []*types.AuthorityDataRaw{},
-		Randomness:         0,
+		Randomness:         [32]byte{},
 		SecondarySlots:     false,
 	}
 

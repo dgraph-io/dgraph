@@ -36,7 +36,7 @@ import (
 )
 
 // TestAuthorityDataKey is the location of authority data in the storage trie
-var TestAuthorityDataKey, _ = common.HexToBytes("0xe3b47b6c84c0493481f97c5197d2554f")
+var TestAuthorityDataKey, _ = common.HexToBytes("0x3a6772616e6470615f617574686f726974696573")
 
 // NewTestRuntime will create a new runtime (polkadot/test)
 func NewTestRuntime(t *testing.T, targetRuntime string) *Runtime {
@@ -92,9 +92,13 @@ func exportRuntime(t *testing.T, targetRuntime string, outFp string) {
 
 //nolint
 const (
-	POLKADOT_RUNTIME_c768a7e4c70e     = "polkadot_runtime"
-	POLKADOT_RUNTIME_FP_c768a7e4c70e  = "substrate_test_runtime.compact.wasm"
-	POLKADOT_RUNTIME_URL_c768a7e4c70e = "https://github.com/noot/substrate/blob/add-blob-042920/target/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
+	SUBSTRATE_TEST_RUNTIME     = "substrate_test_runtime"
+	SUBSTRATE_TEST_RUNTIME_FP  = "substrate_test_runtime.compact.wasm"
+	SUBSTRATE_TEST_RUNTIME_URL = "https://github.com/noot/substrate/blob/add-blob-042920/target/wasm32-unknown-unknown/release/wbuild/substrate-test-runtime/substrate_test_runtime.compact.wasm?raw=true"
+
+	NODE_RUNTIME     = "node_runtime"
+	NODE_RUNTIME_FP  = "node_runtime.compact.wasm"
+	NODE_RUNTIME_URL = "https://github.com/noot/substrate/blob/noot/legacy/target/wasm32-unknown-unknown/release/wbuild/node-runtime/node_runtime.compact.wasm?raw=true"
 
 	TEST_RUNTIME  = "test_runtime"
 	TESTS_FP      = "test_wasm.wasm"
@@ -120,14 +124,17 @@ func GetRuntimeVars(targetRuntime string) (string, string, func() (*wasm.Imports
 	var registerImports func() (*wasm.Imports, error)
 
 	switch targetRuntime {
-	case POLKADOT_RUNTIME_c768a7e4c70e:
-		registerImports = RegisterImports
-		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(POLKADOT_RUNTIME_FP_c768a7e4c70e), POLKADOT_RUNTIME_URL_c768a7e4c70e
+	case SUBSTRATE_TEST_RUNTIME:
+		registerImports = RegisterImports_TestRuntime
+		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(SUBSTRATE_TEST_RUNTIME_FP), SUBSTRATE_TEST_RUNTIME_URL
+	case NODE_RUNTIME:
+		registerImports = RegisterImports_NodeRuntime
+		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(NODE_RUNTIME_FP), NODE_RUNTIME_URL
 	case TEST_RUNTIME:
-		registerImports = RegisterImports
+		registerImports = RegisterImports_TestRuntime
 		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(TESTS_FP), TEST_WASM_URL
 	default:
-		registerImports = RegisterImports
+		registerImports = RegisterImports_NodeRuntime
 	}
 
 	return testRuntimeFilePath, testRuntimeURL, registerImports

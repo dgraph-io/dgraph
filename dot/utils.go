@@ -119,8 +119,8 @@ func NewTestGenesisFile(t *testing.T, cfg *Config) *os.File {
 func NewTestGenesisAndRuntime(t *testing.T) string {
 	dir := utils.NewTestDir(t)
 
-	_ = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
-	runtimeFilePath := runtime.GetAbsolutePath(runtime.POLKADOT_RUNTIME_FP_c768a7e4c70e)
+	_ = runtime.NewTestRuntime(t, runtime.NODE_RUNTIME)
+	runtimeFilePath := runtime.GetAbsolutePath(runtime.NODE_RUNTIME_FP)
 
 	runtimeData, err := ioutil.ReadFile(runtimeFilePath)
 	require.Nil(t, err)

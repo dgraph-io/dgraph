@@ -128,7 +128,18 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 
 	log.Info("[babe] config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
 
-	babeSession.randomness = [sr25519.VrfOutputLength]byte{babeSession.config.Randomness}
+	if babeSession.authorityData == nil {
+		log.Info("[babe] setting authority data to genesis authorities", "authorities", babeSession.config.GenesisAuthorities)
+
+		babeSession.authorityData, err = types.AuthorityDataRawToAuthorityData(babeSession.config.GenesisAuthorities)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	log.Info("[babe]", "authorities", babeSession.authorityData)
+
+	babeSession.randomness = babeSession.config.Randomness
 
 	err = babeSession.setAuthorityIndex()
 	if err != nil {
@@ -309,7 +320,7 @@ func (b *Session) invokeBlockAuthoring() {
 			b.handleSlot(slotNum)
 
 			// TODO: change this to sleep until start + slotDuration
-			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration))
+			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration) * 2)
 		}
 
 		b.syncLock.Unlock()
@@ -371,7 +382,7 @@ func (b *Session) handleSlot(slotNum uint64) {
 func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	slotBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slotBytes, slot)
-	vrfInput := append(slotBytes, b.config.Randomness)
+	vrfInput := append(slotBytes, b.randomness[:]...)
 
 	output, proof, err := b.vrfSign(vrfInput)
 	if err != nil {

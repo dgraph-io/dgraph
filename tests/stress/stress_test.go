@@ -342,6 +342,8 @@ func submitExtrinsicAssertInclusion(t *testing.T, nodes []*utils.Node, ext extri
 }
 
 func TestStress_IncludeData(t *testing.T) {
+	t.Skip()
+
 	nodes, err := utils.StartNodes(t, numNodes)
 	require.NoError(t, err)
 
@@ -359,6 +361,8 @@ func TestStress_IncludeData(t *testing.T) {
 }
 
 func TestStress_StorageChange(t *testing.T) {
+	t.Skip()
+
 	nodes, err := utils.StartNodes(t, numNodes)
 	require.NoError(t, err)
 

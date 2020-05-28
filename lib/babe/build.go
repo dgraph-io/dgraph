@@ -26,6 +26,7 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
 
 	log "github.com/ChainSafe/log15"
@@ -52,7 +53,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 	// create new block header
 	number := big.NewInt(0).Add(parent.Number, big.NewInt(1))
-	header, err := types.NewHeader(parent.Hash(), number, common.Hash{}, common.Hash{}, [][]byte{})
+	header, err := types.NewHeader(common.Hash{}, number, common.Hash{}, common.Hash{}, [][]byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -241,10 +242,41 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 		return err
 	}
 
-	// Call BlockBuilder_inherent_extrinsics
-	_, err = b.rt.InherentExtrinsics(ienc)
+	// TODO: inherent_extrinsics needs to be called for each inherent
+	// this currently only returns the timestamp (first inherent)
+
+	// Call BlockBuilder_inherent_extrinsics which returns the inherents as extrinsics
+	inherentExts, err := b.rt.InherentExtrinsics(ienc)
 	if err != nil {
 		return err
+	}
+
+	// decode inherent extrinsics
+	exts, err := scale.Decode(inherentExts, [][]byte{})
+	if err != nil {
+		return err
+	}
+
+	// apply each inherent extrinsic
+	for _, ext := range exts.([][]byte) {
+		in, err := scale.Encode(ext)
+		if err != nil {
+			return err
+		}
+
+		ret, err := b.rt.ApplyExtrinsic(in)
+		if err != nil {
+			return err
+		}
+
+		if !bytes.Equal(ret, []byte{0, 0}) {
+			errTxt, err := determineError(ret)
+			if err != nil {
+				return err
+			}
+
+			return errors.New("error applying extrinsic: " + errTxt)
+		}
 	}
 
 	return nil

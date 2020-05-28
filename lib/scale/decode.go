@@ -377,7 +377,7 @@ func (sd *Decoder) DecodeArray(t interface{}) (interface{}, error) {
 // decoded struct, otherwise error,
 // Note that we return the same interface that was passed to this function; this is because we are writing directly to the
 // struct that is passed in, using reflect to get each of the fields.
-func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
+func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) { //nolint
 	var v reflect.Value
 	switch reflect.ValueOf(t).Kind() {
 	case reflect.Ptr:
@@ -460,6 +460,11 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) {
 				b := make([]byte, 32)
 				if _, err = sd.Reader.Read(b); err == nil {
 					*ptr = common.NewHash(b)
+				}
+			case *[32]byte:
+				b := make([]byte, 32)
+				if _, err = sd.Reader.Read(b); err == nil {
+					copy((*ptr)[:], b)
 				}
 			case *string:
 				if o, err = sd.DecodeByteArray(); err == nil {

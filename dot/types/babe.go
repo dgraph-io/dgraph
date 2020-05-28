@@ -16,7 +16,7 @@ type BabeConfiguration struct {
 	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
 	C2                 uint64
 	GenesisAuthorities []*AuthorityDataRaw
-	Randomness         byte // TODO: change to [RandomnessLength]byte when updating to new runtime
+	Randomness         [32]byte
 	SecondarySlots     bool
 }
 
@@ -113,4 +113,18 @@ func (a *AuthorityData) Decode(r io.Reader) error {
 	}
 
 	return a.FromRaw(raw)
+}
+
+// AuthorityDataRawToAuthorityData turns a slice of AuthorityDataRaw into a slice of AuthorityData
+func AuthorityDataRawToAuthorityData(adr []*AuthorityDataRaw) ([]*AuthorityData, error) {
+	ad := make([]*AuthorityData, len(adr))
+	for i, r := range adr {
+		ad[i] = new(AuthorityData)
+		err := ad[i].FromRaw(r)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return ad, nil
 }

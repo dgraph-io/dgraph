@@ -100,7 +100,7 @@ func TestStableNetworkRPC(t *testing.T) {
 				t.Log("Will assert SystemPeersResponse", "target", target)
 
 				require.NotNil(t, v.Peers)
-				require.GreaterOrEqual(t, len(v.Peers), networkSize-1)
+				require.GreaterOrEqual(t, len(v.Peers), networkSize-2)
 
 				for _, vv := range v.Peers {
 					require.NotNil(t, vv.PeerID)

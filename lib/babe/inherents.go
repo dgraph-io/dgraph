@@ -29,6 +29,8 @@ import (
 var (
 	Timstap0 = []byte("timstap0")
 	Babeslot = []byte("babeslot")
+	Finalnum = []byte("finalnum")
+	Uncles00 = []byte("uncles00")
 )
 
 // InherentsData contains a mapping of inherent keys to values

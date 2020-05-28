@@ -81,7 +81,7 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
 	}
 
 	if cfg.TransactionQueue == nil {
@@ -547,7 +547,7 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 
 func newBlockBuilder(t *testing.T, cfg *babe.SessionConfig) *babe.Session {
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
 	}
 
 	if cfg.Keypair == nil {
@@ -574,7 +574,7 @@ func newBlockBuilder(t *testing.T, cfg *babe.SessionConfig) *babe.Session {
 
 func TestExecuteBlock(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()
@@ -610,7 +610,7 @@ func TestExecuteBlock(t *testing.T) {
 
 func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()

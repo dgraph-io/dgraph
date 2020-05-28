@@ -66,7 +66,7 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	if cfg.Runtime == nil {
-		cfg.Runtime = runtime.NewTestRuntime(t, runtime.POLKADOT_RUNTIME_c768a7e4c70e)
+		cfg.Runtime = runtime.NewTestRuntime(t, runtime.NODE_RUNTIME)
 	}
 
 	if cfg.Keystore == nil {

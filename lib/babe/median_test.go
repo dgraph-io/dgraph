@@ -143,7 +143,7 @@ func TestSlotTime(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint64(103)
+	expected := uint64(129)
 
 	if res != expected {
 		t.Errorf("Fail: got %v expected %v\n", res, expected)
@@ -218,7 +218,7 @@ func TestGetCurrentSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expected := uint64(100)
+	expected := uint64(162)
 
 	if res != expected && res != expected+1 {
 		t.Fatalf("Fail: got %d expected %d", res, expected)

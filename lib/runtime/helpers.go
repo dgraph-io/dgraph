@@ -77,7 +77,7 @@ func (r *Runtime) BabeConfiguration() (*types.BabeConfiguration, error) {
 // GrandpaAuthorities returns the genesis authorities from the runtime
 // TODO: this seems to be out-of-date, the call is now named Grandpa_authorities and takes a block number.
 func (r *Runtime) GrandpaAuthorities() ([]*types.AuthorityData, error) {
-	ret, err := r.Exec(AuraAPIAuthorities, []byte{})
+	ret, err := r.Exec(GrandpaAuthorities, []byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +115,8 @@ func (r *Runtime) InitializeBlock(header *types.Header) error {
 	if err != nil {
 		return fmt.Errorf("cannot encode header: %s", err)
 	}
+
+	encodedHeader = append(encodedHeader, 0)
 
 	_, err = r.Exec(CoreInitializeBlock, encodedHeader)
 	return err
