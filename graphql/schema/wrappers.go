@@ -136,6 +136,7 @@ type Field interface {
 	GetObjectName() string
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
+	EnumValues() []string
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -785,6 +786,7 @@ func (f *field) Type() Type {
 		// had a nil Definition ... how ???
 		t = f.field.Definition.Type
 	}
+
 	return &astType{
 		typ:             t,
 		inSchema:        f.op.inSchema,
@@ -907,6 +909,16 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 
 func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
+}
+
+func (f *field) EnumValues() []string {
+	typ := f.Type()
+	def := f.op.inSchema.schema.Types[typ.Name()]
+	res := make([]string, 0, len(def.EnumValues))
+	for _, e := range def.EnumValues {
+		res = append(res, e.Name)
+	}
+	return res
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -1069,6 +1081,10 @@ func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(q), true)
 }
 
+func (q *query) EnumValues() []string {
+	return nil
+}
+
 func (q *query) QueryType() QueryType {
 	return queryType(q.Name(), q.op.inSchema.customDirectives["Query"][q.Name()])
 }
@@ -1211,6 +1227,10 @@ func (m *mutation) MutatedType() Type {
 
 func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(m), true)
+}
+
+func (m *mutation) EnumValues() []string {
+	return nil
 }
 
 func (m *mutation) GetObjectName() string {

@@ -98,7 +98,7 @@ const (
 		The group this node belongs to in the Dgraph cluster.
 		See : https://dgraph.io/docs/deploy/#cluster-setup.
 		"""
-		group: Int
+		group: String
 
 		"""
 		Version of the Dgraph binary.
