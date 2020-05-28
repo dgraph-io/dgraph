@@ -1465,7 +1465,7 @@ func queryWithAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
-func DgraphDirectivesWithSpecialCharacters(t *testing.T) {
+func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 	queryParams := &GraphQLParams{
 		Query: `
 		query {

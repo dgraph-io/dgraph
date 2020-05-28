@@ -28,7 +28,7 @@ import (
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
 	t.Run("dgraph predicate with special characters",
-		common.DgraphDirectivesWithSpecialCharacters)
+		common.DgraphDirectiveWithSpecialCharacters)
 }
 
 func TestSchema_WithDgraphDirectives(t *testing.T) {
