@@ -96,6 +96,7 @@ type ResultCompleter interface {
 type RequestResolver struct {
 	schema    schema.Schema
 	resolvers ResolverFactory
+	resp   *schema.Response
 }
 
 // A resolverFactory is the main implementation of ResolverFactory.  It stores a
@@ -144,6 +145,8 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
+	trace []*schema.ResolverTrace
+	timers schema.TimerFactory
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -357,6 +360,26 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
+
+
+// //Trace of the complete request
+//     trace := &schema.Trace{
+// 		Version:   1,
+// 		StartTime: time.Now(),
+// 	}
+// 	timers := schema.NewOffsetTimerFactory(trace.StartTime)
+// 	defer func() {
+// 		trace.EndTime = time.Now()
+// 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+// 	}()
+
+// 	r.resp.Extensions = &schema.Extensions{
+// 	//	RequestID: api.RequestID(ctx),
+// 		Tracing:   trace,
+// 	}
+
+
+
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
@@ -396,8 +419,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 						allResolved[storeAt] = &Resolved{
 							Data:  nil,
 							Field: q,
-							Err:   err}
-					})
+							Err:   err,
+						//	timers: timers
+						}
+							})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
@@ -511,6 +536,8 @@ func addResult(resp *schema.Response, res *Resolved) {
 	resp.WithError(res.Err)
 	resp.WithError(gqlErr)
 	resp.AddData(b)
+	
+	//also need to merge extensions of individual queries in the request
 	resp.MergeExtensions(res.Extensions)
 }
 

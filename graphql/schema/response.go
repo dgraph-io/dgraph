@@ -32,6 +32,7 @@ import (
 type Extensions struct {
 	TouchedUids uint64 `json:"touched_uids,omitempty"`
 	Tracing   *Trace `json:"tracing,omitempty"`
+	RequestID string `json:"requestID,omitempty"`
 }
 
 // Merge merges ext with e

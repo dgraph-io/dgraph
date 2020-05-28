@@ -45,8 +45,10 @@ type QueryRewriter interface {
 type QueryResolverFunc func(ctx context.Context, query schema.Query) *Resolved
 
 // Resolve calls qr(ctx, query)
+
 func (qr QueryResolverFunc) Resolve(ctx context.Context, query schema.Query) *Resolved {
 	return qr(ctx, query)
+
 }
 
 // NewQueryResolver creates a new query resolver.  The resolver runs the pipeline:
@@ -62,23 +64,40 @@ type queryResolver struct {
 	queryRewriter   QueryRewriter
 	executor        DgraphExecutor
 	resultCompleter ResultCompleter
+	timers schema.TimerFactory
+	query  schema.Query
+
 }
 
 func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
+	
+	
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
+    
+	//Add Tracing of the complete query
+	trace,timer := traceWithTimer(qr.timers, qr.query, "Query")  //getting panic 
+    trace.Path = []interface{}{qr.query.ResponseName()}
+	timer.Start()
+	defer timer.Stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
 	if resolved.Data == nil {
 		resolved.Data = map[string]interface{}{query.Name(): nil}
 	}
 
+
+	resolved.trace = []*schema.ResolverTrace{trace}
+	
 	qr.resultCompleter.Complete(ctx, resolved)
+	
 	return resolved
 }
 
 func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Query) *Resolved {
+
+	
 
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
@@ -87,12 +106,19 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			Err:   err,
 		}
 	}
+	
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
 			query.ResponseName()))
 	}
+
+	
+	//Add Trace for the execution path of the query
+	
+    // dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	// trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 
 	resp, err := qr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
@@ -101,7 +127,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
+    
+
 	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
+	 
 	resolved.Extensions =
 		&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
@@ -122,4 +151,17 @@ func resolveIntrospection(ctx context.Context, q schema.Query) *Resolved {
 		Field: q,
 		Err:   schema.AppendGQLErrs(err, err2),
 	}
+}
+
+//func traceWithTimer(tf schema.TimerFactory, field schema.Field, parent string) (*schema.ResolverTrace) {
+func traceWithTimer(tf schema.TimerFactory, field schema.Field, parent string) (*schema.ResolverTrace, schema.OffsetTimer){
+ 
+	trace := &schema.ResolverTrace{
+		ParentType: parent,
+		FieldName:  field.ResponseName(),
+		ReturnType: field.Type().String(),
+	}
+
+	timer := tf.NewOffsetTimer(&trace.OffsetDuration)
+	return trace,timer
 }
