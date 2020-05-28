@@ -45,6 +45,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - During shutdown, generate snapshot before closing raft node. ([#5476][])
 - Get lists of predicates and types before sending the snapshot. ([#5488][]) 
 - Fix panic for sending on a closed channel. ([#5479][])
+- Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
 - GraphQL: fix password rewriting. ([#5483][]) 
 - GraphQL: Fix non-unique schema issue. ([#5481][]) 
 - Enterprise features
@@ -88,6 +89,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5419]: https://github.com/dgraph-io/dgraph/issues/5419
 [#5485]: https://github.com/dgraph-io/dgraph/issues/5485
 [#5479]: https://github.com/dgraph-io/dgraph/issues/5479
+[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
+[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
 
 ## [1.2.5] - 2020-05-28
 [1.2.5]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.5
@@ -111,6 +114,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - During shutdown, generate snapshot before closing raft node. ([#5476][]) 
 - Get lists of predicates and types before sending the snapshot. ([#5488][]) 
 - Move runVlogGC to x and use it in zero as well. ([#5468][]) 
+- Fix inconsistent bulk loader failures. Fixes [#5361][]. ([#5537][])
 
 ### Security
 
@@ -135,6 +139,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5476]: https://github.com/dgraph-io/dgraph/issues/5476
 [#5488]: https://github.com/dgraph-io/dgraph/issues/5488
 [#5468]: https://github.com/dgraph-io/dgraph/issues/5468
+[#5361]: https://github.com/dgraph-io/dgraph/issues/5361
+[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
 
 ## [20.03.2] - 2020-05-15
 This release was removed
