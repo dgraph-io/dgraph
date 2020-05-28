@@ -1301,21 +1301,22 @@ func completeValue(
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-		if field.Type().ListType() != nil {
-			// This means either Dgraph or the remote endpoint returned the wrong type.
-			//
-			// Let's crush it to null so we still get something from the rest of the
-			// query and log the error.
-			return nil, mismatchedMapAndListError(path, field)
-		}
 
 		switch field.Type().Name() {
 		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
-			return nil, mismatchedScalarAndMapError(path, field)
+			return nil, x.GqlErrorList{&x.GqlError{
+				Message:   errExpectedScalar,
+				Locations: []x.Location{field.Location()},
+				Path:      copyPath(path),
+			}}
 		}
 		enumValues := field.EnumValues()
 		if len(enumValues) > 0 {
-			return nil, mismatchedScalarAndMapError(path, field)
+			return nil, x.GqlErrorList{&x.GqlError{
+				Message:   errExpectedScalar,
+				Locations: []x.Location{field.Location()},
+				Path:      copyPath(path),
+			}}
 		}
 
 		return completeObject(path, field.SelectionSet(), val)
@@ -1633,30 +1634,6 @@ func mismatched(
 
 	val, errs := completeValue(path, field, nil)
 	return val, append(errs, gqlErr)
-}
-
-func mismatchedScalarAndMapError(
-	path []interface{},
-	field schema.Field) x.GqlErrorList {
-
-	return x.GqlErrorList{&x.GqlError{
-		Message:   errExpectedScalar,
-		Locations: []x.Location{field.Location()},
-		Path:      copyPath(path),
-	}}
-}
-
-func mismatchedMapAndListError(
-	path []interface{},
-	field schema.Field) x.GqlErrorList {
-
-	gqlErr := &x.GqlError{
-		Message:   errExpectedList,
-		Locations: []x.Location{field.Location()},
-		Path:      copyPath(path),
-	}
-
-	return x.GqlErrorList{gqlErr}
 }
 
 func copyPath(path []interface{}) []interface{} {

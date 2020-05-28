@@ -75,15 +75,15 @@ func TestErrorOnIncorrectValueType(t *testing.T) {
 				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
 				Path:      []interface{}{"getAuthor", "posts"},
 			}}},
-		{Name: "return error when object is returned instead of array value",
-			GQLQuery: `query { getAuthor(id: "0x1") { posts { text } } }`,
-			Response: `{ "getAuthor": { "posts": {"text": "Random post"} }}`,
-			Expected: `{ "getAuthor": { "posts": null }}`,
-			Errors: x.GqlErrorList{{
-				Message:   errExpectedList,
-				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
-				Path:      []interface{}{"getAuthor", "posts"},
-			}}},
+		// {Name: "return error when object is returned instead of array value",
+		// 	GQLQuery: `query { getAuthor(id: "0x1") { posts { text } } }`,
+		// 	Response: `{ "getAuthor": { "posts": {"text": "Random post"} }}`,
+		// 	Expected: `{ "getAuthor": { "posts": null }}`,
+		// 	Errors: x.GqlErrorList{{
+		// 		Message:   errExpectedList,
+		// 		Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+		// 		Path:      []interface{}{"getAuthor", "posts"},
+		// 	}}},
 	}
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
