@@ -558,8 +558,19 @@ func IsGraphqlReservedPredicate(pred string) bool {
 	return ok
 }
 
-// IsReservedPredicate returns true if the predicate is in the reserved predicate list.
+// IsReservedPredicate returns true if the predicate is reserved for internal usage, i.e., prefixed
+// with `dgraph.`
+//
+// When critical, use IsPreDefinedPredicate(pred string) to find out whether the predicate was
+// actually defined internally or not.
 func IsReservedPredicate(pred string) bool {
+	return isReservedName(pred)
+}
+
+// IsPreDefinedPredicate returns true if the predicate has been defined by dgraph internally.
+// For example, `dgraph.type` or ACL predicates or GraphQL predicates are defined in the initial
+// internal schema.
+func IsPreDefinedPredicate(pred string) bool {
 	_, ok := reservedPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
@@ -590,12 +601,19 @@ func AllACLPredicates() []string {
 }
 
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
+// Currently, `uid` is the only such candidate.
 func IsInternalPredicate(pred string) bool {
 	_, ok := internalPredicateMap[strings.ToLower(pred)]
 	return ok
 }
 
-// IsInInternalNamespace returns true if the given name is prefixed with `dgraph.`
-func IsInInternalNamespace(name string) bool {
+// IsInInternalNamespace returns true if the given typ is reserved for internal usage, i.e.,
+// prefixed with `dgraph.`
+func IsReservedType(typ string) bool {
+	return isReservedName(typ)
+}
+
+// isReservedName returns true if the given name is prefixed with `dgraph.`
+func isReservedName(name string) bool {
 	return strings.HasPrefix(strings.ToLower(name), "dgraph.")
 }

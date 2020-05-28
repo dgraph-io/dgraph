@@ -682,11 +682,11 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsReservedPredicateChanged returns true if the initial update for the reserved
+// IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
 // predicate pred is different than the passed update.
-func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
-	// Return false for non-reserved predicates.
-	if !x.IsReservedPredicate(pred) {
+func IsPreDefinedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+	// Return false for non-pre-defined predicates.
+	if !x.IsPreDefinedPredicate(pred) {
 		return false
 	}
 
