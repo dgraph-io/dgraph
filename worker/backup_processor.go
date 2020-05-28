@@ -49,6 +49,8 @@ type BackupProcessor struct {
 	plList []*pb.PostingList
 	// bplList is an array of pre-allocated pb.BackupPostingList objects.
 	bplList []*pb.BackupPostingList
+	// kvList is an array of pre-allocated bpb.KV objects.
+	kvList []*bpb.KV
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -57,6 +59,7 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		Request: req,
 		plList:  make([]*pb.PostingList, backupNumGo),
 		bplList: make([]*pb.BackupPostingList, backupNumGo),
+		kvList:  make([]*bpb.KV, backupNumGo),
 	}
 
 	for i := range bp.plList {
@@ -64,6 +67,9 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 	}
 	for i := range bp.bplList {
 		bp.bplList[i] = &pb.BackupPostingList{}
+	}
+	for i := range bp.bplList {
+		bp.kvList[i] = &bpb.KV{}
 	}
 
 	return bp
@@ -237,8 +243,9 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
 
-		kv, err := l.SingleListRollup()
-		if err != nil {
+		kv := pr.kvList[itr.ThreadId]
+		kv.Reset()
+		if err := l.SingleListRollup(kv); err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
 
