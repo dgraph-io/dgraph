@@ -300,7 +300,7 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) ([]*UpsertMut
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
-		mrw.frags = append(mrw.frags, frag.get())
+		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
 		mutationsAllSec = buildMutations(mutationsAllSec, queriesSec, frag.secondPass, true)
@@ -423,7 +423,6 @@ func (urw *UpdateRewriter) Rewrite(
 		queries := []*gql.GraphQuery{upsertQuery}
 
 		if setArg != nil {
-			urw.setFrags = append(urw.setFrags, setFrag...)
 			addUpdateCondition(setFrag)
 			var errSet error
 			mutSet, errSet = mutationsFromFragments(
@@ -439,6 +438,7 @@ func (urw *UpdateRewriter) Rewrite(
 				})
 
 			if keepError {
+				urw.setFrags = append(urw.setFrags, setFrag...)
 				errs = schema.AppendGQLErrs(errs, errSet)
 			}
 
@@ -449,11 +449,10 @@ func (urw *UpdateRewriter) Rewrite(
 		}
 
 		if delArg != nil {
-			urw.delFrags = append(urw.delFrags, delFrag...)
 			addUpdateCondition(delFrag)
 			var errDel error
 			mutDel, errDel = mutationsFromFragments(
-				urw.delFrags,
+				delFrag,
 				func(frag *mutationFragment) ([]byte, error) {
 					return nil, nil
 				},
@@ -462,6 +461,7 @@ func (urw *UpdateRewriter) Rewrite(
 				})
 
 			if keepError {
+				urw.delFrags = append(urw.delFrags, delFrag...)
 				errs = schema.AppendGQLErrs(errs, errDel)
 			}
 
