@@ -136,7 +136,9 @@ function RunDefaultClusterTests {
     while read -r PKG; do
         Info "Running test for $PKG"
         CURRENT_TEST=$PKG
-        Run $PKG || TestFailed
+        Run $PKG || {
+            TestFailed && docker-compose logs -f $DGRAPH_ROOT/dgraph/docker-compose.yml
+        }
     done < $DEFAULT_CLUSTER_TESTS
     CURRENT_TEST=
     return $TEST_FAILED
@@ -150,7 +152,9 @@ function RunCustomClusterTests {
         restartCluster $DIR/docker-compose.yml
         pushd $DIR >/dev/null
         CURRENT_TEST=$DIR
-        Run || TestFailed
+        Run || {
+            TestFailed && docker-compose logs -f $DIR/docker-compose.yml
+        }
         popd >/dev/null
     done < $CUSTOM_CLUSTER_TESTS
     CURRENT_TEST=
