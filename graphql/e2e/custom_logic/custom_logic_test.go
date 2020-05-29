@@ -223,7 +223,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 		id: ID!
 		name: String!
 	}
-	type Movie @remote {
+	type Movie {
 		id: ID!
 		name: String! @custom(http: {
 			url: "http://mock:8888/movieName",
@@ -235,6 +235,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 			method: "POST",
 			forwardHeaders: ["User-Id", "X-App-Token"]
 		})
+		foo: String
 	}
 
 	type Query {
@@ -2098,9 +2099,9 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 	type SearchTweets {
 		id: ID!
 		text: String!
-		user: User 
+		user: User
 	}
-	
+
 	type User {
 		id: ID!
 		screen_name: String! @id
@@ -2110,12 +2111,12 @@ func TestRestCustomLogicInDeepNestedField(t *testing.T) {
 		})
 		tweets: [SearchTweets] @hasInverse(field: user)
 	}
-	
+
 	type RemoteUser @remote {
 		id: ID!
 		name: String
 	}
-	
+
 	type Followers@remote{
 		users: [RemoteUser]
 	}

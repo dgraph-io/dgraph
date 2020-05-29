@@ -8,6 +8,7 @@ schemas:
       }
       type P {
         id: ID!
+        q: A
       }
     output: |
       type A {
@@ -15,7 +16,9 @@ schemas:
       }
       A.p: uid .
       type P {
+        P.q
       }
+      P.q: uid .
 
   -
     name: "Scalar list"
@@ -54,6 +57,7 @@ schemas:
       }
       type P {
         id: ID!
+        name: String
       }
     output: |
       type X {
@@ -61,7 +65,9 @@ schemas:
       }
       X.p: [uid] .
       type P {
+        P.name
       }
+      P.name: string .
 
   -
     name: "Scalar types"
