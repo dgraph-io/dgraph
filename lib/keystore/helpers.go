@@ -67,27 +67,28 @@ func DecodePrivateKey(in []byte, keytype crypto.KeyType) (priv crypto.PrivateKey
 // GenerateKeypair create a new keypair with the corresponding type and saves
 // it to basepath/keystore/[public key].key in json format encrypted using the
 // specified password and returns the resulting filepath of the new key
-func GenerateKeypair(keytype string, basepath string, password []byte) (string, error) {
+func GenerateKeypair(keytype string, kp crypto.Keypair, basepath string, password []byte) (string, error) {
 	if keytype == "" {
 		keytype = crypto.Sr25519Type
 	}
-
-	var kp crypto.Keypair
 	var err error
-	if keytype == crypto.Sr25519Type {
-		kp, err = sr25519.GenerateKeypair()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate sr25519 keypair: %s", err)
-		}
-	} else if keytype == crypto.Ed25519Type {
-		kp, err = ed25519.GenerateKeypair()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate ed25519 keypair: %s", err)
-		}
-	} else if keytype == crypto.Secp256k1Type {
-		kp, err = secp256k1.GenerateKeypair()
-		if err != nil {
-			return "", fmt.Errorf("failed to generate secp256k1 keypair: %s", err)
+
+	if kp == nil {
+		if keytype == crypto.Sr25519Type {
+			kp, err = sr25519.GenerateKeypair()
+			if err != nil {
+				return "", fmt.Errorf("failed to generate sr25519 keypair: %s", err)
+			}
+		} else if keytype == crypto.Ed25519Type {
+			kp, err = ed25519.GenerateKeypair()
+			if err != nil {
+				return "", fmt.Errorf("failed to generate ed25519 keypair: %s", err)
+			}
+		} else if keytype == crypto.Secp256k1Type {
+			kp, err = secp256k1.GenerateKeypair()
+			if err != nil {
+				return "", fmt.Errorf("failed to generate secp256k1 keypair: %s", err)
+			}
 		}
 	}
 
@@ -189,6 +190,35 @@ func ImportKeypair(fp string, dir string) (string, error) {
 	}
 
 	return keyFilePath, nil
+}
+
+// ImportRawPrivateKey imports a raw private key and saves it to the keystore directory
+func ImportRawPrivateKey(key, keytype, basepath string, password []byte) (string, error) {
+	var kp crypto.Keypair
+	var err error
+
+	if keytype == "" {
+		keytype = crypto.Sr25519Type
+	}
+
+	if keytype == crypto.Sr25519Type {
+		kp, err = sr25519.NewKeypairFromPrivateKeyString(key)
+		if err != nil {
+			return "", fmt.Errorf("failed to import sr25519 keypair: %s", err)
+		}
+	} else if keytype == crypto.Ed25519Type {
+		kp, err = ed25519.NewKeypairFromPrivateKeyString(key)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate ed25519 keypair: %s", err)
+		}
+	} else if keytype == crypto.Secp256k1Type {
+		kp, err = secp256k1.NewKeypairFromPrivateKeyString(key)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate secp256k1 keypair: %s", err)
+		}
+	}
+
+	return GenerateKeypair(keytype, kp, basepath, password)
 }
 
 // UnlockKeys unlocks keys specified by the --unlock flag with the passwords given by --password

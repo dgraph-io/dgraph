@@ -162,6 +162,11 @@ var (
 		Name:  "import",
 		Usage: "Import encrypted keystore file generated with gossamer",
 	}
+	// ImportRawFlag imports a raw private key
+	ImportRawFlag = cli.StringFlag{
+		Name:  "import-raw",
+		Usage: "Import encrypted keystore file generated with gossamer",
+	}
 	// ListFlag List node keys
 	ListFlag = cli.BoolFlag{
 		Name:  "list",
@@ -241,6 +246,7 @@ var (
 		GenerateFlag,
 		PasswordFlag,
 		ImportFlag,
+		ImportRawFlag,
 		ListFlag,
 		Ed25519Flag,
 		Sr25519Flag,

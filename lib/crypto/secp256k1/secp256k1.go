@@ -85,6 +85,21 @@ func NewPrivateKey(in []byte) (*PrivateKey, error) {
 	return priv, err
 }
 
+// NewKeypairFromPrivateKeyString returns a Keypair given a 0x prefixed private key string
+func NewKeypairFromPrivateKeyString(in string) (*Keypair, error) {
+	privBytes, err := common.HexToBytes(in)
+	if err != nil {
+		return nil, err
+	}
+
+	priv, err := NewPrivateKey(privBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return NewKeypairFromPrivate(priv)
+}
+
 // GenerateKeypair will generate a Keypair
 func GenerateKeypair() (*Keypair, error) {
 	priv, err := secp256k1.GenerateKey()
