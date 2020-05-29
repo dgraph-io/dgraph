@@ -38,7 +38,7 @@ func init() {
 
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
-		passwordDirectiveValidation, conflictingDirectiveValidation)
+		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
@@ -520,6 +520,39 @@ func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
 		return gqlerror.ErrorPosf(
 			dir.Position,
 			"Type %s; type argument for @dgraph directive should of type String.", typ.Name)
+	}
+	return nil
+}
+
+// A type should have other fields apart from fields of
+// 1. Type ID!
+// 2. Fields with @custom directive.
+// to be a valid type. Otherwise its not possible to add objects of that type.
+func nonIdFieldsCheck(typ *ast.Definition) *gqlerror.Error {
+	if isQueryOrMutation(typ.Name) || typ.Kind == ast.Enum || typ.Kind == ast.Interface ||
+		typ.Kind == ast.InputObject {
+		return nil
+	}
+
+	// We don't generate mutations for remote types, so we skip this check for them.
+	remote := typ.Directives.ForName(remoteDirective)
+	if remote != nil {
+		return nil
+	}
+
+	hasNonIdField := false
+	for _, field := range typ.Fields {
+		custom := field.Directives.ForName(customDirective)
+		if isIDField(typ, field) || custom != nil {
+			continue
+		}
+		hasNonIdField = true
+		break
+	}
+
+	if !hasNonIdField {
+		return gqlerror.ErrorPosf(typ.Position, "Type %s; is invalid, a type must have atleast "+
+			"one field that is not of ID! type and doesn't have @custom directive.", typ.Name)
 	}
 	return nil
 }
