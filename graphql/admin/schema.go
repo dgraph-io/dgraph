@@ -39,7 +39,9 @@ type updateSchemaResolver struct {
 	mutation schema.Mutation
 
 	// new GraphQL schema that is given as mutation input
-	newGqlSchema string
+	newSchema string
+	// GraphQL schema that is generated from that input
+	generatedSchema string
 	// dgraph schema that is generated from the mutation input
 	newDgraphSchema string
 
@@ -77,11 +79,12 @@ func (asr *updateSchemaResolver) Rewrite(
 	// Disable subscription.
 	schHandler.DisableSubscription()
 
-	_, err = schema.FromString(schHandler.GQLSchema())
+	asr.generatedSchema = schHandler.GQLSchema()
+	_, err = schema.FromString(asr.generatedSchema)
 	if err != nil {
 		return nil, err
 	}
-	asr.newGqlSchema = input.Set.Schema
+	asr.newSchema = input.Set.Schema
 	asr.newDgraphSchema = schHandler.DGSchema()
 
 	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
@@ -114,8 +117,8 @@ func (asr *updateSchemaResolver) Execute(
 		// mutation and once for the following query.  This is the query case.
 		b, err := doQuery(&gqlSchema{
 			ID:              asr.admin.schema.ID,
-			Schema:          asr.newGqlSchema,
-			GeneratedSchema: asr.newDgraphSchema,
+			Schema:          asr.newSchema,
+			GeneratedSchema: asr.generatedSchema,
 		}, asr.mutation.QueryField())
 		return &dgoapi.Response{Json: b}, err
 	}
