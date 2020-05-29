@@ -1466,6 +1466,22 @@ func queryWithAlias(t *testing.T) {
 }
 
 func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
+	mutation := &GraphQLParams{
+		Query: `
+		mutation {
+			addMessage(input : [{content : "content1", author: "author1"}]) {
+				message {
+					content
+					author
+				}
+			}
+		}`,
+	}
+	result := `{"addMessage":{"message":[{"content":"content1","author":"author1"}]}}`
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+
 	queryParams := &GraphQLParams{
 		Query: `
 		query {
@@ -1475,10 +1491,9 @@ func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
 			}
 		}`,
 	}
-	result := "{\"queryMessage\":[{\"content\":\"content1\",\"author\":\"author1\"}]}"
-	gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+	result = `{"queryMessage":[{"content":"content1","author":"author1"}]}`
+	gqlResponse = queryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-
 	require.JSONEq(t, result, string(gqlResponse.Data))
 }
 
