@@ -148,8 +148,12 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
+		opt := badger.DefaultOptions(Config.PostingDir).
+			WithValueThreshold(1 << 10 /* 1KB */).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithMaxCacheSize(1 << 30).
+			WithKeepBlockIndicesInCache(true).
+			WithKeepBlocksInCache(true)
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

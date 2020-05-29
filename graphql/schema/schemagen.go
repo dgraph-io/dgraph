@@ -376,6 +376,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	}
 
 	for _, key := range definitions {
+		if isQueryOrMutation(key) {
+			continue
+		}
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:

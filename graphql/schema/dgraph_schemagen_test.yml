@@ -8,6 +8,7 @@ schemas:
       }
       type P {
         id: ID!
+        q: A
       }
     output: |
       type A {
@@ -15,7 +16,9 @@ schemas:
       }
       A.p: uid .
       type P {
+        P.q
       }
+      P.q: uid .
 
   -
     name: "Scalar list"
@@ -54,6 +57,7 @@ schemas:
       }
       type P {
         id: ID!
+        name: String
       }
     output: |
       type X {
@@ -61,7 +65,9 @@ schemas:
       }
       X.p: [uid] .
       type P {
+        P.name
       }
+      P.name: string .
 
   -
     name: "Scalar types"
@@ -516,6 +522,20 @@ schemas:
         name
       }
 
+  - name: "fields with @dgraph(pred: ...) contain different language."
+    input: |
+      type A {
+          content: String! @dgraph(pred: "post") @search(by: [exact, term])
+          author: String @dgraph(pred: "<公司>") @search(by: [exact, term])
+      }
+    output: |
+      type A {
+        post
+        <公司>
+      }
+      post: string @index(exact, term) .
+      <公司>: string @index(exact, term) .
+
   -
     name: "custom types shouldn't be part of Dgraph schema"
     input: |
@@ -543,3 +563,26 @@ schemas:
         B.p
       }
       B.p: string .
+
+  -
+    name: "custom query and mutation shouldn't be part of Dgraph schema"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        favUsers(id: ID!, name: String!): [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "GET"
+        })
+      }
+
+      type Mutation {
+        setFavUsers(id: ID!, name: String!): [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "POST"
+        })
+      }
+    output:
