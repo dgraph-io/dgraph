@@ -208,6 +208,11 @@ type Mutation {
         })
 }
 
+type Message {
+    content: String! @dgraph(pred: "post")
+    author: String @dgraph(pred: "<职业>")
+}
+
 interface X {
     id: ID!
     username: String! @id
