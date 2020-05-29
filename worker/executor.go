@@ -101,8 +101,8 @@ func (e *executor) shutdown() {
 	}
 }
 
-// getChannelID obtains the channel for the given edge.
-func (e *executor) getChannelID(edge *pb.DirectedEdge) int {
+// channelID obtains the channel for the given edge.
+func (e *executor) channelID(edge *pb.DirectedEdge) int {
 	cid := z.MemHashString(edge.Attr+strconv.FormatUint(edge.Entity, 10)) % uint64(len(e.edgesChan))
 	return int(cid)
 }
@@ -118,7 +118,7 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 	payloadMap := make(map[int]*subMutation)
 	var esize int64
 	for _, edge := range edges {
-		cid := e.getChannelID(edge)
+		cid := e.channelID(edge)
 		payload, ok := payloadMap[cid]
 		if !ok {
 			payloadMap[cid] = &subMutation{
