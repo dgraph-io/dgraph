@@ -23,8 +23,8 @@ env:
   - CC_TEST_REPORTER_ID=abdad8b2e2ec0bfdd7af57d955c44e9470f4d174e744b824047f3037800f5b40
 cache:
   directories:
-  - "$HOME/.cache/go-build"
-  - "$GOPATH/pkg/mod"
+  - $HOME/.cache/go-build
+  - $GOPATH/pkg/mod
 before_cache:
 - rm -f ./trie/failing_test_data
 matrix:
@@ -35,10 +35,10 @@ matrix:
     before_script:
     - curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
     - chmod +x ./cc-test-reporter
-    - "./cc-test-reporter before-build"
-    script: "./scripts/ci.sh"
+    - ./cc-test-reporter before-build
+    script: ./scripts/ci.sh
     after_script:
-    - "./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT"
+    - ./cc-test-reporter after-build --exit-code $TRAVIS_TEST_RESULT
   - name: Test State - Race
     script: make test-state-race
   - name: Integration Tests - Stable
@@ -79,10 +79,11 @@ matrix:
     deploy:
       provider: pages
       skip_cleanup: true
-      github_token: $github_token
+      github_token: $GITHUB_TOKEN # set in settings on travis as a secure variable
       local_dir: docs/_site
+      target_branch: gh-pages
       on:
-        branch: master
+        branch: development
   allow_failures:
     - stage: build
       env:
