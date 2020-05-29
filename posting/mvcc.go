@@ -274,7 +274,9 @@ func NewPlCache() error {
 			return int64(calculatePostingListSize(pl))
 		},
 	})
-	return err
+	if err != nil {
+		return err
+	}
 
 	go func() {
 		m := plCache.Metrics
@@ -297,6 +299,7 @@ func NewPlCache() error {
 				x.CacheKeptGets.M(int64(m.GetsKept())))
 		}
 	}()
+	return nil
 }
 
 // ClearCache will clear the entire list cache.
