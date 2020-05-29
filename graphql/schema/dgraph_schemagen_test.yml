@@ -522,6 +522,20 @@ schemas:
         name
       }
 
+  - name: "fields with @dgraph(pred: ...) contain different language."
+    input: |
+      type A {
+          content: String! @dgraph(pred: "post") @search(by: [exact, term])
+          author: String @dgraph(pred: "<公司>") @search(by: [exact, term])
+      }
+    output: |
+      type A {
+        post
+        <公司>
+      }
+      post: string @index(exact, term) .
+      <公司>: string @index(exact, term) .
+
   -
     name: "custom types shouldn't be part of Dgraph schema"
     input: |

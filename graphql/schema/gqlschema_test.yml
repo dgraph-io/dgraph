@@ -2032,6 +2032,7 @@ valid_schemas:
         f3: [String!] @dgraph(pred: "f3")
         f4: [String]! @dgraph(pred: "f4")
         f5: String
+        f6: String @dgraph(pred: "<职业>")
       }
       type Y {
         f1: String! @dgraph(pred: "f1")
@@ -2039,6 +2040,7 @@ valid_schemas:
         f3: [String]! @dgraph(pred: "f3")
         f4: [String!]! @dgraph(pred: "f4")
         f5: String @dgraph(pred: "X.f5")
+        f6: String @dgraph(pred: "<职业>")
       }
 
   -
@@ -2104,23 +2106,6 @@ valid_schemas:
                   method: "POST",
                   body: "{sid: $established}"
                 })
-      }
-
-  - name: "@dgraph predicate type validation gives no errors with non-null variations"
-    input: |
-      type X {
-        f1: String @dgraph(pred: "f1")
-        f2: [String] @dgraph(pred: "f2")
-        f3: [String!] @dgraph(pred: "f3")
-        f4: [String]! @dgraph(pred: "f4")
-        f5: String
-      }
-      type Y {
-        f1: String! @dgraph(pred: "f1")
-        f2: [String!] @dgraph(pred: "f2")
-        f3: [String]! @dgraph(pred: "f3")
-        f4: [String!]! @dgraph(pred: "f4")
-        f5: String @dgraph(pred: "X.f5")
       }
 
   -
