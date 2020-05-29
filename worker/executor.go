@@ -20,13 +20,14 @@ package worker
 
 import (
 	"context"
-	"strconv"
+	"encoding/binary"
 	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
@@ -41,26 +42,26 @@ type executor struct {
 	pendingSize int64
 
 	sync.RWMutex
-	edgesChan []chan *subMutation
-	closer    *y.Closer
+	workerChan []chan *subMutation
+	closer     *y.Closer
 }
 
 func newExecutor() *executor {
 	e := &executor{
-		edgesChan: make([]chan *subMutation, 32), /* TODO: no of chans can be made configurable */
-		closer:    y.NewCloser(0),
+		workerChan: make([]chan *subMutation, 32), /* TODO: no of chans can be made configurable */
+		closer:     y.NewCloser(0),
 	}
 
-	for i := 0; i < len(e.edgesChan); i++ {
-		e.edgesChan[i] = make(chan *subMutation, 1000)
+	for i := 0; i < len(e.workerChan); i++ {
+		e.workerChan[i] = make(chan *subMutation, 1000)
 		e.closer.AddRunning(1)
-		go e.processMutationCh(e.edgesChan[i])
+		go e.processWorkerCh(e.workerChan[i])
 	}
 	go e.shutdown()
 	return e
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
+func (e *executor) processWorkerCh(ch chan *subMutation) {
 	defer e.closer.Done()
 
 	writer := posting.NewTxnWriter(pstore)
@@ -96,14 +97,19 @@ func (e *executor) shutdown() {
 	<-e.closer.HasBeenClosed()
 	e.Lock()
 	defer e.Unlock()
-	for _, ch := range e.edgesChan {
+	for _, ch := range e.workerChan {
 		close(ch)
 	}
 }
 
 // channelID obtains the channel for the given edge.
 func (e *executor) channelID(edge *pb.DirectedEdge) int {
-	cid := z.MemHashString(edge.Attr+strconv.FormatUint(edge.Entity, 10)) % uint64(len(e.edgesChan))
+	attr := edge.Attr
+	uid := edge.Entity
+	b := make([]byte, len(attr)+8)
+	x.AssertTrue(len(attr) == copy(b, attr))
+	binary.BigEndian.PutUint64(b[len(attr):len(attr)+8], uid)
+	cid := z.MemHash(b) % uint64(len(e.workerChan))
 	return int(cid)
 }
 
@@ -140,7 +146,7 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 	default:
 		// Closer is not closed. And we have the RLock, so sending on channel should be safe.
 		for cid, payload := range payloadMap {
-			e.edgesChan[cid] <- payload
+			e.workerChan[cid] <- payload
 		}
 	}
 
