@@ -16,6 +16,8 @@
 
 language: go
 
+os: linux
+dist: xenial
 go:
 - 1.13.x
 env:
@@ -27,7 +29,7 @@ cache:
   - $GOPATH/pkg/mod
 before_cache:
 - rm -f ./trie/failing_test_data
-matrix:
+jobs:
   include:
   - name: Go Linter
     script: make lint
@@ -53,15 +55,28 @@ matrix:
     script:
     - make docker-build
     - make docker-version
-  - name: Deploy Gossamer Docs
+  - name: Build Gossamer Docs
+    language: ruby
+    rvm:
+    - 2.6.3
+    gemfile:
+    - docs/Gemfile
+    before_install:
+    - gem update --system
+    - gem --version
+    cache: bundler # caching bundler gem packages will speed up build
+    script:
+    - cd docs
+    - bundle exec jekyll build
     deploy:
+      strategy: git
       provider: pages
-      skip_cleanup: true
-      github_token: $GITHUB_TOKEN # set in settings on travis as a secure variable
+      cleanup: false
+      token: $GITHUB_TOKEN # set in settings on travis as a secure variable
       local_dir: docs
       target_branch: gh-pages
       on:
-        branch: development
+        branch: development # deploy on merge into development
   allow_failures:
     - stage: build
       env:
