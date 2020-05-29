@@ -84,7 +84,7 @@ func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
 
 	vote := NewVote(m.message.hash, m.message.number)
 
-	equivocated := s.checkForEquivocation(voter, vote)
+	equivocated := s.checkForEquivocation(voter, vote, m.stage)
 	if equivocated {
 		return nil, ErrEquivocation
 	}
@@ -94,7 +94,11 @@ func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
 		return nil, err
 	}
 
-	s.votes[pk.AsBytes()] = vote
+	if m.stage == prevote {
+		s.prevotes[pk.AsBytes()] = vote
+	} else if m.stage == precommit {
+		s.precommits[pk.AsBytes()] = vote
+	}
 
 	return vote, nil
 }
@@ -102,20 +106,31 @@ func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
 // checkForEquivocation checks if the vote is an equivocatory vote.
 // it returns true if so, false otherwise.
 // additionally, if the vote is equivocatory, it updates the service's votes and equivocations.
-func (s *Service) checkForEquivocation(voter *Voter, vote *Vote) bool {
+func (s *Service) checkForEquivocation(voter *Voter, vote *Vote, stage subround) bool {
 	v := voter.key.AsBytes()
 
-	if s.equivocations[v] != nil {
+	var eq map[ed25519.PublicKeyBytes][]*Vote
+	var votes map[ed25519.PublicKeyBytes]*Vote
+
+	if stage == prevote {
+		eq = s.pvEquivocations
+		votes = s.prevotes
+	} else {
+		eq = s.pcEquivocations
+		votes = s.precommits
+	}
+
+	if eq[v] != nil {
 		// if the voter has already equivocated, every vote in that round is an equivocatory vote
-		s.equivocations[v] = append(s.equivocations[v], vote)
+		eq[v] = append(eq[v], vote)
 		return true
 	}
 
-	if s.votes[v] != nil {
-		// the voter has already voter, all their votes are now equivocatory
-		prev := s.votes[v]
-		s.equivocations[v] = []*Vote{prev, vote}
-		delete(s.votes, v)
+	if votes[v] != nil {
+		// the voter has already voted, all their votes are now equivocatory
+		prev := votes[v]
+		eq[v] = []*Vote{prev, vote}
+		delete(votes, v)
 		return true
 	}
 
@@ -136,7 +151,7 @@ func (s *Service) validateVote(v *Vote) error {
 	}
 
 	// check if the block is an eventual descendant of a previously finalized block
-	isDescendant, err := s.blockState.IsDescendantOf(s.head, v.hash)
+	isDescendant, err := s.blockState.IsDescendantOf(s.head.Hash(), v.hash)
 	if err != nil {
 		return err
 	}

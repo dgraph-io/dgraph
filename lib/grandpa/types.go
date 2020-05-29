@@ -122,7 +122,7 @@ func NewVoteFromHash(hash common.Hash, blockState BlockState) (*Vote, error) {
 }
 
 func (v *Vote) String() string {
-	return fmt.Sprintf("hash=0x%s number=%d", v.hash, v.number)
+	return fmt.Sprintf("hash=%s number=%d", v.hash, v.number)
 }
 
 // FullVote represents a vote with additional information about the state

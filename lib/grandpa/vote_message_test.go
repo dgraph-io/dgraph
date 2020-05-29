@@ -42,7 +42,7 @@ func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, v := range voters {
-		equivocated := gs.checkForEquivocation(v, vote)
+		equivocated := gs.checkForEquivocation(v, vote, prevote)
 		require.False(t, equivocated)
 	}
 }
@@ -70,17 +70,17 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 
 	voter := voters[0]
 
-	gs.votes[voter.key.AsBytes()] = vote
+	gs.prevotes[voter.key.AsBytes()] = vote
 
 	vote2 := NewVoteFromHeader(branches[0])
 	require.NoError(t, err)
 
-	equivocated := gs.checkForEquivocation(voter, vote2)
+	equivocated := gs.checkForEquivocation(voter, vote2, prevote)
 	require.True(t, equivocated)
 
-	require.Equal(t, 0, len(gs.votes))
-	require.Equal(t, 1, len(gs.equivocations))
-	require.Equal(t, 2, len(gs.equivocations[voter.key.AsBytes()]))
+	require.Equal(t, 0, len(gs.prevotes))
+	require.Equal(t, 1, len(gs.pvEquivocations))
+	require.Equal(t, 2, len(gs.pvEquivocations[voter.key.AsBytes()]))
 }
 
 func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
@@ -106,26 +106,26 @@ func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 
 	voter := voters[0]
 
-	gs.votes[voter.key.AsBytes()] = vote
+	gs.prevotes[voter.key.AsBytes()] = vote
 
 	vote2 := NewVoteFromHeader(branches[0])
 	require.NoError(t, err)
 
-	equivocated := gs.checkForEquivocation(voter, vote2)
+	equivocated := gs.checkForEquivocation(voter, vote2, prevote)
 	require.True(t, equivocated)
 
-	require.Equal(t, 0, len(gs.votes))
-	require.Equal(t, 1, len(gs.equivocations))
+	require.Equal(t, 0, len(gs.prevotes))
+	require.Equal(t, 1, len(gs.pvEquivocations))
 
 	vote3 := NewVoteFromHeader(branches[1])
 	require.NoError(t, err)
 
-	equivocated = gs.checkForEquivocation(voter, vote3)
+	equivocated = gs.checkForEquivocation(voter, vote3, prevote)
 	require.True(t, equivocated)
 
-	require.Equal(t, 0, len(gs.votes))
-	require.Equal(t, 1, len(gs.equivocations))
-	require.Equal(t, 3, len(gs.equivocations[voter.key.AsBytes()]))
+	require.Equal(t, 0, len(gs.prevotes))
+	require.Equal(t, 1, len(gs.pvEquivocations))
+	require.Equal(t, 3, len(gs.pvEquivocations[voter.key.AsBytes()]))
 }
 
 func TestValidateMessage_Valid(t *testing.T) {
@@ -219,7 +219,7 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 
 	voter := voters[0]
 
-	gs.votes[voter.key.AsBytes()] = vote
+	gs.prevotes[voter.key.AsBytes()] = vote
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -228,7 +228,7 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = gs.ValidateMessage(msg)
-	require.Equal(t, ErrEquivocation, err, gs.votes)
+	require.Equal(t, ErrEquivocation, err, gs.prevotes)
 }
 
 func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
@@ -270,7 +270,7 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 
 	h, err := st.Block.BestBlockHeader()
 	require.NoError(t, err)
-	gs.head = h.Hash()
+	gs.head = h
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -279,5 +279,5 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = gs.ValidateMessage(msg)
-	require.Equal(t, ErrDescendantNotFound, err, gs.votes)
+	require.Equal(t, ErrDescendantNotFound, err, gs.prevotes)
 }
