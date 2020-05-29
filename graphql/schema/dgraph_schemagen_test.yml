@@ -549,3 +549,26 @@ schemas:
         B.p
       }
       B.p: string .
+
+  -
+    name: "custom query and mutation shouldn't be part of Dgraph schema"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Query {
+        favUsers(id: ID!, name: String!): [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "GET"
+        })
+      }
+
+      type Mutation {
+        setFavUsers(id: ID!, name: String!): [User] @custom(http: {
+          url: "http://mock:8888/users",
+          method: "POST"
+        })
+      }
+    output:
