@@ -147,17 +147,17 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 	key := memory[keyData : keyData+keyLen]
 	val, err := s.GetStorage(key)
 	if err != nil {
-		log.Error("[ext_get_storage_into]", "err", err)
+		log.Warn("[ext_get_storage_into]", "err", err)
 		ret := 1<<32 - 1
 		return int32(ret)
 	} else if val == nil {
-		log.Error("[ext_get_storage_into]", "err", "value is nil")
+		log.Warn("[ext_get_storage_into]", "err", "value is nil")
 		ret := 1<<32 - 1
 		return int32(ret)
 	}
 
 	if len(val) > int(valueLen) {
-		log.Error("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
+		log.Warn("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
 		return 0
 	}
 
@@ -297,13 +297,15 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 	// TODO: without the next lines, we often see `storage is not null, therefore must be a valid type` when calling
 	// initialize_block. determine why this is happening,
 
-	// "Babe Initialized" || "Treasury Approvals"
-	if fmt.Sprintf("0x%x", key) == "0xe0410aa8e1aff5af1147fe2f9b33ce62" || fmt.Sprintf("0x%x", key) == "0x3f60b9abbdf97ea5f6f2e132acee78a9" {
+	keyStr := fmt.Sprintf("0x%x", key)
+
+	// "Babe Initialized" || "Treasury Approvals" || "System Digest"
+	if keyStr == "0xe0410aa8e1aff5af1147fe2f9b33ce62" || keyStr == "0x3f60b9abbdf97ea5f6f2e132acee78a9" || keyStr == "0xf7787e54bb33faaf40a7f3bf438458ee" {
 		val[0] = 0
 	}
 
 	// "RandomnessCollectiveFlip RandomMaterial" || "Staking CurrentEraPointsEarned"
-	if fmt.Sprintf("0x%x", key) == "0xca263a1d57613bec1f68af5eb50a2d31" || fmt.Sprintf("0x%x", key) == "0x9ef8d3fecf9615ad693470693c7fb7dd" {
+	if keyStr == "0xca263a1d57613bec1f68af5eb50a2d31" || keyStr == "0x9ef8d3fecf9615ad693470693c7fb7dd" || keyStr == "0x4fbfbfa5fc2e8c0a7265bcb04f86338f004320a0c2ed9d66fcee8e68b7595b7b" {
 		log.Trace("[ext_get_allocated_storage]", "value", "nil")
 		copy(memory[writtenOut:writtenOut+4], []byte{0xff, 0xff, 0xff, 0xff})
 		return 0
