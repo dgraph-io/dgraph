@@ -49,7 +49,7 @@ function ErrorExit
 function StartZero
 {
   INFO "starting zero container"
-  DockerCompose -f $DOCKER_CONF up --force-recreate --detach zero1
+  DockerCompose -f $DOCKER_CONF up --force-recreate -d zero1
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
     if docker logs zero1 2>&1 | grep -q 'CID set'; then
@@ -71,7 +71,7 @@ function StartAlpha
   if [[ $p_dir ]]; then
     docker cp $p_dir alpha1:/data/alpha1/
   fi
-  DockerCompose -f $DOCKER_CONF up --detach alpha1
+  DockerCompose -f $DOCKER_CONF up -d alpha1
 
   TIMEOUT=10
   while [[ $TIMEOUT > 0 ]]; do
