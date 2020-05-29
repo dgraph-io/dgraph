@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
@@ -34,17 +35,17 @@ type configInput struct {
 	LogRequest *bool
 }
 
-func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	glog.Info("Got config request through GraphQL admin API")
+func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+	glog.Info("Got config update through GraphQL admin API")
 
 	input, err := getConfigInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	if input.LruMB > 0 {
 		if err = worker.UpdateLruMb(input.LruMB); err != nil {
-			return emptyResult(m, err), false
+			return resolve.EmptyResult(m, err), false
 		}
 	}
 
@@ -57,6 +58,21 @@ func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		Data:  map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
 		Field: m,
 	}, true
+}
+
+func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
+	glog.Info("Got config query through GraphQL admin API")
+
+	conf := make(map[string]interface{})
+	posting.Config.Lock()
+	conf["lruMb"] = posting.Config.AllottedMemory
+	posting.Config.Unlock()
+
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{q.Name(): conf},
+		Field: q,
+	}
+
 }
 
 func getConfigInput(m schema.Mutation) (*configInput, error) {

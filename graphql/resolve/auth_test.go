@@ -353,6 +353,10 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 			authMeta.AuthVars = map[string]interface{}{
 				"USER": "user1",
 			}
+
+			if tcase.Role != "" {
+				authMeta.AuthVars["ROLE"] = tcase.Role
+			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 

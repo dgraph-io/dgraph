@@ -160,6 +160,35 @@ type Movie @auth(
                 }"""
             }
         ]}
+    ]},
+  delete: { and: [
+        { not: { rule: """
+            query {
+                queryMovie(filter: { hidden: true }) { __typename }
+            }
+        """}},
+        { or: [
+            { rule: """
+                query($USER: String!) {
+                    queryMovie {
+                        regionsAvailable {
+                            users(filter: {username: {eq: $USER}}) {
+                                __typename
+                            }
+                        }
+                    }
+                }"""
+            },
+            { rule: """
+                query {
+                    queryMovie {
+                        regionsAvailable(filter: { global: true }) {
+                            __typename
+                        }
+                    }
+                }"""
+            }
+        ]}
     ]}
 ) {
   id: ID!
@@ -200,9 +229,17 @@ type Issue @auth(
                           }
                       }
                 }"""}
+     ]},
+     delete:  { and : [
+       { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+       { rule: """ query($USER: String!) {
+                      queryIssue {
+                          owner(filter: { username: { eq: $USER } }) {
+                              __typename
+                          }
+                      }
+                }"""}
      ]}
-
-
 ){
   id: ID!
   msg: String
@@ -211,9 +248,10 @@ type Issue @auth(
 }
 
 type Log @auth(
-     query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-     add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
-     update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
 ) {
   id: ID!
   logs: String
@@ -224,10 +262,22 @@ type ComplexLog @auth(
      query: { and : [
       { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
       { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
-     ]}
+     ]},
+      delete: {
+      or : [
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+        { rule: """
+        query {
+          queryComplexLog(filter: { visible: true }) {
+            __typename
+          }
+        }"""
+        }
+    ]}
 ) {
   id: ID!
   logs: String
+  visible: Boolean @search
 }
 
 type Project @auth(
@@ -267,7 +317,6 @@ type Project @auth(
                   }""" },
          { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
      ]}
-
 ) {
   projID: ID!
   name: String!
@@ -364,8 +413,19 @@ type Column @auth(
                 }
             }
         }
-    }"""}
-#     delete: { rule: "false" }
+    }"""},
+    delete: { rule: """
+      query($USER: String!) {
+          queryColumn {
+              inProject {
+                  roles(filter: { permission: { eq: ADMIN } } ) {
+                      assignedTo(filter: { username: { eq: $USER } }) {
+                          __typename
+                      }
+                  }
+              }
+          }
+      }"""},
 ) {
   colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })

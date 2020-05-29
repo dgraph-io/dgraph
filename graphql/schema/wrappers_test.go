@@ -22,6 +22,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -806,10 +807,10 @@ func TestAllowedHeadersList(t *testing.T) {
 			`
 	 type X @auth(
         query: {rule: """
-          query { 
-            queryX(filter: { userRole: { eq: "ADMIN" } }) { 
-              __typename 
-            } 
+          query {
+            queryX(filter: { userRole: { eq: "ADMIN" } }) {
+              __typename
+            }
           }"""
         }
       ) {
@@ -827,7 +828,114 @@ func TestAllowedHeadersList(t *testing.T) {
 			require.NoError(t, errs)
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
-			require.True(t, strings.Contains(ah.headers, test.expected))
+			require.True(t, strings.Contains(hc.allowed, test.expected))
+		})
+	}
+}
+
+func TestParseSecrets(t *testing.T) {
+	tcases := []struct {
+		name               string
+		schemaStr          string
+		expectedSecrets    map[string]string
+		expectedAuthHeader string
+		err                error
+	}{
+		{"should be able to parse secrets",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			 # Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+			`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"",
+			nil,
+		},
+		{"should be able to parse secret where schema also has other comments.",
+			`
+		# Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+
+		type User {
+			id: ID!
+			name: String!
+		}
+
+		# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+		# random comment
+		`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"",
+			nil,
+		},
+		{
+			"should throw an error if the secret is not in the correct format",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Secret RANDOM_TOKEN
+			`,
+			nil,
+			"",
+			errors.New("incorrect format for specifying Dgraph secret found for " +
+				"comment: `# Dgraph.Secret RANDOM_TOKEN`, it should " +
+				"be `# Dgraph.Secret key value`"),
+		},
+		{
+			"should work along with authorization",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Secret  "GITHUB_API_TOKEN"   some-super-secret-token
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+			`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"X-Test-Dgraph",
+			nil,
+		},
+		{
+			"should throw an error if multiple authorization values are specified",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization random https://dgraph.io/jwt/claims HS256 "key"
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+			`,
+			nil,
+			"",
+			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
+				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
+				` https://dgraph.io/jwt/claims HS256 "key"`),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			s, err := parseSecrets(test.schemaStr)
+			if test.err != nil || err != nil {
+				require.EqualError(t, err, test.err.Error())
+				return
+			}
+
+			require.Equal(t, test.expectedSecrets, s)
+			if test.expectedAuthHeader != "" {
+				require.Equal(t, test.expectedAuthHeader, authorization.GetHeader())
+			}
 		})
 	}
 }

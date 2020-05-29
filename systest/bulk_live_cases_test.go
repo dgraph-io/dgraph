@@ -102,9 +102,9 @@ func TestFacets(t *testing.T) {
 		"q":[
 			{
 				"boss":{
-					"name":"Alice"
-				},
-				"boss|since":"2017-04-26T00:00:00Z"
+					"name":"Alice",
+					"boss|since":"2017-04-26T00:00:00Z"
+				}
 			}
 		]
 	}
@@ -122,12 +122,10 @@ func TestFacets(t *testing.T) {
 			{
 				"~boss":[
 					{
-						"name":"Bob"
+						"name":"Bob",
+						"~boss|since": "2017-04-26T00:00:00Z"
 					}
-				],
-				"~boss|since":{
-					"0":"2017-04-26T00:00:00Z"
-				}
+				]
 			}
 		]
 	}
@@ -345,7 +343,7 @@ func TestBulkSingleUid(t *testing.T) {
 		_:erin  <name> "Erin" .
 		_:frank <name> "Frank" .
 		_:grace <name> "Grace" .
-	`)
+	`, "")
 	defer s.cleanup()
 
 	// Ensures that the index keys are written to disk after commit.
@@ -476,7 +474,7 @@ func TestDeleteEdgeWithStar(t *testing.T) {
 
 		<0x2> <name> "Alice" .
 		<0x3> <name> "Bob" .
-	`)
+	`, "")
 	defer s.cleanup()
 
 	_, err := s.bulkCluster.client.NewTxn().Mutate(context.Background(), &api.Mutation{
@@ -499,6 +497,28 @@ func TestDeleteEdgeWithStar(t *testing.T) {
 
 }
 
+func TestGqlSchema(t *testing.T) {
+	s := newBulkOnlySuite(t, "", "", "abc")
+	defer s.cleanup()
+
+	t.Run("Get GraphQL schema", s.testCase(`
+	{
+		schema(func: has(dgraph.graphql.schema)) {
+			dgraph.graphql.schema
+			dgraph.graphql.xid
+			dgraph.type
+		}
+	}`, `
+		{
+			"schema": [{
+				"dgraph.graphql.schema": "abc",
+				"dgraph.graphql.xid": "dgraph.graphql.schema",
+				"dgraph.type": ["dgraph.graphql"]
+			}]
+		}`))
+
+}
+
 // TODO: Fix this later.
 func DONOTRUNTestGoldenData(t *testing.T) {
 	if testing.Short() {
@@ -508,6 +528,7 @@ func DONOTRUNTestGoldenData(t *testing.T) {
 	s := newSuiteFromFile(t,
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.schema"),
 		os.ExpandEnv("$GOPATH/src/github.com/dgraph-io/dgraph/systest/data/goldendata.rdf.gz"),
+		"",
 	)
 	defer s.cleanup()
 
@@ -545,6 +566,6 @@ func DONOTRUNTestGoldenData(t *testing.T) {
 	// queries will have to be modified.
 
 	// TODO: Add tests similar to those in
-	// https://docs.dgraph.io/query-language/. These test most of the main
+	// https://dgraph.io/docs/query-language/. These test most of the main
 	// functionality of dgraph.
 }
