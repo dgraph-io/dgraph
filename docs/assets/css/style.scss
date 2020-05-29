@@ -1,0 +1,29 @@
+---
+---
+
+@import "minima/skins/dark.scss";
+@import "minima/initialize.scss";
+
+body {
+    font-family: "ubuntu";
+    line-height: 1.75;
+}
+
+header, footer {
+    border: 0 !important;
+    padding: 2.5% 0 !important;
+    margin: 0 !important;
+}
+
+h2 {
+    padding-top: 2%;
+}
+
+a {
+    color: #e6087b !important;
+}
+
+ul, li {
+    padding: 2px 0;
+}
+

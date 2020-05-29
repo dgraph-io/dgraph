@@ -17,7 +17,7 @@ in functionality rather than the changes in code.
 -
 -
 
-## Tests:
+## Tests
 
 <!--
 
@@ -29,7 +29,7 @@ Details on how to run tests relevant to the changes within this pull request.
 
 ```
 
-## Checklist:
+## Checklist
 
 <!--
 
@@ -38,13 +38,12 @@ the box after completing the task.
 
 -->
 
-- [ ] I have read [CONTRIBUTING](CONTRIBUTING.md) and [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md)
+- [ ] I have read [CODE_OF_CONDUCT](https://github.com/ChainSafe/gossamer/blob/development/.github/CODE_OF_CONDUCT.md) and [CONTRIBUTING](https://github.com/ChainSafe/gossamer/blob/development/.github/CONTRIBUTING.md) 
 - [ ] I have provided as much information as possible and necessary
 - [ ] I have reviewed my own pull request before requesting a review
-- [ ] I have linked any relevant issues in my pull request comments
 - [ ] All integration tests and required coverage checks are passing
 
-## Issues:
+## Issues
 
 <!--
 

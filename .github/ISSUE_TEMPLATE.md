@@ -94,8 +94,6 @@ the box after completing the task.
 
 --->
 
-- [ ] I have read [CONTRIBUTING](CONTRIBUTING.md) and [CODE_OF_CONDUCT](CODE_OF_CONDUCT.md)
+- [ ] I have read [CODE_OF_CONDUCT](https://github.com/ChainSafe/gossamer/blob/development/.github/CODE_OF_CONDUCT.md) and [CONTRIBUTING](https://github.com/ChainSafe/gossamer/blob/development/.github/CONTRIBUTING.md) 
 - [ ] I have provided as much information as possible and necessary
 - [ ] I am planning to submit a pull request to fix this issue myself
-
-<!--- Modified from trufflesuite/ganache -->
