@@ -740,11 +740,16 @@ func addSchema(url, schema string) error {
 				}
 			}
 		}
+		Errors []interface{}
 	}
 
 	err = json.Unmarshal(resp, &addResult)
 	if err != nil {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if len(addResult.Errors) > 0 {
+		return errors.Errorf("%v", addResult.Errors)
 	}
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {
