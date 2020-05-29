@@ -25,6 +25,7 @@ import (
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
+         "github.com/iancoleman/strcase" //Added strcase for camelCase conversion
 )
 
 const (
@@ -971,7 +972,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: strcase.ToLowerCamel(defn.Name), //Converting Name to lower camelCase
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1001,7 +1002,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: strcase.ToLowerCamel(defn.Name), //Converting Name to lower camelCase
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
