@@ -522,6 +522,7 @@ These third-party clients are contributed by the community and are not officiall
 ### Rust
 
 - https://github.com/Swoorup/dgraph-rs
+- https://github.com/selmeci/dgraph-tonic
 
 ## Raw HTTP
 

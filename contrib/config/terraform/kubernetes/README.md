@@ -90,7 +90,7 @@ The following table lists the configurable parameters of the template and their 
 >          # Initializing the Alphas:
 >          #
 >          # You may want to initialize the Alphas with data before starting, e.g.
->          # with data from the Dgraph Bulk Loader: https://docs.dgraph.io/deploy/#bulk-loader.
+>          # with data from the Dgraph Bulk Loader: https://dgraph.io/docs/deploy/#bulk-loader.
 >          # You can accomplish by uncommenting this initContainers config. This
 >          # starts a container with the same /dgraph volume used by Alpha and runs
 >          # before Alpha starts.

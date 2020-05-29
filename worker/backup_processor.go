@@ -33,12 +33,40 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 )
 
+const (
+	// backupNumGo is the number of go routines used by the backup stream writer.
+	backupNumGo = 16
+)
+
 // BackupProcessor handles the different stages of the backup process.
 type BackupProcessor struct {
 	// DB is the Badger pstore managed by this node.
 	DB *badger.DB
 	// Request stores the backup request containing the parameters for this backup.
 	Request *pb.BackupRequest
+
+	// plList is an array of pre-allocated pb.PostingList objects.
+	plList []*pb.PostingList
+	// bplList is an array of pre-allocated pb.BackupPostingList objects.
+	bplList []*pb.BackupPostingList
+}
+
+func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
+	bp := &BackupProcessor{
+		DB:      db,
+		Request: req,
+		plList:  make([]*pb.PostingList, backupNumGo),
+		bplList: make([]*pb.BackupPostingList, backupNumGo),
+	}
+
+	for i := range bp.plList {
+		bp.plList[i] = &pb.PostingList{}
+	}
+	for i := range bp.bplList {
+		bp.bplList[i] = &pb.BackupPostingList{}
+	}
+
+	return bp
 }
 
 // LoadResult holds the output of a Load operation.
@@ -94,6 +122,7 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 
 	stream := pr.DB.NewStreamAt(pr.Request.ReadTs)
 	stream.LogPrefix = "Dgraph.Backup"
+	stream.NumGo = backupNumGo
 	stream.KeyToList = pr.toBackupList
 	stream.ChooseKey = func(item *badger.Item) bool {
 		parsedKey, err := x.Parse(item.Key())
@@ -187,7 +216,8 @@ func (m *Manifest) GoString() string {
 		m.Since, m.Groups, m.Encrypted)
 }
 
-func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
+func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
+	*bpb.KVList, error) {
 	list := &bpb.KVList{}
 
 	item := itr.Item()
@@ -218,7 +248,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.
 		}
 		kv.Key = backupKey
 
-		backupPl, err := toBackupPostingList(kv.Value)
+		backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
 		if err != nil {
 			return nil, err
 		}
@@ -262,12 +292,18 @@ func toBackupKey(key []byte) ([]byte, error) {
 	return backupKey, nil
 }
 
-func toBackupPostingList(val []byte) ([]byte, error) {
-	pl := &pb.PostingList{}
+func (pr *BackupProcessor) toBackupPostingList(val []byte, threadNum int) ([]byte, error) {
+	pl := pr.plList[threadNum]
+	bpl := pr.bplList[threadNum]
+	pl.Reset()
+	bpl.Reset()
+
 	if err := pl.Unmarshal(val); err != nil {
 		return nil, errors.Wrapf(err, "while reading posting list")
 	}
-	backupVal, err := posting.ToBackupPostingList(pl).Marshal()
+	posting.ToBackupPostingList(pl, bpl)
+	backupVal, err := bpl.Marshal()
+
 	if err != nil {
 		return nil, errors.Wrapf(err, "while converting posting list for backup")
 	}
