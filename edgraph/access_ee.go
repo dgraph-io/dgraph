@@ -825,12 +825,10 @@ func AuthorizeGuardians(ctx context.Context) error {
 	addUserFilterToQuery applies makes sure that a user can access only its own
 	acl info by applying filter of userid and groupid to acl predicates. A query like
 	Conversion pattern:
-
-	* me(func: type(dgraph.type.Group)) -> me(func: type(dgraph.type.Group)) @filter(eq("dgraph.
-xid", groupIds...))
-
-	* me(func: type(dgraph.type.User)) -> me(func: type(dgraph.type.User)) @filter(eq("dgraph.
-xid", userId))
+		* me(func: type(dgraph.type.Group)) ->
+				me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+		* me(func: type(dgraph.type.User)) ->
+				me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 
 */
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
