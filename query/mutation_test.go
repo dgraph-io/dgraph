@@ -31,7 +31,7 @@ func TestReserverPredicateForMutation(t *testing.T) {
 	require.Error(t, err, "Cannot mutate graphql reserved predicate dgraph.graphql.schema")
 }
 
-func TestAlterInInternalNamespace(t *testing.T) {
+func TestAlteringReservedTypesAndPredicatesShouldFail(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
