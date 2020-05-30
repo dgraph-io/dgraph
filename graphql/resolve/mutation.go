@@ -227,7 +227,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(gqlErr), resolverFailed
 	}
 
-	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
+	// extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 	result := make(map[string]interface{})
 	if req.Query != "" && len(mutResp.GetJson()) != 0 {
 		if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
@@ -266,10 +266,10 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
+	// extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 
 	// merge the extensions we got from Mutate and Query into extM
-	extM.Merge(extQ)
+	// extM.Merge(extQ)
 
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
@@ -281,9 +281,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					schema.NumUid:                numUids,
 					mutation.QueryField().Name(): nil,
 				}},
-			Field:      mutation,
-			Err:        err,
-			Extensions: extM,
+			Field: mutation,
+			Err:   err,
+			// Extensions: extM,
 		}, resolverSucceeded
 	}
 
@@ -295,7 +295,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgRes[schema.NumUid] = numUids
 	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
 	resolved.Field = mutation
-	resolved.Extensions = extM
+	//	resolved.Extensions = extM
 
 	return resolved, resolverSucceeded
 }

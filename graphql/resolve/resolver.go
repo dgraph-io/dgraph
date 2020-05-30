@@ -96,7 +96,7 @@ type ResultCompleter interface {
 type RequestResolver struct {
 	schema    schema.Schema
 	resolvers ResolverFactory
-	resp   *schema.Response
+	resp      *schema.Response
 }
 
 // A resolverFactory is the main implementation of ResolverFactory.  It stores a
@@ -145,8 +145,8 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
-	trace []*schema.ResolverTrace
-	timers schema.TimerFactory
+	// trace      []*schema.ResolverTrace
+	// timers     schema.TimerFactory
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -360,27 +360,27 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
+	// // //
+	// trace := &schema.Trace{
+	// 	Version:   1,
+	// 	StartTime: time.Now(),
+	// }
+	// trace.Version = 1
+	// //timers := schema.NewOffsetTimerFactory(trace.StartTime)                          //Trace of the complete request
+	// // defer func() {
+	// // 	trace.EndTime = time.Now()
+	// // 	trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+	// // }()
+	// //r.resp.Extensions = &schema.Extensions{RequestID: trace}
+	// r.resp.Extensions = &schema.Extensions{Tracing: trace}
+	// // r.resp.Extensions = &schema.Extensions{
+	// // 	RequestID: "1001",
+	// // 	Tracing:   trace,
+	// // }
 
+	op, err := r.schema.Operation(gqlReq) // timers.NewOffsetTimer(&trace.Parsing),
+	// timers.NewOffsetTimer(&trace.Validation)
 
-// //Trace of the complete request
-//     trace := &schema.Trace{
-// 		Version:   1,
-// 		StartTime: time.Now(),
-// 	}
-// 	timers := schema.NewOffsetTimerFactory(trace.StartTime)
-// 	defer func() {
-// 		trace.EndTime = time.Now()
-// 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
-// 	}()
-
-// 	r.resp.Extensions = &schema.Extensions{
-// 	//	RequestID: api.RequestID(ctx),
-// 		Tracing:   trace,
-// 	}
-
-
-
-	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
@@ -420,9 +420,9 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Data:  nil,
 							Field: q,
 							Err:   err,
-						//	timers: timers
+							//	timers: timers
 						}
-							})
+					})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
 			}(q, i)
@@ -536,8 +536,24 @@ func addResult(resp *schema.Response, res *Resolved) {
 	resp.WithError(res.Err)
 	resp.WithError(gqlErr)
 	resp.AddData(b)
-	
-	//also need to merge extensions of individual queries in the request
+
+	// trace := &schema.ResolverTrace{}
+
+	// //also need to merge extensions of individual queries in the request
+	// trace.Path = []interface{}{"getmessage"}
+	// trace.ParentType = "Query"
+	// trace.FieldName = "getmessagage"
+	// trace.ReturnType = "Message"
+	// dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}                       //dummy test data
+	// dgraphDuration.OffsetDuration.StartOffset = 100
+	// dgraphDuration.OffsetDuration.Duration = 150
+	// trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+
+	// trace.OffsetDuration.StartOffset = 150
+	// trace.OffsetDuration.Duration = 50
+	// // resp.Extensions.Tracing.Execution =
+	// // 	append(resp.Extensions.Tracing.Execution, res.trace...)
+
 	resp.MergeExtensions(res.Extensions)
 }
 

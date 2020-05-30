@@ -21,8 +21,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"time"        
-	
+	"time"
+
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -30,7 +30,7 @@ import (
 
 // Extensions represents GraphQL extensions
 type Extensions struct {
-	TouchedUids uint64 `json:"touched_uids,omitempty"`
+	//TouchedUids uint64 `json:"touched_uids,omitempty"`
 	Tracing   *Trace `json:"tracing,omitempty"`
 	RequestID string `json:"requestID,omitempty"`
 }
@@ -41,7 +41,8 @@ func (e *Extensions) Merge(ext *Extensions) {
 		return
 	}
 
-	e.TouchedUids += ext.TouchedUids
+	//e.TouchedUids += ext.TouchedUids
+
 }
 
 // GraphQL spec on response is here:
@@ -62,10 +63,7 @@ type Response struct {
 	Extensions *Extensions
 }
 
-
-
-
-// Trace : Apollo Tracing is a GraphQL extension for tracing resolver performance.
+// Trace : Apollo Tracing is a GraphQL extension for tracing resolver performance.Response
 // https://github.com/apollographql/apollo-tracing
 // Not part of the standard itself, it gets reported in GraphQL "extensions".
 // It's for reporting tracing data through all the resolvers in a GraphQL query.
@@ -147,8 +145,6 @@ type TimerFactory interface {
 	NewOffsetTimer(storeTo *OffsetDuration) OffsetTimer
 }
 
-
-
 // An OffsetTimer is used to fill out an OffsetDuration.  Start starts the timer
 // and calculates the offset.  Stop calculates the duration.
 type OffsetTimer interface {
@@ -187,8 +183,6 @@ func (ot *offsetTimer) Start() {
 func (ot *offsetTimer) Stop() {
 	ot.backing.Duration = time.Since(ot.start).Nanoseconds()
 }
-
-
 
 // ErrorResponse formats an error as a list of GraphQL errors and builds
 // a response with that error list and no data.  Because it doesn't add data, it
