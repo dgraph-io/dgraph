@@ -270,6 +270,7 @@ func RunAll(t *testing.T) {
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
+	t.Run("cascade directive", queryWithCascade)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
