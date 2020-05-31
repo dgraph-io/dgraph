@@ -453,10 +453,6 @@
     query {
       x as updateLog()
     }
-  authquery: |-
-    query {
-      log()
-    }
 
 - name: "Update with top level RBAC true."
   gqlquery: |
