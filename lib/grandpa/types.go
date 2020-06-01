@@ -36,6 +36,11 @@ type Voter struct {
 	id  uint64 //nolint:unused
 }
 
+// PublicKeyBytes returns the voter key as PublicKeyBytes
+func (v *Voter) PublicKeyBytes() ed25519.PublicKeyBytes {
+	return v.key.AsBytes()
+}
+
 // State represents a GRANDPA state
 type State struct {
 	voters []*Voter // set of voters

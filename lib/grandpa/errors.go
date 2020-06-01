@@ -22,6 +22,9 @@ import (
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 )
 
+// ErrNilBlockState is returned when BlockState is nil
+var ErrNilBlockState = errors.New("cannot have nil BlockState")
+
 // ErrBlockDoesNotExist is returned when trying to validate a vote for a block that doesn't exist
 var ErrBlockDoesNotExist = errors.New("block does not exist")
 

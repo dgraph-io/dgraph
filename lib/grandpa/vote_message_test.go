@@ -31,7 +31,12 @@ func TestCheckForEquivocation_NoEquivocation(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
 
@@ -51,7 +56,12 @@ func TestCheckForEquivocation_WithEquivocation(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var branches []*types.Header
@@ -87,7 +97,12 @@ func TestCheckForEquivocation_WithExistingEquivocation(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var branches []*types.Header
@@ -132,7 +147,12 @@ func TestValidateMessage_Valid(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
 
@@ -154,7 +174,12 @@ func TestValidateMessage_InvalidSignature(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
 
@@ -177,7 +202,12 @@ func TestValidateMessage_SetIDMismatch(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
 
@@ -200,7 +230,12 @@ func TestValidateMessage_Equivocation(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var branches []*types.Header
@@ -235,7 +270,12 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
 
@@ -257,7 +297,12 @@ func TestValidateMessage_IsNotDescendant(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var branches []*types.Header

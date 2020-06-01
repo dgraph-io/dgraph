@@ -18,6 +18,7 @@ package grandpa
 
 import (
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 )
@@ -35,31 +36,149 @@ type Service struct {
 	precommits      map[ed25519.PublicKeyBytes]*Vote   // pre-commits for next state
 	pvEquivocations map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-vote stage
 	pcEquivocations map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-commit stage
-	head            *types.Header                      // most recently finalized block hash
+	head            *types.Header                      // most recently finalized block
+
+	// historical information
+	// TODO: do we need maps, or just info from previous round?
+	bestFinalCandidate map[uint64]*Vote // map of round number -> best final candidate
+}
+
+// Config represents a GRANDPA service configuration
+type Config struct {
+	BlockState BlockState
+	Voters     []*Voter
+	Keypair    *ed25519.Keypair
 }
 
 // NewService returns a new GRANDPA Service instance.
 // TODO: determine what needs to be exported.
-func NewService(blockState BlockState, voters []*Voter) (*Service, error) {
-	head, err := blockState.GetFinalizedHeader()
+func NewService(cfg *Config) (*Service, error) {
+	if cfg.BlockState == nil {
+		return nil, ErrNilBlockState
+	}
+
+	head, err := cfg.BlockState.GetFinalizedHeader()
 	if err != nil {
 		return nil, err
 	}
 
 	return &Service{
-		state:           NewState(voters, 0, 0),
-		blockState:      blockState,
-		subround:        prevote,
-		prevotes:        make(map[ed25519.PublicKeyBytes]*Vote),
-		precommits:      make(map[ed25519.PublicKeyBytes]*Vote),
-		pvEquivocations: make(map[ed25519.PublicKeyBytes][]*Vote),
-		pcEquivocations: make(map[ed25519.PublicKeyBytes][]*Vote),
-		head:            head,
+		state:              NewState(cfg.Voters, 0, 0),
+		blockState:         cfg.BlockState,
+		keypair:            cfg.Keypair,
+		subround:           prevote,
+		prevotes:           make(map[ed25519.PublicKeyBytes]*Vote),
+		precommits:         make(map[ed25519.PublicKeyBytes]*Vote),
+		pvEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
+		pcEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
+		bestFinalCandidate: make(map[uint64]*Vote),
+		head:               head,
 	}, nil
 }
 
+func (s *Service) publicKeyBytes() ed25519.PublicKeyBytes {
+	return s.keypair.Public().(*ed25519.PublicKey).AsBytes()
+}
+
+// initiate initates a GRANDPA round
+func (s *Service) initiate() error { //nolint
+	s.state.round++
+
+	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
+	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
+	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
+	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
+
+	// TODO: call s.playGrandpaRound()
+	return nil
+}
+
+func (s *Service) playGrandpaRound() error { //nolint
+	// TODO: this function requires messaging
+	return nil
+}
+
+func (s *Service) attemptToFinalize() error { //nolint
+	// TODO: this function requires messaging
+	return nil
+}
+
+// determinePreVote determines what block is our pre-voted block for the current round
+func (s *Service) determinePreVote() (*Vote, error) {
+	var vote *Vote
+
+	// if we receive a vote message from the primary with a block that's greater than or equal to the current pre-voted block
+	// and greater than the best final candidate from the last round, we choose that.
+	// otherwise, we simply choose the head of our chain.
+	prm := s.prevotes[s.derivePrimary().PublicKeyBytes()]
+
+	if prm != nil && prm.number >= uint64(s.head.Number.Int64()) {
+		vote = prm
+	} else {
+		header, err := s.blockState.BestBlockHeader()
+		if err != nil {
+			return nil, err
+		}
+
+		vote = NewVoteFromHeader(header)
+	}
+
+	return vote, nil
+}
+
+// determinePreCommit determines what block is our pre-committed block for the current round
+func (s *Service) determinePreCommit() (*Vote, error) {
+	// the pre-committed block is simply the pre-voted block (GRANDPA-GHOST)
+	pvb, err := s.getPreVotedBlock()
+	if err != nil {
+		return nil, err
+	}
+
+	return &pvb, nil
+}
+
+// isFinalizable returns true is the round is finalizable, false otherwise.
+func (s *Service) isFinalizable() (bool, error) {
+	pvb, err := s.getPreVotedBlock()
+	if err == ErrNoPreVotedBlock {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+
+	bfc, err := s.getBestFinalCandidate()
+	if err != nil {
+		return false, err
+	}
+
+	if bfc.number <= pvb.number && (s.state.round == 0 || s.bestFinalCandidate[s.state.round-1].number <= bfc.number) {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+// finalize finalizes the round
+func (s *Service) finalize() error {
+	// get best final candidate
+	bfc, err := s.getBestFinalCandidate()
+	if err != nil {
+		return err
+	}
+
+	// set best final candidate
+	s.bestFinalCandidate[s.state.round] = bfc
+	s.head, err = s.blockState.GetHeader(bfc.hash)
+	if err != nil {
+		return err
+	}
+
+	// set finalized head in db
+	return s.blockState.SetFinalizedHash(bfc.hash)
+}
+
 // derivePrimary returns the primary for the current round
-func (s *Service) derivePrimary() *Voter { //nolint
+func (s *Service) derivePrimary() *Voter {
 	return s.state.voters[s.state.round%uint64(len(s.state.voters))]
 }
 
@@ -78,6 +197,8 @@ func (s *Service) getBestFinalCandidate() (*Vote, error) {
 	}
 
 	// if there are no blocks with >=2/3 pre-commits, just return the pre-voted block
+	// TODO: is this correct? the spec implies that it should return nil, but discussions have suggested
+	// that we return the prevoted block.
 	if len(blocks) == 0 {
 		return &prevoted, nil
 	}
@@ -254,7 +375,9 @@ func (s *Service) getPossibleSelectedAncestors(votes []Vote, curr common.Hash, p
 
 		// find common ancestor, check if votes for it is >=2/3 or not
 		pred, err := s.blockState.HighestCommonAncestor(v.hash, curr)
-		if err != nil {
+		if err == blocktree.ErrNodeNotFound {
+			continue
+		} else if err != nil {
 			return nil, err
 		}
 
@@ -319,7 +442,9 @@ func (s *Service) getVotesForBlock(hash common.Hash, stage subround) (uint64, er
 
 		// check if the current block is a descendant of B
 		isDescendant, err := s.blockState.IsDescendantOf(hash, v.hash)
-		if err != nil {
+		if err == blocktree.ErrStartNodeNotFound || err == blocktree.ErrEndNodeNotFound {
+			continue
+		} else if err != nil {
 			return 0, err
 		}
 

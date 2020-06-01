@@ -74,7 +74,12 @@ func TestGetDirectVotes(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	voteA := &Vote{
@@ -109,7 +114,12 @@ func TestGetVotesForBlock_NoDescendantVotes(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -152,7 +162,12 @@ func TestGetVotesForBlock_DescendantVotes(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var branches []*types.Header
@@ -202,7 +217,12 @@ func TestGetPossibleSelectedAncestors_SameAncestor(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with 3 branches all starting at depth 6
@@ -257,7 +277,12 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with branches starting at depth 6 and another branch starting at depth 7
@@ -317,7 +342,12 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor_MoreBranches(t *testing.T)
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with 1 branch starting at depth 6 and 2 branches starting at depth 7,
@@ -383,7 +413,12 @@ func TestGetPossibleSelectedBlocks_OneBlock(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -422,7 +457,12 @@ func TestGetPossibleSelectedBlocks_EqualVotes_SameAncestor(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with 3 branches all starting at depth 6
@@ -470,7 +510,12 @@ func TestGetPossibleSelectedBlocks_EqualVotes_VaryingAncestor(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with branches starting at depth 6 and another branch starting at depth 7
@@ -524,7 +569,12 @@ func TestGetPossibleSelectedBlocks_OneThirdEquivocating(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -565,7 +615,12 @@ func TestGetPossibleSelectedBlocks_MoreThanOneThirdEquivocating(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -614,7 +669,12 @@ func TestGetPreVotedBlock_OneBlock(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -652,7 +712,12 @@ func TestGetPreVotedBlock_MultipleCandidates(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with branches starting at depth 6 and another branch starting at depth 7
@@ -700,7 +765,12 @@ func TestGetPreVotedBlock_EvenMoreCandidates(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// this creates a tree with 6 total branches, one each from depth 3 to 7
@@ -769,7 +839,12 @@ func TestIsCompletable(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -805,7 +880,12 @@ func TestFindParentWithNumber(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	// no branches needed
@@ -833,7 +913,12 @@ func TestGetBestFinalCandidate_OneBlock(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -874,7 +959,12 @@ func TestGetBestFinalCandidate_PrecommitAncestor(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -921,7 +1011,12 @@ func TestGetBestFinalCandidate_NoPrecommit(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -963,7 +1058,12 @@ func TestGetBestFinalCandidate_PrecommitOnAnotherChain(t *testing.T) {
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
-	gs, err := NewService(st.Block, voters)
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
 	var leaves []common.Hash
@@ -999,4 +1099,174 @@ func TestGetBestFinalCandidate_PrecommitOnAnotherChain(t *testing.T) {
 	bfc, err := gs.getBestFinalCandidate()
 	require.NoError(t, err)
 	require.Equal(t, pred, bfc.hash)
+}
+
+func TestDeterminePreVote_NoPrimaryPreVote(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	state.AddBlocksToState(t, st.Block, 3)
+	pv, err := gs.determinePreVote()
+	require.NoError(t, err)
+
+	header, err := st.Block.BestBlockHeader()
+	require.NoError(t, err)
+	require.Equal(t, header.Hash(), pv.hash)
+}
+
+func TestDeterminePreVote_WithPrimaryPreVote(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	state.AddBlocksToState(t, st.Block, 3)
+	header, err := st.Block.BestBlockHeader()
+	require.NoError(t, err)
+	state.AddBlocksToState(t, st.Block, 1)
+
+	primary := gs.derivePrimary().PublicKeyBytes()
+	gs.prevotes[primary] = NewVoteFromHeader(header)
+
+	pv, err := gs.determinePreVote()
+	require.NoError(t, err)
+	require.Equal(t, gs.prevotes[primary], pv)
+}
+
+func TestDeterminePreVote_WithInvalidPrimaryPreVote(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	state.AddBlocksToState(t, st.Block, 3)
+	header, err := st.Block.BestBlockHeader()
+	require.NoError(t, err)
+
+	primary := gs.derivePrimary().PublicKeyBytes()
+	gs.prevotes[primary] = NewVoteFromHeader(header)
+
+	state.AddBlocksToState(t, st.Block, 5)
+	gs.head, err = st.Block.BestBlockHeader()
+	require.NoError(t, err)
+
+	pv, err := gs.determinePreVote()
+	require.NoError(t, err)
+	require.Equal(t, gs.head.Hash(), pv.hash)
+}
+
+func TestIsFinalizable_True(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	var leaves []common.Hash
+	for {
+		state.AddBlocksToState(t, st.Block, 3)
+		leaves = gs.blockState.Leaves()
+		if len(leaves) > 1 {
+			break
+		}
+	}
+
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
+
+	for i, k := range kr.Keys {
+		voter := k.Public().(*ed25519.PublicKey).AsBytes()
+
+		if i < 6 {
+			gs.prevotes[voter] = voteA
+			gs.precommits[voter] = voteA
+		} else {
+			gs.prevotes[voter] = voteB
+			gs.precommits[voter] = voteB
+		}
+	}
+
+	finalizable, err := gs.isFinalizable()
+	require.NoError(t, err)
+	require.True(t, finalizable)
+}
+
+func TestIsFinalizable_False(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	var leaves []common.Hash
+	for {
+		state.AddBlocksToState(t, st.Block, 3)
+		leaves = gs.blockState.Leaves()
+		if len(leaves) > 1 {
+			break
+		}
+	}
+
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
+
+	for i, k := range kr.Keys {
+		voter := k.Public().(*ed25519.PublicKey).AsBytes()
+
+		if i < 6 {
+			gs.prevotes[voter] = voteA
+			gs.precommits[voter] = voteA
+		} else {
+			gs.prevotes[voter] = voteB
+			gs.precommits[voter] = voteB
+		}
+	}
+
+	// previous round has finalized block # higher than current, so round is not finalizable
+	gs.state.round = 1
+	gs.bestFinalCandidate[0] = &Vote{
+		number: 4,
+	}
+
+	finalizable, err := gs.isFinalizable()
+	require.NoError(t, err)
+	require.False(t, finalizable)
 }
