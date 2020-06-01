@@ -34,7 +34,7 @@ them in a Raft group.
 
 ---
 
-{{% notice "outdated" %}}Sections below this one are outdated. You will find [Tour of Dgraph](https://tour.dgraph.io) a much helpful resource.{{% /notice %}}
+{{% notice "outdated" %}}Sections below this one are outdated. You will find [Tour of Dgraph](https://dgraph.io/tour/) a much helpful resource.{{% /notice %}}
 
 ## Consistency Models
 [Last updated: Mar 2018. This is outdated and is not how we do things anymore]

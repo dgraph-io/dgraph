@@ -8,5 +8,5 @@ about: The issue tracker is not for questions. Please ask questions on https://d
 The issue tracker is not for questions.
 
 If you have a question, please ask it on https://discuss.dgraph.io
-Our Docs: https://docs.dgraph.io/
+Our Docs: https://dgraph.io/docs/
 Slack Channel: https://slack.dgraph.io/

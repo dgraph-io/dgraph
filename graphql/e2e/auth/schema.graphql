@@ -319,7 +319,7 @@ type Project @auth(
      ]}
 ) {
   projID: ID!
-  name: String!
+  name: String! @search(by: [hash])
   roles: [Role]
   columns: [Column] @hasInverse(field: inProject)
   random: String

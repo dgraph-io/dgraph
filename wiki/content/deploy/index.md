@@ -1518,7 +1518,7 @@ To enable query logging, you must set `-v=3` which will enable verbose logging f
 ## TLS configuration
 
 {{% notice "note" %}}
-This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://dgraph.io/docs/v1.0.7/deploy/#tls-configuration).
 {{% /notice %}}
 
 

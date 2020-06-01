@@ -164,9 +164,14 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 verifyHeaders(id: ID!): [Movie] @custom(http: {
 				 url: "http://mock:8888/verifyHeaders",
 				 method: "GET",
-				 forwardHeaders: ["X-App-Token", "X-User-Id"]
+				 forwardHeaders: ["X-App-Token", "X-User-Id"],
+				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
 		 })
-	 }`
+	 }
+
+		 # Dgraph.Secret Github-Api-Token random-fake-token
+		 # Dgraph.Secret X-App-Token should-be-overriden
+	 `
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
 
@@ -192,13 +197,33 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	require.Equal(t, expected, string(result.Data))
 }
 
+func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+		type Query {
+			myCustom(yo: CountryInput!): [Country!]!
+			  @custom(
+				http: {
+				  url: "http://mock:8888/validatesecrettoken"
+				  method: "POST"
+				  forwardHeaders: ["Content-Type"]
+				  secretHeaders: ["GITHUB-API-TOKEN"]
+				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
+				}
+			  )
+		  }
+
+		# Dgraph.Secret GITHUB-API-TOKEN "random-api-token"
+		  `
+	common.RequireNoGQLErrors(t, updateSchema(t, schema))
+}
+
 func TestServerShouldAllowForwardHeaders(t *testing.T) {
 	schema := `
 	type User {
 		id: ID!
 		name: String!
 	}
-	type Movie @remote {
+	type Movie {
 		id: ID!
 		name: String! @custom(http: {
 			url: "http://mock:8888/movieName",
@@ -210,6 +235,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 			method: "POST",
 			forwardHeaders: ["User-Id", "X-App-Token"]
 		})
+		foo: String
 	}
 
 	type Query {
@@ -876,6 +902,67 @@ func readFile(t *testing.T, name string) string {
 	b, err := ioutil.ReadFile(name)
 	require.NoError(t, err)
 	return string(b)
+}
+
+func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
+	schema := `
+	type Car @remote {
+		id: ID!
+		name: String!
+	}
+
+	type User {
+		id: ID!
+		name: String
+			@custom(
+				http: {
+					url: "http://mock:8888/checkHeadersForUserName"
+					method: "GET"
+					body: "{uid: $id}"
+					mode: SINGLE,
+					secretHeaders: ["GITHUB-API-TOKEN"]
+				}
+			)
+		age: Int! @search
+		cars: Car
+		@custom(
+			http: {
+			url: "http://mock:8888/checkHeadersForCars"
+			method: "GET"
+			body: "{uid: $id}"
+			mode: BATCH,
+			secretHeaders: ["STRIPE-API-KEY"]
+			}
+		)
+  	}
+
+# Dgraph.Secret GITHUB-API-TOKEN some-api-token
+# Dgraph.Secret STRIPE-API-KEY some-api-key
+  `
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	users := addUsers(t)
+
+	queryUser := `
+	query ($id: [ID!]){
+		queryUser(filter: {id: $id}, order: {asc: age}) {
+			name
+			age
+			cars {
+				name
+			}
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: queryUser,
+		Variables: map[string]interface{}{"id": []interface{}{
+			users[0].ID, users[1].ID, users[2].ID}},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nilf(t, result.Errors, "%+v", result.Errors)
 }
 
 func TestCustomFieldsShouldBeResolved(t *testing.T) {
@@ -2005,4 +2092,87 @@ func TestForNestedInvalidInputObject(t *testing.T) {
 	 `
 	res := updateSchema(t, schema)
 	require.Contains(t, res.Errors.Error(), "expected type for the field name is Int! but got String! in type StateInput")
+}
+
+func TestRestCustomLogicInDeepNestedField(t *testing.T) {
+	schema := `
+	type SearchTweets {
+		id: ID!
+		text: String!
+		user: User
+	}
+
+	type User {
+		id: ID!
+		screen_name: String! @id
+		followers: Followers @custom(http:{
+			url: "http://mock:8888/twitterfollowers?screen_name=$screen_name"
+			method: "GET",
+		})
+		tweets: [SearchTweets] @hasInverse(field: user)
+	}
+
+	type RemoteUser @remote {
+		id: ID!
+		name: String
+	}
+
+	type Followers@remote{
+		users: [RemoteUser]
+	}
+	`
+
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	params := &common.GraphQLParams{
+		Query: `
+		mutation{
+			addUser(input:[{
+			  screen_name:"manishrjain",
+			  tweets:[{
+				text:"hello twitter"
+			  }]
+			}]){
+			  numUids
+			}
+		  }`,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+
+	params = &common.GraphQLParams{
+		Query: `
+		query{
+			querySearchTweets{
+			  text
+			  user{
+				screen_name
+				followers{
+				  users{
+					name
+				  }
+				}
+			  }
+			}
+		  }`,
+	}
+
+	result = params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, string(result.Data), `
+	{
+		"querySearchTweets": [{
+			"text": "hello twitter",
+			"user": {
+				"screen_name": "manishrjain",
+				"followers": {
+					"users": [{
+						"name": "hi_balaji"
+					}]
+				}
+			}
+		}]
+	}`)
 }
