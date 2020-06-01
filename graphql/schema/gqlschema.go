@@ -21,11 +21,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/dgraph/x" //Added strcase for camelCase conversion
 	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 	"github.com/vektah/gqlparser/v2/parser"
-         "github.com/iancoleman/strcase" //Added strcase for camelCase conversion
 )
 
 const (
@@ -972,7 +971,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: strcase.ToLowerCamel(defn.Name), //Converting Name to lower camelCase
+		Name: camelCase(defn.Name), //Converting Name to lower camelCase
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1002,7 +1001,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: strcase.ToLowerCamel(defn.Name), //Converting Name to lower camelCase
+		Name: camelCase(defn.Name), //Converting Name to lower camelCase
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -1640,4 +1639,12 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 func isGraphqlSpecScalar(typ string) bool {
 	_, ok := graphqlSpecScalars[typ]
 	return ok
+}
+func camelCase(x string) string { //Function to convert to camelCase
+	if len(x) < 2 {
+		return strings.ToLower(x)
+	}
+	var y string
+	y = (strings.ToLower(string(x[0]))) + x[1:]
+	return y
 }

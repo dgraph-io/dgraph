@@ -1375,7 +1375,7 @@
   gqlmutation: |
     mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
       updateComputerOwner(input: $patch) {
-        computerowner {
+        computerOwner {
           name
         }
       }
