@@ -137,15 +137,15 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
 			}
-			// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
-			n.ops[otherId] = nil
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
-				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
-				n.ops[opRollup] = nil
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
 				otherCloser.SignalAndWait()
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
@@ -182,9 +182,6 @@ func (n *node) stopAllTasks() {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 	for _, closer := range n.ops {
-		if closer == nil {
-			continue
-		}
 		closer.SignalAndWait()
 	}
 	glog.Infof("Stopped all ongoing registered tasks.")
