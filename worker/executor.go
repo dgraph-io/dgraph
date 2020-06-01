@@ -28,7 +28,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto/z"
+	"github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
 
@@ -109,7 +109,7 @@ func (e *executor) channelID(edge *pb.DirectedEdge) int {
 	b := make([]byte, len(attr)+8)
 	x.AssertTrue(len(attr) == copy(b, attr))
 	binary.BigEndian.PutUint64(b[len(attr):len(attr)+8], uid)
-	cid := z.MemHash(b) % uint64(len(e.workerChan))
+	cid := farm.Fingerprint64(b) % uint64(len(e.workerChan))
 	return int(cid)
 }
 
