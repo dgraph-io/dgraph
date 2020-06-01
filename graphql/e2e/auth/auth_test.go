@@ -80,6 +80,12 @@ type Log struct {
 	Logs string `json:"logs,omitempty"`
 }
 
+type ComplexLog struct {
+	Id      string `json:"id,omitempty"`
+	Logs    string `json:"logs,omitempty"`
+	Visible bool   `json:"visible,omitempty"`
+}
+
 type Role struct {
 	Id         string  `json:"id,omitempty"`
 	Permission string  `json:"permission,omitempty"`
@@ -342,7 +348,89 @@ func TestRootGetFilter(t *testing.T) {
 	query := `
 		query($id: ID!) {
 		    getColumn(colID: $id) {
-			name
+				name
+		    }
+		}
+	`
+
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"id": tcase.name},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func getProjectID(t *testing.T, tcase TestCase) string {
+	query := `
+		query($name: String!) {
+		    queryProject(filter: {name: {eq: $name}}) {
+		        projID
+		    }
+		}
+	`
+
+	var result struct {
+		QueryProject []*Project
+	}
+
+	getUserParams := &common.GraphQLParams{
+		Headers:   getJWT(t, tcase.user, tcase.role),
+		Query:     query,
+		Variables: map[string]interface{}{"name": tcase.name},
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.Nil(t, err)
+
+	if len(result.QueryProject) > 0 {
+		return result.QueryProject[0].ProjID
+	}
+
+	return ""
+}
+
+func TestRootGetDeepFilter(t *testing.T) {
+	idProject1 := getProjectID(t, TestCase{user: "user1", role: "USER", name: "Project1"})
+	idProject2 := getProjectID(t, TestCase{user: "user2", role: "USER", name: "Project2"})
+	require.NotEqual(t, idProject1, "")
+	require.NotEqual(t, idProject2, "")
+
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"getProject":{"name":"Project1","columns":[{"name":"Column1"}]}}`,
+		name:   idProject1,
+	}, {
+		user:   "user1",
+		role:   "USER",
+		result: `{"getProject": null}`,
+		name:   idProject2,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"getProject":{"name":"Project2","columns":[{"name":"Column3"},{"name":"Column2"}]}}`,
+		name:   idProject2,
+	}}
+
+	query := `
+		query($id: ID!) {
+		    getProject(projID: $id) {
+				name
+				columns {
+          			name
+				}
 		    }
 		}
 	`
@@ -696,7 +784,7 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		require.Nilf(t, gqlResponse.Errors, "%+v", gqlResponse.Errors)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)

@@ -37,20 +37,20 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 
 	input, err := getExportInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	format := worker.DefaultExportFormat
 	if input.Format != "" {
 		format = worker.NormalizeExportFormat(input.Format)
 		if format == "" {
-			return emptyResult(m, errors.Errorf("invalid export format: %v", input.Format)), false
+			return resolve.EmptyResult(m, errors.Errorf("invalid export format: %v", input.Format)), false
 		}
 	}
 
 	err = worker.ExportOverNetwork(context.Background(), format)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{

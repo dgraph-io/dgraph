@@ -42,12 +42,12 @@ func resolveLogin(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bo
 		RefreshToken: input.RefreshToken,
 	})
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	jwt := &dgoapi.Jwt{}
 	if err := jwt.Unmarshal(resp.GetJson()); err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{

@@ -66,6 +66,62 @@
       }
     }
 
+- name: "Delete with top level RBAC true."
+  gqlquery: |
+    mutation($projs: [ID!]) {
+      deleteProject (filter: { projID: $projs}) {
+          numUids
+        }
+    }
+  variables: |
+    {
+      "projs" : ["0x01", "0x02"]
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },
+         {
+           "Column.inProject": {
+             "uid": "uid(x)"
+           },
+           "uid": "uid(Column2)"
+         }
+        ]
+  dgquery: |-
+    query {
+      x as deleteProject(func: uid(0x1, 0x2)) @filter(type(Project)) {
+        uid
+        Column2 as Project.columns
+      }
+    }
+
+- name: "Delete with top level RBAC false."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog()
+    }
+
 - name: "multiple rule in delete mutation"
   gqlquery: |
     mutation deleteUser($filter: UserFilter!) {

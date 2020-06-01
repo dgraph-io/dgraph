@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -55,6 +56,7 @@ func TestSystem(t *testing.T) {
 	t.Run("delete all reverse index", wrap(DeleteAllReverseIndex))
 	t.Run("normalise edge cases", wrap(NormalizeEdgeCasesTest))
 	t.Run("facets with order", wrap(FacetOrderTest))
+	t.Run("facets on scalar list", wrap(FacetsOnScalarList))
 	t.Run("lang and sort bug", wrap(LangAndSortBugTest))
 	t.Run("sort facets return nil", wrap(SortFacetsReturnNil))
 	t.Run("check schema after deleting node", wrap(SchemaAfterDeleteNode))
@@ -153,10 +155,10 @@ func FacetJsonInputSupportsAnyOfTerms(t *testing.T, c *dgo.Dgraph) {
 			{
 				"uid":"%s",
 				"access.to":{
-						"uid":"%s"
-				},
-				"access.to|inherit": false,
-				"access.to|permission": "WRITE"
+					"uid":"%s",
+					"access.to|inherit": false,
+					"access.to|permission": "WRITE"
+				}
 			}
 		]
 	}`, assigned.Uids["a"], assigned.Uids["b"]), string(resp.GetJson()))
@@ -416,34 +418,100 @@ func FacetOrderTest(t *testing.T, c *dgo.Dgraph) {
 			{
 				"friend":[
 					{
-						"name":"Charlie"
+						"name":"Charlie",
+						"friend|age": 15,
+						"friend|car": "Tesla"
 					},
 					{
 						"name":"Bubble"
 					},
 					{
-						"name":"Bob"
+						"name":"Bob",
+						"friend|age": 13,
+						"friend|car": "Honda"
 					},
 					{
-						"name":"Abc"
+						"name":"Abc",
+						"friend|age": 20,
+						"friend|car": "Hyundai"
 					}
 				],
-				"friend|age":{
-					"0":15,
-					"2":13,
-					"3":20
-				},
-				"friend|car":{
-					"0":"Tesla",
-					"2":"Honda",
-					"3":"Hyundai"
-				},
 				"name":"Alice"
 			}
 		]
 	}
 	`, string(resp.Json))
+}
 
+func FacetsOnScalarList(t *testing.T, c *dgo.Dgraph) {
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `
+	name: string @index(exact) .
+	friend: [string] .
+	`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		CommitNow: true,
+		SetJson: []byte(`
+			{
+				"name":"Alice",
+				"friend": ["Joshua", "David", "Josh"],
+				"friend|from": {
+					"0": "school",
+					"2": "college"
+				},
+				"friend|age": {
+					"1": 20,
+					"2": 21
+				}
+			}
+		`),
+	})
+	require.NoError(t, err)
+
+	const friendQuery = `
+	{
+		q(func: eq(name, "Alice")) {
+			name
+			friend @facets
+		}
+	}`
+
+	txn = c.NewTxn()
+	resp, err := txn.Query(ctx, friendQuery)
+	var res struct {
+		Q []struct {
+			Friend     []string          `json:"friend"`
+			FriendFrom map[string]string `json:"friend|from"`
+			FriendAge  map[string]int    `json:"friend|age"`
+		} `json:"q"`
+	}
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(resp.Json, &res))
+	require.Equal(t, 1, len(res.Q))
+	require.Equal(t, 3, len(res.Q[0].Friend))
+	require.Equal(t, 2, len(res.Q[0].FriendFrom))
+	require.Equal(t, 2, len(res.Q[0].FriendAge))
+	// Validate facets.
+	friends := res.Q[0].Friend
+	friendFrom := res.Q[0].FriendFrom
+	friendAge := res.Q[0].FriendAge
+	for i, friend := range friends {
+		_, ok1 := friendFrom[strconv.Itoa(i)]
+		_, ok2 := friendAge[strconv.Itoa(i)]
+		if friend == "David" {
+			require.True(t, !ok1 && ok2)
+		} else if friend == "Josh" {
+			require.True(t, ok1 && ok2)
+		} else if friend == "Joshua" {
+			require.True(t, ok1 && !ok2)
+		} else {
+			require.True(t, false, "FacetsOnScalarList: should not reach here")
+		}
+	}
 }
 
 // Shows fix for issue #1918.
@@ -526,16 +594,14 @@ func SortFacetsReturnNil(t *testing.T, c *dgo.Dgraph) {
 							"name":"Charlie"
 						},
 						{
-							"name":"Alice"
+							"name":"Alice",
+							"friend|since":"2014-01-02T00:00:00Z"
 						},
 						{
-							"name":"Sang Hyun"
+							"name":"Sang Hyun",
+							"friend|since":"2012-01-02T00:00:00Z"
 						}
-					],
-					"friend|since":{
-						"1":"2014-01-02T00:00:00Z",
-						"2":"2012-01-02T00:00:00Z"
-					}
+					]
 				}
 			]
 		}

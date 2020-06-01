@@ -20,8 +20,224 @@ import (
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/test"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 )
+
+func TestValueCoercion(t *testing.T) {
+	tests := []QueryCase{
+		// test int/float/bool can be coerced to String
+		{Name: "int value should be coerced to string",
+			GQLQuery: `query { getAuthor(id: "0x1") { name } }`,
+			Response: `{ "getAuthor": { "name": 2 }}`,
+			Expected: `{ "getAuthor": { "name": "2"}}`},
+		{Name: "float value should be coerced to string",
+			GQLQuery: `query { getAuthor(id: "0x1") { name } }`,
+			Response: `{ "getAuthor": { "name": 2.134 }}`,
+			Expected: `{ "getAuthor": { "name": "2.134"}}`},
+		{Name: "bool value should be coerced to string",
+			GQLQuery: `query {  getAuthor(id: "0x1") { name} }`,
+			Response: `{ "getAuthor": { "name": false } }`,
+			Expected: `{ "getAuthor": { "name": "false"}}`},
+
+		// test int/float/bool can be coerced to Enum
+		{Name: "int value should raise an error when coerced to postType",
+			GQLQuery: `query { getPost(postID: "0x1") { postType } }`,
+			Response: `{ "getPost": { "postType": 2 }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '2' for field 'postType' to type PostType.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "postType"},
+			}},
+			Expected: `{ "getPost": { "postType": null }}`},
+		{Name: "float value should raise error when coerced to postType",
+			GQLQuery: `query { getPost(postID: "0x1") { postType } }`,
+			Response: `{ "getPost": { "postType": 2.134 }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '2.134' for field 'postType' to type PostType.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "postType"},
+			}},
+			Expected: `{ "getPost": { "postType": null }}`},
+		{Name: "bool value should raise error when coerced to postType",
+			GQLQuery: `query { getPost(postID: "0x1") { postType } }`,
+			Response: `{ "getPost": { "postType": false }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value 'false' for field 'postType' to type PostType.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "postType"},
+			}},
+			Expected: `{ "getPost": { "postType": null }}`},
+		{Name: "string value should raise error it has invalid enum value",
+			GQLQuery: `query { getPost(postID: "0x1") { postType } }`,
+			Response: `{ "getPost": { "postType": "Random" }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value 'Random' for field 'postType' to type PostType.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "postType"},
+			}},
+			Expected: `{ "getPost": { "postType": null }}`},
+		{Name: "string value should be coerced to valid enum value",
+			GQLQuery: `query { getPost(postID: "0x1") { postType } }`,
+			Response: `{ "getPost": { "postType": "Question" }}`,
+			Expected: `{ "getPost": { "postType": "Question" }}`},
+
+		// test int/float/string can be coerced to Boolean
+		{Name: "int value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 2 }}`,
+			Expected: `{ "getPost": { "isPublished": true}}`},
+		{Name: "int value should be coerced to bool with false value for 0",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 0 }}`,
+			Expected: `{ "getPost": { "isPublished": false}}`},
+		{Name: "float value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 2.134 }}`,
+			Expected: `{ "getPost": { "isPublished": true}}`},
+		{Name: "float value should be coerced to bool with false value for 0",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": 0.000 }}`,
+			Expected: `{ "getPost": { "isPublished": false}}`},
+		{Name: "string value should be coerced to bool",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": "name" }}`,
+			Expected: `{ "getPost": { "isPublished": true }}`},
+		{Name: "string value should be coerced to bool false value when empty",
+			GQLQuery: `query { getPost(postID: "0x1") { isPublished } }`,
+			Response: `{ "getPost": { "isPublished": "" }}`,
+			Expected: `{ "getPost": { "isPublished": false }}`},
+
+		// test bool/float/string can be coerced to Int
+		{Name: "float value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 2.000 }}`,
+			Expected: `{ "getPost": { "numLikes": 2}}`},
+		{Name: "string value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": "23" }}`,
+			Expected: `{ "getPost": { "numLikes": 23}}`},
+		{Name: "string float value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": "23.00" }}`,
+			Expected: `{ "getPost": { "numLikes": 23}}`},
+		{Name: "bool true value should be coerced to int value 1",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": true }}`,
+			Expected: `{ "getPost": { "numLikes": 1}}`},
+		{Name: "bool false value should be coerced to int",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": false }}`,
+			Expected: `{ "getPost": { "numLikes": 0}}`},
+		{Name: "field should return an error when it is greater than int32" +
+			" without losing data",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 2147483648 }}`,
+			Errors: x.GqlErrorList{{
+				Message: "Error coercing value '2.147483648e+09' for field 'numLikes' to type" +
+					" Int.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
+		{Name: "field should return an error when float can't be coerced to int" +
+			" without losing data",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": 123.23 }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
+		{Name: "field should return an error when when it can't be coerced as int32" +
+			" from a string",
+			GQLQuery: `query { getPost(postID: "0x1") { numLikes } }`,
+			Response: `{ "getPost": { "numLikes": "123.23" }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '123.23' for field 'numLikes' to type Int.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 34}},
+				Path:      []interface{}{"getPost", "numLikes"},
+			}},
+			Expected: `{"getPost": {"numLikes": null}}`,
+		},
+
+		// test bool/int/string can be coerced to Float
+		{Name: "int value should be coerced to float",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": 2 }}`,
+			Expected: `{ "getAuthor": { "reputation": 2.0 }}`},
+		{Name: "string value should be coerced to float",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": "23.123" }}`,
+			Expected: `{ "getAuthor": { "reputation": 23.123 }}`},
+		{Name: "bool true value should be coerced to float value 1.0",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": true }}`,
+			Expected: `{ "getAuthor": { "reputation": 1.0 }}`},
+		{Name: "bool false value should be coerced to float value 0.0",
+			GQLQuery: `query { getAuthor(id: "0x1") { reputation } }`,
+			Response: `{ "getAuthor": { "reputation": false }}`,
+			Expected: `{ "getAuthor": { "reputation": 0.0}}`},
+
+		// test bool/int/string/datetime can be coerced to Datetime
+		{Name: "float value should raise an error when tried to be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": "23.123" }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '23.123' for field 'dob' to type DateTime.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "dob"},
+			}},
+			Expected: `{ "getAuthor": { "dob": null }}`},
+		{Name: "bool value should raise an error when coerced as datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": true }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value 'true' for field 'dob' to type DateTime.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "dob"},
+			}},
+			Expected: `{ "getAuthor": { "dob": null }}`},
+		{Name: "invalid string value should raise an error when tried to be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": "123" }}`,
+			Errors: x.GqlErrorList{{
+				Message:   "Error coercing value '123' for field 'dob' to type DateTime.",
+				Locations: []x.Location{x.Location{Line: 1, Column: 32}},
+				Path:      []interface{}{"getAuthor", "dob"},
+			}},
+			Expected: `{ "getAuthor": { "dob": null}}`},
+		{Name: "int value should be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": 2 }}`,
+			Expected: `{ "getAuthor": { "dob": "1970-01-01T00:00:02Z"}}`},
+		{Name: "float value that can be truncated safely should be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": 2.0 }}`,
+			Expected: `{ "getAuthor": { "dob": "1970-01-01T00:00:02Z"}}`},
+		{Name: "val string value should be coerced to datetime",
+			GQLQuery: `query { getAuthor(id: "0x1") { dob } }`,
+			Response: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+00:00" }}`,
+			Expected: `{ "getAuthor": { "dob": "2012-11-01T22:08:41+00:00" }}`},
+	}
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	for _, test := range tests {
+		t.Run(test.Name, func(t *testing.T) {
+			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
+			if diff := cmp.Diff(test.Errors, resp.Errors); diff != "" {
+				t.Errorf("errors mismatch (-want +got):\n%s", diff)
+			}
+
+			require.JSONEq(t, test.Expected, resp.Data.String())
+		})
+	}
+}
 
 func TestQueryAlias(t *testing.T) {
 	tests := []QueryCase{
@@ -38,10 +254,10 @@ func TestQueryAlias(t *testing.T) {
 			Response: `{"getAuthor": [{"name": "A.N. Author", "posts": [{"title": "A Post"}]}]}`,
 			Expected: `{"getAuthor": {"name": "A.N. Author", "posts": [{"theTitle": "A Post"}]}}`},
 		{Name: "many aliases",
-			GQLQuery: `query { 
+			GQLQuery: `query {
 				auth : getAuthor(id: "0x1") { name myPosts : posts { theTitle : title } }
 				post : getPost(postID: "0x2") { postTitle: title } }`,
-			Response: `{ 
+			Response: `{
 				"getAuthor": [{"name": "A.N. Author", "posts": [{"title": "A Post"}]}],
 				"getPost": [ { "title": "A Post" } ] }`,
 			Expected: `{"auth": {"name": "A.N. Author", "myPosts": [{"theTitle": "A Post"}]},` +
@@ -106,7 +322,7 @@ func TestMutationAlias(t *testing.T) {
 			mutQryResp: map[string]interface{}{
 				"Author2": []interface{}{map[string]string{"uid": "0x1"}}},
 			queryResponse: `{ "post" : [ { "title": "A Post" } ] }`,
-			expected: `{ 
+			expected: `{
 				"add1": { "thePosts" : [{ "postTitle": "A Post"}] },
 				"add2": { "otherPosts" : [{ "t": "A Post"}] } }`,
 		},

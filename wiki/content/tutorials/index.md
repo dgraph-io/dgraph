@@ -116,7 +116,7 @@ single page quickstart guide [here]({{< relref "get-started/index.md" >}}).
 
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
 with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+- Take the [Tour](https://dgraph.io/tour/) for a guided tour of how to write queries in Dgraph.
 - A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
 - See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
   in a cluster.

@@ -30,7 +30,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../../../ee/enc/enc-key
+        source: ../../../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
@@ -54,7 +54,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../../../ee/enc/enc-key
+        source: ../../../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     ports:
@@ -78,7 +78,7 @@ services:
         target: /gobin
         read_only: true
       - type: bind
-        source: ../../../ee/enc/enc-key
+        source: ../../../ee/enc/test-fixtures/enc-key
         target: /dgraph-enc/enc-key
         read_only: true
     ports:

@@ -126,6 +126,17 @@
 		"Log.logs": "Log2"
 	},
 	{
+		"uid": "_:complexlog1",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog1",
+		"ComplexLog.visible": true
+	},
+	{
+		"uid": "_:complexlog2",
+		"dgraph.type": "ComplexLog",
+		"ComplexLog.logs": "ComplexLog2"
+	},
+	{
 		"uid": "_:role1",
 		"dgraph.type": "Role",
 		"Role.assignedTo": [{"uid": "_:user1"}, {"uid": "_:user2"}],

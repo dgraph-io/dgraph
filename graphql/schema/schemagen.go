@@ -17,6 +17,7 @@
 package schema
 
 import (
+	"bufio"
 	"fmt"
 	"sort"
 	"strings"
@@ -36,6 +37,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	DisableSubscription()
 }
 
 type handler struct {
@@ -71,6 +73,49 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
+func (s *handler) DisableSubscription() {
+	s.completeSchema.Subscription = nil
+}
+
+func parseSecrets(sch string) (map[string]string, error) {
+	m := make(map[string]string)
+	scanner := bufio.NewScanner(strings.NewReader(sch))
+	authSecret := ""
+	for scanner.Scan() {
+		text := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(text, "# Dgraph.Authorization") {
+			if authSecret != "" {
+				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+					"a schema, found second mention: %v", text)
+			}
+			authSecret = text
+			continue
+		}
+		if !strings.HasPrefix(text, "# Dgraph.Secret") {
+			continue
+		}
+		parts := strings.Fields(text)
+		if len(parts) != 4 {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
+
+		val := strings.Trim(parts[3], `"`)
+		key := strings.Trim(parts[2], `"`)
+		m[key] = val
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+	}
+	if authSecret == "" {
+		return m, nil
+	}
+	err := authorization.ParseAuthMeta(authSecret)
+	return m, err
+}
+
 // NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
@@ -78,8 +123,14 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No schema specified")
 	}
 
-	if err := authorization.ParseAuthMeta(input); err != nil {
+	secrets, err := parseSecrets(input)
+	if err != nil {
 		return nil, err
+	}
+	// lets obfuscate the value of the secrets from here on.
+	schemaSecrets := make(map[string]x.SensitiveByteSlice, len(secrets))
+	for k, v := range secrets {
+		schemaSecrets[k] = x.SensitiveByteSlice([]byte(v))
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -143,7 +194,7 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
-	gqlErrList = postGQLValidation(sch, defns)
+	gqlErrList = postGQLValidation(sch, defns, schemaSecrets)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
@@ -156,9 +207,10 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
 	}
 
-	ah.Lock()
-	ah.headers = headers
-	defer ah.Unlock()
+	hc.Lock()
+	hc.allowed = headers
+	hc.secrets = schemaSecrets
+	hc.Unlock()
 
 	return &handler{
 		input:          input,
@@ -168,13 +220,19 @@ func NewHandler(input string) (Handler, error) {
 	}, nil
 }
 
-type allowedHeaders struct {
-	headers string // comma separated list of allowed headers
+type headersConfig struct {
+	// comma separated list of allowed headers. These are parsed from the forwardHeaders specified
+	// in the @custom directive. They are returned to the client as part of
+	// Access-Control-Allow-Headers.
+	allowed string
+	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
+	// to requests which resolve custom queries/mutations.
+	secrets map[string]x.SensitiveByteSlice
 	sync.RWMutex
 }
 
-var ah = allowedHeaders{
-	headers: x.AccessControlAllowedHeaders,
+var hc = headersConfig{
+	allowed: x.AccessControlAllowedHeaders,
 }
 
 func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
@@ -228,9 +286,9 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 }
 
 func AllowedHeaders() string {
-	ah.RLock()
-	defer ah.RUnlock()
-	return ah.headers
+	hc.RLock()
+	defer hc.RUnlock()
+	return hc.allowed
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {
@@ -318,6 +376,9 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	}
 
 	for _, key := range definitions {
+		if isQueryOrMutation(key) {
+			continue
+		}
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:

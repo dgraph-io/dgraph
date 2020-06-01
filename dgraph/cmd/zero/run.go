@@ -203,6 +203,12 @@ func run() {
 			return true, true
 		}
 	}
+
+	if opts.rebalanceInterval <= 0 {
+		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
+			opts.rebalanceInterval)
+	}
+
 	grpc.EnableTracing = false
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
@@ -234,9 +240,6 @@ func run() {
 	gcCloser := y.NewCloser(1) // closer for vLogGC
 	go x.RunVlogGC(kv, gcCloser)
 	defer gcCloser.SignalAndWait()
-
-	// zero out from memory
-	kvOpt.EncryptionKey = nil
 
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
@@ -294,11 +297,12 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Try to generate a snapshot before the shutdown.
+		st.node.trySnapshot(0)
 		// Stop Raft store.
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
-		st.node.trySnapshot(0)
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")
