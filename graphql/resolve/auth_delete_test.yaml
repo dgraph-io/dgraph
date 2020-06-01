@@ -182,6 +182,202 @@
       Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
     }
 
-# FIXME: when RBAC is done, have cases for
-# - with RBAC + that simplifies on some way
-# - what happens when the RBAC is False ?
+- name: "Delete with top level RBAC false."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog()
+    }
+
+- name: "Delete with top level RBAC true."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog(func: uid(0x1, 0x2)) @filter(type(Log)) {
+        uid
+      }
+    }
+
+- name: "Delete with top level OR RBAC true."
+  gqlquery: |
+    mutation($ids: [ID!]) {
+      deleteComplexLog (filter: { id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids" : ["0x01", "0x02"]
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)" }]
+  dgquery: |-
+    query {
+      x as deleteComplexLog(func: uid(0x1, 0x2)) @filter(type(ComplexLog)) {
+        uid
+      }
+    }
+
+- name: "Delete with top level OR RBAC false."
+  gqlquery: |
+    mutation($ids: [ID!]) {
+      deleteComplexLog (filter: { id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids" : ["0x01", "0x02"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)" }]
+  dgquery: |-
+    query {
+      x as deleteComplexLog(func: uid(ComplexLog1)) @filter(uid(ComplexLog2)) {
+        uid
+      }
+      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
+      ComplexLog2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
+    }
+
+- name: "Delete with top level AND RBAC true."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteIssue(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: type(Issue))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Delete with top level AND RBAC false."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteIssue(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteIssue()
+    }
+
+- name: "Delete with top level not RBAC false."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteRole(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteRole()
+    }
+
+- name: "Delete with top level not RBAC true."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteRole(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteRole(func: type(Role)) {
+        uid
+      }
+    }
