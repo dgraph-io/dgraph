@@ -1276,6 +1276,16 @@ func completeObject(
 			}
 		}
 
+		if f.Type().ListType() != nil {
+			// We were expecting a list but got a value which wasn't a list. Lets return an error.
+			if _, ok := val.([]interface{}); val != nil && !ok {
+				return nil, x.GqlErrorList{&x.GqlError{
+					Message:   errExpectedList,
+					Locations: []x.Location{f.Location()},
+					Path:      copyPath(path),
+				}}
+			}
+		}
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
@@ -1301,7 +1311,6 @@ func completeValue(
 
 	switch val := val.(type) {
 	case map[string]interface{}:
-
 		switch field.Type().Name() {
 		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
 			return nil, x.GqlErrorList{&x.GqlError{
