@@ -27,6 +27,8 @@ import (
 
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
+	t.Run("dgraph predicate with special characters",
+		common.DgraphDirectiveWithSpecialCharacters)
 }
 
 func TestSchema_WithDgraphDirectives(t *testing.T) {
@@ -201,6 +203,12 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"tokenizer": ["hash"],
 		"upsert": true
 	}, {
+		"predicate": "post",
+		"type": "string"
+	},{
+		"predicate": "职业",
+		"type": "string"
+	}, {
 		"predicate": "People.name",
 		"type": "string"
 	}, {
@@ -297,6 +305,13 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 			"name": "dgraph.graphql.xid"
 		}],
 		"name": "dgraph.graphql"
+	}, {
+		"fields": [{
+			"name": "post"
+		}, {
+			"name": "职业"
+		}],
+		"name": "Message"
 	}, {
 		"fields": [{
 			"name": "myPost.title"

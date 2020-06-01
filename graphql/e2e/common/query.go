@@ -1465,6 +1465,38 @@ func queryWithAlias(t *testing.T) {
 		string(gqlResponse.Data))
 }
 
+func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
+	mutation := &GraphQLParams{
+		Query: `
+		mutation {
+			addMessage(input : [{content : "content1", author: "author1"}]) {
+				message {
+					content
+					author
+				}
+			}
+		}`,
+	}
+	result := `{"addMessage":{"message":[{"content":"content1","author":"author1"}]}}`
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+
+	queryParams := &GraphQLParams{
+		Query: `
+		query {
+			queryMessage {
+				content
+				author
+			}
+		}`,
+	}
+	result = `{"queryMessage":[{"content":"content1","author":"author1"}]}`
+	gqlResponse = queryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
 func queryWithCascade(t *testing.T) {
 	// for testing @cascade with get by ID and filter queries, also for testing @cascade on field
 	authors := addMultipleAuthorFromRef(t, []*author{
