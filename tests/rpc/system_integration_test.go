@@ -80,7 +80,8 @@ func TestStableNetworkRPC(t *testing.T) {
 			require.Nil(t, err)
 
 			target := reflect.New(reflect.TypeOf(test.expected)).Interface()
-			utils.DecodeRPC(t, respBody, target)
+			err = utils.DecodeRPC(t, respBody, target)
+			require.Nil(t, err)
 
 			switch v := target.(type) {
 			case *modules.SystemHealthResponse:

@@ -82,3 +82,8 @@ func DecodeRPC(t *testing.T, body []byte, target interface{}) error {
 	require.Nil(t, err, "respBody", string(body))
 	return nil
 }
+
+// NewEndpoint will create a new endpoint string based on utils.HOSTNAME and port
+func NewEndpoint(port string) string {
+	return "http://" + HOSTNAME + ":" + port
+}

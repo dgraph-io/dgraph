@@ -65,7 +65,7 @@ func TestSystemRPC(t *testing.T) {
 					ShouldHavePeers: true,
 				},
 			},
-			skip: false,
+			params: "{}",
 		},
 		{
 			description: "test system_peers",
@@ -73,7 +73,7 @@ func TestSystemRPC(t *testing.T) {
 			expected: modules.SystemPeersResponse{
 				Peers: []common.PeerInfo{},
 			},
-			skip: false,
+			params: "{}",
 		},
 		{
 			description: "test system_network_state",
@@ -83,7 +83,7 @@ func TestSystemRPC(t *testing.T) {
 					PeerID: "",
 				},
 			},
-			skip: false,
+			params: "{}",
 		},
 		{ //TODO
 			description: "test system_addReservedPeer",

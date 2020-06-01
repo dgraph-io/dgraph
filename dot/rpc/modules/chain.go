@@ -31,7 +31,7 @@ import (
 // ChainHashRequest Hash as a string
 type ChainHashRequest string
 
-// ChainBlockNumberRequest interface is it can accept string or float64 or []
+// ChainBlockNumberRequest interface can accept string, float64 or []
 type ChainBlockNumberRequest interface{}
 
 // ChainBlockHeaderResponse struct

@@ -43,6 +43,7 @@ func TestMain(m *testing.M) {
 type testCase struct {
 	description string
 	method      string
+	params      string
 	expected    interface{}
 	skip        bool
 }
@@ -53,11 +54,13 @@ func getResponse(t *testing.T, test *testCase) interface{} {
 		return nil
 	}
 
-	respBody, err := utils.PostRPC(t, test.method, "http://"+utils.HOSTNAME+":"+currentPort, "{}")
+	respBody, err := utils.PostRPC(t, test.method, utils.NewEndpoint(currentPort), test.params)
 	require.Nil(t, err)
 
 	target := reflect.New(reflect.TypeOf(test.expected)).Interface()
-	utils.DecodeRPC(t, respBody, target)
+	err = utils.DecodeRPC(t, respBody, target)
+	require.Nil(t, err, "Could not DecodeRPC", string(respBody))
+
 	require.NotNil(t, target)
 
 	return target
