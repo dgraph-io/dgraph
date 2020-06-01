@@ -932,7 +932,7 @@
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
-        complexlog {
+        complexLog {
           id
         }
       }
@@ -953,7 +953,7 @@
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
-        complexlog {
+        complexLog {
           id
         }
       }

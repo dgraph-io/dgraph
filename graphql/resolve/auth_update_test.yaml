@@ -600,7 +600,7 @@
   gqlquery: |
     mutation updateComplexLog($log: UpdateComplexLogInput!) {
       updateComplexLog(input: $log) {
-        complexlog {
+        complexLog {
           id
         }
       }
@@ -626,7 +626,7 @@
   gqlquery: |
     mutation updateComplexLog($log: UpdateComplexLogInput!) {
       updateComplexLog(input: $log) {
-        complexlog {
+        complexLog {
           id
         }
       }
