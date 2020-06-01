@@ -170,7 +170,7 @@ built-in function `match` to run a fuzzy search query.
 
 Here is the syntax of the `match` function: `match(predicate, search string, distance)`
 
-The [match function](https://docs.dgraph.io/query-language/#fuzzy-matching) takes in three parameters:
+The [match function](https://dgraph.io/docs/query-language/#fuzzy-matching) takes in three parameters:
 
 1. The name of the string predicate used for querying.
 2. The search string provided by the user

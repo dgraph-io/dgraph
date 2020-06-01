@@ -197,7 +197,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		if !commit && mutResp != nil && mutResp.Txn != nil {
 			mutResp.Txn.Aborted = true
 			err := mr.executor.CommitOrAbort(ctx, mutResp.Txn)
-			glog.Errorf("Error occured while aborting transaction: %f", err)
+			if err != nil {
+				glog.Errorf("Error occured while aborting transaction: %s", err)
+			}
 		}
 	}()
 

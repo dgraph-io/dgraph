@@ -37,7 +37,7 @@ function restartCluster {
   fi
 
   docker ps -a --filter label="cluster=test" --format "{{.Names}}" | xargs -r docker rm -f
-  GOPATH=$docker_compose_gopath docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans --detach || exit 1
+  GOPATH=$docker_compose_gopath docker-compose -p dgraph -f $compose_file up --force-recreate --remove-orphans -d || exit 1
   popd >/dev/null
 
   $basedir/contrib/wait-for-it.sh -t 60 localhost:6180 || exit 1

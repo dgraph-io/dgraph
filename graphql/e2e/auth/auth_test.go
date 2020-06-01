@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -79,6 +80,12 @@ type Log struct {
 	Logs string `json:"logs,omitempty"`
 }
 
+type ComplexLog struct {
+	Id      string `json:"id,omitempty"`
+	Logs    string `json:"logs,omitempty"`
+	Visible bool   `json:"visible,omitempty"`
+}
+
 type Role struct {
 	Id         string  `json:"id,omitempty"`
 	Permission string  `json:"permission,omitempty"`
@@ -113,6 +120,7 @@ type TestCase struct {
 	name      string
 	filter    map[string]interface{}
 	variables map[string]interface{}
+	query     string
 }
 
 type uidResult struct {
@@ -137,6 +145,89 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func TestAuthRulesWithMissingJWT(t *testing.T) {
+	testCases := []TestCase{
+		{name: "Query non auth field without JWT Token",
+			query: `
+			query {
+			  queryRole(filter: {permission: { eq: EDIT }}) {
+				permission
+			  }
+			}`,
+			result: `{"queryRole":[{"permission":"EDIT"}]}`,
+		},
+		{name: "Query auth field without JWT Token",
+			query: `
+			query {
+				queryMovie {
+					content
+				}
+			}`,
+			result: `{"queryMovie":[{"content":"Movie4"}]}`,
+		},
+		{name: "Query empty auth field without JWT Token",
+			query: `
+			query {
+				queryReview {
+					comment
+				}
+			}`,
+			result: `{"queryReview":[{"comment":"Nice movie"}]}`,
+		},
+		{name: "Query auth field with partial JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			result: `{"queryProject":[{"name":"Project1"}]}`,
+		},
+		{name: "Query auth field with invalid JWT Token",
+			query: `
+			query {
+				queryProject {
+					name
+				}
+			}`,
+			user:   "user1",
+			role:   "ADMIN",
+			result: `{"queryProject":[]}`,
+		},
+	}
+
+	for _, tcase := range testCases {
+		queryParams := &common.GraphQLParams{
+			Query: tcase.query,
+		}
+
+		testInvalidKey := strings.HasSuffix(tcase.name, "invalid JWT Token")
+		if testInvalidKey {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+			jwtVar := queryParams.Headers.Get(metaInfo.Header)
+
+			// Create a invalid JWT signature.
+			jwtVar = jwtVar + "A"
+			queryParams.Headers.Set(metaInfo.Header, jwtVar)
+		} else if tcase.user != "" || tcase.role != "" {
+			queryParams.Headers = getJWT(t, tcase.user, tcase.role)
+		}
+
+		gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+		if testInvalidKey {
+			require.Contains(t, gqlResponse.Errors[0].Error(),
+				"couldn't rewrite query queryProject because unable to parse jwt token")
+		} else {
+			require.Nil(t, gqlResponse.Errors)
+		}
+
+		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
+			t.Errorf("Test: %s result mismatch (-want +got):\n%s", tcase.name, diff)
+		}
+	}
 }
 
 func TestOrRBACFilter(t *testing.T) {
@@ -232,9 +323,8 @@ func getColID(t *testing.T, tcase TestCase) string {
 }
 
 func TestRootGetFilter(t *testing.T) {
-	idCol1 := getColID(t, TestCase{"user1", "USER", "", "Column1", nil, nil})
-	idCol2 := getColID(t, TestCase{"user2", "USER", "", "Column2", nil, nil})
-
+	idCol1 := getColID(t, TestCase{user: "user1", role: "USER", name: "Column1"})
+	idCol2 := getColID(t, TestCase{user: "user2", role: "USER", name: "Column2"})
 	require.NotEqual(t, idCol1, "")
 	require.NotEqual(t, idCol2, "")
 
@@ -258,7 +348,89 @@ func TestRootGetFilter(t *testing.T) {
 	query := `
 		query($id: ID!) {
 		    getColumn(colID: $id) {
-			name
+				name
+		    }
+		}
+	`
+
+	for _, tcase := range tcases {
+		t.Run(tcase.role+tcase.user, func(t *testing.T) {
+			getUserParams := &common.GraphQLParams{
+				Headers:   getJWT(t, tcase.user, tcase.role),
+				Query:     query,
+				Variables: map[string]interface{}{"id": tcase.name},
+			}
+
+			gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+			require.Nil(t, gqlResponse.Errors)
+
+			require.JSONEq(t, string(gqlResponse.Data), tcase.result)
+		})
+	}
+}
+
+func getProjectID(t *testing.T, tcase TestCase) string {
+	query := `
+		query($name: String!) {
+		    queryProject(filter: {name: {eq: $name}}) {
+		        projID
+		    }
+		}
+	`
+
+	var result struct {
+		QueryProject []*Project
+	}
+
+	getUserParams := &common.GraphQLParams{
+		Headers:   getJWT(t, tcase.user, tcase.role),
+		Query:     query,
+		Variables: map[string]interface{}{"name": tcase.name},
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	err := json.Unmarshal(gqlResponse.Data, &result)
+	require.Nil(t, err)
+
+	if len(result.QueryProject) > 0 {
+		return result.QueryProject[0].ProjID
+	}
+
+	return ""
+}
+
+func TestRootGetDeepFilter(t *testing.T) {
+	idProject1 := getProjectID(t, TestCase{user: "user1", role: "USER", name: "Project1"})
+	idProject2 := getProjectID(t, TestCase{user: "user2", role: "USER", name: "Project2"})
+	require.NotEqual(t, idProject1, "")
+	require.NotEqual(t, idProject2, "")
+
+	tcases := []TestCase{{
+		user:   "user1",
+		role:   "USER",
+		result: `{"getProject":{"name":"Project1","columns":[{"name":"Column1"}]}}`,
+		name:   idProject1,
+	}, {
+		user:   "user1",
+		role:   "USER",
+		result: `{"getProject": null}`,
+		name:   idProject2,
+	}, {
+		user:   "user2",
+		role:   "USER",
+		result: `{"getProject":{"name":"Project2","columns":[{"name":"Column3"},{"name":"Column2"}]}}`,
+		name:   idProject2,
+	}}
+
+	query := `
+		query($id: ID!) {
+		    getProject(projID: $id) {
+				name
+				columns {
+          			name
+				}
 		    }
 		}
 	`
@@ -482,6 +654,14 @@ func TestNestedFilter(t *testing.T) {
                "name": "Region4"
             }
          ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
+            }
+         ]
       }
    ]
 }
@@ -519,6 +699,14 @@ func TestNestedFilter(t *testing.T) {
             },
             {
                "name": "Region4"
+            }
+         ]
+      },
+      {
+         "content": "Movie4",
+         "regionsAvailable": [
+            {
+               "name": "Region5"
             }
          ]
       }
@@ -596,7 +784,7 @@ func TestDeleteAuthRule(t *testing.T) {
 		}
 
 		gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
-		require.Nil(t, gqlResponse.Errors)
+		require.Nilf(t, gqlResponse.Errors, "%+v", gqlResponse.Errors)
 
 		if diff := cmp.Diff(tcase.result, string(gqlResponse.Data)); diff != "" {
 			t.Errorf("result mismatch (-want +got):\n%s", diff)

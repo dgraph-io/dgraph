@@ -54,7 +54,7 @@ type manifest struct {
 func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 	input, err := getLsBackupInput(q)
 	if err != nil {
-		return emptyResult(q, err)
+		return resolve.EmptyResult(q, err)
 	}
 
 	creds := &worker.Credentials{
@@ -65,7 +65,7 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 	}
 	manifests, err := worker.ProcessListBackups(ctx, input.Location, creds)
 	if err != nil {
-		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
+		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
 	convertedManifests := convertManifests(manifests)
 
@@ -73,12 +73,12 @@ func resolveListBackups(ctx context.Context, q schema.Query) *resolve.Resolved {
 	for _, m := range convertedManifests {
 		b, err := json.Marshal(m)
 		if err != nil {
-			return emptyResult(q, err)
+			return resolve.EmptyResult(q, err)
 		}
 		var result map[string]interface{}
 		err = json.Unmarshal(b, &result)
 		if err != nil {
-			return emptyResult(q, err)
+			return resolve.EmptyResult(q, err)
 		}
 		results = append(results, result)
 	}

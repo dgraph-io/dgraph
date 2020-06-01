@@ -33,7 +33,7 @@ func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
 
 	resp, err := (&edgraph.Server{}).Health(ctx, true)
 	if err != nil {
-		return emptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
+		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
 
 	var health []map[string]interface{}

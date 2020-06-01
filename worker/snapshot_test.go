@@ -44,11 +44,25 @@ func TestSnapshot(t *testing.T) {
 		DropOp: api.Operation_ALL,
 	}))
 	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
-		Schema: "value: int .",
+		Schema: `
+			value: int .
+			name: string .
+			address: string @index(term) .`,
 	}))
 
 	err = testutil.DockerStop("alpha2")
 	require.NoError(t, err)
+
+	// Update the name predicate to include an index.
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
+		Schema: `name: string @index(term) .`,
+	}))
+
+	// Delete the address predicate.
+	require.NoError(t, dg1.Alter(context.Background(), &api.Operation{
+		DropOp:    api.Operation_ATTR,
+		DropValue: "address",
+	}))
 
 	for i := 1; i <= 200; i++ {
 		err := testutil.RetryMutation(dg1, &api.Mutation{
@@ -112,6 +126,30 @@ func verifySnapshot(t *testing.T, dg *dgo.Dgraph, num int) {
 		sum += item["value"]
 	}
 	require.Equal(t, expectedSum, sum)
+
+	// Perform a query using the updated index in the schema.
+	q2 := `
+	{
+		names(func: anyofterms(name, Mike)) {
+			name
+		}
+	}`
+	resMap = make(map[string][]map[string]int)
+	_, err = testutil.RetryQuery(dg, q2)
+	require.NoError(t, err)
+
+	// Trying to perform a query using the address index should not work since that
+	// predicate was deleted.
+	q3 := `
+	{
+		addresses(func: anyofterms(address, Mike)) {
+			address
+		}
+	}`
+	resMap = make(map[string][]map[string]int)
+	_, err = testutil.RetryBadQuery(dg, q3)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Attribute address is not indexed")
 }
 
 func waitForSnapshot(t *testing.T, prevSnapTs uint64) uint64 {

@@ -652,6 +652,98 @@
     }
 
 -
+  name: "Cascade directive on get query"
+  gqlquery: |
+    query {
+      getAuthor(id: "0x1") @cascade {
+        dob
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getAuthor(func: uid(0x1)) @filter(type(Author)) @cascade {
+        dob : Author.dob
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Cascade directive on filter query"
+  gqlquery: |
+    query {
+      queryAuthor @cascade {
+        dob
+        posts {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade {
+        dob : Author.dob
+        posts : Author.posts {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Cascade directive on query field"
+  gqlquery: |
+    query {
+      queryAuthor {
+        dob
+        posts @cascade {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) {
+        dob : Author.dob
+        posts : Author.posts @cascade {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
+  name: "Cascade directive on root query and query field"
+  gqlquery: |
+    query {
+      queryAuthor @cascade {
+        dob
+        posts @cascade {
+          text
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      queryAuthor(func: type(Author)) @cascade {
+        dob : Author.dob
+        posts : Author.posts @cascade {
+          text : Post.text
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+-
   name: "getHuman which implements an interface"
   gqlquery: |
     query {
@@ -695,6 +787,34 @@
         dob : Human.dob
         female : Human.female
       }
+    }
+
+-
+  name: "Get Query on interface whose implementation contains Auth rules."
+  gqlquery: |
+    query {
+      getX(id: "0x1") {
+        username
+        age
+      }
+    }
+  dgquery: |-
+    query {
+      getX()
+    }
+
+-
+  name: "Query on interface whose implementation contains Auth rules."
+  gqlquery: |
+    query {
+      queryX {
+        username
+        age
+      }
+    }
+  dgquery: |-
+    query {
+      queryX()
     }
 
 -

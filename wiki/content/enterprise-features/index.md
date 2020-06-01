@@ -174,7 +174,7 @@ mutation {
 
 #### Overriding Credentials
 
-The `access_key`, `secret_key`, and `session_token` parameters can be used to
+The `accessKey`, `secretKey`, and `sessionToken` parameters can be used to
 override the default credentials. Please note that unless HTTPS is used, the
 credentials will be transmitted in plain text so use these parameters with
 discretion. The environment variables should be used by default but these
@@ -741,8 +741,8 @@ mutation {
 {{% notice "note" %}}
 This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
 For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
-[export the database](https://docs.dgraph.io/deploy/#exporting-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
-preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
+[export the database](https://dgraph.io/docs/deploy/#exporting-database) and [fast data load](https://dgraph.io/docs/deploy/#fast-data-loading),
+preferably using the [bulk loader](https://dgraph.io/docs/deploy/#bulk-loader).
 {{% /notice %}}
 
 Encryption at rest refers to the encryption of data that is stored physically in any
