@@ -492,7 +492,7 @@ func checkAddUpdateCase(
 	}
 }
 
-func TestAuthSchemaRewriting(t *testing.T) {
+func TestAuthQueryRewriting(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 
