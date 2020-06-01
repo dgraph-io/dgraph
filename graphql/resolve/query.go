@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
@@ -64,8 +65,8 @@ type queryResolver struct {
 	queryRewriter   QueryRewriter
 	executor        DgraphExecutor
 	resultCompleter ResultCompleter
-	// timers          schema.TimerFactory
-	// query           schema.Query
+	timers          schema.TimerFactory
+	query           schema.Query
 }
 
 func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resolved {
@@ -114,10 +115,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		ReturnType: query.Type().String(),
 	}
 	trace.Path = []interface{}{query.ResponseName()}
-	// var tf schema.TimerFactory
-	// timer := tf.NewOffsetTimer(&trace.OffsetDuration)
-	// timer.Start()
-	// defer timer.Stop()
+	timers := schema.NewOffsetTimerFactory(time.Now())
+	timer := timers.NewOffsetTimer(&trace.OffsetDuration)
+	timer.Start()
+	defer timer.Stop()
 
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
@@ -127,16 +128,18 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 
 	//Add Trace for the execution path of the query
 
-	// dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	timers1 := schema.NewOffsetTimerFactory(time.Now())
+	timer1 := timers1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
 	// var tf1 schema.TimerFactory
-	// timer1 := tf1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
-	// timer1.Start()
+	//timer1 := tf1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
+	timer1.Start()
 
 	resp, err := qr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
 
-	//timer1.Stop()
-	//trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+	timer1.Stop()
+	trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))

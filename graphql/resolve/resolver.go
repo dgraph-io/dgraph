@@ -367,7 +367,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		StartTime: time.Now(),
 	}
 	//trace.Version = 1
-	// //timers := schema.NewOffsetTimerFactory(trace.StartTime)                          //Trace of the complete request
+	timers := schema.NewOffsetTimerFactory(trace.StartTime) //Trace of the complete request
 	defer func() {
 		trace.EndTime = time.Now()
 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
@@ -416,10 +416,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				defer api.PanicHandler(
 					func(err error) {
 						allResolved[storeAt] = &Resolved{
-							Data:  nil,
-							Field: q,
-							Err:   err,
-							//	timers: timers
+							Data:   nil,
+							Field:  q,
+							Err:    err,
+							timers: timers,
 						}
 					})
 
@@ -434,6 +434,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+
 		}
 	}
 	// A single request can contain either queries or mutations - not both.
@@ -551,9 +553,9 @@ func addResult(resp *schema.Response, res *Resolved) {
 	// trace.OffsetDuration.StartOffset = 150
 	// trace.OffsetDuration.Duration = 50
 	// if resp.Extensions.Tracing.Execution == nil {
-	// 	resp.Extensions.Tracing.Execution = res.trace
+	//	resp.Extensions.Tracing.Execution = res.trace
 	// } else {
-	// 	resp.append(resp.Extensions.Tracing.Execution, res.trace...)
+	// resp = append(resp.Extensions.Tracing.Execution, res.trace...)
 	// }
 
 	resp.MergeExtensions(res.Extensions)
