@@ -27,6 +27,26 @@
         }
 
 -
+  name: "Add mutation for predicates with special characters having @dgraph directive."
+  gqlmutation: |
+    mutation {
+      addMessage(input : [{content : "content1", author: "author1"}]) {
+        message {
+          content
+          author
+        }
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {
+          "uid":"_:Message1",
+          "dgraph.type":["Message"],
+          "职业":"author1",
+          "post":"content1"
+        }
+
+-
   name: "Add multiple mutation with variables"
   gqlmutation: |
     mutation addAuthor($auth: [AddAuthorInput!]!) {
