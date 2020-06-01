@@ -1644,6 +1644,6 @@ func camelCase(x string) string { //Function to convert to camelCase
 	if len(x) < 2 {
 		return strings.ToLower(x)
 	}
-	y = (strings.ToLower(string(x[0]))) + x[1:]
-	return y
+
+	return ((strings.ToLower(string(x[0]))) + x[1:])
 }
