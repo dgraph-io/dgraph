@@ -1276,9 +1276,14 @@ func completeObject(
 			}
 		}
 
-		if f.Type().ListType() != nil {
-			// We were expecting a list but got a value which wasn't a list. Lets return an error.
-			if _, ok := val.([]interface{}); val != nil && !ok {
+		// Check that we should check that data should be of list type when we expect
+		// f.Type().ListType() to be non-nil.
+		if val != nil && f.Type().ListType() != nil {
+			switch val.(type) {
+			case []interface{}, []map[string]interface{}:
+			default:
+				// We were expecting a list but got a value which wasn't a list. Lets return an
+				// error.
 				return nil, x.GqlErrorList{&x.GqlError{
 					Message:   errExpectedList,
 					Locations: []x.Location{f.Location()},
