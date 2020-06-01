@@ -779,12 +779,7 @@
     }
   uids: |
     { "Log1": "0x123" }
-  authquery: |-
-    query {
-      log(func: uid(0x123)) {
-        id : uid
-      }
-    }
+  skipauth: true
 
 - name: "Add with top level OR RBAC true."
   gqlquery: |
@@ -806,12 +801,7 @@
     {
       "Project1": "0x123"
     }
-  authquery: |-
-    query {
-      project(func: uid(0x123)) {
-        projID : uid
-      }
-    }
+  skipauth: true
 
 - name: "Add with top level OR RBAC false."
   gqlquery: |
@@ -977,9 +967,4 @@
     }
   uids: |
     { "ComplexLog1": "0x123" }
-  authquery: |-
-    query {
-      complexlog(func: uid(0x123)) {
-        id : uid
-      }
-    }
+  skipauth: true
