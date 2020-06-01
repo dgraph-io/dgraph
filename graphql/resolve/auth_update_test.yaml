@@ -2,7 +2,7 @@
   gqlquery: |
     mutation updateUserSecret($upd: UpdateUserSecretInput!) {
       updateUserSecret(input: $upd) {
-        usersecret {
+        userSecret {
           id
         }
       }
