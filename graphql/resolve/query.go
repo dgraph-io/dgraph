@@ -73,20 +73,9 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
-
+	//resolved := &Resolved{}
 	//Add Tracing of the complete query
 	// trace, timer := traceWithTimer(qr.timers, qr.query, "Query") //getting panic
-
-	trace := &schema.ResolverTrace{
-		ParentType: "Query",
-		FieldName:  query.ResponseName(),
-		ReturnType: query.Type().String(),
-	}
-	trace.Path = []interface{}{query.ResponseName()}
-	var tf schema.TimerFactory
-	timer := tf.NewOffsetTimer(&trace.OffsetDuration)
-	timer.Start()
-	defer timer.Stop()
 
 	resolved := qr.rewriteAndExecute(ctx, query)
 	if resolved.Data == nil {
@@ -119,6 +108,17 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		}
 	}
 
+	trace := &schema.ResolverTrace{
+		ParentType: "Query",
+		FieldName:  query.ResponseName(),
+		ReturnType: query.Type().String(),
+	}
+	trace.Path = []interface{}{query.ResponseName()}
+	// var tf schema.TimerFactory
+	// timer := tf.NewOffsetTimer(&trace.OffsetDuration)
+	// timer.Start()
+	// defer timer.Stop()
+
 	dgQuery, err := qr.queryRewriter.Rewrite(ctx, query)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite query %s",
@@ -128,16 +128,22 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	//Add Trace for the execution path of the query
 
 	// dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-	// trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+	// var tf1 schema.TimerFactory
+	// timer1 := tf1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
+	// timer1.Start()
 
 	resp, err := qr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
+
+	//timer1.Stop()
+	//trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
 
 	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
+	resolved.trace = []*schema.ResolverTrace{trace}
 
 	// resolved.Extensions =
 	// 	&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}

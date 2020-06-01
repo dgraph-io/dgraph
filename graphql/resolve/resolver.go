@@ -145,8 +145,8 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
-	// trace      []*schema.ResolverTrace
-	// timers     schema.TimerFactory
+	trace      []*schema.ResolverTrace
+	timers     schema.TimerFactory
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -360,23 +360,24 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
+	resp := &schema.Response{}
 	// // //
-	// trace := &schema.Trace{
-	// 	Version:   1,
-	// 	StartTime: time.Now(),
-	// }
-	// trace.Version = 1
+	trace := &schema.Trace{
+		Version:   1,
+		StartTime: time.Now(),
+	}
+	//trace.Version = 1
 	// //timers := schema.NewOffsetTimerFactory(trace.StartTime)                          //Trace of the complete request
-	// // defer func() {
-	// // 	trace.EndTime = time.Now()
-	// // 	trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
-	// // }()
-	// //r.resp.Extensions = &schema.Extensions{RequestID: trace}
-	// r.resp.Extensions = &schema.Extensions{Tracing: trace}
-	// // r.resp.Extensions = &schema.Extensions{
-	// // 	RequestID: "1001",
-	// // 	Tracing:   trace,
-	// // }
+	defer func() {
+		trace.EndTime = time.Now()
+		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+	}()
+	//resp.Extensions = &schema.Extensions{RequestID: trace}
+	//resp.Extensions = &schema.Extensions{Tracing: trace}
+	resp.Extensions = &schema.Extensions{
+		//	RequestID: "1001",
+		Tracing: trace,
+	}
 
 	op, err := r.schema.Operation(gqlReq) // timers.NewOffsetTimer(&trace.Parsing),
 	// timers.NewOffsetTimer(&trace.Validation)
@@ -384,8 +385,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
-
-	resp := &schema.Response{}
 
 	if glog.V(3) {
 		// don't log the introspection queries they are sent too frequently
@@ -551,8 +550,11 @@ func addResult(resp *schema.Response, res *Resolved) {
 
 	// trace.OffsetDuration.StartOffset = 150
 	// trace.OffsetDuration.Duration = 50
-	// // resp.Extensions.Tracing.Execution =
-	// // 	append(resp.Extensions.Tracing.Execution, res.trace...)
+	// if resp.Extensions.Tracing.Execution == nil {
+	// 	resp.Extensions.Tracing.Execution = res.trace
+	// } else {
+	// 	resp.append(resp.Extensions.Tracing.Execution, res.trace...)
+	// }
 
 	resp.MergeExtensions(res.Extensions)
 }
