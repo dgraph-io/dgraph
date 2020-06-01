@@ -137,14 +137,14 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
 			}
-			// remove from map and signal the closer to cancel the operation.
+			// Remove from map and signal the closer to cancel the operation.
 			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
-				// remove from map and signal the closer to cancel the operation.
+				// Remove from map and signal the closer to cancel the operation.
 				delete(n.ops, otherId)
 				otherCloser.SignalAndWait()
 			} else {
