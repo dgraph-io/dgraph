@@ -153,7 +153,8 @@ func (s *ServerState) initStorage() {
 			WithNumVersionsToKeep(math.MaxInt32).
 			WithMaxCacheSize(1 << 30).
 			WithKeepBlockIndicesInCache(true).
-			WithKeepBlocksInCache(true)
+			WithKeepBlocksInCache(true).
+			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.
