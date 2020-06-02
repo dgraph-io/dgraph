@@ -17,12 +17,17 @@
 package x
 
 import (
+	"bytes"
 	"errors"
+	"io/ioutil"
+	"net/http"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/getsentry/sentry-go"
+	"github.com/gogo/protobuf/jsonpb"
 	"github.com/golang/glog"
 	"github.com/mitchellh/panicwrap"
 )
@@ -111,6 +116,29 @@ func CaptureSentryException(err error) {
 // PanicHandler is the callback function when a panic happens. It does not recover and is
 // only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
+
+	// lets get some data
+	var ms pb.MembershipState
+	glog.Infof("getting state")
+
+	res, err := http.Get("http://localhost:6080/state")
+	if err != nil {
+		glog.Infof("Error on getting /state %v", err)
+	}
+	body, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		glog.Infof("Failure to read /state response %v", err)
+	}
+	res.Body.Close()
+
+	var bb =  bytes.NewReader(body)
+	um := jsonpb.Unmarshaler{}
+
+	if err := um.Unmarshal(bb, &ms); err != nil {
+		glog.Infof("Failure to Unmarshal response %v", err)
+	}
+	glog.Infof("cid  = %+v", ms.GetCid())
+
 	// Output contains the full output (including stack traces) of the panic.
 	sentry.CaptureException(errors.New(out))
 	FlushSentry() // Need to flush asap. Don't defer here.
