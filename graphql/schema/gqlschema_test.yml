@@ -1893,6 +1893,17 @@ invalid_schemas:
      "locations":[{"line":1, "column":11}]},
     ]
 
+
+  - name: "There shoudnt be any reserved arguments on any field"
+    input: |
+      type T {
+        f(first: Int): String
+      }
+    errlist: [
+    {"message": "Type T; Field f: can't have first as an argument because it is a reserved argument.", "locations": [{"line": 2, "column": 3}]}
+    ]
+
+
 valid_schemas:
   - name: "@auth on interface implementation"
     input: |

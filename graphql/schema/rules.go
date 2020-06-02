@@ -39,8 +39,8 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck, fieldNameCheck,
-		isValidFieldForList, hasAuthDirective)
+	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
+		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check for list type value", listTypeCheck)
@@ -628,6 +628,30 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqler
 		return gqlerror.ErrorPosf(
 			field.Position, "Type %s; Field %s: %s lists are invalid.",
 			typ.Name, field.Name, field.Type.Elem.Name())
+	}
+	return nil
+}
+
+func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
+	if isQueryOrMutationType(typ) {
+		return nil
+	}
+	// We don't need to verify the argument names for fields which are part of a remote type as
+	// we don't add any of our own arguments to them.
+	remote := typ.Directives.ForName(remoteDirective)
+	if remote != nil {
+		return nil
+	}
+	for _, arg := range field.Arguments {
+		if isReservedArgument(arg.Name) {
+			return gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s: can't have %s as an argument because it is a reserved "+
+					"argument.",
+				typ.Name, field.Name, arg.Name,
+			)
+
+		}
 	}
 	return nil
 }
@@ -1575,6 +1599,14 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 func isScalar(s string) bool {
 	_, ok := scalarToDgraph[s]
 	return ok
+}
+
+func isReservedArgument(name string) bool {
+	switch name {
+	case "first", "offset", "filter", "order":
+		return true
+	}
+	return false
 }
 
 func isReservedKeyWord(name string) bool {
