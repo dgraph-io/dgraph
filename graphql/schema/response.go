@@ -30,9 +30,9 @@ import (
 
 // Extensions represents GraphQL extensions
 type Extensions struct {
-	//TouchedUids uint64 `json:"touched_uids,omitempty"`
-	Tracing   *Trace `json:"tracing,omitempty"`
-	RequestID string `json:"requestID,omitempty"`
+	TouchedUids uint64 `json:"touched_uids,omitempty"`
+	Tracing     *Trace `json:"tracing,omitempty"`
+	RequestID   string `json:"requestID,omitempty"`
 }
 
 // Merge merges ext with e
@@ -41,7 +41,7 @@ func (e *Extensions) Merge(ext *Extensions) {
 		return
 	}
 
-	//e.TouchedUids += ext.TouchedUids
+	e.TouchedUids += ext.TouchedUids
 
 }
 

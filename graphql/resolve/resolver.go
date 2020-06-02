@@ -147,6 +147,7 @@ type Resolved struct {
 	Extensions *schema.Extensions
 	trace      []*schema.ResolverTrace
 	timers     schema.TimerFactory
+	Dgraph     []*schema.LabeledOffsetDuration `json:"dgraph"`
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -361,27 +362,20 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 	}
 
 	resp := &schema.Response{}
-	// // //
 	trace := &schema.Trace{
 		Version:   1,
 		StartTime: time.Now(),
 	}
-	//trace.Version = 1
-	timers := schema.NewOffsetTimerFactory(trace.StartTime) //Trace of the complete request
+	timers := schema.NewOffsetTimerFactory(trace.StartTime)
+	ctx = context.WithValue(ctx, "starttime", trace.StartTime)
 	defer func() {
 		trace.EndTime = time.Now()
 		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
 	}()
-	//resp.Extensions = &schema.Extensions{RequestID: trace}
-	//resp.Extensions = &schema.Extensions{Tracing: trace}
 	resp.Extensions = &schema.Extensions{
-		//	RequestID: "1001",
 		Tracing: trace,
 	}
-
-	op, err := r.schema.Operation(gqlReq) // timers.NewOffsetTimer(&trace.Parsing),
-	// timers.NewOffsetTimer(&trace.Validation)
-
+	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
@@ -474,6 +468,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			addResult(resp, res)
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		resolveQueries()
@@ -537,27 +532,6 @@ func addResult(resp *schema.Response, res *Resolved) {
 	resp.WithError(res.Err)
 	resp.WithError(gqlErr)
 	resp.AddData(b)
-
-	// trace := &schema.ResolverTrace{}
-
-	// //also need to merge extensions of individual queries in the request
-	// trace.Path = []interface{}{"getmessage"}
-	// trace.ParentType = "Query"
-	// trace.FieldName = "getmessagage"
-	// trace.ReturnType = "Message"
-	// dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}                       //dummy test data
-	// dgraphDuration.OffsetDuration.StartOffset = 100
-	// dgraphDuration.OffsetDuration.Duration = 150
-	// trace.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
-
-	// trace.OffsetDuration.StartOffset = 150
-	// trace.OffsetDuration.Duration = 50
-	// if resp.Extensions.Tracing.Execution == nil {
-	//	resp.Extensions.Tracing.Execution = res.trace
-	// } else {
-	// resp = append(resp.Extensions.Tracing.Execution, res.trace...)
-	// }
-
 	resp.MergeExtensions(res.Extensions)
 }
 
