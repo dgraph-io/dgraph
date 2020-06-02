@@ -903,7 +903,6 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(ctx, q)
-
 	if err != nil {
 		return nil, err
 	}

@@ -1689,7 +1689,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		lists = append(lists, sg.DestUIDs)
 		sg.DestUIDs = algo.MergeSorted(lists)
 	}
-
 	return nil
 }
 
