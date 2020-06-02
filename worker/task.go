@@ -19,8 +19,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -665,9 +663,6 @@ func (qs *queryState) handleUidPostings(
 	srcFn := args.srcFn
 	q := args.q
 
-	fmt.Println("SrcFn inside handleUIDPostings")
-	res2B, _ := json.Marshal(srcFn)
-	fmt.Printf("Src Fn: " + string(res2B) + "\n\n\n")
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
 		return err
@@ -762,10 +757,7 @@ func (qs *queryState) handleUidPostings(
 					tlist := &pb.List{Uids: []uint64{q.UidList.Uids[i]}}
 					out.UidMatrix = append(out.UidMatrix, tlist)
 				}
-			//Check with Pawan/Ashish what this function do? I suppose itreturns the relevant posting/uid list to append to uid matrix
 			case srcFn.fnType == uidInFn:
-				fmt.Println("src Fn inside handleUIDPostings")
-				fmt.Println("src Fn %+v\n\n", srcFn)
 				if i == 0 {
 					span.Annotate(nil, "UidInFn")
 				}
@@ -911,8 +903,6 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(ctx, q)
-	//res2B, _ := json.Marshal(srcFn)
-	//fmt.Printf("Src Fn : " + string(res2B) + "\n\n\n")
 
 	if err != nil {
 		return nil, err
@@ -1646,7 +1636,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.isStringFn = true
 	}
 
-	fmt.Printf("Parse function type: %v, name: %v\n\n", fnType, f)
 	switch fnType {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)

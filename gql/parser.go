@@ -928,9 +928,6 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	// First, get the root
 	gq, rerr = getRoot(it)
-	res2B, _ := json.Marshal(gq)
-	fmt.Printf("Root query: " + string(res2B) + "\n\n\n")
-	//fmt.Printf(" %+v\n\n", gq)
 	if rerr != nil {
 		return nil, rerr
 	}
@@ -1675,7 +1672,6 @@ L:
 			if attrItemsAgo >= 0 {
 				attrItemsAgo++
 			}
-			// fmt.Println("IteminFunc: ", itemInFunc)
 			var val string
 			switch itemInFunc.Typ {
 			case itemRightRound:
@@ -1830,8 +1826,6 @@ L:
 				return nil, err
 			}
 			val += v
-
-			fmt.Println("Val: ", val)
 
 			if isDollar {
 				val = "$" + val

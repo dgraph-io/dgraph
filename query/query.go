@@ -18,7 +18,6 @@ package query
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -1933,7 +1932,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
-	//fmt.Printf("Subgraph inside: %+v\n\n", sg)
 	var suffix string
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
@@ -2605,8 +2603,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 		gq := queries[i]
 		fmt.Println("Processing Queries")
 		fmt.Println("Query #:", i)
-		res2B, _ := json.Marshal(gq)
-		fmt.Printf("Query: " + string(res2B) + "\n\n")
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
