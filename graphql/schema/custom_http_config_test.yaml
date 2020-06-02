@@ -124,7 +124,7 @@
     }
 
     type Country @remote {
-      code(first: Int!, filter: MyFilter): String
+      code(get: Int!, choose: MyFilter): String
       name: String
       states: [State]
       std: Int
@@ -158,7 +158,7 @@
   gqlquery: |
     mutation addCountry1($input: CountryInput!) {
       addCountry1(input: $input) {
-        code(first: 10, filter: {ids: "0x123", name: { eq: "github" }})
+        code(get: 10, choose: {ids: "0x123", name: { eq: "github" }})
         name
         states {
           code
@@ -194,7 +194,7 @@
     }
 
     type Country {
-      code(first: Int!, filter: MyFilter): String
+      code(get: Int!, choose: MyFilter): String
       name: String
       states: [State]
       std: Int
@@ -227,7 +227,7 @@
     }
   remotequery: |-
     mutation($input: CountryInput!) { setCountry(country: $input) {
-    code(first: 10, filter: {ids:"0x123",name:{eq:"github"}})
+    code(get: 10, choose: {ids:"0x123",name:{eq:"github"}})
     name
     states{
     code
