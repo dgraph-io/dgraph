@@ -57,16 +57,15 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
+		// Return fast if executor has been closed.
+		select {
+		case <-e.closer.HasBeenClosed():
+			return
+		default:
+		}
 		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
-			// Return fast if executor has been closed.
-			select {
-			case <-e.closer.HasBeenClosed():
-				return
-			default:
-			}
-
 			esize += int64(edge.Size())
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
