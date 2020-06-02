@@ -1642,9 +1642,9 @@ func isGraphqlSpecScalar(typ string) bool {
 }
 
 func camelCase(x string) string {
-	if len(x) < 2 {
-		return strings.ToLower(x)
+	if len(x) == 0 {
+		return ""
 	}
 
-	return ((strings.ToLower(string(x[0]))) + x[1:])
+	return strings.ToLower(x[:1]) + x[1:]
 }
