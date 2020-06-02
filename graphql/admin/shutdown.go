@@ -21,14 +21,21 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
-	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
+)
+
+var (
+	// ShutdownCh is used to pass the shutdown signal for the Alpha server between goroutines.
+	// When a shutdown command is issued by the user, the admin package closes this channel
+	// and as a response the setupServer() function in cmd/alpha/run.go gracefully stops the
+	// gRPC and HTTP server before stopping Alpha.
+	ShutdownCh = make(chan struct{})
 )
 
 func resolveShutdown(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got shutdown request through GraphQL admin API")
 
-	close(worker.ShutdownCh)
+	close(ShutdownCh)
 
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{m.Name(): response("Success", "Server is shutting down")},

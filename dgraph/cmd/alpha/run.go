@@ -531,7 +531,7 @@ func setupServer(closer *y.Closer) {
 
 	go func() {
 		defer wg.Done()
-		<-worker.ShutdownCh
+		<-admin.ShutdownCh
 		atomic.StoreUint64(&globalEpoch, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
@@ -674,7 +674,6 @@ func run() {
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 3)
-	worker.ShutdownCh = make(chan struct{})
 
 	defer func() {
 		signal.Stop(sdCh)
@@ -686,9 +685,9 @@ func run() {
 		var numShutDownSig int
 		for range sdCh {
 			select {
-			case <-worker.ShutdownCh:
+			case <-admin.ShutdownCh:
 			default:
-				close(worker.ShutdownCh)
+				close(admin.ShutdownCh)
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
