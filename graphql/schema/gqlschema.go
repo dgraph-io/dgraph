@@ -1642,7 +1642,7 @@ func isGraphqlSpecScalar(typ string) bool {
 }
 
 func camelCase(x string) string {
-	if len(x) == 0 {
+	if x == "" {
 		return ""
 	}
 
