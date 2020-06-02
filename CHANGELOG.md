@@ -12,7 +12,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Fixed
 
-## [20.03.3] - 2020-05-28
+## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
 
 ### Changed
@@ -92,7 +92,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5361]: https://github.com/dgraph-io/dgraph/issues/5361
 [#5537]: https://github.com/dgraph-io/dgraph/issues/5537
 
-## [1.2.5] - 2020-05-28
+## [1.2.5] - 2020-06-02
 [1.2.5]: https://github.com/dgraph-io/dgraph/compare/v1.2.3...v1.2.5
 
 ### Changed
