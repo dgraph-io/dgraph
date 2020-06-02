@@ -50,6 +50,24 @@ const (
 
 	resolverFailed    = false
 	resolverSucceeded = true
+
+	errExpectedScalar = "A scalar type was returned, but GraphQL was expecting an object. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
+
+	errExpectedObject = "A list was returned, but GraphQL was expecting just one item. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
+
+	errExpectedList = "An object was returned, but GraphQL was expecting a list of objects. " +
+		"This indicates an internal error - " +
+		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
+		"The value was resolved as null (which may trigger GraphQL error propagation) " +
+		"and as much other data as possible returned."
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -1258,6 +1276,21 @@ func completeObject(
 			}
 		}
 
+		// Check that we should check that data should be of list type when we expect
+		// f.Type().ListType() to be non-nil.
+		if val != nil && f.Type().ListType() != nil {
+			switch val.(type) {
+			case []interface{}, []map[string]interface{}:
+			default:
+				// We were expecting a list but got a value which wasn't a list. Lets return an
+				// error.
+				return nil, x.GqlErrorList{&x.GqlError{
+					Message:   errExpectedList,
+					Locations: []x.Location{f.Location()},
+					Path:      copyPath(path),
+				}}
+			}
+		}
 		completed, err := completeValue(append(path, f.ResponseName()), f, val)
 		errs = append(errs, err...)
 		if completed == nil {
@@ -1283,6 +1316,23 @@ func completeValue(
 
 	switch val := val.(type) {
 	case map[string]interface{}:
+		switch field.Type().Name() {
+		case "String", "ID", "Boolean", "Float", "Int", "DateTime":
+			return nil, x.GqlErrorList{&x.GqlError{
+				Message:   errExpectedScalar,
+				Locations: []x.Location{field.Location()},
+				Path:      copyPath(path),
+			}}
+		}
+		enumValues := field.EnumValues()
+		if len(enumValues) > 0 {
+			return nil, x.GqlErrorList{&x.GqlError{
+				Message:   errExpectedScalar,
+				Locations: []x.Location{field.Location()},
+				Path:      copyPath(path),
+			}}
+		}
+
 		return completeObject(path, field.SelectionSet(), val)
 	case []interface{}:
 		return completeList(path, field, val)
@@ -1591,11 +1641,7 @@ func mismatched(
 		field.Name(), field.Location().Line, field.Location().Column, field.Type().Name())
 
 	gqlErr := &x.GqlError{
-		Message: "Dgraph returned a list, but GraphQL was expecting just one item.  " +
-			"This indicates an internal error - " +
-			"probably a mismatch between GraphQL and Dgraph schemas.  " +
-			"The value was resolved as null (which may trigger GraphQL error propagation) " +
-			"and as much other data as possible returned.",
+		Message:   errExpectedObject,
 		Locations: []x.Location{field.Location()},
 		Path:      copyPath(path),
 	}
