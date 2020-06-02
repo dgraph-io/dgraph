@@ -39,8 +39,8 @@ func init() {
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
 		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck)
-	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
-		fieldNameCheck, isValidFieldForList, hasAuthDirective)
+	fieldValidations = append(fieldValidations, listValidityCheck, fieldNameCheck,
+		isValidFieldForList, hasAuthDirective)
 
 	validator.AddRule("Check variable type is correct", variableTypeCheck)
 	validator.AddRule("Check for list type value", listTypeCheck)
@@ -628,20 +628,6 @@ func isValidFieldForList(typ *ast.Definition, field *ast.FieldDefinition) *gqler
 		return gqlerror.ErrorPosf(
 			field.Position, "Type %s; Field %s: %s lists are invalid.",
 			typ.Name, field.Name, field.Type.Elem.Name())
-	}
-	return nil
-}
-
-func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error {
-	if isQueryOrMutationType(typ) {
-		return nil
-	}
-	if field.Arguments != nil {
-		return gqlerror.ErrorPosf(
-			field.Position,
-			"Type %s; Field %s: You can't give arguments to fields.",
-			typ.Name, field.Name,
-		)
 	}
 	return nil
 }
