@@ -263,6 +263,12 @@ type ComplexLog @auth(
       { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
       { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
      ]},
+      add: {
+        not: { rule: "{$ROLE: { eq: \"USER\" }}" }
+      },
+      update: {
+        not: { rule: "{$ROLE: { eq: \"USER\" }}" }
+      },
       delete: {
       or : [
         { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
@@ -319,13 +325,15 @@ type Project @auth(
      ]}
 ) {
   projID: ID!
-  name: String!
+  name: String! @search(by: [hash])
   roles: [Role]
   columns: [Column] @hasInverse(field: inProject)
   random: String
 }
 
-type Role {
+type Role @auth(
+  delete:  { not : { rule: "{ $ROLE: { eq: \"USER\" }}"} }
+){
   id: ID!
   permission: Permission @search
   assignedTo: [User]

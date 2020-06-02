@@ -73,7 +73,33 @@ const adminTypes = `
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
 		"""
-		keyFile: String!
+		encryptionKeyFile: String
+
+		"""
+		Vault server address where the key is stored. This server must be accessible
+		by all alphas in the group.
+		"""
+		vaultAddr: String
+
+		"""
+		Path to the Vault RoleID file.
+		"""
+		vaultRoleIDFile: String
+
+		"""
+		Path to the Vault SecretID file.
+		"""
+		vaultSecretIDFile: String
+
+		"""
+		Vault kv store path where the key lives.
+		"""
+		vaultPath: String
+
+		"""
+		Vault kv store field whose value is the key.
+		"""
+		vaultField: String
 
 		"""
 		Access key credential for the destination.

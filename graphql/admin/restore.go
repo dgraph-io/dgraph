@@ -27,13 +27,18 @@ import (
 )
 
 type restoreInput struct {
-	Location     string
-	BackupId     string
-	KeyFile      string
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
+	Location          string
+	BackupId          string
+	EncryptionKeyFile string
+	AccessKey         string
+	SecretKey         string
+	SessionToken      string
+	Anonymous         bool
+	VaultAddr         string
+	VaultRoleIDFile   string
+	VaultSecretIDFile string
+	VaultPath         string
+	VaultField        string
 }
 
 func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -44,13 +49,18 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 	}
 
 	req := pb.RestoreRequest{
-		Location:     input.Location,
-		BackupId:     input.BackupId,
-		KeyFile:      input.KeyFile,
-		AccessKey:    input.AccessKey,
-		SecretKey:    input.SecretKey,
-		SessionToken: input.SessionToken,
-		Anonymous:    input.Anonymous,
+		Location:          input.Location,
+		BackupId:          input.BackupId,
+		EncryptionKeyFile: input.EncryptionKeyFile,
+		AccessKey:         input.AccessKey,
+		SecretKey:         input.SecretKey,
+		SessionToken:      input.SessionToken,
+		Anonymous:         input.Anonymous,
+		VaultAddr:         input.VaultAddr,
+		VaultRoleidFile:   input.VaultRoleIDFile,
+		VaultSecretidFile: input.VaultSecretIDFile,
+		VaultPath:         input.VaultPath,
+		VaultField:        input.VaultField,
 	}
 	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {

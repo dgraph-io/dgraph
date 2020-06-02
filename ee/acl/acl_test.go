@@ -1929,7 +1929,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			name: "restore has guardian auth",
 			query: `
 					mutation {
-					  restore(input: {location: "", backupId: "", keyFile: ""}) {
+					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
 						response {
 						  code
 						  message
