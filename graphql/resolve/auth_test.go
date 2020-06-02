@@ -58,6 +58,10 @@ type AuthQueryRewritingCase struct {
 	AuthQuery string
 	AuthJson  string
 
+	// Indicates if we should skip auth query verification when using authExecutor.
+	// Example: Top level RBAC rules is true.
+	SkipAuth bool
+
 	Error *x.GqlError
 }
 
@@ -73,6 +77,8 @@ type authExecutor struct {
 	// auth
 	authQuery string
 	authJson  string
+
+	skipAuth bool
 }
 
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
@@ -92,6 +98,11 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 
 		if len(assigned) == 0 {
 			// skip state 2, there's no new nodes to apply auth to
+			ex.state++
+		}
+
+		// For rules that don't require auth, it should directly go to step 3.
+		if ex.skipAuth {
 			ex.state++
 		}
 
@@ -479,6 +490,7 @@ func checkAddUpdateCase(
 		uids:        tcase.Uids,
 		authQuery:   tcase.AuthQuery,
 		authJson:    tcase.AuthJson,
+		skipAuth:    tcase.SkipAuth,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
 
@@ -492,7 +504,7 @@ func checkAddUpdateCase(
 	}
 }
 
-func TestAuthSchemaRewriting(t *testing.T) {
+func TestAuthQueryRewriting(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 

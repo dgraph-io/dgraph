@@ -30,7 +30,7 @@ You need at least one Dgraph Zero and one Dgraph Alpha to get started.
 **Here's a four-step tutorial to get you up and running.**
 
 This is a quick-start guide to running Dgraph.
-For an interactive walkthrough, take the [tour](https://tour.dgraph.io).
+For an interactive walkthrough, take the [tour](https://dgraph.io/tour/).
 
 {{% notice "tip" %}}
 This guide is for the powerful query language of Dgraph, [GraphQL+-](https://dgraph.io/docs/master/query-language/#graphql)
@@ -288,7 +288,7 @@ data, set a schema and queried that data back.
 
 - Go to [Clients]({{< relref "clients/index.md" >}}) to see how to
 communicate with Dgraph from your application.
-- Take the [Tour](https://tour.dgraph.io) for a guided tour of how to write queries in Dgraph.
+- Take the [Tour](https://dgraph.io/tour/) for a guided tour of how to write queries in Dgraph.
 - A wider range of queries can also be found in the
 [Query Language]({{< relref "query-language/index.md" >}}) reference.
 - See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph

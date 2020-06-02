@@ -138,3 +138,8 @@ type Teacher implements People {
 type Student implements People {
 	taughtBy: [Teacher]
 }
+
+type Message {
+    content: String! @dgraph(pred: "post")
+    author: String @dgraph(pred: "<职业>")
+}

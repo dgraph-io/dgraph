@@ -771,10 +771,8 @@ func run() {
 
 	bopts := badger.DefaultOptions(dir).
 		WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(opt.readOnly).WithEncryptionKey(opt.key)
-
-	// TODO(Ibrahim): Remove this once badger is updated.
-	bopts.ZSTDCompressionLevel = 1
+		WithReadOnly(opt.readOnly).
+		WithEncryptionKey(opt.key)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)

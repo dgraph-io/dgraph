@@ -248,7 +248,7 @@ func TestDeleteOrRBACFilter(t *testing.T) {
 				if tcase.role != "ADMIN" && complexLog.Visible == false {
 					continue
 				}
-				complexLog.add(t, tcase.role)
+				complexLog.add(t, "ADMIN")
 			}
 		})
 	}

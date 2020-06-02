@@ -609,6 +609,12 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 		Var:  MutationQueryVar,
 		Attr: m.Name(),
 	}
+
+	if m.MutatedType().InterfaceImplHasAuthRules() {
+		dgQuery.Attr = m.ResponseName() + "()"
+		return dgQuery
+	}
+
 	rbac := authRw.evaluateStaticRules(m.MutatedType())
 	if rbac == schema.Negative {
 		dgQuery.Attr = m.ResponseName() + "()"
@@ -767,8 +773,7 @@ func deleteAuthSelector(t schema.Type) *schema.RuleNode {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder mutationBuilder,
-	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
@@ -1003,6 +1008,10 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
+			// This fixes mutation when dgraph predicate has special characters. PR #5526
+			if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+				fieldName = fieldName[1 : len(fieldName)-1]
+			}
 
 			switch val := val.(type) {
 			case map[string]interface{}:
@@ -1104,8 +1113,7 @@ func asIDReference(
 	ctx context.Context,
 	val interface{},
 	srcField schema.FieldDefinition,
-	srcUID string,
-	variable string,
+	srcUID, variable string,
 	withAdditionalDeletes bool,
 	varGen *VariableGenerator) *mutationFragment {
 

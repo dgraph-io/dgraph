@@ -739,3 +739,232 @@
     }  
   error:
     { "message": "couldn't rewrite query for mutation addProject because authorization failed" }
+
+- name: "Add with top level RBAC false."
+  gqlquery: |
+    mutation addLog($log: AddLogInput!) {
+      addLog(input: [$log]) {
+        log {
+          id
+        }
+      }
+    }
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "random": "random123"
+      }
+    }
+  uids: |
+    { "Log1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+
+- name: "Add with top level RBAC true."
+  gqlquery: |
+    mutation addLog($log: AddLogInput!) {
+      addLog(input: [$log]) {
+        log {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "random": "random123"
+      }
+    }
+  uids: |
+    { "Log1": "0x123" }
+  skipauth: true
+
+- name: "Add with top level OR RBAC true."
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1"
+      }
+    }
+  uids: |
+    {
+      "Project1": "0x123"
+    }
+  skipauth: true
+
+- name: "Add with top level OR RBAC false."
+  gqlquery: |
+    mutation addProject($proj: AddProjectInput!) {
+      addProject(input: [$proj]) {
+        project {
+          projID
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    {
+      "proj": {
+        "name": "Project1"
+      }
+    }
+  uids: |
+    {
+      "Project1": "0x123"
+    }
+  authquery: |-
+    query {
+      Project(func: uid(Project1)) @filter(uid(Project2)) {
+        uid
+      }
+      Project1 as var(func: uid(0x123))
+      Project2 as var(func: uid(Project1)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    {
+      "Project": [ { "uid": "0x123" } ]
+    }
+
+- name: "Add with top level And RBAC true."
+  gqlquery: |
+    mutation addIssue($issue: AddIssueInput!) {
+      addIssue(input: [$issue]) {
+        issue {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "issue":
+      { "msg": "log123",
+        "random": "random123",
+        "owner": {
+           "username" : "user1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Issue1": "0x789" }
+  authquery: |-
+    query {
+      Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: uid(0x789))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+  authjson: |
+    { "Issue": [ { "uid": "0x789" }] }
+
+- name: "Add with top level And RBAC false."
+  gqlquery: |
+    mutation addIssue($issue: AddIssueInput!) {
+      addIssue(input: [$issue]) {
+        issue {
+          id
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "issue":
+      { "msg": "log123",
+        "random": "random123",
+        "owner": {
+           "username" : "user1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  json: |
+    { "User3": [ { "uid": "0x123" } ] }
+  uids: |
+    { "Issue1": "0x789" }
+  authquery: |-
+    query {
+      Issue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: uid(0x789))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+  error:
+    { "message": "mutation failed because authorization failed" }
+
+- name: "Add with top level not RBAC false."
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexlog {
+          id
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+  uids: |
+    { "ComplexLog1": "0x123" }
+  error:
+    { "message": "mutation failed because authorization failed"}
+
+- name: "Add with top level not RBAC true."
+  gqlquery: |
+    mutation addComplexLog($log: AddComplexLogInput!) {
+      addComplexLog(input: [$log]) {
+        complexlog {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "log":
+      { "logs": "log123",
+        "visible": true
+      }
+    }
+  uids: |
+    { "ComplexLog1": "0x123" }
+  skipauth: true
