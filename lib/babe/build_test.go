@@ -157,7 +157,7 @@ func TestBuildBlock_ok(t *testing.T) {
 	block.Header.Digest = block.Header.Digest[:1]
 	// reset state root, since it has randomness aspects in it
 	// TODO: where does this randomness come from?
-	block.Header.StateRoot = emptyHash
+	block.Header.StateRoot, _ = babesession.storageState.StorageRoot()
 
 	if !reflect.DeepEqual(block.Header, expectedBlockHeader) {
 		t.Fatalf("Fail: got %v expected %v", block.Header, expectedBlockHeader)

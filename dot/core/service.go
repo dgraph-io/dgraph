@@ -428,12 +428,7 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		return err
 	}
 
-	err = s.checkForRuntimeChanges()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return s.checkForRuntimeChanges()
 }
 
 // handleReceivedMessage handles messages from the network service
