@@ -527,7 +527,7 @@ func Parse(key []byte) (ParsedKey, error) {
 }
 
 // These predicates appear for queries that have * as predicate in them.
-var reservedPredicateMap = map[string]struct{}{
+var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
 }
 
@@ -588,7 +588,7 @@ func IsReservedPredicate(pred string) bool {
 //
 // Pre-defined predicates are subset of reserved predicates.
 func IsPreDefinedPredicate(pred string) bool {
-	_, ok := reservedPredicateMap[strings.ToLower(pred)]
+	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
 
@@ -599,11 +599,11 @@ func IsAclPredicate(pred string) bool {
 	return ok
 }
 
-// ReservedPredicates returns the complete list of reserved predicates that needs to
+// StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func ReservedPredicates() []string {
-	preds := make([]string, 0, len(reservedPredicateMap))
-	for pred := range reservedPredicateMap {
+func StarAllPredicates() []string {
+	preds := make([]string, 0, len(starAllPredicateMap))
+	for pred := range starAllPredicateMap {
 		preds = append(preds, pred)
 	}
 	return preds
