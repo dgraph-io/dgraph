@@ -102,6 +102,11 @@ type MovieDirector {
         directed: [Movie] @dgraph(pred: "directed.movies")
 }
 
+type Lab {
+        name: String! @id
+        computers: [Computer]
+}
+
 # just for testing XID remove in list
 type Computer {
 	owners: [ComputerOwner!]

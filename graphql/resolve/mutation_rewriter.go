@@ -956,6 +956,12 @@ func rewriteObject(
 		}
 	}
 
+	var additionalFrag []*mutationFragment
+
+	if xidFrag != nil {
+		results.secondPass = append(results.secondPass, xidFrag)
+	}
+
 	// if this object has an xid, then we don't need to rewrite its children if we have encountered
 	// it earlier
 	if xidString == "" || xidEncounteredFirstTime {
@@ -964,6 +970,8 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
+
+			strategy := "squash"
 
 			switch val := val.(type) {
 			case map[string]interface{}:
@@ -977,6 +985,8 @@ func rewriteObject(
 				frags =
 					rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes,
 						val, xidMetadata)
+
+				strategy = "merge1"
 
 			case []interface{}:
 				// This field is either:
@@ -993,6 +1003,7 @@ func rewriteObject(
 				frags =
 					rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val,
 						xidMetadata)
+				strategy = "merge2"
 			default:
 				// This field is either:
 				// 1) a scalar value: e.g.
@@ -1009,14 +1020,16 @@ func rewriteObject(
 				}
 			}
 
-			results.firstPass = squashFragments(squashIntoObject(fieldName), results.firstPass, frags.firstPass)
+			if strategy == "squash" {
+				results.firstPass = squashFragments(squashIntoObject(fieldName), results.firstPass, frags.firstPass)
+			} else {
+				additionalFrag = appendFragments(additionalFrag, frags.firstPass)
+			}
 			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
 		}
 	}
 
-	if xidFrag != nil {
-		results.secondPass = append(results.secondPass, xidFrag)
-	}
+	results.firstPass = append(results.firstPass, additionalFrag...)
 
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
 		results.firstPass = []*mutationFragment{}
@@ -1542,6 +1555,5 @@ func squashFragments(
 	}
 
 	result[0].queries = queries
-
 	return result
 }
