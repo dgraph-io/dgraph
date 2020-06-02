@@ -56,6 +56,12 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 	for payload := range ch {
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
+			// Return fast if executor has been closed.
+			select {
+			case <-e.closer.HasBeenClosed():
+				return
+			default:
+			}
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
 				if err == nil {
