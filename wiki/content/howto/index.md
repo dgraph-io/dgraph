@@ -672,7 +672,7 @@ docker-compose up
 ```
 ### Use the increment tool to start a gRPC LB
 
-In a different shell, run the `dgraph increment` [docs](https://docs.dgraph.io/howto/#using-the-increment-tool) tool against the Nginx gRPC load balancer (`nginx:9080`):
+In a different shell, run the `dgraph increment` [docs](https://dgraph.io/docs/howto/#using-the-increment-tool) tool against the Nginx gRPC load balancer (`nginx:9080`):
 
 ```
 docker-compose exec alpha1 dgraph increment --alpha nginx:9080 --num=10

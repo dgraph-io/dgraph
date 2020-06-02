@@ -53,6 +53,7 @@ type suite struct {
 
 type suiteOpts struct {
 	schema         string
+	gqlSchema      string
 	rdfs           string
 	skipBulkLoader bool
 	skipLiveLoader bool
@@ -85,7 +86,9 @@ func newSuiteInternal(t *testing.T, opts suiteOpts) *suite {
 	s.checkFatal(ioutil.WriteFile(rdfFile, []byte(opts.rdfs), 0644))
 	schemaFile := filepath.Join(rootDir, "schema.txt")
 	s.checkFatal(ioutil.WriteFile(schemaFile, []byte(opts.schema), 0644))
-	s.setup(schemaFile, rdfFile)
+	gqlSchemaFile := filepath.Join(rootDir, "gql_schema.txt")
+	s.checkFatal(ioutil.WriteFile(gqlSchemaFile, []byte(opts.gqlSchema), 0644))
+	s.setup(schemaFile, rdfFile, gqlSchemaFile)
 	return s
 }
 
@@ -97,26 +100,27 @@ func newSuite(t *testing.T, schema, rdfs string) *suite {
 	return newSuiteInternal(t, opts)
 }
 
-func newBulkOnlySuite(t *testing.T, schema, rdfs string) *suite {
+func newBulkOnlySuite(t *testing.T, schema, rdfs, gqlSchema string) *suite {
 	opts := suiteOpts{
 		schema:         schema,
+		gqlSchema:      gqlSchema,
 		rdfs:           rdfs,
 		skipLiveLoader: true,
 	}
 	return newSuiteInternal(t, opts)
 }
 
-func newSuiteFromFile(t *testing.T, schemaFile, rdfFile string) *suite {
+func newSuiteFromFile(t *testing.T, schemaFile, rdfFile, gqlSchemaFile string) *suite {
 	if testing.Short() {
 		t.Skip("Skipping system test with long runtime.")
 	}
 	s := &suite{t: t}
 
-	s.setup(schemaFile, rdfFile)
+	s.setup(schemaFile, rdfFile, gqlSchemaFile)
 	return s
 }
 
-func (s *suite) setup(schemaFile, rdfFile string) {
+func (s *suite) setup(schemaFile, rdfFile, gqlSchemaFile string) {
 	var (
 		bulkDir = filepath.Join(rootDir, "bulk")
 		liveDir = filepath.Join(rootDir, "live")
@@ -137,6 +141,7 @@ func (s *suite) setup(schemaFile, rdfFile string) {
 		bulkCmd := exec.Command(testutil.DgraphBinaryPath(), "bulk",
 			"-f", rdfFile,
 			"-s", schemaFile,
+			"-g", gqlSchemaFile,
 			"--http", "localhost:"+strconv.Itoa(freePort(0)),
 			"-j=1",
 			"--store_xids=true",
