@@ -19,6 +19,8 @@ package worker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -663,6 +665,9 @@ func (qs *queryState) handleUidPostings(
 	srcFn := args.srcFn
 	q := args.q
 
+	fmt.Println("SrcFn inside handleUIDPostings")
+	res2B, _ := json.Marshal(srcFn)
+	fmt.Printf("Src Fn: " + string(res2B) + "\n\n\n")
 	facetsTree, err := preprocessFilter(q.FacetsFilter)
 	if err != nil {
 		return err
@@ -701,7 +706,6 @@ func (qs *queryState) handleUidPostings(
 			}
 			var key []byte
 			switch srcFn.fnType {
-			//Check with pawan/ashish if this needs any changes
 			case notAFunction, compareScalarFn, hasFn, uidInFn:
 				if q.Reverse {
 					key = x.ReverseKey(q.Attr, q.UidList.Uids[i])
@@ -760,8 +764,10 @@ func (qs *queryState) handleUidPostings(
 				}
 			//Check with Pawan/Ashish what this function do? I suppose itreturns the relevant posting/uid list to append to uid matrix
 			case srcFn.fnType == uidInFn:
+				fmt.Println("src Fn inside handleUIDPostings")
+				fmt.Println("src Fn %+v\n\n", srcFn)
 				if i == 0 {
-					span.Annotate(nil, "UidInFn") //Check with Pawan/Ashish what does this do?
+					span.Annotate(nil, "UidInFn")
 				}
 				reqList := &pb.List{Uids: srcFn.uidsPresent}
 				topts := posting.ListOptions{
@@ -905,6 +911,9 @@ func (qs *queryState) helpProcessTask(ctx context.Context, q *pb.Query, gid uint
 	attr := q.Attr
 
 	srcFn, err := parseSrcFn(ctx, q)
+	//res2B, _ := json.Marshal(srcFn)
+	//fmt.Printf("Src Fn : " + string(res2B) + "\n\n\n")
+
 	if err != nil {
 		return nil, err
 	}
@@ -1637,6 +1646,7 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		fc.isStringFn = true
 	}
 
+	fmt.Printf("Parse function type: %v, name: %v\n\n", fnType, f)
 	switch fnType {
 	case notAFunction:
 		fc.n = len(q.UidList.Uids)
@@ -1821,6 +1831,8 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		if len(q.SrcFunc.Args) == 0 {
 			err := errors.Errorf("Function '%s' requires atleast 1 argument, but got %d (%v)",
 				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
+			return nil, err
+		}
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {

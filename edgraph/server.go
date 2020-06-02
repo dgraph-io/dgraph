@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -770,6 +771,8 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if bool(glog.V(3)) || worker.LogRequestEnabled() {
 		glog.Infof("Got a query: %+v", req)
 	}
+	fmt.Printf("Here!!\n")
+	fmt.Printf("Got a query: %+v\n\n", req)
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
@@ -831,6 +834,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	if rerr = parseRequest(qc); rerr != nil {
 		return
 	}
+	fmt.Println("Parsed request (qc): %v\n", qc)
 
 	if doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {

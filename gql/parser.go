@@ -928,6 +928,9 @@ func parseRecurseArgs(it *lex.ItemIterator, gq *GraphQuery) error {
 func getQuery(it *lex.ItemIterator) (gq *GraphQuery, rerr error) {
 	// First, get the root
 	gq, rerr = getRoot(it)
+	res2B, _ := json.Marshal(gq)
+	fmt.Printf("Root query: " + string(res2B) + "\n\n\n")
+	//fmt.Printf(" %+v\n\n", gq)
 	if rerr != nil {
 		return nil, rerr
 	}
@@ -1664,6 +1667,7 @@ L:
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
 		fmt.Println("Top level function name: ", name)
+		fmt.Printf("\n")
 		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
@@ -1734,38 +1738,9 @@ L:
 					function.IsCount = true
 				case uidFunc:
 					fmt.Println("Inside uid in nested loop")
-					if len(nestedFunc.NeedsVar) > 1 {
-						return nil, itemInFunc.Errorf("Multiple variables not allowed in a function")
-					}
-					if len(nestedFunc.NeedsVar) != 0 {
-						function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
-						function.NeedsVar[0].Typ = UidVar
-						function.Args = append(function.Args,
-							Arg{Value: nestedFunc.NeedsVar[0].Name, IsUIDVar: true})
-					}
-					function.UID = append(function.UID, nestedFunc.UID...)
-					// uid, err := strconv.ParseUint(val, 0, 64)
-					// switch e := err.(type) {
-					// case nil:
-					// 	// It could be uid function at root.
-					// 	if gq != nil {
-					// 		gq.UID = append(gq.UID, uid)
-					// 		// Or uid function in filter.
-					// 	} else {
-					// 		function.UID = append(function.UID, uid)
-					// 	}
-					// 	continue
-					// case *strconv.NumError:
-					// 	if e.Err == strconv.ErrRange {
-					// 		return nil, itemInFunc.Errorf("The uid value %q is too large.", val)
-					// 	}
-					// }
-					// // E.g. @filter(uid(a, b, c))
-					// function.NeedsVar = append(function.NeedsVar, VarContext{
-					// 	Name: val,
-					// 	Typ:  UidVar,
-					// })
-					//return nil, itemInFunc.Errorf("UIDFunc Incomplete")
+					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
+					function.NeedsVar[0].Typ = UidVar
+					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsUIDVar: true})
 				default:
 					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
 						"within another. Got: %s", nestedFunc.Name)
@@ -1946,9 +1921,9 @@ L:
 
 	res2B, _ := json.Marshal(function)
 	fmt.Printf("Function at the end : " + string(res2B) + "\n\n\n")
-	// if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
-	// 	return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
-	// }
+	if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
+		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
+	}
 
 	if function.Name == typFunc && len(function.Args) != 1 {
 		return nil, it.Errorf("type function only supports one argument. Got: %v", function.Args)

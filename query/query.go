@@ -18,6 +18,7 @@ package query
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -1680,8 +1681,16 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if err := sg.replaceVarInFunc(); err != nil {
 		return err
 	}
-	lists = append(lists, sg.DestUIDs)
-	sg.DestUIDs = algo.MergeSorted(lists)
+	//make changes here.
+	if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
+		val := sg.SrcFunc.Args[0].Value
+		num := mp[val].Uids.Uids[0]
+		sg.SrcFunc.Args[0].Value = strconv.FormatUint(num, 10)
+	} else {
+		lists = append(lists, sg.DestUIDs)
+		sg.DestUIDs = algo.MergeSorted(lists)
+	}
+
 	return nil
 }
 
@@ -1924,6 +1933,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 // ProcessGraph processes the SubGraph instance accumulating result for the query
 // from different instances. Note: taskQuery is nil for root node.
 func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
+	//fmt.Printf("Subgraph inside: %+v\n\n", sg)
 	var suffix string
 	if len(sg.Params.Alias) > 0 {
 		suffix += "." + sg.Params.Alias
@@ -2593,6 +2603,10 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
+		fmt.Println("Processing Queries")
+		fmt.Println("Query #:", i)
+		res2B, _ := json.Marshal(gq)
+		fmt.Printf("Query: " + string(res2B) + "\n\n")
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {
