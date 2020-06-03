@@ -282,11 +282,11 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// timers2 := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
 	// timer2 := timers2.NewOffsetTimer(&dgraphDuration1.OffsetDuration)
 	// timer2.Start()
-	// qryResp, err := mr.executor.Execute(ctx,
-	// 	&dgoapi.Request{
-	// 		Query:    dgraph.AsString(dgQuery),
-	// 		ReadOnly: true,
-	// 	})
+	qryResp, err := mr.executor.Execute(ctx,
+		&dgoapi.Request{
+			Query:    dgraph.AsString(dgQuery),
+			ReadOnly: true,
+		})
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 	// timer2.Stop()
