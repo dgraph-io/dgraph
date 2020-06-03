@@ -338,3 +338,8 @@ func (k *PublicKey) Hex() string {
 	h := hex.EncodeToString(enc)
 	return "0x" + h
 }
+
+// AsBytes returns the key as a [PublicKeyLength]byte
+func (k *PublicKey) AsBytes() [PublicKeyLength]byte {
+	return k.key.Encode()
+}

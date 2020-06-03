@@ -211,5 +211,9 @@ func (s *StorageState) GetBalance(key [32]byte) (uint64, error) {
 		return 0, err
 	}
 
+	if len(bal) != 8 {
+		return 0, nil
+	}
+
 	return binary.LittleEndian.Uint64(bal), nil
 }

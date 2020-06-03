@@ -143,8 +143,8 @@ func LoadKeystore(key string) (*Keystore, error) {
 			ks.Insert(kr.Dave)
 		case "eve":
 			ks.Insert(kr.Eve)
-		case "fred":
-			ks.Insert(kr.Fred)
+		case "ferdie":
+			ks.Insert(kr.Ferdie)
 		case "george":
 			ks.Insert(kr.George)
 		case "heather":

@@ -133,7 +133,7 @@ func NewTestGenesisAndRuntime(t *testing.T) string {
 		gen.Genesis.Raw[0] = make(map[string]string)
 	}
 	gen.Genesis.Raw[0]["0x3a636f6465"] = "0x" + hex
-	gen.Genesis.Raw[0]["0x89d892938a1ad12bbbd7e698505f791668241093caee86a94556a9f48da95856"] = "0x0000000000000001"
+	gen.Genesis.Raw[0]["0xcf722c0832b5231d35e29f319ff27389f5032bfc7bfc3ba5ed7839f2042fb99f"] = "0x0000000000000001"
 
 	genFile, err := ioutil.TempFile(dir, "genesis-")
 	require.Nil(t, err)

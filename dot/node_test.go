@@ -29,6 +29,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
+	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/trie"
@@ -309,11 +310,9 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	}
 
 	kr, _ := keystore.NewSr25519Keyring()
-	alice := kr.Alice.Public().Encode()
-	ab := [32]byte{}
-	copy(ab[:], alice)
+	alice := kr.Alice.Public().(*sr25519.PublicKey).AsBytes()
 
-	bal, err := stateSrv.Storage.GetBalance(ab)
+	bal, err := stateSrv.Storage.GetBalance(alice)
 	require.NoError(t, err)
 
 	genbal := "0x0000000000000001"
