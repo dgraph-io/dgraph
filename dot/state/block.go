@@ -208,6 +208,17 @@ func (bs *BlockState) GetHeader(hash common.Hash) (*types.Header, error) {
 	return result, err
 }
 
+// GetHeaderByNumber returns a block header given a number
+func (bs *BlockState) GetHeaderByNumber(num *big.Int) (*types.Header, error) {
+	bh, err := bs.db.Get(headerHashKey(num.Uint64()))
+	if err != nil {
+		return nil, fmt.Errorf("cannot get block %d: %s", num, err)
+	}
+
+	hash := common.NewHash(bh)
+	return bs.GetHeader(hash)
+}
+
 // GetBlockByHash returns a block for a given hash
 func (bs *BlockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 	header, err := bs.GetHeader(hash)
@@ -223,11 +234,11 @@ func (bs *BlockState) GetBlockByHash(hash common.Hash) (*types.Block, error) {
 }
 
 // GetBlockByNumber returns a block for a given blockNumber
-func (bs *BlockState) GetBlockByNumber(blockNumber *big.Int) (*types.Block, error) {
+func (bs *BlockState) GetBlockByNumber(num *big.Int) (*types.Block, error) {
 	// First retrieve the block hash in a byte array based on the block number from the database
-	byteHash, err := bs.db.Get(headerHashKey(blockNumber.Uint64()))
+	byteHash, err := bs.db.Get(headerHashKey(num.Uint64()))
 	if err != nil {
-		return nil, fmt.Errorf("cannot get block %d: %s", blockNumber, err)
+		return nil, fmt.Errorf("cannot get block %d: %s", num, err)
 	}
 
 	// Then find the block based on the hash

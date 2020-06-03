@@ -154,9 +154,9 @@ func AddBlocksToStateWithFixedBranches(t *testing.T, blockState *BlockState, dep
 			block := &types.Block{
 				Header: &types.Header{
 					ParentHash: previousHash,
-					Number:     big.NewInt(int64(i + rand)),
+					Number:     big.NewInt(int64(i)),
 					StateRoot:  trie.EmptyHash,
-					Digest:     [][]byte{{byte(i)}},
+					Digest:     [][]byte{{byte(i), byte(rand)}},
 				},
 				Body: &types.Body{},
 			}

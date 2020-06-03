@@ -46,3 +46,7 @@ var ErrDescendantNotFound = blocktree.ErrDescendantNotFound
 // ErrNoPreVotedBlock is returned when there is no pre-voted block for a round.
 // this can only happen in the case of > 1/3 byzantine nodes (ie > 1/3 nodes equivocate or don't submit valid votes)
 var ErrNoPreVotedBlock = errors.New("cannot get pre-voted block")
+
+// ErrNoGHOST is returned when there is no GHOST. the only case where this could happen is if there are no votes
+// at all, so it shouldn't ever happen.
+var ErrNoGHOST = errors.New("cannot determine grandpa-GHOST")

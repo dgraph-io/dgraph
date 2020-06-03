@@ -17,6 +17,8 @@
 package grandpa
 
 import (
+	"math/big"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 )
@@ -25,10 +27,12 @@ import (
 type BlockState interface {
 	HasHeader(hash common.Hash) (bool, error)
 	GetHeader(hash common.Hash) (*types.Header, error)
+	GetHeaderByNumber(num *big.Int) (*types.Header, error)
 	IsDescendantOf(parent, child common.Hash) (bool, error)
 	HighestCommonAncestor(a, b common.Hash) (common.Hash, error)
 	GetFinalizedHeader() (*types.Header, error)
 	SetFinalizedHash(hash common.Hash) error
 	BestBlockHeader() (*types.Header, error)
 	Leaves() []common.Hash
+	BlocktreeAsString() string
 }

@@ -21,11 +21,28 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 
 	"github.com/stretchr/testify/require"
 )
+
+func onSameChain(blockState BlockState, a, b common.Hash) bool {
+	descendant, err := blockState.IsDescendantOf(a, b)
+	if err != nil {
+		return false
+	}
+
+	if !descendant {
+		descendant, err = blockState.IsDescendantOf(b, a)
+		if err != nil {
+			return false
+		}
+	}
+
+	return descendant
+}
 
 func setupGrandpa(t *testing.T, kp *ed25519.Keypair) *Service {
 	st := newTestState(t)
@@ -86,14 +103,14 @@ func TestGrandpa_DifferentChains(t *testing.T) {
 
 	gss := make([]*Service, len(kr.Keys))
 	prevotes := make(map[ed25519.PublicKeyBytes]*Vote)
-	//precommits := make(map[ed25519.PublicKeyBytes]*Vote)
+	precommits := make(map[ed25519.PublicKeyBytes]*Vote)
 
 	for i, gs := range gss {
 		gs = setupGrandpa(t, kr.Keys[i])
 		gss[i] = gs
 
-		r := rand.Intn(2)
-		state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 15+r)
+		r := rand.Intn(3)
+		state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 4+r)
 		prevotes[gs.publicKeyBytes()], err = gs.determinePreVote()
 		require.NoError(t, err)
 	}
@@ -108,18 +125,20 @@ func TestGrandpa_DifferentChains(t *testing.T) {
 		}
 	}
 
-	// TODO: this currently fails with ErrNoPreVotedBlock since ~1/2 voters vote for block 15,
-	// and 1/2 vote for block 16. can be completed with #899
+	for _, gs := range gss {
+		precommits[gs.publicKeyBytes()], err = gs.determinePreCommit()
+		require.NoError(t, err)
+		err = gs.finalize()
+		require.NoError(t, err)
+	}
 
-	// for _, gs := range gss {
-	// 	precommits[gs.publicKeyBytes()], err = gs.determinePreCommit()
-	// 	require.NoError(t, err)
-	// 	err = gs.finalize()
-	// 	require.NoError(t, err)
-	// }
+	t.Log(gss[0].blockState.BlocktreeAsString())
+	finalized := gss[0].head
 
-	// finalized := gss[0].head.Hash()
-	// for _, gs := range gss {
-	// 	require.Equal(t, finalized, gs.head.Hash())
-	// }
+	for i, gs := range gss {
+		// TODO: this can be changed to equal once attemptToFinalizeRound is implemented (needs check for >=2/3 precommits)
+		headOk := onSameChain(gss[0].blockState, finalized.Hash(), gs.head.Hash())
+		finalizedOK := onSameChain(gs.blockState, finalized.Hash(), gs.head.Hash())
+		require.True(t, headOk || finalizedOK, "node %d did not match: %s", i, gs.blockState.BlocktreeAsString())
+	}
 }

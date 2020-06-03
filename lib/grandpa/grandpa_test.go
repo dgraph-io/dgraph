@@ -258,7 +258,7 @@ func TestGetPossibleSelectedAncestors_SameAncestor(t *testing.T) {
 	var blocks map[common.Hash]uint64
 
 	for _, curr := range leaves {
-		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote)
+		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote, gs.state.threshold())
 		require.NoError(t, err)
 	}
 
@@ -319,7 +319,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor(t *testing.T) {
 	var blocks map[common.Hash]uint64
 
 	for _, curr := range leaves {
-		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote)
+		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote, gs.state.threshold())
 		require.NoError(t, err)
 	}
 
@@ -390,7 +390,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor_MoreBranches(t *testing.T)
 	var blocks map[common.Hash]uint64
 
 	for _, curr := range leaves {
-		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote)
+		blocks, err = gs.getPossibleSelectedAncestors(votes, curr, prevoted, prevote, gs.state.threshold())
 		require.NoError(t, err)
 	}
 
@@ -445,7 +445,7 @@ func TestGetPossibleSelectedBlocks_OneBlock(t *testing.T) {
 		}
 	}
 
-	blocks, err := gs.getPossibleSelectedBlocks(prevote)
+	blocks, err := gs.getPossibleSelectedBlocks(prevote, gs.state.threshold())
 	require.NoError(t, err)
 	require.Equal(t, 1, len(blocks))
 	require.Equal(t, voteA.number, blocks[voteA.hash])
@@ -493,7 +493,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_SameAncestor(t *testing.T) {
 		}
 	}
 
-	blocks, err := gs.getPossibleSelectedBlocks(prevote)
+	blocks, err := gs.getPossibleSelectedBlocks(prevote, gs.state.threshold())
 	require.NoError(t, err)
 
 	expected, err := common.HexToHash("0x32ed981734053dc565a1e224137d751f24917a1cb2aeea56fd44a06629550a23")
@@ -547,7 +547,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_VaryingAncestor(t *testing.T) {
 		}
 	}
 
-	blocks, err := gs.getPossibleSelectedBlocks(prevote)
+	blocks, err := gs.getPossibleSelectedBlocks(prevote, gs.state.threshold())
 	require.NoError(t, err)
 
 	expectedAt6, err := common.HexToHash("0x32ed981734053dc565a1e224137d751f24917a1cb2aeea56fd44a06629550a23")
@@ -604,7 +604,7 @@ func TestGetPossibleSelectedBlocks_OneThirdEquivocating(t *testing.T) {
 		}
 	}
 
-	blocks, err := gs.getPossibleSelectedBlocks(prevote)
+	blocks, err := gs.getPossibleSelectedBlocks(prevote, gs.state.threshold())
 	require.NoError(t, err)
 	require.Equal(t, 2, len(blocks))
 }
@@ -658,7 +658,7 @@ func TestGetPossibleSelectedBlocks_MoreThanOneThirdEquivocating(t *testing.T) {
 		}
 	}
 
-	blocks, err := gs.getPossibleSelectedBlocks(prevote)
+	blocks, err := gs.getPossibleSelectedBlocks(prevote, gs.state.threshold())
 	require.NoError(t, err)
 	require.Equal(t, 2, len(blocks))
 }
@@ -1269,4 +1269,109 @@ func TestIsFinalizable_False(t *testing.T) {
 	finalizable, err := gs.isFinalizable()
 	require.NoError(t, err)
 	require.False(t, finalizable)
+}
+
+func TestGetGrandpaGHOST_CommonAncestor(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	var leaves []common.Hash
+	for {
+		state.AddBlocksToState(t, st.Block, 8)
+		leaves = gs.blockState.Leaves()
+		if len(leaves) > 1 {
+			break
+		}
+	}
+
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
+
+	for i, k := range kr.Keys {
+		voter := k.Public().(*ed25519.PublicKey).AsBytes()
+
+		if i < 4 {
+			gs.prevotes[voter] = voteA
+		} else if i < 5 {
+			gs.prevotes[voter] = voteB
+		}
+	}
+
+	pred, err := gs.blockState.HighestCommonAncestor(voteA.hash, voteB.hash)
+	require.NoError(t, err)
+
+	block, err := gs.getGrandpaGHOST()
+	require.NoError(t, err)
+	require.Equal(t, pred, block.hash)
+}
+
+func TestGetGrandpaGHOST_MultipleCandidates(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	// this creates a tree with branches starting at depth 3 and another branch starting at depth 7
+	branches := make(map[int]int)
+	branches[3] = 1
+	branches[7] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+
+	leaves := gs.blockState.Leaves()
+	require.Equal(t, 3, len(leaves))
+
+	// 1/3 voters each vote for a block on a different chain
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
+	voteC, err := NewVoteFromHash(leaves[2], st.Block)
+	require.NoError(t, err)
+
+	for i, k := range kr.Keys {
+		voter := k.Public().(*ed25519.PublicKey).AsBytes()
+
+		if i < 1 {
+			gs.prevotes[voter] = voteA
+		} else if i < 2 {
+			gs.prevotes[voter] = voteB
+		} else if i < 3 {
+			gs.prevotes[voter] = voteC
+		}
+	}
+
+	t.Log(st.Block.BlocktreeAsString())
+
+	// expected block is that with the most votes ie. block 3
+	expected, err := common.HexToHash("0x00608d0fab61edd13d6cded6db4014e001269973fe9e2d9d9c21a769ad826e7d")
+	require.NoError(t, err)
+
+	block, err := gs.getGrandpaGHOST()
+	require.NoError(t, err)
+	require.Equal(t, expected, block.hash)
+	require.Equal(t, uint64(3), block.number)
+
+	pv, err := gs.getPreVotedBlock()
+	require.NoError(t, err)
+	require.Equal(t, block, pv)
 }

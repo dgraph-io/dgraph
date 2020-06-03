@@ -191,7 +191,7 @@ func (s *Service) getBestFinalCandidate() (*Vote, error) {
 	}
 
 	// get all blocks with >=2/3 pre-commits
-	blocks, err := s.getPossibleSelectedBlocks(precommit)
+	blocks, err := s.getPossibleSelectedBlocks(precommit, s.state.threshold())
 	if err != nil {
 		return nil, err
 	}
@@ -286,14 +286,14 @@ func (s *Service) isCompletable() (bool, error) {
 // the pre-voted block is the block with the highest block number in the set of all the blocks with
 // total votes >= 2/3 the total number of voters, where the total votes is determined by getTotalVotesForBlock.
 func (s *Service) getPreVotedBlock() (Vote, error) {
-	blocks, err := s.getPossibleSelectedBlocks(prevote)
+	blocks, err := s.getPossibleSelectedBlocks(prevote, s.state.threshold())
 	if err != nil {
 		return Vote{}, err
 	}
 
 	// TODO: if there are no blocks with >=2/3 voters, then just pick the highest voted block
 	if len(blocks) == 0 {
-		return Vote{}, ErrNoPreVotedBlock
+		return s.getGrandpaGHOST()
 	}
 
 	// if there is one block, return it
@@ -322,41 +322,81 @@ func (s *Service) getPreVotedBlock() (Vote, error) {
 	return highest, nil
 }
 
+// getGrandpaGHOST returns the block with the most votes. if there are multiple blocks with the same number
+// of votes, it picks the one with the highest number.
+func (s *Service) getGrandpaGHOST() (Vote, error) {
+	threshold := s.state.threshold()
+
+	var blocks map[common.Hash]uint64
+	var err error
+
+	for {
+		blocks, err = s.getPossibleSelectedBlocks(prevote, threshold)
+		if err != nil {
+			return Vote{}, err
+		}
+
+		threshold--
+		if len(blocks) > 0 || threshold == 0 {
+			break
+		}
+	}
+
+	if len(blocks) == 0 {
+		return Vote{}, ErrNoGHOST
+	}
+
+	// if there are multiple, find the one with the highest number and return it
+	highest := Vote{
+		number: uint64(0),
+	}
+	for h, n := range blocks {
+		if n > highest.number {
+			highest = Vote{
+				hash:   h,
+				number: n,
+			}
+		}
+	}
+
+	return highest, nil
+}
+
 // getPossibleSelectedBlocks returns blocks with total votes >=2/3 |voters| in a map of block hash -> block number.
 // if there are no blocks that have >=2/3 direct votes, this function will find ancestors of those blocks that do have >=2/3 votes.
 // note that by voting for a block, all of its ancestor blocks are automatically voted for.
 // thus, if there are no blocks with >=2/3 total votes, but the sum of votes for blocks A and B is >=2/3, then this function returns
 // the first common ancestor of A and B.
 // in general, this function will return the highest block on each chain with >=2/3 votes.
-func (s *Service) getPossibleSelectedBlocks(stage subround) (map[common.Hash]uint64, error) {
+func (s *Service) getPossibleSelectedBlocks(stage subround, threshold uint64) (map[common.Hash]uint64, error) {
 	// get blocks that were directly voted for
 	votes := s.getDirectVotes(stage)
 	blocks := make(map[common.Hash]uint64)
 
-	// check if any of them have >=2/3 votes
+	// check if any of them have >=threshold votes
 	for v := range votes {
 		total, err := s.getTotalVotesForBlock(v.hash, stage)
 		if err != nil {
 			return nil, err
 		}
 
-		if total >= s.state.threshold() {
+		if total >= threshold {
 			blocks[v.hash] = v.number
 		}
 	}
 
-	// since we want to select the block with the highest number that has >=2/3 votes,
+	// since we want to select the block with the highest number that has >=threshold votes,
 	// we can return here since their ancestors won't have a higher number.
 	if len(blocks) != 0 {
 		return blocks, nil
 	}
 
-	// no block has >=2/3 direct votes, check for votes for ancestors recursively
+	// no block has >=threshold direct votes, check for votes for ancestors recursively
 	var err error
 	va := s.getVotes(stage)
 
 	for v := range votes {
-		blocks, err = s.getPossibleSelectedAncestors(va, v.hash, blocks, stage)
+		blocks, err = s.getPossibleSelectedAncestors(va, v.hash, blocks, stage, threshold)
 		if err != nil {
 			return nil, err
 		}
@@ -367,13 +407,13 @@ func (s *Service) getPossibleSelectedBlocks(stage subround) (map[common.Hash]uin
 
 // getPossibleSelectedAncestors recursively searches for ancestors with >=2/3 votes
 // it returns a map of block hash -> number, such that the blocks in the map have >=2/3 votes
-func (s *Service) getPossibleSelectedAncestors(votes []Vote, curr common.Hash, prevoted map[common.Hash]uint64, stage subround) (map[common.Hash]uint64, error) {
+func (s *Service) getPossibleSelectedAncestors(votes []Vote, curr common.Hash, selected map[common.Hash]uint64, stage subround, threshold uint64) (map[common.Hash]uint64, error) {
 	for _, v := range votes {
 		if v.hash == curr {
 			continue
 		}
 
-		// find common ancestor, check if votes for it is >=2/3 or not
+		// find common ancestor, check if votes for it is >=threshold or not
 		pred, err := s.blockState.HighestCommonAncestor(v.hash, curr)
 		if err == blocktree.ErrNodeNotFound {
 			continue
@@ -382,7 +422,7 @@ func (s *Service) getPossibleSelectedAncestors(votes []Vote, curr common.Hash, p
 		}
 
 		if pred == curr {
-			return prevoted, nil
+			return selected, nil
 		}
 
 		total, err := s.getTotalVotesForBlock(pred, stage)
@@ -390,23 +430,23 @@ func (s *Service) getPossibleSelectedAncestors(votes []Vote, curr common.Hash, p
 			return nil, err
 		}
 
-		if total >= s.state.threshold() {
+		if total >= threshold {
 			var h *types.Header
 			h, err = s.blockState.GetHeader(pred)
 			if err != nil {
 				return nil, err
 			}
 
-			prevoted[pred] = uint64(h.Number.Int64())
+			selected[pred] = uint64(h.Number.Int64())
 		} else {
-			prevoted, err = s.getPossibleSelectedAncestors(votes, pred, prevoted, stage)
+			selected, err = s.getPossibleSelectedAncestors(votes, pred, selected, stage, threshold)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
 
-	return prevoted, nil
+	return selected, nil
 }
 
 // getTotalVotesForBlock returns the total number of observed votes for a block B in a subround, which is equal
