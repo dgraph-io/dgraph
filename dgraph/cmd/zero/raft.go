@@ -177,11 +177,12 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 	if m != nil && (m.Id != member.Id || m.GroupId != member.GroupId) {
 		return errors.Errorf("Found another member %d with same address: %v", m.Id, m.Addr)
 	}
+
+	// Handle zero membership updates.
 	if member.GroupId == 0 {
 		state.Zeros[member.Id] = member
 		if member.Leader {
-			// Unset leader flag for other nodes, there can be only one
-			// leader at a time.
+			// Unset leader flag for other nodes, there can be only one leader at a time.
 			for _, m := range state.Zeros {
 				if m.Id != member.Id {
 					m.Leader = false
@@ -190,12 +191,15 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
+
+	// Handle alpha membership updates.
 	group := state.Groups[member.GroupId]
 	if group == nil {
 		group = newGroup()
 		state.Groups[member.GroupId] = group
 	}
 	m, has := group.Members[member.Id]
+
 	if member.AmDead {
 		if has {
 			delete(group.Members, member.Id)
@@ -203,9 +207,19 @@ func (n *node) handleMemberProposal(member *pb.Member) error {
 		}
 		return nil
 	}
+
 	if !has && len(group.Members) >= n.server.NumReplicas {
 		// We shouldn't allow more members than the number of replicas.
-		return errors.Errorf("Group reached replication level. Can't add another member: %+v", member)
+		return errors.Errorf("Group reached replication level. Can't add another member: %+v",
+			member)
+	}
+
+	if has && m.Addr != member.Addr {
+		// Two different alphas have tried joining the cluster with the same ID.
+		// Reject this update. The alpha is responsible of retrying until succeeds
+		// in joining the cluster.
+		return errors.Errorf("duplicate RAFT ID %d already taken by member at address %s",
+			m.Id, m.Addr)
 	}
 
 	// Create a connection to this server.
