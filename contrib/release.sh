@@ -10,9 +10,30 @@
 RED='\033[91;1m'
 RESET='\033[0m'
 
+print_error() {
+    printf "$RED$1$RESET\n"
+}
+
+exit_error() {
+    print_error "$@"
+    exit 1
+}
+check_cmd_exists() {
+    if ! command -v "$1" > /dev/null; then
+        exit_error "$1: command not found"
+    fi
+}
+
+check_cmd_exists strip
+check_cmd_exists gcc
+check_cmd_exists go
+check_cmd_exists docker
+check_cmd_exists npm
+check_cmd_exists protoc
+
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
-GOPATH="/tmp/go"
+export GOPATH="/tmp/go"
 if [ -d $GOPATH ]; then
    chmod -R 755 $GOPATH
 fi
@@ -58,13 +79,6 @@ branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 
-echo "Using Go version"
-go version
-if [[ ! "$(go version)" =~ $GOVERSION ]]; then
-   echo -e "${RED}Go version is NOT expected. Should be $GOVERSION.${RESET}"
-   exit 1
-fi
-
 go get -u github.com/jteeuwen/go-bindata/...
 go get -d google.golang.org/grpc
 go get -u github.com/prometheus/client_golang/prometheus
@@ -82,7 +96,7 @@ popd
 basedir=$GOPATH/src/github.com/dgraph-io
 # Clone Dgraph repo.
 pushd $basedir
-  git clone https://github.com/dgraph-io/dgraph.git
+  git clone /home/dmai/go/src/github.com/dgraph-io/dgraph
 popd
 
 pushd $basedir/dgraph
@@ -96,13 +110,15 @@ pushd $basedir/dgraph
 popd
 
 # Regenerate protos. Should not be different from what's checked in.
-pushd $basedir/dgraph/protos
-  make regenerate
-  if [[ "$(git status --porcelain)" ]]; then
-      echo >&2 "Generated protos different in release."
-      exit 1
-  fi
-popd
+# pushd $basedir/dgraph/protos
+#   export GO111MODULE=on
+#   make --debug=verbose regenerate
+#   if [[ "$(git status --porcelain)" ]]; then
+#       echo >&2 "Generated protos different in release."
+#       exit 1
+#   fi
+#   export GO111MODULE=off
+# popd
 
 # Clone ratel repo.
 pushd $basedir
