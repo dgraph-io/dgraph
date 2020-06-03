@@ -6,7 +6,7 @@ permalink: /get-started/
 
 ## Prerequisites
 
-install go version `1.13.7`
+install go version `>=1.13`
 
 ## Installation
 
@@ -15,9 +15,7 @@ get the [ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) repository:
 go get -u github.com/ChainSafe/gossamer
 ```
 
-## Build Command
-
-build gossamer node:
+build gossamer command:
 ```
 make gossamer
 ```
@@ -38,22 +36,34 @@ start default node:
 
 initialize gossamer node:
 ```
-./bin/gossamer --node gssmr --key alice init
+./bin/gossamer --chain gssmr --key alice init
 ```
 
 start gossamer node:
 ```
-./bin/gossamer --node gssmr --key alice
+./bin/gossamer --chain gssmr --key alice
 ```
 
-## Run Kusama Node
+## Run Kusama Node (_in development_)
 
 initialize kusama node:
 ```
-./bin/gossamer --node ksmcc --key alice init
+./bin/gossamer --chain ksmcc --key alice init
 ```
 
 start kusama node:
 ```
-./bin/gossamer --node ksmcc --key alice
+./bin/gossamer --chain ksmcc --key alice
+```
+
+## Run Polkadot Node (_in development_)
+
+initialize polkadot node:
+```
+./bin/gossamer --chain dotcc --key alice init
+```
+
+start polkadot node:
+```
+./bin/gossamer --chain dotcc --key alice
 ```

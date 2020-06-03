@@ -73,7 +73,7 @@ jobs:
       provider: pages
       cleanup: false
       token: $GITHUB_TOKEN # set in settings on travis as a secure variable
-      local_dir: docs
+      local_dir: docs/_site
       target_branch: gh-pages
       on:
         branch: development # deploy on merge into development

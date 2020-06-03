@@ -250,6 +250,7 @@ PLATFORMS
 
 DEPENDENCIES
   github-pages
+  jekyll-relative-links
   minima!
 
 BUNDLED WITH

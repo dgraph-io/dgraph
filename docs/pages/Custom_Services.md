@@ -4,4 +4,6 @@ title: Custom Services
 permalink: /custom-services/
 ---
 
-_work in progress_
+- _TODO: update "Custom Services" document [#917](https://github.com/ChainSafe/gossamer/issues/917)_
+
+---

@@ -5,25 +5,49 @@
 @import "minima/initialize.scss";
 
 body {
-    font-family: "ubuntu";
-    line-height: 1.75;
+    color: #BBB !important;
+    font-family: "ubuntu", sans-serif;
+    line-height: 1.75 !important;
 }
 
 header, footer {
     border: 0 !important;
-    padding: 2.5% 0 !important;
-    margin: 0 !important;
+    padding: 2% 0 !important;
 }
 
-h2 {
+h1, h2, h3, h4, h5 {
+    color: #CCC;
+    font-weight: 500;
     padding-top: 2%;
+}
+
+h1.title {
+    font-size: 110%;
+}
+
+b, strong {
+    color: #CCC;
 }
 
 a {
     color: #e6087b !important;
 }
 
-ul, li {
-    padding: 2px 0;
+a:hover {
+    color: #EEE !important;
+    text-decoration: none;
+    transition: 0.1s;
 }
 
+ul, li {
+    padding: 0.5% 0;
+}
+
+code {
+    padding: 4px;
+}
+
+pre {
+    font-size: 17px;
+    padding: 10px 16px;
+}

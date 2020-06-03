@@ -4,4 +4,4 @@ title: Appendix
 permalink: /appendix/
 ---
 
-- [SCALE Examples](/scale-examples/)
+- [SCALE Examples](../scale-examples/)

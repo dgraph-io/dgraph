@@ -26,6 +26,9 @@ description: > # this means to ignore newlines until "show_excerpts:"
   The Official Documentation for Gossamer | A Go Implementation of the Polkadot Host
 show_excerpts: false # set to true to show excerpts on the homepage
 
+baseurl: /gossamer/
+relative_url: /gossamer/
+
 # Minima date format
 # refer to https://shopify.github.io/liquid/filters/date/ if you want to customize this
 minima:
@@ -65,20 +68,20 @@ minima:
     # - username: jekyll2
     #   instance: example.com
 
-# If you want to link only specific pages in your header, uncomment
+# If you want to link only specific pages in your menus, uncomment
 # this and add the path to the pages in order as they should show up
 header_pages:
-  - header_pages/Run_Nodes.md
-  - header_pages/Build_Nodes.md
-  - header_pages/Implementation.md
-  - header_pages/Resources.md
-#  - header_pages/Appendix.md
+  - menus/Run_Nodes.md
+  - menus/Build_Nodes.md
+  - menus/Implementation.md
+  - menus/Resources.md
+#  - menus/Appendix.md
 
 # Build settings
 theme: minima
 
 plugins:
-  - jekyll-feed
+  - jekyll-relative-links
   - jekyll-seo-tag
 
 # Exclude from processing.

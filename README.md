@@ -37,7 +37,7 @@ For more information about Gossamer, the Polkadot ecosystem, and how to use Goss
 
 ### Prerequisites
 
-install go version `1.13.7`
+install go version `>=1.13`
 
 ### Installation
 
@@ -46,9 +46,7 @@ get the [ChainSafe/gossamer](https://github.com/ChainSafe/gossamer) repository:
 go get -u github.com/ChainSafe/gossamer
 ```
 
-### Build Command
-
-build gossamer node:
+build gossamer command:
 ```
 make gossamer
 ```
@@ -77,7 +75,7 @@ start gossamer node:
 ./bin/gossamer --chain gssmr --key alice
 ```
 
-### Run Kusama Node
+### Run Kusama Node (_in development_)
 
 initialize kusama node:
 ```
@@ -89,11 +87,16 @@ start kusama node:
 ./bin/gossamer --chain ksmcc --key alice
 ```
 
-### Run Tests
+### Run Polkadot Node (_in development_)
 
-run all package tests:
+initialize polkadot node:
 ```
-go test ./... -short
+./bin/gossamer --chain dotcc --key alice init
+```
+
+start polkadot node:
+```
+./bin/gossamer --chain dotcc --key alice
 ```
 
 ## Contribute
