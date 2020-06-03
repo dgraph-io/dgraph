@@ -1641,6 +1641,9 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
+		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
+			fmt.Println("This requires change")
+		}
 		l, ok := mp[v.Name]
 		if !ok {
 			continue
