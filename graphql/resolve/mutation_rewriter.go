@@ -26,6 +26,7 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -94,6 +95,30 @@ func NewVariableGenerator() *VariableGenerator {
 		counter:       0,
 		xidVarNameMap: make(map[string]string),
 	}
+}
+
+func (mf *mutationFragment) print() {
+	fmt.Println("------------")
+	fmt.Println(dgraph.AsString(&gql.GraphQuery{Children: mf.queries}))
+	fmt.Println("Condition: ", mf.conditions)
+	byt, _ := json.MarshalIndent(mf.fragment, "", "    ")
+	fmt.Println("Frag:", string(byt))
+	byt, _ = json.MarshalIndent(mf.deletes, "", "    ")
+	fmt.Println("Dels:", string(byt))
+	fmt.Println("------------")
+}
+
+func (mr *mutationRes) print() {
+	fmt.Println("======first pass======")
+	for _, i := range mr.firstPass {
+		i.print()
+	}
+	fmt.Println("======second pass======")
+	for _, i := range mr.secondPass {
+		i.print()
+	}
+	fmt.Println("======end pass======")
+
 }
 
 // Next gets the Next variable name for the given type and xid.
@@ -235,7 +260,7 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 	varGen := NewVariableGenerator()
 	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
 	xidMd := newXidMetadata()
-	obj := rewriteObject(mutatedType, nil, "", varGen, true, val, xidMd)
+	obj := rewriteObject(mutatedType, nil, "", varGen, true, val, 0, xidMd)
 	mrw.frags = [][]*mutationFragment{obj.get()}
 	mutations, err := mutationsFromFragments(
 		mrw.frags[0],
@@ -299,7 +324,8 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) ([]*UpsertMut
 
 	for _, i := range val {
 		obj := i.(map[string]interface{})
-		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, xidMd)
+		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, 0, xidMd)
+		frag.print()
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
@@ -481,14 +507,14 @@ func (urw *UpdateRewriter) Rewrite(
 
 	if setArg != nil {
 		setFrag := rewriteObject(mutatedType, nil, srcUID, varGen, true,
-			setArg.(map[string]interface{}), xidMd)
+			setArg.(map[string]interface{}), 0, xidMd)
 		setFragF = setFrag.firstPass
 		setFragS = setFrag.secondPass
 	}
 
 	if delArg != nil {
 		delFrag := rewriteObject(mutatedType, nil, srcUID, varGen, false,
-			delArg.(map[string]interface{}), xidMd)
+			delArg.(map[string]interface{}), 0, xidMd)
 		delFragF = delFrag.firstPass
 		delFragS = delFrag.secondPass
 	}
@@ -801,6 +827,7 @@ func rewriteObject(
 	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	obj map[string]interface{},
+	deepXID int,
 	xidMetadata *xidMetadata) *mutationRes {
 
 	atTopLevel := srcField == nil
@@ -864,6 +891,8 @@ func rewriteObject(
 				xidMetadata.seenAtTopLevel[variable] = atTopLevel
 			}
 		}
+
+		deepXID += 1
 	}
 
 	if !atTopLevel { // top level is never a reference - it's adding/updating
@@ -918,7 +947,7 @@ func rewriteObject(
 		newObj["dgraph.type"] = dgraphTypes
 		myUID = fmt.Sprintf("_:%s", variable)
 
-		if xid == nil {
+		if xid == nil || deepXID > 1 {
 			addInverseLink(newObj, srcField, srcUID)
 		}
 	} else {
@@ -949,7 +978,7 @@ func rewriteObject(
 		results = &mutationRes{
 			firstPass: []*mutationFragment{frag},
 		}
-		if xidFrag != nil {
+		if xidFrag != nil && deepXID <= 2 {
 			frag.queries = []*gql.GraphQuery{
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
@@ -958,7 +987,7 @@ func rewriteObject(
 
 	var additionalFrag []*mutationFragment
 
-	if xidFrag != nil {
+	if xidFrag != nil && deepXID <= 2 {
 		results.secondPass = append(results.secondPass, xidFrag)
 	}
 
@@ -984,9 +1013,8 @@ func rewriteObject(
 				//          like here ^^
 				frags =
 					rewriteObject(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes,
-						val, xidMetadata)
-
-				strategy = "merge1"
+						val, deepXID, xidMetadata)
+				strategy = "merge"
 
 			case []interface{}:
 				// This field is either:
@@ -1002,8 +1030,8 @@ func rewriteObject(
 				//            like here ^^
 				frags =
 					rewriteList(fieldDef.Type(), fieldDef, myUID, varGen, withAdditionalDeletes, val,
-						xidMetadata)
-				strategy = "merge2"
+						deepXID, xidMetadata)
+				strategy = "merge"
 			default:
 				// This field is either:
 				// 1) a scalar value: e.g.
@@ -1029,11 +1057,39 @@ func rewriteObject(
 		}
 	}
 
+	//fmt.Println("")
+	//fmt.Println("")
+	//fmt.Println("")
+
+	//fmt.Println(obj)
+	//fmt.Println("=========PRE=========")
+	//results.print()
+
+	conditions := []string{}
+
+	for _, i := range results.firstPass {
+		conditions = append(conditions, i.conditions...)
+	}
+
+	for _, i := range additionalFrag {
+		i.conditions = append(i.conditions, conditions...)
+	}
+
 	results.firstPass = append(results.firstPass, additionalFrag...)
+	if xidFrag != nil && deepXID > 2 {
+		results.firstPass = append(results.firstPass, xidFrag)
+	}
 
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
 		results.firstPass = []*mutationFragment{}
 	}
+
+	//fmt.Println("=========POST=========")
+	//results.print()
+
+	//fmt.Println("")
+	//fmt.Println("")
+	//fmt.Println("")
 
 	return results
 }
@@ -1368,6 +1424,7 @@ func rewriteList(
 	varGen *VariableGenerator,
 	withAdditionalDeletes bool,
 	objects []interface{},
+	deepXID int,
 	xidMetadata *xidMetadata) *mutationRes {
 
 	result := &mutationRes{}
@@ -1377,7 +1434,7 @@ func rewriteList(
 	for _, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
-			frag := rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, xidMetadata)
+			frag := rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, deepXID, xidMetadata)
 			result.firstPass = appendFragments(result.firstPass, frag.firstPass)
 			result.secondPass = squashFragments(squashIntoList, result.secondPass, frag.secondPass)
 		default:

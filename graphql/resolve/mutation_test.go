@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strings"
 	"testing"
@@ -118,11 +119,14 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
 		require.Len(t, generated, len(test))
 		for i, expected := range test {
+			fmt.Println(i)
 			require.Equal(t, expected.Cond, generated[i].Cond)
 			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
+				fmt.Println(string(generated[i].SetJson))
 				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
 			}
 			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+				fmt.Println(string(generated[i].DeleteJson))
 				require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
 			}
 		}

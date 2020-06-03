@@ -1629,8 +1629,8 @@
       }
     }
   gqlvariables: |
-    { 
-      "inp": { 
+    {
+      "inp": {
         "name": "A Country",
         "states": [ { "code": "abc", "name": "Alphabet" } ]
       }
@@ -1665,7 +1665,7 @@
     }
   dgmutationssec:
     - setjson: |
-        { 
+        {
           "uid" : "_:Country1",
           "dgraph.type": ["Country"],
           "Country.name": "A Country",
@@ -1687,8 +1687,8 @@
 
 - name: "Deep XID Add"
   gqlmutation: |
-    mutation addAuthor($auth: AddLabInput!) {
-      addLab(input: [$auth]) {
+    mutation addLab($lab: AddLabInput!) {
+      addLab(input: [$lab]) {
         lab {
           name
         }
@@ -1696,7 +1696,7 @@
     }
   gqlvariables: |
     {
-      "auth": {
+      "lab": {
         "name": "Lab1",
         "computers": [{
                 "name": "computer1",
@@ -1719,45 +1719,45 @@
 
     - setjson: |
         {
-            "ComputerOwner.name": "owner1",
-            "dgraph.type": [
-                "ComputerOwner"
-            ],
-            "uid": "_:ComputerOwner6"
+                "ComputerOwner.computers":{"uid":"_:Computer4"},
+                "ComputerOwner.name":"owner1",
+                "dgraph.type":["ComputerOwner"],
+                "uid":"_:ComputerOwner6"
         }
-      cond: "@if(eq(len(ComputerOwner6), 0))"
+      cond: "@if(eq(len(ComputerOwner6), 0) AND eq(len(Computer4), 0))"
+
+    - setjson: |
+        {
+            "ComputerOwner.computers": {
+                "uid": "_:Computer4"
+            },
+            "uid": "uid(ComputerOwner6)"
+        }
+      deletejson: |-
+        [{
+            "Computer.owners": [
+                {
+                    "uid": "uid(ComputerOwner6)"
+                }
+            ],
+            "uid": "uid(Computer7)"
+        }]
+      cond: "@if(eq(len(ComputerOwner6), 1) AND eq(len(Computer4), 0))"
 
   dgmutationssec:
     - setjson: |-
         {
             "Lab.computers": [
                 {
-                    "Computer.owners": [
-                        {
-                            "ComputerOwner.computers": {
-                                "uid": "_:Computer4"
-                            },
-                            "uid": "uid(ComputerOwner6)"
-                        }
-                    ],
+                    "Computer.owners": [],
                     "uid": "uid(Computer4)"
                 }
             ],
             "Lab.name": "Lab1",
-            "dgraph.type": [
-                "Lab"
-            ],
+            "dgraph.type": ["Lab"],
             "uid": "_:Lab2"
         }
-      cond: "@if(eq(len(Lab2), 0) AND eq(len(Computer4), 1) AND eq(len(ComputerOwner6), 1))"
-      deletejson: |-
-        [{
-                "Computer.owners":[{
-                        "uid":"uid(ComputerOwner6)"
-                }],
-                "uid":"uid(Computer7)"
-        }]
-
+      cond: "@if(eq(len(Lab2), 0) AND eq(len(Computer4), 1))"
 
   dgquerysec: |-
     query {
@@ -1766,12 +1766,6 @@
       }
       Computer4 as Computer4(func: eq(Computer.name, "computer1")) @filter(type(Computer)) {
         uid
-      }
-      ComputerOwner6 as ComputerOwner6(func: eq(ComputerOwner.name, "owner1")) @filter(type(ComputerOwner)) {
-        uid
-      }
-      var(func: uid(ComputerOwner6)) {
-        Computer7 as ComputerOwner.computers
       }
     }
 
@@ -1782,6 +1776,9 @@
       }
       ComputerOwner6 as ComputerOwner6(func: eq(ComputerOwner.name, "owner1")) @filter(type(ComputerOwner)) {
         uid
+      }
+      var(func: uid(ComputerOwner6)) {
+        Computer7 as ComputerOwner.computers
       }
     }
 
