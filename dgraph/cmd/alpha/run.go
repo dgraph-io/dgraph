@@ -570,20 +570,6 @@ func run() {
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
 	}
 
-	var kr enc.KeyReader
-	if kr, err = enc.NewKeyReader(Alpha.Conf); err != nil {
-		glog.Errorf("error: %v", err)
-		return
-	}
-	// kR can be nil for the no-encryption scenario.
-	var key x.SensitiveByteSlice
-	if kr != nil {
-		if key, err = kr.ReadKey(); err != nil {
-			glog.Errorf("error: %v", err)
-			return
-		}
-	}
-
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
 	if secretFile != "" {
 		hmacSecret, err := ioutil.ReadFile(secretFile)
@@ -637,7 +623,10 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
-		EncryptionKey:       key,
+	}
+	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
+		glog.Infof("unable to read key %v", err)
+		return
 	}
 
 	setupCustomTokenizers()
