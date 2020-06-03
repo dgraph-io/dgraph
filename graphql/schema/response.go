@@ -77,7 +77,7 @@ type Response struct {
 type Trace struct {
 	// (comments from Apollo Tracing spec)
 
-	Version int64 `json:"version"`
+	Version string `json:"version"`
 
 	// Timestamps in RFC 3339 format.
 	StartTime time.Time `json:"startTime"`

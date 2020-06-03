@@ -414,11 +414,24 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 			mutationTouched: 5,
 		})
 
-	expectedExtensions := &schema.Extensions{TouchedUids: 2}
-
 	require.NotNil(t, resp)
 	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
+	require.NotNil(t, resp.Extensions)
+	require.Equal(t, uint64(2), resp.Extensions.TouchedUids)
+	require.NotNil(t, resp.Extensions.Tracing)
+	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
+	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
+	require.True(t, resp.Extensions.Tracing.Duration > 0)
+	require.Len(t, resp.Extensions.Tracing.Execution, 1)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].ParentType, "Query")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].FieldName, "getAuthor")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].ReturnType, "Author")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[0].StartOffset > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+
 }
 
 func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
@@ -442,11 +455,42 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 			mutationTouched: 5,
 		})
 
-	expectedExtensions := &schema.Extensions{TouchedUids: 6}
-
 	require.NotNil(t, resp)
 	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
+	require.NotNil(t, resp.Extensions)
+	require.Equal(t, uint64(6), resp.Extensions.TouchedUids)
+	require.NotNil(t, resp.Extensions.Tracing)
+	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
+	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
+	require.True(t, resp.Extensions.Tracing.Duration > 0)
+	require.Len(t, resp.Extensions.Tracing.Execution, 3)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].ParentType, "Query")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].FieldName, "a")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].ReturnType, "Author")
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[0].StartOffset > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].ParentType, "Query")
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].FieldName, "b")
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].ReturnType, "Author")
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[1].StartOffset > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[1].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].StartOffset > 0)
+
+	require.Equal(t, resp.Extensions.Tracing.Execution[2].ParentType, "Query")
+	require.Equal(t, resp.Extensions.Tracing.Execution[2].FieldName, "c")
+	require.Equal(t, resp.Extensions.Tracing.Execution[2].ReturnType, "Author")
+	require.Equal(t, resp.Extensions.Tracing.Execution[2].Dgraph[0].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[2].StartOffset > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[2].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[2].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[2].Dgraph[0].StartOffset > 0)
+
 }
 
 func TestMutationsPropagateExtensions(t *testing.T) {
@@ -495,11 +539,15 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 		})
 
 	// as both .Mutate() and .Query() should get called, so we should get their merged result
-	expectedExtensions := &schema.Extensions{TouchedUids: 14}
+
+	expectedTouchedUids := 14
 
 	require.NotNil(t, resp)
 	require.Nil(t, resp.Errors)
-	require.Equal(t, expectedExtensions, resp.Extensions)
+	require.NotNil(t, resp.Extensions)
+	require.Equal(t, expectedTouchedUids, resp.Extensions.TouchedUids)
+	require.NotNil(t, resp.Extensions.Tracing)
+
 }
 
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {

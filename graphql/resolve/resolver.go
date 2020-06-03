@@ -385,7 +385,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 	resp := &schema.Response{}
 	trace := &schema.Trace{
-		Version:   1,
+		Version:   x.Version(),
 		StartTime: time.Now(),
 	}
 	timers := schema.NewOffsetTimerFactory(trace.StartTime)
