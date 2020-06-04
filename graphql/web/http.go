@@ -40,7 +40,7 @@ import (
 	"go.opencensus.io/trace"
 )
 
-const touchedUidsHeader = "X-Dgraph-TouchedUids"
+const touchedUidsHeader = "Graphql-TouchedUids"
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {

@@ -80,7 +80,7 @@ func touchedUidsHeader(t *testing.T) {
 	require.NoError(t, err)
 
 	// confirm that the header value is a non-negative integer
-	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("X-Dgraph-TouchedUids"), 10, 64)
+	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
 	require.NoError(t, err)
 
 	// confirm that the value in header is same as the value in body
