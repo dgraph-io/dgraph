@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
@@ -29,7 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestBlockState(header *types.Header) *BlockState {
+func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
 	db := database.NewMemDatabase()
 	blockDb := NewBlockDB(db)
 
@@ -39,14 +38,13 @@ func newTestBlockState(header *types.Header) *BlockState {
 		}
 	}
 
-	return &BlockState{
-		db: blockDb,
-		bt: blocktree.NewBlockTreeFromGenesis(header, db),
-	}
+	bs, err := NewBlockStateFromGenesis(db, header)
+	require.NoError(t, err)
+	return bs
 }
 
 func TestSetAndGetHeader(t *testing.T) {
-	bs := newTestBlockState(nil)
+	bs := newTestBlockState(t, nil)
 
 	header := &types.Header{
 		Number:    big.NewInt(0),
@@ -63,7 +61,7 @@ func TestSetAndGetHeader(t *testing.T) {
 }
 
 func TestHasHeader(t *testing.T) {
-	bs := newTestBlockState(nil)
+	bs := newTestBlockState(t, nil)
 
 	header := &types.Header{
 		Number:    big.NewInt(0),
@@ -84,7 +82,7 @@ func TestGetBlockByNumber(t *testing.T) {
 		Number: big.NewInt(0),
 	}
 
-	bs := newTestBlockState(genesisHeader)
+	bs := newTestBlockState(t, genesisHeader)
 
 	blockHeader := &types.Header{
 		ParentHash: genesisHeader.Hash(),
@@ -111,7 +109,7 @@ func TestAddBlock(t *testing.T) {
 		Number: big.NewInt(0),
 	}
 
-	bs := newTestBlockState(genesisHeader)
+	bs := newTestBlockState(t, genesisHeader)
 
 	// Create header
 	header0 := &types.Header{
@@ -185,7 +183,7 @@ func TestGetSlotForBlock(t *testing.T) {
 		StateRoot: trie.EmptyHash,
 	}
 
-	bs := newTestBlockState(genesisHeader)
+	bs := newTestBlockState(t, genesisHeader)
 
 	preDigest, err := common.HexToBytes("0x064241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")
 	require.NoError(t, err)
@@ -215,7 +213,7 @@ func TestIsBlockOnCurrentChain(t *testing.T) {
 		StateRoot: trie.EmptyHash,
 	}
 
-	bs := newTestBlockState(genesisHeader)
+	bs := newTestBlockState(t, genesisHeader)
 	currChain, branchChains := AddBlocksToState(t, bs, 8)
 
 	for _, header := range currChain {
@@ -243,7 +241,7 @@ func TestAddBlock_BlockNumberToHash(t *testing.T) {
 		StateRoot: trie.EmptyHash,
 	}
 
-	bs := newTestBlockState(genesisHeader)
+	bs := newTestBlockState(t, genesisHeader)
 	currChain, branchChains := AddBlocksToState(t, bs, 8)
 
 	bestHash := bs.BestBlockHash()

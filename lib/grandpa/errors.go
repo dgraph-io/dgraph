@@ -25,6 +25,9 @@ import (
 // ErrNilBlockState is returned when BlockState is nil
 var ErrNilBlockState = errors.New("cannot have nil BlockState")
 
+// ErrNilKeypair is returned when the keypair is nil
+var ErrNilKeypair = errors.New("cannot have nil keypair")
+
 // ErrBlockDoesNotExist is returned when trying to validate a vote for a block that doesn't exist
 var ErrBlockDoesNotExist = errors.New("block does not exist")
 

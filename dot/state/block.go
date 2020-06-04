@@ -455,10 +455,12 @@ func (bs *BlockState) isBlockOnCurrentChain(header *types.Header) (bool, error) 
 		return true, nil
 	}
 
-	_, err = bs.SubChain(header.Hash(), bestBlock.Hash())
+	is, err := bs.IsDescendantOf(header.Hash(), bestBlock.Hash())
 	if err != nil {
-		// subchain function will error if the new block is not a precessor of our best block,
-		// thus it is not on our current chain
+		return false, err
+	}
+
+	if !is {
 		return false, nil
 	}
 

@@ -18,6 +18,7 @@ package grandpa
 
 import (
 	"math/big"
+	"math/rand"
 	"sort"
 	"testing"
 
@@ -77,6 +78,7 @@ func TestGetDirectVotes(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -117,19 +119,16 @@ func TestGetVotesForBlock_NoDescendantVotes(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	// 1/3 of voters equivocate; ie. vote for both blocks
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
@@ -165,25 +164,27 @@ func TestGetVotesForBlock_DescendantVotes(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var branches []*types.Header
-	var chain []*types.Header
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
-	for {
-		chain, branches = state.AddBlocksToState(t, st.Block, 8)
-		if len(branches) != 0 {
-			break
-		}
-	}
+	a, err := st.Block.GetHeader(leaves[0])
+	require.NoError(t, err)
 
 	// A is a descendant of B
-	voteA := NewVoteFromHeader(chain[7])
-	voteB := NewVoteFromHeader(chain[5])
-	voteC := NewVoteFromHeader(branches[0])
+	voteA, err := NewVoteFromHash(leaves[0], st.Block)
+	require.NoError(t, err)
+	voteB, err := NewVoteFromHash(a.ParentHash, st.Block)
+	require.NoError(t, err)
+	voteC, err := NewVoteFromHash(leaves[1], st.Block)
+	require.NoError(t, err)
 
 	for i, k := range kr.Keys {
 		voter := k.Public().(*ed25519.PublicKey).AsBytes()
@@ -220,6 +221,7 @@ func TestGetPossibleSelectedAncestors_SameAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -228,7 +230,7 @@ func TestGetPossibleSelectedAncestors_SameAncestor(t *testing.T) {
 	// this creates a tree with 3 branches all starting at depth 6
 	branches := make(map[int]int)
 	branches[6] = 2
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, 0)
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
@@ -280,6 +282,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -289,7 +292,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor(t *testing.T) {
 	branches := make(map[int]int)
 	branches[6] = 1
 	branches[7] = 1
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
@@ -345,6 +348,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor_MoreBranches(t *testing.T)
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -354,7 +358,7 @@ func TestGetPossibleSelectedAncestors_VaryingAncestor_MoreBranches(t *testing.T)
 	branches := make(map[int]int)
 	branches[6] = 1
 	branches[7] = 2
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 4, len(leaves))
@@ -416,19 +420,16 @@ func TestGetPossibleSelectedBlocks_OneBlock(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -460,6 +461,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_SameAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -469,7 +471,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_SameAncestor(t *testing.T) {
 	branches := make(map[int]int)
 	branches[6] = 2
 
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
 
@@ -513,6 +515,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_VaryingAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -522,7 +525,7 @@ func TestGetPossibleSelectedBlocks_EqualVotes_VaryingAncestor(t *testing.T) {
 	branches := make(map[int]int)
 	branches[6] = 1
 	branches[7] = 1
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
@@ -572,19 +575,16 @@ func TestGetPossibleSelectedBlocks_OneThirdEquivocating(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	// 1/3 of voters equivocate; ie. vote for both blocks
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
@@ -618,19 +618,17 @@ func TestGetPossibleSelectedBlocks_MoreThanOneThirdEquivocating(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 2 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	branches[7] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	// this tests a byzantine case where >1/3 of voters equivocate; ie. vote for multiple blocks
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
@@ -672,19 +670,16 @@ func TestGetPreVotedBlock_OneBlock(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -715,6 +710,7 @@ func TestGetPreVotedBlock_MultipleCandidates(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -724,7 +720,7 @@ func TestGetPreVotedBlock_MultipleCandidates(t *testing.T) {
 	branches := make(map[int]int)
 	branches[6] = 1
 	branches[7] = 1
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
@@ -768,6 +764,7 @@ func TestGetPreVotedBlock_EvenMoreCandidates(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -780,7 +777,7 @@ func TestGetPreVotedBlock_EvenMoreCandidates(t *testing.T) {
 	branches[5] = 1
 	branches[6] = 1
 	branches[7] = 1
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(0))
 
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 6, len(leaves))
@@ -842,19 +839,16 @@ func TestIsCompletable(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -879,10 +873,13 @@ func TestIsCompletable(t *testing.T) {
 func TestFindParentWithNumber(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
 
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -890,7 +887,7 @@ func TestFindParentWithNumber(t *testing.T) {
 
 	// no branches needed
 	branches := make(map[int]int)
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 	leaves := gs.blockState.Leaves()
 
 	v, err := NewVoteFromHash(leaves[0], st.Block)
@@ -916,19 +913,16 @@ func TestGetBestFinalCandidate_OneBlock(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -962,20 +956,16 @@ func TestGetBestFinalCandidate_PrecommitAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1014,20 +1004,16 @@ func TestGetBestFinalCandidate_NoPrecommit(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1061,20 +1047,16 @@ func TestGetBestFinalCandidate_PrecommitOnAnotherChain(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1104,10 +1086,13 @@ func TestGetBestFinalCandidate_PrecommitOnAnotherChain(t *testing.T) {
 func TestDeterminePreVote_NoPrimaryPreVote(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
 
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1125,10 +1110,13 @@ func TestDeterminePreVote_NoPrimaryPreVote(t *testing.T) {
 func TestDeterminePreVote_WithPrimaryPreVote(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
 
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1150,10 +1138,13 @@ func TestDeterminePreVote_WithPrimaryPreVote(t *testing.T) {
 func TestDeterminePreVote_WithInvalidPrimaryPreVote(t *testing.T) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
 
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1184,19 +1175,16 @@ func TestIsFinalizable_True(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 3)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1215,7 +1203,7 @@ func TestIsFinalizable_True(t *testing.T) {
 		}
 	}
 
-	finalizable, err := gs.isFinalizable()
+	finalizable, err := gs.isFinalizable(gs.state.round)
 	require.NoError(t, err)
 	require.True(t, finalizable)
 }
@@ -1229,19 +1217,16 @@ func TestIsFinalizable_False(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 3)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[2] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 3, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1266,7 +1251,7 @@ func TestIsFinalizable_False(t *testing.T) {
 		number: 4,
 	}
 
-	finalizable, err := gs.isFinalizable()
+	finalizable, err := gs.isFinalizable(gs.state.round)
 	require.NoError(t, err)
 	require.False(t, finalizable)
 }
@@ -1280,19 +1265,16 @@ func TestGetGrandpaGHOST_CommonAncestor(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	var leaves []common.Hash
-	for {
-		state.AddBlocksToState(t, st.Block, 8)
-		leaves = gs.blockState.Leaves()
-		if len(leaves) > 1 {
-			break
-		}
-	}
+	branches := make(map[int]int)
+	branches[6] = 1
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
+	leaves := gs.blockState.Leaves()
 
 	voteA, err := NewVoteFromHash(leaves[0], st.Block)
 	require.NoError(t, err)
@@ -1326,6 +1308,7 @@ func TestGetGrandpaGHOST_MultipleCandidates(t *testing.T) {
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
+		Keypair:    kr.Alice,
 	}
 
 	gs, err := NewService(cfg)
@@ -1335,8 +1318,7 @@ func TestGetGrandpaGHOST_MultipleCandidates(t *testing.T) {
 	branches := make(map[int]int)
 	branches[3] = 1
 	branches[7] = 1
-	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches)
-
+	state.AddBlocksToStateWithFixedBranches(t, st.Block, 8, branches, byte(rand.Intn(256)))
 	leaves := gs.blockState.Leaves()
 	require.Equal(t, 3, len(leaves))
 

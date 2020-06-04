@@ -17,18 +17,71 @@
 package grandpa
 
 import (
-	"github.com/ChainSafe/gossamer/dot/types"
+	"bytes"
+	"time"
+
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/scale"
+
+	log "github.com/ChainSafe/log15"
 )
 
-// CreateVoteMessage returns a signed VoteMessage given a header
-func (s *Service) CreateVoteMessage(header *types.Header, kp crypto.Keypair) (*VoteMessage, error) {
-	vote := NewVoteFromHeader(header)
+// sendMessageTimeout is the timeout period for sending a Vote through the out channel
+var sendMessageTimeout = time.Second
 
+// receiveMessages receives messages from the in channel until the specified condition is met
+func (s *Service) receiveMessages(cond func() bool) {
+	go func() {
+		for msg := range s.in {
+			log.Debug("[grandpa] received vote message", "msg", msg)
+
+			v, err := s.validateMessage(msg)
+			if err != nil {
+				log.Debug("[grandpa] failed to validate vote message", "message", msg, "error", err)
+				continue
+			}
+
+			log.Debug("[grandpa] validated vote message", "vote", v, "subround", msg.stage)
+		}
+	}()
+
+	for {
+		if cond() {
+			return
+		}
+	}
+
+}
+
+// sendMessage sends a message through the out channel
+func (s *Service) sendMessage(vote *Vote, stage subround) error {
+	msg, err := s.createVoteMessage(vote, stage, s.keypair)
+	if err != nil {
+		return err
+	}
+
+	s.chanLock.Lock()
+	defer s.chanLock.Unlock()
+
+	if s.stopped {
+		return nil
+	}
+
+	select {
+	case s.out <- msg:
+	case <-time.After(sendMessageTimeout):
+		log.Warn("[grandpa] failed to send vote message", "vote", vote)
+		return nil
+	}
+
+	return nil
+}
+
+// createVoteMessage returns a signed VoteMessage given a header
+func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypair) (*VoteMessage, error) {
 	msg, err := scale.Encode(&FullVote{
-		stage: s.subround,
+		stage: stage,
 		vote:  vote,
 		round: s.state.round,
 		setID: s.state.setID,
@@ -52,14 +105,14 @@ func (s *Service) CreateVoteMessage(header *types.Header, kp crypto.Keypair) (*V
 	return &VoteMessage{
 		setID:   s.state.setID,
 		round:   s.state.round,
-		stage:   s.subround,
+		stage:   stage,
 		message: sm,
 	}, nil
 }
 
-// ValidateMessage validates a VoteMessage and adds it to the current votes
+// validateMessage validates a VoteMessage and adds it to the current votes
 // it returns the resulting vote if validated, error otherwise
-func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
+func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 	// check for message signature
 	pk, err := ed25519.NewPublicKey(m.message.authorityID[:])
 	if err != nil {
@@ -84,6 +137,12 @@ func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
 
 	vote := NewVote(m.message.hash, m.message.number)
 
+	// if the vote is from ourselves, ignore
+	kb := [32]byte(s.publicKeyBytes())
+	if bytes.Equal(m.message.authorityID[:], kb[:]) {
+		return vote, nil
+	}
+
 	equivocated := s.checkForEquivocation(voter, vote, m.stage)
 	if equivocated {
 		return nil, ErrEquivocation
@@ -93,6 +152,9 @@ func (s *Service) ValidateMessage(m *VoteMessage) (*Vote, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
 
 	if m.stage == prevote {
 		s.prevotes[pk.AsBytes()] = vote
@@ -112,6 +174,9 @@ func (s *Service) checkForEquivocation(voter *Voter, vote *Vote, stage subround)
 	var eq map[ed25519.PublicKeyBytes][]*Vote
 	var votes map[ed25519.PublicKeyBytes]*Vote
 
+	s.mapLock.Lock()
+	defer s.mapLock.Unlock()
+
 	if stage == prevote {
 		eq = s.pvEquivocations
 		votes = s.prevotes
@@ -120,13 +185,14 @@ func (s *Service) checkForEquivocation(voter *Voter, vote *Vote, stage subround)
 		votes = s.precommits
 	}
 
+	// TODO: check for votes we've already seen #923
 	if eq[v] != nil {
 		// if the voter has already equivocated, every vote in that round is an equivocatory vote
 		eq[v] = append(eq[v], vote)
 		return true
 	}
 
-	if votes[v] != nil {
+	if votes[v] != nil && votes[v].hash != vote.hash {
 		// the voter has already voted, all their votes are now equivocatory
 		prev := votes[v]
 		eq[v] = []*Vote{prev, vote}

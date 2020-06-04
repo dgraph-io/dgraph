@@ -47,18 +47,16 @@ func createTestBlockTree(header *types.Header, depth int, db database.Database) 
 		}
 	}
 
-	num := 77
-
 	// create tree branches
 	for _, branch := range branches {
-		num++ // create blocks with different hashes
 		previousHash = branch.hash
 
 		for i := int(branch.depth.Uint64()); i <= depth; i++ {
 			block := &types.Block{
 				Header: &types.Header{
 					ParentHash: previousHash,
-					Number:     big.NewInt(int64(i + num)),
+					Number:     big.NewInt(int64(i)),
+					Digest:     [][]byte{{byte(rand.Intn(256))}},
 				},
 				Body: &types.Body{},
 			}

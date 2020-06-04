@@ -219,6 +219,7 @@ func TestBlockTree_DeepestLeaf(t *testing.T) {
 			earliestTime = node.arrivalTime
 			expected = node.hash
 			deepest = node.depth
+			t.Logf("expected leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
 		}
 		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
 		return true
