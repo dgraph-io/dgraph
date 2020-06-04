@@ -299,8 +299,8 @@ func ext_get_allocated_storage(context unsafe.Pointer, keyData, keyLen, writtenO
 
 	keyStr := fmt.Sprintf("0x%x", key)
 
-	// "Babe Initialized" || "Treasury Approvals" || "System Digest"
-	if keyStr == "0xe0410aa8e1aff5af1147fe2f9b33ce62" || keyStr == "0x3f60b9abbdf97ea5f6f2e132acee78a9" || keyStr == "0xf7787e54bb33faaf40a7f3bf438458ee" {
+	// "Babe Initialized" || "Treasury Approvals" || "System Digest" || "Timestamp DidUpdate"
+	if keyStr == "0xe0410aa8e1aff5af1147fe2f9b33ce62" || keyStr == "0x3f60b9abbdf97ea5f6f2e132acee78a9" || keyStr == "0xf7787e54bb33faaf40a7f3bf438458ee" || keyStr == "0x5e21085b25d4293fe413b5d3a698068a" {
 		val[0] = 0
 	}
 

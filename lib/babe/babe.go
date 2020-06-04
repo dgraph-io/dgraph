@@ -300,13 +300,18 @@ func (b *Session) invokeBlockAuthoring() {
 				log.Error("[babe] cannot get current slot", "error", err)
 				return
 			}
-
-			log.Debug("[babe]", "calculated slot", slotNum)
 		} else {
-			log.Warn("[babe] Failed to calculate slot; not enough blocks synced")
-			return
+			log.Warn("[babe] cannot use median algorithm, not enough blocks synced")
+
+			slotNum, err = b.estimateCurrentSlot()
+			if err != nil {
+				log.Error("[babe] cannot get current slot", "error", err)
+				return
+			}
 		}
 	}
+
+	log.Debug("[babe]", "calculated slot", slotNum)
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
 		start := time.Now().Unix()
