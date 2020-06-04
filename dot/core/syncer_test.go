@@ -156,13 +156,28 @@ func TestWatchForBlocks_NotHighestSeen(t *testing.T) {
 	number := big.NewInt(12)
 	blockNumberIn <- number
 
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
+	cmp := 0
+	for i := 0; i < maxRetries; i++ {
+		cmp = syncer.highestSeenBlock.Cmp(number)
+		if cmp == 0 {
+			break
+		}
+	}
+
+	if cmp != 0 {
 		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
 	}
 
 	blockNumberIn <- big.NewInt(11)
 
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
+	for i := 0; i < maxRetries; i++ {
+		cmp = syncer.highestSeenBlock.Cmp(number)
+		if cmp == 0 {
+			break
+		}
+	}
+
+	if cmp != 0 {
 		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
 	}
 }
@@ -183,7 +198,15 @@ func TestWatchForBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
 	number := big.NewInt(12)
 	blockNumberIn <- number
 
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
+	cmp := 0
+	for i := 0; i < maxRetries; i++ {
+		cmp = syncer.highestSeenBlock.Cmp(number)
+		if cmp == 0 {
+			break
+		}
+	}
+
+	if cmp != 0 {
 		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
 	}
 
@@ -601,10 +624,17 @@ func TestExecuteBlock(t *testing.T) {
 	parent, err := syncer.blockState.BestBlockHeader()
 	require.NoError(t, err)
 
-	slot := babe.NewSlot(1, 0, 0)
-	block, err := builder.BuildBlock(parent, *slot)
-	require.NoError(t, err)
+	var block *types.Block
+	for i := 0; i < maxRetries; i++ {
+		slot := babe.NewSlot(1, 0, 0)
+		block, err = builder.BuildBlock(parent, *slot)
+		require.NoError(t, err)
+		if err == nil {
+			break
+		}
+	}
 
+	require.NoError(t, err)
 	_, err = syncer.executeBlock(block)
 	require.NoError(t, err)
 }
@@ -648,10 +678,16 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	parent, err := syncer.blockState.BestBlockHeader()
 	require.NoError(t, err)
 
-	slot := babe.NewSlot(uint64(time.Now().Unix()), 100000, 1)
-	block, err := builder.BuildBlock(parent, *slot)
-	require.NoError(t, err)
+	var block *types.Block
+	for i := 0; i < maxRetries; i++ {
+		slot := babe.NewSlot(uint64(time.Now().Unix()), 100000, 1)
+		block, err = builder.BuildBlock(parent, *slot)
+		if err == nil {
+			break
+		}
+	}
 
+	require.NoError(t, err)
 	require.Equal(t, true, bytes.Contains(*block.Body, enc))
 	_, err = syncer.executeBlock(block)
 	require.NoError(t, err)

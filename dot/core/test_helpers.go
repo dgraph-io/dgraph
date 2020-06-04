@@ -33,6 +33,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var maxRetries = 5
+
 // testGenesisHeader is a test block header
 var testGenesisHeader = &types.Header{
 	Number:    big.NewInt(0),
