@@ -2198,3 +2198,16 @@ valid_schemas:
           id: ID!
           age: Int!
       }
+
+  -
+    name: "non-remote type can implement a remote type"
+    description: "This is ok because the user can use Person as an abstract class for which
+    queries and mutations are not generated."
+    input: |
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person {
+        age: Int!
+      }
