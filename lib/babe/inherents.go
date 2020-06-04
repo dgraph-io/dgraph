@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/ChainSafe/gossamer/lib/scale"
@@ -34,7 +35,7 @@ var (
 )
 
 // InherentsData contains a mapping of inherent keys to values
-// keys must be 8 bytes, values are a variable-length byte array
+// keys must be 8 bytes, values are a scale-encoded byte array
 type InherentsData struct {
 	data map[[8]byte]([]byte)
 }
@@ -44,6 +45,14 @@ func NewInherentsData() *InherentsData {
 	return &InherentsData{
 		data: make(map[[8]byte]([]byte)),
 	}
+}
+
+func (d *InherentsData) String() string {
+	str := ""
+	for k, v := range d.data {
+		str = str + fmt.Sprintf("key=%v\tvalue=%v\n", k, v)
+	}
+	return str
 }
 
 // SetInt64Inherent set the Int64 scale.Encode for a given data
@@ -64,6 +73,29 @@ func (d *InherentsData) SetInt64Inherent(key []byte, data uint64) error {
 	copy(kb[:], key)
 
 	d.data[kb] = venc
+	return nil
+}
+
+// SetBigIntInherent set as a big.Int (compact int) inherent
+func (d *InherentsData) SetBigIntInherent(key []byte, data *big.Int) error {
+	if len(key) != 8 {
+		return errors.New("inherent key must be 8 bytes")
+	}
+
+	venc, err := scale.Encode(data)
+	if err != nil {
+		return err
+	}
+
+	lenc, err := scale.Encode(big.NewInt(int64(len(venc))))
+	if err != nil {
+		return err
+	}
+
+	kb := [8]byte{}
+	copy(kb[:], key)
+
+	d.data[kb] = append(lenc, venc...)
 	return nil
 }
 

@@ -100,6 +100,10 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 		return nil, errors.New("syncLock is nil")
 	}
 
+	if cfg.BlockState == nil {
+		return nil, errors.New("blockState is nil")
+	}
+
 	babeSession := &Session{
 		blockState:       cfg.BlockState,
 		storageState:     cfg.StorageState,

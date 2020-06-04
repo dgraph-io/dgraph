@@ -225,14 +225,26 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 
 // buildBlockInherents applies the inherents for a block
 func (b *Session) buildBlockInherents(slot Slot) error {
-	// Setup inherents: add timstap0 and babeslot
+	// Setup inherents: add timstap0
 	idata := NewInherentsData()
 	err := idata.SetInt64Inherent(Timstap0, uint64(time.Now().Unix()))
 	if err != nil {
 		return err
 	}
 
+	// add babeslot
 	err = idata.SetInt64Inherent(Babeslot, slot.number)
+	if err != nil {
+		return err
+	}
+
+	// add finalnum
+	fin, err := b.blockState.GetFinalizedHeader()
+	if err != nil {
+		return err
+	}
+
+	err = idata.SetBigIntInherent(Finalnum, fin.Number)
 	if err != nil {
 		return err
 	}
@@ -241,9 +253,6 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: inherent_extrinsics needs to be called for each inherent
-	// this currently only returns the timestamp (first inherent)
 
 	// Call BlockBuilder_inherent_extrinsics which returns the inherents as extrinsics
 	inherentExts, err := b.rt.InherentExtrinsics(ienc)
