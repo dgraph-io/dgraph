@@ -2211,3 +2211,19 @@ valid_schemas:
       type User implements Person {
         age: Int!
       }
+
+  -
+    name: "remote type can implement a remote type"
+    input: |
+      type Car {
+        id: ID!
+        name: String!
+      }
+
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
