@@ -1903,6 +1903,51 @@ invalid_schemas:
      "locations":[{"line":1, "column":11}]},
     ]
 
+  - name: "remote type with @custom directives on fields shouldn't be allowed."
+    description: "Remote types are not resolved further currently, hence they shouldn't have
+    fields with @custom directive on them."
+    input: |
+      type User {
+        id: ID!
+        name: String!
+      }
+
+      type School @remote {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type School; field name; can't have @custom directive as a @remote
+     type can't have fields with @custom directive.", "locations": [{"line":9, "column":3}]}
+    ]
+
+
+  -
+    name: "a non-remote type can't have fields which are of remote type"
+    description: "This is disallowed because we don't generate UserRef etc., so we can't
+    allow adding/updating user from author."
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!]
+      }
+    errlist: [
+    {"message": "Type Author; field neighbour; can't be of a type that has @remote directive.
+     Non-remote types can't have fields with a type  having @remote directive.",
+     "locations": [{"line":9, "column":3}]}
+    ]
+
 valid_schemas:
   - name: "@auth on interface implementation"
     input: |
@@ -2120,4 +2165,18 @@ valid_schemas:
           graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
           skipIntrospection: true
         })
+      }
+
+  -
+    name: "remote type can use other types which are dgraph types"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+        author: Author
+      }
+
+      type Author {
+          id: ID!
+          age: Int!
       }
