@@ -18,6 +18,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -33,8 +34,9 @@ var Restore x.SubCommand
 var LsBackup x.SubCommand
 
 var opt struct {
-	backupId, location, pdir, zero, keyfile string
-	forceZero                               bool
+	backupId, location, pdir, zero string
+	key                            x.SensitiveByteSlice
+	forceZero                      bool
 }
 
 func init() {
@@ -106,12 +108,11 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
-	flag.StringVarP(&opt.keyfile, "keyfile", "k", "", "Key file to decrypt the backup. "+
-		"The same key is also used to re-encrypt the restored data.")
 	flag.BoolVarP(&opt.forceZero, "force_zero", "", true, "If false, no connection to "+
 		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
 		"update the timestamp and max uid when you start the cluster. The correct values are "+
 		"printed near the end of this command's output.")
+	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -169,8 +170,11 @@ func runRestoreCmd() error {
 	var (
 		start time.Time
 		zc    pb.ZeroClient
+		err   error
 	)
-
+	if opt.key, err = enc.ReadKey(Restore.Conf); err != nil {
+		return err
+	}
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
@@ -195,7 +199,7 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.keyfile)
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key)
 	if result.Err != nil {
 		return result.Err
 	}

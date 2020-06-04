@@ -22,31 +22,57 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 )
 
 type configInput struct {
 	LruMB float64
+	// LogRequest is used to update WorkerOptions.LogRequest. true value of LogRequest enables
+	// logging of all requests coming to alphas. LogRequest type has been kept as *bool instead of
+	// bool to avoid updating WorkerOptions.LogRequest when it has default value of false.
+	LogRequest *bool
 }
 
-func resolveConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-	glog.Info("Got config request through GraphQL admin API")
+func resolveUpdateConfig(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+	glog.Info("Got config update through GraphQL admin API")
 
 	input, err := getConfigInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
-	err = worker.UpdateLruMb(input.LruMB)
-	if err != nil {
-		return emptyResult(m, err), false
+	if input.LruMB > 0 {
+		if err = worker.UpdateLruMb(input.LruMB); err != nil {
+			return resolve.EmptyResult(m, err), false
+		}
+	}
+
+	// input.LogRequest will be nil, when it is not specified explicitly in config request.
+	if input.LogRequest != nil {
+		worker.UpdateLogRequest(*input.LogRequest)
 	}
 
 	return &resolve.Resolved{
 		Data:  map[string]interface{}{m.Name(): response("Success", "Config updated successfully")},
 		Field: m,
 	}, true
+}
+
+func resolveGetConfig(ctx context.Context, q schema.Query) *resolve.Resolved {
+	glog.Info("Got config query through GraphQL admin API")
+
+	conf := make(map[string]interface{})
+	posting.Config.Lock()
+	conf["lruMb"] = posting.Config.AllottedMemory
+	posting.Config.Unlock()
+
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{q.Name(): conf},
+		Field: q,
+	}
+
 }
 
 func getConfigInput(m schema.Mutation) (*configInput, error) {

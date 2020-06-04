@@ -180,7 +180,7 @@
         http: {
           url: "http://mock:8888/gqlUserName"
           method: "POST"
-          operation: "single"
+          mode: SINGLE
           graphql: "query($id: ID!, $age: Float!) { userName(id: $id, age: $age)}"
           skipIntrospection: true
         }
@@ -217,7 +217,7 @@
         http: {
           url: "http://mock:8888/gqlUserName"
           method: "POST"
-          operation: "batch"
+          mode: BATCH
           graphql: "query($random: [UserInput]) { userName(random: $random)}",
           body: "{id: $id, age: $age}"
           skipIntrospection: true

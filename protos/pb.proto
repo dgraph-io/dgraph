@@ -278,7 +278,13 @@ message RestoreRequest {
 	bool anonymous = 8;
 
 	// Info needed to process encrypted backups.
-	string key_file = 9;
+	string encryption_key_file = 9;
+	// Vault options
+	string vault_addr = 10;
+	string vault_roleid_file = 11;
+	string vault_secretid_file = 12;
+	string vault_path = 13;
+	string vault_field = 14;
 }
 
 message Proposal {
@@ -295,9 +301,14 @@ message Proposal {
 }
 
 message KVS {
- repeated badgerpb2.KV kv = 1;
- // done used to indicate if the stream of KVS is over.
- bool done      = 2;
+	repeated badgerpb2.KV kv = 1;
+
+	// done used to indicate if the stream of KVS is over.
+	bool done	= 2;
+	// predicates is the list of predicates known by the leader at the time of the snapshot.
+	repeated string predicates = 3;
+	// types is the list of types known by the leader at the time of the snapshot.
+	repeated string types = 4;
 }
 
 // Posting messages.

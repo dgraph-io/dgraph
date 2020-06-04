@@ -73,7 +73,33 @@ const adminTypes = `
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
 		"""
-		keyFile: String!
+		encryptionKeyFile: String
+
+		"""
+		Vault server address where the key is stored. This server must be accessible
+		by all alphas in the group.
+		"""
+		vaultAddr: String
+
+		"""
+		Path to the Vault RoleID file.
+		"""
+		vaultRoleIDFile: String
+
+		"""
+		Path to the Vault SecretID file.
+		"""
+		vaultSecretIDFile: String
+
+		"""
+		Vault kv store path where the key lives.
+		"""
+		vaultPath: String
+
+		"""
+		Vault kv store field whose value is the key.
+		"""
+		vaultField: String
 
 		"""
 		Access key credential for the destination.
@@ -360,22 +386,24 @@ const adminTypes = `
 
 	type DeleteUserPayload {
 		msg: String
+		numUids: Int
 	}
 
 	type DeleteGroupPayload {
 		msg: String
+		numUids: Int
 	}`
 
 const adminMutations = `
 
 	"""
-	Start a binary backup.  See : https://docs.dgraph.io/enterprise-features/#binary-backups
+	Start a binary backup.  See : https://dgraph.io/docs/enterprise-features/#binary-backups
 	"""
 	backup(input: BackupInput!) : BackupPayload
 
 	"""
 	Start restoring a binary backup.  See :
-		https://docs.dgraph.io/enterprise-features/#binary-backups
+		https://dgraph.io/docs/enterprise-features/#binary-backups
 	"""
 	restore(input: RestoreInput!) : RestorePayload
 

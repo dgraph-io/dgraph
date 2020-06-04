@@ -21,6 +21,7 @@ package worker
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
@@ -35,6 +36,8 @@ type subMutation struct {
 }
 
 type executor struct {
+	pendingSize int64
+
 	sync.RWMutex
 	predChan map[string]chan *subMutation
 	closer   *y.Closer
@@ -54,8 +57,10 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
+		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
+			esize += int64(edge.Size())
 			for {
 				err := runMutation(payload.ctx, edge, ptxn)
 				if err == nil {
@@ -74,6 +79,8 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
+
+		atomic.AddInt64(&e.pendingSize, -esize)
 	}
 }
 
@@ -86,18 +93,9 @@ func (e *executor) shutdown() {
 	}
 }
 
-func (e *executor) getChannel(pred string) (ch chan *subMutation) {
-	e.RLock()
+// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
+func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
-	e.RUnlock()
-	if ok {
-		return ch
-	}
-
-	// Create a new channel for `pred`.
-	e.Lock()
-	defer e.Unlock()
-	ch, ok = e.predChan[pred]
 	if ok {
 		return ch
 	}
@@ -108,9 +106,16 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	return ch
 }
 
-func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
-	payloadMap := make(map[string]*subMutation)
+const (
+	maxPendingEdgesSize int64 = 64 << 20
+	executorAddEdges          = "executor.addEdges"
+)
 
+func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)
+
+	payloadMap := make(map[string]*subMutation)
+	var esize int64
 	for _, edge := range edges {
 		payload, ok := payloadMap[edge.Attr]
 		if !ok {
@@ -121,9 +126,21 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 			payload = payloadMap[edge.Attr]
 		}
 		payload.edges = append(payload.edges, edge)
+		esize += int64(edge.Size())
 	}
 
-	for attr, payload := range payloadMap {
-		e.getChannel(attr) <- payload
+	// Lock() in case the channel gets closed from underneath us.
+	e.Lock()
+	defer e.Unlock()
+	select {
+	case <-e.closer.HasBeenClosed():
+		return
+	default:
+		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
+		for attr, payload := range payloadMap {
+			e.getChannelUnderLock(attr) <- payload
+		}
 	}
+
+	atomic.AddInt64(&e.pendingSize, esize)
 }

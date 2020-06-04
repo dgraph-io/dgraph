@@ -515,7 +515,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		return nil, err
 	}
 
-	mutated := extractMutated(result, mutation.ResponseName())
+	mutated := extractMutated(result, mutation.Name())
 
 	var uids []uint64
 	if len(mutated) > 0 {
@@ -607,7 +607,18 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	// The query needs to assign the results to a variable, so that the mutation can use them.
 	dgQuery := &gql.GraphQuery{
 		Var:  MutationQueryVar,
-		Attr: m.ResponseName(),
+		Attr: m.Name(),
+	}
+
+	if m.MutatedType().InterfaceImplHasAuthRules() {
+		dgQuery.Attr = m.ResponseName() + "()"
+		return dgQuery
+	}
+
+	rbac := authRw.evaluateStaticRules(m.MutatedType())
+	if rbac == schema.Negative {
+		dgQuery.Attr = m.ResponseName() + "()"
+		return dgQuery
 	}
 	// Add uid child to the upsert query, so that we can get the list of nodes upserted.
 	dgQuery.Children = append(dgQuery.Children, &gql.GraphQuery{
@@ -623,7 +634,11 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
-	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
+
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
+	}
+
 	return dgQuery
 }
 
@@ -758,8 +773,7 @@ func deleteAuthSelector(t schema.Type) *schema.RuleNode {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder mutationBuilder,
-	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
@@ -994,6 +1008,10 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
+			// This fixes mutation when dgraph predicate has special characters. PR #5526
+			if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+				fieldName = fieldName[1 : len(fieldName)-1]
+			}
 
 			switch val := val.(type) {
 			case map[string]interface{}:
@@ -1095,8 +1113,7 @@ func asIDReference(
 	ctx context.Context,
 	val interface{},
 	srcField schema.FieldDefinition,
-	srcUID string,
-	variable string,
+	srcUID, variable string,
 	withAdditionalDeletes bool,
 	varGen *VariableGenerator) *mutationFragment {
 

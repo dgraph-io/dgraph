@@ -194,7 +194,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
+	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
 	ctx = x.AttachAccessJwt(ctx, r)
 
 	if queryTimeout != 0 {
@@ -586,12 +586,8 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 		return
 	}
 
-	md := metadata.New(nil)
-	ctx := metadata.NewIncomingContext(context.Background(), md)
-	ctx = x.AttachAccessJwt(ctx, r)
-
-	gqlReq := &schema.Request{}
-	gqlReq.Query = `
+	gqlReq := &schema.Request{
+		Query: `
 		mutation updateGqlSchema($sch: String!) {
 			updateGQLSchema(input: {
 				set: {
@@ -602,18 +598,27 @@ func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.
 					id
 				}
 			}
-		}`
-	gqlReq.Variables = map[string]interface{}{
-		"sch": string(b),
+		}`,
+		Variables: map[string]interface{}{"sch": string(b)},
 	}
 
-	response := adminServer.Resolve(ctx, gqlReq)
+	response := resolveWithAdminServer(gqlReq, r, adminServer)
 	if len(response.Errors) > 0 {
 		x.SetStatus(w, x.Error, response.Errors.Error())
 		return
 	}
 
 	writeSuccessResponse(w, r)
+}
+
+func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
+	adminServer web.IServeGraphQL) *schema.Response {
+	md := metadata.New(nil)
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
+
+	return adminServer.Resolve(ctx, gqlReq)
 }
 
 func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {

@@ -78,6 +78,38 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	require.Nil(t, result.Errors)
 }
 
+func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
+	return MakeGQLRequestWithAccessJwt(t, params, "")
+}
+
+func MakeGQLRequestWithAccessJwt(t *testing.T, params *GraphQLParams,
+	accessToken string) *GraphQLResponse {
+	adminUrl := "http://" + SockAddrHttp + "/admin"
+
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
+	require.NoError(t, err)
+	req.Header.Set("Content-Type", "application/json")
+	if accessToken != "" {
+		req.Header.Set("X-Dgraph-AccessToken", accessToken)
+	}
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	defer resp.Body.Close()
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+
+	var gqlResp GraphQLResponse
+	err = json.Unmarshal(b, &gqlResp)
+	require.NoError(t, err)
+
+	return &gqlResp
+}
+
 type clientCustomClaims struct {
 	Namespace     string
 	AuthVariables map[string]interface{}
@@ -168,7 +200,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		authInfo := `# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -184,7 +216,7 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
+	authInfo := "# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
 		string(keyData) + "\""
 	return append(schema, []byte(authInfo)...), nil
 }

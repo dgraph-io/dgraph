@@ -13,13 +13,10 @@
 package acl
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 	"strconv"
 	"testing"
 	"time"
@@ -86,12 +83,12 @@ func checkUserCount(t *testing.T, resp []byte, expected int) {
 	require.Equal(t, expected, len(r.AddUser.User))
 }
 
-func deleteUser(t *testing.T, accessToken, username string) {
-	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
+func deleteUser(t *testing.T, accessToken, username string, confirmDeletion bool) {
 	delUser := `
 	mutation deleteUser($name: String!) {
 		deleteUser(filter: {name: {eq: $name}}) {
 			msg
+			numUids
 		}
 	}`
 
@@ -104,15 +101,17 @@ func deleteUser(t *testing.T, accessToken, username string) {
 	resp := makeRequest(t, accessToken, params)
 	resp.RequireNoGraphQLErrors(t)
 
-	require.JSONEq(t, `{"deleteUser":{"msg":"Deleted"}}`, string(resp.Data))
+	if confirmDeletion {
+		require.JSONEq(t, `{"deleteUser":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
+	}
 }
 
 func deleteGroup(t *testing.T, accessToken, name string) {
-	// TODO - Verify that only one uid got deleted once numUids are returned as part of the payload.
 	delGroup := `
 	mutation deleteUser($name: String!) {
 		deleteGroup(filter: {name: {eq: $name}}) {
 			msg
+			numUids
 		}
 	}`
 
@@ -125,7 +124,7 @@ func deleteGroup(t *testing.T, accessToken, name string) {
 	resp := makeRequest(t, accessToken, params)
 	resp.RequireNoGraphQLErrors(t)
 
-	require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted"}}`, string(resp.Data))
+	require.JSONEq(t, `{"deleteGroup":{"msg":"Deleted","numUids":1}}`, string(resp.Data))
 }
 
 func TestInvalidGetUser(t *testing.T) {
@@ -164,20 +163,14 @@ func TestPasswordReturn(t *testing.T) {
 }
 
 func TestGetCurrentUser(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
-
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 	currentUser := getCurrentUser(t, accessJwt)
 	currentUser.RequireNoGraphQLErrors(t)
 	require.Equal(t, string(currentUser.Data), `{"getCurrentUser":{"name":"groot"}}`)
 
 	// clean up the user to allow repeated running of this test
 	userid := "hamilton"
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, false)
 	glog.Infof("cleaned up db user state")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -197,23 +190,11 @@ func TestGetCurrentUser(t *testing.T) {
 }
 
 func TestCreateAndDeleteUsers(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
-
-	// clean up the user to allow repeated running of this test
-	deleteUser(t, accessJwt, userid)
-	glog.Infof("cleaned up db user state")
-
-	resp := createUser(t, accessJwt, userid, userpassword)
-	resp.RequireNoGraphQLErrors(t)
-	checkUserCount(t, resp.Data, 1)
+	resetUser(t)
 
 	// adding the user again should fail
-	resp = createUser(t, accessJwt, userid, userpassword)
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+	resp := createUser(t, accessJwt, userid, userpassword)
 	require.Equal(t, x.GqlErrorList{{
 		Message: "couldn't rewrite query for mutation addUser because id alice already exists" +
 			" for type User",
@@ -221,7 +202,7 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 	checkUserCount(t, resp.Data, 0)
 
 	// delete the user
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, true)
 
 	resp = createUser(t, accessJwt, userid, userpassword)
 	resp.RequireNoGraphQLErrors(t)
@@ -230,15 +211,10 @@ func TestCreateAndDeleteUsers(t *testing.T) {
 }
 
 func resetUser(t *testing.T) {
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "login failed")
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 
 	// clean up the user to allow repeated running of this test
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, false)
 	glog.Infof("deleted user")
 
 	resp := createUser(t, accessJwt, userid, userpassword)
@@ -652,28 +628,7 @@ type group struct {
 
 func makeRequest(t *testing.T, accessToken string, params testutil.GraphQLParams) *testutil.
 	GraphQLResponse {
-	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
-
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, adminUrl, bytes.NewBuffer(b))
-	require.NoError(t, err)
-	req.Header.Set("X-Dgraph-AccessToken", accessToken)
-	req.Header.Set("Content-Type", "application/json")
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	b, err = ioutil.ReadAll(resp.Body)
-	require.NoError(t, err)
-
-	var result *testutil.GraphQLResponse
-	err = json.Unmarshal(b, &result)
-	require.NoError(t, err)
-
-	return result
+	return testutil.MakeGQLRequestWithAccessJwt(t, &params, accessToken)
 }
 
 func addRulesToGroup(t *testing.T, accessToken, group string, rules []rule) {
@@ -1599,7 +1554,7 @@ func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "login failed")
 
-	deleteUser(t, accessJwt, userid)
+	deleteUser(t, accessJwt, userid, true)
 
 	gqlQuery := `
 	query {
@@ -1771,49 +1726,28 @@ func TestWrongPermission(t *testing.T) {
 }
 
 func TestHealthForAcl(t *testing.T) {
-	resetUser(t)
-
-	gqlQuery := `
-	query {
-		health {
-			instance
-			address
-			lastEcho
-			status
-			version
-			uptime
-			group
-		}
-	}`
-
 	params := testutil.GraphQLParams{
-		Query: gqlQuery,
+		Query: `
+		query {
+			health {
+				instance
+				address
+				lastEcho
+				status
+				version
+				uptime
+				group
+			}
+		}`,
 	}
 
 	// assert errors for non-guardians
-	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   userid,
-		Passwd:   userpassword,
-	})
-	require.NoError(t, err, "login failed")
-
-	resp := makeRequest(t, accessJwt, params)
-	expectedError := fmt.Sprintf("Error: rpc error: code"+
-		" = PermissionDenied desc = Only guardians are allowed access. "+
-		"User '%s' is not a member of guardians group.", userid)
-	require.Equal(t, x.GqlErrorList{{Message: expectedError}}, resp.Errors)
-	require.JSONEq(t, `{ "health": [] }`, string(resp.Data))
+	assertNonGuardianFailure(t, "health", false, params)
 
 	// assert data for guardians
-	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: adminEndpoint,
-		UserID:   "groot",
-		Passwd:   "password",
-	})
-	require.NoError(t, err, "groot login failed")
+	accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
 
-	resp = makeRequest(t, accessJwt, params)
+	resp := makeRequest(t, accessJwt, params)
 	resp.RequireNoGraphQLErrors(t)
 	var guardianResp struct {
 		Health []struct {
@@ -1826,7 +1760,7 @@ func TestHealthForAcl(t *testing.T) {
 			Group    string
 		}
 	}
-	err = json.Unmarshal(resp.Data, &guardianResp)
+	err := json.Unmarshal(resp.Data, &guardianResp)
 
 	require.NoError(t, err, "health request failed")
 	// we have 9 instances of alphas/zeros in teamcity environment
@@ -1839,6 +1773,247 @@ func TestHealthForAcl(t *testing.T) {
 		require.NotEmpty(t, v.Version)
 		require.NotEmpty(t, v.UpTime)
 		require.NotEmpty(t, v.Group)
+	}
+}
+
+func assertNonGuardianFailure(t *testing.T, queryName string, respIsNull bool,
+	params testutil.GraphQLParams) {
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   userid,
+		Passwd:   userpassword,
+	})
+	require.NoError(t, err, "login failed")
+	resp := makeRequest(t, accessJwt, params)
+
+	require.Len(t, resp.Errors, 1)
+	require.Contains(t, resp.Errors[0].Message,
+		fmt.Sprintf("rpc error: code = PermissionDenied desc = Only guardians are allowed access."+
+			" User '%s' is not a member of guardians group.", userid))
+	if len(resp.Data) != 0 {
+		queryVal := "null"
+		if !respIsNull {
+			queryVal = "[]"
+		}
+		require.JSONEq(t, fmt.Sprintf(`{"%s": %s}`, queryName, queryVal), string(resp.Data))
+	}
+}
+
+type graphQLAdminEndpointTestCase struct {
+	name               string
+	query              string
+	queryName          string
+	respIsArray        bool
+	testGuardianAccess bool
+	guardianErrs       x.GqlErrorList
+	// specifying this as empty string means it won't be compared with response data
+	guardianData string
+}
+
+func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
+	tcases := []graphQLAdminEndpointTestCase{
+		{
+			name: "backup has guardian auth",
+			query: `
+					mutation {
+					  backup(input: {destination: ""}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "backup",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving backup failed because you must specify a 'destination' value",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"backup": null}`,
+		},
+		{
+			name: "listBackups has guardian auth",
+			query: `
+					query {
+					  listBackups(input: {location: ""}) {
+					  	backupId
+					  }
+					}`,
+			queryName:          "listBackups",
+			respIsArray:        true,
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving listBackups failed because Error: cannot read manfiests at " +
+					"location : The path \"\" does not exist or it is inaccessible.",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"listBackups": []}`,
+		},
+		{
+			name: "config update has guardian auth",
+			query: `
+					mutation {
+					  config(input: {lruMb: 1}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "config",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving config failed because lru_mb must be at least 1024\n",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"config": null}`,
+		},
+		{
+			name: "config get has guardian auth",
+			query: `
+					query {
+					  config {
+						lruMb
+					  }
+					}`,
+			queryName:          "config",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "draining has guardian auth",
+			query: `
+					mutation {
+					  draining(enable: false) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "draining",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData: `{
+								"draining": {
+									"response": {
+										"code": "Success",
+										"message": "draining mode has been set to false"
+									}
+								}
+							}`,
+		},
+		{
+			name: "export has guardian auth",
+			query: `
+					mutation {
+					  export(input: {format: "invalid"}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "export",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message:   "resolving export failed because invalid export format: invalid",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"export": null}`,
+		},
+		{
+			name: "restore has guardian auth",
+			query: `
+					mutation {
+					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "restore",
+			testGuardianAccess: true,
+			guardianErrs: x.GqlErrorList{{
+				Message: "resolving restore failed because failed to verify backup: while retrieving" +
+					" manifests: The path \"\" does not exist or it is inaccessible.",
+				Locations: []x.Location{{Line: 3, Column: 8}},
+			}},
+			guardianData: `{"restore": null}`,
+		},
+		{
+			name: "getGQLSchema has guardian auth",
+			query: `
+					query {
+					  getGQLSchema {
+						id
+					  }
+					}`,
+			queryName:          "getGQLSchema",
+			testGuardianAccess: true,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "updateGQLSchema has guardian auth",
+			query: `
+					mutation {
+					  updateGQLSchema(input: {set: {schema: ""}}) {
+						gqlSchema {
+						  id
+						}
+					  }
+					}`,
+			queryName:          "updateGQLSchema",
+			testGuardianAccess: false,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+		{
+			name: "shutdown has guardian auth",
+			query: `
+					mutation {
+					  shutdown {
+						response {
+						  code
+						  message
+						}
+					  }
+					}`,
+			queryName:          "shutdown",
+			testGuardianAccess: false,
+			guardianErrs:       nil,
+			guardianData:       "",
+		},
+	}
+
+	for _, tcase := range tcases {
+		t.Run(tcase.name, func(t *testing.T) {
+			params := testutil.GraphQLParams{Query: tcase.query}
+
+			// assert ACL error for non-guardians
+			assertNonGuardianFailure(t, tcase.queryName, !tcase.respIsArray, params)
+
+			// for guardians, assert non-ACL error or success
+			if tcase.testGuardianAccess {
+				accessJwt, _ := testutil.GrootHttpLogin(adminEndpoint)
+				resp := makeRequest(t, accessJwt, params)
+
+				if tcase.guardianErrs == nil {
+					resp.RequireNoGraphQLErrors(t)
+				} else {
+					require.Equal(t, tcase.guardianErrs, resp.Errors)
+				}
+
+				if tcase.guardianData != "" {
+					require.JSONEq(t, tcase.guardianData, string(resp.Data))
+				}
+			}
+		})
 	}
 }
 

@@ -28,17 +28,29 @@ import (
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
 
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 )
 
-// KEYFILE is set to the path of the file containing the key. Used for testing purposes only.
+// KeyFile is set to the path of the file containing the key. Used for testing purposes only.
 var KeyFile string
 
 func openDgraph(pdir string) (*badger.DB, error) {
+	// Get key.
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+	config.Set("encryption_key_file", KeyFile)
+	k, err := enc.ReadKey(config)
+	if err != nil {
+		return nil, err
+	}
+
 	opt := badger.DefaultOptions(pdir).WithTableLoadingMode(options.MemoryMap).
-		// TOOD(Ibrahim): Remove compression level once badger is updated.
-		WithReadOnly(true).WithZSTDCompressionLevel(1).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(KeyFile))
+		WithReadOnly(true).
+		WithEncryptionKey(k)
 	return badger.OpenManaged(opt)
 }
 

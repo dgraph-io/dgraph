@@ -26,6 +26,8 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
@@ -61,15 +63,19 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
+	errCh := make(chan error, len(currentGroups))
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
-		if err := proposeRestoreOrSend(ctx, reqCopy); err != nil {
-			// In case of an error, return but don't cancel the context.
-			// After the timeout expires, the Done channel will be closed.
-			// If the channel is closed due to a deadline issue, we can
-			// ignore the requests for the groups that did not error out.
-			return err
+
+		go func() {
+			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+		}()
+	}
+
+	for range currentGroups {
+		if err := <-errCh; err != nil {
+			return errors.Wrapf(err, "cannot complete restore proposal")
 		}
 	}
 
@@ -114,7 +120,6 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 	return &emptyRes, nil
 }
 
-// TODO(DGRAPH-1220): Online restores support passing the backup id.
 // TODO(DGRAPH-1232): Ensure all groups receive the restore proposal.
 func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	if req == nil {
@@ -196,16 +201,51 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
+// create a config object from the request for use with enc package.
+func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	if err := config.BindPFlags(flags); err != nil {
+		return nil, errors.Wrapf(err, "bad config bind")
+	}
+
+	// Copy from the request.
+	config.Set("encryption_key_file", req.EncryptionKeyFile)
+	config.Set("vault_roleid_file", req.VaultRoleidFile)
+	config.Set("vault_secretid_file", req.VaultSecretidFile)
+
+	// Override only if non-nil
+	if req.VaultAddr != "" {
+		config.Set("vault_addr", req.VaultAddr)
+	}
+	if req.VaultPath != "" {
+		config.Set("vault_path", req.VaultPath)
+	}
+	if req.VaultField != "" {
+		config.Set("vault_field", req.VaultField)
+	}
+	return config, nil
+}
+
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
 		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			r, err := enc.GetReader(req.GetKeyFile(), r)
+			cfg, err := getEncConfig(req)
+			if err != nil {
+				return 0, errors.Wrapf(err, "unable to get encryption config")
+			}
+			key, err := enc.ReadKey(cfg)
+			if err != nil {
+				return 0, errors.Wrapf(err, "unable to read key")
+			}
+			r, err = enc.GetReader(key, r)
 			if err != nil {
 				return 0, errors.Wrapf(err, "cannot get encrypted reader")
 			}
 			gzReader, err := gzip.NewReader(r)
 			if err != nil {
-				return 0, errors.Wrapf(err, "cannot create gzip reader")
+				return 0, errors.Wrapf(err, "couldn't create gzip reader")
 			}
 
 			maxUid, err := loadFromBackup(pstore, gzReader, req.RestoreTs, preds)

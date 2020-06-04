@@ -25,7 +25,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/options"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -67,7 +66,7 @@ func InitServerState() {
 
 func setBadgerOptions(opt badger.Options) badger.Options {
 	opt = opt.WithSyncWrites(false).WithTruncate(true).WithLogger(&x.ToGlog{}).
-		WithEncryptionKey(enc.ReadEncryptionKeyFile(Config.BadgerKeyFile))
+		WithEncryptionKey(x.WorkerConfig.EncryptionKey)
 
 	// Do not load bloom filters on DB open.
 	opt.LoadBloomsOnOpen = false
@@ -108,14 +107,14 @@ func setBadgerOptions(opt badger.Options) badger.Options {
 func (s *ServerState) initStorage() {
 	var err error
 
-	if Config.BadgerKeyFile != "" {
+	if x.WorkerConfig.EncryptionKey != nil {
 		// non-nil key file
 		if !EnterpriseEnabled() {
 			// not licensed --> crash.
 			glog.Fatal("Valid Enterprise License needed for the Encryption feature.")
 		} else {
 			// licensed --> OK.
-			glog.Infof("Encryption feature enabled. Using encryption key file: %v", Config.BadgerKeyFile)
+			glog.Infof("Encryption feature enabled.")
 		}
 	}
 
@@ -149,8 +148,13 @@ func (s *ServerState) initStorage() {
 		// All the writes to posting store should be synchronous. We use batched writers
 		// for posting lists, so the cost of sync writes is amortized.
 		x.Check(os.MkdirAll(Config.PostingDir, 0700))
-		opt := badger.DefaultOptions(Config.PostingDir).WithValueThreshold(1 << 10 /* 1KB */).
-			WithNumVersionsToKeep(math.MaxInt32).WithMaxCacheSize(1 << 30)
+		opt := badger.DefaultOptions(Config.PostingDir).
+			WithValueThreshold(1 << 10 /* 1KB */).
+			WithNumVersionsToKeep(math.MaxInt32).
+			WithMaxCacheSize(1 << 30).
+			WithKeepBlockIndicesInCache(true).
+			WithKeepBlocksInCache(true).
+			WithMaxBfCacheSize(500 << 20) // 500 MB of bloom filter cache.
 		opt = setBadgerOptions(opt)
 
 		// Print the options w/o exposing key.

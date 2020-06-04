@@ -38,7 +38,7 @@ import (
 func sendRestoreRequest(t *testing.T) {
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "heuristic_sammet9",
-			keyFile: "/data/keys/enc_key"}) {
+		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			response {
 				code
 				message
@@ -72,7 +72,7 @@ func runQueries(t *testing.T, dg *dgo.Dgraph) {
 			continue
 		}
 		filename := path.Join(queryDir, file.Name())
-		reader, cleanup := chunker.FileReader(filename, "")
+		reader, cleanup := chunker.FileReader(filename, nil)
 		bytes, err := ioutil.ReadAll(reader)
 		require.NoError(t, err)
 		contents := string(bytes)
@@ -140,7 +140,7 @@ func TestBasicRestore(t *testing.T) {
 func TestInvalidBackupId(t *testing.T) {
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "bad-backup-id",
-			keyFile: "/data/keys/enc_key"}) {
+			encryptionKeyFile: "/data/keys/enc_key"}) {
 			response {
 				code
 				message

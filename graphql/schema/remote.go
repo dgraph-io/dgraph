@@ -29,7 +29,7 @@ import (
 )
 
 // introspectRemoteSchema introspectes remote schema
-func introspectRemoteSchema(url string) (*introspectedSchema, error) {
+func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchema, error) {
 	param := &Request{
 		Query: introspectionQuery,
 	}
@@ -44,6 +44,9 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for k := range headers {
+		req.Header.Set(k, headers.Get(k))
+	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -161,10 +164,12 @@ type remoteGraphqlMetadata struct {
 	// graphqlOpDef is the Operation Definition for the operation given in @custom->http->graphql
 	// The operation can only be a query or mutation
 	graphqlOpDef *ast.OperationDefinition
-	// isBatch tells whether it is single/batch operation for resolving custom fields
+	// isBatch tells whether it is SINGLE/BATCH mode for resolving custom fields
 	isBatch bool
 	// url is the url of remote graphql endpoint
 	url string
+	// headers sent to the remote graphql endpoint for introspection
+	headers http.Header
 	// schema given by the user.
 	schema *ast.Schema
 }
@@ -205,7 +210,7 @@ type remoteArgMetadata struct {
 // validates the graphql given in @custom->http->graphql by introspecting remote schema.
 // It assumes that the graphql syntax is correct, only remote validation is needed.
 func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
-	remoteIntrospection, err := introspectRemoteSchema(metadata.url)
+	remoteIntrospection, err := introspectRemoteSchema(metadata.url, metadata.headers)
 	if err != nil {
 		return err
 	}
@@ -273,11 +278,11 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 	givenQryVarTypes := getVarTypesAsMap(metadata.parentField, metadata.parentType)
 	remoteQryArgMetadata := getRemoteQueryArgMetadata(introspectedRemoteQuery)
 
-	// verify remote query arg format for batch operations
+	// verify remote query arg format for BATCH mode
 	if metadata.isBatch {
 		if len(remoteQryArgMetadata.typMap) != 1 {
 			return errors.Errorf("remote %s `%s` accepts %d arguments, It must have only one "+
-				"argument of the form `[{param1: $var1, param2: $var2, ...}]` for batch operation.",
+				"argument of the form `[{param1: $var1, param2: $var2, ...}]` for BATCH mode.",
 				operationType, givenQuery.Name, len(remoteQryArgMetadata.typMap))
 		}
 		for argName, inputTyp := range remoteQryArgMetadata.typMap {
@@ -294,7 +299,7 @@ func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
 					Kind == nonNull && inputTyp.OfType.OfType.OfType != nil && inputTyp.
 					OfType.OfType.OfType.Kind == inputObject)) {
 				return errors.Errorf("argument `%s` for given %s `%s` must be of the form `[{param1"+
-					": $var1, param2: $var2, ...}]` for batch operations in remote %s.", argName,
+					": $var1, param2: $var2, ...}]` for BATCH mode in remote %s.", argName,
 					operationType, givenQuery.Name, operationType)
 			}
 			inputTypName := inputTyp.NamedType()

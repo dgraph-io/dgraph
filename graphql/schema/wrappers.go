@@ -56,7 +56,7 @@ type FieldHTTPConfig struct {
 	Method string
 	// would be nil if there is no body
 	Template       *interface{}
-	Operation      string
+	Mode           string
 	ForwardHeaders http.Header
 	// would be empty for non-GraphQL requests
 	RemoteGqlQueryName string
@@ -122,6 +122,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
+	Cascade() bool
 	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
@@ -135,6 +136,7 @@ type Field interface {
 	GetObjectName() string
 	IsAuthQuery() bool
 	CustomHTTPConfig() (FieldHTTPConfig, error)
+	EnumValues() []string
 }
 
 // A Mutation is a field (from the schema's Mutation type) from an Operation
@@ -162,6 +164,7 @@ type Type interface {
 	Fields() []FieldDefinition
 	IDField() FieldDefinition
 	XIDField() FieldDefinition
+	InterfaceImplHasAuthRules() bool
 	PasswordField() FieldDefinition
 	Name() string
 	DgraphName() string
@@ -656,6 +659,10 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
+func (f *field) Cascade() bool {
+	return f.field.Directives.ForName(cascadeDirective) != nil
+}
+
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	custom := f.op.inSchema.customDirectives[f.GetObjectName()][f.Name()]
 	if custom == nil {
@@ -696,14 +703,14 @@ func (f *field) HasCustomDirective() (bool, map[string]bool) {
 	if graphqlArg == nil {
 		return true, rf
 	}
-	op := ""
-	operation := httpArg.Value.Children.ForName("operation")
-	if operation != nil {
-		op = operation.Raw
+	modeVal := ""
+	modeArg := httpArg.Value.Children.ForName(mode)
+	if modeArg != nil {
+		modeVal = modeArg.Raw
 	}
 
-	if op == "single" {
-		// For batch mode, required args would have been parsed from the body above.
+	if modeVal == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
 		var err error
 		rf, err = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 		// This should not be returning an error since we should have validated this during schema
@@ -779,6 +786,7 @@ func (f *field) Type() Type {
 		// had a nil Definition ... how ???
 		t = f.field.Definition.Type
 	}
+
 	return &astType{
 		typ:             t,
 		inSchema:        f.op.inSchema,
@@ -802,10 +810,10 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		Method: httpArg.Value.Children.ForName("method").Raw,
 	}
 
-	fconf.Operation = "single"
-	op := httpArg.Value.Children.ForName("operation")
+	fconf.Mode = SINGLE
+	op := httpArg.Value.Children.ForName(mode)
 	if op != nil {
-		fconf.Operation = op.Raw
+		fconf.Mode = op.Raw
 	}
 
 	// both body and graphql can't be present together
@@ -827,20 +835,31 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		fconf.RequiredArgs = rf
 	}
 
-	if !isQueryOrMutation && graphqlArg != nil && fconf.Operation == "single" {
-		// For batch mode, required args would have been parsed from the body above.
+	if !isQueryOrMutation && graphqlArg != nil && fconf.Mode == SINGLE {
+		// For BATCH mode, required args would have been parsed from the body above.
 		// Safe to ignore the error here since we should already have validated that we can parse
 		// the required args from the GraphQL request during schema update.
 		fconf.RequiredArgs, _ = parseRequiredArgsFromGQLRequest(graphqlArg.Raw)
 	}
 
+	fconf.ForwardHeaders = http.Header{}
+	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+	if secretHeaders != nil {
+		hc.RLock()
+		for _, h := range secretHeaders.Children {
+			val := string(hc.secrets[h.Value.Raw])
+			fconf.ForwardHeaders.Set(h.Value.Raw, val)
+		}
+		hc.RUnlock()
+	}
+
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
-		headers := http.Header{}
 		for _, h := range forwardHeaders.Children {
-			headers.Add(h.Value.Raw, f.op.header.Get(h.Value.Raw))
+			// We would override the header if it was also specified as part of secretHeaders.
+			reqHeaderVal := f.op.header.Get(h.Value.Raw)
+			fconf.ForwardHeaders.Set(h.Value.Raw, reqHeaderVal)
 		}
-		fconf.ForwardHeaders = headers
 	}
 
 	if graphqlArg != nil {
@@ -850,7 +869,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 		}
 		// queryDoc will always have only one operation with only one field
 		qfield := queryDoc.Operations[0].SelectionSet[0].(*ast.Field)
-		if fconf.Operation == "batch" {
+		if fconf.Mode == BATCH {
 			fconf.GraphqlBatchModeArgument = queryDoc.Operations[0].VariableDefinitions[0].Variable
 		}
 		fconf.RemoteGqlQueryName = qfield.Name
@@ -890,6 +909,16 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 
 func (f *field) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig(f, false)
+}
+
+func (f *field) EnumValues() []string {
+	typ := f.Type()
+	def := f.op.inSchema.schema.Types[typ.Name()]
+	res := make([]string, 0, len(def.EnumValues))
+	for _, e := range def.EnumValues {
+		res = append(res, e.Name)
+	}
+	return res
 }
 
 func (f *field) SelectionSet() (flds []Field) {
@@ -1012,6 +1041,10 @@ func (q *query) Include() bool {
 	return true
 }
 
+func (q *query) Cascade() bool {
+	return (*field)(q).Cascade()
+}
+
 func (q *query) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(q).HasCustomDirective()
 }
@@ -1046,6 +1079,10 @@ func (q *query) GetObjectName() string {
 
 func (q *query) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(q), true)
+}
+
+func (q *query) EnumValues() []string {
+	return nil
 }
 
 func (q *query) QueryType() QueryType {
@@ -1117,6 +1154,10 @@ func (m *mutation) Include() bool {
 	return true
 }
 
+func (m *mutation) Cascade() bool {
+	return (*field)(m).Cascade()
+}
+
 func (m *mutation) HasCustomDirective() (bool, map[string]bool) {
 	return (*field)(m).HasCustomDirective()
 }
@@ -1145,6 +1186,12 @@ func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
 		if f.Name() == NumUid || f.Name() == Typename {
 			continue
+		}
+		// if @cascade was given on mutation itself, then it should get applied for the query which
+		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
+		if m.Cascade() && !f.Cascade() {
+			field := f.(*field).field
+			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
 		}
 		return f
 	}
@@ -1180,6 +1227,10 @@ func (m *mutation) MutatedType() Type {
 
 func (m *mutation) CustomHTTPConfig() (FieldHTTPConfig, error) {
 	return getCustomHTTPConfig((*field)(m), true)
+}
+
+func (m *mutation) EnumValues() []string {
+	return nil
 }
 
 func (m *mutation) GetObjectName() string {
@@ -1464,6 +1515,27 @@ func (t *astType) XIDField() FieldDefinition {
 	}
 
 	return nil
+}
+
+// InterfaceImplHasAuthRules checks if an interface's implementation has auth rules.
+func (t *astType) InterfaceImplHasAuthRules() bool {
+	schema := t.inSchema.schema
+	types := schema.Types
+	if typ, ok := types[t.Name()]; !ok || typ.Kind != ast.Interface {
+		return false
+	}
+
+	for implName, implements := range schema.Implements {
+		for _, intrface := range implements {
+			if intrface.Name != t.Name() {
+				continue
+			}
+			if val, ok := t.inSchema.authRules[implName]; ok && val.Rules != nil {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (t *astType) Interfaces() []string {
@@ -1775,8 +1847,7 @@ func substituteSingleVarInBody(key string, valPtr *interface{},
 	return nil
 }
 
-func substituteVarInMapInBody(object map[string]interface{},
-	variables map[string]interface{}) error {
+func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 	for k, v := range object {
 		switch val := v.(type) {
 		case string:

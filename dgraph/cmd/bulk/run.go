@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -56,6 +55,7 @@ func init() {
 		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
 	flag.StringP("schema", "s", "",
 		"Location of schema file.")
+	flag.StringP("graphql_schema", "g", "", "Location of the GraphQL schema file.")
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename.")
 	flag.Bool("encrypted", false,
@@ -102,41 +102,39 @@ func init() {
 		"Ignore UIDs in load files and assign new ones.")
 
 	// Options around how to set up Badger.
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16/24/32 bytes long."+
-			" The key size indicates the chosen AES encryption (AES-128/192/256 respectively). "+
-			" This key is used to encrypt the output data directories and to decrypt the input "+
-			" schema and data files (if encrytped). Enterprise feature.")
 	flag.Int("badger.compression_level", 1,
 		"The compression level for Badger. A higher value uses more resources.")
+
+	// Encryption and Vault options
+	enc.RegisterFlags(flag)
 }
 
 func run() {
+	var err error
 	opt := options{
-		DataFiles:        Bulk.Conf.GetString("files"),
-		DataFormat:       Bulk.Conf.GetString("format"),
-		SchemaFile:       Bulk.Conf.GetString("schema"),
-		Encrypted:        Bulk.Conf.GetBool("encrypted"),
-		OutDir:           Bulk.Conf.GetString("out"),
-		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
-		TmpDir:           Bulk.Conf.GetString("tmp"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:      Bulk.Conf.GetInt("reducers"),
-		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		HttpAddr:         Bulk.Conf.GetString("http"),
-		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:        Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:          Bulk.Conf.GetBool("new_uids"),
-		ClientDir:        Bulk.Conf.GetString("xidmap"),
-
-		BadgerKeyFile:          Bulk.Conf.GetString("encryption_key_file"),
+		DataFiles:              Bulk.Conf.GetString("files"),
+		DataFormat:             Bulk.Conf.GetString("format"),
+		SchemaFile:             Bulk.Conf.GetString("schema"),
+		GqlSchemaFile:          Bulk.Conf.GetString("graphql_schema"),
+		Encrypted:              Bulk.Conf.GetBool("encrypted"),
+		OutDir:                 Bulk.Conf.GetString("out"),
+		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),
+		TmpDir:                 Bulk.Conf.GetString("tmp"),
+		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:            Bulk.Conf.GetInt("reducers"),
+		Version:                Bulk.Conf.GetBool("version"),
+		StoreXids:              Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:               Bulk.Conf.GetString("zero"),
+		HttpAddr:               Bulk.Conf.GetString("http"),
+		IgnoreErrors:           Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:              Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:           Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers:       Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:                Bulk.Conf.GetBool("new_uids"),
+		ClientDir:              Bulk.Conf.GetString("xidmap"),
 		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
 
@@ -144,13 +142,12 @@ func run() {
 	if opt.Version {
 		os.Exit(0)
 	}
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opt.BadgerKeyFile != "" {
-		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
-		os.Exit(1)
+	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
+		return
 	}
-	if opt.Encrypted && opt.BadgerKeyFile == "" {
-		fmt.Printf("Must use --encryption_key_file option with --encrypted option.\n")
+	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
+		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {
@@ -190,11 +187,6 @@ func run() {
 	}
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
-
-	optBuf, err := json.MarshalIndent(&opt, "", "\t")
-	x.Check(err)
-	fmt.Println(string(optBuf))
-
 	maxOpenFilesWarning()
 
 	go func() {

@@ -18,24 +18,32 @@
 
 package enc
 
-import "io"
-import "github.com/dgraph-io/dgraph/x"
+import (
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"io"
+)
 
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
 
-// ReadEncryptionKeyFile returns nil key for OSS build
-func ReadEncryptionKeyFile(filepath string) []byte {
-	x.AssertTruef(filepath == "", "encryption_key_file is an Enterprise only feature.")
-	return nil
-}
-
 // GetWriter returns the Writer as is for OSS Builds.
-func GetWriter(filepath string, w io.Writer) (io.Writer, error) {
+func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 	return w, nil
 }
 
 // GetReader returns the reader as is for OSS Builds.
-func GetReader(filepath string, r io.Reader) (io.Reader, error) {
+func GetReader(_ []byte, r io.Reader) (io.Reader, error) {
 	return r, nil
+}
+
+// RegisterVaultFlags registers the required encryption flags. None for OSS.
+func RegisterFlags(_ *pflag.FlagSet) {
+	return
+}
+
+// ReadKey reads the key. Nil for OSS.
+func ReadKey(_ *viper.Viper) (x.SensitiveByteSlice, error) {
+	return nil, nil
 }

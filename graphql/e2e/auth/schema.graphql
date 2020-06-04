@@ -63,7 +63,7 @@ type UserSecret @auth(
 type Region @auth(
     delete: { rule: """
     query {
-    queryRegion(filter: { global: true }) { __typename }
+        queryRegion(filter: { global: true }) { __typename }
     }
     """}
 ){
@@ -102,11 +102,101 @@ type Movie @auth(
                 }"""
             }
         ]}
+    ]},
+    add: { and: [
+        { not: { rule: """
+            query {
+                queryMovie(filter: { hidden: true }) { __typename }
+            }
+        """}},
+        { or: [
+            { rule: """
+                query($USER: String!) {
+                    queryMovie {
+                        regionsAvailable {
+                            users(filter: {username: {eq: $USER}}) {
+                                __typename
+                            }
+                        }
+                    }
+                }"""
+            },
+            { rule: """
+                query {
+                    queryMovie {
+                        regionsAvailable(filter: { global: true }) {
+                            __typename
+                        }
+                    }
+                }"""
+            }
+        ]}
+    ]},
+    update: { and: [
+        { not: { rule: """
+            query {
+                queryMovie(filter: { hidden: true }) { __typename }
+            }
+        """}},
+        { or: [
+            { rule: """
+                query($USER: String!) {
+                    queryMovie {
+                        regionsAvailable {
+                            users(filter: {username: {eq: $USER}}) {
+                                __typename
+                            }
+                        }
+                    }
+                }"""
+            },
+            { rule: """
+                query {
+                    queryMovie {
+                        regionsAvailable(filter: { global: true }) {
+                            __typename
+                        }
+                    }
+                }"""
+            }
+        ]}
+    ]},
+  delete: { and: [
+        { not: { rule: """
+            query {
+                queryMovie(filter: { hidden: true }) { __typename }
+            }
+        """}},
+        { or: [
+            { rule: """
+                query($USER: String!) {
+                    queryMovie {
+                        regionsAvailable {
+                            users(filter: {username: {eq: $USER}}) {
+                                __typename
+                            }
+                        }
+                    }
+                }"""
+            },
+            { rule: """
+                query {
+                    queryMovie {
+                        regionsAvailable(filter: { global: true }) {
+                            __typename
+                        }
+                    }
+                }"""
+            }
+        ]}
     ]}
 ) {
+  id: ID!
   content: String
   hidden: Boolean @search
   regionsAvailable: [Region]
+  reviews: [Review]
+  random: String
 }
 
 type Issue @auth(
@@ -119,27 +209,81 @@ type Issue @auth(
                           }
                       }
                 }"""}
-     ]}){
+     ]},
+     add:  { and : [
+       { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+       { rule: """ query($USER: String!) {
+                      queryIssue {
+                          owner(filter: { username: { eq: $USER } }) {
+                              __typename
+                          }
+                      }
+                }"""}
+     ]},
+     update:  { and : [
+       { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+       { rule: """ query($USER: String!) {
+                      queryIssue {
+                          owner(filter: { username: { eq: $USER } }) {
+                              __typename
+                          }
+                      }
+                }"""}
+     ]},
+     delete:  { and : [
+       { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+       { rule: """ query($USER: String!) {
+                      queryIssue {
+                          owner(filter: { username: { eq: $USER } }) {
+                              __typename
+                          }
+                      }
+                }"""}
+     ]}
+){
   id: ID!
   msg: String
   owner: User!
+  random: String
 }
 
 type Log @auth(
-     query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+      query: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      add: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      update: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
+      delete: { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
 ) {
   id: ID!
   logs: String
+  random: String
 }
 
 type ComplexLog @auth(
      query: { and : [
       { rule: "{$ROLE: { eq: \"ADMIN\" }}" },
       { not : { rule: "{$ROLE: { eq: \"USER\" }}" }}
-     ]}
+     ]},
+      add: {
+        not: { rule: "{$ROLE: { eq: \"USER\" }}" }
+      },
+      update: {
+        not: { rule: "{$ROLE: { eq: \"USER\" }}" }
+      },
+      delete: {
+      or : [
+        { rule: "{$ROLE: { eq: \"ADMIN\" }}"},
+        { rule: """
+        query {
+          queryComplexLog(filter: { visible: true }) {
+            __typename
+          }
+        }"""
+        }
+    ]}
 ) {
   id: ID!
   logs: String
+  visible: Boolean @search
 }
 
 type Project @auth(
@@ -154,18 +298,85 @@ type Project @auth(
                       }
                   }""" },
          { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+     ]},
+     add: { or: [
+         { rule: """query($USER: String!) {
+                      queryProject {
+                        roles(filter: { permission: { eq: ADMIN } }) {
+                         assignedTo(filter: { username: { eq: $USER } }) {
+                          __typename
+                         }
+                        }
+                      }
+                  }""" },
+         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
+     ]},
+     update: { or: [
+         { rule: """query($USER: String!) {
+                      queryProject {
+                        roles(filter: { permission: { eq: ADMIN } }) {
+                         assignedTo(filter: { username: { eq: $USER } }) {
+                          __typename
+                         }
+                        }
+                      }
+                  }""" },
+         { rule: "{$ROLE: { eq: \"ADMIN\" }}" }
      ]}
 ) {
   projID: ID!
-  name: String!
+  name: String! @search(by: [hash])
   roles: [Role]
   columns: [Column] @hasInverse(field: inProject)
+  random: String
 }
 
-type Role {
+type Role @auth(
+  delete:  { not : { rule: "{ $ROLE: { eq: \"USER\" }}"} }
+){
   id: ID!
   permission: Permission @search
   assignedTo: [User]
+}
+
+type Group @auth(
+    query:  { or : [
+        { rule: """
+        query($USER: String!) {
+            queryGroup {
+                users(filter: { username: { eq: $USER } }) {
+                    __typename
+                }
+            }
+        }"""},
+        {  rule: """
+        query($PERMISSION: Permission!) {
+            queryGroup(filter: { readPermission: { eq: $PERMISSION } }) {
+                __typename
+            }
+        }"""},
+        { and: [
+            { rule: """
+            query($USER: String!) {
+                queryGroup {
+                    createdBy(filter: { username: { eq: $USER } }) {
+                        __typename
+                    }
+                }
+            }"""},
+            {  not: { rule: """
+            query($PERMISSION: Permission!) {
+                queryGroup(filter: { writePermission: { eq: $PERMISSION } }) {
+                    __typename
+                }
+            }"""} },
+        ]}
+    ]}){
+    id: ID!
+    readPermission: Permission @search
+    writePermission: Permission @search
+    users: [User]
+    createdBy: User
 }
 
 enum Permission {
@@ -210,13 +421,25 @@ type Column @auth(
                 }
             }
         }
-    }"""}
-#     delete: { rule: "false" }
+    }"""},
+    delete: { rule: """
+      query($USER: String!) {
+          queryColumn {
+              inProject {
+                  roles(filter: { permission: { eq: ADMIN } } ) {
+                      assignedTo(filter: { username: { eq: $USER } }) {
+                          __typename
+                      }
+                  }
+              }
+          }
+      }"""},
 ) {
   colID: ID!
   inProject: Project! # @auth(update: { rule: "DENY" })
   name: String! @search(by: [hash])
   tickets: [Ticket] @hasInverse(field: onColumn)
+  random: String
 }
 
 type Ticket @auth(
@@ -281,5 +504,10 @@ type Ticket @auth(
     onColumn: Column!
     title: String! @search(by: [term])
     assignedTo: [User!]
+}
+
+type Review @auth() {
+    id: ID!
+    comment: String!
 }
 

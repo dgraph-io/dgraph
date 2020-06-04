@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strings"
 	"testing"
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
@@ -57,6 +58,10 @@ type AuthQueryRewritingCase struct {
 	AuthQuery string
 	AuthJson  string
 
+	// Indicates if we should skip auth query verification when using authExecutor.
+	// Example: Top level RBAC rules is true.
+	SkipAuth bool
+
 	Error *x.GqlError
 }
 
@@ -72,6 +77,8 @@ type authExecutor struct {
 	// auth
 	authQuery string
 	authJson  string
+
+	skipAuth bool
 }
 
 func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
@@ -91,6 +98,11 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 
 		if len(assigned) == 0 {
 			// skip state 2, there's no new nodes to apply auth to
+			ex.state++
+		}
+
+		// For rules that don't require auth, it should directly go to step 3.
+		if ex.skipAuth {
 			ex.state++
 		}
 
@@ -153,11 +165,19 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 			gqlQuery := test.GetQuery(t, op)
 
 			authMeta.AuthVars = map[string]interface{}{
-				"USER": "user1",
 				"ROLE": tcase.Role,
 			}
-			ctx, err := authMeta.AddClaimsToContext(context.Background())
-			require.NoError(t, err)
+
+			// Skipping $USER for specific rules.
+			if !strings.HasPrefix(tcase.Name, "Query with missing variable") {
+				authMeta.AuthVars["USER"] = "user1"
+			}
+
+			ctx := context.Background()
+			if !strings.HasPrefix(tcase.Name, "Query with missing jwt token") {
+				ctx, err = authMeta.AddClaimsToContext(ctx)
+				require.NoError(t, err)
+			}
 
 			dgQuery, err := testRewriter.Rewrite(ctx, gqlQuery)
 			require.Nil(t, err)
@@ -344,6 +364,10 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 			authMeta.AuthVars = map[string]interface{}{
 				"USER": "user1",
 			}
+
+			if tcase.Role != "" {
+				authMeta.AuthVars["ROLE"] = tcase.Role
+			}
 			ctx, err := authMeta.AddClaimsToContext(context.Background())
 			require.NoError(t, err)
 
@@ -466,6 +490,7 @@ func checkAddUpdateCase(
 		uids:        tcase.Uids,
 		authQuery:   tcase.AuthQuery,
 		authJson:    tcase.AuthJson,
+		skipAuth:    tcase.SkipAuth,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
 
@@ -479,7 +504,7 @@ func checkAddUpdateCase(
 	}
 }
 
-func TestAuthSchemaRewriting(t *testing.T) {
+func TestAuthQueryRewriting(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
 

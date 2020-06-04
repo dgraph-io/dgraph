@@ -50,7 +50,7 @@ func invokeNetworkRequest(ctx context.Context, addr string,
 	f func(context.Context, pb.WorkerClient) (interface{}, error)) (interface{}, error) {
 	pl, err := conn.GetPools().Get(addr)
 	if err != nil {
-		return &pb.Result{}, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
+		return nil, errors.Wrapf(err, "dispatchTaskOverNetwork: while retrieving connection.")
 	}
 
 	con := pl.Get()
@@ -134,9 +134,9 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 	gid, err := groups().BelongsToReadOnly(attr, q.ReadTs)
 	switch {
 	case err != nil:
-		return &pb.Result{}, err
+		return nil, err
 	case gid == 0:
-		return &pb.Result{}, errNonExistentTablet
+		return nil, errNonExistentTablet
 	}
 
 	span := otrace.FromContext(ctx)
@@ -155,7 +155,7 @@ func ProcessTaskOverNetwork(ctx context.Context, q *pb.Query) (*pb.Result, error
 			return c.ServeTask(ctx, q)
 		})
 	if err != nil {
-		return &pb.Result{}, err
+		return nil, err
 	}
 
 	reply := result.(*pb.Result)
@@ -849,7 +849,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	span.Annotatef(nil, "Waiting for startTs: %d at node: %d, gid: %d",
 		q.ReadTs, groups().Node.Id, gid)
 	if err := posting.Oracle().WaitForTs(ctx, q.ReadTs); err != nil {
-		return &pb.Result{}, err
+		return nil, err
 	}
 	if span != nil {
 		maxAssigned := posting.Oracle().MaxAssigned()
@@ -857,7 +857,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 			q.Attr, q.ReadTs, maxAssigned)
 	}
 	if err := groups().ChecksumsMatch(ctx); err != nil {
-		return &pb.Result{}, err
+		return nil, err
 	}
 	span.Annotatef(nil, "Done waiting for checksum match")
 
@@ -870,11 +870,11 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 	knownGid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
-		return &pb.Result{}, err
+		return nil, err
 	case knownGid == 0:
-		return &pb.Result{}, errNonExistentTablet
+		return nil, errNonExistentTablet
 	case knownGid != groups().groupId():
-		return &pb.Result{}, errUnservedTablet
+		return nil, errUnservedTablet
 	}
 
 	var qs queryState
@@ -886,7 +886,7 @@ func processTask(ctx context.Context, q *pb.Query, gid uint32) (*pb.Result, erro
 
 	out, err := qs.helpProcessTask(ctx, q, gid)
 	if err != nil {
-		return &pb.Result{}, err
+		return nil, err
 	}
 	return out, nil
 }
@@ -1851,17 +1851,17 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	defer span.End()
 
 	if ctx.Err() != nil {
-		return &pb.Result{}, ctx.Err()
+		return nil, ctx.Err()
 	}
 
 	gid, err := groups().BelongsToReadOnly(q.Attr, q.ReadTs)
 	switch {
 	case err != nil:
-		return &pb.Result{}, err
+		return nil, err
 	case gid == 0:
-		return &pb.Result{}, errNonExistentTablet
+		return nil, errNonExistentTablet
 	case gid != groups().groupId():
-		return &pb.Result{}, errUnservedTablet
+		return nil, errUnservedTablet
 	}
 
 	var numUids int
@@ -1871,7 +1871,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 	span.Annotatef(nil, "Attribute: %q NumUids: %v groupId: %v ServeTask", q.Attr, numUids, gid)
 
 	if !groups().ServesGroup(gid) {
-		return &pb.Result{}, errors.Errorf(
+		return nil, errors.Errorf(
 			"Temporary error, attr: %q groupId: %v Request sent to wrong server", q.Attr, gid)
 	}
 
@@ -1887,7 +1887,7 @@ func (w *grpcWorker) ServeTask(ctx context.Context, q *pb.Query) (*pb.Result, er
 
 	select {
 	case <-ctx.Done():
-		return &pb.Result{}, ctx.Err()
+		return nil, ctx.Err()
 	case reply := <-c:
 		return reply.result, reply.err
 	}

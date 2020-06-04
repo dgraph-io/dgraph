@@ -41,7 +41,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 
 	input, err := getBackupInput(m)
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	err = worker.ProcessBackupRequest(context.Background(), &pb.BackupRequest{
@@ -53,7 +53,7 @@ func resolveBackup(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 	}, input.ForceFull)
 
 	if err != nil {
-		return emptyResult(m, err), false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{

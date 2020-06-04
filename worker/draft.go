@@ -137,15 +137,15 @@ func (n *node) startTask(id op) (*y.Closer, error) {
 			if otherId == opRestore {
 				return nil, errors.Errorf("another restore operation is already running")
 			}
-			// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
-			n.ops[otherId] = nil
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
 			otherCloser.SignalAndWait()
 		}
 	case opSnapshot, opIndexing:
 		for otherId, otherCloser := range n.ops {
 			if otherId == opRollup {
-				// We set to nil so that stopAllTasks doesn't call SignalAndWait again.
-				n.ops[opRollup] = nil
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
 				otherCloser.SignalAndWait()
 			} else {
 				return nil, errors.Errorf("operation %s is already running", otherId)
@@ -182,9 +182,6 @@ func (n *node) stopAllTasks() {
 	n.opsLock.Lock()
 	defer n.opsLock.Unlock()
 	for _, closer := range n.ops {
-		if closer == nil {
-			continue
-		}
 		closer.SignalAndWait()
 	}
 	glog.Infof("Stopped all ongoing registered tasks.")
@@ -852,17 +849,20 @@ func (n *node) proposeSnapshot(discardN int) error {
 	return n.Raft().Propose(n.ctx, data)
 }
 
-const maxPendingSize int64 = 64 << 20 // in bytes.
+const (
+	maxPendingSize int64 = 64 << 20 // in bytes.
+	nodeApplyChan        = "raft node applyCh"
+)
 
-func (n *node) rampMeter() {
+func rampMeter(address *int64, maxSize int64, component string) {
 	start := time.Now()
 	defer func() {
 		if dur := time.Since(start); dur > time.Second {
-			glog.Infof("Blocked pushing to applyCh for %v", dur.Round(time.Millisecond))
+			glog.Infof("Blocked pushing to %s for %v", component, dur.Round(time.Millisecond))
 		}
 	}()
 	for {
-		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+		if atomic.LoadInt64(address) <= maxSize {
 			return
 		}
 		time.Sleep(3 * time.Millisecond)
@@ -1171,7 +1171,7 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If this do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				n.rampMeter()
+				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
 				for _, p := range proposals {
 					pendingSize += int64(p.Size())
