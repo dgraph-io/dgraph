@@ -221,7 +221,7 @@ func (s *Server) SetMembershipState(state *pb.MembershipState) {
 	defer s.Unlock()
 
 	s.state = state
-	s.nextRaftId = x.Max(s.nextRaftId, s.state.MaxRaftId + 1)
+	s.nextRaftId = x.Max(s.nextRaftId, s.state.MaxRaftId+1)
 
 	if state.Zeros == nil {
 		state.Zeros = make(map[uint64]*pb.Member)
