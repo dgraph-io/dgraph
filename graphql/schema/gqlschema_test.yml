@@ -1948,6 +1948,24 @@ invalid_schemas:
      "locations": [{"line":9, "column":3}]}
     ]
 
+  -
+    name: "a remote type can't implement a non-remote interface"
+    description: "Since we won't be adding/update the remote type, it wouldn't show up in
+    getPerson, queryPerson etc., hence causing confusion."
+    input: |
+      interface Person {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; with @remote directive implements interface Person; which doesn't have
+     @remote directive.",
+      "locations": [{"line":5, "column":6}]}
+    ]
+
 valid_schemas:
   - name: "@auth on interface implementation"
     input: |

@@ -591,6 +591,15 @@ func remoteTypeValidation(typ *ast.Definition, schema *ast.Schema) *gqlerror.Err
 			}
 
 		}
+
+		for _, implements := range typ.Interfaces {
+			origTyp := schema.Types[implements]
+			remoteDir := origTyp.Directives.ForName(remoteDirective)
+			if remoteDir == nil {
+				return gqlerror.ErrorPosf(typ.Position, "Type %s; with @remote directive implements"+
+					" interface %s; which doesn't have @remote directive.", typ.Name, implements)
+			}
+		}
 	}
 
 	return nil
