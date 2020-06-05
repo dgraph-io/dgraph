@@ -944,7 +944,38 @@ Similarly, you can expose alpha and ratel service to the internet as follows:
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
 
-#### Deleting the Charts
+#### Upgrading the Chart
+
+You can update your cluster configuration by updating the configuration of the
+Helm chart. Dgraph is a stateful database that requires some attention on
+upgrading the configuration carefully in order to update your cluster to your
+desired configuration.
+
+In general, you can use [`helm upgrade`][helm-upgrade] to update the
+configuration values of the cluster. Depending on your change, you may need to
+upgrade the configuration in multiple steps following the steps below.
+
+[helm-upgrade]: https://helm.sh/docs/helm/helm_upgrade/
+
+**Upgrade to HA cluster setup**
+
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+that the shard replication setting is more than 1. When `zero.shardReplicaCount`
+is not set to an HA configuration (3 or 5), follow the steps below:
+
+1. Set the shard replica flag on the Zero node group. For example: `zero.shardReplicaCount=3`.
+2. Next, run the Helm upgrade command to restart the Zero node group: 
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+3. Now set the Alpha replica count flag. For example: `alpha.replicaCount=3`.
+4. Finally, run the Helm upgrade command again:
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+
+
+#### Deleting the Chart
 
 Delete the Helm deployment as normal
 
