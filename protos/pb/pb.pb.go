@@ -1291,6 +1291,7 @@ type ZeroProposal struct {
 	Key                  string            `protobuf:"bytes,8,opt,name=key,proto3" json:"key,omitempty"`
 	Cid                  string            `protobuf:"bytes,9,opt,name=cid,proto3" json:"cid,omitempty"`
 	License              *License          `protobuf:"bytes,10,opt,name=license,proto3" json:"license,omitempty"`
+	Rebalance            string            `protobuf:"bytes,11,opt,name=rebalance,proto3" json:"rebalance,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}          `json:"-"`
 	XXX_unrecognized     []byte            `json:"-"`
 	XXX_sizecache        int32             `json:"-"`
@@ -1399,6 +1400,13 @@ func (m *ZeroProposal) GetLicense() *License {
 	return nil
 }
 
+func (m *ZeroProposal) GetRebalance() string {
+	if m != nil {
+		return m.Rebalance
+	}
+	return ""
+}
+
 // MembershipState is used to pack together the current membership state of all the nodes
 // in the caller server; and the membership updates recorded by the callee server since
 // the provided lastUpdate.
@@ -1412,6 +1420,7 @@ type MembershipState struct {
 	Removed              []*Member          `protobuf:"bytes,7,rep,name=removed,proto3" json:"removed,omitempty"`
 	Cid                  string             `protobuf:"bytes,8,opt,name=cid,proto3" json:"cid,omitempty"`
 	License              *License           `protobuf:"bytes,9,opt,name=license,proto3" json:"license,omitempty"`
+	Rebalance            string             `protobuf:"bytes,10,opt,name=rebalance,proto3" json:"rebalance,omitempty"`
 	XXX_NoUnkeyedLiteral struct{}           `json:"-"`
 	XXX_unrecognized     []byte             `json:"-"`
 	XXX_sizecache        int32              `json:"-"`
@@ -1511,6 +1520,13 @@ func (m *MembershipState) GetLicense() *License {
 		return m.License
 	}
 	return nil
+}
+
+func (m *MembershipState) GetRebalance() string {
+	if m != nil {
+		return m.Rebalance
+	}
+	return ""
 }
 
 type ConnectionState struct {
@@ -7204,6 +7220,13 @@ func (m *ZeroProposal) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
 	}
+	if len(m.Rebalance) > 0 {
+		i -= len(m.Rebalance)
+		copy(dAtA[i:], m.Rebalance)
+		i = encodeVarintPb(dAtA, i, uint64(len(m.Rebalance)))
+		i--
+		dAtA[i] = 0x5a
+	}
 	if m.License != nil {
 		{
 			size, err := m.License.MarshalToSizedBuffer(dAtA[:i])
@@ -7322,6 +7345,13 @@ func (m *MembershipState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	if m.XXX_unrecognized != nil {
 		i -= len(m.XXX_unrecognized)
 		copy(dAtA[i:], m.XXX_unrecognized)
+	}
+	if len(m.Rebalance) > 0 {
+		i -= len(m.Rebalance)
+		copy(dAtA[i:], m.Rebalance)
+		i = encodeVarintPb(dAtA, i, uint64(len(m.Rebalance)))
+		i--
+		dAtA[i] = 0x52
 	}
 	if m.License != nil {
 		{
@@ -10596,6 +10626,10 @@ func (m *ZeroProposal) Size() (n int) {
 		l = m.License.Size()
 		n += 1 + l + sovPb(uint64(l))
 	}
+	l = len(m.Rebalance)
+	if l > 0 {
+		n += 1 + l + sovPb(uint64(l))
+	}
 	if m.XXX_unrecognized != nil {
 		n += len(m.XXX_unrecognized)
 	}
@@ -10658,6 +10692,10 @@ func (m *MembershipState) Size() (n int) {
 	}
 	if m.License != nil {
 		l = m.License.Size()
+		n += 1 + l + sovPb(uint64(l))
+	}
+	l = len(m.Rebalance)
+	if l > 0 {
 		n += 1 + l + sovPb(uint64(l))
 	}
 	if m.XXX_unrecognized != nil {
@@ -14772,6 +14810,38 @@ func (m *ZeroProposal) Unmarshal(dAtA []byte) error {
 				return err
 			}
 			iNdEx = postIndex
+		case 11:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Rebalance", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthPb
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Rebalance = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
 			skippy, err := skipPb(dAtA[iNdEx:])
@@ -15233,6 +15303,38 @@ func (m *MembershipState) Unmarshal(dAtA []byte) error {
 			if err := m.License.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Rebalance", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowPb
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthPb
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthPb
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.Rebalance = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

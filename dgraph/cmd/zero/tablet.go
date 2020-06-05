@@ -62,12 +62,16 @@ This would trigger G1 to get latest state. Wait for it.
 func (s *Server) rebalanceTablets() {
 	ticker := time.NewTicker(opts.rebalanceInterval)
 	for range ticker.C {
-		predicate, srcGroup, dstGroup := s.chooseTablet()
-		if len(predicate) == 0 {
-			continue
-		}
-		if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
-			glog.Errorln(err)
+		if s.state.Rebalance == "enabled" {
+			predicate, srcGroup, dstGroup := s.chooseTablet()
+			if len(predicate) == 0 {
+				continue
+			}
+			if err := s.movePredicate(predicate, srcGroup, dstGroup); err != nil {
+				glog.Errorln(err)
+			}
+		} else {
+			glog.Infof("Rebalance is %+v", s.state.Rebalance)
 		}
 	}
 }

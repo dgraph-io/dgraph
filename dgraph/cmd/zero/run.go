@@ -254,6 +254,7 @@ func run() {
 	http.HandleFunc("/moveTablet", st.moveTablet)
 	http.HandleFunc("/assign", st.assign)
 	http.HandleFunc("/enterpriseLicense", st.applyEnterpriseLicense)
+	http.HandleFunc("/rebalance", st.setRebalance)
 	zpages.Handle(http.DefaultServeMux, "/z")
 
 	// This must be here. It does not work if placed before Grpc init.

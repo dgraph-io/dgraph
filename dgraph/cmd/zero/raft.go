@@ -369,6 +369,10 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 		state.License.Enabled = time.Now().UTC().Before(expiry)
 	}
 
+	if p.Rebalance != "" {
+		state.Rebalance = p.Rebalance
+	}
+
 	switch {
 	case p.MaxLeaseId > state.MaxLeaseId:
 		state.MaxLeaseId = p.MaxLeaseId

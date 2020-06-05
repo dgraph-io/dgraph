@@ -159,6 +159,7 @@ message ZeroProposal {
 	string key = 8;  // Used as unique identifier for proposal id.
 	string cid = 9; // Used as unique identifier for the cluster.
 	License license = 10;
+	string rebalance = 11;
 }
 
 // MembershipState is used to pack together the current membership state of all the nodes
@@ -174,6 +175,7 @@ message MembershipState {
 	repeated Member removed = 7;
 	string cid = 8; // Used to uniquely identify the Dgraph cluster.
 	License license = 9;
+	string rebalance = 10;
 }
 
 message ConnectionState {

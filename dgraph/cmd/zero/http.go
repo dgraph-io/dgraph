@@ -129,6 +129,53 @@ func (st *state) removeNode(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// setRebalance can be used to enable or disable rebalance
+func (st *state) setRebalance(w http.ResponseWriter, r *http.Request) {
+	x.AddCorsHeaders(w)
+	if r.Method == "OPTIONS" {
+		return
+	}
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidMethod, "Invalid method")
+		return
+	}
+
+	if !st.node.AmLeader() {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest,
+			"This Zero server is not the leader. Re-run command on leader.")
+		return
+	}
+
+	what := r.URL.Query().Get("what")
+	if len(what) == 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		x.SetStatus(w, x.ErrorInvalidRequest, "what is a mandatory query parameter")
+		return
+	}
+
+	var err error
+	if what == "enabled" || what == "disabled" {
+		err = st.zero.setRebalance(context.Background(), what)
+	} else {
+		x.SetStatus(w, x.Error,
+			fmt.Sprintf("Invalid what: [%s]. Must be one of enabled or disabled\n", what))
+		return
+	}
+	if err != nil {
+		glog.Errorf("While setting rebalance %s. Error: %v", what, err)
+		w.WriteHeader(http.StatusInternalServerError)
+		x.SetStatus(w, x.Error, err.Error())
+		return
+	}
+	_, err = fmt.Fprintf(w, "Rebalance: %s\n",
+		what)
+	if err != nil {
+		glog.Warningf("Error while writing response: %+v", err)
+	}
+}
+
 // moveTablet can be used to move a tablet to a specific group. It takes in tablet and group as
 // argument.
 func (st *state) moveTablet(w http.ResponseWriter, r *http.Request) {

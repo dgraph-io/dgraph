@@ -80,8 +80,9 @@ func (s *Server) Init() {
 	s.orc = &Oracle{}
 	s.orc.Init()
 	s.state = &pb.MembershipState{
-		Groups: make(map[uint32]*pb.Group),
-		Zeros:  make(map[uint64]*pb.Member),
+		Rebalance: "enabled",
+		Groups:    make(map[uint32]*pb.Group),
+		Zeros:     make(map[uint64]*pb.Member),
 	}
 	s.nextLeaseId = 1
 	s.nextTxnTs = 1
@@ -782,4 +783,10 @@ func (s *Server) applyLicense(ctx context.Context, signedData io.Reader) error {
 	}
 	glog.Infof("Enterprise license proposed to the cluster %+v", proposal)
 	return nil
+}
+func (s *Server) setRebalance(ctx context.Context, rebalance string) error {
+	proposal := &pb.ZeroProposal{
+		Rebalance: rebalance,
+	}
+	return s.Node.proposeAndWait(ctx, proposal)
 }
