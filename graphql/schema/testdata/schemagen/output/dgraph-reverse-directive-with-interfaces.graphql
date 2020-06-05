@@ -148,7 +148,7 @@ type AddDirectorPayload {
 }
 
 type AddOscarMoviePayload {
-	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	numUids: Int
 }
 
@@ -178,7 +178,7 @@ type UpdateMoviePayload {
 }
 
 type UpdateOscarMoviePayload {
-	oscarmovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	numUids: Int
 }
 
