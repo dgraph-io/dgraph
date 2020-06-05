@@ -578,7 +578,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
+	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
