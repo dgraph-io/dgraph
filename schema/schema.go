@@ -557,7 +557,7 @@ func InitialTypes() []*pb.TypeUpdate {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
-			TypeName: "User",
+			TypeName: "dgraph.type.User",
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: "dgraph.xid",
@@ -574,7 +574,7 @@ func InitialTypes() []*pb.TypeUpdate {
 			},
 		},
 			&pb.TypeUpdate{
-				TypeName: "Group",
+				TypeName: "dgraph.type.Group",
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.xid",
@@ -587,7 +587,7 @@ func InitialTypes() []*pb.TypeUpdate {
 				},
 			},
 			&pb.TypeUpdate{
-				TypeName: "Rule",
+				TypeName: "dgraph.type.Rule",
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: "dgraph.rule.predicate",
@@ -682,11 +682,11 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsReservedPredicateChanged returns true if the initial update for the reserved
+// IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
 // predicate pred is different than the passed update.
-func IsReservedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
-	// Return false for non-reserved predicates.
-	if !x.IsReservedPredicate(pred) {
+func IsPreDefinedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
+	// Return false for non-pre-defined predicates.
+	if !x.IsPreDefinedPredicate(pred) {
 		return false
 	}
 
