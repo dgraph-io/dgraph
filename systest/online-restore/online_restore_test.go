@@ -37,7 +37,7 @@ import (
 
 func sendRestoreRequest(t *testing.T) {
 	restoreRequest := `mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "heuristic_sammet9",
+		 restore(input: {location: "/data/backup", backupId: "cranky_bartik8",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			response {
 				code
@@ -190,7 +190,7 @@ func TestListBackups(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
-	require.Contains(t, sbuf, `"backupId":"heuristic_sammet9"`)
+	require.Contains(t, sbuf, `"backupId":"cranky_bartik8"`)
 	require.Contains(t, sbuf, `"backupNum":1`)
 	require.Contains(t, sbuf, `"backupNum":2`)
 	require.Contains(t, sbuf, "initial_release_date")
