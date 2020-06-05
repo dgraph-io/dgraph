@@ -44,8 +44,6 @@ import (
 	farm "github.com/dgryski/go-farm"
 )
 
-const partitionKeyShard = 10
-
 type mapper struct {
 	*state
 	shards []shardState // shard is based on predicate
@@ -121,29 +119,6 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		x.Check(gzWriter.Flush())
 		x.Check(gzWriter.Close())
 	}()
-
-	// Create partition keys for the map file.
-	header := &pb.MapHeader{
-		PartitionKeys: [][]byte{},
-	}
-	shardPartitionNo := len(entries) / partitionKeyShard
-	for i := range entries {
-		if shardPartitionNo == 0 {
-			// we have very few entries so no need for partition keys.
-			break
-		}
-		if (i+1)%shardPartitionNo == 0 {
-			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
-		}
-	}
-	// Write the header to the map file.
-	headerBuf, err := header.Marshal()
-	x.Check(err)
-	lenBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))
-	x.Check2(w.Write(lenBuf))
-	x.Check2(w.Write(headerBuf))
-	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	for _, me := range entries {
