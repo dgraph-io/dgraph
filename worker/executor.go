@@ -20,15 +20,13 @@ package worker
 
 import (
 	"context"
-	"encoding/binary"
 	"sync"
 	"sync/atomic"
 
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgryski/go-farm"
+	"github.com/dgraph-io/ristretto/z"
 	"github.com/golang/glog"
 )
 
@@ -104,12 +102,7 @@ func (e *executor) shutdown() {
 
 // channelID obtains the channel for the given edge.
 func (e *executor) channelID(edge *pb.DirectedEdge) int {
-	attr := edge.Attr
-	uid := edge.Entity
-	b := make([]byte, len(attr)+8)
-	x.AssertTrue(len(attr) == copy(b, attr))
-	binary.BigEndian.PutUint64(b[len(attr):len(attr)+8], uid)
-	cid := farm.Fingerprint64(b) % uint64(len(e.workerChan))
+	cid := (z.MemHashString(edge.Attr) ^ edge.Entity) % uint64(len(e.workerChan))
 	return int(cid)
 }
 
