@@ -489,14 +489,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
-		if x.WorkerConfig.LudicrousMode {
-			ts := proposal.Mutations.StartTs
-			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
-				Txns: []*pb.TxnStatus{
-					{StartTs: ts, CommitTs: ts},
-				},
-			})
-		}
+
 		span.Annotate(nil, "Done")
 		return nil
 	}
