@@ -33,6 +33,7 @@ type subMutation struct {
 	edges   []*pb.DirectedEdge
 	ctx     context.Context
 	startTs uint64
+	index   uint64
 }
 
 type executor struct {
@@ -41,12 +42,14 @@ type executor struct {
 	sync.RWMutex
 	predChan map[string]chan *subMutation
 	closer   *y.Closer
+	applied  *y.WaterMark
 }
 
-func newExecutor() *executor {
+func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
+		applied:  applied,
 	}
 	go ex.shutdown()
 	return ex
@@ -80,6 +83,7 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
 
+		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
 	}
 }
@@ -111,7 +115,7 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
-func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
+func (e *executor) addEdges(ctx context.Context, index, startTs uint64, edges []*pb.DirectedEdge) {
 	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)
 
 	payloadMap := make(map[string]*subMutation)
@@ -122,6 +126,7 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 			payloadMap[edge.Attr] = &subMutation{
 				ctx:     ctx,
 				startTs: startTs,
+				index:   index,
 			}
 			payload = payloadMap[edge.Attr]
 		}
@@ -138,6 +143,7 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 	default:
 		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
 		for attr, payload := range payloadMap {
+			e.applied.Begin(index)
 			e.getChannelUnderLock(attr) <- payload
 		}
 	}
