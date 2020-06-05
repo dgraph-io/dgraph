@@ -842,7 +842,7 @@ func hasOrderables(defn *ast.Definition) bool {
 
 func hasID(defn *ast.Definition) bool {
 	return fieldAny(defn.Fields,
-		isID(fld))
+		isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
