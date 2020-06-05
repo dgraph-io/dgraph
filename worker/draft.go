@@ -1431,6 +1431,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 					snapshotIdx = entry.Index - 1
 				}
 			}
+			// In ludicrous mode commitTs for any transaction is same as startTs.
 			if x.WorkerConfig.LudicrousMode {
 				maxCommitTs = x.Max(maxCommitTs, start)
 			} else if proposal.Delta != nil {
