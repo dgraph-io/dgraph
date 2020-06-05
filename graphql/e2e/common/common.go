@@ -221,6 +221,9 @@ func RunAll(t *testing.T) {
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
 
+	// header tests
+	t.Run("touched uids header", touchedUidsHeader)
+
 	// encoding
 	t.Run("gzip compression", gzipCompression)
 	t.Run("gzip compression header", gzipCompressionHeader)
