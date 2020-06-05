@@ -23,6 +23,8 @@ import (
 
 // Options stores the options for this package.
 type Options struct {
+	// BindAll, if set, uses 0.0.0.0 instead of localhost for listening.
+	BindAll bool
 	// PortOffset will be used to determine the ports to use (port = default port + offset).
 	PortOffset int
 	// QueryEdgeLimit is the maximum number of edges that will be traversed during
