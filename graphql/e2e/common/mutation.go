@@ -2576,7 +2576,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 	addMovieDirectorParams := &GraphQLParams{
 		Query: `mutation addMovieDirector($dir: [AddMovieDirectorInput!]!) {
 			addMovieDirector(input: $dir) {
-			  moviedirector {
+			  movieDirector {
 				id
 				name
 			  }
