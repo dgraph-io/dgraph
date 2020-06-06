@@ -19,8 +19,11 @@ package common
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -59,6 +62,33 @@ func queryCountryByRegExp(t *testing.T, regexp string, expectedCountries []*coun
 	if diff := cmp.Diff(expected, result); diff != "" {
 		t.Errorf("result mismatch (-want +got):\n%s", diff)
 	}
+}
+
+func touchedUidsHeader(t *testing.T) {
+	query := &GraphQLParams{
+		Query: `query {
+			queryCountry {
+				name
+			}
+		}`,
+	}
+	req, err := query.createGQLPost(graphqlURL)
+	require.NoError(t, err)
+
+	client := http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+
+	// confirm that the header value is a non-negative integer
+	touchedUidsInHeader, err := strconv.ParseUint(resp.Header.Get("Graphql-TouchedUids"), 10, 64)
+	require.NoError(t, err)
+
+	// confirm that the value in header is same as the value in body
+	var gqlResp GraphQLResponse
+	b, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(b, &gqlResp))
+	require.Equal(t, touchedUidsInHeader, uint64(gqlResp.Extensions["touched_uids"].(float64)))
 }
 
 // This test checks that all the different combinations of
