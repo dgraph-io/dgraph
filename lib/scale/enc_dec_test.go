@@ -17,8 +17,11 @@
 package scale
 
 import (
+	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEncodeDecodeComplexStruct(t *testing.T) {
@@ -80,4 +83,30 @@ func TestEncodeDecodeComplexStruct(t *testing.T) {
 	if !reflect.DeepEqual(output.(*ComplexStruct), test) {
 		t.Errorf("Fail: got %+v expected %+v", output.(*ComplexStruct), test)
 	}
+}
+
+var bigIntTests = []*big.Int{
+	big.NewInt(0),
+	big.NewInt(1),
+	big.NewInt(42),
+	big.NewInt(64),
+	big.NewInt(69),
+	big.NewInt(16383),
+	big.NewInt(16384),
+	big.NewInt(1073741823),
+	big.NewInt(1073741824),
+	big.NewInt(1<<32 - 1),
+	big.NewInt(1 << 32),
+}
+
+func TestEncodeDecodeBigInt(t *testing.T) {
+	for _, test := range bigIntTests {
+		enc, err := Encode(test)
+		require.NoError(t, err)
+
+		dec, err := Decode(enc, big.NewInt(0))
+		require.NoError(t, err)
+		require.Equal(t, test, dec)
+	}
+
 }
