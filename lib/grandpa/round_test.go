@@ -31,7 +31,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var testTimeout = 12 * time.Second
+var testTimeout = 20 * time.Second
 
 func onSameChain(blockState BlockState, a, b common.Hash) bool {
 	descendant, err := blockState.IsDescendantOf(a, b)
@@ -52,8 +52,8 @@ func onSameChain(blockState BlockState, a, b common.Hash) bool {
 func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan *VoteMessage, chan *VoteMessage, chan *types.Header) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
-	in := make(chan *VoteMessage)
-	out := make(chan *VoteMessage)
+	in := make(chan *VoteMessage, 16)
+	out := make(chan *VoteMessage, 16)
 	finalized := make(chan *types.Header)
 
 	cfg := &Config{
@@ -154,7 +154,7 @@ func TestGrandpa_DifferentChains(t *testing.T) {
 	}
 }
 
-func broadcastVotes(t *testing.T, from <-chan *VoteMessage, to []chan *VoteMessage, lock *sync.Mutex, done *bool) {
+func broadcastVotes(from <-chan *VoteMessage, to []chan *VoteMessage, lock *sync.Mutex, done *bool) {
 	for v := range from {
 		for _, tc := range to {
 			lock.Lock()
@@ -162,15 +162,22 @@ func broadcastVotes(t *testing.T, from <-chan *VoteMessage, to []chan *VoteMessa
 				return
 			}
 
-			select {
-			case tc <- v:
-			case <-time.After(testTimeout):
-				t.Error("could not write to channel")
-			}
-
+			tc <- v
 			lock.Unlock()
 		}
 	}
+}
+
+func cleanup(gs *Service, in, out chan *VoteMessage, lock *sync.Mutex, done *bool) {
+	lock.Lock()
+	*done = true
+	close(in)
+	lock.Unlock()
+
+	gs.chanLock.Lock()
+	gs.stopped = true
+	close(out)
+	gs.chanLock.Unlock()
 }
 
 func TestPlayGrandpaRound_BaseCase(t *testing.T) {
@@ -189,18 +196,7 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-
-		defer func(gs *Service) {
-			lock.Lock()
-			done = true
-			close(in)
-			lock.Unlock()
-
-			gs.chanLock.Lock()
-			gs.stopped = true
-			close(out)
-			gs.chanLock.Unlock()
-		}(gs)
+		defer cleanup(gs, in, out, &lock, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -211,7 +207,7 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(t, out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &lock, &done)
 	}
 
 	for _, gs := range gss {
@@ -266,18 +262,7 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-
-		defer func(gs *Service) {
-			lock.Lock()
-			done = true
-			close(in)
-			lock.Unlock()
-
-			gs.chanLock.Lock()
-			gs.stopped = true
-			close(out)
-			gs.chanLock.Unlock()
-		}(gs)
+		defer cleanup(gs, in, out, &lock, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -292,7 +277,7 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(t, out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &lock, &done)
 	}
 
 	for _, gs := range gss {
@@ -343,18 +328,7 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-
-		defer func(gs *Service) {
-			lock.Lock()
-			done = true
-			close(in)
-			lock.Unlock()
-
-			gs.chanLock.Lock()
-			gs.stopped = true
-			close(out)
-			gs.chanLock.Unlock()
-		}(gs)
+		defer cleanup(gs, in, out, &lock, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -371,7 +345,7 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 	leaves := gss[0].blockState.Leaves()
 
 	for _, out := range outs {
-		go broadcastVotes(t, out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &lock, &done)
 	}
 
 	for _, gs := range gss {
@@ -434,18 +408,7 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-
-		defer func(gs *Service) {
-			lock.Lock()
-			done = true
-			close(in)
-			lock.Unlock()
-
-			gs.chanLock.Lock()
-			gs.stopped = true
-			close(out)
-			gs.chanLock.Unlock()
-		}(gs)
+		defer cleanup(gs, in, out, &lock, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -456,7 +419,7 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(t, out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &lock, &done)
 	}
 
 	for _, gs := range gss {
@@ -493,6 +456,7 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 
 		head := gss[0].blockState.(*state.BlockState).BestBlockHash()
 		for _, fb := range finalized {
+			require.NotNil(t, fb)
 			require.Equal(t, head, fb.Hash())
 			require.Equal(t, finalized[0], fb)
 		}
