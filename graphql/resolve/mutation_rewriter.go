@@ -680,8 +680,7 @@ func asUID(val interface{}) (uint64, error) {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder mutationBuilder,
-	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
@@ -960,6 +959,10 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
+			// This fixes mutation when dgraph predicate has special characters. PR #5526
+			if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
+				fieldName = fieldName[1 : len(fieldName)-1]
+			}
 
 			strategy := "squash"
 
@@ -1091,8 +1094,7 @@ func checkQueryResult(qry string, yes, no error) resultChecker {
 func asIDReference(
 	val interface{},
 	srcField schema.FieldDefinition,
-	srcUID string,
-	variable string,
+	srcUID, variable string,
 	withAdditionalDeletes bool,
 	varGen *VariableGenerator) *mutationFragment {
 

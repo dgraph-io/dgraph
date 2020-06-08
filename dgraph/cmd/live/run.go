@@ -68,6 +68,7 @@ type options struct {
 	verbose        bool
 	httpAddr       string
 	bufferSize     int
+	ludicrousMode  bool
 }
 
 type predicate struct {
@@ -149,6 +150,7 @@ func init() {
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
+	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should only be done when alpha is under ludicrous mode)")
 
 	// TLS configuration
 	x.RegisterClientTLSFlags(flag)
@@ -214,7 +216,9 @@ func (l *loader) uid(val string) string {
 		}
 	}
 
-	uid, _ := l.alloc.AssignUid(val)
+	sb := strings.Builder{}
+	x.Check2(sb.WriteString(val))
+	uid, _ := l.alloc.AssignUid(sb.String())
 	return fmt.Sprintf("%#x", uint64(uid))
 }
 
@@ -416,6 +420,7 @@ func run() error {
 		verbose:        Live.Conf.GetBool("verbose"),
 		httpAddr:       Live.Conf.GetString("http"),
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
+		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
 	}
 	go func() {
 		if err := http.ListenAndServe(opt.httpAddr, nil); err != nil {

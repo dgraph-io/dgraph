@@ -174,7 +174,7 @@ mutation {
 
 #### Overriding Credentials
 
-The `access_key`, `secret_key`, and `session_token` parameters can be used to
+The `accessKey`, `secretKey`, and `sessionToken` parameters can be used to
 override the default credentials. Please note that unless HTTPS is used, the
 credentials will be transmitted in plain text so use these parameters with
 discretion. The environment variables should be used by default but these

@@ -1425,3 +1425,35 @@ func queryWithAlias(t *testing.T) {
 				"postAuthor": { "theName": "Ann Author" }}]}`,
 		string(gqlResponse.Data))
 }
+
+func DgraphDirectiveWithSpecialCharacters(t *testing.T) {
+	mutation := &GraphQLParams{
+		Query: `
+		mutation {
+			addMessage(input : [{content : "content1", author: "author1"}]) {
+				message {
+					content
+					author
+				}
+			}
+		}`,
+	}
+	result := `{"addMessage":{"message":[{"content":"content1","author":"author1"}]}}`
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+
+	queryParams := &GraphQLParams{
+		Query: `
+		query {
+			queryMessage {
+				content
+				author
+			}
+		}`,
+	}
+	result = `{"queryMessage":[{"content":"content1","author":"author1"}]}`
+	gqlResponse = queryParams.ExecuteAsPost(t, graphqlURL)
+	requireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
