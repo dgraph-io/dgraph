@@ -115,8 +115,12 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
-func (e *executor) addEdges(ctx context.Context, index, startTs uint64, edges []*pb.DirectedEdge) {
+func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)
+
+	index := proposal.Index
+	startTs := proposal.Mutations.StartTs
+	edges := proposal.Mutations.Edges
 
 	payloadMap := make(map[string]*subMutation)
 	var esize int64
