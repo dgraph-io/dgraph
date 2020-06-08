@@ -156,8 +156,8 @@ type params struct {
 	Recurse bool
 	// RecurseArgs stores the arguments passed to the @recurse directive.
 	RecurseArgs gql.RecurseArgs
-	// Cascade is true if the @cascade directive is specified.
-	Cascade bool
+	// Cascade is the list of predicates to apply @cascade to. __all__ is special to mean @cascade.
+	Cascade []string
 	// IgnoreReflex is true if the @ignorereflex directive is specified.
 	IgnoreReflex bool
 
@@ -532,7 +532,6 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 
 		args := params{
 			Alias:        gchild.Alias,
-			Cascade:      gchild.Cascade || sg.Params.Cascade,
 			Expand:       gchild.Expand,
 			Facet:        gchild.Facets,
 			FacetsOrder:  gchild.FacetsOrder,
@@ -547,6 +546,12 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			GroupbyAttrs: gchild.GroupbyAttrs,
 			IsGroupBy:    gchild.IsGroupby,
 			IsInternal:   gchild.IsInternal,
+		}
+
+		//TODO: apply from gchild. Allow override from sg. OR should it be vice-versa? --- pshah
+		args.Cascade = gchild.Cascade
+		if len(sg.Params.Cascade) != 0 {
+			args.Cascade = sg.Params.Cascade
 		}
 
 		if gchild.IsCount {
@@ -1311,7 +1316,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 			return err
 		}
 		sgPath = sgPath[:len(sgPath)-1] // Backtrack
-		if !child.Params.Cascade {
+		if len(child.Params.Cascade) == 0 {
 			continue
 		}
 
@@ -1320,14 +1325,16 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 		child.updateUidMatrix()
 	}
 
-	if !sg.Params.Cascade {
+	if len(sg.Params.Cascade) == 0 {
 		goto AssignStep
 	}
 
 	// Filter out UIDs that don't have atleast one UID in every child.
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
+		var m map[string]bool
 		for _, child := range sg.Children {
+			m[child.Attr] = true
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
 			// uid would always be excluded. Therefore we skip it.
 			if child.Attr == "uid" {
@@ -1341,6 +1348,12 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
 				(len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
+				exclude = true
+				break
+			}
+		}
+		for _, param := range sg.Params.Cascade {
+			if _, ok := m[param]; !ok {
 				exclude = true
 				break
 			}
