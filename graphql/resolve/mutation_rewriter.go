@@ -252,38 +252,6 @@ func newXidMetadata() *xidMetadata {
 // }
 func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error) {
 	mutatedType := m.MutatedType()
-
-	if m.IsArgListType(schema.InputArgName) {
-		return mrw.handleMultipleMutations(m)
-	}
-
-	varGen := NewVariableGenerator()
-	val := m.ArgValue(schema.InputArgName).(map[string]interface{})
-	xidMd := newXidMetadata()
-	obj := rewriteObject(mutatedType, nil, "", varGen, true, val, 0, xidMd)
-	mrw.frags = [][]*mutationFragment{obj.get()}
-	mutations, err := mutationsFromFragments(
-		mrw.frags[0],
-		func(frag *mutationFragment) ([]byte, error) {
-			return json.Marshal(frag.fragment)
-		},
-		func(frag *mutationFragment) ([]byte, error) {
-			if len(frag.deletes) > 0 {
-				return json.Marshal(frag.deletes)
-			}
-			return nil, nil
-		})
-
-	upsert := &UpsertMutation{
-		Query:     queryFromFragments(mrw.frags[0]),
-		Mutations: mutations,
-	}
-
-	return []*UpsertMutation{upsert}, schema.GQLWrapf(err, "failed to rewrite mutation payload")
-}
-
-func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) ([]*UpsertMutation, error) {
-	mutatedType := m.MutatedType()
 	val, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
 	varGen := NewVariableGenerator()
@@ -325,7 +293,7 @@ func (mrw *AddRewriter) handleMultipleMutations(m schema.Mutation) ([]*UpsertMut
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, 0, xidMd)
-		frag.print()
+		//frag.print()
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
@@ -895,10 +863,21 @@ func rewriteObject(
 		deepXID += 1
 	}
 
+	var parentFrags []*mutationFragment
+
 	if !atTopLevel { // top level is never a reference - it's adding/updating
 		if xid != nil && xidString != "" {
 			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
+			if deepXID > 2 {
+				res := make(map[string]interface{}, 1)
+				res["uid"] = srcUID
+				addInverseLink(res, srcField.Inverse(), fmt.Sprintf("uid(%s)", variable))
+
+				parentFrag := newFragment(res)
+				parentFrag.conditions = append(parentFrag.conditions, xidFrag.conditions...)
+				parentFrags = append(parentFrags, parentFrag)
+			}
 		} else if !withAdditionalDeletes {
 			// In case of delete, id/xid is required
 			var name string
@@ -978,10 +957,18 @@ func rewriteObject(
 		results = &mutationRes{
 			firstPass: []*mutationFragment{frag},
 		}
-		if xidFrag != nil && deepXID <= 2 {
+		if deepXID <= 2 {
 			frag.queries = []*gql.GraphQuery{
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
+		} else {
+			res := make(map[string]interface{}, 1)
+			res["uid"] = srcUID
+			addInverseLink(res, srcField.Inverse(), fmt.Sprintf("_:%s", variable))
+
+			parentFrag := newFragment(res)
+			parentFrag.conditions = append(parentFrag.conditions, frag.conditions...)
+			parentFrags = append(parentFrags, parentFrag)
 		}
 	}
 
@@ -1079,6 +1066,8 @@ func rewriteObject(
 	if xidFrag != nil && deepXID > 2 {
 		results.firstPass = append(results.firstPass, xidFrag)
 	}
+
+	results.firstPass = append(results.firstPass, parentFrags...)
 
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
 		results.firstPass = []*mutationFragment{}

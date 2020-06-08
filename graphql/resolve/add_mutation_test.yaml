@@ -1744,6 +1744,20 @@
         }]
       cond: "@if(eq(len(ComputerOwner6), 1) AND eq(len(Computer4), 0))"
 
+    - setjson: |
+        {
+                "Computer.owners":[{"uid":"uid(ComputerOwner6)"}],
+                "uid":"_:Computer4"
+        }
+      cond: "@if(eq(len(ComputerOwner6), 1) AND eq(len(Computer4), 0))"
+
+    - setjson: |
+        {
+                "Computer.owners":[{"uid":"_:ComputerOwner6"}],
+                "uid":"_:Computer4"
+        }
+      cond: "@if(eq(len(ComputerOwner6), 0) AND eq(len(Computer4), 0))"
+
   dgmutationssec:
     - setjson: |-
         {

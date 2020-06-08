@@ -216,9 +216,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	req := &dgoapi.Request{}
 
 	for _, upsert := range upserts {
-		if len(upsert.Mutations) == 0 {
-			continue
-		}
 		req.Query = dgraph.AsString(upsert.Query)
 		req.Mutations = upsert.Mutations
 
@@ -247,15 +244,19 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(errs), resolverFailed
 	}
 
-	if mutResp != nil {
-		err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
-		if err != nil {
-			return emptyResult(
-					schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
-				resolverFailed
-		}
-		commit = true
+	if mutResp == nil {
+		return emptyResult(
+				schema.GQLWrapf(err, "mutation failed, couldn't get result")),
+			resolverFailed
 	}
+
+	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
+	if err != nil {
+		return emptyResult(
+				schema.GQLWrapf(err, "mutation failed, couldn't commit transaction")),
+			resolverFailed
+	}
+	commit = true
 
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{Query: dgraph.AsString(dgQuery), ReadOnly: true})
