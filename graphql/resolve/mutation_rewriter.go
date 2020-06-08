@@ -26,7 +26,6 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -95,30 +94,6 @@ func NewVariableGenerator() *VariableGenerator {
 		counter:       0,
 		xidVarNameMap: make(map[string]string),
 	}
-}
-
-func (mf *mutationFragment) print() {
-	fmt.Println("------------")
-	fmt.Println(dgraph.AsString(&gql.GraphQuery{Children: mf.queries}))
-	fmt.Println("Condition: ", mf.conditions)
-	byt, _ := json.MarshalIndent(mf.fragment, "", "    ")
-	fmt.Println("Frag:", string(byt))
-	byt, _ = json.MarshalIndent(mf.deletes, "", "    ")
-	fmt.Println("Dels:", string(byt))
-	fmt.Println("------------")
-}
-
-func (mr *mutationRes) print() {
-	fmt.Println("======first pass======")
-	for _, i := range mr.firstPass {
-		i.print()
-	}
-	fmt.Println("======second pass======")
-	for _, i := range mr.secondPass {
-		i.print()
-	}
-	fmt.Println("======end pass======")
-
 }
 
 // Next gets the Next variable name for the given type and xid.
@@ -293,7 +268,6 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, 0, xidMd)
-		//frag.print()
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
@@ -1044,14 +1018,6 @@ func rewriteObject(
 		}
 	}
 
-	//fmt.Println("")
-	//fmt.Println("")
-	//fmt.Println("")
-
-	//fmt.Println(obj)
-	//fmt.Println("=========PRE=========")
-	//results.print()
-
 	conditions := []string{}
 
 	for _, i := range results.firstPass {
@@ -1072,13 +1038,6 @@ func rewriteObject(
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
 		results.firstPass = []*mutationFragment{}
 	}
-
-	//fmt.Println("=========POST=========")
-	//results.print()
-
-	//fmt.Println("")
-	//fmt.Println("")
-	//fmt.Println("")
 
 	return results
 }
