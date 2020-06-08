@@ -117,10 +117,15 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 			currTs := time.Now().Unix()
 			for _, key := range *batch {
 				hash := z.MemHash(key)
-				if elem := m[hash]; currTs-elem >= 10 {
-					// Key not present or Key present but last roll up was more than 10 sec ago.
-					// Add/Update map and rollup.
+				elem, ok := m[hash]
+				if !ok {
+					// If this is a new key, add it and continue.
 					m[hash] = currTs
+					continue
+				}
+				// If this key has been in the map for more than 10 seconds, perform roll up.
+				if currTs-elem >= 10 {
+					delete(m, hash)
 					if err := ir.rollUpKey(writer, key); err != nil {
 						glog.Warningf("Error %v rolling up key %v\n", err, key)
 					}
