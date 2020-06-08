@@ -252,7 +252,11 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 			return
 		}
 		for _, h := range forwardHeaders.Children {
-			headers[h.Value.Raw] = struct{}{}
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) != 2 {
+				continue
+			}
+			headers[key[1]] = struct{}{}
 		}
 	}
 

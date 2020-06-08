@@ -1526,9 +1526,13 @@ func customDirectiveValidation(sch *ast.Schema,
 		headers := http.Header{}
 		if secretHeaders != nil {
 			for _, h := range secretHeaders.Children {
+				key := strings.Split(h.Value.Raw, ":")
+				if len(key) != 2 {
+					continue
+				}
 				// We try and fetch the value from the stored secrets.
-				val := secrets[h.Value.Raw]
-				headers.Add(h.Value.Raw, string(val))
+				val := secrets[key[1]]
+				headers.Add(key[0], string(val))
 			}
 		}
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
