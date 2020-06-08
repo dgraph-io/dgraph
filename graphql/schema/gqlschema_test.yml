@@ -816,6 +816,7 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly 1 argument.",
      "locations":[{"line":7, "column":32}]},
+    {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
     ]
 
   - name: "@custom directive without http argument"
@@ -986,6 +987,10 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1; has parameters in url along with graphql field inside @custom directive, url can't contain parameters if graphql field is present.",
      "locations":[{"line":7, "column":32}]},
+    {"message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+     "locations":[{"line":10, "column":15}]},
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '<' looking for beginning of value",
+     "locations":[{"line":10, "column":15}]}
     ]
 
 
@@ -1007,6 +1012,10 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1; has method GET while graphql field is also present inside @custom directive, method can only be POST if graphql field is present.",
      "locations":[{"line":7, "column":32}]},
+    {"message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+     "locations":[{"line":10, "column":15}]},
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '<' looking for beginning of value",
+     "locations":[{"line":10, "column":15}]},
     ]
 
   -
@@ -1028,6 +1037,10 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1; has both body and graphql field inside @custom directive, they can't be present together.",
      "locations":[{"line":7, "column":32}]},
+    {"message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+     "locations":[{"line":11, "column":15}]},
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '<' looking for beginning of value",
+     "locations":[{"line":11, "column":15}]},
     ]
 
   -
@@ -1147,6 +1160,10 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found `subscription` operation, it can only have query/mutation.",
      "locations":[{"line":10, "column":15}]},
+    {"message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+     "locations":[{"line":10, "column":15}]},
+    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '<' looking for beginning of value",
+     "locations":[{"line":10, "column":15}]},
     ]
 
   -
@@ -1165,8 +1182,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1185,8 +1227,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1205,8 +1272,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1225,8 +1317,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1265,8 +1382,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1285,8 +1427,33 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1; @custom directive, graphql must use fields with a variable definition, found `id`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1308,10 +1475,34 @@ invalid_schemas:
         name: String
       }
     errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
-     "locations":[{"line":11, "column":15}]},
+    {
+      "message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Post; Field author; @custom directive, graphql must use fields with a variable definition, found ``.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Post; Field author: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    }
     ]
-
   -
     name: "@custom directive not allowed on field of type ID!"
     input: |
@@ -1324,9 +1515,33 @@ invalid_schemas:
         name: String
       }
     errlist: [
-    {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
-      field with @id directive.",
-     "locations":[{"line":2, "column":12}]},
+    {
+      "message": "Type Author; Field id; custom directive not allowed on field of type ID! or field with @id directive.",
+      "locations": [
+      {
+        "line": 2,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id; @custom directive, body template must use fields defined within the type, found `foo`.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1359,8 +1574,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
-     "locations":[{"line":6, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't use another field with @custom directive, found field `name` with @custom.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1376,8 +1607,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
-      "locations":[{"line":6, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1454,8 +1701,33 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql can't require itself.",
-     "locations":[{"line":6, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't use another field with @custom directive, found field `name` with @custom.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1471,8 +1743,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
-     "locations":[{"line":6, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1490,10 +1778,25 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
-     "locations":[{"line":8, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    }
     ]
-
   -
     name: "@custom directive on field where graphql doesn't use scalar field"
     input: |
@@ -1511,8 +1814,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
-     "locations":[{"line":11, "column":15}]},
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field yo: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1533,8 +1852,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
-     "locations":[{"line":12, "column":15}]},
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
+      "locations": [
+      {
+        "line": 12,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field yo: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 12,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1551,8 +1886,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
-     "locations":[{"line":8, "column":15}]},
+    {
+      "message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field yo: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1568,9 +1919,33 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive is only allowed on fields where the type
-       definition has a field with type ID! or a field with @id directive.",
-      "locations":[{"line":3, "column":18}]},
+    {
+      "message": "Type Author; Field name; @custom directive is only allowed on fields where the type definition has a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 3,
+        "column": 18
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1620,9 +1995,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
-          "locations":[{"line":5, "column":11}]},
-        ]
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    }
+    ]
 
   -
     name: "@custom directive on a field in a type, only mandatory fields allowed in url path"
@@ -1638,10 +2029,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
-          "locations":[{"line":6, "column":11}]},
-        ]
-
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    }
+    ]
   -
     name: "@custom directive with variable definitions in operation in graphql"
     input: |
@@ -1658,9 +2064,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
-        "locations": [{"line": 10, "column": 15}]},
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
       ]
+    },
+    {
+      "message": "Type Query; Field getAuthors: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
+    ]
 
   -
     name: "@custom directive on a field in a type, should only use fields defined in the type as GraphQL variables"
@@ -1676,10 +2098,34 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
-        "locations": [{"line": 8, "column": 15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
       ]
-
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    }
+    ]
   -
     name: "@custom directive on a field in a type, should only use scalar fields as GraphQL variables"
     input: |
@@ -1699,9 +2145,34 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
-        "locations": [{"line": 13, "column": 15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
       ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
+      ]
+    }
+    ]
 
   -
     name: "@custom directive on a field in a type, only defined fields allowed in url query"
@@ -1766,8 +2237,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1786,8 +2273,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Query; Field getAuthors: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1810,8 +2313,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":14, "column":15}]},
+    {
+      "message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 14,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Mutation; Field setCountry1: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 14,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1829,8 +2348,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
@@ -1848,8 +2383,24 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: inside graphql in @custom directive, while json unmarshaling result from remote introspection query: invalid character '\u003c' looking for beginning of value",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    }
     ]
 
   -
