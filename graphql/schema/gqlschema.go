@@ -834,13 +834,11 @@ func hasOrderables(defn *ast.Definition) bool {
 }
 
 func hasID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return isID(fld) })
+	return fieldAny(defn.Fields, isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		func(fld *ast.FieldDefinition) bool { return hasIDDirective(fld) })
+	return fieldAny(defn.Fields, hasIDDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
