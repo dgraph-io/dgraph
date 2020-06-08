@@ -58,7 +58,8 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
-		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", q.Order[0].Attr)
+		_, attr, _ := x.ParseNamespaceAttr(q.Order[0].Attr)
+		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", attr)
 	}
 
 	if span := otrace.FromContext(ctx); span != nil {
@@ -193,12 +194,12 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	order := ts.Order[0]
 	typ, err := schema.State().TypeOf(order.Attr)
 	if err != nil {
-		return resultWithError(errors.Errorf("Attribute %s not defined in schema", order.Attr))
+		return resultWithError(errors.Errorf("Attribute %s not defined in schema", x.ParseAttr(order.Attr)))
 	}
 
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ctx, order.Attr) {
-		return resultWithError(errors.Errorf("Attribute %s is not indexed.", order.Attr))
+		return resultWithError(errors.Errorf("Attribute %s is not indexed.", x.ParseAttr(order.Attr)))
 	}
 
 	tokenizers := schema.State().Tokenizer(ctx, order.Attr)
@@ -216,11 +217,11 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		// sortable.
 		if typ == types.StringID {
 			return resultWithError(errors.Errorf(
-				"Attribute %s does not have exact index for sorting.", order.Attr))
+				"Attribute %s does not have exact index for sorting.", x.ParseAttr(order.Attr)))
 		}
 		// Other types just have one tokenizer, so if we didn't find a
 		// sortable tokenizer, then attribute isn't sortable.
-		return resultWithError(errors.Errorf("Attribute %s is not sortable.", order.Attr))
+		return resultWithError(errors.Errorf("Attribute %s is not sortable.", x.ParseAttr(order.Attr)))
 	}
 
 	var prefix []byte
@@ -231,7 +232,7 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)
 		if !ok {
 			return resultWithError(errors.Errorf(
-				"Failed to get tokenizer for Attribute %s for language %s.", order.Attr, lang))
+				"Failed to get tokenizer for Attribute %s for language %s.", x.ParseAttr(order.Attr), lang))
 		}
 		prefix = langTokenizer.Prefix()
 	} else {
@@ -443,12 +444,12 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	if ts.Count < 0 {
 		return nil, errors.Errorf(
 			"We do not yet support negative or infinite count with sorting: %s %d. "+
-				"Try flipping order and return first few elements instead.", ts.Order[0].Attr, ts.Count)
+				"Try flipping order and return first few elements instead.", x.ParseAttr(ts.Order[0].Attr), ts.Count)
 	}
 	// TODO (pawan) - Why check only the first attribute, what if other attributes are of list type?
 	if schema.State().IsList(ts.Order[0].Attr) {
 		return nil, errors.Errorf("Sorting not supported on attr: %s of type: [scalar]",
-			ts.Order[0].Attr)
+			x.ParseAttr(ts.Order[0].Attr))
 	}
 
 	// We're not using any txn local cache here. So, no need to deal with that yet.

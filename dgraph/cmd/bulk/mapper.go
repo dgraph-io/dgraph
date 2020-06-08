@@ -236,6 +236,9 @@ func (m *mapper) processNQuad(nq gql.NQuad) {
 	}
 	var oid uint64
 	var de *pb.DirectedEdge
+	if nq.Predicate != x.Star {
+		nq.Predicate = x.NamespaceAttr(x.DefaultNamespace, nq.Predicate)
+	}
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
 		if oid == 0 {

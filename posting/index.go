@@ -59,11 +59,11 @@ func indexTokens(ctx context.Context, info *indexMutationInfo) ([]string, error)
 
 	schemaType, err := schema.State().TypeOf(attr)
 	if err != nil || !schemaType.IsScalar() {
-		return nil, errors.Errorf("Cannot index attribute %s of type object.", attr)
+		return nil, errors.Errorf("Cannot index attribute %s of type object.", x.ParseAttr(attr))
 	}
 
 	if !schema.State().IsIndexed(ctx, attr) {
-		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", x.ParseAttr(attr))
 	}
 	sv, err := types.Convert(info.val, schemaType)
 	if err != nil {
@@ -1109,7 +1109,7 @@ func (rb *IndexRebuild) needsListTypeRebuild() (bool, error) {
 	}
 	if rb.OldSchema.List && !rb.CurrentSchema.List {
 		return false, errors.Errorf("Type can't be changed from list to scalar for attr: [%s]"+
-			" without dropping it first.", rb.CurrentSchema.Predicate)
+			" without dropping it first.", x.ParseAttr(rb.CurrentSchema.Predicate))
 	}
 
 	return false, nil

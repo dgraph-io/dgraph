@@ -28,9 +28,19 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func setSchema(schema string) {
+func setSchema(schema string, namespace string) {
 	err := client.Alter(context.Background(), &api.Operation{
-		Schema: schema,
+		Schema:    schema,
+		Namespace: namespace,
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
+	}
+}
+
+func createNamespace(namespace string) {
+	err := client.Alter(context.Background(), &api.Operation{
+		CreateNamespace: namespace,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
@@ -44,6 +54,40 @@ func dropPredicate(pred string) {
 	if err != nil {
 		panic(fmt.Sprintf("Could not drop predicate. Got error %v", err.Error()))
 	}
+}
+
+func processQueryWithNamespace(ctx context.Context, t *testing.T, query string, namespace string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:     query,
+		Namespace: namespace,
+	})
+
+	response := map[string]interface{}{}
+	response["data"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
+}
+
+func getSchemaWithNamespace(ctx context.Context, t *testing.T, query string, namespace string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:     query,
+		Namespace: namespace,
+	})
+	fmt.Println(res.Json)
+	response := map[string]interface{}{}
+	response["schema"] = json.RawMessage(string(res.Json))
+
+	jsonResponse, err := json.Marshal(response)
+	require.NoError(t, err)
+	return string(jsonResponse), err
 }
 
 func processQuery(ctx context.Context, t *testing.T, query string) (string, error) {
@@ -97,16 +141,21 @@ func processQueryWithVars(t *testing.T, query string,
 	return string(jsonResponse), err
 }
 
-func addTriplesToCluster(triples string) error {
+func addTriplesToCluster(triples string, namespace string) error {
 	txn := client.NewTxn()
 	ctx := context.Background()
 	defer txn.Discard(ctx)
-
-	_, err := txn.Mutate(ctx, &api.Mutation{
-		SetNquads: []byte(triples),
-		CommitNow: true,
+	_, err := txn.Do(ctx, &api.Request{
+		Namespace: namespace,
+		Mutations: []*api.Mutation{&api.Mutation{
+			SetNquads: []byte(triples),
+			CommitNow: true,
+		}},
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	return txn.Commit(ctx)
 }
 
 func deleteTriplesInCluster(triples string) {
@@ -123,11 +172,29 @@ func deleteTriplesInCluster(triples string) {
 	}
 }
 
+func deleteTriplesInClusterWithNamespace(triples string, namespace string) {
+	txn := client.NewTxn()
+	ctx := context.Background()
+	defer txn.Discard(ctx)
+
+	_, err := txn.Do(ctx, &api.Request{
+		Mutations: []*api.Mutation{
+			&api.Mutation{
+				DelNquads: []byte(triples),
+				CommitNow: true,
+			},
+		},
+	})
+	if err != nil {
+		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
+	}
+}
+
 func addGeoPointToCluster(uid uint64, pred string, point []float64) error {
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Point', 'coordinates':[%v, %v]}"^^<geo:geojson> .`,
 		uid, pred, point[0], point[1])
-	return addTriplesToCluster(triple)
+	return addTriplesToCluster(triple, "")
 }
 
 func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) error {
@@ -152,7 +219,7 @@ func addGeoPolygonToCluster(uid uint64, pred string, polygon [][][]float64) erro
 	triple := fmt.Sprintf(
 		`<%d> <%s> "{'type':'Polygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, pred, coordinates)
-	return addTriplesToCluster(triple)
+	return addTriplesToCluster(triple, "")
 }
 
 func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
@@ -185,7 +252,7 @@ func addGeoMultiPolygonToCluster(uid uint64, polygons [][][][]float64) error {
 	triple := fmt.Sprintf(
 		`<%d> <geometry> "{'type':'MultiPolygon', 'coordinates': %s}"^^<geo:geojson> .`,
 		uid, coordinates)
-	return addTriplesToCluster(triple)
+	return addTriplesToCluster(triple, "")
 }
 
 const testSchema = `
@@ -303,7 +370,7 @@ func populateCluster() {
 		panic(fmt.Sprintf("Could not perform DropAll op. Got error %v", err.Error()))
 	}
 
-	setSchema(testSchema)
+	setSchema(testSchema, "")
 	testutil.AssignUids(100000)
 
 	err = addTriplesToCluster(`
@@ -709,7 +776,7 @@ func populateCluster() {
 		<56> <connects> <58> (weight=1) .
 		<58> <connects> <59> (weight=1) .
 		<59> <connects> <60> (weight=1) .
-	`)
+	`, "")
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
 	}
@@ -797,7 +864,7 @@ func populateCluster() {
 			<%d> <value> "%s" .
 			<0x1234> <pattern> <%d> .
 		`, nextId, p, nextId)
-		err = addTriplesToCluster(triples)
+		err = addTriplesToCluster(triples, "")
 		if err != nil {
 			panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
 		}
@@ -822,7 +889,7 @@ func populateCluster() {
 		<305> <updated_at> "2019-03-28T13:41:57+30:00" (modified_at=2019-03-28T15:41:57+30:00) .
 		<306> <updated_at> "2019-03-24T14:41:57+05:30" (modified_at=2019-03-28T13:41:57+30:00) .
 		<307> <updated_at> "2019-05-28" (modified_at=2019-03-24T14:41:57+05:30) .
-	`)
+	`, "")
 	if err != nil {
 		panic(fmt.Sprintf("Could not able add triple to the cluster. Got error %v", err.Error()))
 	}

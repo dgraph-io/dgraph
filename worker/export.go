@@ -337,12 +337,13 @@ func fieldToString(update *pb.SchemaUpdate) string {
 	x.Check2(builder.WriteString("\t"))
 	// While exporting type definitions, "<" and ">" brackets must be written around
 	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
-	if strings.HasPrefix(update.Predicate, "~") {
+	pred := x.ParseAttr(update.Predicate)
+	if strings.HasPrefix(pred, "~") {
 		x.Check2(builder.WriteString("<"))
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(pred))
 		x.Check2(builder.WriteString(">"))
 	} else {
-		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(pred))
 	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
@@ -495,7 +496,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			readTs: in.ReadTs,
 		}
 		e.uid = pk.Uid
-		e.attr = pk.Attr
+		e.attr = x.ParseAttr(pk.Attr)
 
 		// Schema and type keys should be handled first because schema keys are also
 		// considered data keys.
@@ -510,7 +511,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal schema: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toSchema(pk.Attr, &update)
+			return toSchema(x.ParseAttr(pk.Attr), &update)
 
 		case pk.IsType():
 			var update pb.TypeUpdate
@@ -522,7 +523,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				glog.Errorf("Unable to unmarshal type: %+v. Err=%v\n", pk, err)
 				return nil, nil
 			}
-			return toType(pk.Attr, update)
+			return toType(x.ParseAttr(pk.Attr), update)
 
 		case pk.Attr == "dgraph.graphql.xid":
 			// Ignore this predicate.

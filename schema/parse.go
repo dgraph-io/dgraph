@@ -43,6 +43,7 @@ func ParseBytes(s []byte, gid uint32) (rerr error) {
 	}
 
 	for _, update := range result.Preds {
+		update.Predicate = x.NamespaceAttr(x.DefaultNamespace, update.Predicate)
 		State().Set(update.Predicate, update)
 	}
 	return nil

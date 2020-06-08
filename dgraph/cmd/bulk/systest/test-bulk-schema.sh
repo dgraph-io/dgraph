@@ -224,7 +224,7 @@ function StopServers
 function Cleanup
 {
   INFO "removing $WORKDIR"
-  rm -rf $WORKDIR
+  # rm -rf $WORKDIR
 }
 
 mkdir dir1
