@@ -45,6 +45,12 @@ func splitPreds(ps []string) []string {
 	return ps
 }
 
+func stripNamespace(ps []string) []string {
+	for i, s := range ps {
+		ps[i] = x.ParseAttr(s)
+	}
+	return ps
+}
 func TestUpsertExample0(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`email: string @index(exact) .`))
@@ -2349,7 +2355,7 @@ upsert {
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"email", "name"}, splitPreds(mr.preds))
+	require.Equal(t, []string{"email", "name"}, stripNamespace(splitPreds(mr.preds)))
 
 	q1 := `
 {
@@ -2856,13 +2862,13 @@ upsert {
 	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 	require.True(t, len(mr.keys) == 0)
-	require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+	require.Equal(t, []string{"version"}, stripNamespace(splitPreds(mr.preds)))
 
 	for i := 0; i < 10; i++ {
 		mr, err = mutationWithTs(m, "application/rdf", false, true, 0)
 		require.NoError(t, err)
 		require.True(t, len(mr.keys) == 0)
-		require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+		require.Equal(t, []string{"version"}, stripNamespace(splitPreds(mr.preds)))
 	}
 
 	q1 := `

@@ -71,7 +71,7 @@ func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.
 			}
 			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
 			// Convert reserved predicates for the given namespace.
-			for _, pred := range x.ReservedPredicates() {
+			for _, pred := range x.StarAllPredicates() {
 				preds = append(preds, x.NamespaceAttr(namespace, pred))
 			}
 		}

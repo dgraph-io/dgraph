@@ -557,7 +557,7 @@ func InitialTypes(namespace string) []*pb.TypeUpdate {
 		// These type definitions are required for deleteUser and deleteGroup GraphQL API to work
 		// properly.
 		initialTypes = append(initialTypes, &pb.TypeUpdate{
-			TypeName: x.NamespaceAttr(namespace, "User"),
+			TypeName: x.NamespaceAttr(namespace, "dgraph.type.User"),
 			Fields: []*pb.SchemaUpdate{
 				{
 					Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
@@ -574,7 +574,7 @@ func InitialTypes(namespace string) []*pb.TypeUpdate {
 			},
 		},
 			&pb.TypeUpdate{
-				TypeName: x.NamespaceAttr(namespace, "Group"),
+				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Group"),
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: x.NamespaceAttr(namespace, "dgraph.xid"),
@@ -587,7 +587,7 @@ func InitialTypes(namespace string) []*pb.TypeUpdate {
 				},
 			},
 			&pb.TypeUpdate{
-				TypeName: x.NamespaceAttr(namespace, "Rule"),
+				TypeName: x.NamespaceAttr(namespace, "dgraph.type.Rule"),
 				Fields: []*pb.SchemaUpdate{
 					{
 						Predicate: x.NamespaceAttr(namespace, "dgraph.rule.predicate"),
@@ -682,11 +682,11 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsReservedPredicateChanged returns true if the initial update for the reserved
+// IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
 // predicate pred is different than the passed update.
-func IsReservedPredicateChanged(pred string, namespace string, update *pb.SchemaUpdate) bool {
-	// Return false for non-reserved predicates.
-	if !x.IsReservedPredicate(x.ParseAttr(pred)) {
+func IsPreDefinedPredicateChanged(namespace string, pred string, update *pb.SchemaUpdate) bool {
+	// Return false for non-pre-defined predicates.
+	if !x.IsPreDefinedPredicate(x.ParseAttr(pred)) {
 		return false
 	}
 
