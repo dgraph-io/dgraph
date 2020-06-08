@@ -188,7 +188,7 @@ func TestTokensTable(t *testing.T) {
 	edge := &pb.DirectedEdge{
 		Value:  []byte("david"),
 		Label:  "testing",
-		Attr:   "name",
+		Attr:   x.NamespaceAttr(x.DefaultNamespace, "name"),
 		Entity: 157,
 	}
 	addMutation(t, l, edge, Set, 1, 2, true)
@@ -260,13 +260,13 @@ func addEdgeToUID(t *testing.T, attr string, src uint64,
 }
 
 func TestRebuildTokIndex(t *testing.T) {
-	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
-	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 91, "Michonne", uint64(1), uint64(2))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 92, "David", uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get(context.Background(), "name2")
+	currentSchema, _ := schema.State().Get(context.Background(), x.NamespaceAttr(x.DefaultNamespace, "name2"))
 	rb := IndexRebuild{
-		Attr:          "name2",
+		Attr:          x.NamespaceAttr(x.DefaultNamespace, "name2"),
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
@@ -279,7 +279,7 @@ func TestRebuildTokIndex(t *testing.T) {
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "name2"}
+	pk := x.ParsedKey{Attr: x.NamespaceAttr(x.DefaultNamespace, "name2")}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*List
@@ -299,8 +299,8 @@ func TestRebuildTokIndex(t *testing.T) {
 	}
 	require.Len(t, idxKeys, 2)
 	require.Len(t, idxVals, 2)
-	require.EqualValues(t, idxKeys[0], x.IndexKey("name2", "\x01david"))
-	require.EqualValues(t, idxKeys[1], x.IndexKey("name2", "\x01michonne"))
+	require.EqualValues(t, idxKeys[0], x.IndexKey(x.NamespaceAttr(x.DefaultNamespace, "name2"), "\x01david"))
+	require.EqualValues(t, idxKeys[1], x.IndexKey(x.NamespaceAttr(x.DefaultNamespace, "name2"), "\x01michonne"))
 
 	uids1 := uids(idxVals[0], 6)
 	uids2 := uids(idxVals[1], 6)
@@ -311,13 +311,16 @@ func TestRebuildTokIndex(t *testing.T) {
 }
 
 func TestRebuildTokIndexWithDeletion(t *testing.T) {
-	addEdgeToValue(t, "name2", 91, "Michonne", uint64(1), uint64(2))
-	addEdgeToValue(t, "name2", 92, "David", uint64(3), uint64(4))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 91, "Michonne",
+		uint64(1), uint64(2))
+	addEdgeToValue(t, x.NamespaceAttr(x.DefaultNamespace, "name2"), 92, "David",
+		uint64(3), uint64(4))
 
 	require.NoError(t, schema.ParseBytes([]byte(schemaVal), 1))
-	currentSchema, _ := schema.State().Get(context.Background(), "name2")
+	currentSchema, _ := schema.State().Get(context.Background(),
+		x.NamespaceAttr(x.DefaultNamespace, "name2"))
 	rb := IndexRebuild{
-		Attr:          "name2",
+		Attr:          x.NamespaceAttr(x.DefaultNamespace, "name2"),
 		StartTs:       5,
 		OldSchema:     nil,
 		CurrentSchema: &currentSchema,
@@ -327,9 +330,10 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 
 	// Mutate the schema (the index in name2 is deleted) and rebuild the index.
 	require.NoError(t, schema.ParseBytes([]byte(mutatedSchemaVal), 1))
-	newSchema, _ := schema.State().Get(context.Background(), "name2")
+	newSchema, _ := schema.State().Get(context.Background(),
+		x.NamespaceAttr(x.DefaultNamespace, "name2"))
 	rb = IndexRebuild{
-		Attr:          "name2",
+		Attr:          x.NamespaceAttr(x.DefaultNamespace, "name2"),
 		StartTs:       6,
 		OldSchema:     &currentSchema,
 		CurrentSchema: &newSchema,
@@ -342,7 +346,7 @@ func TestRebuildTokIndexWithDeletion(t *testing.T) {
 	defer txn.Discard()
 	it := txn.NewIterator(badger.DefaultIteratorOptions)
 	defer it.Close()
-	pk := x.ParsedKey{Attr: "name2"}
+	pk := x.ParsedKey{Attr: x.NamespaceAttr(x.DefaultNamespace, "name2")}
 	prefix := pk.IndexPrefix()
 	var idxKeys []string
 	var idxVals []*List
