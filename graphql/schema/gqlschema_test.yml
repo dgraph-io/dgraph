@@ -1926,7 +1926,6 @@ invalid_schemas:
      type can't have fields with @custom directive.", "locations": [{"line":9, "column":3}]}
     ]
 
-
   -
     name: "a non-remote type can't have fields which are of remote type"
     description: "This is disallowed because we don't generate UserRef etc., so we can't
@@ -1963,8 +1962,27 @@ invalid_schemas:
     errlist: [
     {"message": "Type User; with @remote directive implements interface Person; which doesn't have
      @remote directive.",
-      "locations": [{"line":5, "column":6}]}
+     "locations": [{"line":5, "column":6}]}
     ]
+
+  -
+    name: "non-remote type can't implement a remote type"
+    description: "Dgraph schema generation and possibly the way we do field mapping would have to
+     be re-worked to make this work correctly."
+    input: |
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; without @remote directive can't implement an interface Person; with
+     have @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
 
 valid_schemas:
   - name: "@auth on interface implementation"
@@ -2200,19 +2218,6 @@ valid_schemas:
       }
 
   -
-    name: "non-remote type can implement a remote type"
-    description: "This is ok because the user can use Person as an abstract class for which
-    queries and mutations are not generated."
-    input: |
-      interface Person @remote {
-        id: ID!
-        name: String!
-      }
-      type User implements Person {
-        age: Int!
-      }
-
-  -
     name: "remote type can implement a remote type"
     input: |
       type Car {
@@ -2226,4 +2231,24 @@ valid_schemas:
       }
       type User implements Person @remote {
         age: Int!
+      }
+
+
+  -
+    name: "a non-remote type can have fields which are of remote type if they have @custom
+     directive"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!] @custom(http: {
+          url: "http://mock:8888/neighbour",
+          method: "POST",
+          body: "{sid: $id}"
+          })
       }

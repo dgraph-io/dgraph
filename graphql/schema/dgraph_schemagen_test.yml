@@ -552,4 +552,3 @@ schemas:
           method: "POST"
         })
       }
-    output:

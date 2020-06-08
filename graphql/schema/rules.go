@@ -581,6 +581,15 @@ func remoteTypeValidation(typ *ast.Definition, schema *ast.Schema) *gqlerror.Err
 					field.Name)
 			}
 		}
+
+		for _, implements := range typ.Interfaces {
+			origTyp := schema.Types[implements]
+			remoteDir := origTyp.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
+				return gqlerror.ErrorPosf(typ.Position, "Type %s; without @remote directive can't "+
+					"implement an interface %s; with have @remote directive.", typ.Name, implements)
+			}
+		}
 	} else {
 		for _, field := range typ.Fields {
 			custom := field.Directives.ForName(customDirective)
