@@ -662,7 +662,7 @@ func TestAddGQLOnly(t *testing.T) {
 	query := `
 		mutation addUser($user: AddUserSecretInput!) {
 			addUserSecret(input: [$user]) {
-				usersecret {
+				userSecret {
 					aSecret
 				}
 			}
