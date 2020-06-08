@@ -324,6 +324,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
+		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
 	}
 	if p.SnapshotTs != nil {
 		for gid, ts := range p.SnapshotTs {
