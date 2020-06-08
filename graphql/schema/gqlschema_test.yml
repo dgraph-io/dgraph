@@ -1044,6 +1044,7 @@ invalid_schemas:
   -
     name: "@custom directive with undefined parameter in body"
     input: |
+<<<<<<< HEAD
       type Author {
         id: ID!
         name: String

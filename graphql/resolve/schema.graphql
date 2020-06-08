@@ -229,3 +229,8 @@ type Y implements X @auth(
 ){
   userRole: String @search(by: [hash])
 }
+
+type Message {
+        content: String! @dgraph(pred: "post")
+        author: String @dgraph(pred: "<职业>")
+}

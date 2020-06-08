@@ -143,3 +143,8 @@ type Message {
     content: String! @dgraph(pred: "post")
     author: String @dgraph(pred: "<职业>")
 }
+
+type Message {
+    content: String! @dgraph(pred: "post")
+    author: String @dgraph(pred: "<职业>")
+}
