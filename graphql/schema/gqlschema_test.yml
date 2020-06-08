@@ -864,6 +864,7 @@ valid_schemas:
         f3: [String!] @dgraph(pred: "f3")
         f4: [String]! @dgraph(pred: "f4")
         f5: String
+        f6: String @dgraph(pred: "<职业>")
       }
       type Y {
         f1: String! @dgraph(pred: "f1")
@@ -871,4 +872,5 @@ valid_schemas:
         f3: [String]! @dgraph(pred: "f3")
         f4: [String!]! @dgraph(pred: "f4")
         f5: String @dgraph(pred: "X.f5")
+        f6: String @dgraph(pred: "<职业>")
       }
