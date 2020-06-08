@@ -24,6 +24,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -538,5 +539,39 @@ func TestDelete(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestGetKeysWithPrefix(t *testing.T) {
+	trie := NewEmptyTrie()
+
+	tests := []Test{
+		{key: []byte{0x01, 0x35}, value: []byte("spaghetti"), op: PUT},
+		{key: []byte{0x01, 0x35, 0x79}, value: []byte("gnocchi"), op: PUT},
+		{key: []byte{0x07, 0x3a}, value: []byte("ramen"), op: PUT},
+		{key: []byte{0x07, 0x3b}, value: []byte("noodles"), op: PUT},
+		{key: []byte{0xf2}, value: []byte("pho"), op: PUT},
+	}
+
+	for _, test := range tests {
+		trie.Put(test.key, test.value)
+	}
+
+	expected := [][]byte{{0x01, 0x35}, {0x01, 0x35, 0x79}}
+	keys := trie.GetKeysWithPrefix([]byte{0x01})
+	if !reflect.DeepEqual(keys, expected) {
+		t.Fatalf("Fail: got %v expected %v", keys, expected)
+	}
+
+	expected = [][]byte{{0x01, 0x35}, {0x01, 0x35, 0x79}, {0x07, 0x3a}, {0x07, 0x3b}}
+	keys = trie.GetKeysWithPrefix([]byte{0x0})
+	if !reflect.DeepEqual(keys, expected) {
+		t.Fatalf("Fail: got %v expected %v", keys, expected)
+	}
+
+	expected = [][]byte{{0x07, 0x3a}, {0x07, 0x3b}}
+	keys = trie.GetKeysWithPrefix([]byte{0x07, 0x30})
+	if !reflect.DeepEqual(keys, expected) {
+		t.Fatalf("Fail: got %v expected %v", keys, expected)
 	}
 }
