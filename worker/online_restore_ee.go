@@ -230,7 +230,7 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
-		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
+		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
 			cfg, err := getEncConfig(req)
 			if err != nil {
 				return 0, errors.Wrapf(err, "unable to get encryption config")
