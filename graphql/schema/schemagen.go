@@ -96,12 +96,13 @@ func parseSecrets(sch string) (map[string]string, error) {
 			continue
 		}
 		parts := strings.Fields(text)
-		if len(parts) != 4 {
+		val := strings.Join(parts[3:], " ")
+		if len(parts) < 4 || val[0] != 34 || val[len(val)-1] != 34 {
 			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
 
-		val := strings.Trim(parts[3], `"`)
+		val = strings.Trim(val, `"`)
 		key := strings.Trim(parts[2], `"`)
 		m[key] = val
 	}

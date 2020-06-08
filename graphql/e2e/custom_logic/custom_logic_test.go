@@ -169,8 +169,8 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 })
 	 }
 
-		 # Dgraph.Secret Github-Api-Token random-fake-token
-		 # Dgraph.Secret X-App-Token should-be-overriden
+		 # Dgraph.Secret Github-Api-Token "random-fake-token"
+		 # Dgraph.Secret X-App-Token "should-be-overriden"
 	 `
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
@@ -936,8 +936,8 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 		)
   	}
 
-# Dgraph.Secret GITHUB-API-TOKEN some-api-token
-# Dgraph.Secret STRIPE-API-KEY some-api-key
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+# Dgraph.Secret STRIPE-API-KEY "some-api-key"
   `
 
 	updateSchemaRequireNoGQLErrors(t, schema)
