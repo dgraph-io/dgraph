@@ -109,10 +109,31 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 
 	m := make(map[uint64]int64) // map hash(key) to ts. hash(key) to limit the size of the map.
 	limiter := time.NewTicker(100 * time.Millisecond)
+	defer limiter.Stop()
+	cleanupTick := time.NewTicker(2 * time.Minute)
+	defer cleanupTick.Stop()
+
 	for {
 		select {
 		case <-closer.HasBeenClosed():
 			return
+		case <-cleanupTick.C:
+			timeout := time.NewTimer(3 * time.Second)
+			currTs := time.Now().UnixNano()
+		LOOP:
+			for hash, ts := range m {
+				select {
+				// Set 3 second timeout on cleanup operation.
+				case <-timeout.C:
+					break LOOP
+				default:
+					// Remove entries from map which have been there for more
+					// than a minute.
+					if currTs-ts >= 60*60 {
+						delete(m, hash)
+					}
+				}
+			}
 		case batch := <-ir.keysCh:
 			currTs := time.Now().Unix()
 			for _, key := range *batch {
