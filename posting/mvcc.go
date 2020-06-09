@@ -122,7 +122,7 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 			for hash, ts := range m {
 				// Remove entries from map which have been there for more
 				// than a two minutes.
-				if currTs-ts >= 2*60*60 {
+				if currTs-ts >= int64(2*time.Minute) {
 					delete(m, hash)
 				}
 			}
