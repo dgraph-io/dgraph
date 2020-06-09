@@ -96,8 +96,14 @@ func parseSecrets(sch string) (map[string]string, error) {
 			continue
 		}
 		parts := strings.Fields(text)
+		const doubleQuotesCode = 34
+
+		if len(parts) < 4 {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
 		val := strings.Join(parts[3:], " ")
-		if len(parts) < 4 || val[0] != 34 || val[len(val)-1] != 34 {
+		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
 			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
 				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
 		}
