@@ -1352,10 +1352,13 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 				break
 			}
 		}
-		for _, param := range sg.Params.Cascade {
-			if _, ok := m[param]; !ok {
-				exclude = true
-				break
+		// For parameterized @cascade, make sure all params seen in map.
+		if sg.Params.Cascade[0] != "__all__" {
+			for _, param := range sg.Params.Cascade {
+				if _, ok := m[param]; !ok {
+					exclude = true
+					break
+				}
 			}
 		}
 		if !exclude {
