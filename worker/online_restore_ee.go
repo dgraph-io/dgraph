@@ -230,8 +230,8 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
-		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
-			if uint32(groupId) != req.GroupId {
+		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+			if groupId != req.GroupId {
 				// LoadBackup will try to call the backup function for every group.
 				// Exit here if the group is not the one indicated by the request.
 				return 0, nil
