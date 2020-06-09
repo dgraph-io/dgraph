@@ -525,12 +525,12 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].ReturnType, "AddPostPayload")
 	require.True(t, resp.Extensions.Tracing.Execution[0].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
-	// require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "mutation")
-	// require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
-	// require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
-	// require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "query")
-	// require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
-	// require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "mutation")
+	 require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].StartOffset > 0)
 }
 
 func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
@@ -570,12 +570,24 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].ReturnType, "AddPostPayload")
 	require.True(t, resp.Extensions.Tracing.Execution[0].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "mutation")
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].StartOffset > 0)
 
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].ParentType, "Mutation")
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].FieldName, "b")
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].ReturnType, "AddPostPayload")
 	require.True(t, resp.Extensions.Tracing.Execution[1].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[1].Duration > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].Label, "mutation")
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].StartOffset > 0)
+	require.Equal(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].Label, "query")
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].Duration > 0)
+	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].StartOffset > 0)
 
 }
 

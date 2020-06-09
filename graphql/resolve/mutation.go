@@ -217,10 +217,19 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}()
 
 	emptyResult := func(err error) *Resolved {
+
+		dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+		dgraphDuration1 := &schema.LabeledOffsetDuration{Label: "query"}
+		dgraphDuration.StartOffset = 0
+		dgraphDuration1.StartOffset = 0
+		dgraphDuration.Duration = 0
+		dgraphDuration1.Duration = 0
+
 		return &Resolved{
-			Data:  map[string]interface{}{mutation.Name(): nil},
-			Field: mutation,
-			Err:   err,
+			Data:   map[string]interface{}{mutation.Name(): nil},
+			Field:  mutation,
+			Err:    err,
+			Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
 		}
 	}
 
@@ -234,8 +243,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Query:     dgraph.AsString(upsert.Query),
 		Mutations: upsert.Mutations,
 	}
-
 	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	dgraphDuration1 := &schema.LabeledOffsetDuration{Label: "query"}
 	timers1 := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
 	timer1 := timers1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
 	timer1.Start()
@@ -278,8 +287,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			resolverFailed
 	}
 	commit = true
-
-	dgraphDuration1 := &schema.LabeledOffsetDuration{Label: "query"}
 	timers2 := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
 	timer2 := timers2.NewOffsetTimer(&dgraphDuration1.OffsetDuration)
 	timer2.Start()
@@ -310,6 +317,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			Field:      mutation,
 			Err:        err,
 			Extensions: extM,
+			Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
+
 		}, resolverSucceeded
 	}
 
