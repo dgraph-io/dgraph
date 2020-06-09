@@ -421,6 +421,7 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 	require.NotNil(t, resp.Extensions.Tracing)
 	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
 	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
+
 	require.True(t, resp.Extensions.Tracing.Duration > 0)
 	require.Len(t, resp.Extensions.Tracing.Execution, 1)
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].ParentType, "Query")
@@ -429,6 +430,7 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Label, "query")
 	require.True(t, resp.Extensions.Tracing.Execution[0].StartOffset > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[0].Path) > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
 
@@ -472,6 +474,7 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 	require.True(t, resp.Extensions.Tracing.Execution[0].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[0].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[0].Path) > 0)
 
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].ParentType, "Query")
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].FieldName, "b")
@@ -481,6 +484,7 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 	require.True(t, resp.Extensions.Tracing.Execution[1].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[0].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[1].Path) > 0)
 
 	require.Equal(t, resp.Extensions.Tracing.Execution[2].ParentType, "Query")
 	require.Equal(t, resp.Extensions.Tracing.Execution[2].FieldName, "c")
@@ -490,6 +494,7 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 	require.True(t, resp.Extensions.Tracing.Execution[2].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[2].Dgraph[0].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[2].Dgraph[0].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[2].Path) > 0)
 
 }
 
@@ -531,6 +536,7 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Label, "query")
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[0].Path) > 0)
 }
 
 func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
@@ -576,6 +582,7 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Label, "query")
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[0].Dgraph[1].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[0].Path) > 0)
 
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].ParentType, "Mutation")
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].FieldName, "b")
@@ -588,6 +595,7 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	require.Equal(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].Label, "query")
 	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].Duration > 0)
 	require.True(t, resp.Extensions.Tracing.Execution[1].Dgraph[1].StartOffset > 0)
+	require.True(t, len(resp.Extensions.Tracing.Execution[1].Path) > 0)
 
 }
 

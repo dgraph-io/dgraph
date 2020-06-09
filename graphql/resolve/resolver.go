@@ -451,7 +451,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
 
 		}
 	}
@@ -491,7 +491,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			var res *Resolved
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			addResult(resp, res)
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
 		}
 	case op.IsSubscription():
 		resolveQueries()

@@ -74,27 +74,30 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
-
-	trace := &schema.ResolverTrace{
-		ParentType: "Query",
+	resolved:=&Resolved{}
+	resolved.Extensions=&schema.Extensions{}
+	resolved.Extensions.Tracing=&schema.Trace{}
+	resolved.Extensions.Tracing.Execution = []*schema.ResolverTrace {
+		{ParentType: "Query",
 		FieldName:  query.ResponseName(),
 		ReturnType: query.Type().String(),
-	}
-	trace.Path = []interface{}{query.ResponseName()}
+		Path : []interface{}{query.ResponseName()},
+
+	}}
 	timers := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
-	timer := timers.NewOffsetTimer(&trace.OffsetDuration)
+	timer := timers.NewOffsetTimer(&resolved.Extensions.Tracing.Execution[0].OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
 
-	resolved := qr.rewriteAndExecute(ctx, query)
-	if resolved.Data == nil {
-		resolved.Data = map[string]interface{}{query.Name(): nil}
+	resolved1 := qr.rewriteAndExecute(ctx, query)
+	if resolved1.Data == nil {
+		resolved1.Data = map[string]interface{}{query.Name(): nil}
 	}
-	qr.resultCompleter.Complete(ctx, resolved)
-	trace.Dgraph = resolved.Dgraph
-	resolved.trace = []*schema.ResolverTrace{trace}
 
-	return resolved
+	qr.resultCompleter.Complete(ctx, resolved)
+	resolved.Extensions.Tracing.Execution[0].Dgraph=resolved1.Extensions.Tracing.Execution[0].Dgraph
+	resolved1.Extensions.Tracing.Execution[0]=resolved.Extensions.Tracing.Execution[0]
+	return resolved1
 }
 
 func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Query) *Resolved {
@@ -114,10 +117,9 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	}
 
 	dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-
-	timers1 := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
+	startTime, _ := ctx.Value("starttime").(time.Time)
+	timers1 := schema.NewOffsetTimerFactory(startTime)
 	timer1 := timers1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
-
 	timer1.Start()
 
 	resp, err := qr.executor.Execute(ctx,
@@ -129,12 +131,13 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
 	}
+	resolved:=&Resolved{}
 
-	resolved := completeDgraphResult(ctx, query, resp.GetJson(), err)
-	resolved.Dgraph = []*schema.LabeledOffsetDuration{dgraphDuration}
+	resolved = completeDgraphResult(ctx, query, resp.GetJson(), err)
 	resolved.Extensions =
 		&schema.Extensions{TouchedUids: resp.GetMetrics().GetNumUids()[touchedUidsKey]}
-
+	resolved.Extensions.Tracing=&schema.Trace{}
+	resolved.Extensions.Tracing.Execution = []*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration}}}
 	return resolved
 }
 
