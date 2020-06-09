@@ -28,6 +28,7 @@ check_cmd_exists strip
 check_cmd_exists gcc
 check_cmd_exists go
 check_cmd_exists docker
+check_cmd_exists nvm
 check_cmd_exists npm
 check_cmd_exists protoc
 
