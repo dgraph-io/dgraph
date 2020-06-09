@@ -545,24 +545,19 @@ func setupServer(closer *y.Closer) {
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
-	time.Sleep(time.Second)
 	panic("pseudo-panic")
 	wg.Wait()
 }
 
 func run() {
 	var err error
-	bindall = Alpha.Conf.GetBool("bindall")	
-	x.Config.BindAll = Alpha.Conf.GetBool("bindall")
-	x.Config.PortOffset = Alpha.Conf.GetInt("port_offset")
-	x.WorkerConfig.ZeroAddr = strings.Split(Alpha.Conf.GetString("zero"), ",")
-
 	if Alpha.Conf.GetBool("enable_sentry") {
 		x.InitSentry(enc.EeBuild)
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
 		x.WrapPanics()
 	}
+	bindall = Alpha.Conf.GetBool("bindall")
 
 	opts := worker.Options{
 		BadgerTables:           Alpha.Conf.GetString("badger.tables"),

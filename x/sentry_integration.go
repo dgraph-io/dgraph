@@ -17,7 +17,6 @@
 package x
 
 import (
-	"fmt"
 	"bytes"
 	"errors"
 	"io/ioutil"
@@ -117,15 +116,12 @@ func CaptureSentryException(err error) {
 // PanicHandler is the callback function when a panic happens. It does not recover and is
 // only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
-	// Construct the ip:port to get CID from /state.
-	zport := Config.PortOffset + PortZeroHTTP
 
-	glog.Infof("getting state. laddr = %v, zport = %d", WorkerConfig.ZeroAddr[0], zport)
 	// lets get some data
 	var ms pb.MembershipState
-	
-	// Make the HTTP call to one of the zero. TODO -- what if it is HTTPs. Need logic for that.
-	res, err := http.Get("http://" + fmt.Sprintf("%s:%d",strings.Split(WorkerConfig.ZeroAddr[0], ":")[0], zport) + "/state")
+	glog.Infof("getting state")
+
+	res, err := http.Get("http://localhost:6080/state")
 	if err != nil {
 		glog.Infof("Error on getting /state %v", err)
 	}
