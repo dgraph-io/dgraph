@@ -2,7 +2,7 @@
   gqlquery: |
     mutation addUserSecret($secret: AddUserSecretInput!) {
       addUserSecret(input: [$secret]) {
-        usersecret {
+        userSecret {
           id
         }
       }
@@ -30,7 +30,7 @@
   gqlquery: |
     mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
       addUserSecret(input: $secrets) {
-        usersecret {
+        userSecret {
           id
         }
       }
@@ -59,7 +59,7 @@
   gqlquery: |
     mutation addUserSecret($secret: AddUserSecretInput!) {
       addUserSecret(input: [$secret]) {
-        usersecret {
+        userSecret {
           id
         }
       }
@@ -89,7 +89,7 @@
   gqlquery: |
     mutation addUserSecret($secrets: [AddUserSecretInput!]!) {
       addUserSecret(input: $secrets) {
-        usersecret {
+        userSecret {
           id
         }
       }
@@ -932,7 +932,7 @@
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
-        complexlog {
+        complexLog {
           id
         }
       }
@@ -953,7 +953,7 @@
   gqlquery: |
     mutation addComplexLog($log: AddComplexLogInput!) {
       addComplexLog(input: [$log]) {
-        complexlog {
+        complexLog {
           id
         }
       }

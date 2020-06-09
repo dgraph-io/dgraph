@@ -420,7 +420,7 @@ func TestRootGetDeepFilter(t *testing.T) {
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"getProject":{"name":"Project2","columns":[{"name":"Column3"},{"name":"Column2"}]}}`,
+		result: `{"getProject":{"name":"Project2","columns":[{"name":"Column2"},{"name":"Column3"}]}}`,
 		name:   idProject2,
 	}}
 
@@ -428,8 +428,8 @@ func TestRootGetDeepFilter(t *testing.T) {
 		query($id: ID!) {
 		    getProject(projID: $id) {
 				name
-				columns {
-          			name
+				columns(order: {asc: name}) {
+          				name
 				}
 		    }
 		}
