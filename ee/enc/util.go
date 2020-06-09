@@ -28,11 +28,6 @@ import (
 // Eebuild indicates if this is a Enterprise build.
 var EeBuild = false
 
-// ReadEncryptionKeyFile returns nil key for OSS build
-func ReadEncryptionKeyFile(filepath string) []byte {
-	return nil
-}
-
 // GetWriter returns the Writer as is for OSS Builds.
 func GetWriter(_ []byte, w io.Writer) (io.Writer, error) {
 	return w, nil
@@ -48,11 +43,7 @@ func RegisterFlags(_ *pflag.FlagSet) {
 	return
 }
 
-type KeyReader interface {
-	ReadKey() (x.SensitiveByteSlice, error)
-}
-
-// NewKeyReader return nil KeyReader (i.e. no encryption).
-func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
+// ReadKey reads the key. Nil for OSS.
+func ReadKey(_ *viper.Viper) (x.SensitiveByteSlice, error) {
 	return nil, nil
 }

@@ -32,9 +32,12 @@ import (
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	minio "github.com/minio/minio-go/v6"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -273,7 +276,7 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 	t.Logf("--- Restoring from: %q", localBackupDst)
 	testutil.KeyFile = "../../../ee/enc/test-fixtures/enc-key"
 	argv := []string{"dgraph", "restore", "-l", localBackupDst, "-p", "data/restore",
-		"-k", testutil.KeyFile, "--force_zero=false"}
+		"--encryption_key_file", testutil.KeyFile, "--force_zero=false"}
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 	err = testutil.ExecWithOpts(argv, testutil.CmdOpts{Dir: cwd})
@@ -310,9 +313,24 @@ func runFailingRestore(t *testing.T, backupLocation, lastDir string, commitTs ui
 	// calling restore.
 	require.NoError(t, os.RemoveAll(restoreDir))
 
-	result := worker.RunRestore("./data/restore", backupLocation, lastDir, "../../../ee/enc/test-fixtures/enc-key")
+	// Get key.
+	config := getEncConfig()
+	config.Set("encryption_key_file", "../../../ee/enc/test-fixtures/enc-key")
+	k, err := enc.ReadKey(config)
+	require.NotNil(t, k)
+	require.NoError(t, err)
+
+	result := worker.RunRestore("./data/restore", backupLocation, lastDir, k)
 	require.Error(t, result.Err)
 	require.Contains(t, result.Err.Error(), "expected a BackupNum value of 1")
+}
+
+func getEncConfig() *viper.Viper {
+	config := viper.New()
+	flags := &pflag.FlagSet{}
+	enc.RegisterFlags(flags)
+	config.BindPFlags(flags)
+	return config
 }
 
 func dirSetup(t *testing.T) {

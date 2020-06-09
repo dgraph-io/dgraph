@@ -849,17 +849,20 @@ func (n *node) proposeSnapshot(discardN int) error {
 	return n.Raft().Propose(n.ctx, data)
 }
 
-const maxPendingSize int64 = 64 << 20 // in bytes.
+const (
+	maxPendingSize int64 = 64 << 20 // in bytes.
+	nodeApplyChan        = "raft node applyCh"
+)
 
-func (n *node) rampMeter() {
+func rampMeter(address *int64, maxSize int64, component string) {
 	start := time.Now()
 	defer func() {
 		if dur := time.Since(start); dur > time.Second {
-			glog.Infof("Blocked pushing to applyCh for %v", dur.Round(time.Millisecond))
+			glog.Infof("Blocked pushing to %s for %v", component, dur.Round(time.Millisecond))
 		}
 	}()
 	for {
-		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+		if atomic.LoadInt64(address) <= maxSize {
 			return
 		}
 		time.Sleep(3 * time.Millisecond)
@@ -943,10 +946,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			close(done)
 			if x.WorkerConfig.LudicrousMode {
 				n.ex.closer.SignalAndWait()
 			}
+			close(done)
 			return
 		}
 	}
@@ -1168,7 +1171,7 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If this do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				n.rampMeter()
+				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
 				for _, p := range proposals {
 					pendingSize += int64(p.Size())

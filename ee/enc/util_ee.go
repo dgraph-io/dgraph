@@ -36,24 +36,24 @@ const (
 // RegisterFlags registers the required encryption flags.
 func RegisterFlags(flag *pflag.FlagSet) {
 	flag.String(encKeyFile, "",
-		"The file that stores the symmetric key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
+		"The file that stores the symmetric key of length 16, 24, or 32 bytes. "+
+			"The key size determines the chosen AES cipher "+
 			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	// Register options for Vault stuff.
 	registerVaultFlags(flag)
 }
 
-type KeyReader interface {
-	ReadKey() (x.SensitiveByteSlice, error)
+type keyReader interface {
+	readKey() (x.SensitiveByteSlice, error)
 }
 
-// localKeyReader implements the KeyReader interface. It reads the key from local files.
+// localKeyReader implements the keyReader interface. It reads the key from local files.
 type localKeyReader struct {
 	keyFile string
 }
 
-func (lkr *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
+func (lkr *localKeyReader) readKey() (x.SensitiveByteSlice, error) {
 	if lkr == nil {
 		return nil, errors.Errorf("nil localKeyReader")
 	}
@@ -62,7 +62,7 @@ func (lkr *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	}
 	k, err := ioutil.ReadFile(lkr.keyFile)
 	if err != nil {
-		return nil, errors.Wrapf(err, "error reading encryption key file (%v)", lkr.keyFile)
+		return nil, errors.Errorf("error reading file %v", err)
 	}
 	// len must be 16,24,32 bytes if given. All other lengths are invalid.
 	klen := len(k)
@@ -72,14 +72,34 @@ func (lkr *localKeyReader) ReadKey() (x.SensitiveByteSlice, error) {
 	return k, nil
 }
 
-// NewKeyReader returns a KeyReader interface based on the configuration options.
+// ReadKey obtains the key using the configured options.
+func ReadKey(cfg *viper.Viper) (x.SensitiveByteSlice, error) {
+	var (
+		kr  keyReader
+		err error
+	)
+	// Get the keyReader interface.
+	if kr, err = newKeyReader(cfg); err != nil {
+		return nil, err
+	}
+	var key x.SensitiveByteSlice
+	if kr != nil {
+		// Get the key using the interface method readKey().
+		if key, err = kr.readKey(); err != nil {
+			return nil, err
+		}
+	}
+	return key, nil
+}
+
+// newKeyReader returns a keyReader interface based on the configuration options.
 // Valid KeyReaders are:
 // 1. Local to read key from local filesystem. .
 // 2. Vault to read key from vault.
 // 3. Nil when encryption is turned off.
-func NewKeyReader(cfg *viper.Viper) (KeyReader, error) {
+func newKeyReader(cfg *viper.Viper) (keyReader, error) {
 	var keyReaders int
-	var keyReader KeyReader
+	var keyReader keyReader
 	var err error
 
 	keyFile := cfg.GetString(encKeyFile)
@@ -150,20 +170,4 @@ func GetReader(key x.SensitiveByteSlice, r io.Reader) (io.Reader, error) {
 		return nil, err
 	}
 	return cipher.StreamReader{S: cipher.NewCTR(c, iv), R: r}, nil
-}
-
-// ReadEncryptionKeyFile returns the encryption key in the given file.
-func ReadEncryptionKeyFile(filepath string) x.SensitiveByteSlice {
-	if filepath == "" {
-		return nil
-	}
-	k, err := ioutil.ReadFile(filepath)
-	x.Checkf(err, "Error reading encryption key file (%v)", filepath)
-
-	// len must be 16,24,32 bytes if given. All other lengths are invalid.
-	klen := len(k)
-	x.AssertTruef(klen == 16 || klen == 24 || klen == 32,
-		"Invalid encryption key length = %v", klen)
-
-	return k
 }
