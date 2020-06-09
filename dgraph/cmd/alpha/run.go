@@ -545,7 +545,6 @@ func setupServer(closer *y.Closer) {
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
-	panic("pseudo-panic")
 	wg.Wait()
 }
 
