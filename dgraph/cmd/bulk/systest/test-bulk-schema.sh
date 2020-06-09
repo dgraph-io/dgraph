@@ -26,6 +26,7 @@ INFO "running bulk load schema test"
 
 WORKDIR=$(mktemp --tmpdir -d $ME.tmp-XXXXXX)
 INFO "using workdir $WORKDIR"
+cp dgraph/cmd/bulk/systest/schema.txt $WORKDIR 
 cd $WORKDIR
 
 LOGFILE=$WORKDIR/output.log
@@ -198,21 +199,7 @@ EOF
 
   dgraph debug -p out/0/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4  > all_dbs.out
   dgraph debug -p out/1/p 2>|/dev/null | grep '{s}' | cut -d' ' -f4 >> all_dbs.out
-  diff <(LC_ALL=C sort all_dbs.out | uniq -c) - <<EOF
-      1 dgraph.acl.rule
-      1 dgraph.graphql.schema
-      1 dgraph.graphql.xid
-      1 dgraph.password
-      1 dgraph.rule.permission
-      1 dgraph.rule.predicate
-      1 dgraph.type
-      1 dgraph.user.group
-      1 dgraph.xid
-      1 genre
-      1 language
-      1 name
-      1 revenue
-EOF
+  diff all_dbs.out schema.txt
 }
 
 function StopServers
@@ -224,7 +211,7 @@ function StopServers
 function Cleanup
 {
   INFO "removing $WORKDIR"
-  # rm -rf $WORKDIR
+   rm -rf $WORKDIR
 }
 
 mkdir dir1

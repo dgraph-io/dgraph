@@ -125,6 +125,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestBasicRestore(t *testing.T) {
+	t.Skip()
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -138,6 +139,7 @@ func TestBasicRestore(t *testing.T) {
 }
 
 func TestInvalidBackupId(t *testing.T) {
+	t.Skip()
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "bad-backup-id",
 			encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -163,6 +165,7 @@ func TestInvalidBackupId(t *testing.T) {
 }
 
 func TestListBackups(t *testing.T) {
+	t.Skip()
 	query := `query backup() {
 		listBackups(input: {location: "/data/backup"}) {
 			backupId

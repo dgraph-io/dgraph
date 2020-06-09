@@ -1590,6 +1590,7 @@ func TestMultiTenancy(t *testing.T) {
 		schema {}
 	`, `dev`)
 	require.NoError(t, err)
+	fmt.Println(res)
 	require.JSONEq(t, `{
 		"schema":{
 		   "schema":[
@@ -1601,6 +1602,15 @@ func TestMultiTenancy(t *testing.T) {
 			  {
 				 "predicate":"dgraph.graphql.schema",
 				 "type":"string"
+			  },
+			  {
+				 "predicate":"dgraph.graphql.xid",
+				 "type":"string",
+				 "index":true,
+				 "tokenizer":[
+					"exact"
+				 ],
+				 "upsert":true
 			  },
 			  {
 				 "predicate":"dgraph.password",

@@ -90,6 +90,9 @@ func ParseNamespaceAttr(attr string) (string, string, bool) {
 func ParseAttr(attr string) string {
 	splits := strings.Split(attr, string(NamespaceSeparator))
 	AssertTrue(len(splits) == 2)
+	if splits[0][0] == '~' {
+		splits[1] = "~" + splits[1]
+	}
 	return splits[1]
 }
 

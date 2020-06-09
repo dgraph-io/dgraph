@@ -684,14 +684,15 @@ func initialSchemaInternal(namespace string, all bool) []*pb.SchemaUpdate {
 
 // IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
 // predicate pred is different than the passed update.
-func IsPreDefinedPredicateChanged(namespace string, pred string, update *pb.SchemaUpdate) bool {
+func IsPreDefinedPredicateChanged(pred string, update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
-	if !x.IsPreDefinedPredicate(x.ParseAttr(pred)) {
+	if !x.IsPreDefinedPredicate(pred) {
 		return false
 	}
 
-	initialSchema := CompleteInitialSchema(namespace)
+	initialSchema := CompleteInitialSchema(x.DefaultNamespace)
 	for _, original := range initialSchema {
+		original.Predicate = x.ParseAttr(original.Predicate)
 		if original.Predicate != pred {
 			continue
 		}

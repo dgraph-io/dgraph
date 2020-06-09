@@ -890,7 +890,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	out := &pb.Query{
 		ReadTs:       sg.ReadTs,
 		Cache:        int32(sg.Cache),
-		Attr:         x.NamespaceAttr(x.DefaultNamespace, attr),
+		Attr:         x.NamespaceAttr(sg.Params.Namespace, attr),
 		Langs:        sg.Params.Langs,
 		Reverse:      reverse,
 		SrcFunc:      srcFunc,
@@ -1872,6 +1872,10 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				span.Annotate(nil, "expand default")
 				// We already have the predicates populated from the var.
 				preds = getPredsFromVals(child.ExpandPreds)
+				// All the value predicates needs to be namespaced.
+				for i, pred := range preds {
+					preds[i] = x.NamespaceAttr(sg.Params.Namespace, pred)
+				}
 			} else {
 				typeNames := strings.Split(child.Params.Expand, ",")
 				preds = getPredicatesFromTypes(sg.Params.Namespace, typeNames)
@@ -2561,6 +2565,8 @@ func getPredicatesFromTypes(namespace string, typeNames []string) []string {
 		if !ok {
 			continue
 		}
+
+		fmt.Printf("%+v \n", typeDef)
 
 		for _, field := range typeDef.Fields {
 			preds = append(preds, field.Predicate)

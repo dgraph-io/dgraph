@@ -254,7 +254,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = op.DropValue
+		m.DropValue = x.NamespaceAttr(op.Namespace, op.DropValue)
 		_, err := query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}
@@ -270,13 +270,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for _, update := range result.Preds {
-		// Set the schema name according to the namespace.
-		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefinedPredicateChanged(op.Namespace, update.Predicate, update) {
+		if schema.IsPreDefinedPredicateChanged(update.Predicate, update) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
-				x.ParseAttr(update.Predicate))
+				update.Predicate)
 			return nil, err
 		}
 
@@ -293,6 +291,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 				" which is reserved as the namespace for dgraph's internal types/predicates.",
 				update.Predicate)
 		}
+		// Set the schema name according to the namespace.
+		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
 	}
 
 	for _, typ := range result.Types {
@@ -826,7 +826,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
 	}
-
 	if req.Namespace == "" {
 		req.Namespace = x.DefaultNamespace
 	}

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -45,6 +46,7 @@ func createNamespace(namespace string) {
 	if err != nil {
 		panic(fmt.Sprintf("Could not alter schema. Got error %v", err.Error()))
 	}
+	time.Sleep(1 * time.Second)
 }
 
 func dropPredicate(pred string) {

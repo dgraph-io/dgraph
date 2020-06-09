@@ -525,10 +525,10 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			}
 			return toType(x.ParseAttr(pk.Attr), update)
 
-		case pk.Attr == "dgraph.graphql.xid":
+		case x.ParseAttr(pk.Attr) == "dgraph.graphql.xid":
 			// Ignore this predicate.
 
-		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
+		case pk.IsData() && x.ParseAttr(pk.Attr) == "dgraph.graphql.schema":
 			// Export the graphql schema.
 			pl, err := posting.ReadPostingList(key, itr)
 			if err != nil {
@@ -559,7 +559,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 			// The GraphQL layer will create a node of type "dgraph.graphql". That entry
 			// should not be exported.
-			if pk.Attr == "dgraph.type" {
+			if x.ParseAttr(pk.Attr) == "dgraph.type" {
 				vals, err := e.pl.AllValues(in.ReadTs)
 				if err != nil {
 					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")

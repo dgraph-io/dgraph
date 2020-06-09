@@ -1047,7 +1047,7 @@ func (qs *queryState) handleCompareScalarFunction(ctx context.Context, arg funcA
 	attr := arg.q.Attr
 	if ok := schema.State().HasCount(ctx, attr); !ok {
 		return errors.Errorf("Need @count directive in schema for attr: %s for fn: %s at root",
-			attr, arg.srcFn.fname)
+			x.ParseAttr(attr), arg.srcFn.fname)
 	}
 	count := arg.srcFn.threshold
 	cp := countParams{
