@@ -298,6 +298,7 @@ func RunAll(t *testing.T) {
 	t.Run("password in mutation", passwordTest)
 	t.Run("duplicate xid in single mutation", deepMutationDuplicateXIDsSameObjectTest)
 	t.Run("alias works for mutations", mutationsWithAlias)
+	t.Run("three level deep", threeLevelDeepMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)

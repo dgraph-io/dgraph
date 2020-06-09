@@ -26,6 +26,7 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -94,6 +95,30 @@ func NewVariableGenerator() *VariableGenerator {
 		counter:       0,
 		xidVarNameMap: make(map[string]string),
 	}
+}
+
+func (mf *mutationFragment) print() {
+	fmt.Println("------------")
+	fmt.Println(dgraph.AsString(&gql.GraphQuery{Children: mf.queries}))
+	fmt.Println("Condition: ", mf.conditions)
+	byt, _ := json.MarshalIndent(mf.fragment, "", "    ")
+	fmt.Println("Frag:", string(byt))
+	byt, _ = json.MarshalIndent(mf.deletes, "", "    ")
+	fmt.Println("Dels:", string(byt))
+	fmt.Println("------------")
+}
+
+func (mr *mutationRes) print() {
+	fmt.Println("======first pass======")
+	for _, i := range mr.firstPass {
+		i.print()
+	}
+	fmt.Println("======second pass======")
+	for _, i := range mr.secondPass {
+		i.print()
+	}
+	fmt.Println("======end pass======")
+
 }
 
 // Next gets the Next variable name for the given type and xid.
@@ -268,6 +293,7 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 	for _, i := range val {
 		obj := i.(map[string]interface{})
 		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, 0, xidMd)
+		frag.print()
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
 		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
@@ -405,8 +431,8 @@ func (urw *UpdateRewriter) Rewrite(
 					return nil, nil
 				})
 
+			urw.setFrags = append(urw.setFrags, setFrag...)
 			if keepError {
-				urw.setFrags = append(urw.setFrags, setFrag...)
 				errs = schema.AppendGQLErrs(errs, errSet)
 			}
 
@@ -428,8 +454,8 @@ func (urw *UpdateRewriter) Rewrite(
 					return json.Marshal(frag.fragment)
 				})
 
+			urw.delFrags = append(urw.delFrags, delFrag...)
 			if keepError {
-				urw.delFrags = append(urw.delFrags, delFrag...)
 				errs = schema.AppendGQLErrs(errs, errDel)
 			}
 
@@ -450,6 +476,17 @@ func (urw *UpdateRewriter) Rewrite(
 	if setArg != nil {
 		setFrag := rewriteObject(mutatedType, nil, srcUID, varGen, true,
 			setArg.(map[string]interface{}), 0, xidMd)
+
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("=======set frags======")
+		setFrag.print()
+		fmt.Println("=======set frags end======")
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("")
+
 		setFragF = setFrag.firstPass
 		setFragS = setFrag.secondPass
 	}
@@ -463,12 +500,12 @@ func (urw *UpdateRewriter) Rewrite(
 
 	result := []*UpsertMutation{}
 
-	firstPass := buildMutation(setFragF, delFragF, false)
+	firstPass := buildMutation(setFragF, delFragF, true)
 	if len(firstPass.Mutations) > 0 {
 		result = append(result, firstPass)
 	}
 
-	secondPass := buildMutation(setFragS, delFragS, true)
+	secondPass := buildMutation(setFragS, delFragS, false)
 	if len(secondPass.Mutations) > 0 {
 		result = append(result, secondPass)
 	}
@@ -680,7 +717,8 @@ func asUID(val interface{}) (uint64, error) {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder mutationBuilder,
+	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
@@ -798,7 +836,7 @@ func rewriteObject(
 			if !ok {
 				errFrag := newFragment(nil)
 				errFrag.err = errors.New("encountered an XID that isn't a string")
-				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+				return &mutationRes{firstPass: []*mutationFragment{errFrag}}
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
@@ -820,7 +858,7 @@ func rewriteObject(
 					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
-					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
+					return &mutationRes{firstPass: []*mutationFragment{errFrag}}
 				}
 			} else {
 				// if not encountered till now, add it to the map
@@ -859,7 +897,7 @@ func rewriteObject(
 			} else {
 				name = id.Name()
 			}
-			return &mutationRes{secondPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
+			return &mutationRes{firstPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
 				xidFrag, variable, xidString)}
 		}
 	}
@@ -899,7 +937,7 @@ func rewriteObject(
 		newObj["dgraph.type"] = dgraphTypes
 		myUID = fmt.Sprintf("_:%s", variable)
 
-		if xid == nil || deepXID > 1 {
+		if xid == nil || deepXID > 2 {
 			addInverseLink(newObj, srcField, srcUID)
 		}
 	} else {
@@ -948,7 +986,14 @@ func rewriteObject(
 	var additionalFrag []*mutationFragment
 
 	if xidFrag != nil && deepXID <= 2 {
+		fmt.Println("Frag")
+		xidFrag.print()
+		fmt.Println("Frag")
 		results.secondPass = append(results.secondPass, xidFrag)
+	} else if xidFrag != nil {
+		fmt.Println("Frag E")
+		xidFrag.print()
+		fmt.Println("Frag E")
 	}
 
 	// if this object has an xid, then we don't need to rewrite its children if we have encountered
@@ -959,10 +1004,6 @@ func rewriteObject(
 
 			fieldDef := typ.Field(field)
 			fieldName := typ.DgraphPredicate(field)
-			// This fixes mutation when dgraph predicate has special characters. PR #5526
-			if strings.HasPrefix(fieldName, "<") && strings.HasSuffix(fieldName, ">") {
-				fieldName = fieldName[1 : len(fieldName)-1]
-			}
 
 			strategy := "squash"
 
@@ -1012,12 +1053,39 @@ func rewriteObject(
 				}
 			}
 
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("====frags=====")
+			fmt.Println(fieldName)
+			fmt.Println(val)
+			fmt.Println(strategy)
+			fmt.Println(obj)
+			fmt.Println(deepXID)
+			frags.print()
+			fmt.Println("====result=====")
+			results.print()
+			fmt.Println("====post results=====")
+
 			if strategy == "squash" {
 				results.firstPass = squashFragments(squashIntoObject(fieldName), results.firstPass, frags.firstPass)
 			} else {
 				additionalFrag = appendFragments(additionalFrag, frags.firstPass)
 			}
-			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
+
+			if xid == nil || (deepXID < 2 && xid != nil) {
+				results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
+			} else {
+				fmt.Println(deepXID)
+				fmt.Println(xid == nil)
+				fmt.Println("Here")
+			}
+
+			results.print()
+			fmt.Println("====end=====")
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("")
 		}
 	}
 
@@ -1421,6 +1489,13 @@ func squashIntoList(list, v interface{}, makeCopy bool) interface{} {
 
 func squashIntoObject(label string) func(interface{}, interface{}, bool) interface{} {
 	return func(object, v interface{}, makeCopy bool) interface{} {
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("======== squash into object =======")
+		fmt.Println(object)
+		fmt.Println(v)
+		fmt.Println(label)
 		asObject := object.(map[string]interface{})
 		if makeCopy {
 			cpy := make(map[string]interface{}, len(asObject)+1)
@@ -1430,6 +1505,11 @@ func squashIntoObject(label string) func(interface{}, interface{}, bool) interfa
 			asObject = cpy
 		}
 		asObject[label] = v
+		fmt.Println(asObject)
+		fmt.Println("======== squash into object =======")
+		fmt.Println("")
+		fmt.Println("")
+		fmt.Println("")
 		return asObject
 	}
 }
@@ -1536,6 +1616,15 @@ func squashFragments(
 				deletes = make([]interface{}, len(l.deletes), len(l.deletes)+len(r.deletes))
 				copy(deletes, l.deletes)
 			}
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("============DEBUUUGGGGG START============")
+
+			fmt.Println("l")
+			l.print()
+			fmt.Println("r")
+			r.print()
 
 			result = append(result, &mutationFragment{
 				conditions: append(conds, r.conditions...),
@@ -1548,6 +1637,13 @@ func squashFragments(
 				}(l.check, r.check),
 				err: schema.AppendGQLErrs(l.err, r.err),
 			})
+
+			fmt.Println("result")
+			result[len(result)-1].print()
+			fmt.Println("============DEBUUUGGGGG END============")
+			fmt.Println("")
+			fmt.Println("")
+			fmt.Println("")
 		}
 	}
 

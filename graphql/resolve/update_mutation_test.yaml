@@ -992,9 +992,15 @@
         {
           "Student.taughtBy": [
             {
+              "Teacher.teaches": [{
+                    "uid": "uid(x)"
+	       }],
               "uid": "uid(Teacher3)"
             },
             {
+              "Teacher.teaches": [{
+                    "uid": "uid(x)"
+	       }],
               "uid": "uid(Teacher3)"
             }
           ],

@@ -1705,7 +1705,108 @@
         ]
       cond: "@if(eq(len(State3), 1))"
 
-- name: "Deep XID Add"
+- name: "Deep XID Add top level hasInverse"
+  gqlmutation: |
+    mutation addStudent($student: AddStudentInput!) {
+      addStudent(input: [$student]) {
+        student {
+          name
+        }
+      }
+    }
+  gqlvariables: |
+    {
+      "student": {
+        "xid": "S0",
+        "name": "Student0",
+        "taughtBy": [{
+                "xid": "T0",
+                "name": "teacher0",
+                "teaches": [{
+                        "xid": "S1",
+                        "name": "Student1"
+                }]
+        }]
+      }
+    }
+  dgquery: |-
+    query {
+      Teacher4 as Teacher4(func: eq(People.xid, "T0")) @filter(type(Teacher)) {
+        uid
+      }
+      Student6 as Student6(func: eq(People.xid, "S1")) @filter(type(Student)) {
+        uid
+      }
+    }
+
+  dgmutations:
+    - setjson: |
+        {
+                "People.name":"teacher0",
+                "People.xid":"T0",
+                "dgraph.type":["Teacher","People"],
+                "uid":"_:Teacher4"
+        }
+
+      cond: "@if(eq(len(Teacher4), 0))"
+
+    - setjson: |
+        {
+                "People.name":"Student1",
+                "People.xid":"S1",
+                "Student.taughtBy":[{"uid":"_:Teacher4"}],
+                "dgraph.type":["Student","People"],
+                "uid":"_:Student6"
+        }
+      cond: "@if(eq(len(Student6), 0) AND eq(len(Teacher4), 0))"
+
+    - setjson: |
+        {
+                "Student.taughtBy":[{"uid":"_:Teacher4"}],
+                "uid":"uid(Student6)"
+        }
+      deletejson: |
+      cond: "@if(eq(len(Student6), 1) AND eq(len(Teacher4), 0))"
+
+    - setjson: |
+        {
+                "Teacher.teaches":[{"uid":"uid(Student6)"}],
+                "uid":"_:Teacher4"
+        }
+      deletejson: |
+      cond: "@if(eq(len(Student6), 1) AND eq(len(Teacher4), 0))"
+
+    - setjson: |
+        {
+                "Teacher.teaches":[{"uid":"_:Student6"}],
+                "uid":"_:Teacher4"
+        }
+      deletejson: |
+      cond: "@if(eq(len(Student6), 0) AND eq(len(Teacher4), 0))"
+
+  dgquerysec: |-
+    query {
+      Student2 as Student2(func: eq(People.xid, "S0")) @filter(type(Student)) {
+        uid
+      }
+      Teacher4 as Teacher4(func: eq(People.xid, "T0")) @filter(type(Teacher)) {
+        uid
+      }
+    }
+
+  dgmutationssec:
+    - setjson: |
+        {
+                "People.name":"Student0",
+                "People.xid":"S0",
+                "Student.taughtBy":[{"Teacher.teaches":[{"uid":"_:Student2"}],"uid":"uid(Teacher4)"}],
+                "dgraph.type":["Student","People"],
+                "uid":"_:Student2"
+        }
+      cond: "@if(eq(len(Student2), 0) AND eq(len(Teacher4), 1))"
+
+
+- name: "Deep XID Add lower level hasInvsere"
   gqlmutation: |
     mutation addLab($lab: AddLabInput!) {
       addLab(input: [$lab]) {
@@ -1783,7 +1884,6 @@
         {
             "Lab.computers": [
                 {
-                    "Computer.owners": [],
                     "uid": "uid(Computer4)"
                 }
             ],
