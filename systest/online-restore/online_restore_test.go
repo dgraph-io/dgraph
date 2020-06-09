@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -35,16 +36,16 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T) {
-	restoreRequest := `mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "cranky_bartik8",
+func sendRestoreRequest(t *testing.T, backupId string) {
+	restoreRequest := fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			response {
 				code
 				message
 			}
 		}
-	}`
+	}`,  backupId)
 
 	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
@@ -132,9 +133,41 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t)
+	sendRestoreRequest(t, "cranky_bartik8")
 	runQueries(t, dg)
 	runMutations(t, dg)
+}
+
+func TestMoveTablets(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	sendRestoreRequest(t, "cranky_bartik8")
+	runQueries(t, dg)
+
+	// Send another restore request with a different backup. This backup has some of the
+	// same predicates as the previous one but they are stored in different groups.
+	sendRestoreRequest(t, "awesome_dirac9")
+
+	resp, err := dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(name), orderasc: name) {
+		name
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Person 1"}, {"name": "Person 2"}]}`, string(resp.Json))
+
+	resp, err = dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(tagline), orderasc: tagline) {
+		tagline
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"tagline":"Tagline 1"}]}`, string(resp.Json))
 }
 
 func TestInvalidBackupId(t *testing.T) {
