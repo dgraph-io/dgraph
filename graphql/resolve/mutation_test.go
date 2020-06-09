@@ -169,18 +169,10 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
 	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
-		for _, i := range generated {
-			fmt.Println(string(i.SetJson))
-			fmt.Println(string(i.DeleteJson))
-			fmt.Println(i.Cond)
-		}
-
 		require.Len(t, generated, len(test))
 		for i, expected := range test {
 			require.Equal(t, expected.Cond, generated[i].Cond)
 			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
-				fmt.Println(expected.SetJSON)
-				fmt.Println(string(generated[i].SetJson))
 				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
 			}
 			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
@@ -218,12 +210,10 @@ func mutationRewriting(t *testing.T, file string, rewriterFactory func() Mutatio
 				return
 			}
 
-			fmt.Println(dgraph.AsString(upsert[0].Query))
 			require.Equal(t, tcase.DGQuery, dgraph.AsString(upsert[0].Query))
 			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
 
 			if len(upsert) > 1 {
-				fmt.Println(dgraph.AsString(upsert[1].Query))
 				require.Equal(t, tcase.DGQuerySec, dgraph.AsString(upsert[1].Query))
 				compareMutations(t, tcase.DGMutationsSec, upsert[1].Mutations)
 			}
