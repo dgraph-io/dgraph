@@ -30,9 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/v2/ast"
-	"github.com/vektah/gqlparser/v2/parser"
-	"github.com/vektah/gqlparser/v2/validator"
 	"gopkg.in/yaml.v2"
 )
 
@@ -110,25 +107,22 @@ func mutationValidation(t *testing.T, file string, rewriterFactory func() Mutati
 }
 
 func benchmark3LevelDeep(num int, b *testing.B) {
-	gql, _ := ioutil.ReadFile("schema.graphql")
-	handler, _ := schema.NewHandler(string(gql))
-	doc, _ := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: handler.GQLSchema()})
-	gqlSch, _ := validator.ValidateSchemaDocument(doc)
-	gqlSchema := schema.AsSchema(gqlSch)
+	t := &testing.T{}
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
 
-	innerTeachers := make([]map[string]interface{}, num)
+	innerTeachers := make([]interface{}, 0)
 	for i := 1; i <= num; i++ {
 		innerTeachers = append(innerTeachers, map[string]interface{}{
-			"xid":  fmt.Sprintf("S$%d", i),
+			"xid":  fmt.Sprintf("S%d", i),
 			"name": fmt.Sprintf("Name%d", i),
 		})
 	}
 
 	vars := map[string]interface{}{
-		"input": []map[string]interface{}{{
+		"input": []interface{}{map[string]interface{}{
 			"xid":  "S0",
 			"name": "Name0",
-			"taughtBy": []map[string]interface{}{{
+			"taughtBy": []interface{}{map[string]interface{}{
 				"xid":     "T0",
 				"name":    "Teacher0",
 				"teaches": innerTeachers,
@@ -136,10 +130,9 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 		}},
 	}
 
-	for n := 0; n < b.N; n++ {
-		op, _ := gqlSchema.Operation(
-			&schema.Request{
-				Query: `
+	op, _ := gqlSchema.Operation(
+		&schema.Request{
+			Query: `
 			mutation addStudent($input: [AddStudentInput!]!) {
 				addStudent(input: $input) {
 					student {
@@ -147,15 +140,17 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 					}
 				}
 			}`,
-				Variables: vars,
-			})
+			Variables: vars,
+		})
+	mut := test.GetMutation(t, op)
 
-		NewAddRewriter().Rewrite(context.Background(), op.Mutations()[0])
+	for n := 0; n < b.N; n++ {
+		NewAddRewriter().Rewrite(context.Background(), mut)
 	}
 }
 
 func Benchmark3LevelDeep5(b *testing.B)   { benchmark3LevelDeep(5, b) }
-func Benchmark3LevelDeep10(b *testing.B)  { benchmark3LevelDeep(10, b) }
+func Benchmark3LevelDeep19(b *testing.B)  { benchmark3LevelDeep(19, b) }
 func Benchmark3LevelDeep100(b *testing.B) { benchmark3LevelDeep(100, b) }
 
 func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
