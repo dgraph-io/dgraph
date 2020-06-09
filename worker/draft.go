@@ -946,10 +946,10 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
-			close(done)
 			if x.WorkerConfig.LudicrousMode {
 				n.ex.closer.SignalAndWait()
 			}
+			close(done)
 			return
 		}
 	}

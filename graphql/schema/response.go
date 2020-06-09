@@ -35,6 +35,14 @@ type Extensions struct {
 	RequestID   string `json:"requestID,omitempty"`
 }
 
+// GetTouchedUids returns TouchedUids
+func (e *Extensions) GetTouchedUids() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.TouchedUids
+}
+
 // Merge merges ext with e
 func (e *Extensions) Merge(ext *Extensions) {
 	if e == nil || ext == nil {
@@ -192,6 +200,14 @@ func ErrorResponse(err error) *Response {
 	return &Response{
 		Errors: AsGQLErrors(err),
 	}
+}
+
+// GetExtensions returns a *Extensions
+func (r *Response) GetExtensions() *Extensions {
+	if r == nil {
+		return nil
+	}
+	return r.Extensions
 }
 
 // WithError generates GraphQL errors from err and records those in r.

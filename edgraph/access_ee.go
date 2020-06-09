@@ -344,7 +344,7 @@ func RefreshAcls(closer *y.Closer) {
 
 const queryAcls = `
 {
-  allAcls(func: type(Group)) {
+  allAcls(func: type(dgraph.type.Group)) {
     dgraph.xid
 	dgraph.acl.rule {
 		dgraph.rule.predicate
@@ -825,8 +825,10 @@ func AuthorizeGuardians(ctx context.Context) error {
 	addUserFilterToQuery applies makes sure that a user can access only its own
 	acl info by applying filter of userid and groupid to acl predicates. A query like
 	Conversion pattern:
-	* me(func: type(Group)) -> me(func: type(Group)) @filter(eq("dgraph.xid", groupIds...))
-	* me(func: type(User)) -> me(func: type(User)) @filter(eq("dgraph.xid", userId))
+		* me(func: type(dgraph.type.Group)) ->
+				me(func: type(dgraph.type.Group)) @filter(eq("dgraph.xid", groupIds...))
+		* me(func: type(dgraph.type.User)) ->
+				me(func: type(dgraph.type.User)) @filter(eq("dgraph.xid", userId))
 
 */
 func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) {
@@ -836,12 +838,12 @@ func addUserFilterToQuery(gq *gql.GraphQuery, userId string, groupIds []string) 
 			return
 		}
 		arg := gq.Func.Args[0]
-		// The case where value of some varialble v (say) is "Group" and a
+		// The case where value of some varialble v (say) is "dgraph.type.Group" and a
 		// query comes like `eq(dgraph.type, val(v))`, will be ignored here.
-		if arg.Value == "User" {
+		if arg.Value == "dgraph.type.User" {
 			newFilter := userFilter(userId)
 			gq.Filter = parentFilter(newFilter, gq.Filter)
-		} else if arg.Value == "Group" {
+		} else if arg.Value == "dgraph.type.Group" {
 			newFilter := groupFilter(groupIds)
 			gq.Filter = parentFilter(newFilter, gq.Filter)
 		}
@@ -915,8 +917,9 @@ func groupFilter(groupIds []string) *gql.FilterTree {
 
 /*
  addUserFilterToFilter makes sure that user can't misue filters to access other user's info.
- If the *filter* have type(Group) or type(User) functions, it generate a *newFilter* with function
- like eq(dgraph.xid, userId) or eq(dgraph.xid, groupId...) and return a filter of the form
+ If the *filter* have type(dgraph.type.Group) or type(dgraph.type.User) functions,
+ it generate a *newFilter* with function like eq(dgraph.xid, userId) or eq(dgraph.xid,groupId...)
+ and return a filter of the form
 
 		&gql.FilterTree{
 			Op: "AND",
@@ -941,9 +944,9 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 		arg := filter.Func.Args[0]
 		var newFilter *gql.FilterTree
 		switch arg.Value {
-		case "User":
+		case "dgraph.type.User":
 			newFilter = userFilter(userId)
-		case "Group":
+		case "dgraph.type.Group":
 			newFilter = groupFilter(groupIds)
 		}
 

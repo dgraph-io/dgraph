@@ -982,7 +982,7 @@
   gqlmutation: |
     mutation addMovieDirector($dir: AddMovieDirectorInput!) {
       addMovieDirector(input: [$dir]) {
-        moviedirector {
+        movieDirector {
           id
         }
       }
