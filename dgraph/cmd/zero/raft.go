@@ -348,8 +348,8 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(p.Tablet); err != nil {
-			span.Annotatef(nil, "While applying tablet proposal: %+v", err)
-			glog.Errorf("While applying tablet proposal: %+v", err)
+			span.Annotatef(nil, "While applying tablet proposal: %v", err)
+			glog.Errorf("While applying tablet proposal: %v", err)
 			return p.Key, err
 		}
 	}
