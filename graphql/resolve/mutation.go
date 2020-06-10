@@ -245,7 +245,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			Data:   map[string]interface{}{mutation.Name(): nil},
 			Field:  mutation,
 			Err:    err,
-			Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
+			//Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
+			Extensions:&schema.Extensions{Tracing:&schema.Trace{Execution:[]*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1}}}}},
+
 		}
 	}
 
