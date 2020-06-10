@@ -136,7 +136,7 @@ input StringHashFilter {
 #######################
 
 type AddMovieDirectorPayload {
-	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+	movieDirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
 	numUids: Int
 }
 
@@ -156,7 +156,7 @@ type DeleteMoviePayload {
 }
 
 type UpdateMovieDirectorPayload {
-	moviedirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
+	movieDirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
 	numUids: Int
 }
 
