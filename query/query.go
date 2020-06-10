@@ -29,6 +29,7 @@ import (
 	"github.com/pkg/errors"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
+	"github.com/golang/protobuf/proto"
 
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
@@ -898,7 +899,11 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	}
 
 	if sg.SrcUIDs != nil {
-		out.UidList = sg.SrcUIDs
+		var ok bool
+		out.UidList, ok = proto.Clone(sg.SrcUIDs).(*pb.List)
+		if !ok {
+			return nil, errors.Errorf("cannot clone uid list")
+		}
 	}
 	return out, nil
 }
