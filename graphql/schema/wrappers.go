@@ -1956,7 +1956,6 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	}
 	writer.WriteString("{\n")
 	for i := 0; i < len(field.SelectionSet); i++ {
-		// TODO - Check if this type conversion is safe.
 		castedField := field.SelectionSet[i].(*ast.Field)
 		writer.WriteString(castedField.Name)
 
