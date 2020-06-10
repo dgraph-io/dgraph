@@ -38,7 +38,8 @@ func init() {
 
 	schemaValidations = append(schemaValidations, dgraphDirectivePredicateValidation)
 	typeValidations = append(typeValidations, idCountCheck, dgraphDirectiveTypeValidation,
-		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck)
+		passwordDirectiveValidation, conflictingDirectiveValidation, nonIdFieldsCheck,
+		remoteTypeValidation)
 	fieldValidations = append(fieldValidations, listValidityCheck, fieldArgumentCheck,
 		fieldNameCheck, isValidFieldForList, hasAuthDirective)
 
@@ -385,7 +386,7 @@ func customMutationNameValidation(schema *ast.SchemaDocument) gqlerror.List {
 	return errs
 }
 
-func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
+func dataTypeCheck(schema *ast.Schema, defn *ast.Definition) *gqlerror.Error {
 	if defn.Kind == ast.Object || defn.Kind == ast.Enum || defn.Kind == ast.Interface || defn.
 		Kind == ast.InputObject {
 		return nil
@@ -398,7 +399,7 @@ func dataTypeCheck(defn *ast.Definition) *gqlerror.Error {
 	)
 }
 
-func nameCheck(defn *ast.Definition) *gqlerror.Error {
+func nameCheck(schema *ast.Schema, defn *ast.Definition) *gqlerror.Error {
 
 	if (defn.Kind == ast.Object || defn.Kind == ast.Enum) && isReservedKeyWord(defn.Name) {
 		var errMesg string
@@ -450,7 +451,7 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 	return fieldNamesString, errLocations
 }
 
-func conflictingDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
+func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
 	var hasAuth, hasRemote bool
 	for _, dir := range typ.Directives {
 		if dir.Name == authDirective {
@@ -467,7 +468,7 @@ func conflictingDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
+func passwordDirectiveValidation(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
 	dirs := make([]string, 0)
 
 	for _, dir := range typ.Directives {
@@ -504,7 +505,7 @@ func passwordDirectiveValidation(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
+func dgraphDirectiveTypeValidation(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
 	dir := typ.Directives.ForName(dgraphDirective)
 	if dir == nil {
 		return nil
@@ -528,7 +529,7 @@ func dgraphDirectiveTypeValidation(typ *ast.Definition) *gqlerror.Error {
 // 1. Type ID!
 // 2. Fields with @custom directive.
 // to be a valid type. Otherwise its not possible to add objects of that type.
-func nonIdFieldsCheck(typ *ast.Definition) *gqlerror.Error {
+func nonIdFieldsCheck(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
 	if isQueryOrMutation(typ.Name) || typ.Kind == ast.Enum || typ.Kind == ast.Interface ||
 		typ.Kind == ast.InputObject {
 		return nil
@@ -557,7 +558,64 @@ func nonIdFieldsCheck(typ *ast.Definition) *gqlerror.Error {
 	return nil
 }
 
-func idCountCheck(typ *ast.Definition) *gqlerror.Error {
+func remoteTypeValidation(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
+	if isQueryOrMutation(typ.Name) {
+		return nil
+	}
+	remote := typ.Directives.ForName(remoteDirective)
+	if remote == nil {
+		for _, field := range typ.Fields {
+			// If the field is being resolved through a custom directive, then we don't care if
+			// the type for the field is a remote or a non-remote type.
+			custom := field.Directives.ForName(customDirective)
+			if custom != nil {
+				continue
+			}
+			t := field.Type.Name()
+			origTyp := schema.Types[t]
+			remoteDir := origTyp.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
+				return gqlerror.ErrorPosf(field.Position, "Type %s; field %s; is of a type that "+
+					"has @remote directive. Those would need to be resolved by a @custom"+
+					" directive.", typ.Name, field.Name)
+			}
+		}
+
+		for _, implements := range typ.Interfaces {
+			origTyp := schema.Types[implements]
+			remoteDir := origTyp.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
+				return gqlerror.ErrorPosf(typ.Position, "Type %s; without @remote directive can't "+
+					"implement an interface %s; with have @remote directive.", typ.Name, implements)
+			}
+		}
+		return nil
+	}
+
+	// This means that the type was a remote type.
+	for _, field := range typ.Fields {
+		custom := field.Directives.ForName(customDirective)
+		if custom != nil {
+			return gqlerror.ErrorPosf(field.Position, "Type %s; field %s; can't have @custom "+
+				"directive as a @remote type can't have fields with @custom directive.", typ.Name,
+				field.Name)
+		}
+
+	}
+
+	for _, implements := range typ.Interfaces {
+		origTyp := schema.Types[implements]
+		remoteDir := origTyp.Directives.ForName(remoteDirective)
+		if remoteDir == nil {
+			return gqlerror.ErrorPosf(typ.Position, "Type %s; with @remote directive implements"+
+				" interface %s; which doesn't have @remote directive.", typ.Name, implements)
+		}
+	}
+
+	return nil
+}
+
+func idCountCheck(schema *ast.Schema, typ *ast.Definition) *gqlerror.Error {
 	var idFields []*ast.FieldDefinition
 	var idDirectiveFields []*ast.FieldDefinition
 	for _, field := range typ.Fields {
@@ -1027,7 +1085,7 @@ func passwordValidation(sch *ast.Schema,
 	dir *ast.Directive,
 	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
 
-	return passwordDirectiveValidation(typ)
+	return passwordDirectiveValidation(sch, typ)
 }
 
 func remoteDirectiveValidation(sch *ast.Schema,

@@ -1903,6 +1903,87 @@ invalid_schemas:
      "locations":[{"line":1, "column":11}]},
     ]
 
+  - name: "remote type with @custom directives on fields shouldn't be allowed."
+    description: "Remote types are not resolved further currently, hence they shouldn't have
+    fields with @custom directive on them."
+    input: |
+      type User {
+        id: ID!
+        name: String!
+      }
+
+      type School @remote {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type School; field name; can't have @custom directive as a @remote
+     type can't have fields with @custom directive.", "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a non-remote type can't have fields which are of remote type"
+    description: "This is disallowed because we don't generate UserRef etc., so we can't
+    allow adding/updating user from author."
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!]
+      }
+    errlist: [
+    {"message": "Type Author; field neighbour; is of a type that has @remote directive. Those
+    would need to be resolved by a @custom directive.",
+     "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a remote type can't implement a non-remote interface"
+    description: "Since we won't be adding/update the remote type, it wouldn't show up in
+    getPerson, queryPerson etc., hence causing confusion."
+    input: |
+      interface Person {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; with @remote directive implements interface Person; which doesn't have
+     @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+  -
+    name: "non-remote type can't implement a remote type"
+    description: "Dgraph schema generation and possibly the way we do field mapping would have to
+     be re-worked to make this work correctly."
+    input: |
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; without @remote directive can't implement an interface Person; with
+     have @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+
 valid_schemas:
   - name: "@auth on interface implementation"
     input: |
@@ -2120,4 +2201,54 @@ valid_schemas:
           graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
           skipIntrospection: true
         })
+      }
+
+  -
+    name: "remote type can use other types which are dgraph types"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+        author: Author
+      }
+
+      type Author {
+          id: ID!
+          age: Int!
+      }
+
+  -
+    name: "remote type can implement a remote type"
+    input: |
+      type Car {
+        id: ID!
+        name: String!
+      }
+
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+
+
+  -
+    name: "a non-remote type can have fields which are of remote type if they have @custom
+     directive"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!] @custom(http: {
+          url: "http://mock:8888/neighbour",
+          method: "POST",
+          body: "{sid: $id}"
+          })
       }
