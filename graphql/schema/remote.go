@@ -39,6 +39,8 @@ func validateUrl(rawURL string) error {
 		return fmt.Errorf("POST method cannot have query parameters in url: %s", rawURL)
 	}
 	return nil
+type IntrospectionRequest struct {
+	Query     string `json:"query"`
 }
 
 // introspectRemoteSchema introspectes remote schema
@@ -46,7 +48,7 @@ func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchem
 	if err := validateUrl(url); err != nil {
 		return nil, err
 	}
-	param := &Request{
+	param := &IntrospectionRequest{
 		Query: introspectionQuery,
 	}
 
