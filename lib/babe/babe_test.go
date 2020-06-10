@@ -20,10 +20,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
-	"sync"
-	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -46,45 +43,26 @@ var emptyHeader = &types.Header{
 	Number: big.NewInt(0),
 }
 
-func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
+func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt)
 
 	babeCfg, err := rt.BabeConfiguration()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if cfg == nil {
-		cfg = &SessionConfig{
+		cfg = &ServiceConfig{
 			Runtime: rt,
 		}
-	}
-
-	if cfg.Kill == nil {
-		cfg.Kill = make(chan struct{})
-	}
-
-	if cfg.EpochDone == nil {
-		cfg.EpochDone = new(sync.WaitGroup)
-		cfg.EpochDone.Add(1)
-	}
-
-	if cfg.NewBlocks == nil {
-		cfg.NewBlocks = make(chan types.Block)
 	}
 
 	if cfg.Runtime == nil {
 		cfg.Runtime = rt
 	}
 
-	cfg.SyncLock = &sync.Mutex{}
-
 	if cfg.Keypair == nil {
 		cfg.Keypair, err = sr25519.GenerateKeypair()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 	}
 
 	if cfg.AuthData == nil {
@@ -106,59 +84,21 @@ func createTestSession(t *testing.T, cfg *SessionConfig) *Session {
 		genesisData := new(genesis.Data)
 
 		err = dbSrv.Initialize(genesisData, genesisHeader, tt)
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		err = dbSrv.Start()
-		if err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, err)
 
 		cfg.BlockState = dbSrv.Block
 		cfg.StorageState = dbSrv.Storage
 	}
 
-	babesession, err := NewSession(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	babeService, err := NewService(cfg)
+	require.NoError(t, err)
 
-	babesession.config = babeCfg
-
-	return babesession
-}
-
-func TestKill(t *testing.T) {
-	killChan := make(chan struct{})
-
-	cfg := &SessionConfig{
-		Kill: killChan,
-	}
-
-	babesession := createTestSession(t, cfg)
-	err := babesession.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if atomic.LoadUint32(&babesession.started) == uint32(0) {
-		t.Fatalf("did not start session")
-	}
-
-	close(killChan)
-
-	babeSessionKilled := true
-	for i := 0; i < 10; i++ {
-		time.Sleep(1 * time.Second)
-		if atomic.LoadUint32(&babesession.started) == uint32(1) {
-			babeSessionKilled = false
-		} else {
-			break
-		}
-	}
-
-	require.True(t, babeSessionKilled, "did not kill session")
+	babeService.started.Store(true)
+	babeService.config = babeCfg
+	return babeService
 }
 
 func TestCalculateThreshold(t *testing.T) {
@@ -171,9 +111,7 @@ func TestCalculateThreshold(t *testing.T) {
 	expected := new(big.Int).Lsh(big.NewInt(1), 128)
 
 	threshold, err := calculateThreshold(C1, C2, authorityIndex, authorityWeights)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if threshold.Cmp(expected) != 0 {
 		t.Fatalf("Fail: got %d expected %d", threshold, expected)
@@ -192,9 +130,7 @@ func TestCalculateThreshold(t *testing.T) {
 	expected = q.Mul(q, p_rat.Num()).Div(q, p_rat.Denom())
 
 	threshold, err = calculateThreshold(C1, C2, authorityIndex, authorityWeights)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if threshold.Cmp(expected) != 0 {
 		t.Fatalf("Fail: got %d expected %d", threshold, expected)
@@ -227,10 +163,10 @@ func TestCalculateThreshold_AuthorityWeights(t *testing.T) {
 }
 
 func TestRunLottery(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	babesession.epochThreshold = big.NewInt(0)
+	babeService := createTestService(t, nil)
+	babeService.epochThreshold = big.NewInt(0)
 
-	outAndProof, err := babesession.runLottery(0)
+	outAndProof, err := babeService.runLottery(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,10 +177,10 @@ func TestRunLottery(t *testing.T) {
 }
 
 func TestRunLottery_False(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	babesession.epochThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	babeService := createTestService(t, nil)
+	babeService.epochThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
 
-	outAndProof, err := babesession.runLottery(0)
+	outAndProof, err := babeService.runLottery(0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,17 +203,15 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 }
 
 func TestBabeAnnounceMessage(t *testing.T) {
-	newBlocks := make(chan types.Block)
 	TransactionQueue := state.NewTransactionQueue()
 
-	cfg := &SessionConfig{
-		NewBlocks:        newBlocks,
+	cfg := &ServiceConfig{
 		TransactionQueue: TransactionQueue,
 	}
 
-	babesession := createTestSession(t, cfg)
+	babeService := createTestService(t, cfg)
 
-	babesession.config = &types.BabeConfiguration{
+	babeService.config = &types.BabeConfiguration{
 		SlotDuration:       1,
 		EpochLength:        6,
 		C1:                 1,
@@ -287,18 +221,19 @@ func TestBabeAnnounceMessage(t *testing.T) {
 		SecondarySlots:     false,
 	}
 
-	babesession.authorityIndex = 0
-	babesession.authorityData = []*types.BABEAuthorityData{
+	babeService.authorityIndex = 0
+	babeService.authorityData = []*types.BABEAuthorityData{
 		{ID: nil, Weight: 1},
 		{ID: nil, Weight: 1},
 		{ID: nil, Weight: 1},
 	}
 
-	err := babesession.Start()
+	err := babeService.Start()
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	newBlocks := babeService.GetBlockChannel()
 	block := <-newBlocks
 	blockNumber := big.NewInt(int64(1))
 	if !reflect.DeepEqual(block.Header.Number, blockNumber) {
@@ -325,7 +260,7 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 		{ID: pubB, Weight: 1},
 	}
 
-	bs := &Session{
+	bs := &Service{
 		authorityData: authData,
 		keypair:       kpA,
 	}
@@ -339,7 +274,7 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 		t.Fatalf("Fail: got %d expected %d", bs.authorityIndex, 0)
 	}
 
-	bs = &Session{
+	bs = &Service{
 		authorityData: authData,
 		keypair:       kpB,
 	}
@@ -352,4 +287,12 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 	if bs.authorityIndex != 1 {
 		t.Fatalf("Fail: got %d expected %d", bs.authorityIndex, 1)
 	}
+}
+
+func TestStartAndStop(t *testing.T) {
+	bs := createTestService(t, nil)
+	err := bs.Start()
+	require.NoError(t, err)
+	err = bs.Stop()
+	require.NoError(t, err)
 }

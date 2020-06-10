@@ -37,8 +37,8 @@ import (
 // RandomnessLength is the length of the epoch randomness (32 bytes)
 const RandomnessLength = 32
 
-// Session contains the VRF keys for the validator, as well as BABE configuation data
-type Session struct {
+// Service contains the VRF keys for the validator, as well as BABE configuation data
+type Service struct {
 	// Storage interfaces
 	blockState       BlockState
 	storageState     StorageState
@@ -60,103 +60,86 @@ type Session struct {
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
 
 	// Channels for inter-process communication
-	newBlocks chan<- types.Block // send blocks to core service
-	epochDone *sync.WaitGroup    // lets core know when the epoch is done
-	kill      <-chan struct{}    // kill session if this is closed
-	lock      sync.Mutex
-	started   uint32
+	blockChan chan types.Block // send blocks to core service
 
-	// Chain synchronization; session is locked for block building while syncing
-	syncLock *sync.Mutex
+	// State variables
+	lock    sync.Mutex
+	started atomic.Value
 }
 
-// SessionConfig struct
-type SessionConfig struct {
+// ServiceConfig represents a BABE configuration
+type ServiceConfig struct {
 	BlockState       BlockState
 	StorageState     StorageState
 	TransactionQueue TransactionQueue
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
-	NewBlocks        chan<- types.Block
 	AuthData         []*types.BABEAuthorityData
 	EpochThreshold   *big.Int // should only be used for testing
-	StartSlot        uint64   // slot to begin session at
-	EpochDone        *sync.WaitGroup
-	Kill             <-chan struct{}
-	SyncLock         *sync.Mutex
+	StartSlot        uint64   // slot to start at
 }
 
-// NewSession returns a new Babe session using the provided VRF keys and runtime
-func NewSession(cfg *SessionConfig) (*Session, error) {
+// NewService returns a new Babe Service using the provided VRF keys and runtime
+func NewService(cfg *ServiceConfig) (*Service, error) {
 	if cfg.Keypair == nil {
-		return nil, errors.New("cannot create BABE session; no keypair provided")
-	}
-
-	if cfg.Kill == nil {
-		return nil, errors.New("kill channel is nil")
-	}
-
-	if cfg.SyncLock == nil {
-		return nil, errors.New("syncLock is nil")
+		return nil, errors.New("cannot create BABE Service; no keypair provided")
 	}
 
 	if cfg.BlockState == nil {
 		return nil, errors.New("blockState is nil")
 	}
 
-	babeSession := &Session{
+	babeService := &Service{
 		blockState:       cfg.BlockState,
 		storageState:     cfg.StorageState,
 		keypair:          cfg.Keypair,
 		rt:               cfg.Runtime,
 		transactionQueue: cfg.TransactionQueue,
 		slotToProof:      make(map[uint64]*VrfOutputAndProof),
-		newBlocks:        cfg.NewBlocks,
+		blockChan:        make(chan types.Block),
 		authorityData:    cfg.AuthData,
 		epochThreshold:   cfg.EpochThreshold,
 		startSlot:        cfg.StartSlot,
-		epochDone:        cfg.EpochDone,
-		kill:             cfg.Kill,
-		syncLock:         cfg.SyncLock,
 	}
 
-	if ok := atomic.CompareAndSwapUint32(&babeSession.started, 0, 1); !ok {
-		return nil, errors.New("failed to change Session status from stopped to started")
-	}
+	babeService.started.Store(false)
 
 	var err error
-	babeSession.config, err = babeSession.rt.BabeConfiguration()
+	babeService.config, err = babeService.rt.BabeConfiguration()
 	if err != nil {
 		return nil, err
 	}
 
-	log.Info("[babe] config", "SlotDuration (ms)", babeSession.config.SlotDuration, "EpochLength (slots)", babeSession.config.EpochLength)
+	log.Info("[babe] config", "SlotDuration (ms)", babeService.config.SlotDuration, "EpochLength (slots)", babeService.config.EpochLength)
 
-	if babeSession.authorityData == nil {
-		log.Info("[babe] setting authority data to genesis authorities", "authorities", babeSession.config.GenesisAuthorities)
+	if babeService.authorityData == nil {
+		log.Info("[babe] setting authority data to genesis authorities", "authorities", babeService.config.GenesisAuthorities)
 
-		babeSession.authorityData, err = types.BABEAuthorityDataRawToAuthorityData(babeSession.config.GenesisAuthorities)
+		babeService.authorityData, err = types.BABEAuthorityDataRawToAuthorityData(babeService.config.GenesisAuthorities)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	log.Info("[babe]", "authorities", babeSession.authorityData)
+	// TODO: format this
+	log.Info("[babe]", "authorities", babeService.authorityData)
 
-	babeSession.randomness = babeSession.config.Randomness
+	babeService.randomness = babeService.config.Randomness
 
-	err = babeSession.setAuthorityIndex()
+	err = babeService.setAuthorityIndex()
 	if err != nil {
 		return nil, err
 	}
 
-	log.Trace("[babe]", "authority index", babeSession.authorityIndex)
+	log.Trace("[babe]", "authority index", babeService.authorityIndex)
 
-	return babeSession, nil
+	return babeService, nil
 }
 
-// Start a session
-func (b *Session) Start() error {
+// Start a Service
+func (b *Service) Start() error {
+	b.started.Store(true)
+
 	if b.epochThreshold == nil {
 		err := b.setEpochThreshold()
 		if err != nil {
@@ -164,7 +147,7 @@ func (b *Session) Start() error {
 		}
 	}
 
-	log.Trace("[babe]", "epochThreshold", b.epochThreshold)
+	log.Debug("[babe]", "epochThreshold", b.epochThreshold)
 
 	i := b.startSlot
 	var err error
@@ -176,64 +159,80 @@ func (b *Session) Start() error {
 	}
 
 	go b.invokeBlockAuthoring()
-
-	go func() {
-		err := b.checkForKill()
-		if err != nil {
-			log.Error("error running checkForKill", "error", err)
-		}
-	}()
-
 	return nil
 }
 
-func (b *Session) stop() error {
+// Pause pauses the service ie. halts block production
+func (b *Service) Pause() error {
+	b.started.Store(false)
+	return nil
+}
+
+// Resume resumes the service ie. resumes block production
+func (b *Service) Resume() error {
+	b.started.Store(true)
+	go b.invokeBlockAuthoring()
+	return nil
+}
+
+// Stop stops the service. If stop is called, it cannot be resumed.
+func (b *Service) Stop() error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
 
-	if atomic.LoadUint32(&b.started) == uint32(1) {
-		if ok := atomic.CompareAndSwapUint32(&b.started, 1, 0); !ok {
-			return errors.New("failed to change Session status from started to stopped")
-		}
-
-		close(b.newBlocks)
-		b.epochDone.Done()
+	if b.started.Load().(bool) {
+		b.started.Store(false)
+		close(b.blockChan)
 	}
 
 	return nil
 }
 
-// Descriptor returns the NextEpochDescriptor for the current session.
-func (b *Session) Descriptor() *NextEpochDescriptor {
+// SetRuntime sets the service's runtime
+func (b *Service) SetRuntime(rt *runtime.Runtime) error {
+	b.rt = rt
+
+	var err error
+	b.config, err = b.rt.BabeConfiguration()
+	return err
+}
+
+// GetBlockChannel returns the channel where new blocks are passed
+func (b *Service) GetBlockChannel() <-chan types.Block {
+	return b.blockChan
+}
+
+// Descriptor returns the NextEpochDescriptor for the current Service.
+func (b *Service) Descriptor() *NextEpochDescriptor {
 	return &NextEpochDescriptor{
 		Authorities: b.authorityData,
 		Randomness:  b.randomness,
 	}
 }
 
-func (b *Session) safeSend(msg types.Block) error {
+func (b *Service) safeSend(msg types.Block) error {
 	b.lock.Lock()
 	defer b.lock.Unlock()
-	if atomic.LoadUint32(&b.started) == uint32(0) {
-		return errors.New("session has been stopped")
+	if !b.started.Load().(bool) {
+		return errors.New("Service has been stopped")
 	}
-	b.newBlocks <- msg
+	b.blockChan <- msg
 	return nil
 }
 
 // AuthorityData returns the data related to the authority
-func (b *Session) AuthorityData() []*types.BABEAuthorityData {
+func (b *Service) AuthorityData() []*types.BABEAuthorityData {
 	return b.authorityData
 }
 
-// SetEpochData will set the BABEAuthorityData and randomness
-func (b *Session) SetEpochData(data *NextEpochDescriptor) error {
+// SetEpochData will set the authorityData and randomness
+func (b *Service) SetEpochData(data *NextEpochDescriptor) error {
 	b.authorityData = data.Authorities
 	b.randomness = data.Randomness
 	return b.setAuthorityIndex()
 }
 
-func (b *Session) setAuthorityIndex() error {
+func (b *Service) setAuthorityIndex() error {
 	pub := b.keypair.Public()
 
 	log.Debug("[babe]", "authority key", pub.Hex(), "authorities", b.authorityData)
@@ -248,31 +247,11 @@ func (b *Session) setAuthorityIndex() error {
 	return fmt.Errorf("key not in BABE authority data")
 }
 
-func isClosed(ch <-chan struct{}) bool {
-	select {
-	case <-ch:
-		return true
-	default:
-	}
-
-	return false
+func (b *Service) isStopped() bool {
+	return !b.started.Load().(bool)
 }
 
-func (b *Session) checkForKill() error {
-	if isClosed(b.kill) {
-		err := b.stop()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (b *Session) isStopped() bool {
-	return atomic.LoadUint32(&b.started) == uint32(0)
-}
-
-func (b *Session) invokeBlockAuthoring() {
+func (b *Service) invokeBlockAuthoring() {
 	if b.config == nil {
 		log.Error("[babe] block authoring", "error", "config is nil")
 		return
@@ -319,7 +298,6 @@ func (b *Session) invokeBlockAuthoring() {
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
 		start := time.Now().Unix()
-		b.syncLock.Lock()
 
 		if uint64(time.Now().Unix()-start) <= b.config.SlotDuration*1000000 {
 			if b.isStopped() {
@@ -331,18 +309,13 @@ func (b *Session) invokeBlockAuthoring() {
 			// TODO: change this to sleep until start + slotDuration
 			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration) * 2)
 		}
-
-		b.syncLock.Unlock()
 	}
 
-	err = b.stop()
-	if err != nil {
-		log.Error("[babe] block authoring", "error", err)
-		return
-	}
+	// loop forever TODO: separate loop into another func
+	b.invokeBlockAuthoring()
 }
 
-func (b *Session) handleSlot(slotNum uint64) {
+func (b *Service) handleSlot(slotNum uint64) {
 	parentHeader, err := b.blockState.BestBlockHeader()
 	if err != nil {
 		log.Error("[babe] block authoring", "error", "parent header is nil")
@@ -388,7 +361,7 @@ func (b *Session) handleSlot(slotNum uint64) {
 // runLottery runs the lottery for a specific slot number
 // returns an encoded VrfOutput and VrfProof if validator is authorized to produce a block for that slot, nil otherwise
 // output = return[0:32]; proof = return[32:96]
-func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
+func (b *Service) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	slotBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slotBytes, slot)
 	vrfInput := append(slotBytes, b.randomness[:]...)
@@ -421,12 +394,12 @@ func (b *Session) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 	return nil, nil
 }
 
-func (b *Session) vrfSign(input []byte) (out []byte, proof []byte, err error) {
+func (b *Service) vrfSign(input []byte) (out []byte, proof []byte, err error) {
 	return b.keypair.VrfSign(input)
 }
 
 // sets the slot lottery threshold for the current epoch
-func (b *Session) setEpochThreshold() error {
+func (b *Service) setEpochThreshold() error {
 	var err error
 	if b.config == nil {
 		return errors.New("cannot set threshold: no babe config")
@@ -440,7 +413,7 @@ func (b *Session) setEpochThreshold() error {
 	return nil
 }
 
-func (b *Session) authorityWeights() []uint64 {
+func (b *Service) authorityWeights() []uint64 {
 	weights := make([]uint64, len(b.authorityData))
 	for i, auth := range b.authorityData {
 		weights[i] = auth.Weight

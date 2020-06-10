@@ -35,12 +35,12 @@ import (
 // BuildBlock builds a block for the slot with the given parent.
 // TODO: separate block builder logic into separate module. The only reason this is exported is so other packages
 // can build blocks for testing, but it would be preferred to have the builder functionality separated.
-func (b *Session) BuildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
+func (b *Service) BuildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
 	return b.buildBlock(parent, slot)
 }
 
 // construct a block for this slot with the given parent
-func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
+func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
 	log.Trace("[babe] build block", "parent", parent, "slot", slot)
 
 	// create pre-digest
@@ -53,7 +53,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 	// create new block header
 	number := big.NewInt(0).Add(parent.Number, big.NewInt(1))
-	header, err := types.NewHeader(common.Hash{}, number, common.Hash{}, common.Hash{}, [][]byte{})
+	header, err := types.NewHeader(parent.Hash(), number, common.Hash{}, common.Hash{}, [][]byte{})
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func (b *Session) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 // buildBlockSeal creates the seal for the block header.
 // the seal consists of the ConsensusEngineID and a signature of the encoded block header.
-func (b *Session) buildBlockSeal(header *types.Header) (*types.SealDigest, error) {
+func (b *Service) buildBlockSeal(header *types.Header) (*types.SealDigest, error) {
 	encHeader, err := header.Encode()
 	if err != nil {
 		return nil, err
@@ -141,7 +141,7 @@ func (b *Session) buildBlockSeal(header *types.Header) (*types.SealDigest, error
 
 // buildBlockPreDigest creates the pre-digest for the slot.
 // the pre-digest consists of the ConsensusEngineID and the encoded BABE header for the slot.
-func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error) {
+func (b *Service) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error) {
 	babeHeader, err := b.buildBlockBabeHeader(slot)
 	if err != nil {
 		return nil, err
@@ -157,7 +157,7 @@ func (b *Session) buildBlockPreDigest(slot Slot) (*types.PreRuntimeDigest, error
 
 // buildBlockBabeHeader creates the BABE header for the slot.
 // the BABE header includes the proof of authorship right for this slot.
-func (b *Session) buildBlockBabeHeader(slot Slot) (*types.BabeHeader, error) {
+func (b *Service) buildBlockBabeHeader(slot Slot) (*types.BabeHeader, error) {
 	if b.slotToProof[slot.number] == nil {
 		// if we don't have a proof already set, re-run lottery.
 		// this can be removed when this is separated into a block builder module,
@@ -185,7 +185,7 @@ func (b *Session) buildBlockBabeHeader(slot Slot) (*types.BabeHeader, error) {
 // buildBlockExtrinsics applies extrinsics to the block. it returns an array of included extrinsics.
 // for each extrinsic in queue, add it to the block, until the slot ends or the block is full.
 // if any extrinsic fails, it returns an empty array and an error.
-func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransaction, error) {
+func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransaction, error) {
 	next := b.nextReadyExtrinsic()
 	included := []*transaction.ValidTransaction{}
 
@@ -224,7 +224,7 @@ func (b *Session) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 }
 
 // buildBlockInherents applies the inherents for a block
-func (b *Session) buildBlockInherents(slot Slot) error {
+func (b *Service) buildBlockInherents(slot Slot) error {
 	// Setup inherents: add timstap0
 	idata := NewInherentsData()
 	err := idata.SetInt64Inherent(Timstap0, uint64(time.Now().Unix()))
@@ -291,7 +291,7 @@ func (b *Session) buildBlockInherents(slot Slot) error {
 	return nil
 }
 
-func (b *Session) addToQueue(txs []*transaction.ValidTransaction) {
+func (b *Service) addToQueue(txs []*transaction.ValidTransaction) {
 	for _, t := range txs {
 		hash, err := b.transactionQueue.Push(t)
 		if err != nil {
@@ -303,7 +303,7 @@ func (b *Session) addToQueue(txs []*transaction.ValidTransaction) {
 }
 
 // nextReadyExtrinsic peeks from the transaction queue. it does not remove any transactions from the queue
-func (b *Session) nextReadyExtrinsic() types.Extrinsic {
+func (b *Service) nextReadyExtrinsic() types.Extrinsic {
 	transaction := b.transactionQueue.Peek()
 	if transaction == nil {
 		return nil

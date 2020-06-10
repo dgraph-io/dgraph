@@ -205,13 +205,30 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	}
 	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
+	// create runtime
+	rt, err := createRuntime(stateSrvc, ks)
+	if err != nil {
+		return nil, err
+	}
+
+	var babeSrvc BlockProducer
+	if cfg.Core.Authority {
+		// create BABE service
+		babeSrvc, err = createBABEService(cfg, rt, stateSrvc, ks)
+		if err != nil {
+			return nil, err
+		}
+
+		nodeSrvcs = append(nodeSrvcs, babeSrvc)
+	}
+
 	// Syncer
 	syncChan := make(chan *big.Int, 128)
 
 	// Core Service
 
 	// create core service and append core service to node services
-	coreSrvc, rt, err := createCoreService(cfg, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	coreSrvc, err := createCoreService(cfg, babeSrvc, rt, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create core service: %s", err)
 	}

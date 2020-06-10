@@ -80,18 +80,18 @@ func TestSlotOffset(t *testing.T) {
 	}
 }
 
-func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState BlockState, startTime uint64) {
+func addBlocksToState(t *testing.T, babeService *Service, depth int, blockState BlockState, startTime uint64) {
 	previousHash := blockState.BestBlockHash()
 	previousAT := startTime
 
 	for i := 1; i <= depth; i++ {
 
 		// create proof that we can authorize this block
-		babesession.epochThreshold = big.NewInt(0)
-		babesession.authorityIndex = 0
+		babeService.epochThreshold = big.NewInt(0)
+		babeService.authorityIndex = 0
 		slotNumber := uint64(i)
 
-		outAndProof, err := babesession.runLottery(slotNumber)
+		outAndProof, err := babeService.runLottery(slotNumber)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -100,7 +100,7 @@ func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState 
 			t.Fatal("proof was nil when over threshold")
 		}
 
-		babesession.slotToProof[slotNumber] = outAndProof
+		babeService.slotToProof[slotNumber] = outAndProof
 
 		// create pre-digest
 		slot := Slot{
@@ -109,7 +109,7 @@ func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState 
 			number:   slotNumber,
 		}
 
-		predigest, err := babesession.buildBlockPreDigest(slot)
+		predigest, err := babeService.buildBlockPreDigest(slot)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -135,10 +135,10 @@ func addBlocksToState(t *testing.T, babesession *Session, depth int, blockState 
 }
 
 func TestSlotTime(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	addBlocksToState(t, babesession, 100, babesession.blockState, uint64(0))
+	babeService := createTestService(t, nil)
+	addBlocksToState(t, babeService, 100, babeService.blockState, uint64(0))
 
-	res, err := babesession.slotTime(103, 20)
+	res, err := babeService.slotTime(103, 20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,13 +151,13 @@ func TestSlotTime(t *testing.T) {
 }
 
 func TestEstimateCurrentSlot(t *testing.T) {
-	babesession := createTestSession(t, nil)
+	babeService := createTestService(t, nil)
 	// create proof that we can authorize this block
-	babesession.epochThreshold = big.NewInt(0)
-	babesession.authorityIndex = 0
+	babeService.epochThreshold = big.NewInt(0)
+	babeService.authorityIndex = 0
 	slotNumber := uint64(17)
 
-	outAndProof, err := babesession.runLottery(slotNumber)
+	outAndProof, err := babeService.runLottery(slotNumber)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,16 +166,16 @@ func TestEstimateCurrentSlot(t *testing.T) {
 		t.Fatal("proof was nil when over threshold")
 	}
 
-	babesession.slotToProof[slotNumber] = outAndProof
+	babeService.slotToProof[slotNumber] = outAndProof
 
 	// create pre-digest
 	slot := Slot{
 		start:    uint64(time.Now().Unix()),
-		duration: babesession.config.SlotDuration,
+		duration: babeService.config.SlotDuration,
 		number:   slotNumber,
 	}
 
-	predigest, err := babesession.buildBlockPreDigest(slot)
+	predigest, err := babeService.buildBlockPreDigest(slot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,12 +191,12 @@ func TestEstimateCurrentSlot(t *testing.T) {
 
 	arrivalTime := uint64(time.Now().Unix()) - slot.duration
 
-	err = babesession.blockState.AddBlockWithArrivalTime(block, arrivalTime)
+	err = babeService.blockState.AddBlockWithArrivalTime(block, arrivalTime)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	estimatedSlot, err := babesession.estimateCurrentSlot()
+	estimatedSlot, err := babeService.estimateCurrentSlot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,13 +207,13 @@ func TestEstimateCurrentSlot(t *testing.T) {
 }
 
 func TestGetCurrentSlot(t *testing.T) {
-	babesession := createTestSession(t, nil)
+	babeService := createTestService(t, nil)
 
 	// 100 blocks / 1000 ms/s
 	// TODO: use time.Duration
-	addBlocksToState(t, babesession, 100, babesession.blockState, uint64(time.Now().Unix())-(babesession.config.SlotDuration/10))
+	addBlocksToState(t, babeService, 100, babeService.blockState, uint64(time.Now().Unix())-(babeService.config.SlotDuration/10))
 
-	res, err := babesession.getCurrentSlot()
+	res, err := babeService.getCurrentSlot()
 	if err != nil {
 		t.Fatal(err)
 	}

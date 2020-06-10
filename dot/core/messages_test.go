@@ -258,7 +258,7 @@ func TestService_ProcessBlockResponseMessage(t *testing.T) {
 	cfg := &Config{
 		Runtime:         rt,
 		Keystore:        ks,
-		IsBabeAuthority: false,
+		IsBlockProducer: false,
 		MsgSend:         msgSend,
 	}
 
@@ -333,7 +333,7 @@ func TestService_ProcessBlockAnnounceMessage(t *testing.T) {
 		MsgSend:         msgSend,
 		Keystore:        keystore.NewKeystore(),
 		NewBlocks:       newBlocks,
-		IsBabeAuthority: false,
+		IsBlockProducer: false,
 	}
 
 	s := NewTestService(t, cfg)
@@ -389,7 +389,7 @@ func TestService_ProcessTransactionMessage(t *testing.T) {
 		Runtime:          rt,
 		Keystore:         ks,
 		TransactionQueue: transaction.NewPriorityQueue(),
-		IsBabeAuthority:  true,
+		IsBlockProducer:  true,
 	}
 
 	s := NewTestService(t, cfg)

@@ -29,7 +29,7 @@ import (
 var slotTail = uint64(12)
 
 // returns the estimated current slot number, without median algorithm
-func (b *Session) estimateCurrentSlot() (uint64, error) {
+func (b *Service) estimateCurrentSlot() (uint64, error) {
 	// estimate slot of highest block we've received
 	head := b.blockState.BestBlockHash()
 
@@ -58,7 +58,7 @@ func (b *Session) estimateCurrentSlot() (uint64, error) {
 }
 
 // getCurrentSlot estimates the current slot, then uses the slotTime algorithm to determine the exact slot
-func (b *Session) getCurrentSlot() (uint64, error) {
+func (b *Service) getCurrentSlot() (uint64, error) {
 	estimate, err := b.estimateCurrentSlot()
 	if err != nil {
 		return 0, err
@@ -80,7 +80,7 @@ func (b *Session) getCurrentSlot() (uint64, error) {
 
 // slotTime calculates the slot time in the form of seconds since the unix epoch
 // for a given slot in seconds, returns 0 and an error if it can't be calculated
-func (b *Session) slotTime(slot uint64, slotTail uint64) (uint64, error) {
+func (b *Service) slotTime(slot uint64, slotTail uint64) (uint64, error) {
 	var at []uint64
 
 	head := b.blockState.BestBlockHash()

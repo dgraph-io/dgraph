@@ -265,7 +265,7 @@ func newCoreService(t *testing.T) *core.Service {
 		Runtime:          rt,
 		Keystore:         ks,
 		TransactionQueue: transaction.NewPriorityQueue(),
-		IsBabeAuthority:  false,
+		IsBlockProducer:  false,
 	}
 
 	return core.NewTestService(t, cfg)

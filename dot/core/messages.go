@@ -238,7 +238,7 @@ func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) err
 		// create new valid transaction
 		vtx := transaction.NewValidTransaction(tx, val)
 
-		if s.isBabeAuthority {
+		if s.isBlockProducer {
 			// push to the transaction queue of BABE session
 			hash, err := s.transactionQueue.Push(vtx)
 			if err != nil {

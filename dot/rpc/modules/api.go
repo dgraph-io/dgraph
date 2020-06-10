@@ -46,7 +46,7 @@ type CoreAPI interface {
 	InsertKey(kp crypto.Keypair)
 	HasKey(pubKeyStr string, keyType string) (bool, error)
 	GetRuntimeVersion() (*runtime.VersionAPI, error)
-	IsBabeAuthority() bool
+	IsBlockProducer() bool
 	HandleSubmittedExtrinsic(types.Extrinsic) error
 	GetMetadata() ([]byte, error)
 }

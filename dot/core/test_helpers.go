@@ -59,11 +59,44 @@ func (v *mockVerifier) EpochNumber() uint64 {
 	return 1
 }
 
+// mockBlockProducer implements the BlockProducer interface
+type mockBlockProducer struct{}
+
+// Start mocks starting
+func (bp *mockBlockProducer) Start() error {
+	return nil
+}
+
+// Stop mocks stopping
+func (bp *mockBlockProducer) Stop() error {
+	return nil
+}
+
+// Pause mocks pausing
+func (bp *mockBlockProducer) Pause() error {
+	return nil
+}
+
+// Resume mocks resuming
+func (bp *mockBlockProducer) Resume() error {
+	return nil
+}
+
+// GetBlockChannel returns a new channel
+func (bp *mockBlockProducer) GetBlockChannel() <-chan types.Block {
+	return make(chan types.Block)
+}
+
+// SetRuntime mocks setting runtime
+func (bp *mockBlockProducer) SetRuntime(rt *runtime.Runtime) error {
+	return nil
+}
+
 // NewTestService creates a new test core service
 func NewTestService(t *testing.T, cfg *Config) *Service {
 	if cfg == nil {
 		cfg = &Config{
-			IsBabeAuthority: false,
+			IsBlockProducer: false,
 		}
 	}
 

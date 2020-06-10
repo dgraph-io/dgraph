@@ -52,12 +52,12 @@ type Syncer struct {
 	// State interfaces
 	blockState       BlockState // retrieve our current head of chain from BlockState
 	transactionQueue TransactionQueue
+	blockProducer    BlockProducer
 
 	// Synchronization channels and variables
 	blockNumIn       <-chan *big.Int                      // incoming block numbers seen from other nodes that are higher than ours
 	msgOut           chan<- network.Message               // channel to send BlockRequest messages to network service
 	respIn           <-chan *network.BlockResponseMessage // channel to receive BlockResponse messages from
-	lock             *sync.Mutex                          // lock BABE session when syncing
 	synced           bool
 	requestStart     int64    // block number from which to begin block requests
 	highestSeenBlock *big.Int // highest block number we have seen
@@ -74,10 +74,10 @@ type Syncer struct {
 // SyncerConfig is the configuration for the Syncer.
 type SyncerConfig struct {
 	BlockState       BlockState
+	BlockProducer    BlockProducer
 	BlockNumIn       <-chan *big.Int
 	RespIn           <-chan *network.BlockResponseMessage
 	MsgOut           chan<- network.Message
-	Lock             *sync.Mutex
 	ChanLock         *sync.Mutex
 	TransactionQueue TransactionQueue
 	Runtime          *runtime.Runtime
@@ -108,12 +108,16 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		return nil, ErrNilRuntime
 	}
 
+	if cfg.BlockProducer == nil {
+		cfg.BlockProducer = new(mockBlockProducer)
+	}
+
 	return &Syncer{
 		blockState:       cfg.BlockState,
+		blockProducer:    cfg.BlockProducer,
 		blockNumIn:       cfg.BlockNumIn,
 		respIn:           cfg.RespIn,
 		msgOut:           cfg.MsgOut,
-		lock:             cfg.Lock,
 		chanLock:         cfg.ChanLock,
 		synced:           true,
 		requestStart:     1,
@@ -166,7 +170,11 @@ func (s *Syncer) watchForBlocks() {
 			if s.synced {
 				s.requestStart = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
 				s.synced = false
-				s.lock.Lock()
+
+				err := s.blockProducer.Pause()
+				if err != nil {
+					log.Warn("[sync] failed to pause block production")
+				}
 			} else {
 				s.requestStart = s.highestSeenBlock.Int64()
 			}
@@ -198,7 +206,10 @@ func (s *Syncer) watchForResponses() {
 		case <-time.After(responseTimeout):
 			log.Debug("[sync] timeout waiting for BlockResponse")
 			if !s.synced {
-				s.lock.Unlock()
+				err := s.blockProducer.Resume()
+				if err != nil {
+					log.Warn("[sync] failed to resume block production")
+				}
 				s.synced = true
 			}
 		}
@@ -238,7 +249,10 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 				log.Debug("[sync] All synced up!", "number", bestNum)
 
 				if !s.synced {
-					s.lock.Unlock()
+					err = s.blockProducer.Resume()
+					if err != nil {
+						log.Warn("[sync] failed to resume block production")
+					}
 					s.synced = true
 				}
 			} else {

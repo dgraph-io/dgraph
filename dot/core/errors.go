@@ -14,9 +14,6 @@ var ErrNilStorageState = errors.New("cannot have nil StorageState")
 // ErrNilKeystore is returned when keystore is nil
 var ErrNilKeystore = errors.New("cannot have nil keystore")
 
-// ErrNoKeysProvided is returned when no keys are given for an authority node
-var ErrNoKeysProvided = errors.New("no keys provided for authority node")
-
 // ErrServiceStopped is returned when the service has been stopped
 var ErrServiceStopped = errors.New("service has been stopped")
 
@@ -28,6 +25,9 @@ var ErrNilVerifier = errors.New("cannot have nil Verifier")
 
 // ErrNilRuntime is returned when trying to instantiate a Service or Syncer without a runtime
 var ErrNilRuntime = errors.New("cannot have nil runtime")
+
+// ErrNilBlockProducer is returned when trying to instantiate a block producing Service without a block producer
+var ErrNilBlockProducer = errors.New("cannot have nil BlockProducer")
 
 // ErrNilChannel is returned if a channel is nil
 func ErrNilChannel(s string) error {

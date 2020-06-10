@@ -168,12 +168,12 @@ func TestCheckForConsensusDigest(t *testing.T) {
 }
 
 func TestVerificationManager_VerifyBlock(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	descriptor := babesession.Descriptor()
+	babeService := createTestService(t, nil)
+	descriptor := babeService.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
 
-	block, _ := createTestBlock(t, babesession, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 	err := vm.blockState.AddBlock(block)
 	require.Nil(t, err)
 
@@ -184,13 +184,13 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 }
 
 func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	descriptor := babesession.Descriptor()
+	babeService := createTestService(t, nil)
+	descriptor := babeService.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
 	vm.currentEpoch = 0
 
-	block, _ := createTestBlock(t, babesession, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 
 	consensusDigest := &types.ConsensusDigest{
 		ConsensusEngineID: types.BabeEngineID,
@@ -202,7 +202,7 @@ func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
 	block.Header.Number = big.NewInt(2)
 
 	// re-sign block
-	seal, err := babesession.buildBlockSeal(block.Header)
+	seal, err := babeService.buildBlockSeal(block.Header)
 	require.Nil(t, err)
 
 	encSeal := seal.Encode()
@@ -219,7 +219,7 @@ func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
 	// create block with lower number, check that it's chosen as first block of epoch
 	block.Header.Number = big.NewInt(1)
 
-	seal, err = babesession.buildBlockSeal(block.Header)
+	seal, err = babeService.buildBlockSeal(block.Header)
 	require.Nil(t, err)
 
 	encSeal = seal.Encode()
@@ -237,7 +237,7 @@ func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
 	}
 
 	newBlock.Header.Number = big.NewInt(99)
-	seal, err = babesession.buildBlockSeal(newBlock.Header)
+	seal, err = babeService.buildBlockSeal(newBlock.Header)
 	require.Nil(t, err)
 
 	encSeal = seal.Encode()
@@ -255,18 +255,18 @@ func TestVerifySlotWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &SessionConfig{
+	cfg := &ServiceConfig{
 		Keypair: kp,
 	}
 
-	babesession := createTestSession(t, cfg)
+	babeService := createTestService(t, cfg)
 
 	// create proof that we can authorize this block
-	babesession.epochThreshold = big.NewInt(0)
-	babesession.authorityIndex = 0
+	babeService.epochThreshold = big.NewInt(0)
+	babeService.authorityIndex = 0
 	var slotNumber uint64 = 1
 
-	addAuthorshipProof(t, babesession, slotNumber)
+	addAuthorshipProof(t, babeService, slotNumber)
 
 	slot := Slot{
 		start:    uint64(time.Now().Unix()),
@@ -275,7 +275,7 @@ func TestVerifySlotWinner(t *testing.T) {
 	}
 
 	// create babe header
-	babeHeader, err := babesession.buildBlockBabeHeader(slot)
+	babeHeader, err := babeService.buildBlockBabeHeader(slot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -284,11 +284,11 @@ func TestVerifySlotWinner(t *testing.T) {
 	authorityData[0] = &types.BABEAuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
-	babesession.authorityData = authorityData
+	babeService.authorityData = authorityData
 
-	verifier, err := newEpochVerifier(babesession.blockState, &NextEpochDescriptor{
-		Authorities: babesession.authorityData,
-		Randomness:  babesession.config.Randomness,
+	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
+		Authorities: babeService.authorityData,
+		Randomness:  babeService.config.Randomness,
 	})
 
 	if err != nil {
@@ -306,12 +306,12 @@ func TestVerifySlotWinner(t *testing.T) {
 }
 
 func TestVerifyAuthorshipRight(t *testing.T) {
-	babesession := createTestSession(t, nil)
-	block, _ := createTestBlock(t, babesession, genesisHeader, [][]byte{})
+	babeService := createTestService(t, nil)
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 
-	verifier, err := newEpochVerifier(babesession.blockState, &NextEpochDescriptor{
-		Authorities: babesession.authorityData,
-		Randomness:  babesession.config.Randomness,
+	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
+		Authorities: babeService.authorityData,
+		Randomness:  babeService.config.Randomness,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -333,29 +333,29 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	cfg := &SessionConfig{
+	cfg := &ServiceConfig{
 		Keypair: kp,
 	}
 
-	babesession := createTestSession(t, cfg)
+	babeService := createTestService(t, cfg)
 
-	babesession.authorityData = make([]*types.BABEAuthorityData, 1)
-	babesession.authorityData[0] = &types.BABEAuthorityData{
+	babeService.authorityData = make([]*types.BABEAuthorityData, 1)
+	babeService.authorityData[0] = &types.BABEAuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
 
 	// create and add first block
-	block, _ := createTestBlock(t, babesession, genesisHeader, [][]byte{})
+	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 	block.Header.Hash()
 
-	err = babesession.blockState.AddBlock(block)
+	err = babeService.blockState.AddBlock(block)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	verifier, err := newEpochVerifier(babesession.blockState, &NextEpochDescriptor{
-		Authorities: babesession.authorityData,
-		Randomness:  babesession.config.Randomness,
+	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
+		Authorities: babeService.authorityData,
+		Randomness:  babeService.config.Randomness,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -366,12 +366,12 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 	require.True(t, ok)
 
 	// create new block
-	block2, _ := createTestBlock(t, babesession, genesisHeader, [][]byte{})
+	block2, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 	block2.Header.Hash()
 
 	t.Log(block2.Header)
 
-	err = babesession.blockState.AddBlock(block2)
+	err = babeService.blockState.AddBlock(block2)
 	if err != nil {
 		t.Fatal(err)
 	}

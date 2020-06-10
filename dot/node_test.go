@@ -102,6 +102,31 @@ func TestNewNode(t *testing.T) {
 	require.Nil(t, err)
 }
 
+func TestNewNode_Authority(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Init.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	ks, err := keystore.LoadKeystore("alice")
+	require.Nil(t, err)
+	require.NotNil(t, ks)
+
+	// TODO: improve dot tests #687
+	cfg.Core.Authority = true
+
+	_, err = NewNode(cfg, ks)
+	require.Nil(t, err)
+}
+
 // TestStartNode
 func TestStartNode(t *testing.T) {
 	cfg := NewTestConfig(t)

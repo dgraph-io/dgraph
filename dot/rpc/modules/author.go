@@ -173,7 +173,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 
 	vtx := transaction.NewValidTransaction(ext, txv)
 
-	if cm.coreAPI.IsBabeAuthority() {
+	if cm.coreAPI.IsBlockProducer() {
 		var hash common.Hash
 		hash, err = cm.txQueueAPI.Push(vtx)
 		if err != nil {
