@@ -48,13 +48,13 @@ func NewSlot(start, duration, number uint64) *Slot {
 // NextEpochDescriptor contains information about the next epoch.
 // It is broadcast as part of the consensus digest in the first block of the epoch.
 type NextEpochDescriptor struct {
-	Authorities []*types.AuthorityData
+	Authorities []*types.BABEAuthorityData
 	Randomness  [RandomnessLength]byte // TODO: update to [32]byte when runtime is updated
 }
 
 // NextEpochDescriptorRaw contains information about the next epoch.
 type NextEpochDescriptorRaw struct {
-	Authorities []*types.AuthorityDataRaw
+	Authorities []*types.BABEAuthorityDataRaw
 	Randomness  [RandomnessLength]byte
 }
 
@@ -72,11 +72,11 @@ func (n *NextEpochDescriptor) Encode() []byte {
 // Decode sets the NextEpochDescriptor to the SCALE decoded input.
 // TODO: change to io.Reader
 func (n *NextEpochDescriptor) Decode(in []byte) error {
-	n.Authorities = []*types.AuthorityData{}
+	n.Authorities = []*types.BABEAuthorityData{}
 
 	i := 0
 	for i = 0; i < (len(in)-32)/40; i++ {
-		auth := new(types.AuthorityData)
+		auth := new(types.BABEAuthorityData)
 		buf := &bytes.Buffer{}
 		_, err := buf.Write(in[i*40 : (i+1)*40])
 		if err != nil {

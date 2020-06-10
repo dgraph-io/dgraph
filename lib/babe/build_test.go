@@ -186,7 +186,7 @@ func TestBuildBlock_failing(t *testing.T) {
 	var err error
 	babesession := createTestSession(t, cfg)
 
-	babesession.authorityData = []*types.AuthorityData{
+	babesession.authorityData = []*types.BABEAuthorityData{
 		{ID: nil, Weight: 1},
 	}
 

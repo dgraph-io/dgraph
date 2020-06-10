@@ -54,7 +54,7 @@ type Session struct {
 	config         *types.BabeConfiguration
 	randomness     [RandomnessLength]byte
 	authorityIndex uint64
-	authorityData  []*types.AuthorityData
+	authorityData  []*types.BABEAuthorityData
 	epochThreshold *big.Int // validator threshold for this epoch
 	startSlot      uint64
 	slotToProof    map[uint64]*VrfOutputAndProof // for slots where we are a producer, store the vrf output (bytes 0-32) + proof (bytes 32-96)
@@ -78,7 +78,7 @@ type SessionConfig struct {
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
 	NewBlocks        chan<- types.Block
-	AuthData         []*types.AuthorityData
+	AuthData         []*types.BABEAuthorityData
 	EpochThreshold   *big.Int // should only be used for testing
 	StartSlot        uint64   // slot to begin session at
 	EpochDone        *sync.WaitGroup
@@ -135,7 +135,7 @@ func NewSession(cfg *SessionConfig) (*Session, error) {
 	if babeSession.authorityData == nil {
 		log.Info("[babe] setting authority data to genesis authorities", "authorities", babeSession.config.GenesisAuthorities)
 
-		babeSession.authorityData, err = types.AuthorityDataRawToAuthorityData(babeSession.config.GenesisAuthorities)
+		babeSession.authorityData, err = types.BABEAuthorityDataRawToAuthorityData(babeSession.config.GenesisAuthorities)
 		if err != nil {
 			return nil, err
 		}
@@ -222,11 +222,11 @@ func (b *Session) safeSend(msg types.Block) error {
 }
 
 // AuthorityData returns the data related to the authority
-func (b *Session) AuthorityData() []*types.AuthorityData {
+func (b *Session) AuthorityData() []*types.BABEAuthorityData {
 	return b.authorityData
 }
 
-// SetEpochData will set the authorityData and randomness
+// SetEpochData will set the BABEAuthorityData and randomness
 func (b *Session) SetEpochData(data *NextEpochDescriptor) error {
 	b.authorityData = data.Authorities
 	b.randomness = data.Randomness

@@ -9,6 +9,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime/extrinsic"
@@ -31,38 +32,29 @@ func TestExportRuntime(t *testing.T) {
 func TestGrandpaAuthorities(t *testing.T) {
 	tt := trie.NewEmptyTrie()
 
-	value, err := common.HexToBytes("0x0108eea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d714103640100000000000000b64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d7170100000000000000")
-	if err != nil {
-		t.Fatal(err)
-	}
+	value, err := common.HexToBytes("0x0108eea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d714103640000000000000000b64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d7170100000000000000")
+	require.NoError(t, err)
 
 	err = tt.Put(TestAuthorityDataKey, value)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt)
 
 	auths, err := rt.GrandpaAuthorities()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	authABytes, _ := common.HexToBytes("0xeea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d71410364")
 	authBBytes, _ := common.HexToBytes("0xb64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d717")
 
-	authA, _ := sr25519.NewPublicKey(authABytes)
-	authB, _ := sr25519.NewPublicKey(authBBytes)
+	authA, _ := ed25519.NewPublicKey(authABytes)
+	authB, _ := ed25519.NewPublicKey(authBBytes)
 
-	expected := []*types.AuthorityData{
-		{ID: authA, Weight: 1},
-		{ID: authB, Weight: 1},
+	expected := []*types.GrandpaAuthorityData{
+		{Key: authA, ID: 0},
+		{Key: authB, ID: 1},
 	}
 
-	// TODO: why does the second key not get loaded?
-	if !reflect.DeepEqual(auths[0], expected[0]) {
-		t.Fatalf("Fail: got %v expected %v", auths, expected)
-	}
+	require.Equal(t, expected, auths)
 }
 
 func TestConfigurationFromRuntime_noAuth(t *testing.T) {
@@ -134,7 +126,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 	authA, _ := common.HexToHash("0xeea1eabcac7d2c8a6459b7322cf997874482bfc3d2ec7a80888a3a7d71410364")
 	authB, _ := common.HexToHash("0xb64994460e59b30364cad3c92e3df6052f9b0ebbb8f88460c194dc5794d6d717")
 
-	expectedAuthData := []*types.AuthorityDataRaw{
+	expectedAuthData := []*types.BABEAuthorityDataRaw{
 		{ID: authA, Weight: 1},
 		{ID: authB, Weight: 1},
 	}

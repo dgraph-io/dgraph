@@ -15,19 +15,19 @@ type BabeConfiguration struct {
 	EpochLength        uint64 // duration of epoch in slots
 	C1                 uint64 // (1-(c1/c2)) is the probability of a slot being empty
 	C2                 uint64
-	GenesisAuthorities []*AuthorityDataRaw
+	GenesisAuthorities []*BABEAuthorityDataRaw
 	Randomness         [32]byte
 	SecondarySlots     bool
 }
 
-// AuthorityDataRaw represents a BABE authority where their key is a byte array
-type AuthorityDataRaw struct {
+// BABEAuthorityDataRaw represents a BABE authority where their key is a byte array
+type BABEAuthorityDataRaw struct {
 	ID     [sr25519.PublicKeyLength]byte
 	Weight uint64
 }
 
-// Decode will decode the Reader into a AuthorityDataRaw
-func (a *AuthorityDataRaw) Decode(r io.Reader) (*AuthorityDataRaw, error) {
+// Decode will decode the Reader into a BABEAuthorityDataRaw
+func (a *BABEAuthorityDataRaw) Decode(r io.Reader) (*BABEAuthorityDataRaw, error) {
 	id, err := common.Read32Bytes(r)
 	if err != nil {
 		return nil, err
@@ -38,30 +38,30 @@ func (a *AuthorityDataRaw) Decode(r io.Reader) (*AuthorityDataRaw, error) {
 		return nil, err
 	}
 
-	a = new(AuthorityDataRaw)
+	a = new(BABEAuthorityDataRaw)
 	a.ID = id
 	a.Weight = weight
 
 	return a, nil
 }
 
-// AuthorityData represents a BABE authority
-type AuthorityData struct {
+// BABEAuthorityData represents a BABE authority
+type BABEAuthorityData struct {
 	ID     *sr25519.PublicKey
 	Weight uint64
 }
 
-// NewAuthorityData returns AuthorityData with the given id and weight
-func NewAuthorityData(pub *sr25519.PublicKey, weight uint64) *AuthorityData {
-	return &AuthorityData{
+// NewBABEAuthorityData returns BABEAuthorityData with the given id and weight
+func NewBABEAuthorityData(pub *sr25519.PublicKey, weight uint64) *BABEAuthorityData {
+	return &BABEAuthorityData{
 		ID:     pub,
 		Weight: weight,
 	}
 }
 
-// ToRaw returns the AuthorityData as AuthorityDataRaw. It encodes the authority public keys.
-func (a *AuthorityData) ToRaw() *AuthorityDataRaw {
-	raw := new(AuthorityDataRaw)
+// ToRaw returns the BABEAuthorityData as BABEAuthorityDataRaw. It encodes the authority public keys.
+func (a *BABEAuthorityData) ToRaw() *BABEAuthorityDataRaw {
+	raw := new(BABEAuthorityDataRaw)
 
 	id := a.ID.Encode()
 	copy(raw.ID[:], id)
@@ -70,9 +70,9 @@ func (a *AuthorityData) ToRaw() *AuthorityDataRaw {
 	return raw
 }
 
-// FromRaw sets the AuthorityData given AuthorityDataRaw. It converts the byte representations of
+// FromRaw sets the BABEAuthorityData given BABEAuthorityDataRaw. It converts the byte representations of
 // the authority public keys into a sr25519.PublicKey.
-func (a *AuthorityData) FromRaw(raw *AuthorityDataRaw) error {
+func (a *BABEAuthorityData) FromRaw(raw *BABEAuthorityDataRaw) error {
 	id, err := sr25519.NewPublicKey(raw.ID[:])
 	if err != nil {
 		return err
@@ -83,8 +83,8 @@ func (a *AuthorityData) FromRaw(raw *AuthorityDataRaw) error {
 	return nil
 }
 
-// Encode returns the SCALE encoding of the AuthorityData.
-func (a *AuthorityData) Encode() []byte {
+// Encode returns the SCALE encoding of the BABEAuthorityData.
+func (a *BABEAuthorityData) Encode() []byte {
 	raw := a.ToRaw()
 
 	enc := raw.ID[:]
@@ -95,8 +95,8 @@ func (a *AuthorityData) Encode() []byte {
 	return append(enc, weightBytes...)
 }
 
-// Decode sets the AuthorityData to the SCALE decoded input.
-func (a *AuthorityData) Decode(r io.Reader) error {
+// Decode sets the BABEAuthorityData to the SCALE decoded input.
+func (a *BABEAuthorityData) Decode(r io.Reader) error {
 	id, err := common.Read32Bytes(r)
 	if err != nil {
 		return err
@@ -107,7 +107,7 @@ func (a *AuthorityData) Decode(r io.Reader) error {
 		return err
 	}
 
-	raw := &AuthorityDataRaw{
+	raw := &BABEAuthorityDataRaw{
 		ID:     id,
 		Weight: weight,
 	}
@@ -115,11 +115,11 @@ func (a *AuthorityData) Decode(r io.Reader) error {
 	return a.FromRaw(raw)
 }
 
-// AuthorityDataRawToAuthorityData turns a slice of AuthorityDataRaw into a slice of AuthorityData
-func AuthorityDataRawToAuthorityData(adr []*AuthorityDataRaw) ([]*AuthorityData, error) {
-	ad := make([]*AuthorityData, len(adr))
+// BABEAuthorityDataRawToAuthorityData turns a slice of BABEAuthorityDataRaw into a slice of BABEAuthorityData
+func BABEAuthorityDataRawToAuthorityData(adr []*BABEAuthorityDataRaw) ([]*BABEAuthorityData, error) {
+	ad := make([]*BABEAuthorityData, len(adr))
 	for i, r := range adr {
-		ad[i] = new(AuthorityData)
+		ad[i] = new(BABEAuthorityData)
 		err := ad[i].FromRaw(r)
 		if err != nil {
 			return nil, err

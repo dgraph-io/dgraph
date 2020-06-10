@@ -219,9 +219,9 @@ func checkForConsensusDigest(header *types.Header) (*types.ConsensusDigest, erro
 
 // epochVerifier represents a BABE verifier for a specific epoch
 type epochVerifier struct {
-	blockState    BlockState
-	authorityData []*types.AuthorityData
-	randomness    [RandomnessLength]byte
+	blockState        BlockState
+	BABEAuthorityData []*types.BABEAuthorityData
+	randomness        [RandomnessLength]byte
 }
 
 // newEpochVerifier returns a Verifier for the epoch described by the given descriptor
@@ -231,19 +231,19 @@ func newEpochVerifier(blockState BlockState, descriptor *NextEpochDescriptor) (*
 	}
 
 	return &epochVerifier{
-		blockState:    blockState,
-		authorityData: descriptor.Authorities,
-		randomness:    descriptor.Randomness,
+		blockState:        blockState,
+		BABEAuthorityData: descriptor.Authorities,
+		randomness:        descriptor.Randomness,
 	}, nil
 }
 
 // verifySlotWinner verifies the claim for a slot, given the BabeHeader for that slot.
 func (b *epochVerifier) verifySlotWinner(slot uint64, header *types.BabeHeader) (bool, error) {
-	if len(b.authorityData) <= int(header.BlockProducerIndex) {
+	if len(b.BABEAuthorityData) <= int(header.BlockProducerIndex) {
 		return false, fmt.Errorf("no authority data for index %d", header.BlockProducerIndex)
 	}
 
-	pub := b.authorityData[header.BlockProducerIndex].ID
+	pub := b.BABEAuthorityData[header.BlockProducerIndex].ID
 
 	slotBytes := make([]byte, 8)
 	binary.LittleEndian.PutUint64(slotBytes, slot)
@@ -290,13 +290,13 @@ func (b *epochVerifier) verifyAuthorshipRight(header *types.Header) (bool, error
 		return false, fmt.Errorf("cannot decode babe header from pre-digest: %s", err)
 	}
 
-	if len(b.authorityData) <= int(babeHeader.BlockProducerIndex) {
+	if len(b.BABEAuthorityData) <= int(babeHeader.BlockProducerIndex) {
 		return false, fmt.Errorf("no authority data for index %d", babeHeader.BlockProducerIndex)
 	}
 
 	slot := babeHeader.SlotNumber
 
-	authorPub := b.authorityData[babeHeader.BlockProducerIndex].ID
+	authorPub := b.BABEAuthorityData[babeHeader.BlockProducerIndex].ID
 	// remove seal before verifying
 	header.Digest = header.Digest[:len(header.Digest)-1]
 	encHeader, err := header.Encode()

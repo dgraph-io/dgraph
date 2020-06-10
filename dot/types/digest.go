@@ -42,6 +42,9 @@ func (h ConsensusEngineID) ToBytes() []byte {
 // BabeEngineID is the hard-coded babe ID
 var BabeEngineID = ConsensusEngineID{'B', 'A', 'B', 'E'}
 
+// GrandpaEngineID is the hard-coded grandpa ID
+var GrandpaEngineID = ConsensusEngineID{'F', 'R', 'N', 'K'} //nolint
+
 // ChangesTrieRootDigestType is the byte representation of ChangesTrieRootDigest
 var ChangesTrieRootDigestType = byte(2)
 

@@ -582,7 +582,7 @@ func newBlockBuilder(t *testing.T, cfg *babe.SessionConfig) *babe.Session {
 	cfg.Kill = make(chan struct{})
 	cfg.SyncLock = &sync.Mutex{}
 
-	cfg.AuthData = []*types.AuthorityData{
+	cfg.AuthData = []*types.BABEAuthorityData{
 		{
 			ID:     cfg.Keypair.Public().(*sr25519.PublicKey),
 			Weight: 1,

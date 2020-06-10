@@ -26,7 +26,7 @@ import (
 
 func TestDecodeNextEpochDescriptor(t *testing.T) {
 	length := 3
-	auths := []*types.AuthorityData{}
+	auths := []*types.BABEAuthorityData{}
 
 	for i := 0; i < length; i++ {
 		kp, err := sr25519.GenerateKeypair()
@@ -34,7 +34,7 @@ func TestDecodeNextEpochDescriptor(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		auth := &types.AuthorityData{
+		auth := &types.BABEAuthorityData{
 			ID:     kp.Public().(*sr25519.PublicKey),
 			Weight: 1,
 		}

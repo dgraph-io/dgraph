@@ -211,7 +211,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 		// TODO: load this from runtime BabeConfiguration
 		currentDescriptor = &babe.NextEpochDescriptor{
-			Authorities: []*types.AuthorityData{},
+			Authorities: []*types.BABEAuthorityData{},
 			Randomness:  [babe.RandomnessLength]byte{},
 		}
 	}

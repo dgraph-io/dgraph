@@ -66,7 +66,7 @@ func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEp
 		require.Nil(t, err)
 
 		nextEpochData := &NextEpochDescriptor{
-			Authorities: []*types.AuthorityData{},
+			Authorities: []*types.BABEAuthorityData{},
 		}
 
 		consensusDigest := &types.ConsensusDigest{
@@ -156,7 +156,7 @@ func TestCheckForConsensusDigest(t *testing.T) {
 	require.Nil(t, err)
 
 	nextEpochData := &NextEpochDescriptor{
-		Authorities: []*types.AuthorityData{},
+		Authorities: []*types.BABEAuthorityData{},
 	}
 
 	expected := &types.ConsensusDigest{
@@ -280,8 +280,8 @@ func TestVerifySlotWinner(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	authorityData := make([]*types.AuthorityData, 1)
-	authorityData[0] = &types.AuthorityData{
+	authorityData := make([]*types.BABEAuthorityData, 1)
+	authorityData[0] = &types.BABEAuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
 	babesession.authorityData = authorityData
@@ -339,8 +339,8 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 
 	babesession := createTestSession(t, cfg)
 
-	babesession.authorityData = make([]*types.AuthorityData, 1)
-	babesession.authorityData[0] = &types.AuthorityData{
+	babesession.authorityData = make([]*types.BABEAuthorityData, 1)
+	babesession.authorityData[0] = &types.BABEAuthorityData{
 		ID: kp.Public().(*sr25519.PublicKey),
 	}
 

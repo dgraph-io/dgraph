@@ -14,7 +14,7 @@ RPC_PORT=8540
 HOSTNAME="0.0.0.0"
 MODE="stable"
 
-KEY="alice"
+declare -a keys=("alice" "bob" "charlie" "dave" "eve" "ferdie" "george" "heather" "ian")
 
 usage() {
   echo "Usage: $SCRIPT"
@@ -56,8 +56,8 @@ arr=()
 
 start_func() {
   echo "starting gossamer node $i in background ..."
-  "$PWD"/bin/gossamer --port=$(($PORT + $i)) --key=$KEY --basepath="$BASE_PATH$i" \
-    --rpc --rpchost=$HOSTNAME --rpcport=$(($RPC_PORT + $i)) --rpcmods=system,author,chain >"$BASE_PATH"/node"$i".log 2>&1 & disown
+  "$PWD"/bin/gossamer --port=$(($PORT + $i)) --key=${keys[$i-1]} --basepath="$BASE_PATH$i" \
+    --rpc --rpchost=$HOSTNAME --rpcport=$(($RPC_PORT + $i)) --roles=1 --rpcmods=system,author,chain >"$BASE_PATH"/node"$i".log 2>&1 & disown
 
   GOSSAMER_PID=$!
   echo "started gossamer node, pid=$GOSSAMER_PID"
