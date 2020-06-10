@@ -1,6 +1,22 @@
-.PHONY: build
+# Build dgraph/standalone image
+# Usage:
+#  Build latest tag, based on dgraph/dgraph:latest
+#    make
+#
+#  Build $TAG tag, based on dgraph/dgraph:$TAG
+#    make DGRAPH_VERSION=$TAG
+#
+# Examples
+#  Build master:
+#    make DGRAPH_VERSION=master
+.PHONY: all build version
 
-DGRAPH_VERSION ?= latest
+export DGRAPH_VERSION ?= latest
+
+all: build version
+
 build:
-	docker build -t dgraph/standalone:$(DGRAPH_VERSION) --build-arg DGRAPH_VERSION=$(DGRAPH_VERSION) .
+	./hooks/build
+
+version:
 	docker run dgraph/standalone:$(DGRAPH_VERSION) dgraph version
