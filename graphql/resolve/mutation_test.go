@@ -149,9 +149,11 @@ func benchmark3LevelDeep(num int, b *testing.B) {
 	}
 }
 
-func Benchmark3LevelDeep5(b *testing.B)   { benchmark3LevelDeep(5, b) }
-func Benchmark3LevelDeep19(b *testing.B)  { benchmark3LevelDeep(19, b) }
-func Benchmark3LevelDeep100(b *testing.B) { benchmark3LevelDeep(100, b) }
+func Benchmark3LevelDeep5(b *testing.B)     { benchmark3LevelDeep(5, b) }
+func Benchmark3LevelDeep19(b *testing.B)    { benchmark3LevelDeep(19, b) }
+func Benchmark3LevelDeep100(b *testing.B)   { benchmark3LevelDeep(100, b) }
+func Benchmark3LevelDeep1000(b *testing.B)  { benchmark3LevelDeep(1000, b) }
+func Benchmark3LevelDeep10000(b *testing.B) { benchmark3LevelDeep(10000, b) }
 
 func mutationRewriting(t *testing.T, file string, rewriterFactory func() MutationRewriter) {
 	b, err := ioutil.ReadFile(file)
