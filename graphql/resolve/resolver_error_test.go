@@ -419,6 +419,7 @@ func TestQueriesPropagateExtensions(t *testing.T) {
 	require.NotNil(t, resp.Extensions)
 	require.Equal(t, uint64(2), resp.Extensions.TouchedUids)
 	require.NotNil(t, resp.Extensions.Tracing)
+	require.Equal(t, resp.Extensions.Tracing.Version, x.Version())
 	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
 	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
 
@@ -462,6 +463,7 @@ func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
 	require.NotNil(t, resp.Extensions)
 	require.Equal(t, uint64(6), resp.Extensions.TouchedUids)
 	require.NotNil(t, resp.Extensions.Tracing)
+	require.Equal(t, resp.Extensions.Tracing.Version, x.Version())
 	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
 	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
 	require.True(t, resp.Extensions.Tracing.Duration > 0)
@@ -521,6 +523,7 @@ func TestMutationsPropagateExtensions(t *testing.T) {
 	require.NotNil(t, resp.Extensions)
 	require.Equal(t, uint64(7), resp.Extensions.TouchedUids)
 	require.NotNil(t, resp.Extensions.Tracing)
+	require.Equal(t, resp.Extensions.Tracing.Version, x.Version())
 	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
 	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
 	require.True(t, resp.Extensions.Tracing.Duration > 0)
@@ -567,6 +570,8 @@ func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
 	require.NotNil(t, resp.Extensions)
 	require.Equal(t, uint64(14), resp.Extensions.TouchedUids)
 	require.NotNil(t, resp.Extensions.Tracing)
+
+	require.Equal(t, resp.Extensions.Tracing.Version, x.Version())
 	require.True(t, len(resp.Extensions.Tracing.StartTime.String()) > 0)
 	require.True(t, len(resp.Extensions.Tracing.EndTime.String()) > 0)
 	require.True(t, resp.Extensions.Tracing.Duration > 0)
