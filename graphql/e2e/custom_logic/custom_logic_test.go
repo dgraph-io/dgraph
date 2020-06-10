@@ -165,7 +165,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 url: "http://mock:8888/verifyHeaders",
 				 method: "GET",
 				 forwardHeaders: ["X-App-Token", "X-User-Id"],
-				 secretHeaders: ["Authorization|Github-Api-Token", "X-App-Token"]
+				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
 		 })
 	 }
 
