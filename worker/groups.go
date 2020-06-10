@@ -811,6 +811,8 @@ START:
 			}
 			if i == 0 {
 				glog.Infof("Received first state update from Zero: %+v", state)
+				x.WriteCidFile(state.Cid)
+				//panic("panic after alpha and cid is set")
 			}
 			select {
 			case stateCh <- state:

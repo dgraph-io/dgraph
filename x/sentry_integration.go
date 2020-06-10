@@ -18,6 +18,7 @@ package x
 
 import (
 	"errors"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
@@ -28,8 +29,9 @@ import (
 )
 
 var (
-	env string
-	dsn string // API KEY to use
+	env    string
+	dsn    string // API KEY to use
+	subCmd string
 )
 
 // Sentry API KEYs to use.
@@ -95,10 +97,40 @@ func FlushSentry() {
 
 // ConfigureSentryScope configures the scope on the global hub of Sentry.
 func ConfigureSentryScope(subcmd string) {
+	subCmd = subcmd
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("dgraph", subcmd)
 		scope.SetLevel(sentry.LevelFatal)
 	})
+}
+
+// WriteCidFile writes the CID to a well-known location so it can be read and sent to Sentry on panic.
+func WriteCidFile(cid string) {
+	if cid == "" {
+		return
+	}
+	fpath := os.TempDir() + "/" + "dgraph-" + subCmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
+	err := ioutil.WriteFile(fpath, []byte(cid), 0644)
+	if err != nil {
+		glog.Infof("unable to write CID to file %v %v", fpath, err)
+		return
+	}
+}
+
+// readAndRemoveCidFile writes the file to a well-known location so it can be read and sent to Sentry on panic.
+func readAndRemoveCidFile() string {
+	fpath := os.TempDir() + "/" + "dgraph-" + subCmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
+	cid, err := ioutil.ReadFile(fpath)
+	if err != nil {
+		glog.Infof("unable to read CID from file %v %v. Skip", fpath, err)
+		return ""
+	}
+	if err = os.RemoveAll(fpath); err != nil {
+		glog.Infof("unable to remove the cid file at %v %v. Skip", fpath, err)
+		return ""
+	}
+
+	return string(cid)
 }
 
 // CaptureSentryException sends the error report to Sentry.
@@ -111,6 +143,15 @@ func CaptureSentryException(err error) {
 // PanicHandler is the callback function when a panic happens. It does not recover and is
 // only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
+	cid := readAndRemoveCidFile()
+	if cid != "" {
+		// re-configure sentry scope to include cid if found.
+		sentry.ConfigureScope(func(scope *sentry.Scope) {
+			scope.SetTag("dgraph", subCmd)
+			scope.SetTag("cid", cid)
+			scope.SetLevel(sentry.LevelFatal)
+		})
+	}
 	// Output contains the full output (including stack traces) of the panic.
 	sentry.CaptureException(errors.New(out))
 	FlushSentry() // Need to flush asap. Don't defer here.
