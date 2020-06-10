@@ -19,6 +19,9 @@ package upgrade
 import (
 	"fmt"
 	"os"
+	"sort"
+	"strconv"
+	"strings"
 
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/spf13/cobra"
@@ -27,32 +30,270 @@ import (
 var (
 	// Upgrade is the sub-command used to upgrade dgraph cluster.
 	Upgrade x.SubCommand
+	// dummy version
+	dummyVersion = &version{}
 )
+
+type versionComparisonResult int8
+
+const (
+	acl  = "acl"
+	from = "from"
+	to   = "to"
+
+	less versionComparisonResult = iota
+	equal
+	greater
+)
+
+// version represents a mainstream release version
+// for eg: for v20.03.1, major = 20, minor = 3, patch = 1
+type version struct {
+	major int
+	minor int
+	patch int
+}
+
+func (v *version) String() string {
+	if v == nil {
+		v = dummyVersion
+	}
+	return fmt.Sprintf("v%d.%d.%d", v.major, v.minor, v.patch)
+}
+
+// Compare compares v with other version, and tells if v is equal, less, or greater than other.
+// It interprets nil as &version{major: 0, minor: 0, patch: 0}
+func (v *version) Compare(other *version) versionComparisonResult {
+	if v == nil {
+		v = dummyVersion
+	}
+	if other == nil {
+		other = dummyVersion
+	}
+
+	switch {
+	case v.major > other.major:
+		return greater
+	case v.major < other.major:
+		return less
+	case v.minor > other.minor:
+		return greater
+	case v.minor < other.minor:
+		return less
+	case v.patch > other.patch:
+		return greater
+	case v.patch < other.patch:
+		return less
+	}
+
+	return equal
+}
+
+// change represents the action that needs to be taken during upgrade as a result of some breaking
+// change
+type change struct {
+	name        string // a short name to identify the change
+	description string // longer description
+	// The minimum from version, upgrading from which this change can be applied.
+	// For a version less than this value, this change is not applicable
+	minFromVersion *version
+	applyFunc      func() error // function which applies the change
+}
+
+// changeSet represents a set of changes that were introduced in some version
+type changeSet struct {
+	introducedIn *version // the version in which the changes were introduced
+	// the list of changes that were introduced in the above version
+	// it should contain changes in sorted order, based on their order of introduction as they would
+	// be applied in the order they are present in this list
+	changes []*change
+}
+
+// changeList represents a list of changeSet, i.e., a list of all the changes that were ever
+// introduced since the beginning of Dgraph.
+//The changeSets in this list are supposed to be in sorted order based on when they were introduced.
+type changeList []*changeSet
+
+type commandInput struct {
+	fromVersion *version
+	toVersion   *version
+}
 
 func init() {
 	Upgrade.Cmd = &cobra.Command{
 		Use:   "upgrade",
 		Short: "Run the Dgraph upgrade tool",
+		Long: "This tool is supported only for the mainstream release versions of Dgraph, " +
+			"not for the beta releases.",
 		Run: func(cmd *cobra.Command, args []string) {
 			run()
 		},
 	}
 
 	flag := Upgrade.Cmd.Flags()
-	flag.Bool("acl", false, "upgrade ACL from v1.2.2 to >v20.03.0")
 	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.BoolP("deleteOld", "d", true, "Delete the older ACL predicates")
+	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
+	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
 }
 
 func run() {
-	if !Upgrade.Conf.GetBool("acl") {
-		fmt.Fprint(os.Stderr, "Error! we only support acl upgrade as of now.\n")
+	cmdInput, err := validateAndParseInput()
+	if err != nil {
+		x.Check2(fmt.Fprintln(os.Stderr, err))
 		return
 	}
 
-	if err := upgradeACLRules(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error in upgrading ACL!", err)
+	applyChangeList(cmdInput, getChangeList())
+}
+
+func validateAndParseInput() (*commandInput, error) {
+	fromVersionParsed, err := parseVersionFromString(Upgrade.Conf.GetString(from))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing `from` flag: %w", err)
 	}
+
+	toVersionParsed, err := parseVersionFromString(Upgrade.Conf.GetString(to))
+	if err != nil {
+		return nil, fmt.Errorf("error parsing `to` flag: %w", err)
+	}
+
+	if fromVersionParsed.Compare(toVersionParsed) != less {
+		return nil, fmt.Errorf("error: `from` must be less than `to`")
+	}
+
+	return &commandInput{fromVersion: fromVersionParsed, toVersion: toVersionParsed}, nil
+}
+
+// parseVersionFromString parses a version given as string to internal representation.
+// Some examples for input and output:
+// 	1. input : v1.2.2
+// 	   output: &version{major: 1, minor: 2, patch: 2}, nil
+// 	2. input : v20.03.0-beta.20200320
+// 	   output: &version{major: 20, minor: 3, patch: 0}, nil
+// 	3. input : 1.2.2
+// 	   output: nil, error
+// 	4. input : v1.2.2s
+// 	   output: nil, error
+func parseVersionFromString(v string) (*version, error) {
+	v = strings.TrimSpace(v)
+	if v == "" || v[:1] != "v" {
+		return nil, fmt.Errorf("version can't be empty and must start with `v`. E.g.: v1.2.2")
+	}
+
+	versionSplit := strings.Split(v[1:], ".")
+	result := &version{}
+	var err error
+
+	result.major, err = strconv.Atoi(versionSplit[0])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing major version: %w", err)
+	}
+
+	result.minor, err = strconv.Atoi(versionSplit[1])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing minor version: %w", err)
+	}
+
+	// the third part of split can contain some extra things like `beta` appended with -,
+	// so split again and take the first part as patch
+	patchSplit := strings.Split(versionSplit[2], "-")
+	result.patch, err = strconv.Atoi(patchSplit[0])
+	if err != nil {
+		return nil, fmt.Errorf("error parsing patch version: %w", err)
+	}
+
+	return result, nil
+}
+
+func getChangeList() changeList {
+	return changeList{
+		{
+			introducedIn: &version{major: 20, minor: 3, patch: 0},
+			changes: []*change{{
+				name: "Upgrade ACL Rules",
+				description: "This updates the ACL nodes to use the new ACL model introduced in" +
+					" v20.03.0. This is applied while upgrading from v1.2.2+ to v20.03.0+",
+				minFromVersion: &version{major: 1, minor: 2, patch: 2},
+				applyFunc:      upgradeACLRules,
+			}},
+		},
+		{
+			introducedIn: &version{major: 20, minor: 7, patch: 0},
+			changes: []*change{
+				{
+					name: "Upgrade ACL Type names",
+					description: "This updates the ACL nodes to use the new type names for the" +
+						" types User, Group and Rule. They are now dgraph.type.User, " +
+						"dgraph.type.Group, and dgraph.type.Rule. This change was introduced in " +
+						"v20.07.0, and is applied while upgrading from v20.03.0+ to v20.07.0+. " +
+						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
+					minFromVersion: &version{major: 20, minor: 3, patch: 0},
+					applyFunc:      upgradeAclTypeNames,
+				},
+				{
+					name: "Upgrade non-predefined types/predicates using reserved namespace",
+					description: "This updates any user-defined types/predicates which start with" +
+						" `dgraph.` to use a name which doesn't start with `dgraph.`. The user " +
+						"will have to provide a new name to use for such types/predicates. " +
+						"This change was introduced in v20.07.0, " +
+						"and is applied while upgrading from v20.03.0+ to v20.07.0+. " +
+						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
+					minFromVersion: &version{major: 20, minor: 3, patch: 0},
+					applyFunc:      upgradeNonPredefinedNamesInReservedNamespace,
+				},
+			},
+		},
+	}
+}
+
+func applyChangeList(cmdInput *commandInput, list changeList) {
+	// sort the changeList based on the version the changes were introduced in
+	sort.SliceStable(list, func(i, j int) bool {
+		iVersion := list[i].introducedIn
+		jVersion := list[j].introducedIn
+		return iVersion.Compare(jVersion) == less
+	})
+
+	for _, changeSet := range list {
+		// apply the change set only if the version in which it was introduced is <= the version
+		// to which we want to upgrade and also >= the version from which we want to upgrade.
+		if cmdInput.toVersion.Compare(changeSet.introducedIn) != less && cmdInput.fromVersion.
+			Compare(changeSet.introducedIn) != greater {
+			x.Check2(fmt.Println("Applying the change set introduced in version:",
+				changeSet.introducedIn))
+			// Go over every change in the change set and check if it should be applied. If yes,
+			// apply it, otherwise skip it.
+			for i, change := range changeSet.changes {
+				x.Check2(fmt.Println(fmt.Sprintf(""+
+					"\tApplying change %d:\n"+
+					"\t\tName       : %s,\n"+
+					"\t\tDescription: %s", i+1, change.name, change.description)))
+				// apply the change only if the min version from which it should be applied
+				// is <= the version from which we want to upgrade
+				if cmdInput.fromVersion.Compare(change.minFromVersion) != less {
+					if err := change.applyFunc(); err != nil {
+						x.Check2(fmt.Println("\t\terror occurred: ", err))
+						x.Check2(fmt.Println("\t\tCan't continue. Exiting!!!"))
+						os.Exit(1)
+					} else {
+						x.Check2(fmt.Println("\t\tApplied!"))
+					}
+				} else {
+					x.Check2(fmt.Println("\t\tSkipped!"))
+				}
+			}
+			// update the fromVersion to reflect the version till which DB has been upgraded,
+			// so that minFromVersion check is satisfied for the changes in next changeSets
+			cmdInput.fromVersion = changeSet.introducedIn
+			x.Check2(fmt.Println("DB state now upgraded to:", cmdInput.fromVersion))
+		} else {
+			x.Check2(fmt.Println("Skipping the change set introduced in version:",
+				changeSet.introducedIn))
+		}
+	}
+
+	x.Check2(fmt.Println("Upgrade finished!"))
 }
