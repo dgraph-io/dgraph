@@ -318,7 +318,8 @@ var directiveValidators = map[string]directiveValidator{
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
-var defnValidations, typeValidations []func(defn *ast.Definition) *gqlerror.Error
+var defnValidations, typeValidations []func(schema *ast.Schema,
+	defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
@@ -396,7 +397,7 @@ func preGQLValidation(schema *ast.SchemaDocument) gqlerror.List {
 			// prelude definitions are built in and we don't want to validate them.
 			continue
 		}
-		errs = append(errs, applyDefnValidations(defn, defnValidations)...)
+		errs = append(errs, applyDefnValidations(defn, nil, defnValidations)...)
 	}
 
 	errs = append(errs, applySchemaDocValidations(schema)...)
@@ -415,7 +416,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 	for _, defn := range definitions {
 		typ := schema.Types[defn]
 
-		errs = append(errs, applyDefnValidations(typ, typeValidations)...)
+		errs = append(errs, applyDefnValidations(typ, schema, typeValidations)...)
 
 		for _, field := range typ.Fields {
 			errs = append(errs, applyFieldValidations(typ, field)...)
@@ -461,12 +462,12 @@ func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.L
 	return errs
 }
 
-func applyDefnValidations(defn *ast.Definition,
-	rules []func(defn *ast.Definition) *gqlerror.Error) gqlerror.List {
+func applyDefnValidations(defn *ast.Definition, schema *ast.Schema,
+	rules []func(schema *ast.Schema, defn *ast.Definition) *gqlerror.Error) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range rules {
-		errs = appendIfNotNull(errs, rule(defn))
+		errs = appendIfNotNull(errs, rule(schema, defn))
 	}
 
 	return errs
@@ -841,13 +842,11 @@ func hasOrderables(defn *ast.Definition) bool {
 }
 
 func hasID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		isID)
+	return fieldAny(defn.Fields, isID)
 }
 
 func hasXID(defn *ast.Definition) bool {
-	return fieldAny(defn.Fields,
-		hasIDDirective)
+	return fieldAny(defn.Fields, hasIDDirective)
 }
 
 // fieldAny returns true if any field in fields satisfies pred
