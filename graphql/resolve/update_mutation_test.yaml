@@ -872,7 +872,7 @@
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
-        moviedirector {
+        movieDirector {
           id
         }
       }
@@ -912,7 +912,7 @@
   gqlmutation: |
     mutation updateMovieDirector($patch: UpdateMovieDirectorInput!) {
       updateMovieDirector(input: $patch) {
-        moviedirector {
+        movieDirector {
           id
         }
       }
@@ -1375,7 +1375,7 @@
   gqlmutation: |
     mutation updateComputerOwner($patch: UpdateComputerOwnerInput!) {
       updateComputerOwner(input: $patch) {
-        computerowner {
+        computerOwner {
           name
         }
       }

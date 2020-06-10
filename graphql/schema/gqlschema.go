@@ -970,7 +970,7 @@ func addTypeOrderable(schema *ast.Schema, defn *ast.Definition) {
 
 func addAddPayloadType(schema *ast.Schema, defn *ast.Definition) {
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: camelCase(defn.Name),
 		Type: ast.ListType(&ast.Type{
 			NamedType: defn.Name,
 		}, nil),
@@ -1000,7 +1000,7 @@ func addUpdatePayloadType(schema *ast.Schema, defn *ast.Definition) {
 	}
 
 	qry := &ast.FieldDefinition{
-		Name: strings.ToLower(defn.Name),
+		Name: camelCase(defn.Name),
 		Type: &ast.Type{
 			Elem: &ast.Type{
 				NamedType: defn.Name,
@@ -1638,4 +1638,12 @@ func appendIfNotNull(errs []*gqlerror.Error, err *gqlerror.Error) gqlerror.List 
 func isGraphqlSpecScalar(typ string) bool {
 	_, ok := graphqlSpecScalars[typ]
 	return ok
+}
+
+func camelCase(x string) string {
+	if x == "" {
+		return ""
+	}
+
+	return strings.ToLower(x[:1]) + x[1:]
 }
