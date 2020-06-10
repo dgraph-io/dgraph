@@ -63,16 +63,6 @@ invalid_schemas:
     ]
 
   -
-    name: "There shoudnt be arguments on any field"
-    input: |
-      type T {
-        f(a: Int): String
-      }
-    errlist: [
-      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
-    ]
-
-  -
     name: "Enum indexes clash trigram and regexp"
     input: |
       type T {
@@ -1902,6 +1892,15 @@ invalid_schemas:
     {"message": "Interface X; @auth directive is not allowed on interfaces.",
      "locations":[{"line":1, "column":11}]},
     ]
+
+
+  - name: "There shoudnt be any reserved arguments on any field"
+    input: |
+      type T {
+        f(first: Int): String
+      }
+    errlist: [
+    {"message": "Type T; Field f: can't have first as an argument because it is a reserved argument.", "locations": [{"line": 2, "column": 3}]}]
 
   - name: "remote type with @custom directives on fields shouldn't be allowed."
     description: "Remote types are not resolved further currently, hence they shouldn't have

@@ -694,12 +694,22 @@ func fieldArgumentCheck(typ *ast.Definition, field *ast.FieldDefinition) *gqlerr
 	if isQueryOrMutationType(typ) {
 		return nil
 	}
-	if field.Arguments != nil {
-		return gqlerror.ErrorPosf(
-			field.Position,
-			"Type %s; Field %s: You can't give arguments to fields.",
-			typ.Name, field.Name,
-		)
+	// We don't need to verify the argument names for fields which are part of a remote type as
+	// we don't add any of our own arguments to them.
+	remote := typ.Directives.ForName(remoteDirective)
+	if remote != nil {
+		return nil
+	}
+	for _, arg := range field.Arguments {
+		if isReservedArgument(arg.Name) {
+			return gqlerror.ErrorPosf(
+				field.Position,
+				"Type %s; Field %s: can't have %s as an argument because it is a reserved "+
+					"argument.",
+				typ.Name, field.Name, arg.Name,
+			)
+
+		}
 	}
 	return nil
 }
@@ -1647,6 +1657,14 @@ func searchMessage(sch *ast.Schema, field *ast.FieldDefinition) string {
 func isScalar(s string) bool {
 	_, ok := scalarToDgraph[s]
 	return ok
+}
+
+func isReservedArgument(name string) bool {
+	switch name {
+	case "first", "offset", "filter", "order":
+		return true
+	}
+	return false
 }
 
 func isReservedKeyWord(name string) bool {

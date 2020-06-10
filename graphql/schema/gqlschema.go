@@ -326,13 +326,13 @@ func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
 	dirs = append(dirs, src.Directives...)
 
-	// Lets leave out copying the arguments as types in input schemas are not supposed to contain
-	// them. We add arguments for filters and order statements later.
+	// We add arguments for filters and order statements later.
 	dst := &ast.FieldDefinition{
 		Name:         src.Name,
 		DefaultValue: src.DefaultValue,
 		Type:         src.Type,
 		Directives:   dirs,
+		Arguments:    src.Arguments,
 		Position:     src.Position,
 	}
 	return dst
@@ -1240,6 +1240,7 @@ func createField(schema *ast.Schema, fld *ast.FieldDefinition) *ast.FieldDefinit
 	newFldType := *fld.Type
 	newFld.Type = &newFldType
 	newFld.Directives = nil
+	newFld.Arguments = nil
 	return &newFld
 }
 
