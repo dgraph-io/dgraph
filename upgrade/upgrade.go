@@ -18,6 +18,7 @@ package upgrade
 
 import (
 	"fmt"
+	"net"
 	"os"
 	"sort"
 	"strconv"
@@ -37,9 +38,11 @@ var (
 type versionComparisonResult int8
 
 const (
-	acl  = "acl"
-	from = "from"
-	to   = "to"
+	alpha    = "alpha"
+	user     = "user"
+	password = "password"
+	from     = "from"
+	to       = "to"
 
 	less versionComparisonResult = iota
 	equal
@@ -131,9 +134,9 @@ func init() {
 	}
 
 	flag := Upgrade.Cmd.Flags()
-	flag.StringP("alpha", "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP("user", "u", "", "Username if login is required.")
-	flag.StringP("password", "p", "", "Password of the user.")
+	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
+	flag.StringP(user, "u", "", "Username if login is required.")
+	flag.StringP(password, "p", "", "Password of the user.")
 	flag.BoolP("deleteOld", "d", true, "Delete the older ACL predicates")
 	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
 	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
@@ -142,26 +145,47 @@ func init() {
 func run() {
 	cmdInput, err := validateAndParseInput()
 	if err != nil {
-		x.Check2(fmt.Fprintln(os.Stderr, err))
+		fmt.Fprintln(os.Stderr, err)
 		return
 	}
 
 	applyChangeList(cmdInput, getChangeList())
 }
 
+func formatAsFlagParsingError(flag string, err error) error {
+	return fmt.Errorf("error parsing `%s` flag: %w", flag, err)
+}
+
+func formatAsFlagRequiredError(flag string) error {
+	return formatAsFlagParsingError(flag, fmt.Errorf("%s is required", flag))
+}
+
 func validateAndParseInput() (*commandInput, error) {
+	_, _, err := net.SplitHostPort(strings.TrimSpace(Upgrade.Conf.GetString(alpha)))
+	if err != nil {
+		return nil, formatAsFlagParsingError(alpha, err)
+	}
+
+	if strings.TrimSpace(Upgrade.Conf.GetString(user)) == "" {
+		return nil, formatAsFlagRequiredError(user)
+	}
+
+	if strings.TrimSpace(Upgrade.Conf.GetString(password)) == "" {
+		return nil, formatAsFlagRequiredError(password)
+	}
+
 	fromVersionParsed, err := parseVersionFromString(Upgrade.Conf.GetString(from))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing `from` flag: %w", err)
+		return nil, formatAsFlagParsingError(from, err)
 	}
 
 	toVersionParsed, err := parseVersionFromString(Upgrade.Conf.GetString(to))
 	if err != nil {
-		return nil, fmt.Errorf("error parsing `to` flag: %w", err)
+		return nil, formatAsFlagParsingError(to, err)
 	}
 
 	if fromVersionParsed.Compare(toVersionParsed) != less {
-		return nil, fmt.Errorf("error: `from` must be less than `to`")
+		return nil, fmt.Errorf("error: `%s` must be less than `%s`", from, to)
 	}
 
 	return &commandInput{fromVersion: fromVersionParsed, toVersion: toVersionParsed}, nil
@@ -250,6 +274,10 @@ func getChangeList() changeList {
 }
 
 func applyChangeList(cmdInput *commandInput, list changeList) {
+	fmt.Println("**********************************************")
+	fmt.Println("Version to upgrade from:", cmdInput.fromVersion)
+	fmt.Println("Version to upgrade to  :", cmdInput.toVersion)
+	fmt.Println("**********************************************")
 	// sort the changeList based on the version the changes were introduced in
 	sort.SliceStable(list, func(i, j int) bool {
 		iVersion := list[i].introducedIn
@@ -257,43 +285,54 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 		return iVersion.Compare(jVersion) == less
 	})
 
+	isInitialFromVersion := true
+
 	for _, changeSet := range list {
 		// apply the change set only if the version in which it was introduced is <= the version
 		// to which we want to upgrade and also >= the version from which we want to upgrade.
-		if cmdInput.toVersion.Compare(changeSet.introducedIn) != less && cmdInput.fromVersion.
-			Compare(changeSet.introducedIn) != greater {
-			x.Check2(fmt.Println("Applying the change set introduced in version:",
-				changeSet.introducedIn))
+		// If cmdInput.fromVersion hasn't been changed by us yet, then make sure that it is always
+		// less than the introduced version, ignore equality. So, if upgrading from version x to
+		// some other version, then the changes introduced in version x don't get applied.
+		fromConditionSatisfied := false
+		if isInitialFromVersion {
+			fromConditionSatisfied = cmdInput.fromVersion.Compare(changeSet.introducedIn) == less
+		} else {
+			fromConditionSatisfied = cmdInput.fromVersion.Compare(changeSet.introducedIn) != greater
+		}
+		if cmdInput.toVersion.Compare(changeSet.introducedIn) != less && fromConditionSatisfied {
+			fmt.Println("Applying the change set introduced in version:", changeSet.introducedIn)
 			// Go over every change in the change set and check if it should be applied. If yes,
 			// apply it, otherwise skip it.
 			for i, change := range changeSet.changes {
-				x.Check2(fmt.Println(fmt.Sprintf(""+
+				fmt.Println(fmt.Sprintf(""+
 					"\tApplying change %d:\n"+
 					"\t\tName       : %s,\n"+
-					"\t\tDescription: %s", i+1, change.name, change.description)))
+					"\t\tDescription: %s", i+1, change.name, change.description))
 				// apply the change only if the min version from which it should be applied
 				// is <= the version from which we want to upgrade
 				if cmdInput.fromVersion.Compare(change.minFromVersion) != less {
 					if err := change.applyFunc(); err != nil {
-						x.Check2(fmt.Println("\t\terror occurred: ", err))
-						x.Check2(fmt.Println("\t\tCan't continue. Exiting!!!"))
+						fmt.Println("\t\tStatus     : Error")
+						fmt.Println("\t\tError      :", err)
+						fmt.Println("\t\tCan't continue. Exiting!!!")
 						os.Exit(1)
 					} else {
-						x.Check2(fmt.Println("\t\tApplied!"))
+						fmt.Println("\t\tStatus     : Successful")
 					}
 				} else {
-					x.Check2(fmt.Println("\t\tSkipped!"))
+					fmt.Println("\t\tStatus     : Skipped")
 				}
 			}
 			// update the fromVersion to reflect the version till which DB has been upgraded,
 			// so that minFromVersion check is satisfied for the changes in next changeSets
 			cmdInput.fromVersion = changeSet.introducedIn
-			x.Check2(fmt.Println("DB state now upgraded to:", cmdInput.fromVersion))
+			isInitialFromVersion = false
+			fmt.Println("\tDB state now upgraded to:", cmdInput.fromVersion)
 		} else {
-			x.Check2(fmt.Println("Skipping the change set introduced in version:",
-				changeSet.introducedIn))
+			fmt.Println("Skipping the change set introduced in version:", changeSet.introducedIn)
 		}
 	}
 
-	x.Check2(fmt.Println("Upgrade finished!"))
+	fmt.Println()
+	fmt.Println("Upgrade finished!!!")
 }

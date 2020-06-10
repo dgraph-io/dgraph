@@ -55,7 +55,7 @@ type rules []rule
 // getDgoClient creates a gRPC connection and uses that to create a new dgo client.
 // The gRPC.ClientConn returned by this must be closed after use.
 func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
-	alpha := Upgrade.Conf.GetString("alpha")
+	alpha := Upgrade.Conf.GetString(alpha)
 
 	// TODO(Aman): add TLS configuration.
 	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
@@ -66,8 +66,8 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
 
 	if withLogin {
-		userName := Upgrade.Conf.GetString("user")
-		password := Upgrade.Conf.GetString("password")
+		userName := Upgrade.Conf.GetString(user)
+		password := Upgrade.Conf.GetString(password)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
 		// login to cluster
