@@ -443,7 +443,12 @@ schemas:
 
   - name: "remote types shouldn't be part of Dgraph schema"
     input: |
-      interface C {
+      type B {
+        id: ID!
+        q: String
+      }
+
+      interface C @remote{
         c: String
       }
 
@@ -452,21 +457,11 @@ schemas:
         p: String
         q: String
       }
-
-      type B implements C {
-        id: ID!
-        p: String
-      }
     output: |
-      type C {
-        C.c
-      }
-      C.c: string .
       type B {
-        C.c
-        B.p
+        B.q
       }
-      B.p: string .
+      B.q: string .
 
   - name: "fields with same @dgraph(pred: ...) occur only once in schema"
     input: |
@@ -537,34 +532,6 @@ schemas:
       <公司>: string @index(exact, term) .
 
   -
-    name: "custom types shouldn't be part of Dgraph schema"
-    input: |
-      interface C {
-        c: String
-      }
-
-      type A implements C @remote {
-        id: ID!
-        p: String
-        q: String
-      }
-
-      type B implements C {
-        id: ID!
-        p: String
-      }
-    output: |
-      type C {
-        C.c
-      }
-      C.c: string .
-      type B {
-        C.c
-        B.p
-      }
-      B.p: string .
-
-  -
     name: "custom query and mutation shouldn't be part of Dgraph schema"
     input: |
       type User @remote {
@@ -585,4 +552,3 @@ schemas:
           method: "POST"
         })
       }
-    output:
