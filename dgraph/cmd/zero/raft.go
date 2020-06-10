@@ -508,6 +508,7 @@ func (n *node) initAndStartNode() error {
 				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
+					x.WriteCidFile(id)
 					break
 				}
 				if err == errInvalidProposal {
