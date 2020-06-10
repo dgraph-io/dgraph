@@ -406,9 +406,7 @@ func (urw *UpdateRewriter) Rewrite(
 				})
 
 			urw.setFrags = append(urw.setFrags, setFrag...)
-			if keepError {
-				errs = schema.AppendGQLErrs(errs, errSet)
-			}
+			errs = schema.AppendGQLErrs(errs, errSet)
 
 			q1 := queryFromFragments(setFrag)
 			if q1 != nil {
@@ -429,9 +427,7 @@ func (urw *UpdateRewriter) Rewrite(
 				})
 
 			urw.delFrags = append(urw.delFrags, delFrag...)
-			if keepError {
-				errs = schema.AppendGQLErrs(errs, errDel)
-			}
+			errs = schema.AppendGQLErrs(errs, errDel)
 
 			q2 := queryFromFragments(delFrag)
 			if q2 != nil {
