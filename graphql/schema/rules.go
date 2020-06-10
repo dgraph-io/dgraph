@@ -1395,6 +1395,7 @@ func customDirectiveValidation(sch *ast.Schema,
 							"mode, %s `%s` can have only one argument whose value should "+
 							"be a variable.",
 						typ.Name, field.Name, graphqlOpDef.Operation, query.Name))
+					return errs
 				}
 				argVal := query.Arguments[0].Value.Raw
 				vd := graphqlOpDef.VariableDefinitions.ForName(argVal)
@@ -1535,6 +1536,11 @@ func customDirectiveValidation(sch *ast.Schema,
 				typ.Name, field.Name, si.Raw))
 		}
 	}
+
+	if errs != nil {
+		return errs
+	}
+
 	if graphql != nil && !skip && graphqlOpDef != nil {
 		secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
 		headers := http.Header{}
