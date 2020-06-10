@@ -29,9 +29,9 @@ import (
 )
 
 var (
-	env      string
-	dsn      string // API KEY to use
-	filePath string
+	env     string
+	dsn     string // API KEY to use
+	cidPath string
 )
 
 // Sentry API KEYs to use.
@@ -102,27 +102,28 @@ func ConfigureSentryScope(subcmd string) {
 		scope.SetLevel(sentry.LevelFatal)
 	})
 
-	filePath = os.TempDir() + "/" + "dgraph-" + subcmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
+	// e.g. /tmp/dgraph-alpha-cid-sentry
+	cidPath = os.TempDir() + "/" + "dgraph-" + subcmd + "-cid-sentry"
 }
 
-// WriteCidFile writes the CID to a well-known location so it can be read and sent to Sentry on panic.
+// WriteCidFile writes the CID to a well-known location so it can be read and
+// sent to Sentry on panic.
 func WriteCidFile(cid string) {
 	if cid == "" {
 		return
 	}
-
-	err := ioutil.WriteFile(filePath, []byte(cid), 0644)
-	if err != nil {
-		glog.Infof("unable to write CID to file %v %v", filePath, err)
+	if err := ioutil.WriteFile(cidPath, []byte(cid), 0644); err != nil {
+		glog.Warningf("unable to write CID to file %v %v", cidPath, err)
 		return
 	}
 }
 
-// readAndRemoveCidFile reads the file from a well-known location so it can be read and sent to Sentry on panic.
+// readAndRemoveCidFile reads the file from a well-known location so
+// it can be read and sent to Sentry on panic.
 func readAndRemoveCidFile() string {
-	cid, err := ioutil.ReadFile(filePath)
+	cid, err := ioutil.ReadFile(cidPath)
 	if err != nil {
-		glog.Infof("unable to read CID from file %v %v. Skip", filePath, err)
+		glog.Warningf("unable to read CID from file %v %v. Skip", cidPath, err)
 		return ""
 	}
 	RemoveCidFile()
@@ -131,8 +132,8 @@ func readAndRemoveCidFile() string {
 
 // RemoveCidFile removes the file.
 func RemoveCidFile() {
-	if err := os.RemoveAll(filePath); err != nil {
-		glog.Infof("unable to remove the cid file at %v %v. Skip", filePath, err)
+	if err := os.RemoveAll(cidPath); err != nil {
+		glog.Warningf("unable to remove the CID file at %v %v. Skip", cidPath, err)
 		return
 	}
 }
@@ -147,11 +148,10 @@ func CaptureSentryException(err error) {
 // PanicHandler is the callback function when a panic happens. It does not recover and is
 // only used to log panics (in our case send an event to sentry).
 func PanicHandler(out string) {
-	cid := readAndRemoveCidFile()
-	if cid != "" {
+	if cid := readAndRemoveCidFile(); cid != "" {
 		// re-configure sentry scope to include cid if found.
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
-			scope.SetTag("cid", cid)
+			scope.SetTag("CID", cid)
 		})
 	}
 	// Output contains the full output (including stack traces) of the panic.
@@ -162,7 +162,6 @@ func PanicHandler(out string) {
 }
 
 // WrapPanics is a wrapper on panics. We use it to send sentry events about panics
-// and crash right after.
 func WrapPanics() {
 	exitStatus, err := panicwrap.BasicWrap(PanicHandler)
 	if err != nil {
