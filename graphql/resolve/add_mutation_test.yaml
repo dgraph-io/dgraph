@@ -1916,6 +1916,76 @@
       }
     }
 
+- name: "Deep mutation alternate id xid"
+  gqlmutation: |
+    mutation addAuthor($city: AddCityInput!) {
+      addCity(input: [$city]) {
+        city {
+          name
+          district {
+            code
+            name
+            cities {
+              name 
+              district {
+                code
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { 
+      "city": {
+        "name": "c1",
+        "district":{
+                "name":"d1",
+                "code":"d1",
+                "cities":[{"name": "c2"}]
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      District3 as District3(func: eq(District.code, "d1")) @filter(type(District)) {
+        uid
+      }
+    }
+  dgmutations:
+    - setjson: |
+        {"District.code":"d1","District.name":"d1","dgraph.type":["District"],"uid":"_:District3"}
+      cond: "@if(eq(len(District3), 0))"
+
+  dgquerysec: |-
+    query {
+      District3 as District3(func: eq(District.code, "d1")) @filter(type(District)) {
+        uid
+      }
+    }
+
+  dgmutationssec:
+    - setjson: |
+        {
+        	"City.district": {
+        		"District.cities": [{
+        			"City.district": {
+        				"uid": "uid(District3)"
+        			},
+        			"City.name": "c2",
+        			"dgraph.type": ["City"],
+        			"uid": "_:City4"
+        		}],
+        		"uid": "uid(District3)"
+        	},
+        	"City.name": "c1",
+        	"dgraph.type": ["City"],
+        	"uid": "_:City1"
+        }
+      cond: "@if(eq(len(District3), 1))"
+
+
 - name: "Additional Deletes - deep mutation"
   gqlmutation: |
     mutation addAuthor($auth: AddAuthorInput!) {

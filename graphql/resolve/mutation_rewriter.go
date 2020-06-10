@@ -738,12 +738,6 @@ type mutationRes struct {
 	secondPass []*mutationFragment
 }
 
-func (mr *mutationRes) get() []*mutationFragment {
-	k := mr.firstPass
-	k = append(k, mr.secondPass...)
-	return k
-}
-
 // rewriteObject rewrites obj to a list of mutation fragments.  See AddRewriter.Rewrite
 // for a description of what those fragments look like.
 //
