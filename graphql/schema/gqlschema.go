@@ -318,8 +318,8 @@ var directiveValidators = map[string]directiveValidator{
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
-var defnValidations, typeValidations []func(defn *ast.Definition,
-	schema *ast.Schema) *gqlerror.Error
+var defnValidations, typeValidations []func(schema *ast.Schema,
+	defn *ast.Definition) *gqlerror.Error
 var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
@@ -463,11 +463,11 @@ func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.L
 }
 
 func applyDefnValidations(defn *ast.Definition, schema *ast.Schema,
-	rules []func(defn *ast.Definition, schema *ast.Schema) *gqlerror.Error) gqlerror.List {
+	rules []func(schema *ast.Schema, defn *ast.Definition) *gqlerror.Error) gqlerror.List {
 	var errs []*gqlerror.Error
 
 	for _, rule := range rules {
-		errs = appendIfNotNull(errs, rule(defn, schema))
+		errs = appendIfNotNull(errs, rule(schema, defn))
 	}
 
 	return errs

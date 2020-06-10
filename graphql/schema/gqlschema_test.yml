@@ -1942,8 +1942,8 @@ invalid_schemas:
         neighbour: [User!]
       }
     errlist: [
-    {"message": "Type Author; field neighbour; can't be of a type that has @remote directive.
-     Non-remote types can't have fields with a type  having @remote directive.",
+    {"message": "Type Author; field neighbour; is of a type that has @remote directive. Those
+    would need to be resolved by a @custom directive.",
      "locations": [{"line":9, "column":3}]}
     ]
 
