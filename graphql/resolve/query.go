@@ -91,7 +91,8 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 			Path : []interface{}{query.ResponseName()},
 
 		}
-	timers := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
+	startTime, _ := ctx.Value("starttime").(time.Time)
+	timers := schema.NewOffsetTimerFactory(startTime)
 	//timer := timers.NewOffsetTimer(&resolved.Extensions.Tracing.Execution[0].OffsetDuration)
 	timer := timers.NewOffsetTimer(&trace.OffsetDuration)
 	timer.Start()

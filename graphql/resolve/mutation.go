@@ -187,7 +187,8 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 			Path : []interface{}{m.ResponseName()},
 
 		}
-	timers := schema.NewOffsetTimerFactory(ctx.Value("starttime").(time.Time))
+	startTime, _ := ctx.Value("starttime").(time.Time)
+	timers := schema.NewOffsetTimerFactory(startTime)
 	//timer := timers.NewOffsetTimer(&resolved.Extensions.Tracing.Execution[0].OffsetDuration)
 	timer := timers.NewOffsetTimer(&trace.OffsetDuration)
 	timer.Start()
