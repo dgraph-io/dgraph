@@ -509,7 +509,6 @@ func (n *node) initAndStartNode() error {
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
 					x.WriteCidFile(id)
-					//panic("this is a pseudo panic after cid is set")
 					break
 				}
 				if err == errInvalidProposal {

@@ -29,9 +29,9 @@ import (
 )
 
 var (
-	env    string
-	dsn    string // API KEY to use
-	subCmd string
+	env      string
+	dsn      string // API KEY to use
+	filePath string
 )
 
 // Sentry API KEYs to use.
@@ -97,11 +97,12 @@ func FlushSentry() {
 
 // ConfigureSentryScope configures the scope on the global hub of Sentry.
 func ConfigureSentryScope(subcmd string) {
-	subCmd = subcmd
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("dgraph", subcmd)
 		scope.SetLevel(sentry.LevelFatal)
 	})
+
+	filePath = os.TempDir() + "/" + "dgraph-" + subcmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
 }
 
 // WriteCidFile writes the CID to a well-known location so it can be read and sent to Sentry on panic.
@@ -109,28 +110,31 @@ func WriteCidFile(cid string) {
 	if cid == "" {
 		return
 	}
-	fpath := os.TempDir() + "/" + "dgraph-" + subCmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
-	err := ioutil.WriteFile(fpath, []byte(cid), 0644)
+
+	err := ioutil.WriteFile(filePath, []byte(cid), 0644)
 	if err != nil {
-		glog.Infof("unable to write CID to file %v %v", fpath, err)
+		glog.Infof("unable to write CID to file %v %v", filePath, err)
 		return
 	}
 }
 
-// readAndRemoveCidFile writes the file to a well-known location so it can be read and sent to Sentry on panic.
+// readAndRemoveCidFile reads the file from a well-known location so it can be read and sent to Sentry on panic.
 func readAndRemoveCidFile() string {
-	fpath := os.TempDir() + "/" + "dgraph-" + subCmd + "-cid-sentry" // e.g. /tmp/dgraph-alpha-cid-sentry
-	cid, err := ioutil.ReadFile(fpath)
+	cid, err := ioutil.ReadFile(filePath)
 	if err != nil {
-		glog.Infof("unable to read CID from file %v %v. Skip", fpath, err)
+		glog.Infof("unable to read CID from file %v %v. Skip", filePath, err)
 		return ""
 	}
-	if err = os.RemoveAll(fpath); err != nil {
-		glog.Infof("unable to remove the cid file at %v %v. Skip", fpath, err)
-		return ""
-	}
-
+	RemoveCidFile()
 	return string(cid)
+}
+
+// RemoveCidFile removes the file.
+func RemoveCidFile() {
+	if err := os.RemoveAll(filePath); err != nil {
+		glog.Infof("unable to remove the cid file at %v %v. Skip", filePath, err)
+		return
+	}
 }
 
 // CaptureSentryException sends the error report to Sentry.
@@ -147,9 +151,7 @@ func PanicHandler(out string) {
 	if cid != "" {
 		// re-configure sentry scope to include cid if found.
 		sentry.ConfigureScope(func(scope *sentry.Scope) {
-			scope.SetTag("dgraph", subCmd)
 			scope.SetTag("cid", cid)
-			scope.SetLevel(sentry.LevelFatal)
 		})
 	}
 	// Output contains the full output (including stack traces) of the panic.
