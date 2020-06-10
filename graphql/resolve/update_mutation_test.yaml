@@ -990,20 +990,13 @@
   dgmutationssec:
     - setjson: |
         {
-          "Student.taughtBy": [
-            {
-              "Teacher.teaches": [{
-                    "uid": "uid(x)"
-	       }],
-              "uid": "uid(Teacher3)"
-            },
-            {
-              "Teacher.teaches": [{
-                    "uid": "uid(x)"
-	       }],
-              "uid": "uid(Teacher3)"
-            }
-          ],
+          "Student.taughtBy":[{
+                  "Teacher.teaches":[{"uid":"uid(x)"}],
+                  "uid":"uid(Teacher3)"
+          },{
+                  "Teacher.teaches":[{"uid":"uid(x)"}],
+                  "uid":"uid(Teacher3)"
+          }],
           "uid": "uid(x)"
         }
       cond: "@if(eq(len(Teacher3), 1) AND eq(len(Teacher3), 1) AND gt(len(x), 0))"
@@ -1355,8 +1348,7 @@
         { 
           "uid": "_:Computer3",
           "dgraph.type": ["Computer"],
-          "Computer.name": "Comp",
-          "Computer.owners":[ { "uid":"uid(x)" } ]
+          "Computer.name": "Comp"
         }
       cond: "@if(eq(len(Computer3), 0) AND gt(len(x), 0))"
   dgmutationssec:
