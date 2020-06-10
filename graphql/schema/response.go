@@ -32,7 +32,7 @@ import (
 type Extensions struct {
 	TouchedUids uint64 `json:"touched_uids,omitempty"`
 	Tracing     *Trace `json:"tracing,omitempty"`
-	Execution   []*ResolverTrace
+	//Execution   []*ResolverTrace
 }
 
 // GetTouchedUids returns TouchedUids

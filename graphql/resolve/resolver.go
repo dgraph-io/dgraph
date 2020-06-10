@@ -168,7 +168,7 @@ type Resolved struct {
 	Err        error
 	Extensions *schema.Extensions
 	trace      []*schema.ResolverTrace
-	timers     schema.TimerFactory
+	//timers     schema.TimerFactory
 	Dgraph     []*schema.LabeledOffsetDuration `json:"dgraph"`
 }
 
@@ -388,7 +388,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		Version:   x.Version(),
 		StartTime: time.Now(),
 	}
-	timers := schema.NewOffsetTimerFactory(trace.StartTime)
+	//timers := schema.NewOffsetTimerFactory(trace.StartTime)
 	ctx = context.WithValue(ctx, "starttime", trace.StartTime)
 	defer func() {
 		trace.EndTime = time.Now()
@@ -435,7 +435,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 							Data:   nil,
 							Field:  q,
 							Err:    err,
-							timers: timers,
+							//timers: timers,
 						}
 					})
 
@@ -451,8 +451,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 
 		}
 	}
@@ -490,10 +490,13 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			}
 
 			var res *Resolved
+			//res.Extensions=&schema.Extensions{}
+			//res.Extensions.Tracing=&schema.Trace{}
+			//res.Extensions.Tracing.Execution = []*schema.ResolverTrace {{ParentType: "Mutation",}}
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			addResult(resp, res)
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		resolveQueries()
