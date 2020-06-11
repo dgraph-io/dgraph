@@ -240,7 +240,7 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 	queries := &gql.GraphQuery{}
 
 	buildMutations := func(mutationsAll []*dgoapi.Mutation, queries *gql.GraphQuery,
-		frag []*mutationFragment, keepError bool) []*dgoapi.Mutation {
+		frag []*mutationFragment) []*dgoapi.Mutation {
 		mutations, err := mutationsFromFragments(
 			frag,
 			func(frag *mutationFragment) ([]byte, error) {
@@ -270,8 +270,8 @@ func (mrw *AddRewriter) Rewrite(ctx context.Context, m schema.Mutation) ([]*Upse
 		frag := rewriteObject(mutatedType, nil, "", varGen, true, obj, 0, xidMd)
 		mrw.frags = append(mrw.frags, frag.secondPass)
 
-		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass, false)
-		mutationsAllSec = buildMutations(mutationsAllSec, queriesSec, frag.secondPass, true)
+		mutationsAll = buildMutations(mutationsAll, queries, frag.firstPass)
+		mutationsAllSec = buildMutations(mutationsAllSec, queriesSec, frag.secondPass)
 	}
 
 	if len(queries.Children) == 0 {
@@ -386,7 +386,7 @@ func (urw *UpdateRewriter) Rewrite(
 	var errs error
 	varGen := NewVariableGenerator()
 
-	buildMutation := func(setFrag, delFrag []*mutationFragment, keepError bool) *UpsertMutation {
+	buildMutation := func(setFrag, delFrag []*mutationFragment) *UpsertMutation {
 		var mutSet, mutDel []*dgoapi.Mutation
 		queries := []*gql.GraphQuery{upsertQuery}
 
@@ -460,12 +460,12 @@ func (urw *UpdateRewriter) Rewrite(
 
 	result := []*UpsertMutation{}
 
-	firstPass := buildMutation(setFragF, delFragF, true)
+	firstPass := buildMutation(setFragF, delFragF)
 	if len(firstPass.Mutations) > 0 {
 		result = append(result, firstPass)
 	}
 
-	secondPass := buildMutation(setFragS, delFragS, false)
+	secondPass := buildMutation(setFragS, delFragS)
 	if len(secondPass.Mutations) > 0 {
 		result = append(result, secondPass)
 	}
@@ -790,7 +790,7 @@ func rewriteObject(
 			if !ok {
 				errFrag := newFragment(nil)
 				errFrag.err = errors.New("encountered an XID that isn't a string")
-				return &mutationRes{firstPass: []*mutationFragment{errFrag}}
+				return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
@@ -812,7 +812,7 @@ func rewriteObject(
 					xidObj, obj) || (invField != nil && invField.Type().ListType() == nil) {
 					errFrag := newFragment(nil)
 					errFrag.err = errors.Errorf("duplicate XID found: %s", xidString)
-					return &mutationRes{firstPass: []*mutationFragment{errFrag}}
+					return &mutationRes{secondPass: []*mutationFragment{errFrag}}
 				}
 			} else {
 				// if not encountered till now, add it to the map
@@ -852,7 +852,7 @@ func rewriteObject(
 			} else {
 				name = id.Name()
 			}
-			return &mutationRes{firstPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
+			return &mutationRes{secondPass: invalidObjectFragment(fmt.Errorf("%s is not provided", name),
 				xidFrag, variable, xidString)}
 		}
 	}
