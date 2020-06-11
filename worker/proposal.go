@@ -166,6 +166,14 @@ func (n *node) proposeAndWait(ctx context.Context, proposal *pb.Proposal) (perr 
 			}
 			su, ok := schema.State().Get(ctx, edge.Attr)
 			if !ok {
+				// We don't allow mutations for reserved predicates if the schema for them doesn't
+				// already exist.
+				if x.IsReservedPredicate(edge.Attr) {
+					return errors.Errorf("Can't store predicate `%s` as it is prefixed with "+
+						"`dgraph.` which is reserved as the namespace for dgraph's internal "+
+						"types/predicates.",
+						edge.Attr)
+				}
 				continue
 			} else if err := ValidateAndConvert(edge, &su); err != nil {
 				return err

@@ -173,7 +173,7 @@ func (h *fileHandler) Load(uri *url.URL, backupId string, fn loadFn) LoadResult 
 			// of the last backup.
 			predSet := manifests[len(manifests)-1].getPredsInGroup(gid)
 
-			groupMaxUid, err := fn(fp, int(gid), predSet)
+			groupMaxUid, err := fn(fp, gid, predSet)
 			if err != nil {
 				return LoadResult{0, 0, err}
 			}

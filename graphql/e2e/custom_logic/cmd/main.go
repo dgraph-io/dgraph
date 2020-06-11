@@ -1154,6 +1154,7 @@ func main() {
 	// for queries
 	vsch := graphql.MustParseSchema(graphqlResponses["validcountry"].Schema, &query{})
 	http.Handle("/validcountry", &relay.Handler{Schema: vsch})
+	http.HandleFunc("/argsonfields", commonGraphqlHandler("argsonfields"))
 	http.HandleFunc("/validcountrywitherror", commonGraphqlHandler("validcountrywitherror"))
 	http.HandleFunc("/graphqlerr", commonGraphqlHandler("graphqlerr"))
 	http.Handle("/validcountries", &relay.Handler{

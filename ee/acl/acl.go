@@ -438,7 +438,7 @@ func chMod(conf *viper.Viper) error {
 
 	ruleQuery := fmt.Sprintf(`
 	{
-		var(func: eq(dgraph.xid, "%s")) @filter(type(Group)) {
+		var(func: eq(dgraph.xid, "%s")) @filter(type(dgraph.type.Group)) {
 			gUID as uid
 			rUID as dgraph.acl.rule @filter(eq(dgraph.rule.predicate, "%s"))
 		}
@@ -519,7 +519,7 @@ func chMod(conf *viper.Viper) error {
 func queryUser(ctx context.Context, txn *dgo.Txn, userid string) (user *User, err error) {
 	query := `
     query search($userid: string){
-      user(func: eq(dgraph.xid, $userid)) @filter(type(User)) {
+      user(func: eq(dgraph.xid, $userid)) @filter(type(dgraph.type.User)) {
 	    uid
         dgraph.xid
         dgraph.user.group {
@@ -568,7 +568,7 @@ func queryGroup(ctx context.Context, txn *dgo.Txn, groupid string,
 	// write query header
 	query := fmt.Sprintf(`
 		query search($groupid: string){
-			group(func: eq(dgraph.xid, $groupid)) @filter(type(Group)) {
+			group(func: eq(dgraph.xid, $groupid)) @filter(type(dgraph.type.Group)) {
 				uid
 				%s
 			}
