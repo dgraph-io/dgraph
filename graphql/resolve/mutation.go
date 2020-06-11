@@ -169,41 +169,27 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 	span := otrace.FromContext(ctx)
 	stop := x.SpanTimer(span, "resolveMutation")
 	defer stop()
-	//
-	//resolved:=&Resolved{}
-	//resolved.Extensions=&schema.Extensions{}
-	//resolved.Extensions.Tracing=&schema.Trace{}
-	//resolved.Extensions.Tracing.Execution = []*schema.ResolverTrace {
-	//	{ParentType: "Mutation",
-	//		FieldName:  m.ResponseName(),
-	//		ReturnType: m.Type().String(),
-	//		Path : []interface{}{m.ResponseName()},
-	//
-	//	}}
-	trace := &schema.ResolverTrace{
-		  ParentType: "Mutation",
-			FieldName:  m.ResponseName(),
-			ReturnType: m.Type().String(),
-			Path : []interface{}{m.ResponseName()},
-
-		}
-	startTime, _ := ctx.Value("starttime").(time.Time)
-	timers := schema.NewOffsetTimerFactory(startTime)
-	//timer := timers.NewOffsetTimer(&resolved.Extensions.Tracing.Execution[0].OffsetDuration)
-	timer := timers.NewOffsetTimer(&trace.OffsetDuration)
-	timer.Start()
-	defer timer.Stop()
 	if span != nil {
 		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", m.Alias(), m.MutationType())
 	}
 
-	resolved1, success := mr.rewriteAndExecute(ctx, m)
-	mr.resultCompleter.Complete(ctx, resolved1)
-	//resolved.Extensions.Tracing.Execution[0].Dgraph=resolved1.Extensions.Tracing.Execution[0].Dgraph
-	//resolved1.Extensions.Tracing.Execution[0]=resolved.Extensions.Tracing.Execution[0]
-	trace.Dgraph = resolved1.Dgraph
-	resolved1.trace = []*schema.ResolverTrace{trace}
-	return resolved1, success
+	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	tf := schema.NewOffsetTimerFactory(resolveStartTime)
+	resolverTrace := &schema.ResolverTrace{
+		Path:       []interface{}{m.ResponseName()},
+		ParentType: "Mutation",
+		FieldName:  m.ResponseName(),
+		ReturnType: m.Type().String(),
+	}
+	timer := tf.NewOffsetTimer(&resolverTrace.OffsetDuration)
+	timer.Start()
+	defer timer.Stop()
+
+	resolved, success := mr.rewriteAndExecute(ctx, m)
+	mr.resultCompleter.Complete(ctx, resolved)
+	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution[0].Dgraph
+	resolved.Extensions.Tracing.Execution[0] = resolverTrace
+	return resolved, success
 }
 
 func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}) int {
@@ -216,8 +202,7 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 	}
 }
 
-func (mr *dgraphResolver) rewriteAndExecute(
-	ctx context.Context,
+func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
 	var mutResp *dgoapi.Response
 	commit := false
@@ -232,22 +217,27 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 	}()
 
+	dgraphMutationDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	ext := &schema.Extensions{
+		Tracing: &schema.Trace{
+			Execution: []*schema.ResolverTrace{
+				{
+					Dgraph: []*schema.LabeledOffsetDuration{
+						dgraphMutationDuration,
+						dgraphQueryDuration,
+					},
+				},
+			},
+		},
+	}
+
 	emptyResult := func(err error) *Resolved {
-
-		dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
-		dgraphDuration1 := &schema.LabeledOffsetDuration{Label: "query"}
-		dgraphDuration.StartOffset = 0
-		dgraphDuration1.StartOffset = 0
-		dgraphDuration.Duration = 0
-		dgraphDuration1.Duration = 0
-
 		return &Resolved{
-			Data:   map[string]interface{}{mutation.Name(): nil},
-			Field:  mutation,
-			Err:    err,
-			Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
-			//Extensions:&schema.Extensions{Tracing:&schema.Trace{Execution:[]*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1}}}}},
-
+			Data:       map[string]interface{}{mutation.Name(): nil},
+			Field:      mutation,
+			Err:        err,
+			Extensions: ext,
 		}
 	}
 
@@ -261,22 +251,23 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Query:     dgraph.AsString(upsert.Query),
 		Mutations: upsert.Mutations,
 	}
-	dgraphDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
-	dgraphDuration1 := &schema.LabeledOffsetDuration{Label: "query"}
-	startTime, _ := ctx.Value("starttime").(time.Time)
-	timers1 := schema.NewOffsetTimerFactory(startTime)
-	timer1 := timers1.NewOffsetTimer(&dgraphDuration.OffsetDuration)
-	timer1.Start()
+
+	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	tf := schema.NewOffsetTimerFactory(resolveStartTime)
+	mutationTimer := tf.NewOffsetTimer(&dgraphMutationDuration.OffsetDuration)
+	mutationTimer.Start()
 
 	mutResp, err = mr.executor.Execute(ctx, req)
+
+	mutationTimer.Stop()
+
 	if err != nil {
-		gqlErr := schema.GQLWrapLocationf(
-			err, mutation.Location(), "mutation %s failed", mutation.Name())
+		gqlErr := schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed",
+			mutation.Name())
 		return emptyResult(gqlErr), resolverFailed
 	}
-	timer1.Stop()
 
-	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
+	ext.TouchedUids = mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	result := make(map[string]interface{})
 	if req.Query != "" && len(mutResp.GetJson()) != 0 {
 		if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
@@ -306,30 +297,25 @@ func (mr *dgraphResolver) rewriteAndExecute(
 			resolverFailed
 	}
 	commit = true
-	startTime, _ = ctx.Value("starttime").(time.Time)
-	timers2 := schema.NewOffsetTimerFactory(startTime)
-	timer2 := timers2.NewOffsetTimer(&dgraphDuration1.OffsetDuration)
-	timer2.Start()
+
+	queryTimer := tf.NewOffsetTimer(&dgraphQueryDuration.OffsetDuration)
+	queryTimer.Start()
+
 	qryResp, err := mr.executor.Execute(ctx,
 		&dgoapi.Request{
 			Query:    dgraph.AsString(dgQuery),
 			ReadOnly: true,
 		})
+
+	queryTimer.Stop()
+
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
-	timer2.Stop()
 
-	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
-
-	// merge the extensions we got from Mutate and Query into extM
-	extM.Merge(extQ)
-
+	ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), errs)
-	resolved.Extensions = extM
-	//resolved.Extensions.Tracing=&schema.Trace{}
-	//resolved.Extensions.Tracing.Execution = []*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1}}}
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{
@@ -339,8 +325,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				}},
 			Field:      mutation,
 			Err:        err,
-			Extensions:extM,
-			Dgraph: []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1},
+			Extensions: ext,
 		}, resolverSucceeded
 	}
 
@@ -352,7 +337,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgRes[schema.NumUid] = numUids
 	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
 	resolved.Field = mutation
-    resolved.Dgraph= []*schema.LabeledOffsetDuration{dgraphDuration, dgraphDuration1}
+	resolved.Extensions = ext
 
 	return resolved, resolverSucceeded
 }

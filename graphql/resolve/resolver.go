@@ -46,7 +46,8 @@ import (
 )
 
 const (
-	methodResolve = "RequestResolver.Resolve"
+	methodResolve    = "RequestResolver.Resolve"
+	resolveStartTime = "resolveStartTime"
 
 	resolverFailed    = false
 	resolverSucceeded = true
@@ -118,7 +119,6 @@ type ResultCompleter interface {
 type RequestResolver struct {
 	schema    schema.Schema
 	resolvers ResolverFactory
-	resp      *schema.Response
 }
 
 // A resolverFactory is the main implementation of ResolverFactory.  It stores a
@@ -167,9 +167,6 @@ type Resolved struct {
 	Field      schema.Field
 	Err        error
 	Extensions *schema.Extensions
-	trace      []*schema.ResolverTrace
-	//timers     schema.TimerFactory
-	Dgraph     []*schema.LabeledOffsetDuration `json:"dgraph"`
 }
 
 // CompletionFunc is an adapter that allows us to compose completions and build a
@@ -383,20 +380,21 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
-	resp := &schema.Response{}
-	trace := &schema.Trace{
-		Version:   x.Version(),
-		StartTime: time.Now(),
+	resp := &schema.Response{
+		Extensions: &schema.Extensions{
+			Tracing: &schema.Trace{
+				Version:   x.Version(),
+				StartTime: time.Now(),
+			},
+		},
 	}
-	//timers := schema.NewOffsetTimerFactory(trace.StartTime)
-	ctx = context.WithValue(ctx, "starttime", trace.StartTime)
 	defer func() {
-		trace.EndTime = time.Now()
-		trace.Duration = trace.EndTime.Sub(trace.StartTime).Nanoseconds()
+		resp.Extensions.Tracing.EndTime = time.Now()
+		resp.Extensions.Tracing.Duration = resp.Extensions.Tracing.EndTime.Sub(resp.Extensions.
+			Tracing.StartTime).Nanoseconds()
 	}()
-	resp.Extensions = &schema.Extensions{
-		Tracing: trace,
-	}
+	ctx = context.WithValue(ctx, resolveStartTime, resp.Extensions.Tracing.StartTime)
+
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
@@ -431,15 +429,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				defer wg.Done()
 				defer api.PanicHandler(
 					func(err error) {
-						dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
-						dgraphDuration.StartOffset = 0
-						dgraphDuration.Duration = 0
 						allResolved[storeAt] = &Resolved{
-							Data:   nil,
-							Field:  q,
-							Err:    err,
-							Extensions:&schema.Extensions{Tracing:&schema.Trace{Execution:[]*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration}}}}},
-							//timers: timers,
+							Data:  nil,
+							Field: q,
+							Err:   err,
 						}
 					})
 
@@ -450,18 +443,10 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 		// The GraphQL data response needs to be written in the same order as the
 		// queries in the request.
-
 		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
-
-			//res.Extensions.Tracing.Execution = []*schema.ResolverTrace {
-			//	{ParentType: "Query",
-			//	}}
-
 			addResult(resp, res)
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 
 		}
 	}
@@ -499,13 +484,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			}
 
 			var res *Resolved
-			//res.Extensions=&schema.Extensions{}
-			//res.Extensions.Tracing=&schema.Trace{}
-			//res.Extensions.Tracing.Execution = []*schema.ResolverTrace {{ParentType: "Mutation",}}
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			addResult(resp, res)
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		resolveQueries()
