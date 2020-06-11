@@ -1335,7 +1335,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	// Filter out UIDs that don't have atleast one UID in every child.
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
-		var m map[string]bool
+		m := make(map[string]bool)
 		for _, child := range sg.Children {
 			m[child.Attr] = true
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
