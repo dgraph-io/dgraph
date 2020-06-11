@@ -82,7 +82,6 @@ func TestLoaderXidmap(t *testing.T) {
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	expected := `{
@@ -97,8 +96,6 @@ func TestLoaderXidmap(t *testing.T) {
 	err=json.Unmarshal(b,res1)
 	require.NoError(t, err)
 	require.JSONEq(t, expected, string(res1.Data))
-	//require.JSONEq(t, expected, string(b))
-
 
 	require.NoError(t, copyExportFiles(tmpDir))
 
