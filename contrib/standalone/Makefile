@@ -11,6 +11,7 @@
 #    make DGRAPH_VERSION=master
 .PHONY: all build version
 
+export DOCKER_IMAGE ?= dgraph/standalone
 export DGRAPH_VERSION ?= latest
 
 all: build version
@@ -19,4 +20,4 @@ build:
 	./hooks/build
 
 version:
-	docker run dgraph/standalone:$(DGRAPH_VERSION) dgraph version
+	docker run $(DOCKER_IMAGE):$(DGRAPH_VERSION) dgraph version
