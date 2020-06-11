@@ -35,7 +35,7 @@ var (
 	dummyVersion = &version{}
 )
 
-type versionComparisonResult int8
+type versionComparisonResult uint8
 
 const (
 	alpha    = "alpha"
