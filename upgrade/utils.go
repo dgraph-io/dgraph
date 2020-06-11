@@ -20,12 +20,21 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
+
+	"github.com/dgraph-io/dgraph/protos/pb"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
+)
+
+var (
+	reservedNameError = fmt.Errorf("new name can't start with `dgraph.`, please try again! ")
+	existingNameError = fmt.Errorf("new name can't be same as a name in existing schema, " +
+		"please try again! ")
 )
 
 // getDgoClient creates a gRPC connection and uses that to create a new dgo client.
@@ -56,6 +65,8 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 	return dg, conn, nil
 }
 
+// getQueryResult executes the given query and unmarshals the result in given pointer queryResPtr.
+// If any error is encountered, it returns the error.
 func getQueryResult(dg *dgo.Dgraph, query string, queryResPtr interface{}) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -72,6 +83,8 @@ func getQueryResult(dg *dgo.Dgraph, query string, queryResPtr interface{}) error
 	return nil
 }
 
+// mutateWithClient uses the given dgraph client to execute the given mutation.
+// It retries max 3 times before returning failure error, if any.
 func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 	if mutation == nil {
 		return nil
@@ -96,10 +109,131 @@ func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 	return err
 }
 
+// copyMap returns a shallow copy of the input map
 func copyMap(m map[string]interface{}) map[string]interface{} {
 	m1 := make(map[string]interface{})
 	for k, v := range m {
 		m1[k] = v
 	}
 	return m1
+}
+
+// askUserForNewName prompts the user to input a new name on the terminal,
+// and validates that the user-provided name is not reserved as well as doesn't exist in the
+// existingNameMap argument. It will only return the newName if the user provides a valid name,
+// otherwise it will ask the user to keep trying again until a valid name is not obtained.
+func askUserForNewName(oldName string, checkReservedFunc func(string) bool,
+	existingNameMap map[string]struct{}) string {
+	var newName string
+
+	// until the user doesn't supply a valid name, keep asking him
+	for {
+		fmt.Printf("Enter new name for `%s`: ", oldName)
+		if _, err := fmt.Scan(&newName); err != nil {
+			fmt.Println("Something went wrong while scanning input: ", err)
+			fmt.Println("Try again!")
+			continue
+		}
+		if checkReservedFunc(newName) {
+			fmt.Println(reservedNameError)
+			continue
+		}
+		if _, ok := existingNameMap[newName]; ok {
+			fmt.Println(existingNameError)
+			continue
+		}
+		// if no error encountered, means name is valid, so break
+		break
+	}
+
+	return newName
+}
+
+// getPredSchemaString generates a string which can be used to alter the schema for a predicate.
+// It uses newPredName as the name of the predicate, other things are same as what is provided in
+// schemaNode argument.
+func getPredSchemaString(newPredName string, schemaNode *pb.SchemaNode) string {
+	var builder strings.Builder
+	builder.WriteString(newPredName)
+	builder.WriteString(": ")
+
+	if schemaNode.List {
+		builder.WriteString("[")
+	}
+	builder.WriteString(schemaNode.Type)
+	if schemaNode.List {
+		builder.WriteString("]")
+	}
+	builder.WriteString(" ")
+
+	if schemaNode.Count {
+		builder.WriteString("@count ")
+	}
+	if schemaNode.Index {
+		builder.WriteString("@index(")
+		comma := ""
+		for _, tokenizer := range schemaNode.Tokenizer {
+			builder.WriteString(comma)
+			builder.WriteString(tokenizer)
+			comma = ", "
+		}
+		builder.WriteString(") ")
+	}
+	if schemaNode.Lang {
+		builder.WriteString("@lang ")
+	}
+	if schemaNode.NoConflict {
+		builder.WriteString("@noconflict ")
+	}
+	if schemaNode.Reverse {
+		builder.WriteString("@reverse ")
+	}
+	if schemaNode.Upsert {
+		builder.WriteString("@upsert ")
+	}
+
+	builder.WriteString(".\n")
+
+	return builder.String()
+}
+
+// getTypeSchemaString generates a string which can be used to alter a type in schema.
+// It generates the type string using new type and predicate names. So, if this type
+// previously had a predicate for which we got a new name, then the generated string
+// will contain the new name for that predicate. For example:
+// initialType:
+// 	type {
+// 		name
+// 		age
+// 	}
+// also,
+// 	newPredNames = {
+// 		"age": "mAge'
+// 	}
+// then returned type string will be:
+// 	type {
+// 		name
+// 		mAge
+// 	}
+func getTypeSchemaString(newTypeName string, typeNode *schemaTypeNode,
+	newPredNames map[string]string) string {
+	var builder strings.Builder
+	builder.WriteString("type ")
+	builder.WriteString(newTypeName)
+	builder.WriteString(" {\n")
+
+	for _, oldPred := range typeNode.Fields {
+		builder.WriteString("  ")
+		newPredName, ok := newPredNames[oldPred.Name]
+		if ok {
+			builder.WriteString(newPredName)
+		} else {
+			builder.WriteString(oldPred.Name)
+		}
+		builder.WriteString("\n")
+	}
+
+	builder.WriteString("}\n")
+
+	return builder.String()
 }
