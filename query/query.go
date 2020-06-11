@@ -548,10 +548,13 @@ func treeCopy(gq *gql.GraphQuery, sg *SubGraph) error {
 			IsInternal:   gchild.IsInternal,
 		}
 
-		//TODO: apply from gchild. Allow override from sg. OR should it be vice-versa? --- pshah
-		args.Cascade = gchild.Cascade
-		if len(sg.Params.Cascade) != 0 {
-			args.Cascade = sg.Params.Cascade
+		// If parent has @cascade (with or without params), inherit @cascade (with no params)
+		if len(sg.Params.Cascade) > 0 {
+			args.Cascade = append(args.Cascade, "__all__")
+		}
+		// Allow over-riding at this level.
+		if len(gchild.Cascade) > 0 {
+			args.Cascade = gchild.Cascade
 		}
 
 		if gchild.IsCount {

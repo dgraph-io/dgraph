@@ -660,8 +660,11 @@ func (f *field) Include() bool {
 }
 
 func (f *field) Cascade() []string {
-	// how do we handle in graphql? --- TODO/pshah . Need help.
-	return nil
+
+	if f.field.Directives.ForName(cascadeDirective) == nil {
+		return nil
+	}
+	return []string{"__all__"}
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
