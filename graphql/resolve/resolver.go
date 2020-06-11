@@ -447,7 +447,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
-
 		}
 	}
 	// A single request can contain either queries or mutations - not both.
