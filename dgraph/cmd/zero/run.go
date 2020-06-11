@@ -203,6 +203,12 @@ func run() {
 			return true, true
 		}
 	}
+
+	if opts.rebalanceInterval <= 0 {
+		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
+			opts.rebalanceInterval)
+	}
+
 	grpc.EnableTracing = false
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
@@ -300,6 +306,8 @@ func run() {
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
+
+		x.RemoveCidFile()
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")

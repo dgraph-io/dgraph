@@ -23,9 +23,10 @@ run() {
   export DGRAPH_ENDPOINT=${DGRAPH_ENDPOINT:-"https://play.dgraph.io/query?latency=true"}
 
 
-  HUGO_TITLE="Dgraph Doc - Preview" \
-  VERSIONS=${VERSION_STRING} \
-  CURRENT_BRANCH="master" \
+  export HUGO_TITLE="Dgraph Doc - Preview" \
+  export VERSIONS=${VERSION_STRING} \
+  export CURRENT_BRANCH="master" \
+  export CURRENT_VERSION=${CURRENT_VERSION}
 
   pushd "$(dirname "$0")/.." > /dev/null
   pushd themes > /dev/null
@@ -46,10 +47,10 @@ run() {
     hugo --destination=public --baseURL="$2" 1> /dev/null
     echo -e "$(date) $GREEN  Done building. $RESET"
   else
-    CURRENT_VERSION=${CURRENT_VERSION} hugo server -w --baseURL=http://localhost:1313
+    hugo server -w --baseURL=http://localhost:1313
   fi
   popd > /dev/null
 }
 
-run $1 $2
+run "$1" "$2"
 

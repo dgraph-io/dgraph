@@ -3087,11 +3087,11 @@ Calculating the average ratings of users requires a variable that maps users to 
 }
 {{</ runnable >}}
 
-## K-Shortest Path Queries
+## Shortest Path Queries
 
 The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
-By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
+**K-Shortest Path queries:** By default the shortest path is returned. With `numpaths: k`, and `k > 1`, the k-shortest paths are returned. Cyclical paths are pruned out from the result of k-shortest path query. With `depth: n`, the paths up to `n` depth away are returned.
 
 {{% notice "note" %}}
 - If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
@@ -3277,8 +3277,9 @@ Some points to keep in mind for shortest path queries:
 
 - Weights must be non-negative. Dijkstra's algorithm is used to calculate the shortest paths.
 - Only one facet per predicate in the shortest query block is allowed.
-- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result.
-- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path. All k paths are returned in `_path_`.
+- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result. For queries with `numpaths` > 1, `_path_` contains all the paths.
+- Cyclical paths are not included in the result of k-shortest path query.
+- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path which will be the shortest path among the k paths. All k paths are returned in `_path_`.
 
 ## Recurse Query
 

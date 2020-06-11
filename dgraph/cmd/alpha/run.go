@@ -677,5 +677,6 @@ func run() {
 	adminCloser.SignalAndWait()
 	glog.Info("Disposing server state.")
 	worker.State.Dispose()
+	x.RemoveCidFile()
 	glog.Infoln("Server shutdown. Bye!")
 }
