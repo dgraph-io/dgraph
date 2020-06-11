@@ -14,29 +14,4 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package utils
-
-import (
-	"testing"
-
-	"github.com/ChainSafe/gossamer/lib/common"
-	"github.com/stretchr/testify/require"
-)
-
-// GetStorage calls the endpoint state_getStorage
-func GetStorage(t *testing.T, node *Node, key []byte) []byte {
-	respBody, err := PostRPC(StateGetStorage, NewEndpoint(node.RPCPort), "[\""+common.BytesToHex(key)+"\"]")
-	require.NoError(t, err)
-
-	v := new(string)
-	err = DecodeRPC(t, respBody, v)
-	require.NoError(t, err)
-	if *v == "" {
-		return []byte{}
-	}
-
-	value, err := common.HexToBytes(*v)
-	require.NoError(t, err)
-
-	return value
-}
+package sync

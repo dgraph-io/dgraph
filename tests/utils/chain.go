@@ -29,7 +29,7 @@ import (
 
 // GetHeader calls the endpoint chain_getHeader
 func GetHeader(t *testing.T, node *Node, hash common.Hash) *types.Header { //nolint
-	respBody, err := PostRPC(t, ChainGetHeader, NewEndpoint(node.RPCPort), "[\""+hash.String()+"\"]")
+	respBody, err := PostRPC(ChainGetHeader, NewEndpoint(node.RPCPort), "[\""+hash.String()+"\"]")
 	require.NoError(t, err)
 
 	header := new(modules.ChainBlockHeaderResponse)
@@ -41,7 +41,7 @@ func GetHeader(t *testing.T, node *Node, hash common.Hash) *types.Header { //nol
 
 // GetChainHead calls the endpoint chain_getHeader to get the latest chain head
 func GetChainHead(t *testing.T, node *Node) *types.Header {
-	respBody, err := PostRPC(t, ChainGetHeader, NewEndpoint(node.RPCPort), "[]")
+	respBody, err := PostRPC(ChainGetHeader, NewEndpoint(node.RPCPort), "[]")
 	require.NoError(t, err)
 
 	header := new(modules.ChainBlockHeaderResponse)
@@ -53,7 +53,7 @@ func GetChainHead(t *testing.T, node *Node) *types.Header {
 
 // GetBlock calls the endpoint chain_getBlock
 func GetBlock(t *testing.T, node *Node, hash common.Hash) *types.Block {
-	respBody, err := PostRPC(t, ChainGetBlock, NewEndpoint(node.RPCPort), "[\""+hash.String()+"\"]")
+	respBody, err := PostRPC(ChainGetBlock, NewEndpoint(node.RPCPort), "[\""+hash.String()+"\"]")
 	require.NoError(t, err)
 
 	block := new(modules.ChainBlockResponse)

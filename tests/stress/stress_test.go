@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 }
 
 func getPendingExtrinsics(t *testing.T, node *utils.Node) [][]byte {
-	respBody, err := utils.PostRPC(t, utils.AuthorSubmitExtrinsic, utils.NewEndpoint(node.RPCPort), "[]")
+	respBody, err := utils.PostRPC(utils.AuthorSubmitExtrinsic, utils.NewEndpoint(node.RPCPort), "[]")
 	require.NoError(t, err)
 
 	exts := new(modules.PendingExtrinsicsResponse)
@@ -138,6 +138,24 @@ func TestStressSync(t *testing.T) {
 	require.Len(t, errList, 0)
 }
 
+func TestRestartNode(t *testing.T) {
+	nodes, err := utils.InitNodes(numNodes)
+	require.NoError(t, err)
+
+	err = utils.RestartNodes(t, nodes)
+	require.NoError(t, err)
+
+	errList := utils.TearDown(t, nodes)
+	require.Len(t, errList, 0)
+
+	err = utils.RestartNodes(t, nodes)
+	require.NoError(t, err)
+
+	errList = utils.TearDown(t, nodes)
+	require.Len(t, errList, 0)
+
+}
+
 // submitExtrinsicAssertInclusion submits an extrinsic to a random node and asserts that the extrinsic was included in some block
 // and that the nodes remain synced
 func submitExtrinsicAssertInclusion(t *testing.T, nodes []*utils.Node, ext extrinsic.Extrinsic) {
@@ -150,7 +168,7 @@ func submitExtrinsicAssertInclusion(t *testing.T, nodes []*utils.Node, ext extri
 	// send extrinsic to random node
 	idx := rand.Intn(len(nodes))
 	prevHeader := utils.GetChainHead(t, nodes[idx]) // get starting header so that we can lookup blocks by number later
-	respBody, err := utils.PostRPC(t, utils.AuthorSubmitExtrinsic, utils.NewEndpoint(nodes[idx].RPCPort), "\"0x"+txStr+"\"")
+	respBody, err := utils.PostRPC(utils.AuthorSubmitExtrinsic, utils.NewEndpoint(nodes[idx].RPCPort), "\"0x"+txStr+"\"")
 	require.NoError(t, err)
 
 	var hash modules.ExtrinsicHashResponse
