@@ -1838,9 +1838,9 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, for BATCH mode, query"+
-		" `getPosts` can have only one argument whose value should be a variable.\n",
+	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: "+
+		"Type Post; Field comments: inside graphql in @custom directive, for BATCH mode, "+
+		"query `getPosts` can have only one argument whose value should be a variable.\n",
 		res.Errors[0].Error())
 }
 

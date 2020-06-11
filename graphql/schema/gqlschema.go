@@ -190,7 +190,7 @@ type directiveValidator func(
 	typ *ast.Definition,
 	field *ast.FieldDefinition,
 	dir *ast.Directive,
-	secrets map[string]x.SensitiveByteSlice) *gqlerror.Error
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List
 
 type searchTypeIndex struct {
 	gqlType string
@@ -289,38 +289,32 @@ var scalarToDgraph = map[string]string{
 	"Password": "password",
 }
 
+func ValidatorNoOp(
+	sch *ast.Schema,
+	typ *ast.Definition,
+	field *ast.FieldDefinition,
+	dir *ast.Directive,
+	secrets map[string]x.SensitiveByteSlice) gqlerror.List {
+	return nil
+}
+
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective: hasInverseValidation,
-	searchDirective:  searchValidation,
-	dgraphDirective:  dgraphDirectiveValidation,
-	idDirective:      idValidation,
-	secretDirective:  passwordValidation,
-	customDirective:  customDirectiveValidation,
-	remoteDirective:  remoteDirectiveValidation,
-	deprecatedDirective: func(
-		sch *ast.Schema,
-		typ *ast.Definition,
-		field *ast.FieldDefinition,
-		dir *ast.Directive,
-		secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
-		return nil
-	},
+	inverseDirective:    hasInverseValidation,
+	searchDirective:     searchValidation,
+	dgraphDirective:     dgraphDirectiveValidation,
+	idDirective:         idValidation,
+	secretDirective:     passwordValidation,
+	customDirective:     customDirectiveValidation,
+	remoteDirective:     ValidatorNoOp,
+	deprecatedDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
-	authDirective: func(
-		sch *ast.Schema,
-		typ *ast.Definition,
-		field *ast.FieldDefinition,
-		dir *ast.Directive,
-		secrets map[string]x.SensitiveByteSlice) *gqlerror.Error {
-		return nil
-	},
+	authDirective: ValidatorNoOp,
 }
 
 var schemaDocValidations []func(schema *ast.SchemaDocument) gqlerror.List
 var schemaValidations []func(schema *ast.Schema, definitions []string) gqlerror.List
-var defnValidations, typeValidations []func(schema *ast.Schema,
-	defn *ast.Definition) *gqlerror.Error
-var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) *gqlerror.Error
+var defnValidations, typeValidations []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List
+var fieldValidations []func(typ *ast.Definition, field *ast.FieldDefinition) gqlerror.List
 
 func copyAstFieldDef(src *ast.FieldDefinition) *ast.FieldDefinition {
 	var dirs ast.DirectiveList
@@ -425,8 +419,7 @@ func postGQLValidation(schema *ast.Schema, definitions []string,
 				if directiveValidators[dir.Name] == nil {
 					continue
 				}
-				errs = appendIfNotNull(errs,
-					directiveValidators[dir.Name](schema, typ, field, dir, secrets))
+				errs = append(errs, directiveValidators[dir.Name](schema, typ, field, dir, secrets)...)
 			}
 		}
 	}
@@ -463,13 +456,11 @@ func applySchemaValidations(schema *ast.Schema, definitions []string) gqlerror.L
 }
 
 func applyDefnValidations(defn *ast.Definition, schema *ast.Schema,
-	rules []func(schema *ast.Schema, defn *ast.Definition) *gqlerror.Error) gqlerror.List {
+	rules []func(schema *ast.Schema, defn *ast.Definition) gqlerror.List) gqlerror.List {
 	var errs []*gqlerror.Error
-
 	for _, rule := range rules {
-		errs = appendIfNotNull(errs, rule(schema, defn))
+		errs = append(errs, rule(schema, defn)...)
 	}
-
 	return errs
 }
 
@@ -477,7 +468,7 @@ func applyFieldValidations(typ *ast.Definition, field *ast.FieldDefinition) gqle
 	var errs []*gqlerror.Error
 
 	for _, rule := range fieldValidations {
-		errs = appendIfNotNull(errs, rule(typ, field))
+		errs = append(errs, rule(typ, field)...)
 	}
 
 	return errs
