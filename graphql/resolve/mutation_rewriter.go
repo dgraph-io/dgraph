@@ -26,7 +26,6 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
@@ -739,31 +738,6 @@ type mutationRes struct {
 	secondPass []*mutationFragment
 }
 
-func (mf *mutationFragment) print() {
-	fmt.Println(dgraph.AsString(&gql.GraphQuery{Children: mf.queries}))
-	byt, _ := json.MarshalIndent(mf.fragment, "", "    ")
-	fmt.Println(string(byt))
-	fmt.Println(mf.conditions)
-}
-
-func (mr *mutationRes) print() {
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("========First Pass=====")
-	for _, i := range mr.firstPass {
-		i.print()
-	}
-	fmt.Println("========Second Pass=====")
-	for _, i := range mr.secondPass {
-		i.print()
-	}
-	fmt.Println("========End Pass=====")
-	fmt.Println("")
-	fmt.Println("")
-	fmt.Println("")
-}
-
 // rewriteObject rewrites obj to a list of mutation fragments.  See AddRewriter.Rewrite
 // for a description of what those fragments look like.
 //
@@ -1021,29 +995,9 @@ func rewriteObject(
 				//   to remove all friends
 				frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
 			}
-			fmt.Println("")
-			fmt.Println("")
-			fmt.Println("")
-			fmt.Println("========Rewrite object Pass=====")
-			fmt.Println(fieldName)
-			fmt.Println(val)
-			fmt.Println(obj)
-			fmt.Println(xid == nil)
-			fmt.Println("========Frag=====")
-			frags.print()
-			fmt.Println("========Result=====")
-			results.print()
 
 			additionalFrag = appendFragments(additionalFrag, frags.firstPass)
 			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
-
-			fmt.Println("=======Post Result======")
-			results.print()
-
-			fmt.Println("========End Pass=====")
-			fmt.Println("")
-			fmt.Println("")
-			fmt.Println("")
 		}
 	}
 
@@ -1078,26 +1032,6 @@ func rewriteObject(
 	if xid != nil && !atTopLevel && !xidEncounteredFirstTime {
 		results.firstPass = []*mutationFragment{}
 	}
-
-	fmt.Println("==========Final=======")
-	fmt.Println(obj)
-	fmt.Println(deepXID)
-	fmt.Println("==========additional frag==========")
-	for _, i := range additionalFrag {
-		i.print()
-	}
-	fmt.Println("==========parent frag==========")
-	for _, i := range parentFrags {
-		i.print()
-	}
-	fmt.Println("==========xidfrag==========")
-	if xidFrag != nil {
-		xidFrag.print()
-	}
-	fmt.Println("==========result==========")
-
-	results.print()
-	fmt.Println("==========End Final=======")
 
 	return results
 }
@@ -1442,9 +1376,6 @@ func rewriteList(
 		switch obj := obj.(type) {
 		case map[string]interface{}:
 			frag := rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, deepXID, xidMetadata)
-			fmt.Println("========rewrite list=========")
-			frag.print()
-			fmt.Println("========rewrite end list========")
 			result.firstPass = appendFragments(result.firstPass, frag.firstPass)
 			result.secondPass = squashFragments(squashIntoList, result.secondPass, frag.secondPass)
 		default:
@@ -1481,8 +1412,6 @@ func squashIntoList(list, v interface{}, makeCopy bool) interface{} {
 
 func squashIntoObject(label string) func(interface{}, interface{}, bool) interface{} {
 	return func(object, v interface{}, makeCopy bool) interface{} {
-		fmt.Println(object)
-		fmt.Println(v, label)
 		asObject := object.(map[string]interface{})
 		if makeCopy {
 			cpy := make(map[string]interface{}, len(asObject)+1)
