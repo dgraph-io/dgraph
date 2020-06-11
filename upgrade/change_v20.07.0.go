@@ -202,7 +202,7 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 	newPredicateNames := make(map[string]string)
 	if len(reservedPredicatesInSchema) > 0 {
 		fmt.Println("Please provide new names for predicates.")
-		for oldPredName, _ := range reservedPredicatesInSchema {
+		for oldPredName := range reservedPredicatesInSchema {
 			newPredicateNames[oldPredName] = askUserForNewName(oldPredName, x.IsReservedPredicate,
 				nonReservedPredicatesInSchema)
 		}
@@ -212,7 +212,7 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 	newTypeNames := make(map[string]string)
 	if len(reservedTypesInSchema) > 0 {
 		fmt.Println("Please provide new names for types.")
-		for oldTypeName, _ := range reservedTypesInSchema {
+		for oldTypeName := range reservedTypesInSchema {
 			newTypeNames[oldTypeName] = askUserForNewName(oldTypeName, x.IsReservedType,
 				nonReservedTypesInSchema)
 		}

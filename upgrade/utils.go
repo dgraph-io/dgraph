@@ -76,11 +76,7 @@ func getQueryResult(dg *dgo.Dgraph, query string, queryResPtr interface{}) error
 		return err
 	}
 
-	if err = json.Unmarshal(resp.GetJson(), queryResPtr); err != nil {
-		return err
-	}
-
-	return nil
+	return json.Unmarshal(resp.GetJson(), queryResPtr)
 }
 
 // mutateWithClient uses the given dgraph client to execute the given mutation.

@@ -75,7 +75,7 @@ func upgradeACLRules() error {
 	counter := 1
 	var nquads []*api.NQuad
 	for _, group := range groups {
-		if len(group.ACL) == 0 {
+		if group.ACL == "" {
 			continue
 		}
 
