@@ -173,7 +173,7 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", m.Alias(), m.MutationType())
 	}
 
-	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	resolveStartTime, _ := ctx.Value(Start("resolveStartTime")).(time.Time)
 	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	resolverTrace := &schema.ResolverTrace{
 		Path:       []interface{}{m.ResponseName()},
@@ -252,7 +252,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		Mutations: upsert.Mutations,
 	}
 
-	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	resolveStartTime, _ := ctx.Value(Start("resolveStartTime")).(time.Time)
 	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	mutationTimer := tf.NewOffsetTimer(&dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()

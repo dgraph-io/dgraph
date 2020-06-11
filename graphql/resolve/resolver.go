@@ -47,7 +47,6 @@ import (
 
 const (
 	methodResolve    = "RequestResolver.Resolve"
-	resolveStartTime ="resolveStartTime"
 	resolverFailed    = false
 	resolverSucceeded = true
 
@@ -69,6 +68,8 @@ const (
 		"The value was resolved as null (which may trigger GraphQL error propagation) " +
 		"and as much other data as possible returned."
 )
+
+type Start string
 
 // A ResolverFactory finds the right resolver for a query/mutation.
 type ResolverFactory interface {
@@ -392,8 +393,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		resp.Extensions.Tracing.Duration = resp.Extensions.Tracing.EndTime.Sub(resp.Extensions.
 			Tracing.StartTime).Nanoseconds()
 	}()
-
-	ctx = context.WithValue(ctx,resolveStartTime, resp.Extensions.Tracing.StartTime)
+	ctx = context.WithValue(ctx,Start("resolveStartTime"), resp.Extensions.Tracing.StartTime)
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {

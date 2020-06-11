@@ -70,7 +70,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	resolveStartTime, _ :=ctx.Value(Start("resolveStartTime")).(time.Time)
 	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	resolverTrace := &schema.ResolverTrace{
 		Path:       []interface{}{query.ResponseName()},
@@ -118,7 +118,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 
-	resolveStartTime,_ := ctx.Value(resolveStartTime).(time.Time)
+	resolveStartTime,_ :=ctx.Value(Start("resolveStartTime")).(time.Time)
 	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	queryTimer := tf.NewOffsetTimer(&dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
