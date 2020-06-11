@@ -36,7 +36,7 @@ func validateUrl(rawURL string) error {
 	}
 
 	if u.RawQuery != "" {
-		return fmt.Errorf("POST method cannot have variables in url: %s", rawURL)
+		return fmt.Errorf("POST method cannot have query parameters in url: %s", rawURL)
 	}
 	return nil
 }
