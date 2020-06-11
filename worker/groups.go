@@ -819,6 +819,7 @@ START:
 			}
 			if i == 0 {
 				glog.Infof("Received first state update from Zero: %+v", state)
+				x.WriteCidFile(state.Cid)
 			}
 			select {
 			case stateCh <- state:
