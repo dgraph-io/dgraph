@@ -303,6 +303,8 @@ func run() {
 		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
+
+		x.RemoveCidFile()
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")

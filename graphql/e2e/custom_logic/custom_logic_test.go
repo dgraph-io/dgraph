@@ -49,7 +49,7 @@ const (
 		 director: [MovieDirector]
 	 }
 	  type Country @remote {
-		code: String
+		code(size: Int): String
 		name: String
 		states: [State]
 		std: Int
@@ -169,8 +169,8 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 		 })
 	 }
 
-		 # Dgraph.Secret Github-Api-Token random-fake-token
-		 # Dgraph.Secret X-App-Token should-be-overriden
+		 # Dgraph.Secret Github-Api-Token "random-fake-token"
+		 # Dgraph.Secret X-App-Token "should-be-overriden"
 	 `
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
@@ -936,8 +936,8 @@ func TestCustomFieldsShouldForwardHeaders(t *testing.T) {
 		)
   	}
 
-# Dgraph.Secret GITHUB-API-TOKEN some-api-token
-# Dgraph.Secret STRIPE-API-KEY some-api-key
+# Dgraph.Secret GITHUB-API-TOKEN "some-api-token"
+# Dgraph.Secret STRIPE-API-KEY "some-api-key"
   `
 
 	updateSchemaRequireNoGQLErrors(t, schema)
@@ -1207,6 +1207,37 @@ func TestCustomLogicGraphql(t *testing.T) {
 	result := params.ExecuteAsPost(t, alphaURL)
 	common.RequireNoGQLErrors(t, result)
 	require.JSONEq(t, string(result.Data), `{"getCountry1":{"code":"BI","name":"Burundi"}}`)
+}
+
+func TestCustomLogicGraphqlWithArgumentsOnFields(t *testing.T) {
+	schema := customTypes + `
+	type Query {
+		getCountry2(id: ID!): Country!
+		  @custom(
+			http: {
+			  url: "http://mock:8888/argsonfields"
+			  method: "POST"
+			  forwardHeaders: ["Content-Type"]
+			  graphql: "query($id: ID!) { country(code: $id) }"
+			}
+		  )
+	  }`
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+	query := `
+	query {
+		getCountry2(id: "BI"){
+			code(size: 100)
+			name
+		}
+	}`
+	params := &common.GraphQLParams{
+		Query: query,
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	common.RequireNoGQLErrors(t, result)
+	require.JSONEq(t, string(result.Data), `{"getCountry2":{"code":"BI","name":"Burundi"}}`)
 }
 
 func TestCustomLogicGraphqlWithError(t *testing.T) {
