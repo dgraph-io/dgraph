@@ -47,7 +47,7 @@ import (
 
 const (
 	methodResolve    = "RequestResolver.Resolve"
-
+	resolveStartTime ="resolveStartTime"
 	resolverFailed    = false
 	resolverSucceeded = true
 
@@ -393,9 +393,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			Tracing.StartTime).Nanoseconds()
 	}()
 
-	type Start string
-	resolveStartTime := Start("resolveStartTime")
-	ctx = context.WithValue(ctx, resolveStartTime, resp.Extensions.Tracing.StartTime)
+	ctx = context.WithValue(ctx,resolveStartTime, resp.Extensions.Tracing.StartTime)
 
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
