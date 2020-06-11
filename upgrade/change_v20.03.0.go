@@ -22,11 +22,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -51,34 +47,6 @@ type rule struct {
 }
 
 type rules []rule
-
-// getDgoClient creates a gRPC connection and uses that to create a new dgo client.
-// The gRPC.ClientConn returned by this must be closed after use.
-func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
-	alpha := Upgrade.Conf.GetString(alpha)
-
-	// TODO(Aman): add TLS configuration.
-	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
-	if err != nil {
-		return nil, nil, fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
-	}
-
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-
-	if withLogin {
-		userName := Upgrade.Conf.GetString(user)
-		password := Upgrade.Conf.GetString(password)
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		// login to cluster
-		if err = dg.Login(ctx, userName, password); err != nil {
-			x.Check(conn.Close())
-			return nil, nil, fmt.Errorf("unable to login to Dgraph cluster: %w", err)
-		}
-	}
-
-	return dg, conn, nil
-}
 
 func upgradeACLRules() error {
 	dg, conn, err := getDgoClient(true)
@@ -175,28 +143,4 @@ func upgradeACLRules() error {
 	}
 
 	return nil
-}
-
-func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
-	if mutation == nil {
-		return nil
-	}
-
-	mutation.CommitNow = true
-
-	var err error
-	for i := 0; i < 3; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, err = dg.NewTxn().Mutate(ctx, mutation)
-		if err != nil {
-			fmt.Printf("error in running mutation, retrying: %v\n", err)
-			continue
-		}
-
-		return nil
-	}
-
-	return err
 }

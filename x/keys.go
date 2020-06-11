@@ -655,7 +655,7 @@ func IsReservedType(typ string) bool {
 //
 // Pre-defined types are subset of reserved types.
 func IsPreDefinedType(typ string) bool {
-	_, ok := preDefinedTypeMap[strings.ToLower(typ)]
+	_, ok := preDefinedTypeMap[typ]
 	return ok
 }
 
