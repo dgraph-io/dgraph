@@ -677,8 +677,7 @@ func asUID(val interface{}) (uint64, error) {
 
 func mutationsFromFragments(
 	frags []*mutationFragment,
-	setBuilder mutationBuilder,
-	delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
+	setBuilder, delBuilder mutationBuilder) ([]*dgoapi.Mutation, error) {
 
 	mutations := make([]*dgoapi.Mutation, 0, len(frags))
 	var errs x.GqlErrorList
