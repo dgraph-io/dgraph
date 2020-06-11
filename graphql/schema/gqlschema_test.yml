@@ -2534,3 +2534,53 @@ valid_schemas:
           body: "{sid: $id}"
           })
       }
+
+  - name: "ID field can't have @dgraph directive and @search directive"
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id") @search
+          name: String
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't
+          have the @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
+     "locations":[{"line":2, "column":35}]}
+    ]
+
+  - name: "@dgraph directive on ID field and @dgraph directive with reverse pred argument on scalar
+  field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+    only applies to fields with object types.",
+     "locations":[{"line":3, "column":5}]}
+    ]
+
+  - name: "Multiple type: @dgraph directive on ID field and @dgraph directive with reverse pred
+  argument on scalar field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          name: String
+      }
+      type Y {
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only
+     applies to fields with object types.",
+     "locations":[{"line":6, "column":5}]}
+    ]
