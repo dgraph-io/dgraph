@@ -2106,7 +2106,9 @@ func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 	if err != nil {
 		return item.Errorf("Unable to peek lexer after cascade")
 	}
-	if items[0].Typ == itemLeftCurl {
+
+	// e.g. @cascade {  or @cascade @
+	if items[0].Typ == itemLeftCurl || items[0].Typ == itemAt {
 		gq.Cascade = append(gq.Cascade, "__all__") // __all__ implies @cascade, the old directive.
 		return nil
 	}
