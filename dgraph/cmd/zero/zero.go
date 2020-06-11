@@ -603,12 +603,6 @@ func (s *Server) ShouldServe(
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
 
-	if !tablet.Force {
-		// Multiple Groups might be assigned to same tablet, so during proposal we will
-		// check again.
-		tablet.Force = false
-	}
-
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
