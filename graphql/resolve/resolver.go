@@ -431,10 +431,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				defer wg.Done()
 				defer api.PanicHandler(
 					func(err error) {
+						dgraphDuration := &schema.LabeledOffsetDuration{Label: "query"}
+						dgraphDuration.StartOffset = 0
+						dgraphDuration.Duration = 0
 						allResolved[storeAt] = &Resolved{
 							Data:   nil,
 							Field:  q,
 							Err:    err,
+							Extensions:&schema.Extensions{Tracing:&schema.Trace{Execution:[]*schema.ResolverTrace{{Dgraph:[]*schema.LabeledOffsetDuration{dgraphDuration}}}}},
 							//timers: timers,
 						}
 					})
@@ -450,9 +454,14 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		for _, res := range allResolved {
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
+
+			//res.Extensions.Tracing.Execution = []*schema.ResolverTrace {
+			//	{ParentType: "Query",
+			//	}}
+
 			addResult(resp, res)
-			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
+			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 
 		}
 	}
@@ -496,7 +505,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			res, allSuccessful = r.resolvers.mutationResolverFor(m).Resolve(ctx, m)
 			addResult(resp, res)
 			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.Extensions.Tracing.Execution[0])
-			resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
+			//resp.Extensions.Tracing.Execution = append(resp.Extensions.Tracing.Execution, res.trace...)
 		}
 	case op.IsSubscription():
 		resolveQueries()
