@@ -1374,13 +1374,16 @@ func rewriteList(
 	xidMetadata *xidMetadata) *mutationRes {
 
 	result := &mutationRes{}
-
 	result.secondPass = []*mutationFragment{newFragment(make([]interface{}, 0))}
+	foundSecondPass := false
 
 	for _, obj := range objects {
 		switch obj := obj.(type) {
 		case map[string]interface{}:
 			frag := rewriteObject(typ, srcField, srcUID, varGen, withAdditionalDeletes, obj, deepXID, xidMetadata)
+			if len(frag.secondPass) != 0 {
+				foundSecondPass = true
+			}
 			result.firstPass = appendFragments(result.firstPass, frag.firstPass)
 			result.secondPass = squashFragments(squashIntoList, result.secondPass, frag.secondPass)
 		default:
@@ -1390,6 +1393,10 @@ func rewriteList(
 				newFragment(objects),
 			}}
 		}
+	}
+
+	if len(objects) != 0 && !foundSecondPass {
+		result.secondPass = nil
 	}
 
 	return result
