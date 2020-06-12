@@ -28,22 +28,36 @@ import (
 
 // receiveMessages receives messages from the in channel until the specified condition is met
 func (s *Service) receiveMessages(cond func() bool) {
-	go func() {
+	done := false
+
+	go func(done *bool) {
 		for msg := range s.in {
+			if *done {
+				log.Debug("[grandpa] returning from receiveMessages")
+				return
+			}
+
 			log.Debug("[grandpa] received vote message", "msg", msg)
 
-			v, err := s.validateMessage(msg)
-			if err != nil {
-				log.Debug("[grandpa] failed to validate vote message", "message", msg, "error", err)
+			vm, ok := msg.(*VoteMessage)
+			if !ok {
+				log.Warn("[grandpa] failed to cast message to VoteMessage")
 				continue
 			}
 
-			log.Debug("[grandpa] validated vote message", "vote", v, "subround", msg.stage)
+			v, err := s.validateMessage(vm)
+			if err != nil {
+				log.Debug("[grandpa] failed to validate vote message", "message", vm, "error", err)
+				continue
+			}
+
+			log.Debug("[grandpa] validated vote message", "vote", v, "subround", vm.Stage)
 		}
-	}()
+	}(&done)
 
 	for {
 		if cond() {
+			done = true
 			return
 		}
 	}
@@ -64,16 +78,17 @@ func (s *Service) sendMessage(vote *Vote, stage subround) error {
 	}
 
 	s.out <- msg
+	log.Debug("[grandpa] sent VoteMessage", "msg", msg)
 	return nil
 }
 
 // createVoteMessage returns a signed VoteMessage given a header
 func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypair) (*VoteMessage, error) {
 	msg, err := scale.Encode(&FullVote{
-		stage: stage,
-		vote:  vote,
-		round: s.state.round,
-		setID: s.state.setID,
+		Stage: stage,
+		Vote:  vote,
+		Round: s.state.round,
+		SetID: s.state.setID,
 	})
 	if err != nil {
 		return nil, err
@@ -85,17 +100,17 @@ func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypai
 	}
 
 	sm := &SignedMessage{
-		hash:        vote.hash,
-		number:      vote.number,
-		signature:   ed25519.NewSignatureBytes(sig),
-		authorityID: kp.Public().(*ed25519.PublicKey).AsBytes(),
+		Hash:        vote.hash,
+		Number:      vote.number,
+		Signature:   ed25519.NewSignatureBytes(sig),
+		AuthorityID: kp.Public().(*ed25519.PublicKey).AsBytes(),
 	}
 
 	return &VoteMessage{
-		setID:   s.state.setID,
-		round:   s.state.round,
-		stage:   stage,
-		message: sm,
+		SetID:   s.state.setID,
+		Round:   s.state.round,
+		Stage:   stage,
+		Message: sm,
 	}, nil
 }
 
@@ -103,7 +118,7 @@ func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypai
 // it returns the resulting vote if validated, error otherwise
 func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 	// check for message signature
-	pk, err := ed25519.NewPublicKey(m.message.authorityID[:])
+	pk, err := ed25519.NewPublicKey(m.Message.AuthorityID[:])
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +129,7 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 	}
 
 	// check that setIDs match
-	if m.setID != s.state.setID {
+	if m.SetID != s.state.setID {
 		return nil, ErrSetIDMismatch
 	}
 
@@ -124,15 +139,15 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 		return nil, err
 	}
 
-	vote := NewVote(m.message.hash, m.message.number)
+	vote := NewVote(m.Message.Hash, m.Message.Number)
 
 	// if the vote is from ourselves, ignore
 	kb := [32]byte(s.publicKeyBytes())
-	if bytes.Equal(m.message.authorityID[:], kb[:]) {
+	if bytes.Equal(m.Message.AuthorityID[:], kb[:]) {
 		return vote, nil
 	}
 
-	equivocated := s.checkForEquivocation(voter, vote, m.stage)
+	equivocated := s.checkForEquivocation(voter, vote, m.Stage)
 	if equivocated {
 		return nil, ErrEquivocation
 	}
@@ -145,9 +160,9 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
-	if m.stage == prevote {
+	if m.Stage == prevote {
 		s.prevotes[pk.AsBytes()] = vote
-	} else if m.stage == precommit {
+	} else if m.Stage == precommit {
 		s.precommits[pk.AsBytes()] = vote
 	}
 
@@ -220,15 +235,15 @@ func (s *Service) validateVote(v *Vote) error {
 
 func validateMessageSignature(pk *ed25519.PublicKey, m *VoteMessage) error {
 	msg, err := scale.Encode(&FullVote{
-		stage: m.stage,
-		vote:  NewVote(m.message.hash, m.message.number),
-		round: m.round,
-		setID: m.setID,
+		Stage: m.Stage,
+		Vote:  NewVote(m.Message.Hash, m.Message.Number),
+		Round: m.Round,
+		SetID: m.SetID,
 	})
 	if err != nil {
 		return err
 	}
-	ok, err := pk.Verify(msg, m.message.signature[:])
+	ok, err := pk.Verify(msg, m.Message.Signature[:])
 	if err != nil {
 		return err
 	}

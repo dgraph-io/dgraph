@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/state"
-	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -49,26 +48,20 @@ func onSameChain(blockState BlockState, a, b common.Hash) bool {
 	return descendant
 }
 
-func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan *VoteMessage, chan *VoteMessage, chan *types.Header) {
+func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan FinalityMessage, chan FinalityMessage, chan FinalityMessage) {
 	st := newTestState(t)
 	voters := newTestVoters(t)
-	in := make(chan *VoteMessage, 16)
-	out := make(chan *VoteMessage, 16)
-	finalized := make(chan *types.Header)
 
 	cfg := &Config{
 		BlockState: st.Block,
 		Voters:     voters,
 		Keypair:    kp,
-		In:         in,
-		Out:        out,
-		Finalized:  finalized,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	return gs, in, out, finalized
+	return gs, gs.in, gs.out, gs.finalized
 }
 
 func TestGrandpa_BaseCase(t *testing.T) {
@@ -154,29 +147,24 @@ func TestGrandpa_DifferentChains(t *testing.T) {
 	}
 }
 
-func broadcastVotes(from <-chan *VoteMessage, to []chan *VoteMessage, lock *sync.Mutex, done *bool) {
+func broadcastVotes(from <-chan FinalityMessage, to []chan FinalityMessage, done *bool) {
 	for v := range from {
 		for _, tc := range to {
-			lock.Lock()
 			if *done {
 				return
 			}
 
 			tc <- v
-			lock.Unlock()
 		}
 	}
 }
 
-func cleanup(gs *Service, in, out chan *VoteMessage, lock *sync.Mutex, done *bool) {
-	lock.Lock()
+func cleanup(gs *Service, in, out chan FinalityMessage, done *bool) { //nolint
 	*done = true
 	close(in)
-	lock.Unlock()
 
 	gs.chanLock.Lock()
 	gs.stopped = true
-	close(out)
 	gs.chanLock.Unlock()
 }
 
@@ -187,16 +175,14 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 	require.NoError(t, err)
 
 	gss := make([]*Service, len(kr.Keys))
-	ins := make([]chan *VoteMessage, len(kr.Keys))
-	outs := make([]chan *VoteMessage, len(kr.Keys))
-	fins := make([]chan *types.Header, len(kr.Keys))
-
+	ins := make([]chan FinalityMessage, len(kr.Keys))
+	outs := make([]chan FinalityMessage, len(kr.Keys))
+	fins := make([]chan FinalityMessage, len(kr.Keys))
 	done := false
-	lock := sync.Mutex{}
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-		defer cleanup(gs, in, out, &lock, &done)
+		defer cleanup(gs, in, out, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -207,7 +193,7 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &done)
 	}
 
 	for _, gs := range gss {
@@ -218,15 +204,24 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(kr.Keys))
 
-	finalized := make([]*types.Header, len(kr.Keys))
+	finalized := make([]*FinalizationMessage, len(kr.Keys))
 
 	for i, fin := range fins {
-
-		go func(i int, fin <-chan *types.Header) {
+		go func(i int, fin <-chan FinalityMessage) {
 			select {
 			case f := <-fin:
-				t.Log(f)
-				finalized[i] = f
+
+				// receive first message, which is finalized block from previous round
+				if f.(*FinalizationMessage).Round == 0 {
+					select {
+					case f = <-fin:
+					case <-time.After(testTimeout):
+						t.Errorf("did not receive finalized block from %d", i)
+					}
+				}
+
+				finalized[i] = f.(*FinalizationMessage)
+
 			case <-time.After(testTimeout):
 				t.Errorf("did not receive finalized block from %d", i)
 			}
@@ -253,16 +248,14 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	require.NoError(t, err)
 
 	gss := make([]*Service, len(kr.Keys))
-	ins := make([]chan *VoteMessage, len(kr.Keys))
-	outs := make([]chan *VoteMessage, len(kr.Keys))
-	fins := make([]chan *types.Header, len(kr.Keys))
-
+	ins := make([]chan FinalityMessage, len(kr.Keys))
+	outs := make([]chan FinalityMessage, len(kr.Keys))
+	fins := make([]chan FinalityMessage, len(kr.Keys))
 	done := false
-	lock := sync.Mutex{}
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-		defer cleanup(gs, in, out, &lock, &done)
+		defer cleanup(gs, in, out, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -277,7 +270,7 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &done)
 	}
 
 	for _, gs := range gss {
@@ -288,15 +281,24 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(kr.Keys))
 
-	finalized := make([]*types.Header, len(kr.Keys))
+	finalized := make([]*FinalizationMessage, len(kr.Keys))
 
 	for i, fin := range fins {
 
-		go func(i int, fin <-chan *types.Header) {
+		go func(i int, fin <-chan FinalityMessage) {
 			select {
 			case f := <-fin:
-				t.Log(f)
-				finalized[i] = f
+
+				// receive first message, which is finalized block from previous round
+				if f.(*FinalizationMessage).Round == 0 {
+					select {
+					case f = <-fin:
+					case <-time.After(testTimeout):
+						t.Errorf("did not receive finalized block from %d", i)
+					}
+				}
+
+				finalized[i] = f.(*FinalizationMessage)
 			case <-time.After(testTimeout):
 				t.Errorf("did not receive finalized block from %d", i)
 			}
@@ -318,17 +320,16 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 	require.NoError(t, err)
 
 	gss := make([]*Service, len(kr.Keys))
-	ins := make([]chan *VoteMessage, len(kr.Keys))
-	outs := make([]chan *VoteMessage, len(kr.Keys))
-	fins := make([]chan *types.Header, len(kr.Keys))
+	ins := make([]chan FinalityMessage, len(kr.Keys))
+	outs := make([]chan FinalityMessage, len(kr.Keys))
+	fins := make([]chan FinalityMessage, len(kr.Keys))
 
 	done := false
-	lock := sync.Mutex{}
 	r := byte(rand.Intn(256))
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-		defer cleanup(gs, in, out, &lock, &done)
+		defer cleanup(gs, in, out, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -345,7 +346,7 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 	leaves := gss[0].blockState.Leaves()
 
 	for _, out := range outs {
-		go broadcastVotes(out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &done)
 	}
 
 	for _, gs := range gss {
@@ -369,15 +370,24 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(kr.Keys))
 
-	finalized := make([]*types.Header, len(kr.Keys))
+	finalized := make([]*FinalizationMessage, len(kr.Keys))
 
 	for i, fin := range fins {
 
-		go func(i int, fin <-chan *types.Header) {
+		go func(i int, fin <-chan FinalityMessage) {
 			select {
 			case f := <-fin:
-				t.Log(f)
-				finalized[i] = f
+
+				// receive first message, which is finalized block from previous round
+				if f.(*FinalizationMessage).Round == 0 {
+					select {
+					case f = <-fin:
+					case <-time.After(testTimeout):
+						t.Errorf("did not receive finalized block from %d", i)
+					}
+				}
+
+				finalized[i] = f.(*FinalizationMessage)
 			case <-time.After(testTimeout):
 				t.Errorf("did not receive finalized block from %d", i)
 			}
@@ -399,16 +409,14 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 	require.NoError(t, err)
 
 	gss := make([]*Service, len(kr.Keys))
-	ins := make([]chan *VoteMessage, len(kr.Keys))
-	outs := make([]chan *VoteMessage, len(kr.Keys))
-	fins := make([]chan *types.Header, len(kr.Keys))
-
+	ins := make([]chan FinalityMessage, len(kr.Keys))
+	outs := make([]chan FinalityMessage, len(kr.Keys))
+	fins := make([]chan FinalityMessage, len(kr.Keys))
 	done := false
-	lock := sync.Mutex{}
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
-		defer cleanup(gs, in, out, &lock, &done)
+		defer cleanup(gs, in, out, &done)
 
 		gss[i] = gs
 		ins[i] = in
@@ -419,7 +427,7 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 	}
 
 	for _, out := range outs {
-		go broadcastVotes(out, ins, &lock, &done)
+		go broadcastVotes(out, ins, &done)
 	}
 
 	for _, gs := range gss {
@@ -435,15 +443,24 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 		wg := sync.WaitGroup{}
 		wg.Add(len(kr.Keys))
 
-		finalized := make([]*types.Header, len(kr.Keys))
+		finalized := make([]*FinalizationMessage, len(kr.Keys))
 
 		for i, fin := range fins {
 
-			go func(i int, fin <-chan *types.Header) {
+			go func(i int, fin <-chan FinalityMessage) {
 				select {
 				case f := <-fin:
-					t.Log(f)
-					finalized[i] = f
+
+					// receive first message, which is finalized block from previous round
+					if f.(*FinalizationMessage).Round == uint64(j) {
+						select {
+						case f = <-fin:
+						case <-time.After(testTimeout):
+							t.Errorf("did not receive finalized block from %d", i)
+						}
+					}
+
+					finalized[i] = f.(*FinalizationMessage)
 				case <-time.After(testTimeout):
 					t.Errorf("did not receive finalized block from %d", i)
 				}
@@ -457,7 +474,7 @@ func TestPlayGrandpaRound_MultipleRounds(t *testing.T) {
 		head := gss[0].blockState.(*state.BlockState).BestBlockHash()
 		for _, fb := range finalized {
 			require.NotNil(t, fb)
-			require.Equal(t, head, fb.Hash())
+			require.Equal(t, head, fb.Vote.hash)
 			require.Equal(t, finalized[0], fb)
 		}
 

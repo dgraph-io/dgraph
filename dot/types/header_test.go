@@ -16,4 +16,27 @@
 
 package types
 
-// TODO: improve dot tests #687
+import (
+	"bytes"
+	"math/big"
+	"testing"
+
+	"github.com/ChainSafe/gossamer/lib/common"
+
+	"github.com/stretchr/testify/require"
+)
+
+func TestDecodeHeader(t *testing.T) {
+	header, err := NewHeader(common.Hash{}, big.NewInt(0), common.Hash{}, common.Hash{}, [][]byte{{}})
+	require.NoError(t, err)
+
+	enc, err := header.Encode()
+	require.NoError(t, err)
+
+	rw := &bytes.Buffer{}
+	rw.Write(enc)
+	dec, err := new(Header).Decode(rw)
+	require.NoError(t, err)
+	dec.Hash()
+	require.Equal(t, header, dec)
+}

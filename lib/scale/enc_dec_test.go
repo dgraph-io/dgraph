@@ -17,9 +17,13 @@
 package scale
 
 import (
+	"bytes"
+	"io"
 	"math/big"
 	"reflect"
 	"testing"
+
+	"github.com/ChainSafe/gossamer/lib/common"
 
 	"github.com/stretchr/testify/require"
 )
@@ -109,4 +113,58 @@ func TestEncodeDecodeBigInt(t *testing.T) {
 		require.Equal(t, test, dec)
 	}
 
+}
+
+type testType struct {
+	Data [64]byte
+}
+
+func (t *testType) Encode() ([]byte, error) {
+	return Encode(t)
+}
+
+func (t *testType) Decode(r io.Reader) (*testType, error) {
+	sd := Decoder{Reader: r}
+	ti, err := sd.Decode(t)
+	return ti.(*testType), err
+}
+
+func TestEncodeDecodeCustom_NoRecursion(t *testing.T) {
+	tt := new(testType)
+	tt.Data = [64]byte{1, 2, 3, 4}
+	enc, err := tt.Encode()
+	require.NoError(t, err)
+
+	rw := &bytes.Buffer{}
+	rw.Write(enc)
+	dec, err := new(testType).Decode(rw)
+	require.NoError(t, err)
+	require.Equal(t, tt, dec)
+}
+
+type MyType [32]byte
+
+func (t *MyType) Encode() ([]byte, error) {
+	return t[:], nil
+}
+
+func (t *MyType) Decode(r io.Reader) (*MyType, error) {
+	m, err := common.ReadHash(r)
+	mt := MyType(m)
+	return &mt, err
+}
+
+type testType2 struct {
+	Data *MyType
+}
+
+func TestEncodeDecodeCustom_InsideStruct(t *testing.T) {
+	tt := new(testType2)
+	tt.Data = &MyType{1, 2, 3, 4}
+	enc, err := Encode(tt)
+	require.NoError(t, err)
+
+	dec, err := Decode(enc, new(testType2))
+	require.NoError(t, err)
+	require.Equal(t, tt, dec)
 }

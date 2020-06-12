@@ -206,7 +206,7 @@ func TestValidateMessage_InvalidSignature(t *testing.T) {
 	msg, err := gs.createVoteMessage(NewVoteFromHeader(h), prevote, kr.Alice)
 	require.NoError(t, err)
 
-	msg.message.signature[63] = 0
+	msg.Message.Signature[63] = 0
 
 	_, err = gs.validateMessage(msg)
 	require.Equal(t, err, ErrInvalidSignature)

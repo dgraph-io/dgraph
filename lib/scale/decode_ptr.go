@@ -75,7 +75,7 @@ func (sd *Decoder) DecodeCustom(t interface{}) (interface{}, error) {
 		return t, nil
 	}
 
-	return nil, errors.New("cannot decode custom type")
+	return nil, fmt.Errorf("cannot decode custom type %s", someType.String())
 }
 
 // DecodePtr is the high level function wrapping the specific type decoding functions

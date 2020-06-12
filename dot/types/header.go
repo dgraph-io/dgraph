@@ -106,9 +106,10 @@ func (bh *Header) Encode() ([]byte, error) {
 }
 
 // Decode decodes the SCALE encoded input into this header
-func (bh *Header) Decode(in []byte) error {
-	_, err := scale.Decode(in, bh)
-	return err
+func (bh *Header) Decode(r io.Reader) (*Header, error) {
+	sd := scale.Decoder{Reader: r}
+	_, err := sd.Decode(bh)
+	return bh, err
 }
 
 // AsOptional returns the Header as an optional.Header

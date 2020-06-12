@@ -101,3 +101,21 @@ func HexToHash(in string) (Hash, error) {
 	copy(buf[:], out)
 	return buf, err
 }
+
+// MustHexToHash turns a 0x prefixed hex string into type Hash
+// it panics if it cannot turn the string into a Hash
+func MustHexToHash(in string) Hash {
+	if strings.Compare(in[:2], "0x") != 0 {
+		panic("could not byteify non 0x prefixed string")
+	}
+
+	in = in[2:]
+	out, err := hex.DecodeString(in)
+	if err != nil {
+		panic(err)
+	}
+
+	var buf = [32]byte{}
+	copy(buf[:], out)
+	return buf
+}

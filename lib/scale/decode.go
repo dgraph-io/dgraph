@@ -24,6 +24,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"runtime"
+	"strings"
 
 	"github.com/ChainSafe/gossamer/lib/common"
 )
@@ -70,6 +72,23 @@ func (sd *Decoder) Decode(t interface{}) (out interface{}, err error) {
 	case [][32]byte, [][]byte:
 		out, err = sd.DecodeArray(t)
 	case interface{}:
+		// check if type has a custom Decode function defined
+		// but first, make sure that the function that called this function wasn't the type's Decode function,
+		// or else we will end up in an infinite recursive loop
+		pc, _, _, ok := runtime.Caller(1)
+		details := runtime.FuncForPC(pc)
+		var caller string
+		if ok && details != nil {
+			caller = details.Name()
+		}
+
+		// allow the call to DecodeCustom to proceed if the call comes from inside scale, and isn't a test
+		if !strings.Contains(caller, "Decode") || (strings.Contains(caller, "scale") && !strings.Contains(caller, "test")) {
+			if out, err = sd.DecodeCustom(t); err == nil {
+				return out, nil
+			}
+		}
+
 		out, err = sd.DecodeInterface(t)
 	default:
 		return nil, errors.New("decode error: unsupported type")
@@ -466,6 +485,11 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) { //nolint
 				if _, err = sd.Reader.Read(b); err == nil {
 					copy((*ptr)[:], b)
 				}
+			case *[64]byte:
+				b := make([]byte, 64)
+				if _, err = sd.Reader.Read(b); err == nil {
+					copy((*ptr)[:], b)
+				}
 			case *string:
 				if o, err = sd.DecodeByteArray(); err == nil {
 					// get the pointer to the value and set the value
@@ -476,7 +500,11 @@ func (sd *Decoder) DecodeTuple(t interface{}) (interface{}, error) { //nolint
 					*ptr = o.([]string)
 				}
 			default:
-				var o interface{}
+				if o, err = sd.DecodeCustom(fieldValue); err == nil {
+					field.Set(reflect.ValueOf(o))
+					continue
+				}
+
 				// TODO: clean up this function, can use field.Set everywhere (remove switch case?)
 				if o, err = sd.Decode(v.Field(i).Interface()); err == nil {
 					field.Set(reflect.ValueOf(o))

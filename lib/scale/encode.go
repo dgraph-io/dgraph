@@ -32,7 +32,7 @@ type Encoder struct {
 	Writer io.Writer
 }
 
-// EncodeCustom check if interface has method Encode, if so use that, otherwise use regular scale encoding
+// EncodeCustom checks if interface has method Encode, if so use that, otherwise use regular scale encoding
 func EncodeCustom(in interface{}) ([]byte, error) {
 	someType := reflect.TypeOf(in)
 	_, ok := someType.MethodByName("Encode")
@@ -48,6 +48,23 @@ func EncodeCustom(in interface{}) ([]byte, error) {
 	return Encode(in)
 }
 
+// EncodeCustom checks if interface has method Encode, if so use that, otherwise use regular scale encoding
+func (se *Encoder) EncodeCustom(in interface{}) (int, error) {
+	someType := reflect.TypeOf(in)
+	// TODO: if not a pointer, check if type pointer has Encode method
+	_, ok := someType.MethodByName("Encode")
+	if ok {
+		res := reflect.ValueOf(in).MethodByName("Encode").Call([]reflect.Value{})
+		val := res[0].Interface()
+		err := res[1].Interface()
+		if err != nil {
+			return 0, err.(error)
+		}
+		return se.Writer.Write(val.([]byte))
+	}
+	return se.Encode(in)
+}
+
 // Encode to byte array
 func Encode(in interface{}) ([]byte, error) {
 	buffer := bytes.Buffer{}
@@ -57,8 +74,7 @@ func Encode(in interface{}) ([]byte, error) {
 	return output, err
 }
 
-// Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64,
-// or bool
+// Encode is the top-level function which performs SCALE encoding of b which may be of type []byte, int16, int32, int64, or bool
 func (se *Encoder) Encode(b interface{}) (n int, err error) {
 	switch v := b.(type) {
 	case []byte:
@@ -73,6 +89,8 @@ func (se *Encoder) Encode(b interface{}) (n int, err error) {
 		n, err = se.encodeBool(v)
 	case common.Hash:
 		n, err = se.Writer.Write(v.ToBytes())
+	case [64]byte:
+		n, err = se.Writer.Write(v[:])
 	case interface{}:
 		t := reflect.TypeOf(b).Kind()
 		switch t {
@@ -257,7 +275,7 @@ func (se *Encoder) encodeTuple(t interface{}) (bytesEncoded int, err error) {
 	}
 
 	for _, item := range values {
-		n, err := se.Encode(item)
+		n, err := se.EncodeCustom(item)
 		if err != nil {
 			return bytesEncoded, err
 		}

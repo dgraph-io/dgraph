@@ -131,7 +131,7 @@ func GetRuntimeVars(targetRuntime string) (string, string, func() (*wasm.Imports
 		registerImports = RegisterImports_NodeRuntime
 		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(NODE_RUNTIME_FP), NODE_RUNTIME_URL
 	case TEST_RUNTIME:
-		registerImports = RegisterImports_TestRuntime
+		registerImports = RegisterImports_NodeRuntime
 		testRuntimeFilePath, testRuntimeURL = GetAbsolutePath(TESTS_FP), TEST_WASM_URL
 	default:
 		registerImports = RegisterImports_NodeRuntime

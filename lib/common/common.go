@@ -78,6 +78,31 @@ func HexToBytes(in string) ([]byte, error) {
 	return out, err
 }
 
+// MustHexToBytes turns a 0x prefixed hex string into a byte slice
+// it panic if it cannot decode the string
+func MustHexToBytes(in string) []byte {
+	if len(in) < 2 {
+		panic("invalid string")
+	}
+
+	if strings.Compare(in[:2], "0x") != 0 {
+		panic(ErrNoPrefix)
+	}
+
+	// Ensure we have an even length, otherwise hex.DecodeString will fail and return zero hash
+	if len(in)%2 != 0 {
+		panic("cannot decode a odd length string")
+	}
+
+	in = in[2:]
+	out, err := hex.DecodeString(in)
+	if err != nil {
+		panic(err)
+	}
+
+	return out
+}
+
 // BytesToHex turns a byte slice into a 0x prefixed hex string
 func BytesToHex(in []byte) string {
 	s := hex.EncodeToString(in)

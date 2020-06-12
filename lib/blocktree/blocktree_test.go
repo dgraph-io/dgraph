@@ -19,7 +19,6 @@ package blocktree
 import (
 	"bytes"
 	"math/big"
-	"math/rand"
 	"reflect"
 	"testing"
 
@@ -202,30 +201,6 @@ func TestBlockTree_DeepestLeaf(t *testing.T) {
 	})
 
 	deepestLeaf := bt.deepestLeaf()
-	if deepestLeaf.hash != expected {
-		t.Fatalf("Fail: got %s expected %s", deepestLeaf.hash, expected)
-	}
-
-	r := *rand.New(rand.NewSource(rand.Int63()))
-	earliestTime := uint64(1 << 63)
-
-	deepest = big.NewInt(0)
-
-	bt.leaves.smap.Range(func(h, n interface{}) bool {
-		leaf := h.(Hash)
-		node := n.(*node)
-		node.arrivalTime = uint64(r.Intn(256))
-		if node.arrivalTime < earliestTime && node.depth.Cmp(deepest) >= 0 {
-			earliestTime = node.arrivalTime
-			expected = node.hash
-			deepest = node.depth
-			t.Logf("expected leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
-		}
-		t.Logf("leaf=%s depth=%d arrivalTime=%d", leaf, node.depth, node.arrivalTime)
-		return true
-	})
-
-	deepestLeaf = bt.deepestLeaf()
 	if deepestLeaf.hash != expected {
 		t.Fatalf("Fail: got %s expected %s", deepestLeaf.hash, expected)
 	}
