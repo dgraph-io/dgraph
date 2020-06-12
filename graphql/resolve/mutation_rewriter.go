@@ -752,6 +752,11 @@ type mutationRes struct {
 // an author might make the `author: Author!` field of a bunch of Posts invalid.
 // (That might actually be helpful if you want to run one mutation to remove something
 // and then another to correct it.)
+//
+// rewriteObject returns two set of mutations, firstPass and secondPass. We start
+// building mutations recursively in the secondPass. Whenever we encounter an XID object,
+// we push it to firstPass. We need to make sure that the XID doesn't refer hasInverse links
+// to secondPass, and then to make those links ourselves.
 func rewriteObject(
 	typ schema.Type,
 	srcField schema.FieldDefinition,
@@ -834,7 +839,7 @@ func rewriteObject(
 			xidFrag = asXIDReference(srcField, srcUID, typ, xid.Name(), xidString,
 				variable, withAdditionalDeletes, varGen, xidMetadata)
 			if deepXID > 2 {
-				// Create an inverse link for the xidFrag
+				// We need to link the parent to the already existing child
 				res := make(map[string]interface{}, 1)
 				res["uid"] = srcUID
 				addInverseLink(res, srcField.Inverse(), fmt.Sprintf("uid(%s)", variable))
@@ -925,7 +930,7 @@ func rewriteObject(
 				xidQuery(variable, xidString, xid.Name(), typ),
 			}
 		} else {
-			// for elements in firstPass, we need to create an inverse link
+			// We need to link the parent to the element we are just creating
 			res := make(map[string]interface{}, 1)
 			res["uid"] = srcUID
 			addInverseLink(res, srcField.Inverse(), fmt.Sprintf("_:%s", variable))
@@ -936,7 +941,7 @@ func rewriteObject(
 		}
 	}
 
-	var additionalFrag []*mutationFragment
+	var childrenFirstPass []*mutationFragment
 
 	// we build the mutation to add object here. If XID != nil, we would then move it to
 	// firstPass from secondPass (frag).
@@ -995,26 +1000,27 @@ func rewriteObject(
 				frags = &mutationRes{secondPass: []*mutationFragment{newFragment(val)}}
 			}
 
-			additionalFrag = appendFragments(additionalFrag, frags.firstPass)
+			childrenFirstPass = appendFragments(childrenFirstPass, frags.firstPass)
 			results.secondPass = squashFragments(squashIntoObject(fieldName), results.secondPass, frags.secondPass)
 		}
 	}
 
+	// In the case of an XID, move the secondPass (creation mutation) to firstPass
 	if xid != nil && !atTopLevel {
 		results.firstPass = append(results.firstPass, results.secondPass...)
 		results.secondPass = []*mutationFragment{}
 	}
 
 	// add current conditions to all the new fragments from children.
-	// children add should only happen when this level is true.
+	// childrens should only be addded when this level is true
 	conditions := []string{}
 	for _, i := range results.firstPass {
 		conditions = append(conditions, i.conditions...)
 	}
-	for _, i := range additionalFrag {
+	for _, i := range childrenFirstPass {
 		i.conditions = append(i.conditions, conditions...)
 	}
-	results.firstPass = append(results.firstPass, additionalFrag...)
+	results.firstPass = append(results.firstPass, childrenFirstPass...)
 
 	// parentFrags are reverse links to parents. only applicable for when deepXID > 2
 	results.firstPass = append(results.firstPass, parentFrags...)
