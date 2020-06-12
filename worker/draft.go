@@ -1157,8 +1157,10 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error while proposing.
+						if x.WorkerConfig.LudicrousMode &&
+							proposal.Mutations != nil && len(proposal.Mutations.Edges) > 0 {
+							// Assuming that there will be no error while applying. But this
+							// assumption is only made for data mutations and not schema mutations.
 							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
