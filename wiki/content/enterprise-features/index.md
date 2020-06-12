@@ -273,7 +273,7 @@ backups built on top of it. Each time a new full backup is created, a new backup
 series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
 
-The `--encryption_key_file` argument is required if you took the backup in an
+The `--encryption_key_file` flag is required if you took the backup in an
 encrypted cluster and should point to the location of the same key used to
 run the cluster.
 
