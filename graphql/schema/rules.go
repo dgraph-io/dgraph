@@ -1617,10 +1617,10 @@ func customDirectiveValidation(sch *ast.Schema,
 				if len(key) == 1 {
 					key = []string{h.Value.Raw, h.Value.Raw}
 				} else if len(key) > 2 {
-					return gqlerror.ErrorPosf(graphql.Position,
+					return append(errs, gqlerror.ErrorPosf(graphql.Position,
 						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw)
+						typ.Name, field.Name, h.Value.Raw))
 				}
 				// We try and fetch the value from the stored secrets.
 				val := secrets[key[1]]
