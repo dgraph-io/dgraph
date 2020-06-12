@@ -817,26 +817,29 @@ func (l *List) Rollup() ([]*bpb.KV, error) {
 
 // SingleListRollup works like rollup but generates a single list with no splits.
 // It's used during backup so that each backed up posting list is stored in a single key.
-func (l *List) SingleListRollup() (*bpb.KV, error) {
+func (l *List) SingleListRollup(kv *bpb.KV) error {
+	if kv == nil {
+		return errors.Errorf("passed kv pointer cannot be nil")
+	}
+
 	l.RLock()
 	defer l.RUnlock()
 
 	out, err := l.rollup(math.MaxUint64, false)
 	if err != nil {
-		return nil, err
+		return errors.Wrapf(err, "failed when calling List.rollup")
 	}
 	// out is only nil when the list's minTs is greater than readTs but readTs
 	// is math.MaxUint64 so that's not possible. Assert that's true.
 	x.AssertTrue(out != nil)
 
-	kv := &bpb.KV{}
 	kv.Version = out.newMinTs
 	kv.Key = l.key
 	val, meta := marshalPostingList(out.plist)
 	kv.UserMeta = []byte{meta}
 	kv.Value = val
 
-	return kv, nil
+	return nil
 }
 
 func (out *rollupOutput) marshalPostingListPart(
