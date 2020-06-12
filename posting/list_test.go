@@ -1246,7 +1246,8 @@ func TestSingleListRollup(t *testing.T) {
 	ol, commits := createMultiPartList(t, size, true)
 
 	// Roll list into a single list.
-	kv, err := ol.SingleListRollup()
+	kv := &bpb.KV{}
+	err := ol.SingleListRollup(kv)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(kv.UserMeta))
 	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
