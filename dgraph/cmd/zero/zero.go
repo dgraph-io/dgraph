@@ -587,7 +587,7 @@ func (s *Server) ShouldServe(
 	// Check who is serving this tablet.
 	tab := s.ServingTablet(tablet.Predicate)
 	span.Annotatef(nil, "Tablet for %s: %+v", tablet.Predicate, tab)
-	if tab != nil {
+	if tab != nil && !tablet.Force {
 		// Someone is serving this tablet. Could be the caller as well.
 		// The caller should compare the returned group against the group it holds to check who's
 		// serving.
@@ -602,8 +602,7 @@ func (s *Server) ShouldServe(
 
 	// Set the tablet to be served by this server's group.
 	var proposal pb.ZeroProposal
-	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
-	tablet.Force = false
+
 	if x.IsReservedPredicate(tablet.Predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
