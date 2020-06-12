@@ -19,10 +19,6 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"sort"
-	"strconv"
-	"time"
-
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -31,6 +27,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
+	"sort"
+	"strconv"
 )
 
 const touchedUidsKey = "_total"
@@ -173,15 +171,13 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", m.Alias(), m.MutationType())
 	}
 
-	resolveStartTime, _ := ctx.Value(Start("resolveStartTime")).(time.Time)
-	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	resolverTrace := &schema.ResolverTrace{
 		Path:       []interface{}{m.ResponseName()},
 		ParentType: "Mutation",
 		FieldName:  m.ResponseName(),
 		ReturnType: m.Type().String(),
 	}
-	timer := tf.NewOffsetTimer(&resolverTrace.OffsetDuration)
+	timer := newtimer (ctx ,&resolverTrace.OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
 
@@ -252,11 +248,8 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		Mutations: upsert.Mutations,
 	}
 
-	resolveStartTime, _ := ctx.Value(Start("resolveStartTime")).(time.Time)
-	tf := schema.NewOffsetTimerFactory(resolveStartTime)
-	mutationTimer := tf.NewOffsetTimer(&dgraphMutationDuration.OffsetDuration)
+	mutationTimer := newtimer (ctx ,&dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()
-
 	mutResp, err = mr.executor.Execute(ctx, req)
 
 	mutationTimer.Stop()
@@ -298,7 +291,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 	commit = true
 
-	queryTimer := tf.NewOffsetTimer(&dgraphQueryDuration.OffsetDuration)
+	queryTimer := newtimer (ctx ,&dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
 
 	qryResp, err := mr.executor.Execute(ctx,

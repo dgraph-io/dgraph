@@ -19,8 +19,6 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-	"time"
-
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
@@ -70,15 +68,13 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	stop := x.SpanTimer(span, "resolveQuery")
 	defer stop()
 
-	resolveStartTime, _ :=ctx.Value(Start("resolveStartTime")).(time.Time)
-	tf := schema.NewOffsetTimerFactory(resolveStartTime)
 	resolverTrace := &schema.ResolverTrace{
 		Path:       []interface{}{query.ResponseName()},
 		ParentType: "Query",
 		FieldName:  query.ResponseName(),
 		ReturnType: query.Type().String(),
 	}
-	timer := tf.NewOffsetTimer(&resolverTrace.OffsetDuration)
+	timer := newtimer(ctx,&resolverTrace.OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
 
@@ -118,9 +114,7 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 
-	resolveStartTime,_ :=ctx.Value(Start("resolveStartTime")).(time.Time)
-	tf := schema.NewOffsetTimerFactory(resolveStartTime)
-	queryTimer := tf.NewOffsetTimer(&dgraphQueryDuration.OffsetDuration)
+	queryTimer := newtimer (ctx ,&dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
 
 	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),

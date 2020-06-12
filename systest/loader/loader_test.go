@@ -92,7 +92,7 @@ func TestLoaderXidmap(t *testing.T) {
 			}
 		  }
 		}`
-	res1:=&testutil.GraphQLResponse{}
+	res1 := &testutil.GraphQLResponse{}
 	err=json.Unmarshal(b,res1)
 	require.NoError(t, err)
 	require.JSONEq(t, expected, string(res1.Data))
