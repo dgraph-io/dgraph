@@ -19,6 +19,7 @@ package worker
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -356,6 +357,16 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	}
 	if srcFn.n == 0 {
 		return nil
+	}
+
+	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
+	// calculate) to work correctly. But we have seen some panics while forming DataKey in
+	// calculate(). panic is of the form "index out of range [4] with length 1". We have tried to
+	// reproduce this but couldn't find any edge case which will result in this panic. So for now
+	// we are just logging when srcFn.n != len(q.UidList.Uids) and returning error when this
+	// happens.
+	if srcFn.n != len(q.UidList.Uids) {
+		return fmt.Errorf()
 	}
 
 	// This function has small boilerplate as handleUidPostings, around how the code gets
