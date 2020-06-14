@@ -32,21 +32,21 @@ import (
 )
 
 const (
-	queryACLUsersBefore_20_07_0 = `
+	queryACLUsersBefore_v20_07_0 = `
 		{
 			nodes(func: has(dgraph.xid)) @filter(type(User)) {
 				uid
 			}
 		}
 	`
-	queryACLGroupsBefore_20_07_0 = `
+	queryACLGroupsBefore_v20_07_0 = `
 		{
 			nodes(func: has(dgraph.xid)) @filter(type(Group)) {
 				uid
 			}
 		}
 	`
-	queryACLRulesBefore_20_07_0 = `
+	queryACLRulesBefore_v20_07_0 = `
 		{
 			nodes(func: has(dgraph.rule.predicate)) @filter(type(Rule)) {
 				uid
@@ -126,17 +126,17 @@ func upgradeAclTypeNames() error {
 		{
 			oldTypeName:     "User",
 			newTypeName:     "dgraph.type.User",
-			oldUidNodeQuery: queryACLUsersBefore_20_07_0,
+			oldUidNodeQuery: queryACLUsersBefore_v20_07_0,
 		},
 		{
 			oldTypeName:     "Group",
 			newTypeName:     "dgraph.type.Group",
-			oldUidNodeQuery: queryACLGroupsBefore_20_07_0,
+			oldUidNodeQuery: queryACLGroupsBefore_v20_07_0,
 		},
 		{
 			oldTypeName:     "Rule",
 			newTypeName:     "dgraph.type.Rule",
-			oldUidNodeQuery: queryACLRulesBefore_20_07_0,
+			oldUidNodeQuery: queryACLRulesBefore_v20_07_0,
 		},
 	}
 
@@ -218,19 +218,19 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 		}
 	}
 
-	// build the new schema for alter
 	var newSchemaBuilder strings.Builder
+	// start building new schema for alter
+	// 1. add new predicates to schema
 	for oldPredName, predDef := range reservedPredicatesInSchema {
-		// add new predicate to schema
 		newSchemaBuilder.WriteString(getPredSchemaString(newPredicateNames[oldPredName], predDef))
 	}
+	// 2. add new types to schema, with correct predicates
 	for oldTypeName, typeDef := range reservedTypesInSchema {
-		// add new type to schema
 		newSchemaBuilder.WriteString(getTypeSchemaString(newTypeNames[oldTypeName], typeDef,
 			newPredicateNames))
 	}
+	// 3. overwrite new predicates in existing types which uses old predicates
 	for typeName, typeDef := range nonReservedTypesWithReservedPredicatesInSchema {
-		// overwrite new predicate in existing type which uses old predicate
 		newSchemaBuilder.WriteString(getTypeSchemaString(typeName, typeDef, newPredicateNames))
 	}
 

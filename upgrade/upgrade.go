@@ -31,8 +31,11 @@ import (
 var (
 	// Upgrade is the sub-command used to upgrade dgraph cluster.
 	Upgrade x.SubCommand
-	// dummy version
-	dummyVersion = &version{}
+	// zeroVersion represents &version{major: 0, minor: 0, patch: 0}
+	zeroVersion = &version{}
+	// allChanges contains all the changes ever introduced since the beginning of dgraph in the form
+	// of a list of change sets.
+	allChanges changeList
 )
 
 type versionComparisonResult uint8
@@ -59,7 +62,7 @@ type version struct {
 
 func (v *version) String() string {
 	if v == nil {
-		v = dummyVersion
+		v = zeroVersion
 	}
 	return fmt.Sprintf("v%d.%d.%d", v.major, v.minor, v.patch)
 }
@@ -68,10 +71,10 @@ func (v *version) String() string {
 // It interprets nil as &version{major: 0, minor: 0, patch: 0}
 func (v *version) Compare(other *version) versionComparisonResult {
 	if v == nil {
-		v = dummyVersion
+		v = zeroVersion
 	}
 	if other == nil {
-		other = dummyVersion
+		other = zeroVersion
 	}
 
 	switch {
@@ -149,15 +152,15 @@ func run() {
 		return
 	}
 
-	applyChangeList(cmdInput, getChangeList())
+	applyChangeList(cmdInput, allChanges)
 }
 
 func formatAsFlagParsingError(flag string, err error) error {
-	return fmt.Errorf("error parsing `%s` flag: %w", flag, err)
+	return fmt.Errorf("error parsing flag `%s`: %w", flag, err)
 }
 
 func formatAsFlagRequiredError(flag string) error {
-	return formatAsFlagParsingError(flag, fmt.Errorf("%s is required", flag))
+	return formatAsFlagParsingError(flag, fmt.Errorf("`%s` is required", flag))
 }
 
 func validateAndParseInput() (*commandInput, error) {
@@ -221,7 +224,7 @@ func parseVersionFromString(v string) (*version, error) {
 		return nil, fmt.Errorf("error parsing minor version: %w", err)
 	}
 
-	// the third part of split can contain some extra things like `beta` appended with -,
+	// the third part of split might contain some extra things like `beta` appended with -,
 	// so split again and take the first part as patch
 	patchSplit := strings.Split(versionSplit[2], "-")
 	result.patch, err = strconv.Atoi(patchSplit[0])
@@ -230,47 +233,6 @@ func parseVersionFromString(v string) (*version, error) {
 	}
 
 	return result, nil
-}
-
-func getChangeList() changeList {
-	return changeList{
-		{
-			introducedIn: &version{major: 20, minor: 3, patch: 0},
-			changes: []*change{{
-				name: "Upgrade ACL Rules",
-				description: "This updates the ACL nodes to use the new ACL model introduced in" +
-					" v20.03.0. This is applied while upgrading from v1.2.2+ to v20.03.0+",
-				minFromVersion: &version{major: 1, minor: 2, patch: 2},
-				applyFunc:      upgradeACLRules,
-			}},
-		},
-		{
-			introducedIn: &version{major: 20, minor: 7, patch: 0},
-			changes: []*change{
-				{
-					name: "Upgrade ACL Type names",
-					description: "This updates the ACL nodes to use the new type names for the" +
-						" types User, Group and Rule. They are now dgraph.type.User, " +
-						"dgraph.type.Group, and dgraph.type.Rule. This change was introduced in " +
-						"v20.07.0, and is applied while upgrading from v20.03.0+ to v20.07.0+. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
-					minFromVersion: &version{major: 20, minor: 3, patch: 0},
-					applyFunc:      upgradeAclTypeNames,
-				},
-				{
-					name: "Upgrade non-predefined types/predicates using reserved namespace",
-					description: "This updates any user-defined types/predicates which start with" +
-						" `dgraph.` to use a name which doesn't start with `dgraph.`. The user " +
-						"will have to provide a new name to use for such types/predicates. " +
-						"This change was introduced in v20.07.0, " +
-						"and is applied while upgrading from v20.03.0+ to v20.07.0+. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
-					minFromVersion: &version{major: 20, minor: 3, patch: 0},
-					applyFunc:      upgradeNonPredefinedNamesInReservedNamespace,
-				},
-			},
-		},
-	}
 }
 
 func applyChangeList(cmdInput *commandInput, list changeList) {

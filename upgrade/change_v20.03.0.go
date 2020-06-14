@@ -26,7 +26,7 @@ import (
 )
 
 const (
-	queryACLGroupsBefore_20_03_0 = `
+	queryACLGroupsBefore_v20_03_0 = `
 		{
 			rules(func: type(Group)) @filter(has(dgraph.group.acl)) {
 				uid
@@ -55,21 +55,14 @@ func upgradeACLRules() error {
 	}
 	defer conn.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	resp, err := dg.NewReadOnlyTxn().Query(ctx, queryACLGroupsBefore_20_03_0)
-	if err != nil {
-		return fmt.Errorf("unable to query old ACL rules: %w", err)
-	}
-
 	data := make(map[string][]group)
-	if err := json.Unmarshal(resp.Json, &data); err != nil {
-		return fmt.Errorf("unable to unmarshal old ACLs: %w", err)
+	if err = getQueryResult(dg, queryACLGroupsBefore_v20_03_0, &data); err != nil {
+		return fmt.Errorf("error querying old ACL rules: %w", err)
 	}
 
 	groups, ok := data["rules"]
 	if !ok {
-		return fmt.Errorf("unable to parse ACLs: %v", string(resp.Json))
+		return fmt.Errorf("unable to parse ACLs: %v", data)
 	}
 
 	counter := 1
@@ -130,7 +123,7 @@ func upgradeACLRules() error {
 
 	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	if deleteOld {
-		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		err = dg.Alter(ctx, &api.Operation{
 			DropOp:    api.Operation_ATTR,
