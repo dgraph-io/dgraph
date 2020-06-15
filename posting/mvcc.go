@@ -121,8 +121,8 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 			currTs := time.Now().UnixNano()
 			for hash, ts := range m {
 				// Remove entries from map which have been there for more
-				// than a two minutes.
-				if currTs-ts >= int64(2*time.Minute) {
+				// than 10 seconds.
+				if currTs-ts >= int64(10*time.Second) {
 					delete(m, hash)
 				}
 			}
