@@ -108,7 +108,7 @@ type schemaTypeField struct {
 
 type schemaTypeNode struct {
 	Name   string             `json:"name"`
-	Fields []*schemaTypeField `json:"version"`
+	Fields []*schemaTypeField `json:"fields"`
 }
 
 type schemaQueryResp struct {
