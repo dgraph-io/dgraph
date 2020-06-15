@@ -8,12 +8,13 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
-- GraphQL: make updateGQLSchema always return the new schema. ([#5540][])
+- GraphQL
+  - Make updateGQLSchema always return the new schema. ([#5540][])
+  - Allow user to define and pass arguments to fields. ([#5562][])	
 - Return error list while validating GraphQL schema. ([#5576][])
-- Send CID for sentry events. ([#5625][])
-- GraphQL: Allow user to define and pass arguments to fields. ([#5562][])	
-- Alpha: Enable bloom filter caching ([#5552][])
 - GraphQL: move alias to end of graphql pipeline. ([#5369][])	
+- Send CID for sentry events. ([#5625][])
+- Alpha: Enable bloom filter caching ([#5552][])
 - Add support for multiple uids in uid_in function ([#5292][])
 - Enterprise features
   - /health endpoint now shows Enterprise Features available. Fixes [#5234][]. ([#5293][])
@@ -22,16 +23,15 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - **Breaking changes**
     - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])			
 
-  
 ### Added
 
-- GraphQL: add Graphql-TouchedUids header in HTTP response. ([#5572][])
-- GraphQL: Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5179][])	
-- GraphQL: Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])	
-- GraphQL: support existing gqlschema nodes without xid. ([#5457][])
-- GraphQL: Add custom logic feature. ([#5004][])
-- GraphQL: Add subscription feature. ([#5134][])
-- GraphQL: Add extensions ([#5157][])
+- GraphQL
+  - Add Graphql-TouchedUids header in HTTP response. ([#5572][])
+  - Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5179][])	
+  - Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])	
+  - Support existing gqlschema nodes without xid. ([#5457][])
+  - Add custom logic feature. ([#5004][])
+  - Add extensions to query response. ([#5157][])
 - Add LogRequest variable to GraphQL config input. ([#5197][])
 - Allow backup ID to be passed to restore endpoint. ([#5208][])
 - Added support for application/graphQL to graphQL endpoints. ([#5125][])
@@ -45,19 +45,20 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
     - [BREAKING] Vault Integration. ([#5402][])
  
 ### Fixed
- 
-- GraphQL: Add more validations for coercion of object/scalar and vice versa. ([#5534][])
-- GraphQL: Apply type filter for get query at root level. ([#5497][])
-- GraphQL: Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])	
-- GraphQL: Return better error message if a type only contains ID field. ([#5531][])
-- GraphQL: Coerce value for scalar types correctly. ([#5487][])
-- GraphQL: Minor delete mutation msg fix. ([#5316][])
-- GraphQL: report all errors during schema update. ([#5425][])
-- GraphQL: Do graphql query/mutation validation in the mock server. ([#5362][])
-- GraphQL: remove custom directive from internal schema. ([#5354][])
-- GraphQL: Recover from panic within goroutines used for resolving custom fields. ([#5329][])
-- GraphQL: Start collecting and returning errors from remote remote GraphQL endpoints. ([#5328][])
-- GraphQL: Fix response for partial admin queries. ([#5317][])		
+
+- GraphQL
+  - Add more validations for coercion of object/scalar and vice versa. ([#5534][])
+  - Apply type filter for get query at root level. ([#5497][])
+  - Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])	
+  - Return better error message if a type only contains ID field. ([#5531][])
+  - Coerce value for scalar types correctly. ([#5487][])
+  - Minor delete mutation msg fix. ([#5316][])
+  - Report all errors during schema update. ([#5425][])
+  - Do graphql query/mutation validation in the mock server. ([#5362][])
+  - Remove custom directive from internal schema. ([#5354][])
+  - Recover from panic within goroutines used for resolving custom fields. ([#5329][])
+  - Start collecting and returning errors from remote remote GraphQL endpoints. ([#5328][])
+  - Fix response for partial admin queries. ([#5317][])		
 - Online restores only processes backups for the alpha's group. ([#5588][])
 - Change backup groupId from int to uint32. ([#5605][])
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5571][])
