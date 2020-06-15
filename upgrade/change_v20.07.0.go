@@ -17,18 +17,15 @@
 package upgrade
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
-	"time"
 
 	"github.com/dgraph-io/dgo/v200"
-
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 const (
@@ -60,6 +57,13 @@ const (
 			}
 		}
 	`
+	typeCountQuery = `
+		{
+			nodes(func: type(%s)) {
+				count(uid)
+			}
+		}
+	`
 	scalarPredicateQuery = `
 		{
 			nodes(func: has(%s)) {
@@ -78,7 +82,8 @@ const (
 			}
 		}
 	`
-	schemaQuery = `schema{}`
+	schemaQuery     = `schema{}`
+	typeSchemaQuery = `schema (type: %s) {}`
 )
 
 type uidNodeQueryResp struct {
@@ -87,15 +92,23 @@ type uidNodeQueryResp struct {
 	} `json:"nodes"`
 }
 
+type countNodeQueryResp struct {
+	Nodes []*struct {
+		Count int `json:"count"`
+	} `json:"nodes"`
+}
+
 type predicateQueryResp struct {
 	Nodes []map[string]interface{} `json:"nodes"`
 }
 
+type schemaTypeField struct {
+	Name string `json:"name"`
+}
+
 type schemaTypeNode struct {
-	Name   string `json:"name"`
-	Fields []*struct {
-		Name string `json:"name"`
-	} `json:"fields"`
+	Name   string             `json:"name"`
+	Fields []*schemaTypeField `json:"version"`
 }
 
 type schemaQueryResp struct {
@@ -103,47 +116,72 @@ type schemaQueryResp struct {
 	Types  []*schemaTypeNode `json:"types"`
 }
 
-type upgradeTypeNameInfo struct {
-	oldTypeName     string
-	newTypeName     string
-	oldUidNodeQuery string
+type updateTypeNameInfo struct {
+	oldTypeName              string
+	newTypeName              string
+	oldUidNodeQuery          string
+	dropOldTypeIfUnused      bool
+	predsToRemoveFromOldType map[string]struct{}
 }
 
-type upgradePredNameInfo struct {
+type updatePredNameInfo struct {
 	oldPredName string
 	newPredName string
 	isUidPred   bool
 }
 
 func upgradeAclTypeNames() error {
+	// prepare upgrade info for ACL type names
+	aclTypeNameInfo := []*updateTypeNameInfo{
+		{
+			oldTypeName:         "User",
+			newTypeName:         "dgraph.type.User",
+			oldUidNodeQuery:     queryACLUsersBefore_v20_07_0,
+			dropOldTypeIfUnused: true,
+			predsToRemoveFromOldType: map[string]struct{}{
+				"dgraph.xid":        {},
+				"dgraph.password":   {},
+				"dgraph.user.group": {},
+			},
+		},
+		{
+			oldTypeName:         "Group",
+			newTypeName:         "dgraph.type.Group",
+			oldUidNodeQuery:     queryACLGroupsBefore_v20_07_0,
+			dropOldTypeIfUnused: true,
+			predsToRemoveFromOldType: map[string]struct{}{
+				"dgraph.xid":      {},
+				"dgraph.acl.rule": {},
+			},
+		},
+		{
+			oldTypeName:         "Rule",
+			newTypeName:         "dgraph.type.Rule",
+			oldUidNodeQuery:     queryACLRulesBefore_v20_07_0,
+			dropOldTypeIfUnused: true,
+			predsToRemoveFromOldType: map[string]struct{}{
+				"dgraph.rule.predicate":  {},
+				"dgraph.rule.permission": {},
+			},
+		},
+	}
+
+	// get dgo client
 	dg, conn, err := getDgoClient(true)
 	if err != nil {
 		return fmt.Errorf("error getting dgo client: %w", err)
 	}
 	defer conn.Close()
 
-	aclTypeNameInfo := []*upgradeTypeNameInfo{
-		{
-			oldTypeName:     "User",
-			newTypeName:     "dgraph.type.User",
-			oldUidNodeQuery: queryACLUsersBefore_v20_07_0,
-		},
-		{
-			oldTypeName:     "Group",
-			newTypeName:     "dgraph.type.Group",
-			oldUidNodeQuery: queryACLGroupsBefore_v20_07_0,
-		},
-		{
-			oldTypeName:     "Rule",
-			newTypeName:     "dgraph.type.Rule",
-			oldUidNodeQuery: queryACLRulesBefore_v20_07_0,
-		},
-	}
-
+	// apply upgrades for old ACL type names, one by one.
 	for _, typeNameInfo := range aclTypeNameInfo {
-		if err = upgradeTypeName(dg, typeNameInfo); err != nil {
+		if err = typeNameInfo.updateTypeName(dg); err != nil {
 			return fmt.Errorf("error upgrading ACL type name from `%s` to `%s`: %w",
 				typeNameInfo.oldTypeName, typeNameInfo.newTypeName, err)
+		}
+		if err = typeNameInfo.updateTypeSchema(dg); err != nil {
+			return fmt.Errorf("error upgrading schema for old ACL type `%s`: %w",
+				typeNameInfo.oldTypeName, err)
 		}
 	}
 
@@ -151,12 +189,14 @@ func upgradeAclTypeNames() error {
 }
 
 func upgradeNonPredefinedNamesInReservedNamespace() error {
+	// get dgo client
 	dg, conn, err := getDgoClient(true)
 	if err != nil {
 		return fmt.Errorf("error getting dgo client: %w", err)
 	}
 	defer conn.Close()
 
+	// query full schema
 	var schemaQueryResp schemaQueryResp
 	if err = getQueryResult(dg, schemaQuery, &schemaQueryResp); err != nil {
 		return fmt.Errorf("unable to query schema: %w", err)
@@ -203,8 +243,8 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 	if len(reservedPredicatesInSchema) > 0 {
 		fmt.Println("Please provide new names for predicates.")
 		for oldPredName := range reservedPredicatesInSchema {
-			newPredicateNames[oldPredName] = askUserForNewName(oldPredName, x.IsReservedPredicate,
-				nonReservedPredicatesInSchema)
+			newPredicateNames[oldPredName] = askUserForNewName(os.Stdin, os.Stdout, oldPredName,
+				x.IsReservedPredicate, nonReservedPredicatesInSchema)
 		}
 	}
 
@@ -213,8 +253,8 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 	if len(reservedTypesInSchema) > 0 {
 		fmt.Println("Please provide new names for types.")
 		for oldTypeName := range reservedTypesInSchema {
-			newTypeNames[oldTypeName] = askUserForNewName(oldTypeName, x.IsReservedType,
-				nonReservedTypesInSchema)
+			newTypeNames[oldTypeName] = askUserForNewName(os.Stdin, os.Stdout, oldTypeName,
+				x.IsReservedType, nonReservedTypesInSchema)
 		}
 	}
 
@@ -227,66 +267,69 @@ func upgradeNonPredefinedNamesInReservedNamespace() error {
 	// 2. add new types to schema, with correct predicates
 	for oldTypeName, typeDef := range reservedTypesInSchema {
 		newSchemaBuilder.WriteString(getTypeSchemaString(newTypeNames[oldTypeName], typeDef,
-			newPredicateNames))
+			newPredicateNames, nil))
 	}
 	// 3. overwrite new predicates in existing types which uses old predicates
 	for typeName, typeDef := range nonReservedTypesWithReservedPredicatesInSchema {
-		newSchemaBuilder.WriteString(getTypeSchemaString(typeName, typeDef, newPredicateNames))
+		newSchemaBuilder.WriteString(getTypeSchemaString(typeName, typeDef, newPredicateNames, nil))
 	}
 
 	// execute the alter for new schema, don't drop any old types/predicates yet
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err = dg.Alter(ctx, &api.Operation{Schema: newSchemaBuilder.String()}); err != nil {
+	if err = alterWithClient(dg, &api.Operation{Schema: newSchemaBuilder.String()}); err != nil {
 		return fmt.Errorf("error updating new schema: %w", err)
 	}
 
 	// upgrade all the nodes with old predicates and drop the old predicates from schema
 	for oldPredName, schemaNode := range reservedPredicatesInSchema {
 		newPredName := newPredicateNames[oldPredName]
-		if err = upgradePredicateName(dg, &upgradePredNameInfo{
+		upgradePredNameInfo := &updatePredNameInfo{
 			oldPredName: oldPredName,
 			newPredName: newPredName,
 			isUidPred:   schemaNode.Type == "uid",
-		}); err != nil {
+		}
+		if err = upgradePredNameInfo.updatePredicateName(dg); err != nil {
 			return fmt.Errorf("error upgrading predicate name from `%s` to `%s`: %w", oldPredName,
 				newPredName, err)
+		}
+		if err = upgradePredNameInfo.dropOldPredFromSchema(dg); err != nil {
+			return fmt.Errorf("error upgrading schema for old predicate `%s``: %w", oldPredName,
+				err)
 		}
 	}
 
 	// upgrade all the nodes with old types and drop the old types from schema
 	for oldTypeName, newTypeName := range newTypeNames {
-		if err = upgradeTypeName(dg, &upgradeTypeNameInfo{
-			oldTypeName:     oldTypeName,
-			newTypeName:     newTypeName,
-			oldUidNodeQuery: fmt.Sprintf(typeQuery, oldTypeName),
-		}); err != nil {
+		typeNameInfo := &updateTypeNameInfo{
+			oldTypeName:         oldTypeName,
+			newTypeName:         newTypeName,
+			oldUidNodeQuery:     fmt.Sprintf(typeQuery, oldTypeName),
+			dropOldTypeIfUnused: true,
+		}
+		if err = typeNameInfo.updateTypeName(dg); err != nil {
 			return fmt.Errorf("error upgrading type name from `%s` to `%s`: %w", oldTypeName,
 				newTypeName, err)
+		}
+		if err = typeNameInfo.updateTypeSchema(dg); err != nil {
+			return fmt.Errorf("error upgrading schema for old type `%s`: %w",
+				typeNameInfo.oldTypeName, err)
 		}
 	}
 
 	return nil
 }
 
-// upgradeTypeName changes the name of the given type from old name to new name for all the nodes of
-// that type, and then deletes the old type from schema via alter.
-func upgradeTypeName(dg *dgo.Dgraph, typeNameInfo *upgradeTypeNameInfo) error {
-	// query nodes for old type, using the provided query
-	var oldQueryRes uidNodeQueryResp
-	if err := getQueryResult(dg, typeNameInfo.oldUidNodeQuery, &oldQueryRes); err != nil {
-		return fmt.Errorf("unable to query old type `%s`: %w", typeNameInfo.oldTypeName, err)
+// updateTypeName changes the name of the given type from old name to new name for all the nodes of
+// that type.
+func (t *updateTypeNameInfo) updateTypeName(dg *dgo.Dgraph) error {
+	if t == nil {
+		return nil
 	}
 
-	// find the number of nodes having old type
-	var typeQueryRes uidNodeQueryResp
-	if err := getQueryResult(dg, fmt.Sprintf(typeQuery, typeNameInfo.oldTypeName),
-		&typeQueryRes); err != nil {
-		return fmt.Errorf("unable to query all nodes for old type `%s`: %w",
-			typeNameInfo.oldTypeName, err)
+	// query nodes for old type, using the provided query
+	var oldQueryRes uidNodeQueryResp
+	if err := getQueryResult(dg, t.oldUidNodeQuery, &oldQueryRes); err != nil {
+		return fmt.Errorf("unable to query old type `%s`: %w", t.oldTypeName, err)
 	}
-	oldTypeCount := len(typeQueryRes.Nodes)
-	typeQueryRes.Nodes = nil
 
 	// build NQuads for changing old type name to new name
 	var setNQuads, delNQuads []*api.NQuad
@@ -295,14 +338,14 @@ func upgradeTypeName(dg *dgo.Dgraph, typeNameInfo *upgradeTypeNameInfo) error {
 			Subject:   node.Uid,
 			Predicate: "dgraph.type",
 			ObjectValue: &api.Value{
-				Val: &api.Value_StrVal{StrVal: typeNameInfo.newTypeName},
+				Val: &api.Value_StrVal{StrVal: t.newTypeName},
 			},
 		})
 		delNQuads = append(delNQuads, &api.NQuad{
 			Subject:   node.Uid,
 			Predicate: "dgraph.type",
 			ObjectValue: &api.Value{
-				Val: &api.Value_StrVal{StrVal: typeNameInfo.oldTypeName},
+				Val: &api.Value_StrVal{StrVal: t.oldTypeName},
 			},
 		})
 	}
@@ -311,32 +354,66 @@ func upgradeTypeName(dg *dgo.Dgraph, typeNameInfo *upgradeTypeNameInfo) error {
 	if len(oldQueryRes.Nodes) > 0 {
 		if err := mutateWithClient(dg, &api.Mutation{Set: setNQuads, Del: delNQuads}); err != nil {
 			return fmt.Errorf("error upgrading data for old type `%s`: %w",
-				typeNameInfo.oldTypeName, err)
-		}
-	}
-
-	// drop the type from schema if it was not being used for other user-defined nodes
-	if len(oldQueryRes.Nodes) == oldTypeCount {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		if err := dg.Alter(ctx, &api.Operation{
-			DropOp:    api.Operation_TYPE,
-			DropValue: typeNameInfo.oldTypeName,
-		}); err != nil {
-			return fmt.Errorf("error deleting old type `%s` from schema: %w",
-				typeNameInfo.oldTypeName, err)
+				t.oldTypeName, err)
 		}
 	}
 
 	return nil
 }
 
-// upgradePredicateName changes the name of the given predicate from old name to new name for all
-// the nodes that use it, and then deletes the old predicate name from schema via alter.
-func upgradePredicateName(dg *dgo.Dgraph, predNameInfo *upgradePredNameInfo) error {
+// updateTypeSchema drops the old type from schema if it is not being used by any node and it is
+// allowed to drop the type. Otherwise, it just alters the schema of old type to remove the old
+// predicates.
+func (t *updateTypeNameInfo) updateTypeSchema(dg *dgo.Dgraph) error {
+	if t == nil {
+		return nil
+	}
+
+	// find the number of nodes using old type name as their type
+	var countQueryRes countNodeQueryResp
+	if err := getQueryResult(dg, fmt.Sprintf(typeCountQuery, t.oldTypeName),
+		&countQueryRes); err != nil {
+		return fmt.Errorf("unable to query node count for type `%s`: %w", t.oldTypeName, err)
+	}
+	if len(countQueryRes.Nodes) != 1 {
+		return fmt.Errorf("unable to find number of nodes for type `%s`", t.oldTypeName)
+	}
+
+	// if the old type was not being used by any nodes, and if it is allowed to drop the old type,
+	// then drop it from schema
+	if countQueryRes.Nodes[0].Count == 0 && t.dropOldTypeIfUnused {
+		if err := alterWithClient(dg, &api.Operation{
+			DropOp:    api.Operation_TYPE,
+			DropValue: t.oldTypeName,
+		}); err != nil {
+			return fmt.Errorf("unable to drop old type `%s` from schema: %w", t.oldTypeName, err)
+		}
+	} else if (len(t.predsToRemoveFromOldType)) > 0 {
+		// otherwise just alter the schema of type to remove the old predicates
+
+		// query the schema for type
+		var schemaTypeQueryResp schemaQueryResp
+		if err := getQueryResult(dg, fmt.Sprintf(typeSchemaQuery, t.oldTypeName),
+			&schemaTypeQueryResp); err != nil || len(schemaTypeQueryResp.Types) != 1 {
+			return fmt.Errorf("unable to query schema for type `%s`: %w", t.oldTypeName, err)
+		}
+		// rewrite the schema to remove old predicates
+		schema := getTypeSchemaString(t.oldTypeName, schemaTypeQueryResp.Types[0], nil,
+			t.predsToRemoveFromOldType)
+		// overwrite the schema for type with alter
+		if err := alterWithClient(dg, &api.Operation{Schema: schema}); err != nil {
+			return fmt.Errorf("unable to update schema for type `%s`: %w", t.oldTypeName, err)
+		}
+	}
+
+	return nil
+}
+
+// updatePredicateName changes the name of the given predicate from old name to new name for all
+// the nodes that have it.
+func (p *updatePredNameInfo) updatePredicateName(dg *dgo.Dgraph) error {
 	var query string
-	if predNameInfo.isUidPred {
+	if p.isUidPred {
 		query = uidPredicateQuery
 	} else {
 		query = scalarPredicateQuery
@@ -344,9 +421,9 @@ func upgradePredicateName(dg *dgo.Dgraph, predNameInfo *upgradePredNameInfo) err
 
 	// find out the nodes having old predicate
 	var predicateQueryResp predicateQueryResp
-	if err := getQueryResult(dg, fmt.Sprintf(query, predNameInfo.oldPredName,
-		predNameInfo.oldPredName), &predicateQueryResp); err != nil {
-		return fmt.Errorf("error querying old predicate `%s`: %w", predNameInfo.oldPredName, err)
+	if err := getQueryResult(dg, fmt.Sprintf(query, p.oldPredName,
+		p.oldPredName), &predicateQueryResp); err != nil {
+		return fmt.Errorf("unable to query nodes having old predicate `%s`: %w", p.oldPredName, err)
 	}
 
 	// nothing to do
@@ -354,15 +431,15 @@ func upgradePredicateName(dg *dgo.Dgraph, predNameInfo *upgradePredNameInfo) err
 		return nil
 	}
 
-	// prepare setJson and deleteJson for the upgrade
+	// prepare setJson and deleteJson for the update
 	var setJson, deleteJson []map[string]interface{}
 	for _, setJsonNode := range predicateQueryResp.Nodes {
 		deleteJsonNode := copyMap(setJsonNode)
 
-		setJsonNode[predNameInfo.newPredName] = setJsonNode[predNameInfo.oldPredName]
-		delete(setJsonNode, predNameInfo.oldPredName)
+		setJsonNode[p.newPredName] = setJsonNode[p.oldPredName]
+		delete(setJsonNode, p.oldPredName)
 
-		deleteJsonNode[predNameInfo.oldPredName] = nil
+		deleteJsonNode[p.oldPredName] = nil
 
 		setJson = append(setJson, setJsonNode)
 		deleteJson = append(deleteJson, deleteJsonNode)
@@ -371,31 +448,33 @@ func upgradePredicateName(dg *dgo.Dgraph, predNameInfo *upgradePredNameInfo) err
 	// marshal the JSONs
 	setJsonBytes, err := json.Marshal(setJson)
 	if err != nil {
-		return fmt.Errorf("error marshalling setJson for old predicate `%s`: %w",
-			predNameInfo.oldPredName, err)
+		return fmt.Errorf("unable to marshal setJson for new predicate `%s`: %w", p.newPredName,
+			err)
 	}
+	setJson = nil
 	deleteJsonBytes, err := json.Marshal(deleteJson)
 	if err != nil {
-		return fmt.Errorf("error marshalling deleteJson for old predicate `%s`: %w",
-			predNameInfo.oldPredName, err)
+		return fmt.Errorf("unable to marshal deleteJson for old predicate `%s`: %w",
+			p.oldPredName, err)
 	}
+	deleteJson = nil
 
 	// perform the mutation for upgrade
 	err = mutateWithClient(dg, &api.Mutation{SetJson: setJsonBytes, DeleteJson: deleteJsonBytes})
 	if err != nil {
-		return fmt.Errorf("error upgrading predicate name from `%s` to `%s`: %w",
-			predNameInfo.oldPredName, predNameInfo.newPredName, err)
+		return fmt.Errorf("unable to mutate old predicate `%s`: %w", p.oldPredName, err)
 	}
 
-	// now drop the old predicate from schema
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := dg.Alter(ctx, &api.Operation{
+	return nil
+}
+
+// dropOldPredFromSchema deletes the old predicate name from schema via alter.
+func (p *updatePredNameInfo) dropOldPredFromSchema(dg *dgo.Dgraph) error {
+	if err := alterWithClient(dg, &api.Operation{
 		DropOp:    api.Operation_ATTR,
-		DropValue: predNameInfo.oldPredName,
+		DropValue: p.oldPredName,
 	}); err != nil {
-		return fmt.Errorf("error deleting old predicate `%s` from schema: %w",
-			predNameInfo.oldPredName, err)
+		return fmt.Errorf("unable to delete old predicate `%s` from schema: %w", p.oldPredName, err)
 	}
 
 	return nil

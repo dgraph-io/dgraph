@@ -235,6 +235,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
+		// Reserved types cannot be dropped.
+		if x.IsReservedType(op.DropValue) {
+			err := errors.Errorf("type %s is reserved and is not allowed to be dropped",
+				op.DropValue)
+			return empty, err
+		}
+
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
 		_, err := query.ApplyMutations(ctx, m)

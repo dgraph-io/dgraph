@@ -17,10 +17,8 @@
 package upgrade
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 )
@@ -83,7 +81,7 @@ func upgradeACLRules() error {
 				{
 					Subject:   newRuleStr,
 					Predicate: "dgraph.type",
-					ObjectId:  "Rule",
+					ObjectId:  "Rule", // the name of the type was Rule in v20.03.0
 				},
 				{
 					Subject:   newRuleStr,
@@ -123,9 +121,7 @@ func upgradeACLRules() error {
 
 	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	if deleteOld {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		err = dg.Alter(ctx, &api.Operation{
+		err = alterWithClient(dg, &api.Operation{
 			DropOp:    api.Operation_ATTR,
 			DropValue: "dgraph.group.acl",
 		})

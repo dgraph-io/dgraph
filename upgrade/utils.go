@@ -20,13 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -95,7 +95,7 @@ func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 
 		_, err = dg.NewTxn().Mutate(ctx, mutation)
 		if err != nil {
-			fmt.Printf("error in running mutation, retrying: %v\n", err)
+			fmt.Println("error in running mutation, retrying:", err)
 			continue
 		}
 
@@ -105,7 +105,31 @@ func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 	return err
 }
 
-// copyMap returns a shallow copy of the input map
+// alterWithClient uses the given dgraph client to execute the given alter operation.
+// It retries max 3 times before returning failure error, if any.
+func alterWithClient(dg *dgo.Dgraph, operation *api.Operation) error {
+	if operation == nil {
+		return nil
+	}
+
+	var err error
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		err = dg.Alter(ctx, operation)
+		if err != nil {
+			fmt.Println("error in alter, retrying:", err)
+			continue
+		}
+
+		return nil
+	}
+
+	return err
+}
+
+// copyMap returns a copy of the input map
 func copyMap(m map[string]interface{}) map[string]interface{} {
 	m1 := make(map[string]interface{})
 	for k, v := range m {
@@ -118,24 +142,24 @@ func copyMap(m map[string]interface{}) map[string]interface{} {
 // and validates that the user-provided name is not reserved as well as doesn't exist in the
 // existingNameMap argument. It will only return the newName if the user provides a valid name,
 // otherwise it will ask the user to keep trying again until a valid name is not obtained.
-func askUserForNewName(oldName string, checkReservedFunc func(string) bool,
-	existingNameMap map[string]struct{}) string {
+func askUserForNewName(r io.Reader, w io.Writer, oldName string,
+	checkReservedFunc func(string) bool, existingNameMap map[string]struct{}) string {
 	var newName string
 
 	// until the user doesn't supply a valid name, keep asking him
 	for {
-		fmt.Printf("Enter new name for `%s`: ", oldName)
-		if _, err := fmt.Scan(&newName); err != nil {
-			fmt.Println("Something went wrong while scanning input: ", err)
-			fmt.Println("Try again!")
+		x.Check2(fmt.Fprintf(w, "Enter new name for `%s`: ", oldName))
+		if _, err := fmt.Fscan(r, &newName); err != nil {
+			x.Check2(fmt.Fprintln(w, "Something went wrong while scanning input: ", err))
+			x.Check2(fmt.Fprintln(w, "Try again!"))
 			continue
 		}
 		if checkReservedFunc(newName) {
-			fmt.Println(reservedNameError)
+			x.Check2(fmt.Fprintln(w, reservedNameError))
 			continue
 		}
 		if _, ok := existingNameMap[newName]; ok {
-			fmt.Println(existingNameError)
+			x.Check2(fmt.Fprintln(w, existingNameError))
 			continue
 		}
 		// if no error encountered, means name is valid, so break
@@ -196,29 +220,39 @@ func getPredSchemaString(newPredName string, schemaNode *pb.SchemaNode) string {
 // getTypeSchemaString generates a string which can be used to alter a type in schema.
 // It generates the type string using new type and predicate names. So, if this type
 // previously had a predicate for which we got a new name, then the generated string
-// will contain the new name for that predicate. For example:
+// will contain the new name for that predicate. Also, if some predicates need to be
+// removed from the type, then they can be supplied in predsToRemove. For example:
 // initialType:
-// 	type {
+// 	type Person {
 // 		name
 // 		age
+// 		unnecessaryEdge
 // 	}
 // also,
+// 	newTypeName = "Human"
 // 	newPredNames = {
-// 		"age": "mAge'
+// 		"age": "ageOnEarth'
+// 	}
+// 	predsToRemove = {
+// 		"unnecessaryEdge": {}
 // 	}
 // then returned type string will be:
-// 	type {
+// 	type Human {
 // 		name
-// 		mAge
+// 		ageOnEarth
 // 	}
 func getTypeSchemaString(newTypeName string, typeNode *schemaTypeNode,
-	newPredNames map[string]string) string {
+	newPredNames map[string]string, predsToRemove map[string]struct{}) string {
 	var builder strings.Builder
 	builder.WriteString("type ")
 	builder.WriteString(newTypeName)
 	builder.WriteString(" {\n")
 
 	for _, oldPred := range typeNode.Fields {
+		if _, ok := predsToRemove[oldPred.Name]; ok {
+			continue
+		}
+
 		builder.WriteString("  ")
 		newPredName, ok := newPredNames[oldPred.Name]
 		if ok {
