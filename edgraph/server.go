@@ -207,8 +207,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			attr = op.DropValue
 		}
 
-		// Reserved predicates cannot be dropped.
-		if x.IsReservedPredicate(attr) {
+		// Pre-defined predicates cannot be dropped.
+		if x.IsPreDefinedPredicate(attr) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
 				attr)
 			return empty, err
@@ -235,8 +235,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
-		// Reserved types cannot be dropped.
-		if x.IsReservedType(op.DropValue) {
+		// Pre-defined types cannot be dropped.
+		if x.IsPreDefinedType(op.DropValue) {
 			err := errors.Errorf("type %s is reserved and is not allowed to be dropped",
 				op.DropValue)
 			return empty, err
