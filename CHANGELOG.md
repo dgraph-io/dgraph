@@ -170,6 +170,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#4581]: https://github.com/dgraph-io/dgraph/issues/4581
 [#4907]: https://github.com/dgraph-io/dgraph/issues/4907
 [#5424]: https://github.com/dgraph-io/dgraph/issues/5424
+[#5436]: https://github.com/dgraph-io/dgraph/issues/5436
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
