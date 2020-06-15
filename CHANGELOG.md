@@ -16,10 +16,11 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Send CID for sentry events. ([#5625][])
 - Alpha: Enable bloom filter caching ([#5552][])
 - Add support for multiple uids in uid_in function ([#5292][])
+- Update badger to commit e7b6e76f96e8. 
 - Enterprise features
   - /health endpoint now shows Enterprise Features available. Fixes [#5234][]. ([#5293][])
   - GraphQL Changes for /health endpoint's Enterprise features info. Fixes [#5234][]. ([#5308][])
-  - Use encryption in temp badger, fix compilation on 32bit. ([#4963][])
+  - Use encryption in temp badger, fix compilation on 32-bit. ([#4963][])
   - **Breaking changes**
     - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])			
 
