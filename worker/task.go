@@ -19,7 +19,6 @@ package worker
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -366,7 +365,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 	// we are just logging when srcFn.n != len(q.UidList.Uids) and returning error when this
 	// happens.
 	if srcFn.n != len(q.UidList.Uids) {
-		return fmt.Errorf()
+		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
+			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
 	}
 
 	// This function has small boilerplate as handleUidPostings, around how the code gets
