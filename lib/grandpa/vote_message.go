@@ -160,10 +160,18 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 	s.mapLock.Lock()
 	defer s.mapLock.Unlock()
 
+	just := &Justification{
+		Vote:        vote,
+		Signature:   m.Message.Signature,
+		AuthorityID: pk.AsBytes(),
+	}
+
 	if m.Stage == prevote {
 		s.prevotes[pk.AsBytes()] = vote
+		s.pvJustifications = append(s.pvJustifications, just)
 	} else if m.Stage == precommit {
 		s.precommits[pk.AsBytes()] = vote
+		s.pcJustifications = append(s.pcJustifications, just)
 	}
 
 	return vote, nil

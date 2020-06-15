@@ -182,7 +182,7 @@ func TestEncode(t *testing.T) {
 	for _, test := range encodeTests {
 
 		buffer := bytes.Buffer{}
-		se := Encoder{&buffer}
+		se := Encoder{Writer: &buffer}
 		bytesEncoded, err := se.Encode(test.val)
 		output := buffer.Bytes()
 

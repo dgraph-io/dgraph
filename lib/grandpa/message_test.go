@@ -1,28 +1,38 @@
 package grandpa
 
 import (
+	"bytes"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/scale"
 
 	"github.com/stretchr/testify/require"
 )
+
+var testVote = &Vote{
+	hash:   common.Hash{0xa, 0xb, 0xc, 0xd},
+	number: 999,
+}
+
+var testSignature = [64]byte{1, 2, 3, 4}
+var testAuthorityID = [32]byte{5, 6, 7, 8}
 
 func TestDecodeMessage_VoteMessage(t *testing.T) {
 	gs := &Service{}
 
 	cm := &ConsensusMessage{
 		ConsensusEngineID: types.GrandpaEngineID,
-		Data:              common.MustHexToBytes("0x004d000000000000006300000000000000017db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a777700000000000050de12b09722c4676f022d7200001b90183b3cf7e2e0a5ec009859b3c0956db6ccf35ac019ff5fd73640e3f0dcf658a92b56842b7821f4b7e77eb891931d370034602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
+		Data:              common.MustHexToBytes("0x004d000000000000006300000000000000017db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a777700000000000036e6eca85489bebbb0f687ca5404748d5aa2ffabee34e3ed272cc7b2f6d0a82c65b99bc7cd90dbc21bb528289ebf96705dbd7d96918d34d815509b4e0e2a030f34602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
 	}
 
 	msg, err := gs.DecodeMessage(cm)
 	require.NoError(t, err)
 
-	sigb := common.MustHexToBytes("0x50de12b09722c4676f022d7200001b90183b3cf7e2e0a5ec009859b3c0956db6ccf35ac019ff5fd73640e3f0dcf658a92b56842b7821f4b7e77eb891931d3700")
+	sigb := common.MustHexToBytes("0x36e6eca85489bebbb0f687ca5404748d5aa2ffabee34e3ed272cc7b2f6d0a82c65b99bc7cd90dbc21bb528289ebf96705dbd7d96918d34d815509b4e0e2a030f")
 	sig := [64]byte{}
 	copy(sig[:], sigb)
 
@@ -42,11 +52,16 @@ func TestDecodeMessage_VoteMessage(t *testing.T) {
 }
 
 func TestDecodeMessage_FinalizationMessage(t *testing.T) {
-	gs := &Service{}
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	gs := &Service{
+		keypair: kr.Alice,
+	}
 
 	cm := &ConsensusMessage{
 		ConsensusEngineID: types.GrandpaEngineID,
-		Data:              common.MustHexToBytes("0x014d000000000000007db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a0100000000000000"),
+		Data:              common.MustHexToBytes("0x014d000000000000007db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a0000000000000000040a0b0c0d00000000000000000000000000000000000000000000000000000000e7030000000000000102030400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000034602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
 	}
 
 	msg, err := gs.DecodeMessage(cm)
@@ -56,7 +71,14 @@ func TestDecodeMessage_FinalizationMessage(t *testing.T) {
 		Round: 77,
 		Vote: &Vote{
 			hash:   common.MustHexToHash("0x7db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a"),
-			number: 1,
+			number: 0,
+		},
+		Justification: []*Justification{
+			{
+				Vote:        testVote,
+				Signature:   testSignature,
+				AuthorityID: gs.publicKeyBytes(),
+			},
 		},
 	}
 
@@ -113,16 +135,56 @@ func TestFinalizationMessageToConsensusMessage(t *testing.T) {
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 
-	fm, err := gs.newFinalizationMessage(gs.head, 77)
-	require.NoError(t, err)
+	gs.justification[77] = []*Justification{
+		{
+			Vote:        testVote,
+			Signature:   testSignature,
+			AuthorityID: gs.publicKeyBytes(),
+		},
+	}
 
+	fm := gs.newFinalizationMessage(gs.head, 77)
 	cm, err := fm.ToConsensusMessage()
 	require.NoError(t, err)
 
 	expected := &ConsensusMessage{
 		ConsensusEngineID: types.GrandpaEngineID,
-		Data:              common.MustHexToBytes("0x014d000000000000007db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a0000000000000000"),
+		Data:              common.MustHexToBytes("0x014d000000000000007db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a0000000000000000040a0b0c0d00000000000000000000000000000000000000000000000000000000e7030000000000000102030400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000034602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
 	}
 
 	require.Equal(t, expected, cm)
+}
+
+func TestJustificationEncoding(t *testing.T) {
+	just := &Justification{
+		Vote:        testVote,
+		Signature:   testSignature,
+		AuthorityID: testAuthorityID,
+	}
+
+	enc, err := just.Encode()
+	require.NoError(t, err)
+
+	rw := &bytes.Buffer{}
+	rw.Write(enc)
+	dec, err := new(Justification).Decode(rw)
+	require.NoError(t, err)
+	require.Equal(t, just, dec)
+}
+
+func TestJustificationArrayEncoding(t *testing.T) {
+	just := []*Justification{
+		{
+			Vote:        testVote,
+			Signature:   testSignature,
+			AuthorityID: testAuthorityID,
+		},
+	}
+
+	enc, err := scale.Encode(just)
+	require.NoError(t, err)
+
+	dec, err := scale.Decode(enc, make([]*Justification, 1))
+	require.NoError(t, err)
+	require.Equal(t, just, dec.([]*Justification))
 }

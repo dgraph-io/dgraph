@@ -41,16 +41,19 @@ type Service struct {
 	stopped    bool
 
 	// current state information
-	state           *State                             // current state
-	prevotes        map[ed25519.PublicKeyBytes]*Vote   // pre-votes for next state
-	precommits      map[ed25519.PublicKeyBytes]*Vote   // pre-commits for next state
-	pvEquivocations map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-vote stage
-	pcEquivocations map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-commit stage
-	head            *types.Header                      // most recently finalized block
+	state            *State                             // current state
+	prevotes         map[ed25519.PublicKeyBytes]*Vote   // pre-votes for the current round
+	precommits       map[ed25519.PublicKeyBytes]*Vote   // pre-commits for the current round
+	pvJustifications []*Justification                   // pre-vote justifications for the current round TODO: is this used anywhere?
+	pcJustifications []*Justification                   // pre-commit justifications for the current round
+	pvEquivocations  map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-vote stage
+	pcEquivocations  map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-commit stage
+	head             *types.Header                      // most recently finalized block
 
 	// historical information
-	preVotedBlock      map[uint64]*Vote // map of round number -> pre-voted block
-	bestFinalCandidate map[uint64]*Vote // map of round number -> best final candidate
+	preVotedBlock      map[uint64]*Vote            // map of round number -> pre-voted block
+	bestFinalCandidate map[uint64]*Vote            // map of round number -> best final candidate
+	justification      map[uint64][]*Justification // map of round number -> round justification
 
 	// channels for communication with other services
 	in        chan FinalityMessage // only used to receive *VoteMessage
@@ -87,10 +90,13 @@ func NewService(cfg *Config) (*Service, error) {
 		keypair:            cfg.Keypair,
 		prevotes:           make(map[ed25519.PublicKeyBytes]*Vote),
 		precommits:         make(map[ed25519.PublicKeyBytes]*Vote),
+		pvJustifications:   []*Justification{},
+		pcJustifications:   []*Justification{},
 		pvEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
 		pcEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
 		preVotedBlock:      make(map[uint64]*Vote),
 		bestFinalCandidate: make(map[uint64]*Vote),
+		justification:      make(map[uint64][]*Justification),
 		head:               head,
 		in:                 make(chan FinalityMessage, 128),
 		out:                make(chan FinalityMessage, 128),
@@ -142,8 +148,11 @@ func (s *Service) initiate() error {
 
 	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
 	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
+	s.pvJustifications = []*Justification{}
+	s.pcJustifications = []*Justification{}
 	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
+	s.justification = make(map[uint64][]*Justification)
 
 	for {
 		err := s.playGrandpaRound()
@@ -175,11 +184,7 @@ func (s *Service) playGrandpaRound() error {
 
 	// if primary, broadcast the best final candidate from the previous round
 	if bytes.Equal(primary.key.Encode(), s.keypair.Public().Encode()) {
-		msg, err := s.newFinalizationMessage(s.head, s.state.round-1)
-		if err != nil {
-			return err
-		}
-
+		msg := s.newFinalizationMessage(s.head, s.state.round-1)
 		s.finalized <- msg
 	}
 
@@ -312,10 +317,7 @@ func (s *Service) attemptToFinalize() error {
 
 		// if we haven't received a finalization message for this block yet, broadcast a finalization message
 		log.Debug("[grandpa] finalized block!!!", "hash", s.head)
-		msg, err := s.newFinalizationMessage(s.head, s.state.round)
-		if err != nil {
-			return err
-		}
+		msg := s.newFinalizationMessage(s.head, s.state.round)
 
 		// TODO: safety
 		s.finalized <- msg
@@ -425,6 +427,9 @@ func (s *Service) finalize() error {
 
 	// set best final candidate
 	s.bestFinalCandidate[s.state.round] = bfc
+
+	// set justification
+	s.justification[s.state.round] = s.pcJustifications
 	s.mapLock.Unlock()
 
 	s.head, err = s.blockState.GetHeader(bfc.hash)
