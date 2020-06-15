@@ -418,12 +418,13 @@ func (s *Syncer) handleBody(body *types.Body) error {
 
 // handleHeader handles blocks (header+body) included in BlockResponses
 func (s *Syncer) handleBlock(block *types.Block) error {
-	_, err := s.executeBlock(block)
-	if err != nil {
-		return err
-	}
+	// TODO: needs to be fixed by #941
+	// _, err := s.executeBlock(block)
+	// if err != nil {
+	// 	return err
+	// }
 
-	err = s.blockState.AddBlock(block)
+	err := s.blockState.AddBlock(block)
 	if err != nil {
 		if err == blocktree.ErrParentNotFound && block.Header.Number.Cmp(big.NewInt(0)) != 0 {
 			return err

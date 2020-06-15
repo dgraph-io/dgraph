@@ -60,6 +60,7 @@ func (se *Encoder) EncodeCustom(in interface{}) (int, error) {
 		if err != nil {
 			return 0, err.(error)
 		}
+
 		return se.Writer.Write(val.([]byte))
 	}
 	return se.Encode(in)

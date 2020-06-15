@@ -37,6 +37,7 @@ func TestLoadKeystore(t *testing.T) {
 	require.Nil(t, err)
 
 	require.Equal(t, 1, ks.NumSr25519Keys())
+	require.Equal(t, 1, ks.NumEd25519Keys())
 }
 
 var testKeyTypes = []struct {

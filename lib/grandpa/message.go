@@ -103,6 +103,11 @@ func (v *VoteMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 	}, nil
 }
 
+// GetFinalizedHash returns ErrNotFinalizationMessage
+func (v *VoteMessage) GetFinalizedHash() (common.Hash, error) {
+	return common.Hash{}, ErrNotFinalizationMessage
+}
+
 // Justification represents a justification for a finalized block
 //nolint:structcheck
 type Justification struct {
@@ -137,6 +142,11 @@ func (f *FinalizationMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 		ConsensusEngineID: types.GrandpaEngineID,
 		Data:              append([]byte{finalizationType}, enc...),
 	}, nil
+}
+
+// GetFinalizedHash returns the hash of the block that's being finalized
+func (f *FinalizationMessage) GetFinalizedHash() (common.Hash, error) {
+	return f.Vote.hash, nil
 }
 
 func (s *Service) newFinalizationMessage(header *types.Header, round uint64) (*FinalizationMessage, error) { //nolint

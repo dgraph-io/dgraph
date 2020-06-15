@@ -59,3 +59,6 @@ var ErrCannotDecodeSubround = errors.New("cannot decode invalid subround value")
 
 // ErrInvalidMessageType is returned when a network.Message cannot be decoded
 var ErrInvalidMessageType = errors.New("cannot decode invalid message type")
+
+// ErrNotFinalizationMessage is returned when calling GetFinalizedHash on a message that isn't a FinalizationMessage
+var ErrNotFinalizationMessage = errors.New("cannot get finalized hash from VoteMessage")

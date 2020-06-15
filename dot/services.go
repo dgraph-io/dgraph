@@ -28,7 +28,9 @@ import (
 	"github.com/ChainSafe/gossamer/dot/system"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
+	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	log "github.com/ChainSafe/log15"
@@ -131,7 +133,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, bp BlockProducer, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
+func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
 	log.Info(
 		"[dot] creating core service...",
 		"authority", cfg.Core.Authority,
@@ -143,8 +145,9 @@ func createCoreService(cfg *Config, bp BlockProducer, rt *runtime.Runtime, ks *k
 		StorageState:     stateSrvc.Storage,
 		TransactionQueue: stateSrvc.TransactionQueue,
 		BlockProducer:    bp,
-		Runtime:          rt,
+		FinalityGadget:   fg,
 		Keystore:         ks,
+		Runtime:          rt,
 		MsgRec:           networkMsgs, // message channel from network service to core service
 		MsgSend:          coreMsgs,    // message channel from core service to network service
 		IsBlockProducer:  cfg.Core.Authority,
@@ -235,4 +238,27 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 // creates a service for providing system related information
 func createSystemService(cfg *types.SystemInfo) *system.Service {
 	return system.NewService(cfg)
+}
+
+// createGRANDPAService creates a new GRANDPA service
+func createGRANDPAService(rt *runtime.Runtime, st *state.Service, ks *keystore.Keystore) (*grandpa.Service, error) {
+	ad, err := rt.GrandpaAuthorities()
+	if err != nil {
+		return nil, err
+	}
+
+	voters := grandpa.NewVotersFromAuthorityData(ad)
+
+	keys := ks.Ed25519Keypairs()
+	if len(keys) == 0 {
+		return nil, errors.New("no ed25519 keys provided for GRANDPA")
+	}
+
+	cfg := &grandpa.Config{
+		BlockState: st.Block,
+		Voters:     voters,
+		Keypair:    keys[0].(*ed25519.Keypair),
+	}
+
+	return grandpa.NewService(cfg)
 }

@@ -33,9 +33,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// testMessageTimeout is the wait time for messages to be exchanged
-var testMessageTimeout = time.Second
-
 func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 	previousHash := blockState.BestBlockHash()
 	previousNum, err := blockState.BestBlockNumber()

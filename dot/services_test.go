@@ -74,7 +74,6 @@ func TestCreateCoreService(t *testing.T) {
 
 	ks := keystore.NewKeystore()
 	require.NotNil(t, ks)
-
 	rt, err := createRuntime(stateSrvc, ks)
 	require.NoError(t, err)
 
@@ -82,7 +81,7 @@ func TestCreateCoreService(t *testing.T) {
 	networkMsgs := make(chan network.Message)
 	syncChan := make(chan *big.Int)
 
-	coreSrvc, err := createCoreService(cfg, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
@@ -149,7 +148,7 @@ func TestCreateRPCService(t *testing.T) {
 	rt, err := createRuntime(stateSrvc, ks)
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{} // TODO: rpc service without network service
@@ -193,4 +192,36 @@ func TestCreateBABEService(t *testing.T) {
 	bs, err := createBABEService(cfg, rt, stateSrvc, ks)
 	require.NoError(t, err)
 	require.NotNil(t, bs)
+}
+
+func TestCreateGrandpaService(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	// TODO: improve dot tests #687
+	cfg.Core.Authority = true
+	cfg.Init.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	stateSrvc, err := createStateService(cfg)
+	require.Nil(t, err)
+
+	ks := keystore.NewKeystore()
+	kr, err := keystore.NewEd25519Keyring()
+	require.Nil(t, err)
+	ks.Insert(kr.Alice)
+
+	rt, err := createRuntime(stateSrvc, ks)
+	require.NoError(t, err)
+
+	gs, err := createGRANDPAService(rt, stateSrvc, ks)
+	require.NoError(t, err)
+	require.NotNil(t, gs)
 }

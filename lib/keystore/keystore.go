@@ -46,7 +46,12 @@ func (ks *Keystore) NumSr25519Keys() int {
 	return len(ks.Sr25519Keypairs())
 }
 
-// Insert crypto.Keypai into Keystore
+// NumEd25519Keys returns the number of ed25519 keys in the keystore
+func (ks *Keystore) NumEd25519Keys() int {
+	return len(ks.Ed25519Keypairs())
+}
+
+// Insert crypto.Keypair into Keystore
 func (ks *Keystore) Insert(kp crypto.Keypair) {
 	ks.lock.Lock()
 	defer ks.lock.Unlock()
@@ -55,7 +60,7 @@ func (ks *Keystore) Insert(kp crypto.Keypair) {
 	ks.keys[addr] = kp
 }
 
-// Get crypto.Keypai from Keystore
+// Get crypto.Keypair from Keystore
 func (ks *Keystore) Get(pub common.Address) crypto.Keypair {
 	ks.lock.RLock()
 	defer ks.lock.RUnlock()

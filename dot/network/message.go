@@ -81,6 +81,9 @@ func decodeMessage(r io.Reader) (m Message, err error) {
 	case TransactionMsgType:
 		m = new(TransactionMessage)
 		err = m.Decode(r)
+	case ConsensusMsgType:
+		m = new(ConsensusMessage)
+		err = m.Decode(r)
 	default:
 		return nil, fmt.Errorf("unsupported message type %d", msgType)
 	}

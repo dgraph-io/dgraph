@@ -127,30 +127,44 @@ func LoadKeystore(key string) (*Keystore, error) {
 
 	if key != "" {
 
-		kr, err := NewSr25519Keyring()
+		srkr, err := NewSr25519Keyring()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create keyring: %s", err)
+		}
+
+		edkr, err := NewEd25519Keyring()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create keyring: %s", err)
 		}
 
 		switch strings.ToLower(key) {
 		case "alice":
-			ks.Insert(kr.Alice)
+			ks.Insert(srkr.Alice)
+			ks.Insert(edkr.Alice)
 		case "bob":
-			ks.Insert(kr.Bob)
+			ks.Insert(srkr.Bob)
+			ks.Insert(edkr.Bob)
 		case "charlie":
-			ks.Insert(kr.Charlie)
+			ks.Insert(srkr.Charlie)
+			ks.Insert(edkr.Charlie)
 		case "dave":
-			ks.Insert(kr.Dave)
+			ks.Insert(srkr.Dave)
+			ks.Insert(edkr.Dave)
 		case "eve":
-			ks.Insert(kr.Eve)
+			ks.Insert(srkr.Eve)
+			ks.Insert(edkr.Eve)
 		case "ferdie":
-			ks.Insert(kr.Ferdie)
+			ks.Insert(srkr.Ferdie)
+			ks.Insert(edkr.Ferdie)
 		case "george":
-			ks.Insert(kr.George)
+			ks.Insert(srkr.George)
+			ks.Insert(edkr.George)
 		case "heather":
-			ks.Insert(kr.Heather)
+			ks.Insert(srkr.Heather)
+			ks.Insert(edkr.Heather)
 		case "ian":
-			ks.Insert(kr.Ian)
+			ks.Insert(srkr.Ian)
+			ks.Insert(edkr.Ian)
 		default:
 			return nil, fmt.Errorf("invalid test key provided")
 		}

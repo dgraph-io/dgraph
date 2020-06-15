@@ -48,6 +48,7 @@ type Service struct {
 	blockState       BlockState
 	storageState     StorageState
 	transactionQueue TransactionQueue
+	finalityGadget   FinalityGadget
 
 	// Current runtime and hash of the current runtime code
 	rt       *runtime.Runtime
@@ -81,6 +82,7 @@ type Config struct {
 	BlockState       BlockState
 	StorageState     StorageState
 	TransactionQueue TransactionQueue
+	FinalityGadget   FinalityGadget
 	Keystore         *keystore.Keystore
 	Runtime          *runtime.Runtime
 	BlockProducer    BlockProducer
@@ -138,6 +140,8 @@ func NewService(cfg *Config) (*Service, error) {
 		storageState:     cfg.StorageState,
 		transactionQueue: cfg.TransactionQueue,
 		isBlockProducer:  cfg.IsBlockProducer,
+		blockProducer:    cfg.BlockProducer,
+		finalityGadget:   cfg.FinalityGadget,
 		lock:             chanLock,
 		syncLock:         syncerLock,
 		blockNumOut:      cfg.SyncChan,
@@ -220,6 +224,12 @@ func (s *Service) Start() error {
 	if err != nil {
 		log.Error("[core] could not start syncer", "error", err)
 		return err
+	}
+
+	if s.finalityGadget != nil {
+		log.Debug("[core] routing finality gadget messages")
+		go s.sendVoteMessages()
+		go s.sendFinalizationMessages()
 	}
 
 	return nil
@@ -368,6 +378,13 @@ func (s *Service) handleReceivedMessage(msg network.Message) (err error) {
 		}
 
 		err = s.ProcessTransactionMessage(msg)
+	case network.ConsensusMsgType: // 5
+		msg, ok := msg.(*network.ConsensusMessage)
+		if !ok {
+			return ErrMessageCast("ConsensusMessage")
+		}
+
+		err = s.processConsensusMessage(msg)
 	default:
 		err = ErrUnsupportedMsgType(msgType)
 	}

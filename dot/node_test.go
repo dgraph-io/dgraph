@@ -28,9 +28,11 @@ import (
 	"github.com/ChainSafe/gossamer/dot/core"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
@@ -98,8 +100,13 @@ func TestNewNode(t *testing.T) {
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
 
-	_, err = NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks)
 	require.Nil(t, err)
+
+	bp := node.Services.Get(&babe.Service{})
+	require.Nil(t, bp)
+	fg := node.Services.Get(&grandpa.Service{})
+	require.Nil(t, fg)
 }
 
 func TestNewNode_Authority(t *testing.T) {
@@ -123,8 +130,13 @@ func TestNewNode_Authority(t *testing.T) {
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = true
 
-	_, err = NewNode(cfg, ks)
+	node, err := NewNode(cfg, ks)
 	require.Nil(t, err)
+
+	bp := node.Services.Get(&babe.Service{})
+	require.NotNil(t, bp)
+	fg := node.Services.Get(&grandpa.Service{})
+	require.NotNil(t, fg)
 }
 
 // TestStartNode
