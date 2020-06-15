@@ -120,8 +120,7 @@ func (ir *incrRollupi) Process(closer *y.Closer) {
 		case <-cleanupTick.C:
 			currTs := time.Now().UnixNano()
 			for hash, ts := range m {
-				// Remove entries from map which have been there for more
-				// than 10 seconds.
+				// Remove entries from map which have been there for there more than 10 seconds.
 				if currTs-ts >= int64(10*time.Second) {
 					delete(m, hash)
 				}
