@@ -44,7 +44,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - **Breaking changes**
     - [BREAKING] Vault Integration. ([#5402][])
  
- ### Fixed
+### Fixed
  
 - GraphQL: Add more validations for coercion of object/scalar and vice versa. ([#5534][])
 - GraphQL: Apply type filter for get query at root level. ([#5497][])
@@ -122,6 +122,55 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#4963]: https://github.com/dgraph-io/dgraph/issues/4963
 [#5380]: https://github.com/dgraph-io/dgraph/issues/5380
 [#5547]: https://github.com/dgraph-io/dgraph/issues/5547
+[#5534]: https://github.com/dgraph-io/dgraph/issues/5534
+[#5497]: https://github.com/dgraph-io/dgraph/issues/5497
+[#5296]: https://github.com/dgraph-io/dgraph/issues/5296
+[#5526]: https://github.com/dgraph-io/dgraph/issues/5526
+[#5531]: https://github.com/dgraph-io/dgraph/issues/5531
+[#5487]: https://github.com/dgraph-io/dgraph/issues/5487
+[#5316]: https://github.com/dgraph-io/dgraph/issues/5316
+[#5425]: https://github.com/dgraph-io/dgraph/issues/5425
+[#5362]: https://github.com/dgraph-io/dgraph/issues/5362
+[#5354]: https://github.com/dgraph-io/dgraph/issues/5354
+[#5329]: https://github.com/dgraph-io/dgraph/issues/5329
+[#5328]: https://github.com/dgraph-io/dgraph/issues/5328
+[#5317]: https://github.com/dgraph-io/dgraph/issues/5317
+[#5588]: https://github.com/dgraph-io/dgraph/issues/5588
+[#5605]: https://github.com/dgraph-io/dgraph/issues/5605
+[#5571]: https://github.com/dgraph-io/dgraph/issues/5571
+[#5561]: https://github.com/dgraph-io/dgraph/issues/5561
+[#5503]: https://github.com/dgraph-io/dgraph/issues/5503
+[#5551]: https://github.com/dgraph-io/dgraph/issues/5551
+[#5544]: https://github.com/dgraph-io/dgraph/issues/5544
+[#5524]: https://github.com/dgraph-io/dgraph/issues/5524
+[#5467]: https://github.com/dgraph-io/dgraph/issues/5467
+[#5498]: https://github.com/dgraph-io/dgraph/issues/5498
+[#5492]: https://github.com/dgraph-io/dgraph/issues/5492
+[#5478]: https://github.com/dgraph-io/dgraph/issues/5478
+[#5418]: https://github.com/dgraph-io/dgraph/issues/5418
+[#5426]: https://github.com/dgraph-io/dgraph/issues/5426
+[#5410]: https://github.com/dgraph-io/dgraph/issues/5410
+[#5414]: https://github.com/dgraph-io/dgraph/issues/5414
+[#5397]: https://github.com/dgraph-io/dgraph/issues/5397
+[#5007]: https://github.com/dgraph-io/dgraph/issues/5007
+[#5334]: https://github.com/dgraph-io/dgraph/issues/5334
+[#5333]: https://github.com/dgraph-io/dgraph/issues/5333
+[#5209]: https://github.com/dgraph-io/dgraph/issues/5209
+[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
+[#5138]: https://github.com/dgraph-io/dgraph/issues/5138
+[#3873]: https://github.com/dgraph-io/dgraph/issues/3873
+[#5137]: https://github.com/dgraph-io/dgraph/issues/5137
+[#5126]: https://github.com/dgraph-io/dgraph/issues/5126
+[#5085]: https://github.com/dgraph-io/dgraph/issues/5085
+[#5051]: https://github.com/dgraph-io/dgraph/issues/5051
+[#5023]: https://github.com/dgraph-io/dgraph/issues/5023
+[#4878]: https://github.com/dgraph-io/dgraph/issues/4878
+[#5185]: https://github.com/dgraph-io/dgraph/issues/5185
+[#5148]: https://github.com/dgraph-io/dgraph/issues/5148
+[#4798]: https://github.com/dgraph-io/dgraph/issues/4798
+[#4581]: https://github.com/dgraph-io/dgraph/issues/4581
+[#4907]: https://github.com/dgraph-io/dgraph/issues/4907
+[#5424]: https://github.com/dgraph-io/dgraph/issues/5424
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
