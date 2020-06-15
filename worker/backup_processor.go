@@ -50,6 +50,8 @@ type BackupProcessor struct {
 	plList []*pb.PostingList
 	// bplList is an array of pre-allocated pb.BackupPostingList objects.
 	bplList []*pb.BackupPostingList
+	// kvPool
+	kvPool *sync.Pool
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
@@ -58,6 +60,11 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *BackupProcessor {
 		Request: req,
 		plList:  make([]*pb.PostingList, backupNumGo),
 		bplList: make([]*pb.BackupPostingList, backupNumGo),
+		kvPool: &sync.Pool{
+			New: func() interface{} {
+				return &bpb.KV{}
+			},
+		},
 	}
 
 	for i := range bp.plList {
@@ -195,7 +202,12 @@ func (pr *BackupProcessor) WriteBackup(ctx context.Context) (*pb.Status, error) 
 				maxVersion = kv.Version
 			}
 		}
-		return writeKVList(list, gzWriter)
+		err := writeKVList(list, gzWriter)
+
+		for _, kv := range list.Kv {
+			pr.kvPool.Put(kv)
+		}
+		return err
 	}
 
 	if err := stream.Orchestrate(context.Background()); err != nil {
@@ -273,6 +285,9 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 		return list, nil
 	}
 
+	kv := pr.kvPool.Get().(*bpb.KV)
+	kv.Reset()
+
 	switch item.UserMeta() {
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 		l, err := posting.ReadPostingList(key, itr)
@@ -280,7 +295,7 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
 
-		kv, err := l.SingleListRollup()
+		err = l.SingleListRollup(kv)
 		if err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
@@ -308,13 +323,11 @@ func (pr *BackupProcessor) toBackupList(key []byte, itr *badger.Iterator) (
 			return nil, err
 		}
 
-		kv := &bpb.KV{
-			Key:       backupKey,
-			Value:     valCopy,
-			UserMeta:  []byte{item.UserMeta()},
-			Version:   item.Version(),
-			ExpiresAt: item.ExpiresAt(),
-		}
+		kv.Key = backupKey
+		kv.Value = valCopy
+		kv.UserMeta = []byte{item.UserMeta()}
+		kv.Version = item.Version()
+		kv.ExpiresAt = item.ExpiresAt()
 		list.Kv = append(list.Kv, kv)
 	default:
 		return nil, errors.Errorf(
