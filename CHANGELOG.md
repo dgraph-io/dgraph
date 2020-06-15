@@ -16,7 +16,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Send CID for sentry events. ([#5625][])
 - Alpha: Enable bloom filter caching ([#5552][])
 - Add support for multiple uids in uid_in function ([#5292][])
-- Update badger to commit e7b6e76f96e8. 
+- Update badger to commit [e7b6e76f96e8][]. ([#5537][])
 - Enterprise features
   - /health endpoint now shows Enterprise Features available. Fixes [#5234][]. ([#5293][])
   - GraphQL Changes for /health endpoint's Enterprise features info. Fixes [#5234][]. ([#5308][])
@@ -173,6 +173,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#4907]: https://github.com/dgraph-io/dgraph/issues/4907
 [#5424]: https://github.com/dgraph-io/dgraph/issues/5424
 [#5436]: https://github.com/dgraph-io/dgraph/issues/5436
+[#5537]: https://github.com/dgraph-io/dgraph/issues/5537
+[e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
