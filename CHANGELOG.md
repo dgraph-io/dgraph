@@ -8,9 +8,120 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ### Changed
 
+- GraphQL: make updateGQLSchema always return the new schema. ([#5540][])
+- Return error list while validating GraphQL schema. ([#5576][])
+- Send CID for sentry events. ([#5625][])
+- GraphQL: Allow user to define and pass arguments to fields. ([#5562][])	
+- Alpha: Enable bloom filter caching ([#5552][])
+- GraphQL: move alias to end of graphql pipeline. ([#5369][])	
+- Add support for multiple uids in uid_in function ([#5292][])
+- Enterprise features
+  - /health endpoint now shows Enterprise Features available. Fixes [#5234][]. ([#5293][])
+  - GraphQL Changes for /health endpoint's Enterprise features info. Fixes [#5234][]. ([#5308][])
+  - Use encryption in temp badger, fix compilation on 32bit. ([#4963][])
+  - **Breaking changes**
+    - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])			
+
+  
 ### Added
 
-### Fixed
+- GraphQL: add Graphql-TouchedUids header in HTTP response. ([#5572][])
+- GraphQL: Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5179][])	
+- GraphQL: Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])	
+- GraphQL: support existing gqlschema nodes without xid. ([#5457][])
+- GraphQL: Add custom logic feature. ([#5004][])
+- GraphQL: Add subscription feature. ([#5134][])
+- GraphQL: Add extensions ([#5157][])
+- Add LogRequest variable to GraphQL config input. ([#5197][])
+- Allow backup ID to be passed to restore endpoint. ([#5208][])
+- Added support for application/graphQL to graphQL endpoints. ([#5125][])
+- Add support for xidmap in bulkloader. Fixes [#4917][]. ([#5090][])
+- Add GraphQL admin endpoint to list backups. ([#5307][]) 
+- Enterprise features
+  - Backup can take S3 credentials from IAM. ([#5387][])
+  - Online restore. ([#5095][]) 
+  - Add support for encrypted backups in online restores. ([#5226][])
+  - **Breaking changes**
+    - [BREAKING] Vault Integration. ([#5402][])
+ 
+ ### Fixed
+ 
+- GraphQL: Add more validations for coercion of object/scalar and vice versa. ([#5534][])
+- GraphQL: Apply type filter for get query at root level. ([#5497][])
+- GraphQL: Fix mutation on predicate with special characters having dgraph directive. Fixes [#5296][]. ([#5526][])	
+- GraphQL: Return better error message if a type only contains ID field. ([#5531][])
+- GraphQL: Coerce value for scalar types correctly. ([#5487][])
+- GraphQL: Minor delete mutation msg fix. ([#5316][])
+- GraphQL: report all errors during schema update. ([#5425][])
+- GraphQL: Do graphql query/mutation validation in the mock server. ([#5362][])
+- GraphQL: remove custom directive from internal schema. ([#5354][])
+- GraphQL: Recover from panic within goroutines used for resolving custom fields. ([#5329][])
+- GraphQL: Start collecting and returning errors from remote remote GraphQL endpoints. (#5328][])
+- GraphQL: Fix response for partial admin queries. ([#5317][])		
+- Online restores only processes backups for the alpha's group. ([#5588][])
+- Change backup groupId from int to uint32. ([#5605][])
+- Avoid assigning duplicate RAFT IDs to new nodes. Fixes #[5436][]. ([#5571][])
+- Alpha: Gracefully shutdown ludicrous mode. ([#5561][])	
+- Use rampMeter for Executor. ([#5503][])
+- Dont set n.ops map entries to nil. Instead just delete them. ([#5551][])
+- Add check on rebalance interval. ([#5544][])
+- Queries or mutations shouldn't be part of generated Dgraph schema. ([#5524][])
+- Sent restore proposals to all groups asyncronouosly. ([#5467][])
+- Fix long lines in export.go. ([#5498][])
+- Fix warnings about unkeyed literals. ([#5492][])
+- Remove redundant conversions between string and []byte. ([#5478][])
+- Propogate request context while handling queries. ([#5418][])
+- K-Shortest path query fix. Fixes #5426. ([#5410][])			
+- Worker: Return nil on error. ([#5414][])
+- Fix warning about issues with the cancel function. ([#5397][]). 
+- Replace TxnWriter with WriteBatch. ([#5007][])
+- Add a check to throw an error is a nil pointer is passed to unmarshalOrCopy. ([#5334][])
+- Remove noisy logs in tablet move. ([#5333][])
+- Support bulk loader use-case to import unencrypted export and encrypt the result.  ([#5209][])
+- Use errGroup in handleValuePostings. Fixes [#3873][]. ([#5138][])
+- Alpha Close: Wait for indexing to complete. Fixes #3873. (#5137)		
+- If we don't have any schema updates, avoid running the indexing sequence. ([#5126][])
+- Pass read timestamp to getNew. ([#5085][])
+- Indicate dev environment in Sentry events. ([#5051][])	
+- Replaced s2 contains point methods with go-geom. ([#5023][])	
+- **Breaking changes**
+  - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])			   
+  - [Breaking] Remove shorthand for store_xids in bulk loader.  ([#5148][])		
+  - [BREAKING] Introduce new facets format. Fixes [#4798][], [#4581][], [#4907][]. ([#5424][])
+
+[#5572]: https://github.com/dgraph-io/dgraph/issues/5572
+[#4789]: https://github.com/dgraph-io/dgraph/issues/4789
+[#5179]: https://github.com/dgraph-io/dgraph/issues/5179
+[#4758]: https://github.com/dgraph-io/dgraph/issues/4758
+[#5162]: https://github.com/dgraph-io/dgraph/issues/5162
+[#5457]: https://github.com/dgraph-io/dgraph/issues/5457
+[#5004]: https://github.com/dgraph-io/dgraph/issues/5004
+[#5134]: https://github.com/dgraph-io/dgraph/issues/5134
+[#5157]: https://github.com/dgraph-io/dgraph/issues/5157
+[#5197]: https://github.com/dgraph-io/dgraph/issues/5197
+[#5387]: https://github.com/dgraph-io/dgraph/issues/5387
+[#5226]: https://github.com/dgraph-io/dgraph/issues/5226
+[#5208]: https://github.com/dgraph-io/dgraph/issues/5208
+[#5125]: https://github.com/dgraph-io/dgraph/issues/5125
+[#5095]: https://github.com/dgraph-io/dgraph/issues/5095
+[#4917]: https://github.com/dgraph-io/dgraph/issues/4917
+[#5090]: https://github.com/dgraph-io/dgraph/issues/5090
+[#5307]: https://github.com/dgraph-io/dgraph/issues/5307
+[#5402]: https://github.com/dgraph-io/dgraph/issues/5402
+[#5540]: https://github.com/dgraph-io/dgraph/issues/5540
+[#5576]: https://github.com/dgraph-io/dgraph/issues/5576
+[#5625]: https://github.com/dgraph-io/dgraph/issues/5625
+[#5562]: https://github.com/dgraph-io/dgraph/issues/5562
+[#5552]: https://github.com/dgraph-io/dgraph/issues/5552
+[#5369]: https://github.com/dgraph-io/dgraph/issues/5369
+[#5292]: https://github.com/dgraph-io/dgraph/issues/5292
+[#5234]: https://github.com/dgraph-io/dgraph/issues/5234
+[#5293]: https://github.com/dgraph-io/dgraph/issues/5293
+[#5234]: https://github.com/dgraph-io/dgraph/issues/5234
+[#5308]: https://github.com/dgraph-io/dgraph/issues/5308
+[#4963]: https://github.com/dgraph-io/dgraph/issues/4963
+[#5380]: https://github.com/dgraph-io/dgraph/issues/5380
+[#5547]: https://github.com/dgraph-io/dgraph/issues/5547
 
 ## [20.03.3] - 2020-06-02
 [20.03.3]: https://github.com/dgraph-io/dgraph/compare/v20.03.1...v20.03.3
