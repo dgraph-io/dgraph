@@ -209,9 +209,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// Pre-defined predicates cannot be dropped.
 		if x.IsPreDefinedPredicate(attr) {
-			err := errors.Errorf("predicate %s is pre-defined and is not allowed to be dropped",
-				attr)
-			return empty, err
+			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" dropped", attr)
 		}
 
 		nq := &api.NQuad{
@@ -237,9 +236,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		// Pre-defined types cannot be dropped.
 		if x.IsPreDefinedType(op.DropValue) {
-			err := errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
+			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
 				op.DropValue)
-			return empty, err
 		}
 
 		m.DropOp = pb.Mutations_TYPE
@@ -262,9 +260,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
 		if schema.IsPreDefinedPredicateChanged(update) {
-			err := errors.Errorf("predicate %s is pre-defined and is not allowed to be modified",
-				update.Predicate)
-			return nil, err
+			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" modified", update.Predicate)
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {

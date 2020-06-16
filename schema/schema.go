@@ -550,6 +550,7 @@ func CompleteInitialTypes() []*pb.TypeUpdate {
 	return initialTypesInternal(true)
 }
 
+// NOTE: whenever defining a new type here, please also add it in x/keys.go: preDefinedTypeMap
 func initialTypesInternal(all bool) []*pb.TypeUpdate {
 	var initialTypes []*pb.TypeUpdate
 	initialTypes = append(initialTypes,
