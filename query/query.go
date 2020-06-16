@@ -1304,6 +1304,13 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	if sg.DestUIDs == nil || sg.IsGroupBy() {
 		return nil
 	}
+
+	cascadeArgMap := make(map[string]bool)
+	for _, pred := range sg.Params.Cascade {
+		cascadeArgMap[pred] = true
+	}
+	cascadeAllPreds := cascadeArgMap["__all__"]
+
 	out := make([]uint64, 0, len(sg.DestUIDs.Uids))
 	if sg.Params.Alias == "shortest" {
 		goto AssignStep
@@ -1335,9 +1342,7 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 	// Filter out UIDs that don't have atleast one UID in every child.
 	for i, uid := range sg.DestUIDs.Uids {
 		var exclude bool
-		m := make(map[string]bool)
 		for _, child := range sg.Children {
-			m[child.Attr] = true
 			// For uid we dont actually populate the uidMatrix or values. So a node asking for
 			// uid would always be excluded. Therefore we skip it.
 			if child.Attr == "uid" {
@@ -1346,22 +1351,14 @@ func (sg *SubGraph) populateVarMap(doneVars map[string]varValue, sgPath []*SubGr
 
 			// If the length of child UID list is zero and it has no valid value, then the
 			// current UID should be removed from this level.
-			if !child.IsInternal() &&
+			if (cascadeAllPreds || cascadeArgMap[child.Attr]) &&
+				!child.IsInternal() &&
 				// Check len before accessing index.
 				(len(child.valueMatrix) <= i || len(child.valueMatrix[i].Values) == 0) &&
 				(len(child.counts) <= i) &&
 				(len(child.uidMatrix) <= i || len(child.uidMatrix[i].Uids) == 0) {
 				exclude = true
 				break
-			}
-		}
-		// For parameterized @cascade, make sure all params seen in map.
-		if sg.Params.Cascade[0] != "__all__" {
-			for _, param := range sg.Params.Cascade {
-				if _, ok := m[param]; !ok {
-					exclude = true
-					break
-				}
 			}
 		}
 		if !exclude {
