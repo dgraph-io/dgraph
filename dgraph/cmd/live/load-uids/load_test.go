@@ -171,6 +171,41 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	checkLoadedData(t, true)
 }
 
+func TestLiveLoadExportedSchema(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	// initiate export
+	params := &testutil.GraphQLParams{
+		Query: `
+			mutation {
+			  export(input: {format: "rdf"}) {
+				response {
+				  code
+				  message
+				}
+			  }
+			}`,
+	}
+	resp := testutil.MakeGQLRequest(t, params)
+	require.Nil(t, resp.Errors)
+
+	// wait a bit to be sure export is complete, then load exported schema
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", "export/*/g01.schema.gz", "--alpha", alphaService,
+			"-u", "groot", "-p", "password"},
+	}
+	err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading exported schema exited with error")
+
+	// delete export files
+	pipeline = [][]string{
+		{"rm", "-rf", "export"},
+	}
+	err = testutil.Pipeline(pipeline)
+	require.NoError(t, err, "removing exported schema failed")
+}
+
 func TestMain(m *testing.M) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	testDataDir = path.Dir(thisFile)
