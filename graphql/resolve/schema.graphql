@@ -39,6 +39,11 @@ type Post {
         postType: PostType @search
         author: Author!
         category: Category @hasInverse(field: posts)
+        ps: PostSecret
+}
+
+type PostSecret {
+       title: String! @id
 }
 
 type Category {
@@ -97,6 +102,11 @@ type MovieDirector {
         directed: [Movie] @dgraph(pred: "directed.movies")
 }
 
+type Lab {
+        name: String! @id
+        computers: [Computer]
+}
+
 # just for testing XID remove in list
 type Computer {
 	owners: [ComputerOwner!]
@@ -139,7 +149,7 @@ type Teacher implements People {
 }
 
 type Student implements People {
-        taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
 type Message {
