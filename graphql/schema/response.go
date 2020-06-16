@@ -192,12 +192,14 @@ type Trace struct {
 	Version string `json:"version"`
 
 	// Timestamps in RFC 3339 format.
-	StartTime time.Time `json:"startTime"`
-	EndTime   time.Time `json:"endTime"`
+	StartTime string `json:"startTime"`
+	EndTime   string `json:"endTime"`
+	Parsing    *OffsetDuration  `json:"parsing,omitempty"`
+	Validation *OffsetDuration  `json:"validation,omitempty"`
 
 	// Duration in nanoseconds, relative to the request start, as an integer.
 	Duration int64 `json:"duration"`
-	Execution  []*ResolverTrace `json:"execution,omitempty"`
+	Execution  *ExecutionTrace `json:"execution,omitempty"`
 }
 
 func (t *Trace) Merge(other *Trace) {
@@ -205,11 +207,16 @@ func (t *Trace) Merge(other *Trace) {
 		return
 	}
 
-	if len(other.Execution) != 0 {
-		t.Execution = append(t.Execution, other.Execution...)
+	if len(other.Execution.Resolvers) != 0 {
+		t.Execution.Resolvers = append(t.Execution.Resolvers, t.Execution.Resolvers...)
 	}
 }
 
+//ExecutionTrace records all the resolvers
+type ExecutionTrace struct{
+	Resolvers []*ResolverTrace `json:"resolvers"`
+
+}
 // An OffsetDuration records the offset start and duration of GraphQL parsing/validation.
 type OffsetDuration struct {
 	// (comments from Apollo Tracing spec)

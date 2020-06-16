@@ -378,19 +378,21 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		glog.Errorf("Call to Resolve with no schema")
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
-
+    t,_ := time.Parse("2017-07-28T14:20:32.106Z",time.Now().String())
 	resp := &schema.Response{
 		Extensions: &schema.Extensions{
 			Tracing: &schema.Trace{
 				Version:   x.Version(),
-				StartTime: time.Now(),
+				StartTime: t.String(),
 			},
 		},
 	}
 	defer func() {
-		resp.Extensions.Tracing.EndTime = time.Now()
-		resp.Extensions.Tracing.Duration = resp.Extensions.Tracing.EndTime.Sub(resp.Extensions.
-			Tracing.StartTime).Nanoseconds()
+		t,_= time.Parse("2017-07-28T14:20:32.106Z",time.Now().String())
+		resp.Extensions.Tracing.EndTime = t.String()
+		start,_ := time.Parse("2017-07-28T14:20:32.106Z",resp.Extensions.Tracing.EndTime)
+		end,_ := time.Parse("2017-07-28T14:20:32.106Z",resp.Extensions.Tracing.EndTime)
+		resp.Extensions.Tracing.Duration =start.Sub(end).Nanoseconds()
 	}()
 	ctx = context.WithValue(ctx,resolveStartTime, resp.Extensions.Tracing.StartTime)
 
