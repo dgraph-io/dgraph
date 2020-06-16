@@ -2107,18 +2107,24 @@ func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 		return item.Errorf("Unable to peek lexer after cascade")
 	}
 
-	// e.g. @cascade {  or @cascade @
-	if items[0].Typ == itemLeftCurl || items[0].Typ == itemAt {
+	// check if it is without any args:
+	// 1. @cascade {
+	// 2. @cascade }
+	// 3. @cascade @
+	// 4. @cascade\n someOtherPred
+	if items[0].Typ == itemLeftCurl || items[0].Typ == itemRightCurl || items[0].
+		Typ == itemAt || items[0].Typ == itemName {
 		gq.Cascade = append(gq.Cascade, "__all__") // __all__ implies @cascade, the old directive.
 		return nil
 	}
+
 	count := 0
 	expectArg := true
 	it.Next()
 	item = it.Item()
 	//alias := ""
 	if item.Typ != itemLeftRound {
-		return item.Errorf("Expected a left round after cascade")
+		return item.Errorf("Expected a left round after cascade, got: %s", item.String())
 	}
 
 loop:
