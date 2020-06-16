@@ -83,7 +83,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
-	if groups().ServesGroup(req.GetGroupId()) {
+	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
 		return err
 	}
