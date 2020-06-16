@@ -324,6 +324,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
+		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
 	}
 	if p.SnapshotTs != nil {
 		for gid, ts := range p.SnapshotTs {
@@ -507,6 +508,7 @@ func (n *node) initAndStartNode() error {
 				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
+					x.WriteCidFile(id)
 					break
 				}
 				if err == errInvalidProposal {

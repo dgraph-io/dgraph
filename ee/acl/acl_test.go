@@ -1237,17 +1237,17 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	// We create three groups here, dev, dev-a and dev-b and add alice to two of them.
 	devGroupMut := `
 		_:g  <dgraph.xid>        "dev" .
-		_:g  <dgraph.type>       "Group" .
+		_:g  <dgraph.type>       "dgraph.type.Group" .
 		_:g1  <dgraph.xid>       "dev-a" .
-		_:g1  <dgraph.type>      "Group" .
+		_:g1  <dgraph.type>      "dgraph.type.Group" .
 		_:g2  <dgraph.xid>       "dev-b" .
-		_:g2  <dgraph.type>      "Group" .
+		_:g2  <dgraph.type>      "dgraph.type.Group" .
 		_:g  <dgraph.acl.rule>   _:r1 .
-		_:r1 <dgraph.type> "Rule" .
+		_:r1 <dgraph.type> "dgraph.type.Rule" .
 		_:r1 <dgraph.rule.predicate>  "name" .
 		_:r1 <dgraph.rule.permission> "4" .
 		_:g  <dgraph.acl.rule>   _:r2 .
-		_:r2 <dgraph.type> "Rule" .
+		_:r2 <dgraph.type> "dgraph.type.Rule" .
 		_:r2 <dgraph.rule.predicate>  "nickname" .
 		_:r2 <dgraph.rule.permission> "2" .
 	`
@@ -1260,7 +1260,7 @@ func addDataAndRules(ctx context.Context, t *testing.T, dg *dgo.Dgraph) map[stri
 	idQuery := fmt.Sprintf(`
 	{
 		userid as var(func: eq(dgraph.xid, "%s"))
-		gid as var(func: eq(dgraph.type, "Group")) @filter(eq(dgraph.xid, "dev") OR
+		gid as var(func: eq(dgraph.type, "dgraph.type.Group")) @filter(eq(dgraph.xid, "dev") OR
 			eq(dgraph.xid, "dev-a"))
 	}`, userid)
 	addAliceToGroups := &api.NQuad{
@@ -1390,7 +1390,7 @@ func TestQueryUserInfo(t *testing.T) {
 
 	query := `
 	{
-		me(func: type(User)) {
+		me(func: type(dgraph.type.User)) {
 			dgraph.xid
 			dgraph.user.group {
 				dgraph.xid
@@ -1693,7 +1693,7 @@ func TestWrongPermission(t *testing.T) {
 	require.NoError(t, err)
 
 	ruleMutation := `
-		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.type> "dgraph.type.Group" .
 		_:dev <dgraph.xid> "dev" .
 		_:dev <dgraph.acl.rule> _:rule1 .
 		_:rule1 <dgraph.rule.predicate> "name" .
@@ -1709,7 +1709,7 @@ func TestWrongPermission(t *testing.T) {
 	require.Contains(t, err.Error(), "Value for this predicate should be between 0 and 7")
 
 	ruleMutation = `
-		_:dev <dgraph.type> "Group" .
+		_:dev <dgraph.type> "dgraph.type.Group" .
 		_:dev <dgraph.xid> "dev" .
 		_:dev <dgraph.acl.rule> _:rule1 .
 		_:rule1 <dgraph.rule.predicate> "name" .
