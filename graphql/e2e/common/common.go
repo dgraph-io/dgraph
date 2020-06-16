@@ -309,6 +309,7 @@ func RunAll(t *testing.T) {
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
+	t.Run("three level deep", threeLevelDeepMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
