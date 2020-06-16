@@ -1604,6 +1604,32 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 	}
 
+	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+	if forwardHeaders != nil {
+		for _, h := range forwardHeaders.Children {
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) > 2 {
+				return append(errs, gqlerror.ErrorPosf(graphql.Position,
+					"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						", found: `%s`.",
+					typ.Name, field.Name, h.Value.Raw))
+			}
+		}
+	}
+
+	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+	if secretHeaders != nil {
+		for _, h := range secretHeaders.Children {
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) > 2 {
+				return append(errs, gqlerror.ErrorPosf(graphql.Position,
+					"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+						", found: `%s`.",
+					typ.Name, field.Name, h.Value.Raw))
+			}
+		}
+	}
+
 	if errs != nil {
 		return errs
 	}
@@ -1616,11 +1642,6 @@ func customDirectiveValidation(sch *ast.Schema,
 				key := strings.Split(h.Value.Raw, ":")
 				if len(key) == 1 {
 					key = []string{h.Value.Raw, h.Value.Raw}
-				} else if len(key) > 2 {
-					return append(errs, gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
-							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw))
 				}
 				// We try and fetch the value from the stored secrets.
 				val := secrets[key[1]]

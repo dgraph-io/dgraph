@@ -850,8 +850,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
-			} else if len(key) > 2 {
-				continue
 			}
 			val := string(hc.secrets[key[1]])
 			fconf.ForwardHeaders.Set(key[0], val)
@@ -866,8 +864,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
-			} else if len(key) > 2 {
-				continue
 			}
 			reqHeaderVal := f.op.header.Get(key[1])
 			fconf.ForwardHeaders.Set(key[0], reqHeaderVal)
