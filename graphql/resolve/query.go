@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
@@ -125,6 +126,11 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	if err != nil {
 		glog.Infof("Dgraph query execution failed : %s", err)
 		return emptyResult(schema.GQLWrapf(err, "Dgraph query failed"))
+	}
+
+	if string(resp.GetJson()) == fmt.Sprintf(`{"%s":[]}`, query.Name()) {
+		resp.Json = []byte(fmt.Sprintf(`{"%s":[{"dgraph.type":"%s"}]}`, query.Name(),
+			query.Type().Name()))
 	}
 
 	ext.TouchedUids = resp.GetMetrics().GetNumUids()[touchedUidsKey]
