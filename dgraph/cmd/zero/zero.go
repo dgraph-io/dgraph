@@ -595,7 +595,7 @@ func (s *Server) ShouldServe(
 	var proposal pb.ZeroProposal
 	// Multiple Groups might be assigned to same tablet, so during proposal we will check again.
 	tablet.Force = false
-	_, predicate, _ := x.ParseNamespaceAttr(tablet.Predicate)
+	_, predicate := x.ParseNamespaceAttr(tablet.Predicate)
 	if x.IsReservedPredicate(predicate) {
 		// Force all the reserved predicates to be allocated to group 1.
 		// This is to make it easier to stream ACL updates to all alpha servers
