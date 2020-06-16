@@ -19,6 +19,9 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"sort"
+	"strconv"
+
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/authorization"
@@ -27,8 +30,6 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
-	"sort"
-	"strconv"
 )
 
 const touchedUidsKey = "_total"
@@ -177,7 +178,7 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 		FieldName:  m.ResponseName(),
 		ReturnType: m.Type().String(),
 	}
-	timer := newtimer (ctx ,&resolverTrace.OffsetDuration)
+	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
 
@@ -217,14 +218,15 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
 	ext := &schema.Extensions{
 		Tracing: &schema.Trace{
-			Execution: &schema.ExecutionTrace{Resolvers: []*schema.ResolverTrace{
-				{
-					Dgraph: []*schema.LabeledOffsetDuration{
-						dgraphMutationDuration,
-						dgraphQueryDuration,
+			Execution: &schema.ExecutionTrace{
+				Resolvers: []*schema.ResolverTrace{
+					{
+						Dgraph: []*schema.LabeledOffsetDuration{
+							dgraphMutationDuration,
+							dgraphQueryDuration,
+						},
 					},
 				},
-			},
 			},
 		},
 	}
@@ -249,10 +251,9 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 		Mutations: upsert.Mutations,
 	}
 
-	mutationTimer := newtimer (ctx ,&dgraphMutationDuration.OffsetDuration)
+	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
 	mutationTimer.Start()
 	mutResp, err = mr.executor.Execute(ctx, req)
-
 	mutationTimer.Stop()
 
 	if err != nil {
@@ -292,15 +293,10 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	}
 	commit = true
 
-	queryTimer := newtimer (ctx ,&dgraphQueryDuration.OffsetDuration)
+	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-
-	qryResp, err := mr.executor.Execute(ctx,
-		&dgoapi.Request{
-			Query:    dgraph.AsString(dgQuery),
-			ReadOnly: true,
-		})
-
+	qryResp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
+		ReadOnly: true})
 	queryTimer.Stop()
 
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,

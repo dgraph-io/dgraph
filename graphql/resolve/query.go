@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
@@ -74,7 +75,7 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 		FieldName:  query.ResponseName(),
 		ReturnType: query.Type().String(),
 	}
-	timer := newtimer(ctx,&resolverTrace.OffsetDuration)
+	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
 
@@ -93,9 +94,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
 	ext := &schema.Extensions{
 		Tracing: &schema.Trace{
-			Execution: &schema.ExecutionTrace{Resolvers: []*schema.ResolverTrace{
-				{Dgraph: []*schema.LabeledOffsetDuration{dgraphQueryDuration}},
-			},
+			Execution: &schema.ExecutionTrace{
+				Resolvers: []*schema.ResolverTrace{
+					{Dgraph: []*schema.LabeledOffsetDuration{dgraphQueryDuration}},
+				},
 			},
 		},
 	}
@@ -115,12 +117,10 @@ func (qr *queryResolver) rewriteAndExecute(ctx context.Context, query schema.Que
 			query.ResponseName()))
 	}
 
-	queryTimer := newtimer (ctx ,&dgraphQueryDuration.OffsetDuration)
+	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
 	queryTimer.Start()
-
 	resp, err := qr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
 		ReadOnly: true})
-
 	queryTimer.Stop()
 
 	if err != nil {

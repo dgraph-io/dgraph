@@ -189,17 +189,20 @@ func (e *Extensions) Merge(ext *Extensions) {
 type Trace struct {
 	// (comments from Apollo Tracing spec)
 
-	Version string `json:"version"`
+	// Apollo Tracing Spec version
+	Version int `json:"version"`
 
-	// Timestamps in RFC 3339 format.
-	StartTime string `json:"startTime"`
+	// Timestamps in RFC 3339 nano format.
+	StartTime string `json:"startTime,"`
 	EndTime   string `json:"endTime"`
-	Parsing    *OffsetDuration  `json:"parsing,omitempty"`
-	Validation *OffsetDuration  `json:"validation,omitempty"`
 
 	// Duration in nanoseconds, relative to the request start, as an integer.
 	Duration int64 `json:"duration"`
-	Execution  *ExecutionTrace `json:"execution,omitempty"`
+
+	// Parsing and Validation not required at the moment.
+	//Parsing    *OffsetDuration `json:"parsing,omitempty"`
+	//Validation *OffsetDuration `json:"validation,omitempty"`
+	Execution *ExecutionTrace `json:"execution,omitempty"`
 }
 
 func (t *Trace) Merge(other *Trace) {
@@ -207,31 +210,26 @@ func (t *Trace) Merge(other *Trace) {
 		return
 	}
 
-	if len(other.Execution.Resolvers) != 0 {
-		t.Execution.Resolvers = append(t.Execution.Resolvers, t.Execution.Resolvers...)
+	if t.Execution == nil {
+		t.Execution = other.Execution
+	} else {
+		t.Execution.Merge(other.Execution)
 	}
 }
 
 //ExecutionTrace records all the resolvers
-type ExecutionTrace struct{
+type ExecutionTrace struct {
 	Resolvers []*ResolverTrace `json:"resolvers"`
-
-}
-// An OffsetDuration records the offset start and duration of GraphQL parsing/validation.
-type OffsetDuration struct {
-	// (comments from Apollo Tracing spec)
-
-	// Offset in nanoseconds, relative to the request start, as an integer
-	StartOffset int64 `json:"startOffset"`
-
-	// Duration in nanoseconds, relative to start of operation, as an integer.
-	Duration int64 `json:"duration"`
 }
 
-// LabeledOffsetDuration is an OffsetDuration with a string label.
-type LabeledOffsetDuration struct {
-	Label string `json:"label"`
-	OffsetDuration
+func (e *ExecutionTrace) Merge(other *ExecutionTrace) {
+	if e == nil || other == nil {
+		return
+	}
+
+	if len(other.Resolvers) != 0 {
+		e.Resolvers = append(e.Resolvers, other.Resolvers...)
+	}
 }
 
 // A ResolverTrace is a trace of one resolver.  In a traditional GraphQL server,
@@ -264,6 +262,23 @@ type ResolverTrace struct {
 	// of Dgraph operations for the query/mutation (including network latency)
 	// in nanoseconds.
 	Dgraph []*LabeledOffsetDuration `json:"dgraph"`
+}
+
+// An OffsetDuration records the offset start and duration of GraphQL parsing/validation.
+type OffsetDuration struct {
+	// (comments from Apollo Tracing spec)
+
+	// Offset in nanoseconds, relative to the request start, as an integer
+	StartOffset int64 `json:"startOffset"`
+
+	// Duration in nanoseconds, relative to start of operation, as an integer.
+	Duration int64 `json:"duration"`
+}
+
+// LabeledOffsetDuration is an OffsetDuration with a string label.
+type LabeledOffsetDuration struct {
+	Label string `json:"label"`
+	OffsetDuration
 }
 
 // A TimerFactory makes offset timers that can be used to fill out an OffsetDuration.
@@ -309,4 +324,3 @@ func (ot *offsetTimer) Start() {
 func (ot *offsetTimer) Stop() {
 	ot.backing.Duration = time.Since(ot.start).Nanoseconds()
 }
-
