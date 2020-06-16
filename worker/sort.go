@@ -58,8 +58,8 @@ func SortOverNetwork(ctx context.Context, q *pb.SortMessage) (*pb.SortResult, er
 	if err != nil {
 		return &emptySortResult, err
 	} else if gid == 0 {
-		_, attr, _ := x.ParseNamespaceAttr(q.Order[0].Attr)
-		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s", attr)
+		return &emptySortResult, errors.Errorf("Cannot sort by unknown attribute %s",
+			x.ParseAttr(q.Order[0].Attr))
 	}
 
 	if span := otrace.FromContext(ctx); span != nil {

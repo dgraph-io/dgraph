@@ -1551,159 +1551,170 @@ func TestNumUids(t *testing.T) {
 func TestMultiTenancy(t *testing.T) {
 	// See the cluster with sample data
 	createNamespace("dev")
-	setSchema(`
-	name :string .
-	`, "dev")
 
-	err := addTriplesToCluster(`
-	_:a <name> "balaji" .`, "dev")
+	t.Run("Testing mutation and query", func(t *testing.T) {
+		setSchema(`
+		name :string .
+		`, "dev")
 
-	require.NoError(t, err)
-	res, err := processQueryWithNamespace(context.Background(), t, `{
-		me(func:has(name)){
+		err := addTriplesToCluster(`
+		_:a <name> "balaji" .`, "dev")
+
+		require.NoError(t, err)
+		res, err := processQueryWithNamespace(context.Background(), t, `{
+			me(func:has(name)){
+				name
+			}
+		}`, `dev`)
+		require.JSONEq(t, res, `{"data":{"me":[{"name":"balaji"}]}}`)
+	})
+
+	t.Run("Testing type system", func(t *testing.T) {
+		// Test type system.
+		setSchema(`
+		name :string .
+		type Student{
 			name
 		}
-	}`, `dev`)
-	require.JSONEq(t, res, `{"data":{"me":[{"name":"balaji"}]}}`)
+		`, "dev")
+		err := addTriplesToCluster(`
+		_:a <name> "vegeta" .
+		_:a <dgraph.type> "Student" .`, "dev")
+		require.NoError(t, err)
+		res, err := processQueryWithNamespace(context.Background(), t, `{
+			me(func:type(Student)){
+				name
+			}
+		}`, `dev`)
+		require.NoError(t, err)
+		require.JSONEq(t, res, `{"data":{"me":[{"name":"vegeta"}]}}`)
+	})
 
-	// Test type system.
-	setSchema(`
-	name :string .
-	type Student{
-		name
-	}
-	`, "dev")
-	err = addTriplesToCluster(`
-	_:a <name> "vegeta" .
-	_:a <dgraph.type> "Student" .`, "dev")
-	require.NoError(t, err)
-	res, err = processQueryWithNamespace(context.Background(), t, `{
-		me(func:type(Student)){
-			name
-		}
-	}`, `dev`)
-	require.NoError(t, err)
-	require.JSONEq(t, res, `{"data":{"me":[{"name":"vegeta"}]}}`)
+	t.Run("Testing Schema Retrival", func(t *testing.T) {
 
-	// Test schema retrival.
-	res, err = getSchemaWithNamespace(context.Background(), t, `
+		// Test schema retrival.
+		res, err := getSchemaWithNamespace(context.Background(), t, `
 		schema {}
 	`, `dev`)
-	require.NoError(t, err)
-	fmt.Println(res)
-	require.JSONEq(t, `{
-		"schema":{
-		   "schema":[
-			  {
-				 "predicate":"dgraph.acl.rule",
-				 "type":"uid",
-				 "list":true
-			  },
-			  {
-				 "predicate":"dgraph.graphql.schema",
-				 "type":"string"
-			  },
-			  {
-				 "predicate":"dgraph.graphql.xid",
-				 "type":"string",
-				 "index":true,
-				 "tokenizer":[
-					"exact"
-				 ],
-				 "upsert":true
-			  },
-			  {
-				 "predicate":"dgraph.password",
-				 "type":"password"
-			  },
-			  {
-				 "predicate":"dgraph.rule.permission",
-				 "type":"int"
-			  },
-			  {
-				 "predicate":"dgraph.rule.predicate",
-				 "type":"string",
-				 "index":true,
-				 "tokenizer":[
-					"exact"
-				 ],
-				 "upsert":true
-			  },
-			  {
-				 "predicate":"dgraph.type",
-				 "type":"string",
-				 "index":true,
-				 "tokenizer":[
-					"exact"
-				 ],
-				 "list":true
-			  },
-			  {
-				 "predicate":"dgraph.user.group",
-				 "type":"uid",
-				 "reverse":true,
-				 "list":true
-			  },
-			  {
-				 "predicate":"dgraph.xid",
-				 "type":"string",
-				 "index":true,
-				 "tokenizer":[
-					"exact"
-				 ],
-				 "upsert":true
-			  },
-			  {
-				 "predicate":"name",
-				 "type":"string"
-			  }
-		   ],
-		   "types":[
-			  {
-				 "fields":[
-					{
-					   "name":"name"
-					}
-				 ],
-				 "name":"Student"
-			  }
-		   ]
-		}
-	 }`, res)
+		require.NoError(t, err)
+		fmt.Println(res)
+		require.JSONEq(t, `{
+			"schema":{
+		  	 "schema":[
+				  {
+					 "predicate":"dgraph.acl.rule",
+					 "type":"uid",
+					 "list":true
+				  },
+				  {
+					 "predicate":"dgraph.graphql.schema",
+					 "type":"string"
+				  },
+				  {
+					 "predicate":"dgraph.graphql.xid",
+					 "type":"string",
+					 "index":true,
+					 "tokenizer":[
+						"exact"
+					 ],
+					 "upsert":true
+				  },
+				  {
+					 "predicate":"dgraph.password",
+					 "type":"password"
+				  },
+				  {
+					 "predicate":"dgraph.rule.permission",
+					 "type":"int"
+				  },
+				  {
+					 "predicate":"dgraph.rule.predicate",
+					 "type":"string",
+					 "index":true,
+					 "tokenizer":[
+						"exact"
+					 ],
+					 "upsert":true
+				  },
+				  {
+					 "predicate":"dgraph.type",
+					 "type":"string",
+					 "index":true,
+					 "tokenizer":[
+						"exact"
+					 ],
+					 "list":true
+				  },
+				  {
+					 "predicate":"dgraph.user.group",
+					 "type":"uid",
+					 "reverse":true,
+					 "list":true
+				  },
+				  {
+					 "predicate":"dgraph.xid",
+					 "type":"string",
+					 "index":true,
+					 "tokenizer":[
+						"exact"
+					 ],
+					 "upsert":true
+				  },
+				  {
+					 "predicate":"name",
+					 "type":"string"
+				  }
+		   	],
+		   	"types":[
+				  {
+					 "fields":[
+						{
+						   "name":"name"
+						}
+					 ],
+					 "name":"Student"
+				  }
+		   	]
+		  }
+	 	}`, res)
 
-	createNamespace("emptynamespace")
-	// Trying to query data of default namespace in current namespace.
-	res, err = processQueryWithNamespace(context.Background(), t, `{
-		me(func:has(name), first: 5){
-		name
-	  }
-	  }`, "emptynamespace")
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"me":[]}}`, res)
+		createNamespace("emptynamespace")
+		// Trying to query data of default namespace in current namespace.
+		res, err = processQueryWithNamespace(context.Background(), t, `
+		{
+			me(func:has(name), first: 5){
+			name
+	  	  }
+	  	}`, "emptynamespace")
+		require.NoError(t, err)
+		require.JSONEq(t, `{"data":{"me":[]}}`, res)
+	})
 
-	// Mutating another namespace.
-	createNamespace("namespace1")
-	setSchema(`
-	name :string @index(term, exact, trigram) @count @lang .
-	`, "dev")
+	t.Run("Mutating different namespace", func(t *testing.T) {
+		// Mutating another namespace.
+		createNamespace("namespace1")
+		setSchema(`
+		name :string @index(term, exact, trigram) @count @lang .
+		`, "dev")
+		err := addTriplesToCluster(`
+		<0x888> <name> "vegeta" .`, "namespace1")
+		require.NoError(t, err)
+		// Create another namespace and try to delete the data in namespace1
+		createNamespace("namespace2")
+		setSchema(`
+		name :string @index(term, exact, trigram) @count @lang .
+		`, "namespace2")
 
-	err = addTriplesToCluster(`
-	<0x888> <name> "vegeta" .`, "namespace1")
-	require.NoError(t, err)
-	// Create another namespace and try to delete the data in namespace1
-	createNamespace("namespace2")
-	setSchema(`
-	name :string @index(term, exact, trigram) @count @lang .
-	`, "namespace2")
+		deleteTriplesInClusterWithNamespace(`<0x888> * * .`, "namespace2")
 
-	deleteTriplesInClusterWithNamespace(`<0x888> * * .`, "namespace2")
+		// Now query the namespace1 and check whether the data is not deleted.
+		res, err := processQueryWithNamespace(context.Background(), t, `{
+			me(func:has(name), first: 5){
+			name
+	  	 }
+	  	}`, "namespace1")
+		require.NoError(t, err)
+		require.JSONEq(t, `{"data":{"me":[{"name":"vegeta"}]}}`, res)
+	})
 
-	// Now query the namespace1 and check whether the data is not deleted.
-	res, err = processQueryWithNamespace(context.Background(), t, `{
-		me(func:has(name), first: 5){
-		name
-	  }
-	  }`, "namespace1")
-	require.NoError(t, err)
-	require.JSONEq(t, `{"data":{"me":[{"name":"vegeta"}]}}`, res)
 }

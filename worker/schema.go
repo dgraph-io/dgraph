@@ -259,6 +259,8 @@ func GetTypes(ctx context.Context, req *pb.SchemaRequest) ([]*pb.TypeUpdate, err
 		if !found {
 			continue
 		}
+		// Type is mutated when we return the type name to the user. Because, namespace
+		// is removed from the type name. So, we need to clone the TypeUpdate.
 		out = append(out, proto.Clone(&typeUpdate).(*pb.TypeUpdate))
 	}
 

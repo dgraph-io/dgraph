@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func setSchema(schema string, namespace string) {
+func setSchema(schema, namespace string) {
 	err := client.Alter(context.Background(), &api.Operation{
 		Schema:    schema,
 		Namespace: namespace,

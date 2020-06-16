@@ -187,9 +187,7 @@ func ToDirectedEdges(namespace string, gmuList []*gql.Mutation, newUids map[stri
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
 		if wnq.Predicate != x.Star {
-			if wnq.Predicate != x.Star {
-				wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
-			}
+			wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
 		}
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {

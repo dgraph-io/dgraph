@@ -76,14 +76,15 @@ func NamespaceAttr(namespace, attr string) string {
 }
 
 // ParseNamespaceAttr returns the namespace and attr from the given value.
-func ParseNamespaceAttr(attr string) (string, string, bool) {
+func ParseNamespaceAttr(attr string) (string, string) {
 	splits := strings.Split(attr, string(NamespaceSeparator))
 	AssertTrue(len(splits) == 2)
 	reverse := splits[0][0] == '~'
 	if reverse {
 		splits[0] = splits[0][1:]
+		splits[1] = "~" + splits[1]
 	}
-	return splits[0], splits[1], reverse
+	return splits[0], splits[1]
 }
 
 // ParseAttr returns the attr from the given value.

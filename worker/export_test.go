@@ -109,9 +109,7 @@ func populateGraphExport(t *testing.T) {
 		err = facets.SortAndValidate(rnq.Facets)
 		require.NoError(t, err)
 		if rnq.Predicate != x.Star {
-			if rnq.Predicate != x.Star {
-				rnq.Predicate = x.NamespaceAttr(x.DefaultNamespace, rnq.Predicate)
-			}
+			rnq.Predicate = x.NamespaceAttr(x.DefaultNamespace, rnq.Predicate)
 		}
 		e, err := rnq.ToEdgeUsing(idMap)
 		require.NoError(t, err)

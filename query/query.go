@@ -1894,12 +1894,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 
 		for _, pred := range preds {
 			// Convert attribute name for the given namespace.
-			typeNamespace, attr, reverse := x.ParseNamespaceAttr(pred)
-			if reverse {
-				// Add reverse to the attr so, createTaskQuery will
-				// handle the reverse accordingly.
-				attr = "~" + attr
-			}
+			typeNamespace, attr := x.ParseNamespaceAttr(pred)
 			if typeNamespace != child.Params.Namespace {
 				return out, errors.Errorf(
 					"Expected namespace while expanding subgraph %s but got %s",
@@ -2566,8 +2561,6 @@ func getPredicatesFromTypes(namespace string, typeNames []string) []string {
 			continue
 		}
 
-		fmt.Printf("%+v \n", typeDef)
-
 		for _, field := range typeDef.Fields {
 			preds = append(preds, field.Predicate)
 		}
@@ -2811,18 +2804,17 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 	// Filter the schema nodes for the given namespace.
 	er.SchemaNode = filterSchemaNodeForNamespace(req.Namespace, er.SchemaNode)
 	// Filter the types for the given namespace.
-	er.Types = filterTypesForNamespace(req.Namespace, er.Types)
+	er.Types = getTypesForNamespace(req.Namespace, er.Types)
 	req.Latency.Processing += time.Since(schemaProcessingStart)
 
 	return er, nil
 }
 
-// filterTypesForNamespace filters types for the given namespace.
-func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
+// getTypesForNamespace returns types for the given namespace.
+func getTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.TypeUpdate {
 	out := []*pb.TypeUpdate{}
 	for _, update := range types {
-		// Type name doesn't have reverse.
-		typeNamespace, typeName, _ := x.ParseNamespaceAttr(update.TypeName)
+		typeNamespace, typeName := x.ParseNamespaceAttr(update.TypeName)
 		if typeNamespace != namespace {
 			continue
 		}
@@ -2830,10 +2822,7 @@ func filterTypesForNamespace(namespace string, types []*pb.TypeUpdate) []*pb.Typ
 		fields := []*pb.SchemaUpdate{}
 		// Convert field name for the current namespace.
 		for _, field := range update.Fields {
-			_, fieldName, reverse := x.ParseNamespaceAttr(field.Predicate)
-			if reverse {
-				fieldName = "~" + fieldName
-			}
+			_, fieldName := x.ParseNamespaceAttr(field.Predicate)
 			field.Predicate = fieldName
 			fields = append(fields, field)
 		}
@@ -2848,7 +2837,7 @@ func filterSchemaNodeForNamespace(namespace string, nodes []*pb.SchemaNode) []*p
 	out := []*pb.SchemaNode{}
 
 	for _, node := range nodes {
-		nodeNamespace, attrName, _ := x.ParseNamespaceAttr(node.Predicate)
+		nodeNamespace, attrName := x.ParseNamespaceAttr(node.Predicate)
 		if nodeNamespace != namespace {
 			continue
 		}

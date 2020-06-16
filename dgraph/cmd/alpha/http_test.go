@@ -385,7 +385,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, 2, len(mr.preds))
 	var parsedPreds []string
 	for _, pred := range mr.preds {
-		_, attr, _ := x.ParseNamespaceAttr(strings.Join(strings.Split(pred, "-")[1:], "-"))
+		attr := x.ParseAttr(strings.Join(strings.Split(pred, "-")[1:], "-"))
 		parsedPreds = append(parsedPreds, attr)
 	}
 	sort.Strings(parsedPreds)
