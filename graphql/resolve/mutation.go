@@ -221,9 +221,9 @@ func (mr *dgraphResolver) rewriteAndExecute(
 
 	result := make(map[string]interface{})
 	req := &dgoapi.Request{}
-	upsert := &UpsertMutation{}
+	newNodes := make(map[string]schema.Type)
 
-	for _, upsert = range upserts {
+	for _, upsert := range upserts {
 		req.Query = dgraph.AsString(upsert.Query)
 		req.Mutations = upsert.Mutations
 
@@ -245,9 +245,11 @@ func (mr *dgraphResolver) rewriteAndExecute(
 					resolverFailed
 			}
 		}
+
+		copyTypeMap(upsert.NewNodes, newNodes)
 	}
 
-	authErr := authorizeNewNodes(ctx, mutResp.Uids, upsert.NewNodes, mr.executor, mutResp.Txn)
+	authErr := authorizeNewNodes(ctx, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}

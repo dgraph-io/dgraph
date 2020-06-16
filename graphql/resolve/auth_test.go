@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -52,6 +53,8 @@ type AuthQueryRewritingCase struct {
 	DGMutations    []*dgraphMutation
 	DGMutationsSec []*dgraphMutation
 
+	Length string
+
 	// UIDS and json from the Dgraph result
 	Uids string
 	Json string
@@ -68,11 +71,12 @@ type AuthQueryRewritingCase struct {
 }
 
 type authExecutor struct {
-	t     *testing.T
-	state int
+	t      *testing.T
+	state  int
+	length int
 
 	// initial mutation
-	upsertQuery string
+	upsertQuery []string
 	json        string
 	uids        string
 
@@ -88,9 +92,10 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 	switch ex.state {
 	case 1:
 		// initial mutation
+		ex.length -= 1
 
 		// check that the upsert has built in auth, if required
-		require.Equal(ex.t, ex.upsertQuery, req.Query)
+		require.Equal(ex.t, ex.upsertQuery[ex.length], req.Query)
 
 		var assigned map[string]string
 		if ex.uids != "" {
@@ -106,6 +111,10 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 		// For rules that don't require auth, it should directly go to step 3.
 		if ex.skipAuth {
 			ex.state++
+		}
+
+		if ex.length != 0 {
+			ex.state = 0
 		}
 
 		return &dgoapi.Response{
@@ -495,14 +504,26 @@ func checkAddUpdateCase(
 	ctx, err := authMeta.AddClaimsToContext(context.Background())
 	require.NoError(t, err)
 
+	length := 1
+	upsertQuery := []string{tcase.DGQuery}
+
+	if tcase.Length != "" {
+		length, _ = strconv.Atoi(tcase.Length)
+	}
+
+	if length == 2 {
+		upsertQuery = []string{tcase.DGQuerySec, tcase.DGQuery}
+	}
+
 	ex := &authExecutor{
 		t:           t,
-		upsertQuery: tcase.DGQuery,
+		upsertQuery: upsertQuery,
 		json:        tcase.Json,
 		uids:        tcase.Uids,
 		authQuery:   tcase.AuthQuery,
 		authJson:    tcase.AuthJson,
 		skipAuth:    tcase.SkipAuth,
+		length:      length,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
 

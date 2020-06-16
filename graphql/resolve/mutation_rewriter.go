@@ -1127,7 +1127,7 @@ func rewriteObject(
 
 	// In the case of an XID, move the secondPass (creation mutation) to firstPass
 	if xid != nil && !atTopLevel {
-		results.firstPass = append(results.firstPass, results.secondPass...)
+		results.firstPass = appendFragments(results.firstPass, results.secondPass)
 		results.secondPass = []*mutationFragment{}
 	}
 
@@ -1140,17 +1140,17 @@ func rewriteObject(
 	for _, i := range childrenFirstPass {
 		i.conditions = append(i.conditions, conditions...)
 	}
-	results.firstPass = append(results.firstPass, childrenFirstPass...)
+	results.firstPass = appendFragments(results.firstPass, childrenFirstPass)
 
 	// parentFrags are reverse links to parents. only applicable for when deepXID > 2
-	results.firstPass = append(results.firstPass, parentFrags...)
+	results.firstPass = appendFragments(results.firstPass, parentFrags)
 
 	// xidFrag contains the mutation to update object if it is present.
 	// add it to secondPass if deepXID <= 2, otherwise firstPass for relevant hasInverse links.
 	if xidFrag != nil && deepXID > 2 {
-		results.firstPass = append(results.firstPass, xidFrag)
+		results.firstPass = appendFragments(results.firstPass, []*mutationFragment{xidFrag})
 	} else if xidFrag != nil {
-		results.secondPass = append(results.secondPass, xidFrag)
+		results.secondPass = appendFragments(results.secondPass, []*mutationFragment{xidFrag})
 	}
 
 	// if !xidEncounteredFirstTime, we have already seen the relevant fragments.
@@ -1656,13 +1656,38 @@ func appendFragments(left, right []*mutationFragment) []*mutationFragment {
 		return left
 	}
 
-	for _, i := range right {
-		left[0].queries = append(left[0].queries, i.queries...)
-		i.queries = []*gql.GraphQuery{}
+	result := make([]*mutationFragment, len(left)+len(right))
+	i := 0
+
+	var queries []*gql.GraphQuery
+	for _, l := range left {
+		queries = append(queries, l.queries...)
+		result[i] = l
+		result[i].queries = []*gql.GraphQuery{}
+		result[i].newNodes = make(map[string]schema.Type)
+		i++
 	}
 
-	left = append(left, right...)
-	return left
+	for _, r := range right {
+		queries = append(queries, r.queries...)
+		result[i] = r
+		result[i].queries = []*gql.GraphQuery{}
+		result[i].newNodes = make(map[string]schema.Type)
+		i++
+	}
+
+	newNodes := make(map[string]schema.Type)
+	for _, l := range left {
+		copyTypeMap(l.newNodes, newNodes)
+	}
+	for _, r := range right {
+		copyTypeMap(r.newNodes, newNodes)
+	}
+
+	result[0].newNodes = newNodes
+	result[0].queries = queries
+
+	return result
 }
 
 // squashFragments takes two lists of mutationFragments and produces a single list
