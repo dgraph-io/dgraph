@@ -19,7 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
-
+        "fmt" 
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 
