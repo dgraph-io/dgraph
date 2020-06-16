@@ -1245,7 +1245,6 @@ func (n *node) calculateTabletSizes() {
 			return
 		}
 
-		glog.Infof("Adding %v to table %v", size, pred)
 		if tablet, ok := tablets[pred]; ok {
 			tablet.Space += size
 		} else {
@@ -1269,19 +1268,17 @@ func (n *node) calculateTabletSizes() {
 			continue
 		}
 
-		if previousLeft != "" && left.Attr != previousLeft {
+		if left.Attr == previousLeft {
 			// Dgraph cannot depend on the right end of the table to know if the table belongs
 			// to a single predicate because there might be Badger-specific keys.
 			// Instead, Dgraph only counts the previous table if the current one belongs to the
 			// same predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			previousLeft = left.Attr
-			previousSize = int64(tinfo.EstimatedSz)
-			glog.V(3).Info("Skipping table not owned by one predicate")
+			updateSize(previousLeft, previousSize)
 			continue
+		} else {
+			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-
-		updateSize(previousLeft, previousSize)
 		previousLeft = left.Attr
 		previousSize = int64(tinfo.EstimatedSz)
 	}
