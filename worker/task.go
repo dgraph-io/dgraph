@@ -360,10 +360,8 @@ func (qs *queryState) handleValuePostings(ctx context.Context, args funcArgs) er
 
 	// srcFn.n should be equal to len(q.UidList.Uids) for below implementation(DivideAndRule and
 	// calculate) to work correctly. But we have seen some panics while forming DataKey in
-	// calculate(). panic is of the form "index out of range [4] with length 1". We have tried to
-	// reproduce this but couldn't find any edge case which will result in this panic. So for now
-	// we are just logging when srcFn.n != len(q.UidList.Uids) and returning error when this
-	// happens.
+	// calculate(). panic is of the form "index out of range [4] with length 1". Hence return error
+	// from here when srcFn.n != len(q.UidList.Uids).
 	if srcFn.n != len(q.UidList.Uids) {
 		return errors.Errorf("srcFn.n: %d is not equal to len(q.UidList.Uids): %d, srcFn: %+v in "+
 			"handleValuePostings", srcFn.n, len(q.UidList.GetUids()), srcFn)
