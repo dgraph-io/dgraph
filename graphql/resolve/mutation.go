@@ -244,12 +244,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		return emptyResult(errs), resolverFailed
 	}
 
-	if mutResp == nil {
-		return emptyResult(
-				schema.GQLWrapf(err, "mutation failed, couldn't get result")),
-			resolverFailed
-	}
-
 	err = mr.executor.CommitOrAbort(ctx, mutResp.Txn)
 	if err != nil {
 		return emptyResult(
