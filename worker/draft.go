@@ -1275,7 +1275,6 @@ func (n *node) calculateTabletSizes() {
 			// same predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
 			updateSize(previousLeft, previousSize)
-			continue
 		} else {
 			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
