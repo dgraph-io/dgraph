@@ -184,6 +184,7 @@ func TestUnzip(t *testing.T) {
 	filename := testDataDir + "/g01.schema.gz"
 	tryUnzip(t, filename)
 
+	// fail it, need to check what is happening
 	t.FailNow()
 }
 
@@ -285,13 +286,13 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 
 	// copy the unzipped export files from docker
 	exportId := unzipAndCopyExportToLocalFs(t)
-	tryUnzip(t, localExportPath+"1/"+exportId+"/g01.schema.gz")
+	tryUnzip(t, localExportPath+"/"+exportId+"/g01.schema.gz")
 
 	// then load the exported files
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live",
-			"--schema", localExportPath + "/" + exportId + "/g01.schema",
-			"--files", localExportPath + "/" + exportId + "/g01.rdf",
+			"--schema", localExportPath + "/" + exportId + "/g01.schema.gz",
+			"--files", localExportPath + "/" + exportId + "/g01.rdf.gz",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
@@ -307,12 +308,12 @@ func unzipAndCopyExportToLocalFs(t *testing.T) string {
 	if err := os.RemoveAll(localExportPath); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
-	if err := testutil.DockerCp(alphaExportPath, localExportPath+"1"); err != nil {
-		t.Fatalf("Error copying files from docker container: %s", err.Error())
-	}
-	if err := testutil.DockerExec(alphaName, "gunzip", "-rf", "export"); err != nil {
-		t.Fatalf("Error unzipping files in docker container: %s", err.Error())
-	}
+	//if err := testutil.DockerCp(alphaExportPath, localExportPath+"1"); err != nil {
+	//	t.Fatalf("Error copying files from docker container: %s", err.Error())
+	//}
+	//if err := testutil.DockerExec(alphaName, "gunzip", "-rf", "export"); err != nil {
+	//	t.Fatalf("Error unzipping files in docker container: %s", err.Error())
+	//}
 	if err := testutil.DockerCp(alphaExportPath, localExportPath); err != nil {
 		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}
