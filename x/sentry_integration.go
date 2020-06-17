@@ -42,6 +42,14 @@ const (
 	dsnDevtest = "https://84c2ad450005436fa27d97ef72b52425@o318308.ingest.sentry.io/5208688"
 )
 
+// SentryOptOutNote - This is an opt out banner.
+func SentryOptOutNote() {
+	glog.Infof("Note: This instance of Dgraph has enabled reporting panics back to the " +
+	"Dgraph Labs' dashboard on Sentry. It allows us to improve the quality of the software. " +
+	"See https://dgraph.io/docs/howto/#data-handling on how the reports are handled.\n" +
+	"To opt-out, restart your instance with the --enable_sentry=false flag.")
+}
+
 // InitSentry initializes the sentry machinery.
 func InitSentry(ee bool) {
 	env = "prod-"
