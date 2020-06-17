@@ -390,7 +390,7 @@ func (authRw *authRewriter) addAuthQueries(
 		return dgQuery
 	}
 
-	authRw.varName = authRw.varGen.Next(typ, "", "")
+	authRw.varName = authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
 
 	fldAuthQueries, filter := authRw.rewriteAuthQueries(typ)
 	if len(fldAuthQueries) == 0 {
@@ -408,7 +408,22 @@ func (authRw *authRewriter) addAuthQueries(
 		Attr:   "var",
 		Func:   dgQuery.Func,
 		Filter: dgQuery.Filter,
+		Order:  dgQuery.Order,
+		Args:   dgQuery.Args,
 	}
+
+	if varQry.Filter == nil {
+		varQry.Filter = filter
+	} else {
+		varQry.Filter = &gql.FilterTree{
+			Op:    "and",
+			Child: []*gql.FilterTree{varQry.Filter, filter},
+		}
+	}
+
+	dgQuery.Order = nil
+	dgQuery.Filter = nil
+	dgQuery.Args = nil
 
 	// The user query starts from the var query generated above and is filtered
 	// by the the filter generated from auth processing, so now we build
@@ -417,7 +432,6 @@ func (authRw *authRewriter) addAuthQueries(
 		Name: "uid",
 		Args: []gql.Arg{{Value: authRw.varName}},
 	}
-	dgQuery.Filter = filter
 
 	// The final query that includes the user's filter and auth processsing is thus like
 	//
@@ -535,7 +549,8 @@ func (authRw *authRewriter) rewriteRuleNode(
 
 		// build
 		// Todo2 as var(func: uid(Todo1)) @cascade { ...auth query 1... }
-		varName := authRw.varGen.Next(typ, "", "")
+		varName := authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
+		// authRw.varName = varName
 		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
@@ -652,9 +667,9 @@ func addSelectionSetFrom(
 			continue
 		}
 
+		varName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+		auth.varName = varName
 		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
-		authQueries = append(authQueries, selectionAuth...)
-		authQueries = append(authQueries, fieldAuth...)
 		if authFilter != nil {
 			if child.Filter == nil {
 				child.Filter = authFilter
@@ -665,6 +680,40 @@ func addSelectionSetFrom(
 				}
 			}
 		}
+		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth {
+			parentQryName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+			selectionQry := &gql.GraphQuery{
+				Var:  varName,
+				Attr: "var",
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: parentQryName}},
+				},
+			}
+			parentQry := &gql.GraphQuery{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: parentQryName}},
+				},
+				Attr:     "var",
+				Children: []*gql.GraphQuery{{Attr: f.Name(), Var: parentQryName}},
+			}
+
+			addArgumentsToField(selectionQry, f)
+			selectionQry.Filter = child.Filter
+			authQueries = append(authQueries, parentQry)
+			authQueries = append(authQueries, selectionQry)
+			child.Filter = &gql.FilterTree{
+				Func: &gql.Function{
+					Name: "uid",
+					Args: []gql.Arg{{Value: varName}},
+				},
+			}
+			child.Order = nil
+			child.Args = nil
+		}
+		authQueries = append(authQueries, selectionAuth...)
+		authQueries = append(authQueries, fieldAuth...)
 	}
 
 	// Sort the required fields before adding them to q.Children so that the query produced after

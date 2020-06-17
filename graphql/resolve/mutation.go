@@ -374,7 +374,7 @@ func authorizeNewNodes(
 	authQrys := make(map[string][]*gql.GraphQuery)
 	for _, typeName := range createdTypes {
 		typ := namesToType[typeName]
-		varName := newRw.varGen.Next(typ, "", "")
+		varName := newRw.varGen.Next(typ, "", "", false)
 		newRw.varName = varName
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
 

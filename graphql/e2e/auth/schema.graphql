@@ -1,4 +1,29 @@
 type User @auth(
+    query: { and: [
+        { not: { rule: """
+        query($USER: String!) {
+        queryUser(filter: { username: { eq: $USER } }) {
+        __typename
+        }
+        }
+        """ }},
+        { or: [
+            { rule: """
+            query($USER: String!) {
+            queryUser(filter: { username: { eq: $USER } }) {
+            __typename
+            }
+            }
+            """ },
+            { rule: """
+            query($USER: String!) {
+            queryUser(filter: { username: { eq: $USER } }) {
+            __typename
+            }
+            }
+            """ }
+        ]}
+    ]},
   delete: { and: [
     { rule: """
     query($USER: String!) {

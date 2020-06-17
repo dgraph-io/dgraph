@@ -103,7 +103,7 @@ func NewVariableGenerator() *VariableGenerator {
 // Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string {
+func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth bool) string {
 	// return previously allocated variable name for repeating xidVal
 	var key string
 	if xidName == "" || xidVal == "" {
@@ -118,7 +118,12 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string
 
 	// create new variable name
 	v.counter++
-	varName := fmt.Sprintf("%s%v", typ.Name(), v.counter)
+	var varName string
+	if auth {
+		varName = fmt.Sprintf("%sAuth%v", typ.Name(), v.counter)
+	} else {
+		varName = fmt.Sprintf("%s%v", typ.Name(), v.counter)
+	}
 
 	// save it, if it was created for xidVal
 	if xidName != "" && xidVal != "" {
@@ -686,7 +691,7 @@ func (drw *deleteRewriter) Rewrite(
 				continue
 			}
 		}
-		varName := varGen.Next(fld.Type(), "", "")
+		varName := varGen.Next(fld.Type(), "", "", false)
 
 		qry.Children = append(qry.Children,
 			&gql.GraphQuery{
@@ -856,7 +861,7 @@ func rewriteObject(
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := varGen.Next(typ, "", "")
+	variable := varGen.Next(typ, "", "", false)
 
 	id := typ.IDField()
 	if id != nil {
@@ -884,7 +889,7 @@ func rewriteObject(
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
-			variable = varGen.Next(typ, xid.Name(), xidString)
+			variable = varGen.Next(typ, xid.Name(), xidString, false)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
@@ -1301,7 +1306,7 @@ func addDelete(
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.Next(qryFld.Type(), "", "")
+	targetVar := varGen.Next(qryFld.Type(), "", "", false)
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
