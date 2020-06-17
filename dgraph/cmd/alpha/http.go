@@ -439,6 +439,11 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			"startTs parameter is mandatory while trying to commit")
 		return
 	}
+	namespace := r.Header.Get(x.NamespaceHeader)
+
+	if namespace == "" {
+		namespace = x.DefaultNamespace
+	}
 
 	abort, err := parseBool(r, "abort")
 	if err != nil {
@@ -456,7 +461,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		response, err = handleCommit(startTs, reqText)
+		response, err = handleCommit(namespace, startTs, reqText)
 	}
 	if err != nil {
 		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
