@@ -76,6 +76,7 @@ type options struct {
 	Metrics       bool
 	PortOffset    int
 	Verbosity     int
+	Vmodule       string
 	OutFile       string
 	LocalBin      bool
 	Tag           string
@@ -190,6 +191,9 @@ func getZero(idx int) service {
 		svc.Command += fmt.Sprintf(" --replicas=%d", opts.NumReplicas)
 	}
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
+	if opts.Vmodule != "" {
+		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
+	}
 	if idx == 1 {
 		svc.Command += fmt.Sprintf(" --bindall")
 	} else {
@@ -216,6 +220,9 @@ func getAlpha(idx int) service {
 	svc.Command += fmt.Sprintf(" --zero=zero1:%d", zeroBasePort+opts.PortOffset)
 	svc.Command += fmt.Sprintf(" --logtostderr -v=%d", opts.Verbosity)
 	svc.Command += fmt.Sprintf(" --idx=%d", idx)
+	if opts.Vmodule != "" {
+		svc.Command += fmt.Sprintf(" --vmodule=%s", opts.Vmodule)
+	}
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 	}
@@ -393,6 +400,8 @@ func main() {
 		"TLS Dir.")
 	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
 		"expose host:container ports for each service")
+	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
+		"comma-separated list of pattern=N settings for file-filtered logging")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
