@@ -37,6 +37,7 @@ type authRewriter struct {
 	selector      func(t schema.Type) *schema.RuleNode
 	varGen        *VariableGenerator
 	varName       string
+	parentVarName string
 }
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -58,6 +59,7 @@ func (qr *queryRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
+		parentVarName: gqlQuery.Type().Name() + "Root",
 	}
 
 	if gqlQuery.Type().InterfaceImplHasAuthRules() {
@@ -390,7 +392,7 @@ func (authRw *authRewriter) addAuthQueries(
 		return dgQuery
 	}
 
-	authRw.varName = authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
+	authRw.varName = typ.Name() + "Root"
 
 	fldAuthQueries, filter := authRw.rewriteAuthQueries(typ)
 	if len(fldAuthQueries) == 0 {
@@ -656,6 +658,11 @@ func addSelectionSetFrom(
 		addCascadeDirective(child, f)
 		rbac := auth.evaluateStaticRules(f.Type())
 
+		varName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
+		parentVarName := auth.parentVarName
+		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth {
+			auth.parentVarName = varName
+		}
 		selectionAuth := addSelectionSetFrom(child, f, auth)
 		addedFields[f.Name()] = true
 
@@ -667,7 +674,6 @@ func addSelectionSetFrom(
 			continue
 		}
 
-		varName := auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
 		auth.varName = varName
 		fieldAuth, authFilter := auth.rewriteAuthQueries(f.Type())
 		if authFilter != nil {
@@ -693,7 +699,7 @@ func addSelectionSetFrom(
 			parentQry := &gql.GraphQuery{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: parentQryName}},
+					Args: []gql.Arg{{Value: parentVarName}},
 				},
 				Attr:     "var",
 				Children: []*gql.GraphQuery{{Attr: f.Name(), Var: parentQryName}},
