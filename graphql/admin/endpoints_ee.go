@@ -65,8 +65,9 @@ const adminTypes = `
 
 		"""
 		Backup ID of the backup series to restore. This ID is included in the manifest.json file.
+		If missing, it defaults to the latest series.
 		"""
-		backupId: String!
+		backupId: String
 
 		"""
 		Path to the key file needed to decrypt the backup. This file should be accessible
