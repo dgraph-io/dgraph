@@ -172,8 +172,20 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 		span.Annotatef(nil, "mutation alias: [%s] type: [%s]", m.Alias(), m.MutationType())
 	}
 
+	resolverTrace := &schema.ResolverTrace{
+		Path:       []interface{}{m.ResponseName()},
+		ParentType: "Mutation",
+		FieldName:  m.ResponseName(),
+		ReturnType: m.Type().String(),
+	}
+	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
+	timer.Start()
+	defer timer.Stop()
+
 	resolved, success := mr.rewriteAndExecute(ctx, m)
 	mr.resultCompleter.Complete(ctx, resolved)
+	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
+	resolved.Extensions.Tracing.Execution.Resolvers[0] = resolverTrace
 	return resolved, success
 }
 
@@ -187,8 +199,7 @@ func getNumUids(m schema.Mutation, a map[string]string, r map[string]interface{}
 	}
 }
 
-func (mr *dgraphResolver) rewriteAndExecute(
-	ctx context.Context,
+func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	mutation schema.Mutation) (*Resolved, bool) {
 	var mutResp *dgoapi.Response
 	commit := false
@@ -203,11 +214,29 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 	}()
 
+	dgraphMutationDuration := &schema.LabeledOffsetDuration{Label: "mutation"}
+	dgraphQueryDuration := &schema.LabeledOffsetDuration{Label: "query"}
+	ext := &schema.Extensions{
+		Tracing: &schema.Trace{
+			Execution: &schema.ExecutionTrace{
+				Resolvers: []*schema.ResolverTrace{
+					{
+						Dgraph: []*schema.LabeledOffsetDuration{
+							dgraphMutationDuration,
+							dgraphQueryDuration,
+						},
+					},
+				},
+			},
+		},
+	}
+
 	emptyResult := func(err error) *Resolved {
 		return &Resolved{
-			Data:  map[string]interface{}{mutation.Name(): nil},
-			Field: mutation,
-			Err:   err,
+			Data:       map[string]interface{}{mutation.Name(): nil},
+			Field:      mutation,
+			Err:        err,
+			Extensions: ext,
 		}
 	}
 
@@ -222,14 +251,18 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		Mutations: upsert.Mutations,
 	}
 
+	mutationTimer := newtimer(ctx, &dgraphMutationDuration.OffsetDuration)
+	mutationTimer.Start()
 	mutResp, err = mr.executor.Execute(ctx, req)
+	mutationTimer.Stop()
+
 	if err != nil {
-		gqlErr := schema.GQLWrapLocationf(
-			err, mutation.Location(), "mutation %s failed", mutation.Name())
+		gqlErr := schema.GQLWrapLocationf(err, mutation.Location(), "mutation %s failed",
+			mutation.Name())
 		return emptyResult(gqlErr), resolverFailed
 	}
 
-	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
+	ext.TouchedUids = mutResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	result := make(map[string]interface{})
 	if req.Query != "" && len(mutResp.GetJson()) != 0 {
 		if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
@@ -260,19 +293,16 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	}
 	commit = true
 
-	qryResp, err := mr.executor.Execute(ctx,
-		&dgoapi.Request{
-			Query:    dgraph.AsString(dgQuery),
-			ReadOnly: true,
-		})
+	queryTimer := newtimer(ctx, &dgraphQueryDuration.OffsetDuration)
+	queryTimer.Start()
+	qryResp, err := mr.executor.Execute(ctx, &dgoapi.Request{Query: dgraph.AsString(dgQuery),
+		ReadOnly: true})
+	queryTimer.Stop()
+
 	errs = schema.AppendGQLErrs(errs, schema.GQLWrapf(err,
 		"couldn't rewrite query for mutation %s", mutation.Name()))
 
-	extQ := &schema.Extensions{TouchedUids: qryResp.GetMetrics().GetNumUids()[touchedUidsKey]}
-
-	// merge the extensions we got from Mutate and Query into extM
-	extM.Merge(extQ)
-
+	ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), errs)
@@ -285,7 +315,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 				}},
 			Field:      mutation,
 			Err:        err,
-			Extensions: extM,
+			Extensions: ext,
 		}, resolverSucceeded
 	}
 
@@ -297,7 +327,7 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	dgRes[schema.NumUid] = numUids
 	resolved.Data = map[string]interface{}{mutation.Name(): dgRes}
 	resolved.Field = mutation
-	resolved.Extensions = extM
+	resolved.Extensions = ext
 
 	return resolved, resolverSucceeded
 }
