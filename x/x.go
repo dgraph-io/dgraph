@@ -145,13 +145,15 @@ const (
 
 	AccessControlAllowedHeaders = "X-Dgraph-AccessToken, " +
 		"Content-Type, Content-Length, Accept-Encoding, Cache-Control, " +
-		"X-CSRF-Token, X-Auth-Token, X-Requested-With, Dgraph-Namespace"
+		"X-CSRF-Token, X-Auth-Token, X-Requested-With, " + NamespaceHeader
 
 	// GraphqlPredicates is the json representation of the predicate reserved for graphql system.
 	GraphqlPredicates = `
 {"predicate":"dgraph.graphql.schema", "type": "string"},
 {"predicate":"dgraph.graphql.xid","type":"string","index":true,"tokenizer":["exact"],"upsert":true}
 `
+	// NamespaceHeader is the header to obtain the namespace of the current request.
+	NamespaceHeader = "Dgraph-Namespace"
 )
 
 var (

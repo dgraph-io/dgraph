@@ -50,7 +50,7 @@ const (
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 	// NamespaceSeparator is a constant used as seperator between namespace and attr name.
-	// byte 30 is chosen beacuse it is ascii separator standard.
+	// byte 30 is chosen because it is ascii separator standard.
 	// refer:
 	// https://theasciicode.com.ar/ascii-control-characters/unit-separator-ascii-code-31.html
 	NamespaceSeparator = byte(30)

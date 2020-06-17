@@ -127,10 +127,12 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
+// CreateNamespace bootstraps the namespace by creating deafult types for the given namespace.
 func (s *Server) createNamespace(ctx context.Context, namespace string) error {
-	m := &pb.Mutations{StartTs: worker.State.GetTimestamp(false)}
-	schemas := schema.InitialSchema(namespace)
-	m.Schema = schemas
+	m := &pb.Mutations{
+		StartTs: worker.State.GetTimestamp(false),
+		Schema:  schema.InitialSchema(namespace),
+	}
 	_, err := query.ApplyMutations(ctx, namespace, m)
 	return err
 }
@@ -144,11 +146,22 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
 
+	// Alter is used for the following scenarios
+	// - Dropping Predicate (deleting all values for the given predicate)
+	// - Dropping Database (deleting all the values and bootstrapping default namespace)
+	// - Applying new schema (namespaced for the given namespace. By default `Default` Namespace)
+	// - Creating Namespace (creating a namespace and bootstring default types for the given
+	//   namespace)
+	// TODO: @balaji Droping namespace (drop all values in the namespace and bootstrap default
+	// values)
+
 	if op.CreateNamespace != "" {
+		// When CreateNamespace is not nil we create namespace and return the result.
 		return &api.Payload{}, s.createNamespace(ctx, op.CreateNamespace)
 	}
 
 	if op.Namespace == "" {
+		// Setting default namespace if there is no namespace.
 		op.Namespace = x.DefaultNamespace
 	}
 
@@ -243,7 +256,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		m.DropValue = x.NamespaceAttr(op.Namespace, op.DropValue)
 		_, err = query.ApplyMutations(ctx, op.Namespace, m)
 		return empty, err
 	}

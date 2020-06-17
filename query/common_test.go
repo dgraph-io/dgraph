@@ -181,11 +181,12 @@ func deleteTriplesInClusterWithNamespace(triples string, namespace string) {
 
 	_, err := txn.Do(ctx, &api.Request{
 		Mutations: []*api.Mutation{
-			&api.Mutation{
+			{
 				DelNquads: []byte(triples),
 				CommitNow: true,
 			},
 		},
+		Namespace: namespace,
 	})
 	if err != nil {
 		panic(fmt.Sprintf("Could not delete triples. Got error %v", err.Error()))
