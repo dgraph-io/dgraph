@@ -72,6 +72,11 @@ func (v *Voter) PublicKeyBytes() ed25519.PublicKeyBytes {
 	return v.key.AsBytes()
 }
 
+// String returns a formatted Voter string
+func (v *Voter) String() string {
+	return fmt.Sprintf("[key=0x%x id=%d]", v.PublicKeyBytes(), v.id)
+}
+
 // NewVotersFromAuthorityData returns an array of Voters given an array of GrandpaAuthorityData
 func NewVotersFromAuthorityData(ad []*types.GrandpaAuthorityData) []*Voter {
 	v := make([]*Voter, len(ad))
@@ -84,6 +89,18 @@ func NewVotersFromAuthorityData(ad []*types.GrandpaAuthorityData) []*Voter {
 	}
 
 	return v
+}
+
+// Voters represents []*Voter
+type Voters []*Voter
+
+// String returns a formatted Voters string
+func (v Voters) String() string {
+	str := ""
+	for _, w := range v {
+		str = str + w.String() + " "
+	}
+	return str
 }
 
 // State represents a GRANDPA state

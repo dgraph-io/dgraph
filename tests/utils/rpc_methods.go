@@ -19,8 +19,9 @@ package utils
 //nolint
 var (
 	// CHAIN METHODS
-	ChainGetBlock  = "chain_getBlock"
-	ChainGetHeader = "chain_getHeader"
+	ChainGetBlock         = "chain_getBlock"
+	ChainGetHeader        = "chain_getHeader"
+	ChainGetFinalizedHead = "chain_getFinalizedHead"
 
 	// AUTHOR METHODS
 	AuthorSubmitExtrinsic = "author_submitExtrinsic"

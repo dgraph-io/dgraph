@@ -133,7 +133,7 @@ func (cm *ChainModule) GetFinalizedHead(r *http.Request, req *EmptyRequest, res 
 		return err
 	}
 
-	*res = h
+	*res = common.BytesToHex(h[:])
 	return nil
 }
 

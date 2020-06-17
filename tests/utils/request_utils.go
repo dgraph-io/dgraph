@@ -69,7 +69,7 @@ func DecodeRPC(t *testing.T, body []byte, target interface{}) error {
 
 	var response ServerResponse
 	err := decoder.Decode(&response)
-	require.Nil(t, err, "respBody", string(body))
+	require.Nil(t, err, string(body))
 	require.Equal(t, response.Version, "2.0")
 
 	if response.Error != nil {
@@ -80,7 +80,7 @@ func DecodeRPC(t *testing.T, body []byte, target interface{}) error {
 	decoder.DisallowUnknownFields()
 
 	err = decoder.Decode(target)
-	require.Nil(t, err, "respBody", string(body))
+	require.Nil(t, err, string(body))
 	return nil
 }
 

@@ -223,7 +223,8 @@ func TestChainGetFinalizedHead(t *testing.T) {
 	var res ChainHashResponse
 	err := svc.GetFinalizedHead(nil, &EmptyRequest{}, &res)
 	require.NoError(t, err)
-	require.Equal(t, genesisHeader.Hash(), res)
+	expected := genesisHeader.Hash()
+	require.Equal(t, common.BytesToHex(expected[:]), res)
 }
 
 var genesisHeader, _ = types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})

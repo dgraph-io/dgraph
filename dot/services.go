@@ -212,6 +212,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		"host", cfg.RPC.Host,
 		"rpc port", cfg.RPC.Port,
 		"mods", cfg.RPC.Modules,
+		"ws enabled", cfg.RPC.WSEnabled,
 		"ws port", cfg.RPC.WSPort,
 	)
 	rpcService := rpc.NewService()

@@ -41,7 +41,7 @@ func TestBabeRPC(t *testing.T) {
 	}
 
 	t.Log("starting gossamer...")
-	nodes, err := utils.StartNodes(t, 1)
+	nodes, err := utils.InitializeAndStartNodes(t, 1, utils.GenesisDefault)
 	require.Nil(t, err)
 
 	time.Sleep(time.Second) // give server a second to start

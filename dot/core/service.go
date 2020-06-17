@@ -311,7 +311,7 @@ func (s *Service) receiveMessages() {
 		if err == blocktree.ErrDescendantNotFound || err == blocktree.ErrStartNodeNotFound || err == database.ErrKeyNotFound {
 			log.Trace("[core] failed to handle message from network service", "err", err)
 		} else if err != nil {
-			log.Error("[core] failed to handle message from network service", "err", err)
+			log.Trace("[core] failed to handle message from network service", "err", err)
 		}
 	}
 }
