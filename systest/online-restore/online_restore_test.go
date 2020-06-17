@@ -137,7 +137,7 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "cranky_bartik8")
+	sendRestoreRequest(t, "youthful_rhodes3")
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -150,12 +150,12 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "cranky_bartik8")
+	sendRestoreRequest(t, "youthful_rhodes3")
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "awesome_dirac9")
+	sendRestoreRequest(t, "blissful_hermann1")
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -231,7 +231,7 @@ func TestListBackups(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
-	require.Contains(t, sbuf, `"backupId":"cranky_bartik8"`)
+	require.Contains(t, sbuf, `"backupId":"youthful_rhodes3"`)
 	require.Contains(t, sbuf, `"backupNum":1`)
 	require.Contains(t, sbuf, `"backupNum":2`)
 	require.Contains(t, sbuf, "initial_release_date")
