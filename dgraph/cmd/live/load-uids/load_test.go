@@ -202,11 +202,18 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	// copy the export files from docker
 	exportId := copyExportToLocalFs(t)
 
+	// unzip them
+	require.NoError(t, testutil.Exec(
+		"gunzip",
+		copyExportDir+"/"+exportId+"/g01.schema.gz",
+		copyExportDir+"/"+exportId+"/g01.rdf.gz",
+	), "failed to unzip export files!")
+
 	// then load the exported files
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live", "--new_uids",
-			"--schema", copyExportDir + "/" + exportId + "/g01.schema.gz",
-			"--files", copyExportDir + "/" + exportId + "/g01.rdf.gz",
+			"--schema", copyExportDir + "/" + exportId + "/g01.schema",
+			"--files", copyExportDir + "/" + exportId + "/g01.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
