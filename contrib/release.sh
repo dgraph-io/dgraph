@@ -24,6 +24,10 @@ check_cmd_exists() {
     fi
 }
 
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
 check_cmd_exists strip
 check_cmd_exists gcc
 check_cmd_exists go
@@ -31,6 +35,8 @@ check_cmd_exists docker
 check_cmd_exists nvm
 check_cmd_exists npm
 check_cmd_exists protoc
+check_cmd_exists strip
+check_cmd_exists shasum
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -45,10 +51,7 @@ mkdir $GOPATH
 PATH="$GOPATH/bin:$PATH"
 
 # The Go version used for release builds must match this version.
-GOVERSION="1.14.1"
-
-# Turn off go modules by default. Only enable go modules when needed.
-export GO111MODULE=off
+GOVERSION="1.14.4"
 
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
@@ -70,38 +73,23 @@ echo "Building Dgraph for tag: $TAG"
 set -e
 set -o xtrace
 
-# Check for existence of strip tool.
-type strip
-type shasum
-
 ratel_release="github.com/dgraph-io/ratel/server.ratelVersion"
 release="github.com/dgraph-io/dgraph/x.dgraphVersion"
 branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 
-go get -u github.com/jteeuwen/go-bindata/...
-go get -d google.golang.org/grpc
-go get -u github.com/prometheus/client_golang/prometheus
-go get -u github.com/dgraph-io/dgo
-# go get github.com/stretchr/testify/require
-go get -u github.com/dgraph-io/badger
-go get -u github.com/golang/protobuf/protoc-gen-go
-go get -u github.com/gogo/protobuf/protoc-gen-gofast
 go get -u src.techknowlogick.com/xgo
 
-pushd $GOPATH/src/google.golang.org/grpc
-  git checkout v1.13.0
-popd
-
 basedir=$GOPATH/src/github.com/dgraph-io
+mkdir -p "$basedir"
+
 # Clone Dgraph repo.
 pushd $basedir
   git clone /home/dmai/go/src/github.com/dgraph-io/dgraph
 popd
 
 pushd $basedir/dgraph
-  git pull
   git checkout $TAG
   # HEAD here points to whatever is checked out.
   lastCommitSHA1=$(git rev-parse --short HEAD)
@@ -111,15 +99,17 @@ pushd $basedir/dgraph
 popd
 
 # Regenerate protos. Should not be different from what's checked in.
-# pushd $basedir/dgraph/protos
-#   export GO111MODULE=on
-#   make --debug=verbose regenerate
-#   if [[ "$(git status --porcelain)" ]]; then
-#       echo >&2 "Generated protos different in release."
-#       exit 1
-#   fi
-#   export GO111MODULE=off
-# popd
+pushd $basedir/dgraph/protos
+  # We need to fetch the modules to get the correct proto files. e.g., for
+  # badger and dgo
+  go get -d -v ../dgraph
+
+  make regenerate
+  if [[ "$(git status --porcelain)" ]]; then
+      echo >&2 "Generated protos different in release."
+      exit 1
+  fi
+popd
 
 # Clone ratel repo.
 pushd $basedir
@@ -127,11 +117,14 @@ pushd $basedir
 popd
 
 pushd $basedir/ratel
-  git pull
-  source ~/.nvm/nvm.sh
   nvm install --lts
-  ./scripts/build.prod.sh
+  (export GO111MODULE=off; ./scripts/build.prod.sh)
   ./scripts/test.sh
+popd
+
+# Clone Badger repo.
+pushd $basedir
+  git clone https://github.com/dgraph-io/badger.git
 popd
 
 # Build Windows.
@@ -212,7 +205,7 @@ pushd $TMP
 popd
 rm $TMP/Dockerfile
 
-# Create the tars and delete the binaries.
+# Create the tar and delete the binaries.
 createTar () {
   os=$1
   echo "Creating tar for $os"
@@ -222,10 +215,27 @@ createTar () {
   rm -Rf $TMP/$os
 }
 
-createTar windows
+# Create the zip and delete the binaries.
+createZip () {
+  os=$1
+  echo "Creating zip for $os"
+  pushd $TMP/$os
+    zip -r ../dgraph-$os-amd64.zip *
+  popd
+  rm -Rf $TMP/$os
+}
+
+createZip windows
 createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
 docker run -it dgraph/dgraph:$DTAG dgraph
 ls -alh $TMP
+
+echo "To release:"
+echo "Push the git tag"
+echo "  git push origin $TAG"
+echo "Push the Docker tag:"
+echo "  docker push dgraph/dgraph:$DTAG"
+
