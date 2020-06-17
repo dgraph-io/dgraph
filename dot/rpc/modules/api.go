@@ -23,6 +23,7 @@ type BlockAPI interface {
 	GetBlockByHash(hash common.Hash) (*types.Block, error)
 	GetBlockHash(blockNumber *big.Int) (*common.Hash, error)
 	SetBlockAddedChannel(chan<- *types.Block, <-chan struct{})
+	GetFinalizedHash() (common.Hash, error)
 }
 
 // NetworkAPI interface for network state methods

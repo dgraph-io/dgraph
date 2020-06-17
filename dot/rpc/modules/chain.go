@@ -126,8 +126,15 @@ func (cm *ChainModule) GetHead(r *http.Request, req *ChainBlockNumberRequest, re
 	return cm.GetBlockHash(r, req, res)
 }
 
-// GetFinalizedHead isn't implemented properly yet.
-func (cm *ChainModule) GetFinalizedHead(r *http.Request, req *EmptyRequest, res *ChainHashResponse) {
+// GetFinalizedHead returns the most recently finalized block hash
+func (cm *ChainModule) GetFinalizedHead(r *http.Request, req *EmptyRequest, res *ChainHashResponse) error {
+	h, err := cm.blockAPI.GetFinalizedHash()
+	if err != nil {
+		return err
+	}
+
+	*res = h
+	return nil
 }
 
 //GetHeader Get header of a relay chain block. If no block hash is provided, the latest block header will be returned.
