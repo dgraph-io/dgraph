@@ -1131,6 +1131,56 @@ func queryTypename(t *testing.T) {
 
 }
 
+func queryOnlyTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				__typename
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryCountry": [
+          {
+                "__typename": "Country"
+          }
+        ]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+
+}
+
+func queryNestedOnlyTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				posts {
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"posts": [
+		  {
+			"__typename": "Post"
+		  },
+		]
+	  }
+	]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+}
 func queryNestedTypename(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query {
