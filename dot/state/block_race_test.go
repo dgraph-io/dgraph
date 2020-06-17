@@ -25,12 +25,12 @@ import (
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
-	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/chaindb"
 	"github.com/stretchr/testify/require"
 )
 
 func TestConcurrencySetHeader(t *testing.T) {
-	db := database.NewMemDatabase()
+	db := chaindb.NewMemDatabase()
 	blockDB := NewBlockDB(db)
 
 	threads := runtime.NumCPU()

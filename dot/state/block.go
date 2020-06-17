@@ -29,14 +29,14 @@ import (
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 
-	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/chaindb"
 )
 
 var blockPrefix = []byte("block")
 
 // BlockDB stores block's in an underlying Database
 type BlockDB struct {
-	db database.Database
+	db chaindb.Database
 }
 
 // Put appends `block` to the key and sets the key-value pair in the db
@@ -69,14 +69,14 @@ type BlockState struct {
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
-func NewBlockDB(db database.Database) *BlockDB {
+func NewBlockDB(db chaindb.Database) *BlockDB {
 	return &BlockDB{
 		db,
 	}
 }
 
 // NewBlockState will create a new BlockState backed by the database located at basePath
-func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, error) {
+func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, error) {
 	if bt == nil {
 		return nil, fmt.Errorf("block tree is nil")
 	}
@@ -106,7 +106,7 @@ func NewBlockState(db database.Database, bt *blocktree.BlockTree) (*BlockState, 
 }
 
 // NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at basePath
-func NewBlockStateFromGenesis(db database.Database, header *types.Header) (*BlockState, error) {
+func NewBlockStateFromGenesis(db chaindb.Database, header *types.Header) (*BlockState, error) {
 	bs := &BlockState{
 		bt: blocktree.NewBlockTreeFromGenesis(header, db),
 		db: NewBlockDB(db),

@@ -24,12 +24,12 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
-	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/chaindb"
 	"github.com/stretchr/testify/require"
 )
 
 func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
-	db := database.NewMemDatabase()
+	db := chaindb.NewMemDatabase()
 	blockDb := NewBlockDB(db)
 
 	if header == nil {

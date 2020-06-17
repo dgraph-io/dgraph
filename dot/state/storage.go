@@ -24,7 +24,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
-	database "github.com/ChainSafe/chaindb"
+	"github.com/ChainSafe/chaindb"
 )
 
 var storagePrefix = []byte("storage")
@@ -32,7 +32,7 @@ var codeKey = []byte(":code")
 
 // StorageDB stores trie structure in an underlying database
 type StorageDB struct {
-	db database.Database
+	db chaindb.Database
 }
 
 // Put appends `storage` to the key and sets the key-value pair in the db
@@ -55,14 +55,14 @@ type StorageState struct {
 }
 
 // NewStorageDB instantiates badgerDB instance for storing trie structure
-func NewStorageDB(db database.Database) *StorageDB {
+func NewStorageDB(db chaindb.Database) *StorageDB {
 	return &StorageDB{
 		db,
 	}
 }
 
 // NewStorageState creates a new StorageState backed by the given trie and database located at basePath.
-func NewStorageState(db database.Database, t *trie.Trie) (*StorageState, error) {
+func NewStorageState(db chaindb.Database, t *trie.Trie) (*StorageState, error) {
 	if db == nil {
 		return nil, fmt.Errorf("cannot have nil database")
 	}
