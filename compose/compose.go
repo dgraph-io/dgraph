@@ -83,6 +83,7 @@ type options struct {
 	Ratel         bool
 	RatelPort     int
 	TlsDir        string
+	ExposePorts   bool
 }
 
 var opts options
@@ -96,8 +97,11 @@ func name(prefix string, idx int) string {
 	return fmt.Sprintf("%s%d", prefix, idx)
 }
 
-func toExposedPort(i int) string {
-	return fmt.Sprintf("%d:%d", i, i)
+func toPort(i int) string {
+	if opts.ExposePorts {
+		return fmt.Sprintf("%d:%d", i, i)
+	}
+	return fmt.Sprintf("%d", i)
 }
 
 func getOffset(idx int) int {
@@ -120,8 +124,8 @@ func initService(basename string, idx, grpcPort int) service {
 	svc.Labels = map[string]string{"cluster": "test"}
 
 	svc.Ports = []string{
-		toExposedPort(grpcPort),
-		toExposedPort(grpcPort + 1000), // http port
+		toPort(grpcPort),
+		toPort(grpcPort + 1000), // http port
 	}
 
 	svc.Volumes = append(svc.Volumes, volume{
@@ -243,8 +247,8 @@ func getJaeger() service {
 		ContainerName: "jaeger",
 		WorkingDir:    "/working/jaeger",
 		Ports: []string{
-			toExposedPort(14268),
-			toExposedPort(16686),
+			toPort(14268),
+			toPort(16686),
 		},
 		Environment: []string{
 			"SPAN_STORAGE_TYPE=badger",
@@ -265,7 +269,7 @@ func getRatel() service {
 		Image:         "dgraph/dgraph:" + opts.Tag,
 		ContainerName: "ratel",
 		Ports: []string{
-			toExposedPort(opts.RatelPort),
+			toPort(opts.RatelPort),
 		},
 		Command: "dgraph-ratel" + portFlag,
 	}
@@ -294,7 +298,7 @@ func addMetrics(cfg *composeConfig) {
 		ContainerName: "prometheus",
 		Hostname:      "prometheus",
 		Ports: []string{
-			toExposedPort(9090),
+			toPort(9090),
 		},
 		Volumes: []volume{
 			{
@@ -316,7 +320,7 @@ func addMetrics(cfg *composeConfig) {
 		ContainerName: "grafana",
 		Hostname:      "grafana",
 		Ports: []string{
-			toExposedPort(3000),
+			toPort(3000),
 		},
 		Environment: []string{
 			// Skip login
@@ -387,6 +391,8 @@ func main() {
 		"Port to expose Ratel service")
 	cmd.PersistentFlags().StringVar(&opts.TlsDir, "tls_dir", "",
 		"TLS Dir.")
+	cmd.PersistentFlags().BoolVar(&opts.ExposePorts, "expose_ports", true,
+		"expose host:container ports for each service")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
