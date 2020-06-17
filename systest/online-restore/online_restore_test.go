@@ -61,6 +61,29 @@ func sendRestoreRequest(t *testing.T, backupId string) {
 	require.Contains(t, string(buf), "Restore completed.")
 }
 
+func disableDraining(t *testing.T) {
+	drainRequest := `mutation draining {
+ 		draining(enable: false) {
+    		response {
+        		code
+        		message
+      		}
+  		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: drainRequest,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(buf), "draining mode has been set to false")
+}
+
 func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
@@ -130,6 +153,8 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestBasicRestore(t *testing.T) {
+	disableDraining(t)
+	
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -143,6 +168,8 @@ func TestBasicRestore(t *testing.T) {
 }
 
 func TestMoveTablets(t *testing.T) {
+	disableDraining(t)
+
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
