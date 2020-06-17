@@ -18,6 +18,7 @@ package x
 
 import (
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -99,7 +100,7 @@ func FlushSentry() {
 func ConfigureSentryScope(subcmd string) {
 	sentry.ConfigureScope(func(scope *sentry.Scope) {
 		scope.SetTag("dgraph", subcmd)
-		scope.SetTag("checksum", string(ExecutableChecksum()))
+		scope.SetTag("checksum", fmt.Sprintf("%x", ExecutableChecksum()))
 		scope.SetTag("commit", lastCommitSHA)
 		scope.SetTag("commit ts", lastCommitTime)
 		scope.SetTag("branch", gitBranch)
