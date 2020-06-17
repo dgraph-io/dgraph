@@ -492,9 +492,10 @@ func handleAbort(startTs uint64) (map[string]interface{}, error) {
 	}
 }
 
-func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error) {
+func handleCommit(namespace string, startTs uint64, reqText []byte) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
-		StartTs: startTs,
+		StartTs:   startTs,
+		Namespace: namespace,
 	}
 
 	var reqList []string

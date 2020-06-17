@@ -73,6 +73,7 @@ message Query {
 	int32 cache = 14;
 	int32 first = 15; // used to limit the number of result. Typically, the count is value of first
 	// field. Now, It's been used only for has query.
+	string namespace = 16;
 }
 
 message ValueList {
@@ -106,6 +107,7 @@ message SortMessage {
 	int32 offset = 4;  // Skip this many elements.
 
 	uint64 read_ts = 13;
+	string namespace = 14;
 }
 
 message SortResult {
@@ -179,7 +181,8 @@ message MembershipState {
 message ConnectionState {
     Member member = 1;
     MembershipState state = 2;
-    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+    map<string,uint64> max_pending = 4; // Used to determine the timstamp for reading after bulk
+	// load
 }
 
 message HealthInfo {
@@ -498,10 +501,12 @@ message OracleDelta {
 	uint64 max_assigned                 = 2;
 	map<uint32, uint64> group_checksums = 3;
 	// implement tmax.
+	string namespace	    			= 4;
 }
 
 message TxnTimestamps {
 	repeated uint64 ts = 1;
+	string namespace   = 2;
 }
 
 message PeerResponse {
