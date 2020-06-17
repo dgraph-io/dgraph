@@ -295,6 +295,26 @@ func verifyHeadersHandler(w http.ResponseWriter, r *http.Request) {
 	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
 }
 
+func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
+	err := verifyRequest(r, expectedRequest{
+		method:    http.MethodGet,
+		urlSuffix: "/verifyCustomNameHeaders",
+		body:      "",
+		headers: map[string][]string{
+			"X-App-Token":      {"app-token"},
+			"X-User-Id":        {"123"},
+			"Authorization": {"random-fake-token"},
+			"Accept-Encoding":  nil,
+			"User-Agent":       nil,
+		},
+	})
+	if err != nil {
+		check2(w.Write([]byte(err.Error())))
+		return
+	}
+	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
+}
+
 func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
 	err := verifyRequest(r, expectedRequest{
 		method:    http.MethodGet,
@@ -1114,6 +1134,7 @@ func main() {
 	http.HandleFunc("/favMovies/", getFavMoviesHandler)
 	http.HandleFunc("/favMoviesPost/", postFavMoviesHandler)
 	http.HandleFunc("/verifyHeaders", verifyHeadersHandler)
+	http.HandleFunc("/verifyCustomNameHeaders", verifyCustomNameHeadersHandler)
 	http.HandleFunc("/twitterfollowers", twitterFollwerHandler)
 
 	// for mutations
