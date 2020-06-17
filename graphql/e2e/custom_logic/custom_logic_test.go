@@ -168,6 +168,45 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
 		 })
 	 }
+	 
+		 # Dgraph.Secret Github-Api-Token "random-fake-token"
+		 # Dgraph.Secret app "should-be-overriden"
+	 `
+	updateSchemaRequireNoGQLErrors(t, schema)
+	time.Sleep(2 * time.Second)
+
+	query := `
+	 query {
+		 verifyHeaders(id: "0x123") {
+			 id
+			 name
+		 }
+	 }`
+	params := &common.GraphQLParams{
+		Query: query,
+		Headers: map[string][]string{
+			"X-App-Token":   []string{"app-token"},
+			"X-User-Id":     []string{"123"},
+			"Random-header": []string{"random"},
+		},
+	}
+
+	result := params.ExecuteAsPost(t, alphaURL)
+	require.Nil(t, result.Errors)
+	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
+	require.Equal(t, expected, string(result.Data))
+}
+
+func TestCustomNameForwardHeaders(t *testing.T) {
+	schema := customTypes + `
+	 type Query {
+		 verifyHeaders(id: ID!): [Movie] @custom(http: {
+				 url: "http://mock:8888/verifyCustomNameHeaders",
+				 method: "GET",
+				 forwardHeaders: ["X-App-Token:App", "X-User-Id"],
+				 secretHeaders: ["Authorization:Github-Api-Token", "X-App-Token"]
+		 })
+	 }
 
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
 		 # Dgraph.Secret X-App-Token "should-be-overriden"
@@ -185,7 +224,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 	params := &common.GraphQLParams{
 		Query: query,
 		Headers: map[string][]string{
-			"X-App-Token":   []string{"app-token"},
+			"App":           []string{"app-token"},
 			"X-User-Id":     []string{"123"},
 			"Random-header": []string{"random"},
 		},
