@@ -994,7 +994,7 @@
       x as updateStudent(func: type(Student)) @filter(uid(0x123)) {
         uid
       }
-      Teacher3 as Teacher3(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
+      Teacher4 as Teacher4(func: eq(People.xid, "T1")) @filter(type(Teacher)) {
         uid
       }
     }
@@ -1007,59 +1007,18 @@
             "Teacher",
             "People"
           ],
-          "uid": "_:Teacher3"
+          "uid": "_:Teacher4"
         }
-      cond: "@if(eq(len(Teacher4), 0) AND eq(len(Teacher4), 0) AND gt(len(x), 0))"
-    - setjson: |
-        {
-          "Student.taughtBy": [
-            {
-              "People.name": "Teacher1",
-              "People.xid": "T1",
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            },
-            {
-              "uid": "uid(Teacher4)"
-            }
-          ],
-          "uid": "uid(x)"
-        }
-      cond: "@if(eq(len(Teacher4), 0) AND eq(len(Teacher4), 1) AND gt(len(x), 0))"
-    - setjson: |
-        {
-          "Student.taughtBy": [
-            {
-              "uid": "uid(Teacher4)"
-            },
-            {
-              "dgraph.type": [ "Teacher", "People" ],
-              "uid": "_:Teacher4"
-            }
-          ],
-          "uid": "uid(x)"
-        }
-      cond: "@if(eq(len(Teacher4), 1) AND eq(len(Teacher4), 0) AND gt(len(x), 0))"
-    - setjson: |
-        {
-          "Student.taughtBy": [
-            {
-              "uid": "uid(Teacher4)"
-            },
-            {
-              "uid": "uid(Teacher4)"
-            }
-          ],
-      cond: "@if(eq(len(Teacher3), 0) AND gt(len(x), 0))"
+      cond: "@if(eq(len(Teacher4), 0) AND gt(len(x), 0))"
   dgmutationssec:
     - setjson: |
         {
           "Student.taughtBy":[{
                   "Teacher.teaches":[{"uid":"uid(x)"}],
-                  "uid":"uid(Teacher3)"
+                  "uid":"uid(Teacher4)"
           },{
                   "Teacher.teaches":[{"uid":"uid(x)"}],
-                  "uid":"uid(Teacher3)"
+                  "uid":"uid(Teacher4)"
           }],
           "uid": "uid(x)"
         }
