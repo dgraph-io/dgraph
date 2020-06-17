@@ -83,7 +83,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
-	if groups().ServesGroup(req.GetGroupId()) {
+	if groups().ServesGroup(req.GetGroupId()) && groups().Node.AmLeader() {
 		_, err := (&grpcWorker{}).Restore(ctx, req)
 		return err
 	}
@@ -171,7 +171,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 			req.GroupId)
 	}
 	for _, pred := range preds {
-		if tablet, err := groups().Tablet(pred); err != nil {
+		// Force the tablet to be moved to this group, even if it's currently being served
+		// by another group.
+		if tablet, err := groups().ForceTablet(pred); err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		} else if tablet.GetGroupId() != req.GroupId {
 			return errors.Errorf("cannot assign tablet for pred %s to group %d", pred, req.GroupId)
@@ -230,7 +232,13 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 
 func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	res := LoadBackup(req.Location, req.BackupId,
-		func(r io.Reader, groupId int, preds predicateSet) (uint64, error) {
+		func(r io.Reader, groupId uint32, preds predicateSet) (uint64, error) {
+			if groupId != req.GroupId {
+				// LoadBackup will try to call the backup function for every group.
+				// Exit here if the group is not the one indicated by the request.
+				return 0, nil
+			}
+
 			cfg, err := getEncConfig(req)
 			if err != nil {
 				return 0, errors.Wrapf(err, "unable to get encryption config")

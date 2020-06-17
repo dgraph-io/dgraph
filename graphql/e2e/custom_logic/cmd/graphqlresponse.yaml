@@ -89,6 +89,34 @@
       country(code: ID!): Country!
     }
 
+- name: "argsonfields"
+  description: "Test case to check args on fields can be passed by Dgraph"
+  schema: |
+    type Country {
+      code(size: Int!): String
+      name: String
+    }
+
+    type Query {
+      country(code: ID!): Country!
+    }
+  request: |
+    query($id: ID!) { country(code: $id) {
+    code(size: 100)
+    name
+    }}
+  variables: |
+    {"id":"BI"}
+  response: |
+    {
+      "data":{
+        "country":{
+          "name":"Burundi",
+          "code":"BI"
+        }
+      }
+    }
+
 - name: "validcountrywitherror"
   description: "Test case to validate dgraph can handle both valid data and error"
   schema: |
