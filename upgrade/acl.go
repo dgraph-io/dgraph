@@ -30,7 +30,7 @@ import (
 const (
 	oldACLQuery = `
 		{
-			rules(func: type(Group)) {
+			rules(func: type(dgraph.type.Group)) {
 				uid
 				dgraph.group.acl
 			}
@@ -103,13 +103,19 @@ func upgradeACLRules() error {
 
 		for _, r := range rs {
 			newRuleStr := fmt.Sprintf("_:newrule%d", counter)
-			nquads = append(nquads, []*api.NQuad{{
-				Subject:   newRuleStr,
-				Predicate: "dgraph.rule.predicate",
-				ObjectValue: &api.Value{
-					Val: &api.Value_StrVal{StrVal: r.Predicate},
+			nquads = append(nquads, []*api.NQuad{
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.type",
+					ObjectId:  "dgraph.type.Rule",
 				},
-			},
+				{
+					Subject:   newRuleStr,
+					Predicate: "dgraph.rule.predicate",
+					ObjectValue: &api.Value{
+						Val: &api.Value_StrVal{StrVal: r.Predicate},
+					},
+				},
 				{
 					Subject:   newRuleStr,
 					Predicate: "dgraph.rule.permission",
@@ -121,7 +127,8 @@ func upgradeACLRules() error {
 					Subject:   group.UID,
 					Predicate: "dgraph.acl.rule",
 					ObjectId:  newRuleStr,
-				}}...)
+				},
+			}...)
 
 			counter++
 		}

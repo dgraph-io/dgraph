@@ -56,7 +56,7 @@ type flagOptions struct {
 	readTs        uint64
 	sizeHistogram bool
 	noKeys        bool
-	keyFile       string
+	key           x.SensitiveByteSlice
 
 	// Options related to the WAL.
 	wdir           string
@@ -87,15 +87,13 @@ func init() {
 	flag.StringVarP(&opt.pdir, "postings", "p", "", "Directory where posting lists are stored.")
 	flag.BoolVar(&opt.sizeHistogram, "histogram", false,
 		"Show a histogram of the key and value sizes.")
-	flag.StringVarP(&opt.keyFile, "encryption_key_file", "k", "",
-		"File where the encryption key is stored.")
-
 	flag.StringVarP(&opt.wdir, "wal", "w", "", "Directory where Raft write-ahead logs are stored.")
 	flag.Uint64VarP(&opt.wtruncateUntil, "truncate", "t", 0,
 		"Remove data from Raft entries until but not including this index.")
 	flag.StringVarP(&opt.wsetSnapshot, "snap", "s", "",
 		"Set snapshot term,index,readts to this. Value must be comma-separated list containing"+
 			" the value for these vars in that order.")
+	enc.RegisterFlags(flag)
 }
 
 func toInt(o *pb.Posting) int {
@@ -759,24 +757,27 @@ func printZeroProposal(buf *bytes.Buffer, zpr *pb.ZeroProposal) {
 }
 
 func run() {
+	var err error
 	dir := opt.pdir
 	isWal := false
 	if len(dir) == 0 {
 		dir = opt.wdir
 		isWal = true
 	}
+	if opt.key, err = enc.ReadKey(Debug.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
+		return
+	}
+
 	bopts := badger.DefaultOptions(dir).
 		WithTableLoadingMode(options.MemoryMap).
-		WithReadOnly(opt.readOnly).WithEncryptionKey(enc.ReadEncryptionKeyFile(opt.keyFile))
-
-	// TODO(Ibrahim): Remove this once badger is updated.
-	bopts.ZSTDCompressionLevel = 1
+		WithReadOnly(opt.readOnly).
+		WithEncryptionKey(opt.key)
 
 	x.AssertTruef(len(bopts.Dir) > 0, "No posting or wal dir specified.")
 	fmt.Printf("Opening DB: %s\n", bopts.Dir)
 
 	var db *badger.DB
-	var err error
 	if isWal {
 		db, err = badger.Open(bopts)
 	} else {

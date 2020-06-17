@@ -1,3 +1,43 @@
+- name: "Auth with deep get query."
+  gqlquery: |
+    query {
+      getProject(projID: "0x123") {
+        projID
+        columns {
+          name
+          colID
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      getProject(func: uid(Project2)) @filter((uid(Project3) AND type(Project))) {
+        projID : uid
+        columns : Project.columns @filter(uid(Column1)) {
+          name : Column.name
+          colID : uid
+        }
+      }
+      Project2 as var(func: uid(0x123))
+      Project3 as var(func: uid(Project2)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Column1 as var(func: type(Column)) @cascade {
+        inProject : Column.inProject {
+          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
 - name: "Auth with top level filter : query, no filter"
   gqlquery: |
     query {
@@ -26,11 +66,11 @@
     }
   dgquery: |-
     query {
-      getUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      getUserSecret(func: uid(UserSecret1)) @filter((uid(UserSecret2) AND type(UserSecret))) {
         id : uid
         ownedBy : UserSecret.ownedBy
       }
-      UserSecret1 as var(func: uid(0x123)) @filter(type(UserSecret))
+      UserSecret1 as var(func: uid(0x123))
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 

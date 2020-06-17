@@ -221,6 +221,9 @@ func RunAll(t *testing.T) {
 	// schema tests
 	t.Run("graphql descriptions", graphQLDescriptions)
 
+	// header tests
+	t.Run("touched uids header", touchedUidsHeader)
+
 	// encoding
 	t.Run("gzip compression", gzipCompression)
 	t.Run("gzip compression header", gzipCompressionHeader)
@@ -270,6 +273,7 @@ func RunAll(t *testing.T) {
 	t.Run("query post with author", queryPostWithAuthor)
 	t.Run("queries have extensions", queriesHaveExtensions)
 	t.Run("alias works for queries", queryWithAlias)
+	t.Run("cascade directive", queryWithCascade)
 
 	// mutation tests
 	t.Run("add mutation", addMutation)
@@ -739,11 +743,16 @@ func addSchema(url, schema string) error {
 				}
 			}
 		}
+		Errors []interface{}
 	}
 
 	err = json.Unmarshal(resp, &addResult)
 	if err != nil {
 		return errors.Wrap(err, "error trying to unmarshal GraphQL mutation result")
+	}
+
+	if len(addResult.Errors) > 0 {
+		return errors.Errorf("%v", addResult.Errors)
 	}
 
 	if addResult.Data.UpdateGQLSchema.GQLSchema.Schema == "" {

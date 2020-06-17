@@ -22,14 +22,30 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
+func validateUrl(rawURL string) error {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return err
+	}
+
+	if u.RawQuery != "" {
+		return fmt.Errorf("POST method cannot have query parameters in url: %s", rawURL)
+	}
+	return nil
+}
+
 // introspectRemoteSchema introspectes remote schema
-func introspectRemoteSchema(url string) (*introspectedSchema, error) {
+func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchema, error) {
+	if err := validateUrl(url); err != nil {
+		return nil, err
+	}
 	param := &Request{
 		Query: introspectionQuery,
 	}
@@ -44,6 +60,9 @@ func introspectRemoteSchema(url string) (*introspectedSchema, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	for k := range headers {
+		req.Header.Set(k, headers.Get(k))
+	}
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -165,6 +184,8 @@ type remoteGraphqlMetadata struct {
 	isBatch bool
 	// url is the url of remote graphql endpoint
 	url string
+	// headers sent to the remote graphql endpoint for introspection
+	headers http.Header
 	// schema given by the user.
 	schema *ast.Schema
 }
@@ -205,7 +226,7 @@ type remoteArgMetadata struct {
 // validates the graphql given in @custom->http->graphql by introspecting remote schema.
 // It assumes that the graphql syntax is correct, only remote validation is needed.
 func validateRemoteGraphql(metadata *remoteGraphqlMetadata) error {
-	remoteIntrospection, err := introspectRemoteSchema(metadata.url)
+	remoteIntrospection, err := introspectRemoteSchema(metadata.url, metadata.headers)
 	if err != nil {
 		return err
 	}

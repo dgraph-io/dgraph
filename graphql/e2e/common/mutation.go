@@ -1514,13 +1514,12 @@ func deleteCountry(
 	deleteGqlType(t, "Country", filter, expectedNumUids, expectedErrors)
 }
 
-func deleteAuthor(
+func deleteAuthors(
 	t *testing.T,
-	authorID string,
-	expectedNumUids int,
+	authorIDs []string,
 	expectedErrors x.GqlErrorList) {
-	filter := map[string]interface{}{"id": []string{authorID}}
-	deleteGqlType(t, "Author", filter, expectedNumUids, expectedErrors)
+	filter := map[string]interface{}{"id": authorIDs}
+	deleteGqlType(t, "Author", filter, len(authorIDs), expectedErrors)
 }
 
 func deletePost(
@@ -1911,7 +1910,7 @@ func cleanUp(t *testing.T, countries []*country, authors []*author, posts []*pos
 		}
 
 		for _, author := range authors {
-			deleteAuthor(t, author.ID, 1, nil)
+			deleteAuthors(t, []string{author.ID}, nil)
 		}
 
 		for _, country := range countries {
@@ -2577,7 +2576,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 	addMovieDirectorParams := &GraphQLParams{
 		Query: `mutation addMovieDirector($dir: [AddMovieDirectorInput!]!) {
 			addMovieDirector(input: $dir) {
-			  moviedirector {
+			  movieDirector {
 				id
 				name
 			  }

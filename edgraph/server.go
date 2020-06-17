@@ -252,9 +252,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for _, update := range result.Preds {
-		// Reserved predicates cannot be altered but let the update go through
+		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsReservedPredicateChanged(update.Predicate, update) {
+		if schema.IsPreDefinedPredicateChanged(update.Predicate, update) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
@@ -262,6 +262,25 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
+		}
+		// Users are not allowed to create a predicate under the reserved `dgraph.` namespace. But,
+		// there are pre-defined predicates (subset of reserved predicates), and for them we allow
+		// the schema update to go through if the update is equal to the existing one.
+		// So, here we check if the predicate is reserved but not pre-defined to block users from
+		// creating predicates in reserved namespace.
+		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
+			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
+				" which is reserved as the namespace for dgraph's internal types/predicates.",
+				update.Predicate)
+		}
+	}
+
+	for _, typ := range result.Types {
+		// Users are not allowed to create types in reserved namespace.
+		if x.IsReservedType(typ.TypeName) {
+			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
+				"which is reserved as the namespace for dgraph's internal types/predicates.",
+				typ.TypeName)
 		}
 	}
 

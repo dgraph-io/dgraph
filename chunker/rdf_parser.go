@@ -72,6 +72,10 @@ func ParseRDFs(b []byte) ([]*api.NQuad, *pb.Metadata, error) {
 	return nqs, calculateTypeHints(nqs), nil
 }
 
+func isSpaceRune(r rune) bool {
+	return r == ' '
+}
+
 // ParseRDF parses a mutation string and returns the N-Quad representation for it.
 // It parses N-Quad statements based on http://www.w3.org/TR/n-quads/.
 func ParseRDF(line string, l *lex.Lexer) (api.NQuad, error) {
@@ -97,7 +101,7 @@ L:
 		item := it.Item()
 		switch item.Typ {
 		case itemSubject:
-			rnq.Subject = strings.Trim(item.Val, " ")
+			rnq.Subject = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemSubjectFunc:
 			var err error
@@ -113,10 +117,10 @@ L:
 
 		case itemPredicate:
 			// Here we split predicate and lang directive (ex: "name@en"), if needed.
-			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.Trim(item.Val, " "))
+			rnq.Predicate, rnq.Lang = x.PredicateLang(strings.TrimFunc(item.Val, isSpaceRune))
 
 		case itemObject:
-			rnq.ObjectId = strings.Trim(item.Val, " ")
+			rnq.ObjectId = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemStar:
 			switch {
@@ -144,9 +148,9 @@ L:
 				return rnq, errors.Errorf("If predicate/subject is *, value should be * as well")
 			}
 
-			val := strings.Trim(item.Val, " ")
+			val := strings.TrimFunc(item.Val, isSpaceRune)
 			// TODO: Check if this condition is required.
-			if strings.Trim(val, " ") == "*" {
+			if val == "*" {
 				return rnq, errors.Errorf("itemObject can't be *")
 			}
 			// Lets find out the storage type from the type map.
@@ -190,7 +194,7 @@ L:
 			break L
 
 		case itemLabel:
-			rnq.Label = strings.Trim(item.Val, " ")
+			rnq.Label = strings.TrimFunc(item.Val, isSpaceRune)
 
 		case itemLeftRound:
 			it.Prev() // backup '('

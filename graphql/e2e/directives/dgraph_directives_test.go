@@ -27,6 +27,8 @@ import (
 
 func TestRunAll_WithDgraphDirectives(t *testing.T) {
 	common.RunAll(t)
+	t.Run("dgraph predicate with special characters",
+		common.DgraphDirectiveWithSpecialCharacters)
 }
 
 func TestSchema_WithDgraphDirectives(t *testing.T) {
@@ -82,29 +84,29 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"predicate": "credits",
 		"type": "float"
 	}, {
-		"predicate": "dgraph.author.country",
+		"predicate": "test.dgraph.author.country",
 		"type": "uid"
 	}, {
-		"predicate": "dgraph.author.dob",
+		"predicate": "test.dgraph.author.dob",
 		"type": "datetime",
 		"index": true,
 		"tokenizer": ["year"]
 	}, {
-		"predicate": "dgraph.author.name",
+		"predicate": "test.dgraph.author.name",
 		"type": "string",
 		"index": true,
 		"tokenizer": ["hash", "trigram"]
 	}, {
-		"predicate": "dgraph.author.posts",
+		"predicate": "test.dgraph.author.posts",
 		"type": "uid",
 		"list": true
 	}, {
-		"predicate": "dgraph.author.reputation",
+		"predicate": "test.dgraph.author.reputation",
 		"type": "float",
 		"index": true,
 		"tokenizer": ["float"]
 	}, {
-		"predicate": "dgraph.employee.en.ename",
+		"predicate": "test.dgraph.employee.en.ename",
 		"type": "string"
 	}, {
 		"predicate": "dgraph.graphql.schema",
@@ -116,7 +118,7 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"tokenizer": ["exact"],
 		"upsert": true
 	}, {
-		"predicate": "dgraph.topic",
+		"predicate": "test.dgraph.topic",
 		"type": "string",
 		"index": true,
 		"tokenizer": ["exact"]
@@ -201,6 +203,12 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"tokenizer": ["hash"],
 		"upsert": true
 	}, {
+		"predicate": "post",
+		"type": "string"
+	},{
+		"predicate": "职业",
+		"type": "string"
+	}, {
 		"predicate": "People.name",
 		"type": "string"
 	}, {
@@ -231,7 +239,7 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"name": "Country"
 	}, {
 		"fields": [{
-			"name": "dgraph.employee.en.ename"
+			"name": "test.dgraph.employee.en.ename"
 		}, {
 			"name": "performance.character.name"
 		}, {
@@ -274,22 +282,22 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"name": "User"
 	}, {
 		"fields": [{
-			"name": "dgraph.author.name"
+			"name": "test.dgraph.author.name"
 		}, {
-			"name": "dgraph.author.dob"
+			"name": "test.dgraph.author.dob"
 		}, {
-			"name": "dgraph.author.reputation"
+			"name": "test.dgraph.author.reputation"
 		}, {
-			"name": "dgraph.author.country"
+			"name": "test.dgraph.author.country"
 		}, {
-			"name": "dgraph.author.posts"
+			"name": "test.dgraph.author.posts"
 		}],
-		"name": "dgraph.author"
+		"name": "test.dgraph.author"
 	}, {
 		"fields": [{
-			"name": "dgraph.employee.en.ename"
+			"name": "test.dgraph.employee.en.ename"
 		}],
-		"name": "dgraph.employee.en"
+		"name": "test.dgraph.employee.en"
 	}, {
 		"fields": [{
 			"name": "dgraph.graphql.schema"
@@ -299,13 +307,20 @@ func TestSchema_WithDgraphDirectives(t *testing.T) {
 		"name": "dgraph.graphql"
 	}, {
 		"fields": [{
+			"name": "post"
+		}, {
+			"name": "职业"
+		}],
+		"name": "Message"
+	}, {
+		"fields": [{
 			"name": "myPost.title"
 		}, {
 			"name": "text"
 		}, {
 			"name": "myPost.tags"
 		}, {
-			"name": "dgraph.topic"
+			"name": "test.dgraph.topic"
 		}, {
 			"name": "myPost.numLikes"
 		}, {
