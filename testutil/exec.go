@@ -28,9 +28,9 @@ import (
 
 // These are exported so they can also be set directly from outside this package.
 var (
-	ShowOutput  = os.Getenv("DEBUG_SHOW_OUTPUT") != ""
-	ShowError   = os.Getenv("DEBUG_SHOW_ERROR") != ""
-	ShowCommand = os.Getenv("DEBUG_SHOW_COMMAND") != ""
+	ShowOutput  = true
+	ShowError   = true
+	ShowCommand = true
 )
 
 // CmdOpts sets the options to run a single command.
