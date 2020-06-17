@@ -64,6 +64,7 @@ type Options struct {
 	RefreshJwtTtl time.Duration
 	// AclRefreshInterval is the interval used to refresh the ACL cache.
 	AclRefreshInterval time.Duration
+
 }
 
 // Config holds an instance of the server options..

@@ -197,6 +197,7 @@ they form a Raft group and provide synchronous replication.
 
 	flag.Bool("graphql_introspection", true, "Set to false for no GraphQL schema introspection")
 	flag.Bool("ludicrous_mode", false, "Run alpha in ludicrous mode")
+	flag.Bool("graphql_extensions", true, "Set to false if extensions in graphql results not needed")
 	flag.Duration("graphql_poll_interval", time.Second, "polling interval for graphql subscription.")
 }
 
@@ -568,6 +569,7 @@ func run() {
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
+
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -623,6 +625,7 @@ func run() {
 		AbortOlderThan:      abortDur,
 		StartTime:           startTime,
 		LudicrousMode:       Alpha.Conf.GetBool("ludicrous_mode"),
+		ExtensionsFlag:  Alpha.Conf.GetBool("graphql_extensions"),
 	}
 	if x.WorkerConfig.EncryptionKey, err = enc.ReadKey(Alpha.Conf); err != nil {
 		glog.Infof("unable to read key %v", err)
@@ -635,6 +638,7 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
+
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)

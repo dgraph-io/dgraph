@@ -126,6 +126,7 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 // Output returns json interface of the response
 func (r *Response) Output() interface{} {
+
 	if r == nil {
 		return struct {
 			Errors json.RawMessage `json:"errors,omitempty"`
@@ -134,15 +135,24 @@ func (r *Response) Output() interface{} {
 			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
 			Data:   []byte("null"),
 		}
-	}
-	return struct {
-		Errors     []*x.GqlError   `json:"errors,omitempty"`
-		Data       json.RawMessage `json:"data,omitempty"`
-		Extensions *Extensions     `json:"extensions,omitempty"`
-	}{
-		Errors:     r.Errors,
-		Data:       r.Data.Bytes(),
-		Extensions: r.Extensions,
+	} else if x.WorkerConfig.ExtensionsFlag==true {
+		return struct {
+			Errors     []*x.GqlError   `json:"errors,omitempty"`
+			Data       json.RawMessage `json:"data,omitempty"`
+			Extensions *Extensions     `json:"extensions,omitempty"`
+		}{
+			Errors:     r.Errors,
+			Data:       r.Data.Bytes(),
+			Extensions: r.Extensions,
+		}
+	}else  {
+		return struct {
+			Errors     []*x.GqlError   `json:"errors,omitempty"`
+			Data       json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors:     r.Errors,
+			Data:       r.Data.Bytes(),
+		}
 	}
 }
 

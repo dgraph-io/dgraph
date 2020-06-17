@@ -36,6 +36,7 @@ import (
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/api"
 	"github.com/dgraph-io/dgraph/x"
+
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 	otrace "go.opencensus.io/trace"
