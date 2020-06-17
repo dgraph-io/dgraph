@@ -118,6 +118,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			defer x.StartProfile(Live.Conf).Stop()
 			if err := run(); err != nil {
+				x.Check2(fmt.Fprintf(os.Stderr, "%s", err.Error()))
 				os.Exit(1)
 			}
 		},
