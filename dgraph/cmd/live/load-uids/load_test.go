@@ -24,6 +24,7 @@ import (
 	"path"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -39,6 +40,11 @@ var zeroService = testutil.SockAddrZero
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
+)
+
+const (
+	copyExportDir   = "./export_copy"
+	alphaExportPath = "alpha1:/data/alpha1/export"
 )
 
 func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
@@ -186,24 +192,47 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			  }
 			}`,
 	}
-	resp := testutil.MakeGQLRequest(t, params)
-	require.Nil(t, resp.Errors)
+	accessJwt, _ := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	require.Nilf(t, resp.Errors, resp.Errors.Error())
 
-	// wait a bit to be sure export is complete, then load exported schema
+	// wait a bit to be sure export is complete
+	time.Sleep(time.Second)
+
+	// copy the export files from docker
+	exportId := copyExportToLocalFs(t)
+
+	// then load the exported files
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live",
-			"--schema", "export/*/g01.schema.gz", "--alpha", alphaService,
-			"-u", "groot", "-p", "password"},
+		{testutil.DgraphBinaryPath(), "live", "--new_uids",
+			"--schema", copyExportDir + "/" + exportId + "/g01.schema.gz",
+			"--files", copyExportDir + "/" + exportId + "/g01.rdf.gz",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading exported schema exited with error")
 
-	// delete export files
-	pipeline = [][]string{
-		{"rm", "-rf", "export"},
+	// cleanup copied export files
+	if err := os.RemoveAll(copyExportDir); err != nil {
+		t.Fatalf("Error removing export copy directory: %s", err.Error())
 	}
-	err = testutil.Pipeline(pipeline)
-	require.NoError(t, err, "removing exported schema failed")
+}
+
+func copyExportToLocalFs(t *testing.T) string {
+	if err := os.RemoveAll(copyExportDir); err != nil {
+		t.Fatalf("Error removing directory: %s", err.Error())
+	}
+	if err := testutil.DockerCp(alphaExportPath, copyExportDir); err != nil {
+		t.Fatalf("Error copying files from docker container: %s", err.Error())
+	}
+	childDirs, err := ioutil.ReadDir(copyExportDir)
+	if err != nil {
+		t.Fatalf("Couldn't read local export copy directory: %v", err)
+	}
+	if len(childDirs) == 0 {
+		t.Fatalf("Local export copy directory is empty!!!")
+	}
+	return childDirs[0].Name()
 }
 
 func TestMain(m *testing.M) {
