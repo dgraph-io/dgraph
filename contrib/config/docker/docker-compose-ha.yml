@@ -70,7 +70,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
+    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082
   alpha2:
     image: dgraph/dgraph:latest
     hostname: "alpha2"
@@ -86,7 +86,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
+    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082 -o 1
   alpha3:
     image: dgraph/dgraph:latest
     hostname: "alpha3"
@@ -102,7 +102,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
+    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082 -o 2
   alpha4:
     image: dgraph/dgraph:latest
     hostname: "alpha4"
@@ -117,7 +117,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws04
-    command: dgraph alpha --my=alpha4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
+    command: dgraph alpha --my=alpha4:7083 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082 -o 3
   alpha5:
     image: dgraph/dgraph:latest
     hostname: "alpha5"
@@ -132,7 +132,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws05
-    command: dgraph alpha --my=alpha5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
+    command: dgraph alpha --my=alpha5:7084 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082 -o 4
   alpha6:
     image: dgraph/dgraph:latest
     hostname: "alpha6"
@@ -147,7 +147,7 @@ services:
       placement:
         constraints:
           - node.hostname == aws06
-    command: dgraph alpha --my=alpha6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
+    command: dgraph alpha --my=alpha6:7085 --lru_mb=2048 --zero=zero1:5080,zero2:5081,zero3:5082 -o 5
   ratel:
     image: dgraph/dgraph:latest
     hostname: "ratel"
