@@ -43,8 +43,9 @@ var (
 )
 
 const (
-	copyExportDir   = "./export_copy"
-	alphaExportPath = "alpha1:/data/alpha1/export"
+	alphaName       = "alpha1"
+	alphaExportPath = alphaName + ":/data/" + alphaName + "/export"
+	localExportPath = "./export_copy"
 )
 
 func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
@@ -199,40 +200,36 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	// wait a bit to be sure export is complete
 	time.Sleep(time.Second)
 
-	// copy the export files from docker
-	exportId := copyExportToLocalFs(t)
-
-	// unzip them
-	require.NoError(t, testutil.Exec(
-		"gunzip",
-		copyExportDir+"/"+exportId+"/g01.schema.gz",
-		copyExportDir+"/"+exportId+"/g01.rdf.gz",
-	), "failed to unzip export files!")
+	// copy the unzipped export files from docker
+	exportId := unzipAndCopyExportToLocalFs(t)
 
 	// then load the exported files
 	pipeline := [][]string{
-		{testutil.DgraphBinaryPath(), "live", "--new_uids",
-			"--schema", copyExportDir + "/" + exportId + "/g01.schema",
-			"--files", copyExportDir + "/" + exportId + "/g01.rdf",
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", localExportPath + "/" + exportId + "/g01.schema",
+			"--files", localExportPath + "/" + exportId + "/g01.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 	err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading exported schema exited with error")
 
 	// cleanup copied export files
-	if err := os.RemoveAll(copyExportDir); err != nil {
+	if err := os.RemoveAll(localExportPath); err != nil {
 		t.Fatalf("Error removing export copy directory: %s", err.Error())
 	}
 }
 
-func copyExportToLocalFs(t *testing.T) string {
-	if err := os.RemoveAll(copyExportDir); err != nil {
+func unzipAndCopyExportToLocalFs(t *testing.T) string {
+	if err := os.RemoveAll(localExportPath); err != nil {
 		t.Fatalf("Error removing directory: %s", err.Error())
 	}
-	if err := testutil.DockerCp(alphaExportPath, copyExportDir); err != nil {
+	if err := testutil.DockerExec(alphaName, "gunzip", "-rf", "export"); err != nil {
+		t.Fatalf("Error unzipping files in docker container: %s", err.Error())
+	}
+	if err := testutil.DockerCp(alphaExportPath, localExportPath); err != nil {
 		t.Fatalf("Error copying files from docker container: %s", err.Error())
 	}
-	childDirs, err := ioutil.ReadDir(copyExportDir)
+	childDirs, err := ioutil.ReadDir(localExportPath)
 	if err != nil {
 		t.Fatalf("Couldn't read local export copy directory: %v", err)
 	}
