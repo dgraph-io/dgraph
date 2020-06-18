@@ -349,6 +349,7 @@ func commitWithTs(keys, preds []string, namespace string, ts uint64) error {
 	if err != nil {
 		return err
 	}
+	req.Header.Add(x.NamespaceHeader, namespace)
 	_, _, err = runRequest(req)
 	return err
 }
@@ -401,6 +402,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, mr.startTs, ts)
 	require.Equal(t, 4, len(mr.keys))
 	require.Equal(t, 2, len(mr.preds))
+	require.Equal(t, mr.namespace, x.DefaultNamespace)
 	var parsedPreds []string
 	for _, pred := range mr.preds {
 		attr := x.ParseAttr(strings.Join(strings.Split(pred, "-")[1:], "-"))
@@ -420,7 +422,7 @@ func TestTransactionBasic(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, mr.preds, ts))
+	require.NoError(t, commitWithTs(mr.keys, mr.preds, mr.namespace, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -466,7 +468,7 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, mr.namespace, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
@@ -507,7 +509,7 @@ func TestHttpMultiTennacy(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
-	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	require.NoError(t, commitWithTs(mr.keys, nil, mr.namespace, ts))
 	data, _, err = queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)

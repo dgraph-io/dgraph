@@ -566,6 +566,7 @@ message Num {
 	uint64 val = 1;
 	bool read_only = 2;
 	bool forwarded = 3; // True if this request was forwarded by a peer.
+	string namespace = 4; 
 }
 
 message AssignedIds {
