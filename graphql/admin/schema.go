@@ -63,7 +63,7 @@ type updateGQLSchemaInput struct {
 
 func (asr *updateSchemaResolver) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) (*resolve.UpsertMutation, error) {
+	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
 
 	glog.Info("Got updateGQLSchema request")
 
