@@ -167,6 +167,11 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 }
 
 func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
+	return queryWithTsWithNamespace(x.DefaultNamespace, queryText, contentType, debug, ts)
+}
+
+func queryWithTsWithNamespace(namespace,
+	queryText, contentType, debug string, ts uint64) (string, uint64, error) {
 	params := make([]string, 0, 2)
 	if debug != "" {
 		params = append(params, "debug="+debug)
@@ -176,7 +181,7 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 	}
 	url := addr + "/query?" + strings.Join(params, "&")
 
-	_, body, err := runWithRetries("POST", contentType, url, queryText)
+	_, body, err := runWithRetries(namespace, "POST", contentType, url, queryText)
 	if err != nil {
 		return "", 0, err
 	}
@@ -204,7 +209,8 @@ type mutationResponse struct {
 	namespace string
 }
 
-func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
+func mutationWithTsWithNamespace(namespace string,
+	m, t string, isJson bool, commitNow bool, ts uint64) (
 	mutationResponse, error) {
 
 	params := make([]string, 2)
@@ -218,7 +224,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	}
 
 	url := addr + "/mutate?" + strings.Join(params, "&")
-	_, body, err := runWithRetries("POST", t, url, m)
+	_, body, err := runWithRetries(namespace, "POST", t, url, m)
 	if err != nil {
 		return mr, err
 	}
@@ -248,7 +254,13 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	return mr, nil
 }
 
-func createRequest(method, contentType, url string, body string) (*http.Request, error) {
+func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
+	mutationResponse, error) {
+
+	return mutationWithTsWithNamespace(x.DefaultNamespace, m, t, isJson, commitNow, ts)
+}
+
+func createRequest(namespace, method, contentType, url string, body string) (*http.Request, error) {
 	req, err := http.NewRequest(method, url, bytes.NewBufferString(body))
 	if err != nil {
 		return nil, err
@@ -258,13 +270,17 @@ func createRequest(method, contentType, url string, body string) (*http.Request,
 		req.Header.Set("Content-Type", contentType)
 	}
 
+	if namespace != "" {
+		req.Header.Set(x.NamespaceHeader, namespace)
+	}
+
 	return req, nil
 }
 
-func runWithRetries(method, contentType, url string, body string) (
+func runWithRetries(namespace, method, contentType, url string, body string) (
 	*x.QueryResWithData, []byte, error) {
 
-	req, err := createRequest(method, contentType, url, body)
+	req, err := createRequest(namespace, method, contentType, url, body)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -280,7 +296,7 @@ func runWithRetries(method, contentType, url string, body string) (
 		}
 
 		// create a new request since the previous request would have been closed upon the err
-		retryReq, err := createRequest(method, contentType, url, body)
+		retryReq, err := createRequest(namespace, method, contentType, url, body)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -452,6 +468,47 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	// Commit and query.
 	require.NoError(t, commitWithTs(mr.keys, nil, ts))
 	data, _, err = queryWithTs(q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+}
+
+func TestHttpMultiTennacy(t *testing.T) {
+	require.NoError(t, dropAll())
+	createNamespace("demo")
+	require.NoError(t, alterSchemaWithNamespace("demo", `name: string @index(term) .`))
+
+	q1 := `
+	{
+	  balances(func: anyofterms(name, "Alice Bob")) {
+	    name
+	    balance
+	  }
+	}
+	`
+	_, ts, err := queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", 0)
+	require.NoError(t, err)
+
+	m1 := `
+    {
+	  set {
+		_:alice <name> "Bob" .
+		_:alice <balance> "110" .
+		_:bob <balance> "60" .
+	  }
+	}
+	`
+
+	mr, err := mutationWithTsWithNamespace("demo", m1, "application/rdf", false, false, ts)
+	require.NoError(t, err)
+
+	// Query with same timestamp.
+	data, _, err := queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", ts)
+	require.NoError(t, err)
+	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
+
+	// Commit and query.
+	require.NoError(t, commitWithTs(mr.keys, nil, ts))
+	data, _, err = queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", 0)
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }

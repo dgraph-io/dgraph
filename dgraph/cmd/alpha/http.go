@@ -565,12 +565,14 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	op.RunInBackground = runInBackground
+	op.CreateNamespace = r.URL.Query().Get("createNamespace")
 
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
 	fwd := r.Header.Get("X-Forwarded-For")
 	if len(fwd) > 0 {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
+	op.Namespace = r.Header.Get(x.NamespaceHeader)
 
 	md := metadata.New(nil)
 	// Pass in an auth token, if present.
