@@ -64,6 +64,7 @@ type BlockState struct {
 	lock               sync.RWMutex
 	genesisHash        common.Hash
 	highestBlockHeader *types.Header
+	hashNotifier       chan<- common.Hash
 	blockNotifier      chan<- *types.Block
 	doneNotifying      <-chan struct{}
 }
@@ -453,6 +454,12 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 		}
 	}
 
+	if bs.hashNotifier != nil {
+		go func(hash common.Hash) {
+			bs.hashNotifier <- hash
+		}(hash)
+	}
+
 	return err
 }
 
@@ -645,4 +652,9 @@ func (bs *BlockState) SetBabeHeader(epoch uint64, slot uint64, bh *types.BabeHea
 func (bs *BlockState) SetBlockAddedChannel(rcvr chan<- *types.Block, done <-chan struct{}) {
 	bs.blockNotifier = rcvr
 	bs.doneNotifying = done
+}
+
+// SetHashChannel sets the write channel for new block hashes added to the blocktree
+func (bs *BlockState) SetHashChannel(h chan<- common.Hash) {
+	bs.hashNotifier = h
 }

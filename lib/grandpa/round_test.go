@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -251,10 +252,6 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 
 	// this asserts that all validators finalize the same block if they all see the
 	// same pre-votes and pre-commits, even if their chains are different lengths
-
-	// TODO: keep track of VoteMessages for blocks that don't exist yet, and try
-	// to re-validate them when we receive new blocks. this fixes the case where we may be
-	// behind on the syncing
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
 
@@ -263,6 +260,10 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	outs := make([]chan FinalityMessage, len(kr.Keys))
 	fins := make([]chan FinalityMessage, len(kr.Keys))
 	done := false
+
+	// this represents the chains that will be slightly ahead of the others
+	headers := []*types.Header{}
+	diff := 8
 
 	for i := range gss {
 		gs, in, out, fin := setupGrandpa(t, kr.Keys[i])
@@ -274,10 +275,11 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 		fins[i] = fin
 
 		r := 0
-		if i < 3 {
-			r = rand.Intn(2)
+		r = rand.Intn(diff)
+		chain, _ := state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 4+r)
+		if r == diff-1 {
+			headers = chain
 		}
-		state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 4+r)
 	}
 
 	for _, out := range outs {
@@ -287,6 +289,18 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	for _, gs := range gss {
 		time.Sleep(time.Millisecond * 100)
 		go gs.initiate()
+	}
+
+	// mimic the chains syncing and catching up
+	for _, gs := range gss {
+		for _, h := range headers {
+			time.Sleep(time.Millisecond * 10)
+			block := &types.Block{
+				Header: h,
+				Body:   &types.Body{},
+			}
+			gs.blockState.(*state.BlockState).AddBlock(block)
+		}
 	}
 
 	wg := sync.WaitGroup{}

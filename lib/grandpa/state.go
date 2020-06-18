@@ -35,4 +35,5 @@ type BlockState interface {
 	BestBlockHeader() (*types.Header, error)
 	Leaves() []common.Hash
 	BlocktreeAsString() string
+	SetHashChannel(h chan<- common.Hash)
 }
