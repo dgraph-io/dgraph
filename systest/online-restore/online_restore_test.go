@@ -61,6 +61,7 @@ func sendRestoreRequest(t *testing.T, backupId string) {
 	require.Contains(t, string(buf), "Restore completed.")
 }
 
+// disableDraining disables draining mode before each test for increased reliability.
 func disableDraining(t *testing.T) {
 	drainRequest := `mutation draining {
  		draining(enable: false) {
