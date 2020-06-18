@@ -107,17 +107,17 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Backup: Change groupId from int to uint32. ([#5605][])
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
-[#1366]: https://github.com/dgraph-io/badger/issues/1366
-[#1357]: https://github.com/dgraph-io/badger/issues/1357
-[#1358]: https://github.com/dgraph-io/badger/issues/1358
-[#1349]: https://github.com/dgraph-io/badger/issues/1349
-[#1344]: https://github.com/dgraph-io/badger/issues/1344
-[#1354]: https://github.com/dgraph-io/badger/issues/1354
-[#1355]: https://github.com/dgraph-io/badger/issues/1355
-[#1347]: https://github.com/dgraph-io/badger/issues/1347
-[#1328]: https://github.com/dgraph-io/badger/issues/1328
-[#1341]: https://github.com/dgraph-io/badger/issues/1341
-[#1345]: https://github.com/dgraph-io/badger/issues/1345
+[dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
+[dgraph-io/badger#1357]: https://github.com/dgraph-io/badger/issues/1357
+[dgraph-io/badger#1358]: https://github.com/dgraph-io/badger/issues/1358
+[dgraph-io/badger#1349]: https://github.com/dgraph-io/badger/issues/1349
+[dgraph-io/badger#1344]: https://github.com/dgraph-io/badger/issues/1344
+[dgraph-io/badger#1354]: https://github.com/dgraph-io/badger/issues/1354
+[dgraph-io/badger#1355]: https://github.com/dgraph-io/badger/issues/1355
+[dgraph-io/badger#1347]: https://github.com/dgraph-io/badger/issues/1347
+[dgraph-io/badger#1328]: https://github.com/dgraph-io/badger/issues/1328
+[dgraph-io/badger#1341]: https://github.com/dgraph-io/badger/issues/1341
+[dgraph-io/badger#1345]: https://github.com/dgraph-io/badger/issues/1345
 [#5572]: https://github.com/dgraph-io/dgraph/issues/5572
 [#4789]: https://github.com/dgraph-io/dgraph/issues/4789
 [#5179]: https://github.com/dgraph-io/dgraph/issues/5179
