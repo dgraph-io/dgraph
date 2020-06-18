@@ -332,7 +332,7 @@ func runRequest(req *http.Request) (*x.QueryResWithData, []byte, error) {
 	return qr, body, nil
 }
 
-func commitWithTs(keys, preds []string, ts uint64) error {
+func commitWithTs(keys, preds []string, namespace string, ts uint64) error {
 	url := addr + "/commit"
 	if ts != 0 {
 		url += "?startTs=" + strconv.FormatUint(ts, 10)
