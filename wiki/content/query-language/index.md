@@ -3404,10 +3404,14 @@ query test($a: int = 2, $b: int!, $aName: string, $bName: string) {
 {{< /runnable >}}
 
 We also support variable substituion in facets now.
-{{< runnable vars="{\"$name\": \"Alice\"}" >}}
-query test($name: string = "Alice") {
+
+{{< runnable vars="{\"$name\": \"Alice\", \"$IsClose\": \"true\"}" >}}
+query test($name: string = "Alice", $IsClose: string = "true") {
   data(func: eq(name, $name)) {
-    friend @facets(eq(close, true)) {
+    friend @facets(eq(close, $IsClose)) {
+      name
+    }
+      colleague : friend @facets(eq(close, false)) {
       name
     }
   }
