@@ -453,7 +453,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 
 	var response map[string]interface{}
 	if abort {
-		response, err = handleAbort(startTs)
+		response, err = handleAbort(namespace, startTs)
 	} else {
 		// Keys are sent as an array in the body.
 		reqText := readRequest(w, r)
@@ -477,10 +477,11 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 	_, _ = x.WriteResponse(w, r, js)
 }
 
-func handleAbort(startTs uint64) (map[string]interface{}, error) {
+func handleAbort(namespace string, startTs uint64) (map[string]interface{}, error) {
 	tc := &api.TxnContext{
-		StartTs: startTs,
-		Aborted: true,
+		StartTs:   startTs,
+		Aborted:   true,
+		Namespace: namespace,
 	}
 
 	_, err := worker.CommitOverNetwork(context.Background(), tc)

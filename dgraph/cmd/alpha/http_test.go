@@ -197,10 +197,11 @@ func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint6
 }
 
 type mutationResponse struct {
-	keys    []string
-	preds   []string
-	startTs uint64
-	data    json.RawMessage
+	keys      []string
+	preds     []string
+	startTs   uint64
+	data      json.RawMessage
+	namespace string
 }
 
 func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
@@ -230,6 +231,7 @@ func mutationWithTs(m, t string, isJson bool, commitNow bool, ts uint64) (
 	mr.keys = r.Extensions.Txn.Keys
 	mr.preds = r.Extensions.Txn.Preds
 	mr.startTs = r.Extensions.Txn.StartTs
+	mr.namespace = r.Extensions.Txn.GetNamespace()
 	sort.Strings(mr.preds)
 
 	var d map[string]interface{}
