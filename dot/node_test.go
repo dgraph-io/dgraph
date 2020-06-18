@@ -21,7 +21,6 @@ import (
 	"encoding/binary"
 	"math/big"
 	"reflect"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -170,10 +169,7 @@ func TestStartNode(t *testing.T) {
 	}()
 
 	time.Sleep(100 * time.Millisecond)
-	require.Equal(t, uint32(1), atomic.LoadUint32(&node.started))
-
 	node.Stop()
-	require.Equal(t, uint32(0), atomic.LoadUint32(&node.started))
 }
 
 // TestStopNode

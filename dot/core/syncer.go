@@ -65,7 +65,7 @@ type Syncer struct {
 
 	// Core service control
 	chanLock *sync.Mutex
-	started  uint32
+	started  atomic.Value
 
 	// BABE verification
 	verifier Verifier
@@ -134,9 +134,7 @@ func (s *Syncer) Start() error {
 		return errors.New("nil syncer")
 	}
 
-	if ok := atomic.CompareAndSwapUint32(&s.started, 0, 1); !ok {
-		return errors.New("failed to change Syncer from stopped to started")
-	}
+	s.started.Store(true)
 
 	go s.watchForBlocks()
 	go s.watchForResponses()
@@ -146,16 +144,13 @@ func (s *Syncer) Start() error {
 
 // Stop stops the syncer
 func (s *Syncer) Stop() error {
-	if ok := atomic.CompareAndSwapUint32(&s.started, 1, 0); !ok {
-		return errors.New("failed to change Syncer from started to stopped")
-	}
-
+	s.started.Store(false)
 	return nil
 }
 
 func (s *Syncer) watchForBlocks() {
 	for {
-		if atomic.LoadUint32(&s.started) == uint32(0) {
+		if !s.started.Load().(bool) {
 			return
 		}
 
@@ -187,7 +182,7 @@ func (s *Syncer) watchForBlocks() {
 
 func (s *Syncer) watchForResponses() {
 	for {
-		if atomic.LoadUint32(&s.started) == uint32(0) {
+		if !s.started.Load().(bool) {
 			return
 		}
 
@@ -268,7 +263,7 @@ func (s *Syncer) safeMsgSend(msg network.Message) error {
 	s.chanLock.Lock()
 	defer s.chanLock.Unlock()
 
-	if atomic.LoadUint32(&s.started) == uint32(0) {
+	if !s.started.Load().(bool) {
 		return ErrServiceStopped
 	}
 

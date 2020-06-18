@@ -123,7 +123,7 @@ func TestCheckForRuntimeChanges(t *testing.T) {
 	}
 
 	s := NewTestService(t, cfg)
-	s.started = 1
+	s.started.Store(true)
 
 	_, err = runtime.GetRuntimeBlob(runtime.TESTS_FP, runtime.TEST_WASM_URL)
 	require.Nil(t, err)

@@ -17,14 +17,12 @@
 package dot
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"os/signal"
 	"path"
 	"sync"
-	"sync/atomic"
 	"syscall"
 
 	"github.com/ChainSafe/gossamer/dot/core"
@@ -45,7 +43,6 @@ type Node struct {
 	Services *services.ServiceRegistry // registry of all node services
 	syncChan chan *big.Int
 	wg       sync.WaitGroup
-	started  uint32
 }
 
 // InitNode initializes a new dot node from the provided dot node configuration
@@ -317,10 +314,6 @@ func (n *Node) Start() error {
 		os.Exit(130)
 	}()
 
-	if ok := atomic.CompareAndSwapUint32(&n.started, 0, 1); !ok {
-		return errors.New("failed to change Node status from stopped to started")
-	}
-
 	n.wg.Add(1)
 	n.wg.Wait()
 
@@ -329,15 +322,7 @@ func (n *Node) Start() error {
 
 // Stop stops all dot node services
 func (n *Node) Stop() {
-
 	// stop all node services
 	n.Services.StopAll()
-
-	defer func() {
-		if ok := atomic.CompareAndSwapUint32(&n.started, 1, 0); !ok {
-			log.Error("failed to change Node status from started to stopped")
-		}
-
-		n.wg.Done()
-	}()
+	n.wg.Done()
 }

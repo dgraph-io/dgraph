@@ -17,7 +17,6 @@ package core
 
 import (
 	"bytes"
-	"errors"
 	"math/big"
 	"sync"
 	"sync/atomic"
@@ -68,7 +67,7 @@ type Service struct {
 
 	// State variables
 	lock    *sync.Mutex
-	started uint32
+	started atomic.Value
 
 	// Block synchronization
 	blockNumOut chan<- *big.Int                      // send block numbers from peers to Syncer
@@ -154,12 +153,6 @@ func NewService(cfg *Config) (*Service, error) {
 		srv.blkRec = cfg.BlockProducer.GetBlockChannel()
 	}
 
-	// TODO: change to atomic.Value
-	canLock := atomic.CompareAndSwapUint32(&srv.started, 0, 1)
-	if !canLock {
-		return nil, errors.New("failed to change Service status from stopped to started")
-	}
-
 	// load BABE verification data from runtime
 	// TODO: authority data may change, use NextEpochDescriptor if available
 	babeCfg, err := srv.rt.BabeConfiguration()
@@ -185,8 +178,7 @@ func NewService(cfg *Config) (*Service, error) {
 		}
 	}
 
-	// only one process is starting *core.Service, don't need to use atomic here
-	srv.started = 1
+	srv.started.Store(false)
 
 	syncerCfg := &SyncerConfig{
 		BlockState:       cfg.BlockState,
@@ -212,6 +204,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start starts the core service
 func (s *Service) Start() error {
+	s.started.Store(true)
 
 	// start receiving blocks from BABE session
 	go s.receiveBlocks()
@@ -241,18 +234,12 @@ func (s *Service) Stop() error {
 	defer s.lock.Unlock()
 
 	// close channel to network service
-	// TODO: change to atomic.Value
-	if atomic.LoadUint32(&s.started) == uint32(1) {
+	if s.started.Load().(bool) {
 		if s.msgSend != nil {
 			close(s.msgSend)
 		}
 
-		defer func() {
-			if ok := atomic.CompareAndSwapUint32(&s.started, 1, 0); !ok {
-				log.Error("[core] failed to change Service status from started to stopped")
-			}
-		}()
-
+		s.started.Store(false)
 	}
 
 	err := s.syncer.Stop()
@@ -275,7 +262,7 @@ func (s *Service) safeMsgSend(msg network.Message) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if atomic.LoadUint32(&s.started) == uint32(0) {
+	if !s.started.Load().(bool) {
 		return ErrServiceStopped
 	}
 

@@ -46,6 +46,7 @@ func TestService_ProcessBlockRequestMessage(t *testing.T) {
 	}
 
 	s := NewTestService(t, cfg)
+	s.started.Store(true)
 
 	addTestBlocksToState(t, 2, s.blockState)
 
