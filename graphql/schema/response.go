@@ -135,7 +135,7 @@ func (r *Response) Output() interface{} {
 			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
 			Data:   []byte("null"),
 		}
-	} else if x.WorkerConfig.ExtensionsFlag==true {
+	} else if x.WorkerConfig.ExtensionsFlag {
 		return struct {
 			Errors     []*x.GqlError   `json:"errors,omitempty"`
 			Data       json.RawMessage `json:"data,omitempty"`

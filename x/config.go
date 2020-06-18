@@ -32,7 +32,6 @@ type Options struct {
 	NormalizeNodeLimit int
 	// PollInterval is the polling interval for graphql subscription.
 	PollInterval time.Duration
-
 }
 
 // Config stores the global instance of this package's options.
@@ -90,9 +89,8 @@ type WorkerOptions struct {
 	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
 	// coming to alphas and 0 disables it.
 	LogRequest int32
-	//Extensions wiil be set to see extensions in graphql results
+	//ExtensionsFlag wiil be set to see extensions in graphql results
 	ExtensionsFlag bool
-
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

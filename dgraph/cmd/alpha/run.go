@@ -47,7 +47,6 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 	"github.com/spf13/cast"
@@ -569,7 +568,6 @@ func run() {
 		MutationsMode:  worker.AllowMutations,
 		AuthToken:      Alpha.Conf.GetString("auth_token"),
 		AllottedMemory: Alpha.Conf.GetFloat64("lru_mb"),
-
 	}
 
 	secretFile := Alpha.Conf.GetString("acl_secret_file")
@@ -638,7 +636,6 @@ func run() {
 	x.Config.QueryEdgeLimit = cast.ToUint64(Alpha.Conf.GetString("query_edge_limit"))
 	x.Config.NormalizeNodeLimit = cast.ToInt(Alpha.Conf.GetString("normalize_node_limit"))
 	x.Config.PollInterval = Alpha.Conf.GetDuration("graphql_poll_interval")
-
 
 	x.PrintVersion()
 	glog.Infof("x.Config: %+v", x.Config)
