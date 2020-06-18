@@ -1292,8 +1292,8 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 					set: $set
 				}
 			) {
-			  	post { 
-					postID 
+			  	post {
+					postID
 					text
 					author { id }
 				}
@@ -1313,9 +1313,9 @@ func updateMutationOnlyUpdatesRefsIfDifferent(t *testing.T, executeRequest reque
 	// The text is updated as expected
 	// The author is unchanged
 	expected := fmt.Sprintf(`
-		{ "updatePost": {  "post": [ 
-			{ 
-				"postID": "%s", 
+		{ "updatePost": {  "post": [
+			{
+				"postID": "%s",
 				"text": "The Updated Text",
 				"author": { "id": "%s" }
 			}
@@ -2576,7 +2576,7 @@ func addMutationWithReverseDgraphEdge(t *testing.T) {
 	addMovieDirectorParams := &GraphQLParams{
 		Query: `mutation addMovieDirector($dir: [AddMovieDirectorInput!]!) {
 			addMovieDirector(input: $dir) {
-			  moviedirector {
+			  movieDirector {
 				id
 				name
 			  }
@@ -2862,6 +2862,79 @@ func passwordTest(t *testing.T) {
 	deleteUser(t, *newUser)
 }
 
+func threeLevelDeepMutation(t *testing.T) {
+	newStudent := &student{
+		Xid:  "HS1",
+		Name: "Stud1",
+		TaughtBy: []*teacher{
+			{
+				Xid:     "HT0",
+				Name:    "Teacher0",
+				Subject: "English",
+				Teaches: []*student{{
+					Xid:  "HS2",
+					Name: "Stud2",
+				}},
+			},
+		},
+	}
+
+	newStudents := []*student{newStudent}
+
+	addStudentParams := &GraphQLParams{
+		Query: `mutation addStudent($input: [AddStudentInput!]!) {
+			addStudent(input: $input) {
+				student {
+					xid
+					name
+					taughtBy {
+						id
+						xid
+						name
+						subject
+						teaches (order: {asc:xid}) {
+							xid
+							taughtBy {
+								name
+								xid
+								subject
+							}
+						}
+					}
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"input": newStudents},
+	}
+
+	gqlResponse := postExecutor(t, graphqlURL, addStudentParams)
+	fmt.Println(string(gqlResponse.Data))
+	RequireNoGQLErrors(t, gqlResponse)
+
+	var actualResult struct {
+		AddStudent struct {
+			Student []*student
+		}
+	}
+
+	err := json.Unmarshal(gqlResponse.Data, &actualResult)
+	require.NoError(t, err)
+
+	require.Equal(t, actualResult.AddStudent.Student[0].Xid, "HS1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Xid, "HT0")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].Xid, "HS1")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[0].TaughtBy[0].Xid, "HT0")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].Xid, "HS2")
+	require.Equal(t, actualResult.AddStudent.Student[0].TaughtBy[0].Teaches[1].TaughtBy[0].Xid, "HT0")
+
+	// cleanup
+	filter := getXidFilter("xid", []string{"HS1", "HS2"})
+	deleteGqlType(t, "Student", filter, 2, nil)
+	filter = getXidFilter("xid", []string{"HT0"})
+	deleteGqlType(t, "Teacher", filter, 1, nil)
+
+}
+
 func deepMutationDuplicateXIDsSameObjectTest(t *testing.T) {
 	newStudents := []*student{
 		{
@@ -3084,9 +3157,9 @@ func mutationsWithAlias(t *testing.T) {
 				}
 			}
 
-			del: deleteCountry(filter: $filter) { 
+			del: deleteCountry(filter: $filter) {
 				message: msg
-				uids: numUids 
+				uids: numUids
 			}
 		}`,
 		Variables: map[string]interface{}{

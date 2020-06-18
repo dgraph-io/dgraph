@@ -848,7 +848,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			 # Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+			 # Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
@@ -858,7 +858,7 @@ func TestParseSecrets(t *testing.T) {
 		},
 		{"should be able to parse secret where schema also has other comments.",
 			`
-		# Dgraph.Secret  GITHUB_API_TOKEN   some-super-secret-token
+		# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 
 		type User {
 			id: ID!
@@ -897,7 +897,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Secret  "GITHUB_API_TOKEN"   some-super-secret-token
+			# Dgraph.Secret  "GITHUB_API_TOKEN"   "some-super-secret-token"
 			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,

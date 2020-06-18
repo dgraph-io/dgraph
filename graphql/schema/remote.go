@@ -22,14 +22,30 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/pkg/errors"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
+func validateUrl(rawURL string) error {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return err
+	}
+
+	if u.RawQuery != "" {
+		return fmt.Errorf("POST method cannot have query parameters in url: %s", rawURL)
+	}
+	return nil
+}
+
 // introspectRemoteSchema introspectes remote schema
 func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchema, error) {
+	if err := validateUrl(url); err != nil {
+		return nil, err
+	}
 	param := &Request{
 		Query: introspectionQuery,
 	}

@@ -65,7 +65,7 @@ services:
       - 9180:9180
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100 --logtostderr --mutations=disallow
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 100 --logtostderr --mutations=disallow
 
   dg2:
     image: dgraph/dgraph:latest
@@ -83,7 +83,7 @@ services:
       - 9182:9182
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102 --logtostderr --mutations=strict
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 102 --logtostderr --mutations=strict
 
   dg3:
     image: dgraph/dgraph:latest
@@ -101,4 +101,4 @@ services:
       - 9183:9183
     labels:
       cluster: test
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103 --logtostderr --mutations=strict
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183 -o 103 --logtostderr --mutations=strict

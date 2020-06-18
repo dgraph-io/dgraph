@@ -2,7 +2,7 @@
   gqlquery: |
     mutation updateUserSecret($upd: UpdateUserSecretInput!) {
       updateUserSecret(input: $upd) {
-        usersecret {
+        userSecret {
           id
         }
       }
@@ -428,3 +428,220 @@
     }
   error:
     { "message": "couldn't rewrite query for mutation updateTicket because authorization failed" }
+
+- name: "Update with top level RBAC false."
+  gqlquery: |
+    mutation updateLog($log: UpdateLogInput!) {
+      updateLog(input: $log) {
+        log {
+          id
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123",
+          "random": "random123"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateLog()
+    }
+
+- name: "Update with top level RBAC true."
+  gqlquery: |
+    mutation updateLog($log: UpdateLogInput!) {
+      updateLog(input: $log) {
+        log {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123",
+          "random": "random123"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateLog(func: type(Log)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+
+- name: "Update with top level OR RBAC false."
+  gqlquery: |
+    mutation updateProject($proj: UpdateProjectInput!) {
+      updateProject(input: $proj) {
+        project {
+          projID
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "proj":
+      {
+        "filter": { "projID": [ "0x123" ] },
+        "set": {
+          "name": "Project1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateProject(func: uid(Project1)) @filter(uid(Project2)) {
+        uid
+      }
+      Project1 as var(func: type(Project)) @filter(uid(0x123))
+      Project2 as var(func: uid(Project1)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Update with top level OR RBAC true."
+  gqlquery: |
+    mutation updateProject($proj: UpdateProjectInput!) {
+      updateProject(input: $proj) {
+        project {
+          projID
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "proj":
+      {
+        "filter": { "projID": [ "0x123" ] },
+        "set": {
+          "name": "Project1"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateProject(func: type(Project)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+
+- name: "Update with top level And RBAC true."
+  gqlquery: |
+    mutation updateIssue($issue: UpdateIssueInput!) {
+      updateIssue(input: $issue) {
+        issue {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "issue":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "random": "random456"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: type(Issue)) @filter(uid(0x123))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Update with top level And RBAC false."
+  gqlquery: |
+    mutation updateIssue($issue: UpdateIssueInput!) {
+      updateIssue(input: $issue) {
+        issue {
+          id
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "issue":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "random": "random456"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateIssue()
+    }
+
+- name: "Update with top level not RBAC true."
+  gqlquery: |
+    mutation updateComplexLog($log: UpdateComplexLogInput!) {
+      updateComplexLog(input: $log) {
+        complexLog {
+          id
+        }
+      }
+    }
+  role: "ADMIN"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateComplexLog(func: type(ComplexLog)) @filter(uid(0x123)) {
+        uid
+      }
+    }
+
+- name: "Update with top level not RBAC false."
+  gqlquery: |
+    mutation updateComplexLog($log: UpdateComplexLogInput!) {
+      updateComplexLog(input: $log) {
+        complexLog {
+          id
+        }
+      }
+    }
+  role: "USER"
+  variables: |
+    { "log":
+      {
+        "filter": { "id": [ "0x123" ] },
+        "set": {
+          "logs": "log123"
+        }
+      }
+    }
+  dgquery: |-
+    query {
+      x as updateComplexLog()
+    }

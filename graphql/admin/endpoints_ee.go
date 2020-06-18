@@ -73,7 +73,33 @@ const adminTypes = `
 		by all alphas in the group. The backup will be written using the encryption key
 		with which the cluster was started, which might be different than this key.
 		"""
-		keyFile: String!
+		encryptionKeyFile: String
+
+		"""
+		Vault server address where the key is stored. This server must be accessible
+		by all alphas in the group.
+		"""
+		vaultAddr: String
+
+		"""
+		Path to the Vault RoleID file.
+		"""
+		vaultRoleIDFile: String
+
+		"""
+		Path to the Vault SecretID file.
+		"""
+		vaultSecretIDFile: String
+
+		"""
+		Vault kv store path where the key lives.
+		"""
+		vaultPath: String
+
+		"""
+		Vault kv store field whose value is the key.
+		"""
+		vaultField: String
 
 		"""
 		Access key credential for the destination.
@@ -195,7 +221,7 @@ const adminTypes = `
 		response: LoginResponse
 	}
 
-	type User @secret(field: "password", pred: "dgraph.password") {
+	type User @dgraph(type: "dgraph.type.User") @secret(field: "password", pred: "dgraph.password") {
 
 		"""
 		Username for the user.  Dgraph ensures that usernames are unique.
@@ -205,7 +231,7 @@ const adminTypes = `
 		groups: [Group] @dgraph(pred: "dgraph.user.group")
 	}
 
-	type Group {
+	type Group @dgraph(type: "dgraph.type.Group") {
 
 		"""
 		Name of the group.  Dgraph ensures uniqueness of group names.
@@ -215,7 +241,7 @@ const adminTypes = `
 		rules: [Rule] @dgraph(pred: "dgraph.acl.rule")
 	}
 
-	type Rule {
+	type Rule @dgraph(type: "dgraph.type.Rule") {
 
 		"""
 		Predicate to which the rule applies.
