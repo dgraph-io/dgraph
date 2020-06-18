@@ -18,7 +18,6 @@ package gql
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"sort"
 	"strconv"
@@ -169,7 +168,6 @@ type Arg struct {
 	Value        string
 	IsValueVar   bool // If argument is val(a), e.g. eq(name, val(a))
 	IsGraphQLVar bool
-	IsUIDVar     bool
 }
 
 // Function holds the information about gql functions.
@@ -1663,8 +1661,6 @@ L:
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
-		fmt.Println("Top level function name: ", name)
-		fmt.Printf("\n")
 		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
@@ -1694,8 +1690,6 @@ L:
 				it.Prev()
 				nestedFunc, err := parseFunction(it, gq)
 
-				res2B, _ := json.Marshal(nestedFunc)
-				fmt.Printf("Nested Function is: " + string(res2B) + "\n\n")
 				if err != nil {
 					return nil, err
 				}
@@ -1733,7 +1727,6 @@ L:
 					function.Attr = nestedFunc.Attr
 					function.IsCount = true
 				case uidFunc:
-					fmt.Println("Inside uid in nested loop")
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = UidVar
 					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsUIDVar: true})
@@ -1913,8 +1906,6 @@ L:
 		}
 	}
 
-	res2B, _ := json.Marshal(function)
-	fmt.Printf("Function at the end : " + string(res2B) + "\n\n\n")
 	if function.Name != uidFunc && function.Name != typFunc && len(function.Attr) == 0 {
 		return nil, it.Errorf("Got empty attr for function: [%s]", function.Name)
 	}

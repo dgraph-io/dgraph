@@ -1641,9 +1641,6 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	// Go through all the variables in NeedsVar and see if we have a value for them in the map. If
 	// we do, then we store that value in the appropriate variable inside SubGraph.
 	for _, v := range sg.Params.NeedsVar {
-		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
-			fmt.Println("This requires change")
-		}
 		l, ok := mp[v.Name]
 		if !ok {
 			continue
@@ -1655,6 +1652,18 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			// later.
 			// TODO: If we support value vars for list type then this needn't be true
 			sg.ExpandPreds = l.strList
+
+		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
+			for i, uid := range l.Uids.Uids {
+				if i == 0 {
+					sg.SrcFunc.Args[i].Value = strconv.FormatUint(uid, 10)
+				} else {
+					arg := gql.Arg{Value: strconv.FormatUint(uid, 10),
+						IsValueVar:   false,
+						IsGraphQLVar: false}
+					sg.SrcFunc.Args = append(sg.SrcFunc.Args, arg)
+				}
+			}
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 			lists = append(lists, l.Uids)
@@ -1684,14 +1693,14 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 		return err
 	}
 	//make changes here.
-	if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
-		val := sg.SrcFunc.Args[0].Value
-		num := mp[val].Uids.Uids[0]
-		sg.SrcFunc.Args[0].Value = strconv.FormatUint(num, 10)
-	} else {
-		lists = append(lists, sg.DestUIDs)
-		sg.DestUIDs = algo.MergeSorted(lists)
-	}
+	// if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
+	// 	val := sg.SrcFunc.Args[0].Value
+	// 	num := mp[val].Uids.Uids[0]
+	// 	sg.SrcFunc.Args[0].Value = strconv.FormatUint(num, 10)
+	// } else {
+	lists = append(lists, sg.DestUIDs)
+	sg.DestUIDs = algo.MergeSorted(lists)
+	// }
 	return nil
 }
 
