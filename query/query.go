@@ -1692,15 +1692,8 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 	if err := sg.replaceVarInFunc(); err != nil {
 		return err
 	}
-	//make changes here.
-	// if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in" {
-	// 	val := sg.SrcFunc.Args[0].Value
-	// 	num := mp[val].Uids.Uids[0]
-	// 	sg.SrcFunc.Args[0].Value = strconv.FormatUint(num, 10)
-	// } else {
 	lists = append(lists, sg.DestUIDs)
 	sg.DestUIDs = algo.MergeSorted(lists)
-	// }
 	return nil
 }
 
@@ -2612,8 +2605,6 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	// first loop converts queries to SubGraph representation and populates ReadTs And Cache.
 	for i := 0; i < len(queries); i++ {
 		gq := queries[i]
-		fmt.Println("Processing Queries")
-		fmt.Println("Query #:", i)
 
 		if gq == nil || (len(gq.UID) == 0 && gq.Func == nil && len(gq.NeedsVar) == 0 &&
 			gq.Alias != "shortest" && !gq.IsEmpty) {

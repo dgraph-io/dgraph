@@ -181,7 +181,6 @@ type Function struct {
 	IsCount    bool         // gt(count(friends),0)
 	IsValueVar bool         // eq(val(s), 5)
 	IsLenVar   bool         // eq(len(s), 5)
-	IsUIDVar   bool
 }
 
 // filterOpPrecedence is a map from filterOp (a string) to its precedence.
@@ -1661,6 +1660,7 @@ L:
 		if _, ok := tryParseItemType(it, itemLeftRound); !ok {
 			return nil, it.Errorf("Expected ( after func name [%s]", function.Name)
 		}
+
 		attrItemsAgo := -1
 		expectArg = true
 		for it.Next() {
@@ -1689,7 +1689,6 @@ L:
 				it.Prev()
 				it.Prev()
 				nestedFunc, err := parseFunction(it, gq)
-
 				if err != nil {
 					return nil, err
 				}
@@ -1729,7 +1728,7 @@ L:
 				case uidFunc:
 					function.NeedsVar = append(function.NeedsVar, nestedFunc.NeedsVar...)
 					function.NeedsVar[0].Typ = UidVar
-					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name, IsUIDVar: true})
+					function.Args = append(function.Args, Arg{Value: nestedFunc.NeedsVar[0].Name})
 				default:
 					return nil, itemInFunc.Errorf("Only val/count/len allowed as function "+
 						"within another. Got: %s", nestedFunc.Name)
