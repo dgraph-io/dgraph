@@ -20,23 +20,24 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Add support for multiple uids in uid_in function ([#5292][])
 - Update badger to commit [e7b6e76f96e8][]. ([#5537][])
 - Update Badger ([#5661][])
-  - Fix assert in background compression and encryption. ([#1366][])
-  - GC: Consider size of value while rewriting ([#1357][])
-  - Restore: Account for value size as well ([#1358][])
-  - Tests: Do not leave behind state goroutines ([#1349][])
-  - Support disabling conflict detection ([#1344][])
-  - Compaction: Expired keys and delete markers are never purged ([#1354][])
-  - Fix build on golang tip ([#1355][])
-  - StreamWriter: Close head writer ([#1347][])
-  - Iterator: Always add key to txn.reads ([#1328][])
-  - Add immudb to the project list ([#1341][])
-  - DefaultOptions: Set KeepL0InMemory to false ([#1345][])
+  - Fix assert in background compression and encryption. ([dgraph-io/badger#1366][])
+  - GC: Consider size of value while rewriting ([dgraph-io/badger#1357][])
+  - Restore: Account for value size as well ([dgraph-io/badger#1358][])
+  - Tests: Do not leave behind state goroutines ([dgraph-io/badger#1349][])
+  - Support disabling conflict detection ([dgraph-io/badger#1344][])
+  - Compaction: Expired keys and delete markers are never purged ([dgraph-io/badger#1354][])
+  - Fix build on golang tip ([dgraph-io/badger#1355][])
+  - StreamWriter: Close head writer ([dgraph-io/badger#1347][])
+  - Iterator: Always add key to txn.reads ([dgraph-io/badger#1328][])
+  - Add immudb to the project list ([dgraph-io/badger#1341][])
+  - DefaultOptions: Set KeepL0InMemory to false ([dgraph-io/badger#1345][])
 - Enterprise features
   - /health endpoint now shows Enterprise Features available. Fixes [#5234][]. ([#5293][])
   - GraphQL Changes for /health endpoint's Enterprise features info. Fixes [#5234][]. ([#5308][])
   - Use encryption in temp badger, fix compilation on 32-bit. ([#4963][])
+  - Only process restore request in the current alpha if it's the leader. ([#5657][])
   - **Breaking changes**
-    - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])			
+    - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])
 
 ### Added
 
@@ -75,7 +76,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Start collecting and returning errors from remote remote GraphQL endpoints. ([#5328][])
   - Fix response for partial admin queries. ([#5317][])		
 - Online restores only processes backups for the alpha's group. ([#5588][])
-- Change backup groupId from int to uint32. ([#5605][])
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5571][])
 - Alpha: Gracefully shutdown ludicrous mode. ([#5561][])	
 - Use rampMeter for Executor. ([#5503][])
@@ -103,19 +103,21 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])
   - [BREAKING] Remove shorthand for store_xids in bulk loader.  ([#5148][])
   - [BREAKING] Introduce new facets format. Fixes [#4798][], [#4581][], [#4907][]. ([#5424][])
+- Enterprise:
+  - Backup: Change groupId from int to uint32. ([#5605][])
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
-[#1366]: https://github.com/dgraph-io/dgraph/issues/1366
-[#1357]: https://github.com/dgraph-io/dgraph/issues/1357
-[#1358]: https://github.com/dgraph-io/dgraph/issues/1358
-[#1349]: https://github.com/dgraph-io/dgraph/issues/1349
-[#1344]: https://github.com/dgraph-io/dgraph/issues/1344
-[#1354]: https://github.com/dgraph-io/dgraph/issues/1354
-[#1355]: https://github.com/dgraph-io/dgraph/issues/1355
-[#1347]: https://github.com/dgraph-io/dgraph/issues/1347
-[#1328]: https://github.com/dgraph-io/dgraph/issues/1328
-[#1341]: https://github.com/dgraph-io/dgraph/issues/1341
-[#1345]: https://github.com/dgraph-io/dgraph/issues/1345
+[#1366]: https://github.com/dgraph-io/badger/issues/1366
+[#1357]: https://github.com/dgraph-io/badger/issues/1357
+[#1358]: https://github.com/dgraph-io/badger/issues/1358
+[#1349]: https://github.com/dgraph-io/badger/issues/1349
+[#1344]: https://github.com/dgraph-io/badger/issues/1344
+[#1354]: https://github.com/dgraph-io/badger/issues/1354
+[#1355]: https://github.com/dgraph-io/badger/issues/1355
+[#1347]: https://github.com/dgraph-io/badger/issues/1347
+[#1328]: https://github.com/dgraph-io/badger/issues/1328
+[#1341]: https://github.com/dgraph-io/badger/issues/1341
+[#1345]: https://github.com/dgraph-io/badger/issues/1345
 [#5572]: https://github.com/dgraph-io/dgraph/issues/5572
 [#4789]: https://github.com/dgraph-io/dgraph/issues/4789
 [#5179]: https://github.com/dgraph-io/dgraph/issues/5179
@@ -200,35 +202,36 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5424]: https://github.com/dgraph-io/dgraph/issues/5424
 [#5436]: https://github.com/dgraph-io/dgraph/issues/5436
 [#5537]: https://github.com/dgraph-io/dgraph/issues/5537
+[#5657]: https://github.com/dgraph-io/dgraph/issues/5657
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
 
 ## [20.03.4] - Unreleased
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
-- Update badger 06/09/2020 ([#5616][]) 
-  
+- Update badger 06/09/2020 ([#5616][])
+
 ### Fixed
 - GraphQL
-  - Minor delete mutation msg fix. ([#5564][]) 	
-  - Make updateGQLSchema always return the new schema. ([#5582][])	
-  - Fix mutation on predicate with special characters having dgr…. ([#5577][])	
-  - Updated mutation rewriting to fix OOM issue. ([#5536][])	
-- Dont set n.ops map entries to nil. Instead just delete them. ([#5557][]) 	
-- Alpha: Enable bloom filter caching. ([#5555][]) 	
-- Alpha: Gracefully shutdown ludicrous mode. ([#5584][])	
-- Alpha Close: Wait for indexing to complete. Fixes [#3873][]. ([#5597][]) 	
-- K shortest paths queries fix and documentation update. ([#5548][])	
-- Add check on rebalance interval. ([#5594][]) 	
-- Remove noisy logs in tablet move. ([#5591][]) 	
-- Avoid assigning duplicate RAFT IDs to new nodes. Fixes 	[#4536][]. ([#5604][]) 
-- Send CID for sentry events. ([#5633][]) 	
-- Use rampMeter for Executor. ([#5503][]) 	
-- Fix snapshot calculation in ludicrous mode. ([#5636][]) 	
-- Update badger:  Avoid panic in filltables() , Fix assert in background compression and encryption. ([#5680][]) 	
+  - Minor delete mutation msg fix. ([#5564][])
+  - Make updateGQLSchema always return the new schema. ([#5582][])
+  - Fix mutation on predicate with special characters in the `@dgraph` directive. ([#5577][])
+  - Updated mutation rewriting to fix OOM issue. ([#5536][])
+- Dont set n.ops map entries to nil. Instead just delete them. ([#5557][])
+- Alpha: Enable bloom filter caching. ([#5555][])
+- Alpha: Gracefully shutdown ludicrous mode. ([#5584][])
+- Alpha Close: Wait for indexing to complete. Fixes [#3873][]. ([#5597][])
+- K shortest paths queries fix. ([#5548][])
+- Add check on rebalance interval. ([#5594][])
+- Remove noisy logs in tablet move. ([#5591][])
+- Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#4536][]. ([#5604][])
+- Send CID for sentry events. ([#5633][])
+- Use rampMeter for Executor. ([#5503][])
+- Fix snapshot calculation in ludicrous mode. ([#5636][])
+- Update badger: Avoid panic in fillTables(). Fix assert in background compression and encryption. ([#5680][])
 - Enterprise features
-  - Change groupId from int to uint32. ([#5614][]) 
-  - Use a sync.Pool to allocate KVs during backup. ([#5579][]) 	
+  - Backup: Change groupId from int to uint32. ([#5614][])
+  - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
 
 [#5616]: https://github.com/dgraph-io/dgraph/issues/5616
 [#5564]: https://github.com/dgraph-io/dgraph/issues/5564
@@ -253,19 +256,19 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5579]: https://github.com/dgraph-io/dgraph/issues/5579
 
 ## [1.2.6] - Unreleased
-[1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.6...v1.2.5
+[1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
 
 ### Fixed
 
 - Alpha: Enable bloom filter caching. ([#5554][]) 	
-- Shortest paths queries fix and documentation update. ([#5596][])	
+- K shortest paths queries fix. ([#5596][])	
 - Add check on rebalance interval. ([#5595][]) 	
 - Change error message in case of successful license application. ([#5593][])	
 - Remove noisy logs in tablet move. ([#5592][]) 	
 - Avoid assigning duplicate RAFT IDs to new nodes. Fixes [#5436][]. ([#5603][]) 	
 - Update badger: Set KeepL0InMemory to false (badger default), and Set DetectConflicts to false. ([#5615][])
 - Enterprise features
-  - Change groupId from int to uint32. ([#5613][]) 	
+  - Backup: Change groupId from int to uint32. ([#5613][])
 
 [#5554]: https://github.com/dgraph-io/dgraph/issues/5554
 [#5596]: https://github.com/dgraph-io/dgraph/issues/5596
