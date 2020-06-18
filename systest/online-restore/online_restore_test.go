@@ -61,6 +61,30 @@ func sendRestoreRequest(t *testing.T, backupId string) {
 	require.Contains(t, string(buf), "Restore completed.")
 }
 
+// disableDraining disables draining mode before each test for increased reliability.
+func disableDraining(t *testing.T) {
+	drainRequest := `mutation draining {
+ 		draining(enable: false) {
+    		response {
+        		code
+        		message
+      		}
+  		}
+	}`
+
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: drainRequest,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	buf, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Contains(t, string(buf), "draining mode has been set to false")
+}
+
 func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
@@ -130,6 +154,8 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestBasicRestore(t *testing.T) {
+	disableDraining(t)
+	
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -137,12 +163,14 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "cranky_bartik8")
+	sendRestoreRequest(t, "youthful_rhodes3")
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
 
 func TestMoveTablets(t *testing.T) {
+	disableDraining(t)
+
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
@@ -150,12 +178,12 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "cranky_bartik8")
+	sendRestoreRequest(t, "youthful_rhodes3")
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "awesome_dirac9")
+	sendRestoreRequest(t, "blissful_hermann1")
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -231,7 +259,7 @@ func TestListBackups(t *testing.T) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	sbuf := string(buf)
-	require.Contains(t, sbuf, `"backupId":"cranky_bartik8"`)
+	require.Contains(t, sbuf, `"backupId":"youthful_rhodes3"`)
 	require.Contains(t, sbuf, `"backupNum":1`)
 	require.Contains(t, sbuf, `"backupNum":2`)
 	require.Contains(t, sbuf, "initial_release_date")
