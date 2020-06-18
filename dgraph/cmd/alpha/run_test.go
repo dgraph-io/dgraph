@@ -107,20 +107,23 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	return alterSchemaHelper(s, false)
+	return alterSchemaHelper(x.DefaultNamespace, s, false)
+}
+func alterSchemaWithNamespace(namespace, s string) error {
+	return alterSchemaHelper(namespace, s, false)
 }
 
 func alterSchemaInBackground(s string) error {
-	return alterSchemaHelper(s, true)
+	return alterSchemaHelper(x.DefaultNamespace, s, true)
 }
 
-func alterSchemaHelper(s string, bg bool) error {
+func alterSchemaHelper(namespace, s string, bg bool) error {
 	url := addr + "/alter"
 	if bg {
 		url += "?runInBackground=true"
 	}
 
-	_, _, err := runWithRetries("PUT", "", url, s)
+	_, _, err := runWithRetries(namespace, "PUT", "", url, s)
 	if err != nil {
 		return errors.Wrapf(err, "while running request with retries")
 	}
@@ -140,13 +143,19 @@ func alterSchemaWithRetry(s string) error {
 
 func dropAll() error {
 	op := `{"drop_all": true}`
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+	_, _, err := runWithRetries(x.DefaultNamespace, "PUT", "", addr+"/alter", op)
+	return err
+}
+
+func createNamespace(namespace string) error {
+	op := `{}`
+	_, _, err := runWithRetries(namespace, "PUT", "", addr+"/alter", op)
 	return err
 }
 
 func deletePredicate(pred string) error {
 	op := `{"drop_attr": "` + pred + `"}`
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", op)
+	_, _, err := runWithRetries(x.DefaultNamespace, "PUT", "", addr+"/alter", op)
 	return err
 }
 
