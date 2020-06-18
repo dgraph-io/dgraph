@@ -1147,6 +1147,12 @@ func queryOnlyTypename(t *testing.T) {
 	"queryCountry": [
           {
                 "__typename": "Country"
+          },
+          {
+                "__typename": "Country"
+          },
+          {
+                "__typename": "Country"
           }
         ]
 }`
@@ -1175,6 +1181,9 @@ func queryNestedOnlyTypename(t *testing.T) {
 		  {
 			"__typename": "Post"
 		  },
+          {
+			"__typename": "Post"
+		  }
 		]
 	  }
 	]

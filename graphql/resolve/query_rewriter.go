@@ -174,6 +174,19 @@ func intersection(a, b []uint64) []uint64 {
 // But, for GraphQL, we want to know about those missing values.
 func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
+		uidChild := &gql.GraphQuery{
+			Attr:  "uid",
+			Alias: "dgraph.uid",
+		}
+		dgQuery.Children = append(dgQuery.Children, uidChild)
+	} else {
+		addUID1(dgQuery)
+	}
+
+}
+
+func addUID1(dgQuery *gql.GraphQuery) {
+	if len(dgQuery.Children) == 0 {
 		return
 	}
 	hasUid := false
@@ -181,7 +194,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 		if c.Attr == "uid" {
 			hasUid = true
 		}
-		addUID(c)
+		addUID1(c)
 	}
 
 	// If uid was already requested by the user then we don't need to add it again.
@@ -193,6 +206,7 @@ func addUID(dgQuery *gql.GraphQuery) {
 		Alias: "dgraph.uid",
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
+
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
