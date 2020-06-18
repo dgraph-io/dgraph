@@ -229,6 +229,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Use rampMeter for Executor. ([#5503][])
 - Fix snapshot calculation in ludicrous mode. ([#5636][])
 - Update badger: Avoid panic in fillTables(). Fix assert in background compression and encryption. ([#5680][])
+- Avoid panic in handleValuePostings. ([#5678][])
 - Enterprise features
   - Backup: Change groupId from int to uint32. ([#5614][])
   - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
@@ -254,6 +255,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5680]: https://github.com/dgraph-io/dgraph/issues/5680
 [#5614]: https://github.com/dgraph-io/dgraph/issues/5614
 [#5579]: https://github.com/dgraph-io/dgraph/issues/5579
+[#5678]: https://github.com/dgraph-io/dgraph/issues/5678
 
 ## [1.2.6] - Unreleased
 [1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
