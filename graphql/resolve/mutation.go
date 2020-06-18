@@ -88,7 +88,7 @@ type MutationRewriter interface {
 	// Rewrite rewrites GraphQL mutation m into a Dgraph mutation - that could
 	// be as simple as a single DelNquads, or could be a Dgraph upsert mutation
 	// with a query and multiple mutations guarded by conditions.
-	Rewrite(ctx context.Context, m schema.Mutation) (*UpsertMutation, error)
+	Rewrite(ctx context.Context, m schema.Mutation) ([]*UpsertMutation, error)
 
 	// FromMutationResult takes a GraphQL mutation and the results of a Dgraph
 	// mutation and constructs a Dgraph query.  It's used to find the return
@@ -211,35 +211,45 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		}
 	}
 
-	upsert, err := mr.mutationRewriter.Rewrite(ctx, mutation)
+	upserts, err := mr.mutationRewriter.Rewrite(ctx, mutation)
 	if err != nil {
 		return emptyResult(schema.GQLWrapf(err, "couldn't rewrite mutation %s", mutation.Name())),
 			resolverFailed
 	}
 
-	req := &dgoapi.Request{
-		Query:     dgraph.AsString(upsert.Query),
-		Mutations: upsert.Mutations,
-	}
+	extM := &schema.Extensions{}
 
-	mutResp, err = mr.executor.Execute(ctx, req)
-	if err != nil {
-		gqlErr := schema.GQLWrapLocationf(
-			err, mutation.Location(), "mutation %s failed", mutation.Name())
-		return emptyResult(gqlErr), resolverFailed
-	}
-
-	extM := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
 	result := make(map[string]interface{})
-	if req.Query != "" && len(mutResp.GetJson()) != 0 {
-		if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
-			return emptyResult(
-					schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")),
-				resolverFailed
+	req := &dgoapi.Request{}
+	newNodes := make(map[string]schema.Type)
+
+	for _, upsert := range upserts {
+		req.Query = dgraph.AsString(upsert.Query)
+		req.Mutations = upsert.Mutations
+
+		mutResp, err = mr.executor.Execute(ctx, req)
+		if err != nil {
+			gqlErr := schema.GQLWrapLocationf(
+				err, mutation.Location(), "mutation %s failed", mutation.Name())
+			return emptyResult(gqlErr), resolverFailed
+
 		}
+
+		ext := &schema.Extensions{TouchedUids: mutResp.GetMetrics().GetNumUids()[touchedUidsKey]}
+		extM.Merge(ext)
+
+		if req.Query != "" && len(mutResp.GetJson()) != 0 {
+			if err := json.Unmarshal(mutResp.GetJson(), &result); err != nil {
+				return emptyResult(
+						schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")),
+					resolverFailed
+			}
+		}
+
+		copyTypeMap(upsert.NewNodes, newNodes)
 	}
 
-	authErr := authorizeNewNodes(ctx, mutResp.Uids, upsert.NewNodes, mr.executor, mutResp.Txn)
+	authErr := authorizeNewNodes(ctx, mutResp.Uids, newNodes, mr.executor, mutResp.Txn)
 	if authErr != nil {
 		return emptyResult(schema.GQLWrapf(authErr, "mutation failed")), resolverFailed
 	}
