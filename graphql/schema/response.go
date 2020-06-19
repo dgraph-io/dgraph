@@ -135,15 +135,19 @@ func (r *Response) Output() interface{} {
 			Data:   []byte("null"),
 		}
 	}
-	return struct {
+
+	res := struct {
 		Errors     []*x.GqlError   `json:"errors,omitempty"`
 		Data       json.RawMessage `json:"data,omitempty"`
 		Extensions *Extensions     `json:"extensions,omitempty"`
-	}{
-		Errors:     r.Errors,
-		Data:       r.Data.Bytes(),
-		Extensions: r.Extensions,
+	}{Errors: r.Errors,
+		Data: r.Data.Bytes(),
 	}
+
+	if x.Config.GraphqlExtension {
+		res.Extensions = r.Extensions
+	}
+	return res
 }
 
 // Extensions represents GraphQL extensions
