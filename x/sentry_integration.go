@@ -46,7 +46,8 @@ const (
 func SentryOptOutNote() {
 	glog.Infof("Note: This instance of Dgraph has enabled reporting panics back to the " +
 		"Dgraph Labs' dashboard on Sentry. It allows us to improve the the software quality. " +
-		"See https://dgraph.io/docs/howto/#data-handling on how the reports are handled.\n" +
+		"See https://dgraph.io/docs/howto/#data-handling on how the reports are handled. " +
+		"No confidential information is sent.\n" +
 		"To opt-out, restart your instance with the --enable_sentry=false flag.")
 }
 
