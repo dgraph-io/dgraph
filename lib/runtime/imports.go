@@ -66,6 +66,10 @@ package runtime
 // extern int32_t ext_sandbox_memory_get(void *context, int32_t a, int32_t b, int32_t c, int32_t d);
 // extern int32_t ext_sandbox_memory_set(void *context, int32_t a, int32_t b, int32_t c, int32_t d);
 // extern void ext_log(void *context, int32_t a, int32_t b, int32_t c, int32_t d, int32_t e);
+// extern void ext_twox_256(void *context, int32_t a, int32_t b, int32_t c);
+// extern int32_t ext_exists_storage(void *context, int32_t a, int32_t b);
+// extern int32_t ext_exists_child_storage(void *context, int32_t a, int32_t b, int32_t c, int32_t d);
+// extern void ext_clear_child_prefix(void *context, int32_t a, int32_t b, int32_t c, int32_t d);
 import "C"
 
 import (
@@ -159,6 +163,32 @@ func ext_sandbox_memory_set(context unsafe.Pointer, a, b, c, d C.int32_t) C.int3
 func ext_log(context unsafe.Pointer, a, b, c, d, e C.int32_t) {
 	log.Trace("[ext_log] executing...")
 	log.Warn("[ext_log] not yet implemented")
+}
+
+//export ext_twox_256
+func ext_twox_256(context unsafe.Pointer, data, len, out C.int32_t) {
+	log.Trace("[ext_twox_256] executing...")
+	log.Warn("[ext_twox_256] not yet implemented")
+}
+
+//export ext_exists_storage
+func ext_exists_storage(context unsafe.Pointer, a, b C.int32_t) C.int32_t {
+	log.Trace("[ext_exists_storage] executing...")
+	log.Warn("[ext_exists_storage] not yet implemented")
+	return 0
+}
+
+//export ext_exists_child_storage
+func ext_exists_child_storage(context unsafe.Pointer, a, b, c, d C.int32_t) C.int32_t {
+	log.Trace("[ext_exists_child_storage] executing...")
+	log.Warn("[ext_exists_child_storage] not yet implemented")
+	return 0
+}
+
+//export ext_clear_child_prefix
+func ext_clear_child_prefix(context unsafe.Pointer, a, b, c, d C.int32_t) {
+	log.Trace("[ext_clear_child_prefix] executing...")
+	log.Warn("[ext_clear_child_prefix] not yet implemented")
 }
 
 // RegisterImports_NodeRuntime returns the wasm imports for the substrate v0.6.x node runtime
@@ -352,6 +382,22 @@ func RegisterImports_NodeRuntime() (*wasm.Imports, error) { //nolint
 		return nil, err
 	}
 	_, err = imports.Append("ext_log", ext_log, C.ext_log)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_twox_256", ext_twox_256, C.ext_twox_256)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_exists_storage", ext_exists_storage, C.ext_exists_storage)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_exists_child_storage", ext_exists_child_storage, C.ext_exists_child_storage)
+	if err != nil {
+		return nil, err
+	}
+	_, err = imports.Append("ext_clear_child_prefix", ext_clear_child_prefix, C.ext_clear_child_prefix)
 	if err != nil {
 		return nil, err
 	}
