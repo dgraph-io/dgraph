@@ -145,7 +145,6 @@ func (r *Response) Output() interface{} {
 		}
 	} else if x.Config.GraphqlExtension {
 		res.Extensions = r.Extensions
-
 	}
 	return res
 }
