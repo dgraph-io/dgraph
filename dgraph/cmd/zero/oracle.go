@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"strconv"
 	"strings"
@@ -198,7 +199,6 @@ func (o *Oracle) removeSubscriber(id int) {
 // constructs a delta object containing transactions from one or more updates
 // and sends the delta object to each subscriber's channel
 func (o *Oracle) sendDeltasToSubscribers() {
-	delta := &pb.OracleDelta{}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -206,6 +206,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 
 	// updateDelta will batch the incoming delta for the given namespace.
 	updateDelta := func(update *pb.OracleDelta) {
+		fmt.Println(update)
 		y.AssertTrue(update.Namespace != "")
 		delta, ok := deltas[update.Namespace]
 		if !ok {
@@ -235,7 +236,7 @@ func (o *Oracle) sendDeltasToSubscribers() {
 		var update *pb.OracleDelta
 		select {
 		case update = <-o.updates:
-			updateDelta(delta)
+			updateDelta(update)
 		case <-ticker.C:
 			// progressed will tell any of the namespace is progressed for the periodic tick.
 			progressed := false
@@ -333,6 +334,7 @@ func (o *Oracle) commitTs(namespace string, startTs uint64) uint64 {
 }
 
 func (o *Oracle) storePending(namespace string, ids *pb.AssignedIds) {
+	y.AssertTrue(namespace != "")
 	// Wait to finish up processing everything before start id.
 	max := x.Max(ids.EndId, ids.ReadOnly)
 	o.doneUntilMutex.Lock()

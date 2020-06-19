@@ -236,6 +236,7 @@ func (g *groupi) upsertSchema(namespace string, sch *pb.SchemaUpdate, typ *pb.Ty
 	}
 
 	m.StartTs = ts.StartId
+	m.Namespace = namespace
 	if sch != nil {
 		m.Schema = append(m.Schema, sch)
 	}
