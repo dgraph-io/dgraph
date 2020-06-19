@@ -2405,8 +2405,13 @@ You can use the `--whitelist` option to specify whitelisted IP addresses and ran
 ```sh
 dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third RAM> ...
 ```
+
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
+
+The config option also accepts CIDR notation, e.g., `172.17.0.0/16,172.18.0.0/15,172.20.0.0/32,192.168.1.1/32` to accept the same range above.
+
+You can set whitelist IP to `0.0.0.0/0` to whitelist all IPs.
 
 ### Restricting Mutation Operations
 
