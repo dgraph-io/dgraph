@@ -1505,9 +1505,9 @@ curl -H "Content-Type: application/json" -X POST localhost:8080/mutate?commitNow
 
 Any outgoing edge in Dgraph can be reversed using the `@reverse` directive in Schema. And be queried using tilde as the prefix of the reverse edge. e.g. `<~myEdge>`.
 
-Dgraph serializes directed graphs. This means that all properties point from a entity to another entity or value always in a single direction. `S P -> O`.
+Dgraph serializes directed graphs. This means that all properties point from a entity to another entity or value is always in a single direction. `S P -> O`.
 
-However, in some cases, users want to request an entity in the reverse direction. But there is no specific syntax for reverse edges in Dgraph mutations. Because Reverse edges are just a kind of edge indexing. It is not literally an edge, but a kind of "pointer". And it will always be represented as `S P -> O` in query responses. But the "tilde" sets what is the direction for the user.
+However, in some cases, users want to create an entity in the reverse direction. But there is no specific syntax for reverse edges in Dgraph mutations. Because Reverse edges are just a kind of edge indexing. It is not literally an edge, but a kind of "pointer". And it will always be represented as `S P -> O` in query responses. But the "tilde" sets what is the direction for the user.
 
 There are some confusions about syntax related to reverse e.g.
 
