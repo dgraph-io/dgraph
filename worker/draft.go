@@ -266,7 +266,8 @@ var errHasPendingTxns = errors.New("Pending transactions found. Please retry ope
 // transactions. We're now applying all updates serially, so blocking for one
 // operation is not an option.
 func detectPendingTxns(attr string) error {
-	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
+	namespace := x.ParseAttr(attr)
+	tctxs := posting.Oracle().IterateTxns(namespace, func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
 			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
@@ -277,7 +278,7 @@ func detectPendingTxns(attr string) error {
 	if len(tctxs) == 0 {
 		return nil
 	}
-	go tryAbortTransactions(tctxs)
+	go tryAbortTransactions(namespace, tctxs)
 	return errHasPendingTxns
 }
 
@@ -303,6 +304,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		if groups().groupId() == 1 {
+			// TODO: @balaji default type needs to be populated for all the namespace.
 			initialSchema := schema.InitialSchema(x.DefaultNamespace)
 			for _, s := range initialSchema {
 				if err := updateSchema(s); err != nil {
@@ -342,7 +344,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		// MaxAssigned would ensure that everything that's committed up until this point
 		// would be picked up in building indexes. Any uncommitted txns would be cancelled
 		// by detectPendingTxns below.
-		startTs := posting.Oracle().MaxAssigned()
+		startTs := posting.Oracle().MaxAssigned(proposal.Mutations.Namespace)
 
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
@@ -438,7 +440,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		return nil
 	}
 
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	txn := posting.Oracle().RegisterStartTs(m.Namespace, m.StartTs)
 	if txn.ShouldAbort() {
 		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
 		return zero.ErrConflict
@@ -713,7 +715,7 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
 	toDisk := func(start, commit uint64) {
-		txn := posting.Oracle().GetTxn(start)
+		txn := posting.Oracle().GetTxn(delta.Namespace, start)
 		if txn == nil {
 			return
 		}
@@ -1351,14 +1353,17 @@ func (n *node) blockingAbort(req *pb.TxnTimestamps) error {
 // abort. Note that only the leader runs this function.
 func (n *node) abortOldTransactions() {
 	// Aborts if not already committed.
-	starts := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
-	if len(starts) == 0 {
-		return
+	oldTxns := posting.Oracle().TxnOlderThan(x.WorkerConfig.AbortOlderThan)
+
+	for _, oldTxn := range oldTxns {
+		if len(oldTxn.StartTs) == 0 {
+			continue
+		}
+		glog.Infof("Found %d old transactions. Acting to abort them.\n", len(oldTxn.StartTs))
+		req := &pb.TxnTimestamps{Ts: oldTxn.StartTs, Namespace: oldTxn.Namespace}
+		err := n.blockingAbort(req)
+		glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
 	}
-	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
-	req := &pb.TxnTimestamps{Ts: starts}
-	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -1447,7 +1452,7 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	// So, we iterate over logs. If we hit MinPendingStartTs, that generates our
 	// snapshotIdx. In any case, we continue picking up txn updates, to generate
 	// a maxCommitTs, which would become the readTs for the snapshot.
-	minPendingStart := posting.Oracle().MinPendingStartTs()
+	minPendingStart, minNamespace := posting.Oracle().MinPendingStartTs()
 	maxCommitTs := snap.ReadTs
 	var snapshotIdx uint64
 
@@ -1520,9 +1525,10 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 	}
 
 	result := &pb.Snapshot{
-		Context: n.RaftContext,
-		Index:   snapshotIdx,
-		ReadTs:  maxCommitTs,
+		Context:   n.RaftContext,
+		Index:     snapshotIdx,
+		ReadTs:    maxCommitTs,
+		Namespace: minNamespace,
 	}
 	span.Annotatef(nil, "Got snapshot: %+v", result)
 	return result, nil

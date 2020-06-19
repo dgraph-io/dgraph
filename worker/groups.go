@@ -196,7 +196,7 @@ func (g *groupi) proposeInitialTypes() {
 		if _, ok := schema.State().GetType(t.TypeName); ok {
 			continue
 		}
-		g.upsertSchema(nil, t)
+		g.upsertSchema(x.DefaultNamespace, nil, t)
 	}
 }
 
@@ -207,14 +207,14 @@ func (g *groupi) proposeInitialSchema() {
 		if gid, err := g.BelongsToReadOnly(s.Predicate, 0); err != nil {
 			glog.Errorf("Error getting tablet for predicate %s. Will force schema proposal.",
 				s.Predicate)
-			g.upsertSchema(s, nil)
+			g.upsertSchema(x.DefaultNamespace, s, nil)
 		} else if gid == 0 {
-			g.upsertSchema(s, nil)
+			g.upsertSchema(x.DefaultNamespace, s, nil)
 		} else if curr, _ := schema.State().Get(ctx, s.Predicate); gid == g.groupId() &&
 			!proto.Equal(s, &curr) {
 			// If this tablet is served to the group, do not upsert the schema unless the
 			// stored schema and the proposed one are different.
-			g.upsertSchema(s, nil)
+			g.upsertSchema(x.DefaultNamespace, s, nil)
 		} else {
 			// The schema for this predicate has already been proposed.
 			glog.V(1).Infof("Skipping initial schema upsert for predicate %s", s.Predicate)
@@ -223,12 +223,12 @@ func (g *groupi) proposeInitialSchema() {
 	}
 }
 
-func (g *groupi) upsertSchema(sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
+func (g *groupi) upsertSchema(namespace string, sch *pb.SchemaUpdate, typ *pb.TypeUpdate) {
 	// Propose schema mutation.
 	var m pb.Mutations
 	// schema for a reserved predicate is not changed once set.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	ts, err := Timestamps(ctx, &pb.Num{Val: 1})
+	ts, err := Timestamps(ctx, &pb.Num{Val: 1, Namespace: namespace})
 	cancel()
 	if err != nil {
 		glog.Errorf("error while requesting timestamp for schema %v: %v", sch, err)
@@ -923,14 +923,15 @@ func (g *groupi) processOracleDeltaStream() {
 		}()
 
 		for {
-			var delta *pb.OracleDelta
-			var batch int
+			deltas := make(map[string]*pb.OracleDelta)
+			batchCount := make(map[string]uint64)
 			select {
-			case delta = <-deltaCh:
+			case delta := <-deltaCh:
 				if delta == nil {
 					return
 				}
-				batch++
+				deltas[delta.GetNamespace()] = delta
+				batchCount[delta.GetNamespace()]++
 			case <-ticker.C:
 				newLead := g.Leader(0)
 				if newLead == nil || newLead.Addr != pl.Addr {
@@ -952,7 +953,12 @@ func (g *groupi) processOracleDeltaStream() {
 					if more == nil {
 						return
 					}
-					batch++
+					batchCount[more.GetNamespace()]++
+					delta, ok := deltas[more.GetNamespace()]
+					if !ok {
+						deltas[more.GetNamespace()] = more
+						continue
+					}
 					delta.Txns = append(delta.Txns, more.Txns...)
 					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
 					for gid, checksum := range more.GroupChecksums {
@@ -974,37 +980,40 @@ func (g *groupi) processOracleDeltaStream() {
 				return
 			}
 
-			// We should always sort the txns before applying. Otherwise, we might lose some of
-			// these updates, because we never write over a new version.
-			sort.Slice(delta.Txns, func(i, j int) bool {
-				return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
-			})
-			if len(delta.Txns) > 0 {
-				last := delta.Txns[len(delta.Txns)-1]
-				// Update MaxAssigned on commit so best effort queries can get back latest data.
-				delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
-			}
-			if glog.V(3) {
-				glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
-					batch, delta.MaxAssigned)
-				for _, txn := range delta.Txns {
-					if txn.CommitTs == 0 {
-						glog.Infof("Aborted: %d", txn.StartTs)
-					} else {
-						glog.Infof("Committed: %d -> %d", txn.StartTs, txn.CommitTs)
+			for namespace, delta := range deltas {
+				// We should always sort the txns before applying. Otherwise, we might lose some of
+				// these updates, because we never write over a new version.
+				sort.Slice(delta.Txns, func(i, j int) bool {
+					return delta.Txns[i].CommitTs < delta.Txns[j].CommitTs
+				})
+				if len(delta.Txns) > 0 {
+					last := delta.Txns[len(delta.Txns)-1]
+					// Update MaxAssigned on commit so best effort queries can get back latest data.
+					delta.MaxAssigned = x.Max(delta.MaxAssigned, last.CommitTs)
+				}
+				if glog.V(3) {
+					glog.Infof("Batched %d updates. Max Assigned: %d. Proposing Deltas:",
+						batchCount[namespace], delta.MaxAssigned)
+					for _, txn := range delta.Txns {
+						if txn.CommitTs == 0 {
+							glog.Infof("Aborted: %d", txn.StartTs)
+						} else {
+							glog.Infof("Committed: %d -> %d", txn.StartTs, txn.CommitTs)
+						}
 					}
 				}
-			}
-			for {
-				// Block forever trying to propose this. Also this proposal should not be counted
-				// towards num pending proposals and be proposed right away.
-				err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
-				if err == nil {
-					break
+				for {
+					// Block forever trying to propose this. Also this proposal should not be
+					//counted towards num pending proposals and be proposed right away.
+					err := g.Node.proposeAndWait(context.Background(), &pb.Proposal{Delta: delta})
+					if err == nil {
+						break
+					}
+					glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
+						" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 				}
-				glog.Errorf("While proposing delta with MaxAssigned: %d and num txns: %d."+
-					" Error=%v. Retrying...\n", delta.MaxAssigned, len(delta.Txns), err)
 			}
+
 		}
 	}
 

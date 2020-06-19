@@ -23,6 +23,7 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -35,8 +36,9 @@ import (
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
-func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
-	edges, err := expandEdges(ctx, namespace, m)
+func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	y.AssertTrue(m.Namespace != "")
+	edges, err := expandEdges(ctx, m.Namespace, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}

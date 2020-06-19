@@ -240,6 +240,7 @@ message Mutations {
 	string drop_value = 8;
 
 	Metadata metadata = 9;
+	string namespace  = 10;
 }
 
 message Metadata {
@@ -266,6 +267,8 @@ message Snapshot {
 	bool done	= 4;
 	// since_ts stores the ts of the last snapshot to support diff snap updates.
 	uint64 since_ts = 5;
+	// namespace is the minimum ts namespace 
+	string namespace = 6;
 }
 
 message RestoreRequest {

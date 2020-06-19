@@ -350,10 +350,11 @@ func multiSort(ctx context.Context, r *sortresult, ts *pb.SortMessage) error {
 	och := make(chan orderResult, len(ts.Order)-1)
 	for i := 1; i < len(ts.Order); i++ {
 		in := &pb.Query{
-			Attr:    ts.Order[i].Attr,
-			UidList: dest,
-			Langs:   ts.Order[i].Langs,
-			ReadTs:  ts.ReadTs,
+			Attr:      ts.Order[i].Attr,
+			UidList:   dest,
+			Langs:     ts.Order[i].Langs,
+			ReadTs:    ts.ReadTs,
+			Namespace: ts.Namespace,
 		}
 		go fetchValues(ctx, in, i, och)
 	}
@@ -432,7 +433,7 @@ func processSort(ctx context.Context, ts *pb.SortMessage) (*pb.SortResult, error
 	defer stop()
 
 	span.Annotatef(nil, "Waiting for startTs: %d", ts.ReadTs)
-	if err := posting.Oracle().WaitForTs(ctx, ts.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, ts.Namespace, ts.ReadTs); err != nil {
 		return nil, err
 	}
 	span.Annotatef(nil, "Waiting for checksum match")

@@ -20,9 +20,9 @@ import (
 	"context"
 	"math"
 	"sync"
-	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
@@ -96,59 +96,75 @@ type oracle struct {
 	x.SafeMutex
 
 	// max start ts given out by Zero. Do not use mutex on this, only use atomics.
-	maxAssigned uint64
+	maxAssigned map[string]uint64
 
 	// Keeps track of all the startTs we have seen so far, based on the mutations. Then as
 	// transactions are committed or aborted, we delete entries from the startTs map. When taking a
 	// snapshot, we need to know the minimum start ts present in the map, which represents a
 	// mutation which has not yet been committed or aborted.  As we iterate over entries, we should
 	// only discard those whose StartTs is below this minimum pending start ts.
-	pendingTxns map[uint64]*Txn
+	pendingTxns map[string]map[uint64]*Txn
 
 	// Used for waiting logic for transactions with startTs > maxpending so that we don't read an
 	// uncommitted transaction.
-	waiters map[uint64][]chan struct{}
+	waiters map[string]map[uint64][]chan struct{}
 }
 
 func (o *oracle) init() {
-	o.waiters = make(map[uint64][]chan struct{})
-	o.pendingTxns = make(map[uint64]*Txn)
+	o.waiters = make(map[string]map[uint64][]chan struct{})
+	o.pendingTxns = make(map[string]map[uint64]*Txn)
+	o.maxAssigned = make(map[string]uint64)
 }
 
-func (o *oracle) RegisterStartTs(ts uint64) *Txn {
+func (o *oracle) RegisterStartTs(namespace string, ts uint64) *Txn {
 	o.Lock()
 	defer o.Unlock()
-	txn, ok := o.pendingTxns[ts]
+	txns, ok := o.pendingTxns[namespace]
+	if !ok {
+		txns = make(map[uint64]*Txn)
+	}
+	txn, ok := txns[ts]
 	if ok {
 		txn.lastUpdate = time.Now()
 	} else {
 		txn = NewTxn(ts)
-		o.pendingTxns[ts] = txn
+		txns[ts] = txn
 	}
+	o.pendingTxns[namespace] = txns
 	return txn
 }
 
-func (o *oracle) CacheAt(ts uint64) *LocalCache {
+func (o *oracle) CacheAt(namespace string, ts uint64) *LocalCache {
 	o.RLock()
 	defer o.RUnlock()
-	txn, ok := o.pendingTxns[ts]
+	txns, ok := o.pendingTxns[namespace]
+	if !ok {
+		return nil
+	}
+	txn, ok := txns[ts]
 	if !ok {
 		return nil
 	}
 	return txn.cache
 }
 
-// MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision.
-func (o *oracle) MinPendingStartTs() uint64 {
+// MinPendingStartTs returns the min start ts which is currently pending a commit or abort decision
+// and it's namespace.
+func (o *oracle) MinPendingStartTs() (uint64, string) {
 	o.RLock()
 	defer o.RUnlock()
 	min := uint64(math.MaxUint64)
-	for ts := range o.pendingTxns {
-		if ts < min {
-			min = ts
+	minNamespace := ""
+
+	for namespace, txn := range o.pendingTxns {
+		for ts := range txn {
+			if ts < min {
+				min = ts
+				minNamespace = namespace
+			}
 		}
 	}
-	return min
+	return min, minNamespace
 }
 
 func (o *oracle) NumPendingTxns() int {
@@ -157,42 +173,61 @@ func (o *oracle) NumPendingTxns() int {
 	return len(o.pendingTxns)
 }
 
-func (o *oracle) TxnOlderThan(dur time.Duration) (res []uint64) {
-	o.RLock()
-	defer o.RUnlock()
-
-	cutoff := time.Now().Add(-dur)
-	for startTs, txn := range o.pendingTxns {
-		if txn.lastUpdate.Before(cutoff) {
-			res = append(res, startTs)
-		}
-	}
-	return res
+// OlderTxn contain all the pending start timestamp of a namespace
+type OlderTxn struct {
+	Namespace string
+	StartTs   []uint64
 }
 
-func (o *oracle) addToWaiters(startTs uint64) (chan struct{}, bool) {
-	if startTs <= o.MaxAssigned() {
-		return nil, false
+// TxnOlderThan will give older txn of all the namespace
+func (o *oracle) TxnOlderThan(dur time.Duration) []*OlderTxn {
+	o.RLock()
+	defer o.RUnlock()
+	oldTxns := []*OlderTxn{}
+
+	cutoff := time.Now().Add(-dur)
+	for namespaace, txns := range o.pendingTxns {
+		oldTxn := &OlderTxn{
+			Namespace: namespaace,
+		}
+		for startTs, txn := range txns {
+			if txn.lastUpdate.Before(cutoff) {
+				oldTxn.StartTs = append(oldTxn.StartTs, startTs)
+			}
+		}
+		oldTxns = append(oldTxns, oldTxn)
 	}
-	o.Lock()
-	defer o.Unlock()
+	return oldTxns
+}
+
+func (o *oracle) addToWaiters(namespace string, startTs uint64) (chan struct{}, bool) {
 	// Check again after acquiring lock, because o.waiters is being processed serially. So, if we
 	// don't check here, then it's possible that we add to waiters here, but MaxAssigned has already
-	// moved past startTs.
-	if startTs <= o.MaxAssigned() {
+	// moved past startTs. Caller should take care of thread safety.
+	if startTs <= o.maxAssigned[namespace] {
 		return nil, false
 	}
+	waiters, ok := o.waiters[namespace]
+	if !ok {
+		waiters = make(map[uint64][]chan struct{})
+	}
 	ch := make(chan struct{})
-	o.waiters[startTs] = append(o.waiters[startTs], ch)
+	waiters[startTs] = append(waiters[startTs], ch)
+	o.waiters[namespace] = waiters
 	return ch, true
 }
 
-func (o *oracle) MaxAssigned() uint64 {
-	return atomic.LoadUint64(&o.maxAssigned)
+func (o *oracle) MaxAssigned(namespace string) uint64 {
+	o.Lock()
+	defer o.Unlock()
+	return o.maxAssigned[namespace]
 }
 
-func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
-	ch, ok := o.addToWaiters(startTs)
+func (o *oracle) WaitForTs(ctx context.Context, namespace string, startTs uint64) error {
+	y.AssertTrue(namespace != "")
+	o.Lock()
+	ch, ok := o.addToWaiters(namespace, startTs)
+	o.Unlock()
 	if !ok {
 		return nil
 	}
@@ -202,6 +237,24 @@ func (o *oracle) WaitForTs(ctx context.Context, startTs uint64) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+func (o *oracle) WaitForAllNamespace(ctx context.Context, startTs uint64) error {
+	for namespace := range o.waiters {
+		o.Lock()
+		ch, ok := o.addToWaiters(namespace, startTs)
+		o.Unlock()
+		if !ok {
+			continue
+		}
+		select {
+		case <-ch:
+			continue
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
@@ -220,38 +273,38 @@ func (o *oracle) ProcessDelta(delta *pb.OracleDelta) {
 	o.Lock()
 	defer o.Unlock()
 	for _, txn := range delta.Txns {
-		delete(o.pendingTxns, txn.StartTs)
+		delete(o.pendingTxns[delta.Namespace], txn.StartTs)
 	}
-	curMax := o.MaxAssigned()
+	curMax := o.maxAssigned[delta.Namespace]
 	if delta.MaxAssigned < curMax {
 		return
 	}
 
 	// Notify the waiting cattle.
-	for startTs, toNotify := range o.waiters {
+	for startTs, toNotify := range o.waiters[delta.Namespace] {
 		if startTs > delta.MaxAssigned {
 			continue
 		}
 		for _, ch := range toNotify {
 			close(ch)
 		}
-		delete(o.waiters, startTs)
+		delete(o.waiters[delta.Namespace], startTs)
 	}
-	x.AssertTrue(atomic.CompareAndSwapUint64(&o.maxAssigned, curMax, delta.MaxAssigned))
+	o.maxAssigned[delta.Namespace] = delta.MaxAssigned
 	ostats.Record(context.Background(),
-		x.MaxAssignedTs.M(int64(delta.MaxAssigned))) // Can't access o.MaxAssigned without atomics.
+		x.MaxAssignedTs.M(int64(delta.MaxAssigned)))
 }
 
 func (o *oracle) ResetTxns() {
 	o.Lock()
 	defer o.Unlock()
-	o.pendingTxns = make(map[uint64]*Txn)
+	o.pendingTxns = make(map[string]map[uint64]*Txn)
 }
 
-func (o *oracle) GetTxn(startTs uint64) *Txn {
+func (o *oracle) GetTxn(namespace string, startTs uint64) *Txn {
 	o.RLock()
 	defer o.RUnlock()
-	return o.pendingTxns[startTs]
+	return o.pendingTxns[namespace][startTs]
 }
 
 func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
@@ -267,11 +320,11 @@ func (txn *Txn) matchesDelta(ok func(key []byte) bool) bool {
 
 // IterateTxns returns a list of start timestamps for currently pending transactions, which match
 // the provided function.
-func (o *oracle) IterateTxns(ok func(key []byte) bool) []uint64 {
+func (o *oracle) IterateTxns(namespace string, ok func(key []byte) bool) []uint64 {
 	o.RLock()
 	defer o.RUnlock()
 	var timestamps []uint64
-	for startTs, txn := range o.pendingTxns {
+	for startTs, txn := range o.pendingTxns[namespace] {
 		if txn.matchesDelta(ok) {
 			timestamps = append(timestamps, startTs)
 		}

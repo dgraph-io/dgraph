@@ -900,6 +900,7 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 		FacetsFilter: sg.facetsFilter,
 		ExpandAll:    sg.Params.ExpandAll,
 		First:        first,
+		Namespace:    sg.Params.Namespace,
 	}
 
 	if sg.SrcUIDs != nil {
@@ -2189,6 +2190,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 					Alias:        it.Alias,
 					IgnoreResult: true,
 					Langs:        it.Langs,
+					Namespace:    sg.Params.Namespace,
 				},
 			})
 		}
@@ -2304,6 +2306,7 @@ func (sg *SubGraph) applyOrderAndPagination(ctx context.Context) error {
 		Offset:    int32(sg.Params.Offset),
 		Count:     int32(sg.Params.Count),
 		ReadTs:    sg.ReadTs,
+		Namespace: sg.Params.Namespace,
 	}
 	result, err := worker.SortOverNetwork(ctx, sortMsg)
 	if err != nil {

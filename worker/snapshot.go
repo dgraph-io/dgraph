@@ -187,7 +187,7 @@ func doStreamSnapshot(snap *pb.Snapshot, out pb.Worker_StreamSnapshotServer) err
 	// request. Any other node in the group should have the same data as the leader, once it is past
 	// the read timestamp.
 	glog.Infof("Waiting to reach timestamp: %d", snap.ReadTs)
-	if err := posting.Oracle().WaitForTs(out.Context(), snap.ReadTs); err != nil {
+	if err := posting.Oracle().WaitForTs(out.Context(), snap.Namespace, snap.ReadTs); err != nil {
 		return err
 	}
 

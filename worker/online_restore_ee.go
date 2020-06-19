@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -59,7 +60,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
 		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
-	req.RestoreTs = State.GetTimestamp(false)
+	req.RestoreTs = State.GetTimestamp(x.DefaultNamespace, false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
@@ -108,7 +109,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 	// We should wait to ensure that we have seen all the updates until the StartTs
 	// of this restore transaction.
-	if err := posting.Oracle().WaitForTs(ctx, req.RestoreTs); err != nil {
+	if err := posting.Oracle().WaitForTs(ctx, x.DefaultNamespace, req.RestoreTs); err != nil {
 		return nil, errors.Wrapf(err, "cannot wait for restore ts %d", req.RestoreTs)
 	}
 

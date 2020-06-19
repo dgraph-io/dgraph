@@ -70,7 +70,7 @@ func TestCalculateSnapshot(t *testing.T) {
 		getEntryForMutation(3, 2), getEntryForCommit(4, 3, 4), getEntryForCommit(5, 1, 5))
 	require.NoError(t, n.Store.Save(&raftpb.HardState{}, entries, &raftpb.Snapshot{}))
 	n.Applied.SetDoneUntil(5)
-	posting.Oracle().RegisterStartTs(2)
+	posting.Oracle().RegisterStartTs(x.DefaultNamespace, 2)
 	snap, err := n.calculateSnapshot(0, 1)
 	require.NoError(t, err)
 	require.Equal(t, uint64(5), snap.ReadTs)
