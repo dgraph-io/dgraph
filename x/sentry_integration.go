@@ -102,7 +102,7 @@ func ConfigureSentryScope(subcmd string) {
 		scope.SetTag("dgraph", subcmd)
 		scope.SetTag("checksum", fmt.Sprintf("%x", ExecutableChecksum()))
 		scope.SetTag("commit", lastCommitSHA)
-		scope.SetTag("commit ts", lastCommitTime)
+		scope.SetTag("commit_ts", lastCommitTime)
 		scope.SetTag("branch", gitBranch)
 		scope.SetLevel(sentry.LevelFatal)
 	})
