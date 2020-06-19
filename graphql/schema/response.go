@@ -126,7 +126,6 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 
 // Output returns json interface of the response
 func (r *Response) Output() interface{} {
-
 	if r == nil {
 		return struct {
 			Errors json.RawMessage `json:"errors,omitempty"`
