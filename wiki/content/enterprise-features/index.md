@@ -743,15 +743,14 @@ mutation {
 ### Reset Groot Password
 
 If you've forgotten the password to your groot user, then you may reset the groot password (or
-the password for any user) by the following these steps. You'll need to have access to update the
-Dgraph cluster configuration.
+the password for any user) by the following these steps.
 
 1. Stop Dgraph Alpha. If you're running a high available cluster, then you can stop this Alpha.
 2. Turn off ACLs by removing the `--acl_hmac_secret` config flag in the Alph config. This leaves the
-   Alpha open with no ACL rules, so be sure to secure access to this Alpha, including
+   Alpha open with no ACL rules, so be sure to restrict access to this Alpha, including
    stopping request traffic to this Alpha.
 3. Start Dgraph Alpha.
-4. Connect to Dgraph using Ratel and run the following upsert mutation to update the groot password
+4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
    to `newpassword` (choose your own secure password):
    ```text
    upsert {
