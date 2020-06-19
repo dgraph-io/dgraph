@@ -1549,6 +1549,7 @@ func TestNumUids(t *testing.T) {
 }
 
 func TestMultiTenancy(t *testing.T) {
+	t.Skip()
 	// See the cluster with sample data
 	createNamespace("dev")
 
