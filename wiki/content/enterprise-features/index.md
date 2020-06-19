@@ -483,8 +483,8 @@ mutation {
   }
 }
 ```
-Here we assigned to the `friend` predicate permission to the group, in case you have [reverse edges](https://dgraph.io/docs/master/query-language/#reverse-edges), they have to be given the permission to the group as well
-```qraphql
+Here we assigned a permission rule for the friend predicate to the group. In case you have [reverse edges]({{< relref "query-language/index.md#reverse-edges" >}}), they have to be given the permission to the group as well
+```graphql
 mutation {
   updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "~friend", permission: 7}]}}) {
     group {
