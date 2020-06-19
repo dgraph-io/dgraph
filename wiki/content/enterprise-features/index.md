@@ -748,6 +748,33 @@ mutation {
 }
 ```
 
+### Reset Groot Password
+
+If you've forgotten the password to your groot user, then you may reset the groot password (or
+the password for any user) by following these steps.
+
+1. Stop Dgraph Alpha.
+2. Turn off ACLs by removing the `--acl_hmac_secret` config flag in the Alpha config. This leaves
+   the Alpha open with no ACL rules, so be sure to restrict access, including stopping request
+   traffic to this Alpha.
+3. Start Dgraph Alpha.
+4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
+   to `newpassword` (choose your own secure password):
+   ```text
+   upsert {
+     query {
+       groot as var(func: eq(dgraph.xid, "groot"))
+     }
+     mutation {
+       set {
+         uid(groot) <dgraph.password> "newpassword" .
+       }
+     }
+   }
+   ```
+5. Restart Dgraph Alpha with ACLs turned on by setting the `--acl_hmac_secret` config flag.
+6. Login as groot with your new password.
+
 ## Encryption at Rest
 
 {{% notice "note" %}}
