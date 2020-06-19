@@ -136,6 +136,6 @@ type Teacher implements People {
 }
 
 type Student implements People {
-	taughtBy: [Teacher]
+        taughtBy: [Teacher] @hasInverse(field: teaches)
 }
 

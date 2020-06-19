@@ -140,8 +140,9 @@ func (r *Response) Output() interface{} {
 		Errors     []*x.GqlError   `json:"errors,omitempty"`
 		Data       json.RawMessage `json:"data,omitempty"`
 		Extensions *Extensions     `json:"extensions,omitempty"`
-	}{Errors: r.Errors,
-		Data: r.Data.Bytes(),
+	}{
+		Errors: r.Errors,
+		Data:   r.Data.Bytes(),
 	}
 
 	if x.Config.GraphqlExtension {

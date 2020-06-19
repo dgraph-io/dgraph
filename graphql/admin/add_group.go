@@ -21,7 +21,7 @@ func NewAddGroupRewriter() resolve.MutationRewriter {
 // A rule is duplicate if it has same predicate name as another rule.
 func (mrw *addGroupRewriter) Rewrite(
 	ctx context.Context,
-	m schema.Mutation) (*resolve.UpsertMutation, error) {
+	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
 
 	addGroupInput, _ := m.ArgValue(schema.InputArgName).([]interface{})
 
