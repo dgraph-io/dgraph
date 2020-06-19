@@ -2403,7 +2403,7 @@ By default, admin operations can only be initiated from the machine on which the
 
 You can use the `--whitelist` option to specify a comma-separated whitelist of IP addresses, IP ranges, CIDR ranges, or hostnames for hosts from which admin operations can be initiated.
 
-**IP address**
+**IP Address**
 
 ```sh
 dgraph alpha --whitelist 127.0.0.1 --lru_mb <one-third RAM> ...
