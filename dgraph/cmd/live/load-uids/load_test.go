@@ -215,25 +215,18 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	require.NoError(t, err, "live loading exported schema exited with error")
 
 	// cleanup copied export files
-	if err := os.RemoveAll(localExportPath); err != nil {
-		t.Fatalf("Error removing export copy directory: %s", err.Error())
-	}
+	require.NoError(t, os.RemoveAll(localExportPath), "Error removing export copy directory")
 }
 
 func copyExportToLocalFs(t *testing.T) string {
-	if err := os.RemoveAll(localExportPath); err != nil {
-		t.Fatalf("Error removing directory: %s", err.Error())
-	}
-	if err := testutil.DockerCp(alphaExportPath, localExportPath); err != nil {
-		t.Fatalf("Error copying files from docker container: %s", err.Error())
-	}
+	require.NoError(t, os.RemoveAll(localExportPath), "Error removing directory")
+	require.NoError(t, testutil.DockerCp(alphaExportPath, localExportPath),
+		"Error copying files from docker container")
+
 	childDirs, err := ioutil.ReadDir(localExportPath)
-	if err != nil {
-		t.Fatalf("Couldn't read local export copy directory: %v", err)
-	}
-	if len(childDirs) == 0 {
-		t.Fatalf("Local export copy directory is empty!!!")
-	}
+	require.NoError(t, err, "Couldn't read local export copy directory")
+	require.True(t, len(childDirs) > 0, "Local export copy directory is empty!!!")
+
 	return childDirs[0].Name()
 }
 

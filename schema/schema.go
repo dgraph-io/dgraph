@@ -544,7 +544,7 @@ func InitialTypes() []*pb.TypeUpdate {
 // options. This is useful in situations where the worker options are not known
 // in advance or it is required to consider all initial pre-defined types. An
 // example of such situation is while allowing type updates to go through during
-// alter if they are same as existing for pre-defined types. This is useful for
+// alter if they are same as existing pre-defined types. This is useful for
 // live loading a previously exported schema.
 func CompleteInitialTypes() []*pb.TypeUpdate {
 	return initialTypesInternal(true)
@@ -697,9 +697,9 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// IsPreDefinedPredicateChanged returns true if the initial update for the pre-defined
+// ComparePreDefPred returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
-func IsPreDefinedPredicateChanged(update *pb.SchemaUpdate) bool {
+func ComparePreDefPred(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
@@ -715,9 +715,9 @@ func IsPreDefinedPredicateChanged(update *pb.SchemaUpdate) bool {
 	return true
 }
 
-// IsPreDefinedTypeChanged returns true if the initial update for the pre-defined
+// ComparePreDefType returns true if the initial update for the pre-defined
 // type is different than the passed update.
-func IsPreDefinedTypeChanged(update *pb.TypeUpdate) bool {
+func ComparePreDefType(update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
 	if !x.IsPreDefinedType(update.TypeName) {
 		return false

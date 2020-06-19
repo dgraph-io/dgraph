@@ -227,9 +227,8 @@ func TestPreDefinedPredicates(t *testing.T) {
 	// This test uses the groot account to ensure that pre-defined predicates
 	// cannot be altered even if the permissions allow it.
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	require.NoError(t, err, "Error while getting a dgraph client")
+
 	alterPreDefinedPredicates(t, dg1)
 }
 
@@ -237,9 +236,8 @@ func TestPreDefinedTypes(t *testing.T) {
 	// This test uses the groot account to ensure that pre-defined types
 	// cannot be altered even if the permissions allow it.
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
+	require.NoError(t, err, "Error while getting a dgraph client")
+
 	alterPreDefinedTypes(t, dg)
 }
 
