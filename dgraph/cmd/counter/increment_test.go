@@ -26,8 +26,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -35,7 +35,6 @@ import (
 )
 
 const N = 10
-const pred = "counter"
 
 func incrementInLoop(t *testing.T, dg *dgo.Dgraph, M int) int {
 	conf := viper.New()

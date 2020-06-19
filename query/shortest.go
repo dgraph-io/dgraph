@@ -63,6 +63,15 @@ var errFacet = errors.Errorf("Skip the edge")
 
 type priorityQueue []*queueItem
 
+func (r *route) indexOf(uid uint64) int {
+	for i, val := range *r.route {
+		if val.uid == uid {
+			return i
+		}
+	}
+	return -1
+}
+
 func (h priorityQueue) Len() int { return len(h) }
 
 func (h priorityQueue) Less(i, j int) bool { return h[i].cost < h[j].cost }
@@ -303,7 +312,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 	}
 	heap.Push(&pq, srcNode)
 
-	numHops := -1
+	numHops := 0
 	maxHops := math.MaxInt32
 	if sg.Params.ExploreDepth != nil {
 		maxHops = int(*sg.Params.ExploreDepth)
@@ -340,7 +349,7 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 				break
 			}
 		}
-		if item.hop > numHops && numHops < maxHops {
+		if item.hop > numHops-1 && numHops < maxHops {
 			// Explore the next level by calling processGraph and add them
 			// to the queue.
 			if !stopExpansion {
@@ -364,9 +373,6 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		default:
-			if stopExpansion {
-				continue
-			}
 		}
 		neighbours := adjacencyMap[item.uid]
 		for toUid, info := range neighbours {
@@ -375,7 +381,10 @@ func runKShortestPaths(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			if item.cost+cost > maxWeight {
 				continue
 			}
-
+			// Skip neighbour if it present in current path to remove cyclical paths
+			if len(*item.path.route) > 0 && item.path.indexOf(toUid) != -1 {
+				continue
+			}
 			curPath := pathPool.Get().(*[]pathInfo)
 			if curPath == nil {
 				return nil, errors.Errorf("Sync pool returned a nil pointer")

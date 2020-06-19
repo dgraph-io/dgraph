@@ -23,25 +23,26 @@ import (
 	"math"
 	"strconv"
 	"time"
+	"unsafe"
 
 	"github.com/pkg/errors"
 	geom "github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/geojson"
 	"github.com/twpayne/go-geom/encoding/wkb"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 // Convert converts the value to given scalar type.
 func Convert(from Val, toID TypeID) (Val, error) {
-	var to Val
+	to := Val{Tid: toID}
 
 	// sanity: we expect a value
 	data, ok := from.Value.([]byte)
 	if !ok {
 		return to, errors.Errorf("Invalid data to convert to %s", toID.Name())
 	}
-	to = ValueForType(toID)
+
 	fromID := from.Tid
 	res := &to.Value
 
@@ -54,7 +55,8 @@ func Convert(from Val, toID TypeID) (Val, error) {
 			case BinaryID:
 				*res = data
 			case StringID, DefaultID:
-				*res = string(data)
+				// We never modify from Val, so this should be safe.
+				*res = *(*string)(unsafe.Pointer(&data))
 			case IntID:
 				if len(data) < 8 {
 					return to, errors.Errorf("Invalid data for int64 %v", data)

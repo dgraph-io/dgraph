@@ -53,10 +53,50 @@ enum DgraphIndex {
 	hour
 }
 
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int
@@ -114,46 +154,57 @@ input StringHashFilter {
 
 type AddAnswerPayload {
 	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
 }
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
 }
 
 type DeleteAnswerPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteQuestionPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAnswerPayload {
 	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type UpdateQuestionPayload {
 	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	numUids: Int
 }
 
 #######################
@@ -367,4 +418,19 @@ type Mutation {
 	addAnswer(input: [AddAnswerInput!]!): AddAnswerPayload
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
+}
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getQuestion(id: ID!): Question
+	queryQuestion(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
+	getAnswer(id: ID!): Answer
+	queryAnswer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
 }

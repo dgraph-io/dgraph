@@ -1,10 +1,16 @@
 package certrequireandverify
 
 import (
+	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
+	"io/ioutil"
+	"net/http"
 	"testing"
+	"time"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
@@ -56,4 +62,69 @@ func TestCurlAccessWithClientCert(t *testing.T) {
 	testutil.VerifyCurlCmd(t, curlArgs, &testutil.CurlFailureConfig{
 		ShouldFail: false,
 	})
+}
+
+func TestGQLAdminHealthWithClientCert(t *testing.T) {
+	// Read the root cert file.
+	caCert, err := ioutil.ReadFile("../tls/ca.crt")
+	require.NoError(t, err, "Unable to read root cert file : %v", err)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(caCert)
+
+	// Load the client cert file.
+	clientCert, err := tls.LoadX509KeyPair("../tls/client.acl.crt", "../tls/client.acl.key")
+	require.NoError(t, err, "Unable to read client cert file : %v", err)
+	tlsConfig := tls.Config{
+		RootCAs:      pool,
+		Certificates: []tls.Certificate{clientCert},
+	}
+	transport := http.Transport{
+		TLSClientConfig: &tlsConfig,
+	}
+	client := http.Client{
+		Timeout:   time.Second * 10,
+		Transport: &transport,
+	}
+
+	healthCheckQuery := []byte(`{"query":"query {\n health {\n status\n }\n}"}`)
+	gqlAdminEndpoint := "https://localhost:8180/admin"
+	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
+	require.NoError(t, err, "Failed to create request : %v", err)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	require.NoError(t, err, "Https request failed: %v", err)
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	require.NoError(t, err, "Error while reading http response: %v", err)
+	require.Contains(t, string(body), `"status":"healthy"`)
+}
+
+func TestGQLAdminHealthWithoutClientCert(t *testing.T) {
+	// Read the root cert file.
+	caCert, err := ioutil.ReadFile("../tls/ca.crt")
+	require.NoError(t, err, "Unable to read root cert file : %v", err)
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(caCert)
+
+	tlsConfig := tls.Config{
+		RootCAs: pool,
+	}
+	transport := http.Transport{
+		TLSClientConfig: &tlsConfig,
+	}
+	client := http.Client{
+		Timeout:   time.Second * 10,
+		Transport: &transport,
+	}
+
+	healthCheckQuery := []byte(`{"query":"query {\n health {\n message\n status\n }\n}"}`)
+	gqlAdminEndpoint := "https://localhost:8180/admin"
+	req, err := http.NewRequest("POST", gqlAdminEndpoint, bytes.NewBuffer(healthCheckQuery))
+	require.NoError(t, err, "Failed to create request : %v", err)
+	req.Header.Set("Content-Type", "application/json")
+
+	_, err = client.Do(req)
+	require.Contains(t, err.Error(), "remote error: tls: bad certificate")
 }

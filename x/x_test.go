@@ -17,10 +17,18 @@
 package x
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+func TestSensitiveByteSlice(t *testing.T) {
+	var v SensitiveByteSlice = SensitiveByteSlice("mysecretkey")
+
+	s := fmt.Sprintf("%s,%v,%s,%+v", v, v, &v, &v)
+	require.EqualValues(t, "****,****,****,****", s)
+}
 
 func TestRemoveDuplicates(t *testing.T) {
 	set := RemoveDuplicates([]string{"a", "a", "a", "b", "b", "c", "c"})
@@ -124,4 +132,20 @@ func TestGqlError(t *testing.T) {
 			require.Equal(t, tcase.req, tcase.err.Error())
 		})
 	}
+}
+
+func TestVersionString(t *testing.T) {
+	dgraphVersion = "v1.2.2-rc1-g1234567"
+	require.True(t, DevVersion())
+
+	dgraphVersion = "v20.03-1-beta-Mar20-g12345678"
+	require.True(t, DevVersion())
+
+	dgraphVersion = "v20.03"
+	require.False(t, DevVersion())
+
+	// less than 7 hex digits in commit-hash
+	dgraphVersion = "v1.2.2-rc1-g123456"
+	require.False(t, DevVersion())
+
 }

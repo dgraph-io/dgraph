@@ -6,11 +6,11 @@ Dgraph's GraphQL+- is based on Facebook's [GraphQL](https://facebook.github.io/g
 
 GraphQL+- is a work in progress. We're adding more features and we might further simplify existing ones.
 
-## Take a Tour - https://tour.dgraph.io
+## Take a Tour - https://dgraph.io/tour/
 
 This document is the Dgraph query reference material.  It is not a tutorial.  It's designed as a reference for users who already know how to write queries in GraphQL+- but need to check syntax, or indices, or functions, etc.
 
-{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://tour.dgraph.io{{% /notice %}}
+{{% notice "note" %}}If you are new to Dgraph and want to learn how to use Dgraph and GraphQL+-, take the tour - https://dgraph.io/tour/{{% /notice %}}
 
 
 ### Running examples
@@ -182,11 +182,23 @@ For example:
 - `name@*` => Look for all the values of this predicate and return them along with their language. For example, if there are two values with languages en and hi, this query will return two keys named "name@en" and "name@hi".
 
 
-{{% notice "note" %}}In functions, language lists (including the `@*` notation) are not allowed. Untagged predicates, Single language tags, and `.` notation work as described above.
+{{% notice "note" %}}
+
+In functions, language lists (including the `@*` notation) are not allowed.
+Untagged predicates, Single language tags, and `.` notation work as described
+above.
 
 ---
 
-In [full-text search functions]({{< relref "#full-text-search" >}}) (`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`), the default (English) full-text tokenizer is used.{{% /notice %}}
+In [full-text search functions]({{< relref "#full-text-search" >}})
+(`alloftext`, `anyoftext`), when no language is specified (untagged or `@.`),
+the default (English) full-text tokenizer is used. This does not mean that
+the value with the `en` tag will be searched when querying the untagged value,
+but that untagged values will be treated as English text. If you don't want that
+to be the case, use the appropriate tag for the desired language, both for
+mutating and querying the value.
+
+{{% /notice %}}
 
 
 Query Example: Some of Bollywood director and actor Farhan Akhtar's movies have a name stored in Russian as well as Hindi and English, others do not.
@@ -1796,19 +1808,31 @@ Query Example: Actors from Tim Burton movies and how many roles they have played
 }
 {{< /runnable >}}
 
-
-
 ## Expand Predicates
 
 The `expand()` function can be used to expand the predicates out of a node. To
- use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
+use `expand()`, the [type system]({{< relref "#type-system" >}}) is required.
 Refer to the section on the type system to check how to set the types
 nodes. The rest of this section assumes familiarity with that section.
 
-There are four ways to use the `expand` function.
+There are two ways to use the `expand` function.
 
-* Predicates can be stored in a variable and passed to `expand()` to expand all
-  the predicates in the variable.
+* Types can be passed to `expand()` to expand all the predicates in the type.
+
+Query example: List the movies from the Harry Potter series:
+
+{{< runnable >}}
+{
+  all(func: eq(name@en, "Harry Potter")) @filter(type(Series)) {
+    name@en
+    expand(Series) {
+      name@en
+      expand(Film)
+    }
+  }
+}
+{{< /runnable >}}
+
 * If `_all_` is passed as an argument to `expand()`, the predicates to be
 expanded will be the union of fields in the types assigned to a given node.
 
@@ -1816,7 +1840,7 @@ The `_all_` keyword requires that the nodes have types. Dgraph will look for all
 the types that have been assigned to a node, query the types to check which
 attributes they have, and use those to compute the list of predicates to expand.
 
-For example, consider a node that has types `Animal` and `Pet`, which have 
+For example, consider a node that has types `Animal` and `Pet`, which have
 the following definitions:
 
 ```
@@ -1844,9 +1868,11 @@ owner
 veterinarian
 ```
 
+{{% notice "note" %}}
 For `string` predicates, `expand` only returns values not tagged with a language
-(see [language preference]({{< relref "#language-support" >}})).  So it's often 
+(see [language preference]({{< relref "#language-support" >}})).  So it's often
 required to add `name@fr` or `name@.` as well to an expand query.
+{{% /notice  %}}
 
 ### Filtering during expand.
 
@@ -1956,7 +1982,7 @@ You can also apply `@normalize` on nested query blocks. It will work similarly b
 {{< /runnable >}}
 
 
-## Ignorereflex directive
+## IgnoreReflex directive
 
 The `@ignorereflex` directive forces the removal of child nodes that are reachable from themselves as a parent, through any path in the query result
 
@@ -2112,6 +2138,78 @@ If data exists and new indices are specified in a schema mutation, any index not
 Reverse edges are also computed if specified by a schema mutation.
 
 
+### Indexes in Background
+
+Indexes may take long time to compute depending upon the size of the data.
+Starting Dgraph version `20.03.0`, indexes can be computed in the background,
+and thus indexing may still be running after an Alter operation returns.
+This requires that you wait for indexing to complete before running queries
+that require newly created indices. Such queries will fail with an error
+notifying that a given predicate is not indexed or doesn't have reverse edges.
+
+An alter operation will also fail if one is already in progress with an error
+`schema is already being modified. Please retry`. Though, mutations can
+be successfully executed while indexing is going on.
+
+For example, let's say we execute an Alter operation with the following schema:
+
+```
+name: string @index(fulltext, term) .
+age: int @index(int) @upsert .
+friend: [uid] @count @reverse .
+```
+
+Once the Alter operation returns, Dgraph will report the following schema
+and start background tasks to compute all the new indexes:
+
+```
+name: string .
+age: int @upsert .
+friend: [uid] .
+```
+
+When indexes are done computing, Dgraph will start reporting the indexes in the
+schema. In a multi-node cluster, it is possible that the alphas will finish
+computing indexes at different times. Alphas may return different schema in such
+a case until all the indexes are done computing on all the Alphas.
+
+Background indexing task may fail if an unexpected error occurs while computing
+the indexes. You should retry the Alter operation in order to update the schema,
+or sync the schema across all the alphas.
+
+We also plan to add a simpler API soon to check the status of background indexing.
+See this [PR](https://github.com/dgraph-io/dgraph/pull/4961) for more details.
+
+#### HTTP API
+
+You can specify the flag `runInBackground` to `true` to run
+index computation in the background.
+
+```sh
+curl localhost:8080/alter?runInBackground=true -XPOST -d $'
+    name: string @index(fulltext, term) .
+    age: int @index(int) @upsert .
+    friend: [uid] @count @reverse .
+' | python -m json.tool | less
+```
+
+#### Grpc API
+
+You can set `RunInBackground` field to `true` of the `api.Operation`
+struct before passing it to the `Alter` function.
+
+```go
+op := &api.Operation{}
+op.Schema = `
+  name: string @index(fulltext, term) .
+  age: int @index(int) @upsert .
+  friend: [uid] @count @reverse .
+`
+op.RunInBackground = true
+err = dg.Alter(context.Background(), op)
+```
+
+
 ### Predicate name rules
 
 Any alphanumeric combination of a predicate name is permitted.
@@ -2193,6 +2291,18 @@ concurrent upserts.
 This is how you specify the upsert directive for a predicate.
 ```
 email: string @index(exact) @upsert .
+```
+
+### Noconflict directive
+
+The NoConflict directive prevents conflict detection at the predicate level. This is an experimental feature and not a
+recommended directive but exists to help avoid conflicts for predicates that don't have high
+correctness requirements. This can cause data loss, especially when used for predicates with count
+index.
+
+This is how you specify the `@noconflict` directive for a predicate.
+```
+email: string @index(exact) @noconflict .
 ```
 
 ### RDF Types
@@ -2391,6 +2501,15 @@ score: [int] .
   "#functions">}}) on them.
 * Sorting is not allowed using these predicates.
 
+### Filtering on list
+
+Dgraph supports filtering based on the list.
+Filtering works similarly to how it works on edges and has the same available functions.
+
+For example, `@filter(eq(occupations, "Teacher"))` at the root of the query or the
+parent edge will display all the occupations from a list of each node in an array but
+will only include nodes which have `Teacher` as one of the occupations. However, filtering
+on value edge is not supported.
 
 ### Reverse Edges
 
@@ -2612,7 +2731,6 @@ curl localhost:8080/alter -XPOST -d $'
     name: string @index(exact, term) .
     rated: [uid] @reverse @count .
 ' | python -m json.tool | less
-
 ```
 
 ```sh
@@ -2978,11 +3096,11 @@ Calculating the average ratings of users requires a variable that maps users to 
 }
 {{</ runnable >}}
 
-## K-Shortest Path Queries
+## Shortest Path Queries
 
 The shortest path between a source (`from`) node and destination (`to`) node can be found using the keyword `shortest` for the query block name. It requires the source node UID, destination node UID and the predicates (at least one) that have to be considered for traversal. A `shortest` query block returns the shortest path under `_path_` in the query response. The path can also be stored in a variable which is used in other query blocks.
 
-By default the shortest path is returned. With `numpaths: k`, the k-shortest paths are returned. With `depth: n`, the shortest paths up to `n` hops away are returned.
+**K-Shortest Path queries:** By default the shortest path is returned. With `numpaths: k`, and `k > 1`, the k-shortest paths are returned. Cyclical paths are pruned out from the result of k-shortest path query. With `depth: n`, the paths up to `n` depth away are returned.
 
 {{% notice "note" %}}
 - If no predicates are specified in the `shortest` block, no path can be fetched as no edge is traversed.
@@ -3168,8 +3286,9 @@ Some points to keep in mind for shortest path queries:
 
 - Weights must be non-negative. Dijkstra's algorithm is used to calculate the shortest paths.
 - Only one facet per predicate in the shortest query block is allowed.
-- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result.
-- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path. All k paths are returned in `_path_`.
+- Only one `shortest` path block is allowed per query. Only one `_path_` is returned in the result. For queries with `numpaths` > 1, `_path_` contains all the paths.
+- Cyclical paths are not included in the result of k-shortest path query.
+- For k-shortest paths (when `numpaths` > 1), the result of the shortest path query variable will only return a single path which will be the shortest path among the k paths. All k paths are returned in `_path_`.
 
 ## Recurse Query
 

@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -81,12 +82,12 @@ Commit timestamp : %v
 Branch           : %v
 Go version       : %v
 
-For Dgraph official documentation, visit https://docs.dgraph.io.
+For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
 To say hi to the community       , visit https://dgraph.slack.com.
 
 %s.
-Copyright 2015-2018 Dgraph Labs, Inc.
+Copyright 2015-2020 Dgraph Labs, Inc.
 
 `,
 		dgraphVersion, ExecutableChecksum(), lastCommitSHA, lastCommitTime, gitBranch,
@@ -101,6 +102,17 @@ func PrintVersion() {
 // Version returns a string containing the dgraphVersion.
 func Version() string {
 	return dgraphVersion
+}
+
+// pattern for  dev version = min. 7 hex digits of commit-hash.
+var versionRe *regexp.Regexp = regexp.MustCompile(`-g[[:xdigit:]]{7,}`)
+
+// DevVersion returns true if the version string contains the above pattern
+// e.g.
+//  1. v2.0.0-rc1-127-gd20a768b3 => dev version
+//  2. v2.0.0 => prod version
+func DevVersion() (matched bool) {
+	return (versionRe.MatchString(dgraphVersion))
 }
 
 // ExecutableChecksum returns a byte slice containing the SHA256 checksum of the executable.

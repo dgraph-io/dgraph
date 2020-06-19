@@ -12,7 +12,8 @@ type State {
         id: ID!
         xcode: String! @id @search(by: [regexp])
         name: String!
-        country: Country
+	capital: String
+	country: Country
 }
 
 # **Don't delete** Comments in the middle of schemas should work
@@ -55,6 +56,10 @@ type Category {
         id: ID
         name: String
         posts: [Post]
+}
+
+type User @secret(field: "password") {
+	name: String! @id
 }
 
 """
@@ -106,3 +111,31 @@ type Starship {
         name: String! @search(by: [term])
         length: Float
 }
+
+type Movie {
+        id: ID!
+	name: String!
+	director: [MovieDirector] @hasInverse(field: directed)
+}
+
+type MovieDirector {
+	id: ID!
+	name: String!
+	directed: [Movie]
+}
+
+interface People {
+	id: ID!
+	xid: String! @id
+	name: String!
+}
+
+type Teacher implements People {
+	subject: String
+	teaches: [Student]
+}
+
+type Student implements People {
+        taughtBy: [Teacher] @hasInverse(field: teaches)
+}
+

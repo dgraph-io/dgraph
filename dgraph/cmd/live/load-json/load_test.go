@@ -26,9 +26,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -100,7 +100,7 @@ func TestLiveLoadJSONFileEmpty(t *testing.T) {
 
 	pipeline := [][]string{
 		{"echo", "[]"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -112,7 +112,7 @@ func TestLiveLoadJSONFile(t *testing.T) {
 	testutil.DropAll(t, dg)
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -127,7 +127,7 @@ func TestLiveLoadJSONCompressedStream(t *testing.T) {
 
 	pipeline := [][]string{
 		{"gzip", "-c", testDataDir + "/family.json"},
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", "/dev/stdin",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -148,7 +148,7 @@ func TestLiveLoadJSONMultipleFiles(t *testing.T) {
 	fileList := strings.Join(files, ",")
 
 	pipeline := [][]string{
-		{os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+		{testutil.DgraphBinaryPath(), "live",
 			"--schema", testDataDir + "/family.schema", "--files", fileList,
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}

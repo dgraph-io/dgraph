@@ -20,7 +20,6 @@ package main
 
 import (
 	"context"
-	"log"
 	"testing"
 	"time"
 
@@ -9265,7 +9264,7 @@ var tc = []struct {
 func Test1Million(t *testing.T) {
 	dg, err := testutil.DgraphClient(testutil.SockAddr)
 	if err != nil {
-		log.Fatalf("Error while getting a dgraph client: %v", err)
+		t.Fatalf("Error while getting a dgraph client: %v", err)
 	}
 
 	for _, tt := range tc {

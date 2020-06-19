@@ -3,11 +3,11 @@
 # will still be available to service requests even when one Zero
 # and/or one Alpha are down.
 #
-# There are 4 public services exposed, users can use:
+# There are 3 services can can be used to expose outside the cluster as needed:
 #       dgraph-zero-public - To load data using Live & Bulk Loaders
 #       dgraph-alpha-public - To connect clients and for HTTP APIs
 #       dgraph-ratel-public - For Dgraph UI
-#       dgraph-alpha-x-http-public - Use for debugging & profiling
+
 apiVersion: v1
 kind: Service
 metadata:
@@ -46,24 +46,6 @@ spec:
   selector:
     app: dgraph-alpha
 ---
-# This service is created in-order to debug & profile a specific alpha.
-# You can create one for each alpha that you need to profile.
-# For a more general HTTP APIs use the above service instead.
-apiVersion: v1
-kind: Service
-metadata:
-  name: dgraph-alpha-0-http-public
-  labels:
-    app: dgraph-alpha
-spec:
-  type: ClusterIP
-  ports:
-  - port: 8080
-    targetPort: 8080
-    name: alpha-http
-  selector:
-    statefulset.kubernetes.io/pod-name: dgraph-alpha-0
----
 apiVersion: v1
 kind: Service
 metadata:
@@ -93,6 +75,10 @@ spec:
     targetPort: 5080
     name: zero-grpc
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph Zero pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-zero
 ---
@@ -110,6 +96,10 @@ spec:
     targetPort: 7080
     name: alpha-grpc-int
   clusterIP: None
+  # We want all pods in the StatefulSet to have their addresses published for
+  # the sake of the other Dgraph alpha pods even before they're ready, since they
+  # have to be able to talk to each other in order to become ready.
+  publishNotReadyAddresses: true
   selector:
     app: dgraph-alpha
 ---
@@ -175,16 +165,16 @@ spec:
           httpGet:
             path: /health
             port: 6080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
           successThreshold: 1
         readinessProbe:
           httpGet:
-            path: /state
+            path: /health
             port: 6080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
@@ -239,7 +229,7 @@ spec:
       # Initializing the Alphas:
       #
       # You may want to initialize the Alphas with data before starting, e.g.
-      # with data from the Dgraph Bulk Loader: https://docs.dgraph.io/deploy/#bulk-loader.
+      # with data from the Dgraph Bulk Loader: https://dgraph.io/docs/deploy/#bulk-loader.
       # You can accomplish by uncommenting this initContainers config. This
       # starts a container with the same /dgraph volume used by Alpha and runs
       # before Alpha starts.
@@ -310,7 +300,7 @@ spec:
           httpGet:
             path: /health?live=1
             port: 8080
-          initialDelaySeconds: 30
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6
@@ -319,7 +309,7 @@ spec:
           httpGet:
             path: /health
             port: 8080
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 10
           timeoutSeconds: 5
           failureThreshold: 6

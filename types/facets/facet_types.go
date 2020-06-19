@@ -16,7 +16,12 @@
 
 package facets
 
-import "github.com/dgraph-io/dgo/v2/protos/api"
+import (
+	"errors"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/x"
+)
 
 const (
 	// IntID represents the integer type.
@@ -48,5 +53,6 @@ func ValTypeForTypeID(typId TypeID) api.Facet_ValType {
 	case StringID:
 		return api.Facet_STRING
 	}
-	panic("Unhandled case in ValTypeForTypeID.")
+	x.Panic(errors.New("unhandled case in ValTypeForTypeID"))
+	return api.Facet_ValType(0)
 }

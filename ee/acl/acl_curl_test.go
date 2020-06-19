@@ -22,7 +22,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var loginEndpoint = "http://" + testutil.SockAddrHttp + "/login"
+var adminEndpoint = "http://" + testutil.SockAddrHttp + "/admin"
 
 func TestCurlAuthorization(t *testing.T) {
 	if testing.Short() {
@@ -38,7 +38,7 @@ func TestCurlAuthorization(t *testing.T) {
 
 	// test query through curl
 	accessJwt, refreshJwt, err := testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint: loginEndpoint,
+		Endpoint: adminEndpoint,
 		UserID:   userid,
 		Passwd:   userpassword,
 	})
@@ -97,7 +97,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 	// login again using the refreshJwt
 	accessJwt, refreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   loginEndpoint,
+		Endpoint:   adminEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
@@ -112,7 +112,7 @@ func TestCurlAuthorization(t *testing.T) {
 	})
 	// refresh the jwts again
 	accessJwt, refreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   loginEndpoint,
+		Endpoint:   adminEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))
@@ -135,7 +135,7 @@ func TestCurlAuthorization(t *testing.T) {
 	time.Sleep(6 * time.Second)
 	// refresh the jwts again
 	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
-		Endpoint:   loginEndpoint,
+		Endpoint:   adminEndpoint,
 		RefreshJwt: refreshJwt,
 	})
 	require.NoError(t, err, fmt.Sprintf("login through refresh token failed: %v", err))

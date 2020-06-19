@@ -5,10 +5,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"strings"
 	"testing"
+	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -103,8 +105,15 @@ func TestLoginOverTLS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Unable to get dgraph client: %s", err.Error())
 	}
-	if err := dg.Login(context.Background(), "groot", "password"); err != nil {
-		t.Fatalf("Unable to login using the groot account: %v", err.Error())
+	for {
+		err := dg.Login(context.Background(), "groot", "password")
+		if err == nil {
+			break
+		} else if err != nil && !strings.Contains(err.Error(), "user not found") {
+			t.Fatalf("Unable to login using the groot account: %v", err.Error())
+		}
+
+		time.Sleep(time.Second)
 	}
 
 	// Output:

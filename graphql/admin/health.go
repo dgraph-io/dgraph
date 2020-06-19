@@ -18,48 +18,31 @@ package admin
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
-const (
-	errNoConnection healthStatus = "ErrNoConnection"
-	noGraphQLSchema healthStatus = "NoGraphQLSchema"
-	healthy         healthStatus = "Healthy"
-)
+func resolveHealth(ctx context.Context, q schema.Query) *resolve.Resolved {
+	glog.Info("Got health request")
 
-type healthStatus string
-
-type healthResolver struct {
-	status healthStatus
-	format string
-}
-
-var statusMessage = map[healthStatus]string{
-	errNoConnection: "Unable to contact Dgraph",
-	noGraphQLSchema: "Dgraph connection established but there's no GraphQL schema.",
-	healthy:         "Dgraph connection established and serving GraphQL schema.",
-}
-
-func (hr *healthResolver) Rewrite(q schema.Query) (*gql.GraphQuery, error) {
-	msg := "message"
-	status := "status"
-
-	for _, f := range q.SelectionSet() {
-		if f.Name() == "message" {
-			msg = f.ResponseName()
-		}
-		if f.Name() == "status" {
-			status = f.ResponseName()
-		}
+	resp, err := (&edgraph.Server{}).Health(ctx, true)
+	if err != nil {
+		return resolve.EmptyResult(q, errors.Errorf("%s: %s", x.Error, err.Error()))
 	}
 
-	hr.format = fmt.Sprintf(`{"%s":[{"%s":"%%s","%s":"%%s"}]}`, q.ResponseName(), msg, status)
-	return nil, nil
-}
+	var health []map[string]interface{}
+	err = json.Unmarshal(resp.GetJson(), &health)
 
-func (hr *healthResolver) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	return []byte(fmt.Sprintf(hr.format, statusMessage[hr.status], string(hr.status))), nil
+	return &resolve.Resolved{
+		Data:  map[string]interface{}{q.Name(): health},
+		Field: q,
+		Err:   err,
+	}
+
 }

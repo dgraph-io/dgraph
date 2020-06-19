@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has byteType and
+	// TODO(pawan) - Make this 2 bytes long. Right now ParsedKey has ByteType and
 	// bytePrefix. Change it so that it just has one field which has all the information.
 
 	// ByteData indicates the key stores data.
@@ -43,11 +43,10 @@ const (
 	// DefaultPrefix is the prefix used for data, index and reverse keys so that relative
 	// order of data doesn't change keys of same attributes are located together.
 	DefaultPrefix = byte(0x00)
-	byteSchema    = byte(0x01)
-	byteType      = byte(0x02)
-	// ByteSplit is a constant to specify a given key corresponds to a posting list split
-	// into multiple parts.
-	ByteSplit = byte(0x01)
+	ByteSchema    = byte(0x01)
+	ByteType      = byte(0x02)
+	// ByteSplit signals that the key stores an individual part of a multi-part list.
+	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
 )
@@ -80,47 +79,41 @@ func generateKey(typeByte byte, attr string, totalLen int) []byte {
 // separately with unique prefix, since we need to iterate over all schema keys.
 // The structure of a schema key is as follows:
 //
-// byte 0: key type prefix (set to byteSchema)
+// byte 0: key type prefix (set to ByteSchema)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 func SchemaKey(attr string) []byte {
-	return generateKey(byteSchema, attr, 1+2+len(attr))
+	return generateKey(ByteSchema, attr, 1+2+len(attr))
 }
 
 // TypeKey returns type key for given type name. Type keys are stored separately
 // with a unique prefix, since we need to iterate over all type keys.
 // The structure of a type key is as follows:
 //
-// byte 0: key type prefix (set to byteType)
+// byte 0: key type prefix (set to ByteType)
 // byte 1-2: length of typeName
 // next len(attr) bytes: value of attr (the type name)
 func TypeKey(attr string) []byte {
-	return generateKey(byteType, attr, 1+2+len(attr))
+	return generateKey(ByteType, attr, 1+2+len(attr))
 }
 
 // DataKey generates a data key with the given attribute and UID.
 // The structure of a data key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteData)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
-//   the split stored in this key.
+//   the split stored in this key and the first byte will be sets to ByteSplit.
 func DataKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 8
+	totalLen := prefixLen + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteData
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -130,26 +123,20 @@ func DataKey(attr string, uid uint64) []byte {
 // ReverseKey generates a reverse key with the given attribute and UID.
 // The structure of a reverse key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteReverse)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next eight bytes: value of uid
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func ReverseKey(attr string, uid uint64) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 8
+	totalLen := prefixLen + 1 + 8
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteReverse
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	binary.BigEndian.PutUint64(rest, uid)
@@ -159,26 +146,20 @@ func ReverseKey(attr string, uid uint64) []byte {
 // IndexKey generates a index key with the given attribute and term.
 // The structure of an index key is as follows:
 //
-// byte 0: key type prefix (set to DefaultPrefix)
+// byte 0: key type prefix (set to DefaultPrefix or ByteSplit if part of a multi-part list)
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteIndex)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts
 // next len(term) bytes: value of term
 // next eight bytes (optional): if the key corresponds to a split list, the startUid of
 //   the split stored in this key.
 func IndexKey(attr, term string) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + len(term)
+	totalLen := prefixLen + 1 + len(term)
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
 	rest[0] = ByteIndex
-
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
 
 	rest = rest[1:]
 	AssertTrue(len(term) == copy(rest, term))
@@ -192,13 +173,10 @@ func IndexKey(attr, term string) []byte {
 // byte 1-2: length of attr
 // next len(attr) bytes: value of attr
 // next byte: data type prefix (set to ByteCount or ByteCountRev)
-// next byte: byte to determine if this key corresponds to a list that has been split
-//   into multiple parts. Since count indexes only store one number, this value will
-//   always be zero.
 // next four bytes: value of count.
 func CountKey(attr string, count uint32, reverse bool) []byte {
 	prefixLen := 1 + 2 + len(attr)
-	totalLen := prefixLen + 1 + 1 + 4
+	totalLen := prefixLen + 1 + 4
 	buf := generateKey(DefaultPrefix, attr, totalLen)
 
 	rest := buf[prefixLen:]
@@ -208,10 +186,6 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 		rest[0] = ByteCount
 	}
 
-	// By default, this key does not correspond to a part of a split key.
-	rest = rest[1:]
-	rest[0] = 0
-
 	rest = rest[1:]
 	binary.BigEndian.PutUint32(rest, count)
 	return buf
@@ -219,7 +193,7 @@ func CountKey(attr string, count uint32, reverse bool) []byte {
 
 // ParsedKey represents a key that has been parsed into its multiple attributes.
 type ParsedKey struct {
-	byteType    byte
+	ByteType    byte
 	Attr        string
 	Uid         uint64
 	HasStartUid bool
@@ -231,12 +205,12 @@ type ParsedKey struct {
 
 // IsData returns whether the key is a data key.
 func (p ParsedKey) IsData() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteData
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.ByteType == ByteData
 }
 
 // IsReverse returns whether the key is a reverse key.
 func (p ParsedKey) IsReverse() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteReverse
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.ByteType == ByteReverse
 }
 
 // IsCountOrCountRev returns whether the key is a count or a count rev key.
@@ -246,27 +220,27 @@ func (p ParsedKey) IsCountOrCountRev() bool {
 
 // IsCount returns whether the key is a count key.
 func (p ParsedKey) IsCount() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCount
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.ByteType == ByteCount
 }
 
 // IsCountRev returns whether the key is a count rev key.
 func (p ParsedKey) IsCountRev() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteCountRev
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.ByteType == ByteCountRev
 }
 
 // IsIndex returns whether the key is an index key.
 func (p ParsedKey) IsIndex() bool {
-	return p.bytePrefix == DefaultPrefix && p.byteType == ByteIndex
+	return (p.bytePrefix == DefaultPrefix || p.bytePrefix == ByteSplit) && p.ByteType == ByteIndex
 }
 
 // IsSchema returns whether the key is a schema key.
 func (p ParsedKey) IsSchema() bool {
-	return p.bytePrefix == byteSchema
+	return p.bytePrefix == ByteSchema
 }
 
 // IsType returns whether the key is a type key.
 func (p ParsedKey) IsType() bool {
-	return p.bytePrefix == byteType
+	return p.bytePrefix == ByteType
 }
 
 // IsOfType checks whether the key is of the given type.
@@ -300,66 +274,62 @@ func (p ParsedKey) SkipPredicate() []byte {
 // SkipSchema returns the first key after all the schema keys.
 func (p ParsedKey) SkipSchema() []byte {
 	var buf [1]byte
-	buf[0] = byteSchema + 1
+	buf[0] = ByteSchema + 1
 	return buf[:]
 }
 
 // SkipType returns the first key after all the type keys.
 func (p ParsedKey) SkipType() []byte {
 	var buf [1]byte
-	buf[0] = byteType + 1
+	buf[0] = ByteType + 1
 	return buf[:]
 }
 
 // DataPrefix returns the prefix for data keys.
 func (p ParsedKey) DataPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteData
-	k[1] = 0
 	return buf
 }
 
 // IndexPrefix returns the prefix for index keys.
 func (p ParsedKey) IndexPrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteIndex
-	k[1] = 0
 	return buf
 }
 
 // ReversePrefix returns the prefix for index keys.
 func (p ParsedKey) ReversePrefix() []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
-	buf[0] = p.bytePrefix
+	buf := make([]byte, 1+2+len(p.Attr)+1)
+	buf[0] = DefaultPrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	k[0] = ByteReverse
-	k[1] = 0
 	return buf
 }
 
 // CountPrefix returns the prefix for count keys.
 func (p ParsedKey) CountPrefix(reverse bool) []byte {
-	buf := make([]byte, 1+2+len(p.Attr)+1+1)
+	buf := make([]byte, 1+2+len(p.Attr)+1)
 	buf[0] = p.bytePrefix
 	rest := buf[1:]
 	k := writeAttr(rest, p.Attr)
-	AssertTrue(len(k) == 2)
+	AssertTrue(len(k) == 1)
 	if reverse {
 		k[0] = ByteCountRev
 	} else {
 		k[0] = ByteCount
 	}
-	k[1] = 0
 	return buf
 }
 
@@ -417,7 +387,7 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 
 	if backupKey.StartUid > 0 {
 		var err error
-		key, err = GetSplitKey(key, backupKey.StartUid)
+		key, err = SplitKey(key, backupKey.StartUid)
 		Check(err)
 	}
 	return key
@@ -426,14 +396,14 @@ func FromBackupKey(backupKey *pb.BackupKey) []byte {
 // SchemaPrefix returns the prefix for Schema keys.
 func SchemaPrefix() []byte {
 	var buf [1]byte
-	buf[0] = byteSchema
+	buf[0] = ByteSchema
 	return buf[:]
 }
 
 // TypePrefix returns the prefix for Schema keys.
 func TypePrefix() []byte {
 	var buf [1]byte
-	buf[0] = byteType
+	buf[0] = ByteType
 	return buf[:]
 }
 
@@ -446,23 +416,20 @@ func PredicatePrefix(predicate string) []byte {
 	return buf
 }
 
-// GetSplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
-func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
+// SplitKey takes a key baseKey and generates the key of the list split that starts at startUid.
+func SplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 	keyCopy := make([]byte, len(baseKey)+8)
 	copy(keyCopy, baseKey)
 
-	p, err := Parse(baseKey)
-	if err != nil {
-		return nil, err
+	if keyCopy[0] != DefaultPrefix {
+		return nil, errors.Errorf("only keys with default prefix can have a split key")
 	}
+	// Change the first byte (i.e the key prefix) to ByteSplit to signal this is an
+	// individual part of a single list key.
+	keyCopy[0] = ByteSplit
 
-	index := 1 + 2 + len(p.Attr) + 1
-	if index >= len(keyCopy) {
-		panic("Cannot write to key. Key is too small")
-	}
-	keyCopy[index] = ByteSplit
+	// Append the start uid at the end of the key.
 	binary.BigEndian.PutUint64(keyCopy[len(baseKey):], startUid)
-
 	return keyCopy, nil
 }
 
@@ -471,36 +438,47 @@ func GetSplitKey(baseKey []byte, startUid uint64) ([]byte, error) {
 func Parse(key []byte) (ParsedKey, error) {
 	var p ParsedKey
 
+	if len(key) == 0 {
+		return p, errors.New("0 length key")
+	}
+
 	p.bytePrefix = key[0]
 	if p.bytePrefix == ByteUnused {
 		return p, nil
 	}
 
+	p.HasStartUid = key[0] == ByteSplit
+
+	if len(key) < 3 {
+		return p, errors.Errorf("Invalid format for key %v", key)
+	}
 	sz := int(binary.BigEndian.Uint16(key[1:3]))
 	k := key[3:]
 
+	if len(k) < sz {
+		return p, errors.Errorf("Invalid size %v for key %v", sz, key)
+	}
 	p.Attr = string(k[:sz])
 	k = k[sz:]
 
 	switch p.bytePrefix {
-	case byteSchema, byteType:
+	case ByteSchema, ByteType:
 		return p, nil
 	default:
 	}
 
-	p.byteType = k[0]
+	p.ByteType = k[0]
 	k = k[1:]
 
-	p.HasStartUid = k[0] == ByteSplit
-	k = k[1:]
-
-	switch p.byteType {
+	switch p.ByteType {
 	case ByteData, ByteReverse:
 		if len(k) < 8 {
 			return p, errors.Errorf("uid length < 8 for key: %q, parsed key: %+v", key, p)
 		}
 		p.Uid = binary.BigEndian.Uint64(k)
-
+		if p.Uid == 0 {
+			return p, errors.Errorf("Invalid UID with value 0 for key: %v", key)
+		}
 		if !p.HasStartUid {
 			break
 		}
@@ -549,18 +527,21 @@ func Parse(key []byte) (ParsedKey, error) {
 }
 
 // These predicates appear for queries that have * as predicate in them.
-var reservedPredicateMap = map[string]struct{}{
+var starAllPredicateMap = map[string]struct{}{
 	"dgraph.type": {},
 }
 
 var aclPredicateMap = map[string]struct{}{
-	"dgraph.xid":        {},
-	"dgraph.password":   {},
-	"dgraph.user.group": {},
-	"dgraph.group.acl":  {},
+	"dgraph.xid":             {},
+	"dgraph.password":        {},
+	"dgraph.user.group":      {},
+	"dgraph.rule.predicate":  {},
+	"dgraph.rule.permission": {},
+	"dgraph.acl.rule":        {},
 }
 
 var graphqlReservedPredicate = map[string]struct{}{
+	"dgraph.graphql.xid":    {},
 	"dgraph.graphql.schema": {},
 }
 
@@ -577,9 +558,37 @@ func IsGraphqlReservedPredicate(pred string) bool {
 	return ok
 }
 
-// IsReservedPredicate returns true if the predicate is in the reserved predicate list.
+// IsReservedPredicate returns true if the predicate is reserved for internal usage, i.e., prefixed
+// with `dgraph.`.
+//
+// We reserve `dgraph.` as the namespace for the types/predicates we may create in future.
+// So, users are not allowed to create a predicate under this namespace.
+// Hence, we should always define internal predicates under `dgraph.` namespace.
+//
+// Reserved predicates are a superset of pre-defined predicates.
+//
+// When critical, use IsPreDefinedPredicate(pred string) to find out whether the predicate was
+// actually defined internally or not.
+//
+// As an example, consider below predicates:
+// 	1. dgraph.type (reserved = true,  pre_defined = true )
+// 	2. dgraph.blah (reserved = true,  pre_defined = false)
+// 	3. person.name (reserved = false, pre_defined = false)
 func IsReservedPredicate(pred string) bool {
-	_, ok := reservedPredicateMap[strings.ToLower(pred)]
+	return isReservedName(pred)
+}
+
+// IsPreDefinedPredicate returns true only if the predicate has been defined by dgraph internally.
+// For example, `dgraph.type` or ACL predicates or GraphQL predicates are defined in the initial
+// internal schema.
+//
+// We reserve `dgraph.` as the namespace for the types/predicates we may create in future.
+// So, users are not allowed to create a predicate under this namespace.
+// Hence, we should always define internal predicates under `dgraph.` namespace.
+//
+// Pre-defined predicates are subset of reserved predicates.
+func IsPreDefinedPredicate(pred string) bool {
+	_, ok := starAllPredicateMap[strings.ToLower(pred)]
 	return ok || IsAclPredicate(pred) || IsGraphqlReservedPredicate(pred)
 }
 
@@ -590,13 +599,18 @@ func IsAclPredicate(pred string) bool {
 	return ok
 }
 
-// ReservedPredicates returns the complete list of reserved predicates that needs to
+// StarAllPredicates returns the complete list of pre-defined predicates that needs to
 // be expanded when * is given as a predicate.
-func ReservedPredicates() []string {
-	var preds []string
-	for pred := range reservedPredicateMap {
+func StarAllPredicates() []string {
+	preds := make([]string, 0, len(starAllPredicateMap))
+	for pred := range starAllPredicateMap {
 		preds = append(preds, pred)
 	}
+	return preds
+}
+
+func AllACLPredicates() []string {
+	preds := make([]string, 0, len(aclPredicateMap))
 	for pred := range aclPredicateMap {
 		preds = append(preds, pred)
 	}
@@ -604,7 +618,23 @@ func ReservedPredicates() []string {
 }
 
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
+// Currently, `uid` is the only such candidate.
 func IsInternalPredicate(pred string) bool {
 	_, ok := internalPredicateMap[strings.ToLower(pred)]
 	return ok
+}
+
+// IsReservedType returns true if the given typ is reserved for internal usage, i.e.,
+// prefixed with `dgraph.`.
+//
+// We reserve `dgraph.` as the namespace for the types/predicates we may create in future.
+// So, users are not allowed to create a type under this namespace.
+// Hence, we should always define internal types under `dgraph.` namespace.
+func IsReservedType(typ string) bool {
+	return isReservedName(typ)
+}
+
+// isReservedName returns true if the given name is prefixed with `dgraph.`
+func isReservedName(name string) bool {
+	return strings.HasPrefix(strings.ToLower(name), "dgraph.")
 }

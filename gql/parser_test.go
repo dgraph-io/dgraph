@@ -22,7 +22,7 @@ import (
 	"runtime/debug"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/lex"
 	"github.com/stretchr/testify/require"
@@ -1801,6 +1801,34 @@ func TestParseSchemaTypeMulti(t *testing.T) {
 	require.Equal(t, len(res.Schema.Fields), 0)
 }
 
+func TestParseSchemaSpecialChars(t *testing.T) {
+	query := `
+		schema (pred: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 2)
+	require.Equal(t, len(res.Schema.Types), 0)
+	require.Equal(t, res.Schema.Predicates[0], "Person")
+	require.Equal(t, res.Schema.Predicates[1], "人物")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
+func TestParseSchemaTypeSpecialChars(t *testing.T) {
+	query := `
+		schema (type: [Person, <人物>]) {
+		}
+	`
+	res, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+	require.Equal(t, len(res.Schema.Predicates), 0)
+	require.Equal(t, len(res.Schema.Types), 2)
+	require.Equal(t, res.Schema.Types[0], "Person")
+	require.Equal(t, res.Schema.Types[1], "人物")
+	require.Equal(t, len(res.Schema.Fields), 0)
+}
+
 func TestParseSchemaError(t *testing.T) {
 	query := `
 		schema () {
@@ -2962,6 +2990,21 @@ func TestLangsInvalid9(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
 		"The * symbol cannot be used as a valid language inside functions")
+}
+
+func TestLangsInvalid10(t *testing.T) {
+	query := `
+	query {
+		me(func: uid(1)) {
+			name@.:*
+		}
+	}
+	`
+
+	_, err := Parse(Request{Str: query})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"If * is used, no other languages are allowed in the language list")
 }
 
 func TestLangsFilter(t *testing.T) {
@@ -4813,16 +4856,53 @@ func TestParseGraphQLVarArray(t *testing.T) {
 		require.Equal(t, 1, len(gq.Query))
 		require.Equal(t, "eq", gq.Query[0].Func.Name)
 		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
-		found := false
+		var found bool
 		for _, val := range tc.vars {
+			found = false
 			for _, arg := range gq.Query[0].Func.Args {
 				if val == arg.Value {
 					found = true
 					break
 				}
 			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
 		}
-		require.True(t, found, "vars not matched: %v", tc.vars)
+	}
+}
+
+func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
+	tests := []struct {
+		q    string
+		vars map[string]string
+		args int
+	}{
+		// uid_in test cases (uids and predicate inside uid_in are dummy)
+		{q: `query test($a: string){q(func: uid_in(director.film, [$a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 1},
+		{q: `query test($a: string, $b: string){q(func: uid_in(director.film, [$a, $b])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a", "$b": "0x4e9545"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, [$a, "0x4e9545"])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+		{q: `query test($a: string){q(func: uid_in(name, ["0x4e9545", $a])) {name}}`,
+			vars: map[string]string{"$a": "0x4e472a"}, args: 2},
+	}
+	for _, tc := range tests {
+		gq, err := Parse(Request{Str: tc.q, Variables: tc.vars})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(gq.Query))
+		require.Equal(t, "uid_in", gq.Query[0].Func.Name)
+		require.Equal(t, tc.args, len(gq.Query[0].Func.Args))
+		var found bool
+		for _, val := range tc.vars {
+			found = false
+			for _, arg := range gq.Query[0].Func.Args {
+				if val == arg.Value {
+					found = true
+					break
+				}
+			}
+			require.True(t, found, "vars not matched: %v", tc.vars)
+		}
 	}
 }
 
@@ -5135,4 +5215,63 @@ func TestParseExpandFilterErr(t *testing.T) {
 	_, err := Parse(Request{Str: query})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "expand is only compatible with type filters")
+}
+
+func TestFilterWithDollar(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, "$yo")) {
+		  name
+		  description
+		}
+	  }
+	`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "$yo")
+}
+
+func TestFilterWithDollarError(t *testing.T) {
+	query := `
+	{
+		q(func: eq(name, "Bob"), first:5) @filter(eq(description, $yo)) {
+		  name
+		  description
+		}
+	  }
+	`
+	_, err := Parse(Request{
+		Str: query,
+	})
+	require.Error(t, err)
+}
+
+func TestFilterWithVar(t *testing.T) {
+	query := `query data($a: string = "dgraph")
+	{
+		data(func: eq(name, "Bob"), first:5) @filter(eq(description, $a)) {
+			name
+			description
+		  }
+	}`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "dgraph")
+}
+
+func TestFilterWithEmpty(t *testing.T) {
+	query := `{
+		names(func: has(name)) @filter(eq(name, "")) {
+		  count(uid)
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
 }

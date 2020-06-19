@@ -22,7 +22,7 @@ import (
 	"strconv"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/dgraph-io/dgraph/types"
@@ -57,7 +57,8 @@ func CopyFacets(fcs []*api.Facet, param *pb.FacetParams) (fs []*api.Facet) {
 	numFacets := len(fcs)
 	for kidx, fidx := 0, 0; (param.AllKeys || kidx < numKeys) && fidx < numFacets; {
 		f := fcs[fidx]
-		if param.AllKeys || param.Param[kidx].Key == f.Key {
+		switch {
+		case param.AllKeys || param.Param[kidx].Key == f.Key:
 			fcopy := &api.Facet{
 				Key:     f.Key,
 				Value:   nil,
@@ -71,9 +72,9 @@ func CopyFacets(fcs []*api.Facet, param *pb.FacetParams) (fs []*api.Facet) {
 			fs = append(fs, fcopy)
 			kidx++
 			fidx++
-		} else if f.Key > param.Param[kidx].Key {
+		case f.Key > param.Param[kidx].Key:
 			kidx++
-		} else {
+		default:
 			fidx++
 		}
 	}

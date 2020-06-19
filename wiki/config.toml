@@ -1,5 +1,12 @@
 languageCode = "en-us"
 theme = "hugo-docs"
+canonifyURLs = true
+
+[markup.goldmark.renderer]
+unsafe = true
+
+[markup.highlight]
+noClasses = false
 
 # set by build script: title, baseurl
 title = "Dgraph Documentation"
@@ -14,6 +21,11 @@ title = "Dgraph Documentation"
   url = "/get-started/"
   identifier = "get-started"
   weight = 1
+[[menu.main]]
+  name = "Tutorials"
+  url = "/tutorials/"
+  identifier = "tutorials"
+  weight = 2
 [[menu.main]]
   name = "Query Language"
   url = "/query-language/"
@@ -64,3 +76,8 @@ title = "Dgraph Documentation"
   url = "/dgraph-compared-to-other-databases/"
   identifier = "dgraph-compared-to-other-databases"
   weight = 12
+[[menu.main]]
+  name = "Releases"
+  url = "/releases/"
+  identifier = "releases"
+  weight = 13

@@ -26,6 +26,7 @@ package pb;
 
 import "api.proto";
 import "github.com/dgraph-io/badger/v2/pb/pb.proto";
+import "github.com/gogo/protobuf/gogoproto/gogo.proto";
 
 /* import "gogoproto/gogo.proto"; */
 
@@ -123,14 +124,14 @@ message RaftContext {
 // one RAFT node per server serving that group.
 message Member {
 	fixed64 id = 1;
-	uint32 group_id = 2;
+	uint32 group_id = 2 [(gogoproto.jsontag) = "groupId,omitempty"];
 	string addr = 3;
 	bool leader = 4;
-	bool am_dead = 5;
-	uint64 last_update = 6;
+	bool am_dead = 5 [(gogoproto.jsontag) = "amDead,omitempty"];
+	uint64 last_update = 6 [(gogoproto.jsontag) = "lastUpdate,omitempty"];
 
-	bool cluster_info_only = 13;
-	bool force_group_id = 14;
+	bool cluster_info_only = 13 [(gogoproto.jsontag) = "clusterInfoOnly,omitempty"];
+	bool force_group_id = 14 [(gogoproto.jsontag) = "forceGroupId,omitempty"];
 }
 
 message Group {
@@ -176,29 +177,32 @@ message MembershipState {
 }
 
 message ConnectionState {
-	Member member = 1;
-	MembershipState state = 2;
-	uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
+    Member member = 1;
+    MembershipState state = 2;
+    uint64 max_pending = 3; // Used to determine the timstamp for reading after bulk load
 }
 
 message HealthInfo {
-	string Instance = 1;
-	string Addr = 2;
-	string Status = 3;
-	string Group = 4;  // string so group = 0 can be printed in JSON. 
-	string Version = 5;
-	int64 Uptime = 6;
-	int64 LastEcho = 7; 
+    string instance = 1;
+    string address = 2;
+    string status = 3;
+    string group = 4; // string so group = 0 can be printed in JSON.
+    string version = 5;
+    int64 uptime = 6;
+    int64 lastEcho = 7;
+    repeated string ongoing = 8;
+    repeated string indexing = 9;
+    repeated string ee_features = 10;
 }
 
 message Tablet {
-	uint32 group_id  = 1; // Served by which group.
-	string predicate = 2;
-	bool force       = 3; // Used while moving predicate.
-	int64 space      = 7;
-	bool remove      = 8;
-	bool read_only   = 9; // If true, do not ask zero to serve any tablets.
-	uint64 move_ts   = 10;
+    uint32 group_id = 1 [(gogoproto.jsontag) = "groupId,omitempty"]; // Served by which group.
+    string predicate = 2;
+    bool force = 3; // Used while moving predicate.
+    int64 space = 7;
+    bool remove = 8;
+    bool read_only = 9 [(gogoproto.jsontag) = "readOnly,omitempty"]; // If true, do not ask zero to serve any tablets.
+    uint64 move_ts = 10 [(gogoproto.jsontag) = "moveTs,omitempty"];
 }
 
 message DirectedEdge {
@@ -261,22 +265,50 @@ message Snapshot {
 	uint64 since_ts = 5;
 }
 
+message RestoreRequest {
+	uint32 group_id = 1;
+	uint64 restore_ts = 2;
+	string location = 3;
+	string backup_id = 4;
+
+	// Credentials when using a minio or S3 bucket as the backup location.
+	string access_key = 5;
+	string secret_key = 6;
+	string session_token = 7;
+	bool anonymous = 8;
+
+	// Info needed to process encrypted backups.
+	string encryption_key_file = 9;
+	// Vault options
+	string vault_addr = 10;
+	string vault_roleid_file = 11;
+	string vault_secretid_file = 12;
+	string vault_path = 13;
+	string vault_field = 14;
+}
+
 message Proposal {
-	Mutations mutations    = 2;
-	repeated KV kv         = 4;
-	MembershipState state  = 5;
-	string clean_predicate = 6;  // Delete the predicate which was moved to other group.
-	string key             = 7;
-	OracleDelta delta      = 8;
-	Snapshot snapshot      = 9;  // Used to tell the group when to take snapshot.
-	uint64 index           = 10; // Used to store Raft index, in raft.Ready.
-	uint64 expected_checksum = 11; // Block an operation until membership reaches this checksum.
+	Mutations mutations    		= 2;
+	repeated badgerpb2.KV kv  = 4;
+	MembershipState state  		= 5;
+	string clean_predicate 		= 6;  // Delete the predicate which was moved to other group.
+	string key             		= 7;
+	OracleDelta delta      		= 8;
+	Snapshot snapshot      		= 9;  // Used to tell the group when to take snapshot.
+	uint64 index           		= 10; // Used to store Raft index, in raft.Ready.
+	uint64 expected_checksum 	= 11; // Block an operation until membership reaches this checksum.
+	RestoreRequest restore 		= 12;
 }
 
 message KVS {
- repeated pb.KV kv = 1;
- // done used to indicate if the stream of KVS is over.
- bool done      = 2;
+	repeated badgerpb2.KV kv = 1;
+
+	// done used to indicate if the stream of KVS is over.
+	bool done	= 2;
+	// predicates is the list of predicates known by the leader at the time of the snapshot.
+	repeated string predicates = 3;
+	// types is the list of types known by the leader at the time of the snapshot.
+	repeated string types = 4;
 }
 
 // Posting messages.
@@ -435,6 +467,10 @@ message TypeUpdate {
 	repeated SchemaUpdate fields = 2;
 }
 
+message MapHeader {
+	repeated bytes partition_keys = 1;
+}
+
 // Bulk loader proto.
 message MapEntry {
 	bytes key = 1;
@@ -506,10 +542,11 @@ service Worker {
 	rpc Sort (SortMessage)                  returns (SortResult) {}
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
+	rpc Restore (RestoreRequest)            returns (Status) {}
 	rpc Export (ExportRequest)              returns (Status) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
-	rpc Subscribe(SubscriptionRequest) returns (stream pb.KVList) {}
+	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
 }
 
 message SubscriptionRequest {
@@ -517,7 +554,7 @@ message SubscriptionRequest {
 }
 
 message SubscriptionResponse {
-    pb.KVList kvs = 1;
+    badgerpb2.KVList kvs = 1;
 }
 
 message Num {

@@ -216,6 +216,26 @@ type Function struct {
 
 // SubGraph is the way to represent data. It contains both the request parameters and the response.
 // Once generated, this can then be encoded to other client convenient formats, like GraphQL / JSON.
+// SubGraphs are recursively nested. Each SubGraph contain the following:
+// * SrcUIDS: A list of UIDs that were sent to this query. If this subgraph is a child graph, then the
+//            DestUIDs of the parent must match the SrcUIDs of the children.
+// * DestUIDs: A list of UIDs for which there can be output found in the Children field
+// * Children: A list of child results for this query
+// * valueMatrix: A list of values, against a single attribute, such as name (for a scalar subgraph).
+//                This must be the same length as the SrcUIDs
+// * uidMatrix: A list of outgoing edges. This must be same length as the SrcUIDs list.
+// Example, say we are creating a SubGraph for a query "users", which returns one user with name 'Foo', you may get
+// SubGraph
+//   Params: { Alias: "users" }
+//   SrcUIDs: [1]
+//   DestUIDs: [1]
+//   uidMatrix: [[1]]
+//   Children:
+//     SubGraph:
+//       Attr: "name"
+//       SrcUIDs: [1]
+//       uidMatrix: [[]]
+//       valueMatrix: [["Foo"]]
 type SubGraph struct {
 	ReadTs      uint64
 	Cache       int
@@ -384,16 +404,16 @@ func isEmptyIneqFnWithVar(sg *SubGraph) bool {
 // is already set in api.Value
 func convertWithBestEffort(tv *pb.TaskValue, attr string) (types.Val, error) {
 	// value would be in binary format with appropriate type
-	v, _ := getValue(tv)
-	if !v.Tid.IsScalar() {
-		return v, errors.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
+	tid := types.TypeID(tv.ValType)
+	if !tid.IsScalar() {
+		return types.Val{}, errors.Errorf("Leaf predicate:'%v' must be a scalar.", attr)
 	}
 
 	// creates appropriate type from binary format
-	sv, err := types.Convert(v, v.Tid)
+	sv, err := types.Convert(types.Val{Tid: types.BinaryID, Value: tv.Val}, tid)
 	if err != nil {
 		// This can happen when a mutation ingests corrupt data into the database.
-		return v, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
+		return types.Val{}, errors.Wrapf(err, "error interpreting appropriate type for %v", attr)
 	}
 	return sv, nil
 }
@@ -857,8 +877,8 @@ func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
 	// If the lang is set to *, query all the languages.
 	if len(sg.Params.Langs) == 1 && sg.Params.Langs[0] == "*" {
 		sg.Params.ExpandAll = true
-		sg.Params.Langs = nil
 	}
+
 	// count is to limit how many results we want.
 	first := calculateFirstN(sg)
 
@@ -1572,8 +1592,10 @@ func (sg *SubGraph) recursiveFillVars(doneVars map[string]varValue) error {
 // fillShortestPathVars reads value of the uid variable from mp map and fills it into From and To
 // parameters.
 func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
-	// The uidVar.Uids can be nil if the variable didn't return any uids. This would mean
-	// sg.Params.From or sg.Params.To is 0 and the query would return an empty result.
+	// The uidVar.Uids can be nil or have an empty uid list if the variable didn't
+	// return any uids. This would mean sg.Params.From or sg.Params.To is 0 and the
+	// query would return an empty result.
+
 	if sg.Params.ShortestPathArgs.From != nil && len(sg.Params.ShortestPathArgs.From.NeedsVar) > 0 {
 		fromVar := sg.Params.ShortestPathArgs.From.NeedsVar[0].Name
 		uidVar, ok := mp[fromVar]
@@ -1581,7 +1603,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of from var(%s) should have already been populated",
 				fromVar)
 		}
-		if uidVar.Uids != nil {
+		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
 			if len(uidVar.Uids.Uids) > 1 {
 				return errors.Errorf("from variable(%s) should only expand to 1 uid", fromVar)
 			}
@@ -1596,7 +1618,7 @@ func (sg *SubGraph) fillShortestPathVars(mp map[string]varValue) error {
 			return errors.Errorf("value of to var(%s) should have already been populated",
 				toVar)
 		}
-		if uidVar.Uids != nil {
+		if uidVar.Uids != nil && len(uidVar.Uids.Uids) > 0 {
 			if len(uidVar.Uids.Uids) > 1 {
 				return errors.Errorf("to variable(%s) should only expand to 1 uid", toVar)
 			}
@@ -1939,7 +1961,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 				return sg.DestUIDs.Uids[i] < sg.DestUIDs.Uids[j]
 			})
 		}
-	case len(sg.Attr) == 0:
+	case sg.Attr == "":
 		// This is when we have uid function in children.
 		if sg.SrcFunc != nil && sg.SrcFunc.Name == "uid" {
 			// If its a uid() filter, we just have to intersect the SrcUIDs with DestUIDs
@@ -1988,7 +2010,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 
 			curVal := types.Val{Tid: types.IntID, Value: int64(len(sg.DestUIDs.Uids))}
 			if types.CompareVals(sg.SrcFunc.Name, curVal, dst) {
-				sg.DestUIDs.Uids = sg.SrcUIDs.Uids
+				sg.DestUIDs.Uids = sg.SrcUIDs.GetUids()
 			} else {
 				sg.DestUIDs.Uids = nil
 			}
@@ -2002,6 +2024,8 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			switch {
 			case err != nil && strings.Contains(err.Error(), worker.ErrNonExistentTabletMessage):
 				sg.UnknownAttr = true
+				// Create an empty result because the code below depends on it.
+				result = &pb.Result{}
 			case err != nil:
 				rch <- err
 				return

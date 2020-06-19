@@ -17,7 +17,6 @@
 package worker
 
 import (
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -44,8 +43,10 @@ type Options struct {
 	BadgerTables string
 	// BadgerVlog is the name of the mode used to load the badger value log.
 	BadgerVlog string
-	// BadgerKeyFile is the file containing the key used for encryption. Enterprise only feature.
-	BadgerKeyFile string
+	// BadgerCompressionLevel is the ZSTD compression level used by badger. A
+	// higher value means more CPU intensive compression and better compression
+	// ratio.
+	BadgerCompressionLevel int
 	// WALDir is the path to the directory storing the write-ahead log.
 	WALDir string
 	// MutationsMode is the mode used to handle mutation requests.
@@ -56,7 +57,7 @@ type Options struct {
 	AllottedMemory float64
 
 	// HmacSecret stores the secret used to sign JSON Web Tokens (JWT).
-	HmacSecret []byte
+	HmacSecret x.SensitiveByteSlice
 	// AccessJwtTtl is the TTL for the access JWT.
 	AccessJwtTtl time.Duration
 	// RefreshJwtTtl is the TTL of the refresh JWT.
@@ -68,20 +69,6 @@ type Options struct {
 // Config holds an instance of the server options..
 var Config Options
 
-// String will generate the string output an Options struct without including
-// the HmacSecret field, which prevents revealing the secret during logging
-func (opt *Options) String() string {
-	if opt == nil {
-		return ""
-	}
-
-	return fmt.Sprintf("{PostingDir:%s BadgerTables:%s BadgerVlog:%s WALDir:%s MutationsMode:%d "+
-		"AuthToken:%s AllottedMemory:%.1fMB AccessJwtTtl:%v RefreshJwtTtl:%v "+
-		"AclRefreshInterval:%v}", opt.PostingDir, opt.BadgerTables, opt.BadgerVlog, opt.WALDir,
-		opt.MutationsMode, opt.AuthToken, opt.AllottedMemory, opt.AccessJwtTtl, opt.RefreshJwtTtl,
-		opt.AclRefreshInterval)
-}
-
 // SetConfiguration sets the server configuration to the given config.
 func SetConfiguration(newConfig *Options) {
 	if newConfig == nil {
@@ -90,8 +77,8 @@ func SetConfiguration(newConfig *Options) {
 	newConfig.validate()
 	Config = *newConfig
 
-	posting.Config.Mu.Lock()
-	defer posting.Config.Mu.Unlock()
+	posting.Config.Lock()
+	defer posting.Config.Unlock()
 	posting.Config.AllottedMemory = Config.AllottedMemory
 }
 
@@ -113,12 +100,12 @@ func (opt *Options) validate() {
 			glog.Infof(
 				"LRU memory (--lru_mb) set to %vMB, 25%% of the total RAM found (%vMB)\n"+
 					"For more information on --lru_mb please read "+
-					"https://docs.dgraph.io/deploy/#config\n",
+					"https://dgraph.io/docs/deploy/#config\n",
 				opt.AllottedMemory, AvailableMemory)
 		}
 	}
 	x.AssertTruefNoTrace(opt.AllottedMemory >= MinAllottedMemory,
 		"LRU memory (--lru_mb) must be at least %.0f MB. Currently set to: %f\n"+
-			"For more information on --lru_mb please read https://docs.dgraph.io/deploy/#config",
+			"For more information on --lru_mb please read https://dgraph.io/docs/deploy/#config",
 		MinAllottedMemory, opt.AllottedMemory)
 }

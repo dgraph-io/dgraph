@@ -197,11 +197,11 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 	}
 
 	// Get the tokenizers and choose the corresponding one.
-	if !schema.State().IsIndexed(order.Attr) {
+	if !schema.State().IsIndexed(ctx, order.Attr) {
 		return resultWithError(errors.Errorf("Attribute %s is not indexed.", order.Attr))
 	}
 
-	tokenizers := schema.State().Tokenizer(order.Attr)
+	tokenizers := schema.State().Tokenizer(ctx, order.Attr)
 	var tokenizer tok.Tokenizer
 	for _, t := range tokenizers {
 		// Get the first sortable index.
@@ -223,11 +223,26 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		return resultWithError(errors.Errorf("Attribute %s is not sortable.", order.Attr))
 	}
 
+	var prefix []byte
+	if len(order.Langs) > 0 {
+		// Only one languge is allowed.
+		lang := order.Langs[0]
+		tokenizer = tok.GetTokenizerForLang(tokenizer, lang)
+		langTokenizer, ok := tokenizer.(tok.ExactTokenizer)
+		if !ok {
+			return resultWithError(errors.Errorf(
+				"Failed to get tokenizer for Attribute %s for language %s.", order.Attr, lang))
+		}
+		prefix = langTokenizer.Prefix()
+	} else {
+		prefix = []byte{tokenizer.Identifier()}
+	}
+
 	// Iterate over every bucket / token.
 	iterOpt := badger.DefaultIteratorOptions
 	iterOpt.PrefetchValues = false
 	iterOpt.Reverse = order.Desc
-	iterOpt.Prefix = x.IndexKey(order.Attr, string(tokenizer.Identifier()))
+	iterOpt.Prefix = x.IndexKey(order.Attr, string(prefix))
 	txn := pstore.NewTransactionAt(ts.ReadTs, false)
 	defer txn.Discard()
 	var seekKey []byte
@@ -236,7 +251,8 @@ func sortWithIndex(ctx context.Context, ts *pb.SortMessage) *sortresult {
 		seekKey = nil // Would automatically seek to iterOpt.Prefix.
 	} else {
 		// We need to reach the last key of this index type.
-		seekKey = x.IndexKey(order.Attr, string(tokenizer.Identifier()+1))
+		prefix[len(prefix)-1]++
+		seekKey = x.IndexKey(order.Attr, string(prefix))
 	}
 	itr := txn.NewIterator(iterOpt)
 	defer itr.Close()
@@ -529,7 +545,7 @@ func intersectBucket(ctx context.Context, ts *pb.SortMessage, token string,
 
 	key := x.IndexKey(order.Attr, token)
 	// Don't put the Index keys in memory.
-	pl, err := posting.GetNoStore(key)
+	pl, err := posting.GetNoStore(key, ts.GetReadTs())
 	if err != nil {
 		return err
 	}
@@ -725,7 +741,7 @@ func sortByValue(ctx context.Context, ts *pb.SortMessage, ul *pb.List,
 func fetchValue(uid uint64, attr string, langs []string, scalar types.TypeID,
 	readTs uint64) (types.Val, error) {
 	// Don't put the values in memory
-	pl, err := posting.GetNoStore(x.DataKey(attr, uid))
+	pl, err := posting.GetNoStore(x.DataKey(attr, uid), readTs)
 	if err != nil {
 		return types.Val{}, err
 	}

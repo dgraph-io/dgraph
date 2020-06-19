@@ -24,8 +24,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
@@ -322,13 +322,13 @@ upsert {
 }`
 	mr, err := mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 
 	// Ensure that another run works too
 	mr, err = mutationWithTs(m1, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	require.True(t, 0 == len(mr.keys))
+	require.Equal(t, 0, len(mr.keys))
 	require.Equal(t, []string{"age"}, splitPreds(mr.preds))
 }
 
@@ -1613,8 +1613,6 @@ func TestUpsertWithValueVar(t *testing.T) {
 	require.NoError(t, alterSchema(`amount: int .`))
 	res, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
 	require.NoError(t, err)
-	b, _ := json.MarshalIndent(res, "", "  ")
-	fmt.Printf("%s\n", b)
 
 	const (
 		// this upsert block increments the value of the counter by one
@@ -2800,6 +2798,66 @@ func TestUpsertMultiValueJson(t *testing.T) {
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 2, len(result.Queries["user1"]))
 	require.Equal(t, 2, len(result.Queries["user2"]))
+}
+
+func TestValVarWithBlankNode(t *testing.T) {
+	require.NoError(t, dropAll())
+	require.NoError(t, alterSchema(`version: int .`))
+
+	m := `
+upsert {
+  query {
+    q(func: has(version), orderdesc: version, first: 1) {
+      Ver as version
+      VerIncr as math(Ver + 1)
+    }
+
+    me() {
+      sVerIncr as sum(val(VerIncr))
+    }
+  }
+
+  mutation @if(gt(len(VerIncr), 0)) {
+    set {
+      _:newNode <version> val(sVerIncr) .
+    }
+  }
+
+  mutation @if(eq(len(VerIncr), 0)) {
+    set {
+      _:newNode <version> "1" .
+    }
+  }
+}`
+	mr, err := mutationWithTs(m, "application/rdf", false, true, 0)
+	require.NoError(t, err)
+	require.True(t, len(mr.keys) == 0)
+	require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+
+	for i := 0; i < 10; i++ {
+		mr, err = mutationWithTs(m, "application/rdf", false, true, 0)
+		require.NoError(t, err)
+		require.True(t, len(mr.keys) == 0)
+		require.Equal(t, []string{"version"}, splitPreds(mr.preds))
+	}
+
+	q1 := `
+{
+  q(func: has(version), orderdesc: version, first: 1) {
+    version
+  }
+}`
+	res, _, err := queryWithTs(q1, "application/graphql+-", "", 0)
+	expectedRes := `
+{
+  "data": {
+    "q": [{
+       "version": 11
+     }]
+   }
+}`
+	require.NoError(t, err)
+	testutil.CompareJSON(t, res, expectedRes)
 }
 
 // This test may fail sometimes because ACL token

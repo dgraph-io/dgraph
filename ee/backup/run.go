@@ -18,7 +18,9 @@ import (
 	"os"
 	"time"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -33,6 +35,8 @@ var LsBackup x.SubCommand
 
 var opt struct {
 	backupId, location, pdir, zero string
+	key                            x.SensitiveByteSlice
+	forceZero                      bool
 }
 
 func init() {
@@ -104,6 +108,11 @@ $ dgraph restore -p . -l /var/backups/dgraph -z localhost:5080
 	flag.StringVarP(&opt.zero, "zero", "z", "", "gRPC address for Dgraph zero. ex: localhost:5080")
 	flag.StringVarP(&opt.backupId, "backup_id", "", "", "The ID of the backup series to "+
 		"restore. If empty, it will restore the latest series.")
+	flag.BoolVarP(&opt.forceZero, "force_zero", "", true, "If false, no connection to "+
+		"a zero in the cluster will be required. Keep in mind this requires you to manually "+
+		"update the timestamp and max uid when you start the cluster. The correct values are "+
+		"printed near the end of this command's output.")
+	enc.RegisterFlags(flag)
 	_ = Restore.Cmd.MarkFlagRequired("postings")
 	_ = Restore.Cmd.MarkFlagRequired("location")
 }
@@ -161,13 +170,19 @@ func runRestoreCmd() error {
 	var (
 		start time.Time
 		zc    pb.ZeroClient
+		err   error
 	)
-
+	if opt.key, err = enc.ReadKey(Restore.Conf); err != nil {
+		return err
+	}
 	fmt.Println("Restoring backups from:", opt.location)
 	fmt.Println("Writing postings to:", opt.pdir)
 
-	// TODO: Remove this dependency on Zero. It complicates restore for the end
-	// user.
+	if opt.zero == "" && opt.forceZero {
+		return errors.Errorf("No Dgraph Zero address passed. Use the --force_zero option if you " +
+			"meant to do this")
+	}
+
 	if opt.zero != "" {
 		fmt.Println("Updating Zero timestamp at:", opt.zero)
 
@@ -184,22 +199,33 @@ func runRestoreCmd() error {
 	}
 
 	start = time.Now()
-	version, err := RunRestore(opt.pdir, opt.location, opt.backupId)
-	if err != nil {
-		return err
+	result := worker.RunRestore(opt.pdir, opt.location, opt.backupId, opt.key)
+	if result.Err != nil {
+		return result.Err
 	}
-	if version == 0 {
+	if result.Version == 0 {
 		return errors.Errorf("Failed to obtain a restore version")
 	}
-	fmt.Printf("Restore version: %d\n", version)
+	fmt.Printf("Restore version: %d\n", result.Version)
+	fmt.Printf("Restore max uid: %d\n", result.MaxLeaseUid)
 
 	if zc != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
-		defer cancel()
+		ctx, cancelTs := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelTs()
 
-		_, err = zc.Timestamps(ctx, &pb.Num{Val: version})
+		_, err := zc.Timestamps(ctx, &pb.Num{Val: result.Version})
 		if err != nil {
-			fmt.Printf("Failed to assign timestamp %d in Zero: %v", version, err)
+			fmt.Printf("Failed to assign timestamp %d in Zero: %v", result.Version, err)
+			return err
+		}
+
+		ctx, cancelUid := context.WithTimeout(context.Background(), time.Minute)
+		defer cancelUid()
+
+		_, err = zc.AssignUids(ctx, &pb.Num{Val: result.MaxLeaseUid})
+		if err != nil {
+			fmt.Printf("Failed to assign maxLeaseId %d in Zero: %v\n", result.MaxLeaseUid, err)
+			return err
 		}
 	}
 
@@ -209,14 +235,14 @@ func runRestoreCmd() error {
 
 func runLsbackupCmd() error {
 	fmt.Println("Listing backups from:", opt.location)
-	manifests, err := ListManifests(opt.location)
+	manifests, err := worker.ListBackupManifests(opt.location, nil)
 	if err != nil {
 		return errors.Wrapf(err, "while listing manifests")
 	}
 
-	fmt.Printf("Name\tSince\tGroups\n")
+	fmt.Printf("Name\tSince\tGroups\tEncrypted\n")
 	for path, manifest := range manifests {
-		fmt.Printf("%v\t%v\t%v\n", path, manifest.Since, manifest.Groups)
+		fmt.Printf("%v\t%v\t%v\t%v\n", path, manifest.Since, manifest.Groups, manifest.Encrypted)
 	}
 
 	return nil

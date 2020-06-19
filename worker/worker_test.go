@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -28,8 +29,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -74,6 +75,11 @@ func addEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
 	commitTransaction(t, edge, l)
 }
 
+func delEdge(t *testing.T, edge *pb.DirectedEdge, l *posting.List) {
+	edge.Op = pb.DirectedEdge_DEL
+	commitTransaction(t, edge, l)
+}
+
 func setClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	mu := &api.Mutation{SetNquads: []byte(rdf), CommitNow: true}
 	err := testutil.RetryMutation(dg, mu)
@@ -86,7 +92,7 @@ func delClusterEdge(t *testing.T, dg *dgo.Dgraph, rdf string) {
 	require.NoError(t, err)
 }
 func getOrCreate(key []byte) *posting.List {
-	l, err := posting.GetNoStore(key)
+	l, err := posting.GetNoStore(key, math.MaxUint64)
 	x.Checkf(err, "While calling posting.Get")
 	return l
 }
@@ -368,6 +374,9 @@ func TestMain(m *testing.M) {
 	gr.tablets["http://www.w3.org/2000/01/rdf-schema#range"] = &pb.Tablet{GroupId: 1}
 	gr.tablets["friend_not_served"] = &pb.Tablet{GroupId: 2}
 	gr.tablets[""] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.type"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.xid"] = &pb.Tablet{GroupId: 1}
+	gr.tablets["dgraph.graphql.schema"] = &pb.Tablet{GroupId: 1}
 
 	dir, err := ioutil.TempDir("", "storetest_")
 	x.Check(err)

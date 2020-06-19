@@ -26,15 +26,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	humanize "github.com/dustin/go-humanize"
+	"github.com/dustin/go-humanize"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
 	"go.etcd.io/etcd/raft"
 	"go.etcd.io/etcd/raft/raftpb"
+	"golang.org/x/net/trace"
 
 	ostats "go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
@@ -45,28 +47,160 @@ import (
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/pkg/errors"
-
-	"github.com/golang/glog"
-	"golang.org/x/net/trace"
 )
 
 type node struct {
+	// This needs to be 64 bit aligned for atomics to work on 32 bit machine.
+	pendingSize int64
+
+	// embedded struct
 	*conn.Node
 
 	// Fields which are never changed after init.
-	applyCh  chan []*pb.Proposal
-	rollupCh chan uint64 // Channel to run posting list rollups.
-	ctx      context.Context
-	gid      uint32
-	closer   *y.Closer
+	applyCh chan []*pb.Proposal
+	ctx     context.Context
+	gid     uint32
+	closer  *y.Closer
 
 	streaming int32 // Used to avoid calculating snapshot
+
+	// Used to track the ops going on in the system.
+	ops     map[op]*y.Closer
+	opsLock sync.Mutex
 
 	canCampaign bool
 	elog        trace.EventLog
 
-	pendingSize int64
+	ex *executor
+}
+
+type op int
+
+func (id op) String() string {
+	switch id {
+	case opRollup:
+		return "opRollup"
+	case opSnapshot:
+		return "opSnapshot"
+	case opIndexing:
+		return "opIndexing"
+	case opRestore:
+		return "opRestore"
+	default:
+		return "opUnknown"
+	}
+}
+
+const (
+	opRollup op = iota + 1
+	opSnapshot
+	opIndexing
+	opRestore
+)
+
+// startTask is used to check whether an op is already running. If a rollup is running,
+// it is canceled and startTask will wait until it completes before returning.
+// If the same task is already running, this method returns an errror.
+// Restore operations have preference and cancel all other operations, not just rollups.
+// You should only call Done() on the returned closer. Calling other functions (such as
+// SignalAndWait) for closer could result in panics. For more details, see GitHub issue #5034.
+func (n *node) startTask(id op) (*y.Closer, error) {
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+
+	stopTask := func(id op) {
+		n.opsLock.Lock()
+		delete(n.ops, id)
+		n.opsLock.Unlock()
+		glog.Infof("Operation completed with id: %s", id)
+
+		// Resume rollups if another operation is being stopped.
+		if id != opRollup {
+			time.Sleep(10 * time.Second) // Wait for 10s to start rollup operation.
+			// If any other operation is running, this would error out. This error can
+			// be safely ignored because rollups will resume once that other task is done.
+			_, _ = n.startTask(opRollup)
+		}
+	}
+
+	closer := y.NewCloser(1)
+	switch id {
+	case opRollup:
+		if len(n.ops) > 0 {
+			return nil, errors.Errorf("another operation is already running")
+		}
+		go posting.IncrRollup.Process(closer)
+	case opRestore:
+		// Restores cancel all other operations, except for other restores since
+		// only one restore operation should be active any given moment.
+		for otherId, otherCloser := range n.ops {
+			if otherId == opRestore {
+				return nil, errors.Errorf("another restore operation is already running")
+			}
+			// Remove from map and signal the closer to cancel the operation.
+			delete(n.ops, otherId)
+			otherCloser.SignalAndWait()
+		}
+	case opSnapshot, opIndexing:
+		for otherId, otherCloser := range n.ops {
+			if otherId == opRollup {
+				// Remove from map and signal the closer to cancel the operation.
+				delete(n.ops, otherId)
+				otherCloser.SignalAndWait()
+			} else {
+				return nil, errors.Errorf("operation %s is already running", otherId)
+			}
+		}
+	default:
+		glog.Errorf("Got an unhandled operation %s. Ignoring...", id)
+		return nil, nil
+	}
+
+	n.ops[id] = closer
+	glog.Infof("Operation started with id: %s", id)
+	go func(id op, closer *y.Closer) {
+		closer.Wait()
+		stopTask(id)
+	}(id, closer)
+	return closer, nil
+}
+
+func (n *node) waitForTask(id op) {
+	n.opsLock.Lock()
+	closer, ok := n.ops[id]
+	n.opsLock.Unlock()
+	if !ok {
+		return
+	}
+	closer.Wait()
+}
+
+func (n *node) stopAllTasks() {
+	defer n.closer.Done() // CLOSER:1
+	<-n.closer.HasBeenClosed()
+
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+	for _, closer := range n.ops {
+		closer.SignalAndWait()
+	}
+	glog.Infof("Stopped all ongoing registered tasks.")
+}
+
+// GetOngoingTasks returns the list of ongoing tasks.
+func GetOngoingTasks() []string {
+	n := groups().Node
+	if n == nil {
+		return []string{}
+	}
+
+	n.opsLock.Lock()
+	defer n.opsLock.Unlock()
+	var tasks []string
+	for id := range n.ops {
+		tasks = append(tasks, id.String())
+	}
+	return tasks
 }
 
 // Now that we apply txn updates via Raft, waiting based on Txn timestamps is
@@ -89,10 +223,13 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		// We need a generous size for applyCh, because raft.Tick happens every
 		// 10ms. If we restrict the size here, then Raft goes into a loop trying
 		// to maintain quorum health.
-		applyCh:  make(chan []*pb.Proposal, 1000),
-		rollupCh: make(chan uint64, 3),
-		elog:     trace.NewEventLog("Dgraph", "ApplyCh"),
-		closer:   y.NewCloser(3), // Matches CLOSER:1
+		applyCh: make(chan []*pb.Proposal, 1000),
+		elog:    trace.NewEventLog("Dgraph", "ApplyCh"),
+		closer:  y.NewCloser(4), // Matches CLOSER:1
+		ops:     make(map[op]*y.Closer),
+	}
+	if x.WorkerConfig.LudicrousMode {
+		n.ex = newExecutor()
 	}
 	return n
 }
@@ -132,6 +269,7 @@ func detectPendingTxns(attr string) error {
 	tctxs := posting.Oracle().IterateTxns(func(key []byte) bool {
 		pk, err := x.Parse(key)
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v", err, hex.EncodeToString(key))
 			return false
 		}
 		return pk.Attr == attr
@@ -178,6 +316,15 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 						s.Predicate)
 				}
 			}
+
+		}
+
+		// Propose initial types as well after a drop all as they would have been cleared.
+		initialTypes := schema.InitialTypes()
+		for _, t := range initialTypes {
+			if err := updateType(t.GetTypeName(), *t); err != nil {
+				return err
+			}
 		}
 
 		return nil
@@ -190,18 +337,22 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	if proposal.Mutations.StartTs == 0 {
 		return errors.New("StartTs must be provided")
 	}
-	startTs := proposal.Mutations.StartTs
 
 	if len(proposal.Mutations.Schema) > 0 || len(proposal.Mutations.Types) > 0 {
+		// MaxAssigned would ensure that everything that's committed up until this point
+		// would be picked up in building indexes. Any uncommitted txns would be cancelled
+		// by detectPendingTxns below.
+		startTs := posting.Oracle().MaxAssigned()
+
 		span.Annotatef(nil, "Applying schema and types")
 		for _, supdate := range proposal.Mutations.Schema {
 			// We should not need to check for predicate move here.
 			if err := detectPendingTxns(supdate.Predicate); err != nil {
 				return err
 			}
-			if err := runSchemaMutation(ctx, supdate, startTs); err != nil {
-				return err
-			}
+		}
+		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+			return err
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -267,14 +418,6 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	}
 
 	m := proposal.Mutations
-	txn := posting.Oracle().RegisterStartTs(m.StartTs)
-	if txn.ShouldAbort() {
-		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
-		return zero.ErrConflict
-	}
-
-	// Discard the posting lists from cache to release memory at the end.
-	defer txn.Update()
 
 	// It is possible that the user gives us multiple versions of the same edge, one with no facets
 	// and another with facets. In that case, use stable sort to maintain the ordering given to us
@@ -289,6 +432,19 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 		return ei.GetEntity() < ej.GetEntity()
 	})
+
+	if x.WorkerConfig.LudicrousMode {
+		n.ex.addEdges(ctx, m.StartTs, m.Edges)
+		return nil
+	}
+
+	txn := posting.Oracle().RegisterStartTs(m.StartTs)
+	if txn.ShouldAbort() {
+		span.Annotatef(nil, "Txn %d should abort.", m.StartTs)
+		return zero.ErrConflict
+	}
+	// Discard the posting lists from cache to release memory at the end.
+	defer txn.Update()
 
 	process := func(edges []*pb.DirectedEdge) error {
 		var retries int
@@ -346,6 +502,14 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		if err := n.applyMutations(ctx, proposal); err != nil {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
+		}
+		if x.WorkerConfig.LudicrousMode {
+			ts := proposal.Mutations.StartTs
+			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+				Txns: []*pb.TxnStatus{
+					{StartTs: ts, CommitTs: ts},
+				},
+			})
 		}
 		span.Annotate(nil, "Done")
 		return nil
@@ -412,38 +576,50 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			}
 			glog.Warningf("Error while calling CreateSnapshot: %v. Retrying...", err)
 		}
-		// Roll up all posting lists as a best-effort operation.
-		n.rollupCh <- snap.ReadTs
+		// We can now discard all invalid versions of keys below this ts.
+		pstore.SetDiscardTs(snap.ReadTs)
 		return nil
+
+	case proposal.Restore != nil:
+		// Enable draining mode for the duration of the restore processing.
+		x.UpdateDrainingMode(true)
+		defer x.UpdateDrainingMode(false)
+
+		var err error
+		var closer *y.Closer
+		closer, err = n.startTask(opRestore)
+		if err != nil {
+			return errors.Wrapf(err, "cannot start restore task")
+		}
+		defer closer.Done()
+
+		if err := handleRestoreProposal(ctx, proposal.Restore); err != nil {
+			return err
+		}
+
+		// Call commitOrAbort to update the group checksums.
+		ts := proposal.Restore.RestoreTs
+		return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
+			Txns: []*pb.TxnStatus{
+				{StartTs: ts, CommitTs: ts},
+			},
+		})
 	}
 	x.Fatalf("Unknown proposal: %+v", proposal)
 	return nil
 }
 
-func (n *node) processRollups() {
+func (n *node) processTabletSizes() {
 	defer n.closer.Done()                   // CLOSER:1
-	tick := time.NewTicker(5 * time.Minute) // Rolling up once every 5 minutes seems alright.
+	tick := time.NewTicker(5 * time.Minute) // Once every 5 minutes seems alright.
 	defer tick.Stop()
 
-	var readTs, last uint64
 	for {
 		select {
 		case <-n.closer.HasBeenClosed():
 			return
-		case readTs = <-n.rollupCh:
 		case <-tick.C:
-			glog.V(3).Infof("Evaluating rollup readTs:%d last:%d rollup:%v", readTs, last, readTs > last)
-			if readTs <= last {
-				break // Break out of the select case.
-			}
-			if err := n.rollupLists(readTs); err != nil {
-				// If we encounter error here, we don't need to do anything about
-				// it. Just let the user know.
-				glog.Errorf("Error while rolling up lists at %d: %v\n", readTs, err)
-			} else {
-				last = readTs // Update last only if we succeeded.
-				glog.Infof("List rollup at Ts %d: OK.\n", readTs)
-			}
+			n.calculateTabletSizes()
 		}
 	}
 }
@@ -532,6 +708,7 @@ func (n *node) processApplyCh() {
 	}
 }
 
+// TODO(Anurag - 4 May 2020): Are we using pkey? Remove if unused.
 func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	// First let's commit all mutations to disk.
 	writer := posting.NewTxnWriter(pstore)
@@ -554,12 +731,20 @@ func (n *node) commitOrAbort(pkey string, delta *pb.OracleDelta) error {
 	for _, status := range delta.Txns {
 		toDisk(status.StartTs, status.CommitTs)
 	}
-	if err := writer.Flush(); err != nil {
-		return errors.Wrapf(err, "while flushing to disk")
+	if x.WorkerConfig.LudicrousMode {
+		if err := writer.Wait(); err != nil {
+			glog.Errorf("Error while waiting to commit: +%v", err)
+		}
+	} else {
+		if err := writer.Flush(); err != nil {
+			return errors.Wrapf(err, "while flushing to disk")
+		}
 	}
 
 	g := groups()
-	atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	if delta.GroupChecksums != nil && delta.GroupChecksums[g.groupId()] > 0 {
+		atomic.StoreUint64(&g.deltaChecksum, delta.GroupChecksums[g.groupId()])
+	}
 
 	// Now advance Oracle(), so we can service waiting reads.
 	posting.Oracle().ProcessDelta(delta)
@@ -596,6 +781,12 @@ func (n *node) Snapshot() (*pb.Snapshot, error) {
 }
 
 func (n *node) retrieveSnapshot(snap pb.Snapshot) error {
+	closer, err := n.startTask(opSnapshot)
+	if err != nil {
+		return err
+	}
+	defer closer.Done()
+
 	// In some edge cases, the Zero leader might not have been able to update
 	// the status of Alpha leader. So, instead of blocking forever on waiting
 	// for Zero to send us the updates info about the leader, we can just use
@@ -658,17 +849,20 @@ func (n *node) proposeSnapshot(discardN int) error {
 	return n.Raft().Propose(n.ctx, data)
 }
 
-const maxPendingSize int64 = 64 << 20 // in bytes.
+const (
+	maxPendingSize int64 = 64 << 20 // in bytes.
+	nodeApplyChan        = "raft node applyCh"
+)
 
-func (n *node) rampMeter() {
+func rampMeter(address *int64, maxSize int64, component string) {
 	start := time.Now()
 	defer func() {
 		if dur := time.Since(start); dur > time.Second {
-			glog.Infof("Blocked pushing to applyCh for %v", dur.Round(time.Millisecond))
+			glog.Infof("Blocked pushing to %s for %v", component, dur.Round(time.Millisecond))
 		}
 	}()
 	for {
-		if atomic.LoadInt64(&n.pendingSize) <= maxPendingSize {
+		if atomic.LoadInt64(address) <= maxSize {
 			return
 		}
 		time.Sleep(3 * time.Millisecond)
@@ -752,6 +946,9 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 				time.Sleep(time.Second) // Let transfer happen.
 			}
 			n.Raft().Stop()
+			if x.WorkerConfig.LudicrousMode {
+				n.ex.closer.SignalAndWait()
+			}
 			close(done)
 			return
 		}
@@ -789,6 +986,13 @@ func (n *node) Run() {
 	done := make(chan struct{})
 	go n.checkpointAndClose(done)
 	go n.ReportRaftComms()
+
+	if x.WorkerConfig.LudicrousMode {
+		closer := y.NewCloser(2)
+		defer closer.SignalAndWait()
+		go x.StoreSync(n.Store, closer)
+		go x.StoreSync(pstore, closer)
+	}
 
 	applied, err := n.Store.Checkpoint()
 	if err != nil {
@@ -907,17 +1111,17 @@ func (n *node) Run() {
 			// Store the hardstate and entries. Note that these are not CommittedEntries.
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
-			if rd.MustSync {
-				if err := n.Store.Sync(); err != nil {
-					glog.Errorf("Error while calling Store.Sync: %+v", err)
-				}
-				timer.Record("sync")
-			}
 			if span != nil {
 				span.Annotatef(nil, "Saved %d entries. Snapshot, HardState empty? (%v, %v)",
 					len(rd.Entries),
 					raft.IsEmptySnap(rd.Snapshot),
 					raft.IsEmptyHardState(rd.HardState))
+			}
+			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
+				if err := n.Store.Sync(); err != nil {
+					glog.Errorf("Error while calling Store.Sync: %+v", err)
+				}
+				timer.Record("sync")
 			}
 
 			// Now schedule or apply committed entries.
@@ -953,6 +1157,10 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
+						if x.WorkerConfig.LudicrousMode {
+							// Assuming that there will be no error while proposing.
+							n.Proposals.Done(proposal.Key, nil)
+						}
 					}
 					proposal.Index = entry.Index
 					proposals = append(proposals, proposal)
@@ -963,7 +1171,7 @@ func (n *node) Run() {
 				// Apply the meter this before adding size to pending size so some crazy big
 				// proposal can be pushed to applyCh. If this do this after adding its size to
 				// pending size, we could block forever in rampMeter.
-				n.rampMeter()
+				rampMeter(&n.pendingSize, maxPendingSize, nodeApplyChan)
 				var pendingSize int64
 				for _, p := range proposals {
 					pendingSize += int64(p.Size())
@@ -1024,120 +1232,76 @@ func listWrap(kv *bpb.KV) *bpb.KVList {
 	return &bpb.KVList{Kv: []*bpb.KV{kv}}
 }
 
-// rollupLists would consolidate all the deltas that constitute one posting
-// list, and write back a complete posting list.
-func (n *node) rollupLists(readTs uint64) error {
-	writer := posting.NewTxnWriter(pstore)
-
-	// We're doing rollups. We should use this opportunity to calculate the tablet sizes.
-	amLeader := n.AmLeader()
-	m := new(sync.Map)
-
-	addTo := func(key []byte, delta int64) {
-		if !amLeader {
-			// Only leader needs to calculate the tablet sizes.
-			return
-		}
-		pk, err := x.Parse(key)
-
-		// Type keys should not count for tablet size calculations.
-		if pk.IsType() {
-			return
-		}
-
-		if err != nil {
-			glog.Errorf("Error while parsing key %s: %v", hex.Dump(key), err)
-			return
-		}
-		val, ok := m.Load(pk.Attr)
-		if !ok {
-			sz := new(int64)
-			val, _ = m.LoadOrStore(pk.Attr, sz)
-		}
-		size := val.(*int64)
-		atomic.AddInt64(size, delta)
-	}
-
-	stream := pstore.NewStreamAt(readTs)
-	stream.LogPrefix = "Rolling up"
-	stream.ChooseKey = func(item *badger.Item) bool {
-		switch item.UserMeta() {
-		case posting.BitSchemaPosting, posting.BitCompletePosting, posting.BitEmptyPosting:
-			addTo(item.Key(), item.EstimatedSize())
-			return false
-		case x.ByteUnused:
-			return false
-		default:
-			return true
-		}
-	}
-	var numKeys uint64
-	stream.KeyToList = func(key []byte, itr *badger.Iterator) (*bpb.KVList, error) {
-		l, err := posting.ReadPostingList(key, itr)
-		if err != nil {
-			return nil, err
-		}
-		atomic.AddUint64(&numKeys, 1)
-		kvs, err := l.Rollup()
-
-		// If there are multiple keys, the posting list was split into multiple
-		// parts. The key of the first part is the right key to use for tablet
-		// size calculations.
-		for _, kv := range kvs {
-			addTo(kvs[0].Key, int64(kv.Size()))
-		}
-
-		return &bpb.KVList{Kv: kvs}, err
-	}
-	stream.Send = func(list *bpb.KVList) error {
-		return writer.Write(list)
-	}
-	if err := stream.Orchestrate(context.Background()); err != nil {
-		return err
-	}
-	if err := writer.Flush(); err != nil {
-		return err
-	}
-	// For all the keys, let's see if they're in the LRU cache. If so, we can roll them up.
-	glog.Infof("Rolled up %d keys. Done", atomic.LoadUint64(&numKeys))
-
-	// We can now discard all invalid versions of keys below this ts.
-	pstore.SetDiscardTs(readTs)
-
-	if amLeader {
+// calculateTabletSizes updates the tablet sizes for the keys.
+func (n *node) calculateTabletSizes() {
+	if !n.AmLeader() {
 		// Only leader sends the tablet size updates to Zero. No one else does.
-		// doSendMembership is also being concurrently called from another goroutine.
-		go func() {
-			tablets := make(map[string]*pb.Tablet)
-			var total int64
-			m.Range(func(key, val interface{}) bool {
-				pred := key.(string)
-				size := atomic.LoadInt64(val.(*int64))
-				tablets[pred] = &pb.Tablet{
-					GroupId:   n.gid,
-					Predicate: pred,
-					Space:     size,
-				}
-				total += size
-				return true
-			})
-			// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
-			// this group, it would send instruction to delete that tablet. There's an edge case
-			// here if the followers are still running Rollup, and happen to read a key before and
-			// write after the tablet deletion, causing that tablet key to resurface. Then, only the
-			// follower would have that key, not the leader.
-			// However, if the follower then becomes the leader, we'd be able to get rid of that
-			// key then. Alternatively, we could look into cancelling the Rollup if we see a
-			// predicate deletion.
-			if err := groups().doSendMembership(tablets); err != nil {
-				glog.Warningf("While sending membership to Zero. Error: %v", err)
-			} else {
-				glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
-					humanize.Bytes(uint64(total)))
-			}
-		}()
+		return
 	}
-	return nil
+	var total int64
+	tablets := make(map[string]*pb.Tablet)
+	updateSize := func(pred string, size int64) {
+		if pred == "" {
+			return
+		}
+
+		if tablet, ok := tablets[pred]; ok {
+			tablet.Space += size
+		} else {
+			tablets[pred] = &pb.Tablet{
+				GroupId:   n.gid,
+				Predicate: pred,
+				Space:     size,
+			}
+		}
+		total += size
+	}
+
+	tableInfos := pstore.Tables(false)
+	previousLeft := ""
+	var previousSize int64
+	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
+	for _, tinfo := range tableInfos {
+		left, err := x.Parse(tinfo.Left)
+		if err != nil {
+			glog.V(3).Infof("Unable to parse key: %v", err)
+			continue
+		}
+
+		if left.Attr == previousLeft {
+			// Dgraph cannot depend on the right end of the table to know if the table belongs
+			// to a single predicate because there might be Badger-specific keys.
+			// Instead, Dgraph only counts the previous table if the current one belongs to the
+			// same predicate.
+			// We could later specifically iterate over these tables to get their estimated sizes.
+			updateSize(previousLeft, previousSize)
+		} else {
+			glog.V(3).Info("Skipping table not owned by one predicate")
+		}
+		previousLeft = left.Attr
+		previousSize = int64(tinfo.EstimatedSz)
+	}
+	// The last table has not been counted. Assign it to the predicate at the left of the table.
+	updateSize(previousLeft, previousSize)
+
+	if len(tablets) == 0 {
+		glog.V(2).Infof("No tablets found.")
+		return
+	}
+	// Update Zero with the tablet sizes. If Zero sees a tablet which does not belong to
+	// this group, it would send instruction to delete that tablet. There's an edge case
+	// here if the followers are still running Rollup, and happen to read a key before and
+	// write after the tablet deletion, causing that tablet key to resurface. Then, only the
+	// follower would have that key, not the leader.
+	// However, if the follower then becomes the leader, we'd be able to get rid of that
+	// key then. Alternatively, we could look into cancelling the Rollup if we see a
+	// predicate deletion.
+	if err := groups().doSendMembership(tablets); err != nil {
+		glog.Warningf("While sending membership to Zero. Error: %v", err)
+	} else {
+		glog.V(2).Infof("Sent tablet size update to Zero. Total size: %s",
+			humanize.Bytes(uint64(total)))
+	}
 }
 
 var errNoConnection = errors.New("No connection exists")
@@ -1194,7 +1358,7 @@ func (n *node) abortOldTransactions() {
 	glog.Infof("Found %d old transactions. Acting to abort them.\n", len(starts))
 	req := &pb.TxnTimestamps{Ts: starts}
 	err := n.blockingAbort(req)
-	glog.Infof("Done abortOldTransactions for %d txns. Error: %+v\n", len(req.Ts), err)
+	glog.Infof("Done abortOldTransactions for %d txns. Error: %v\n", len(req.Ts), err)
 }
 
 // calculateSnapshot would calculate a snapshot index, considering these factors:
@@ -1468,9 +1632,13 @@ func (n *node) InitAndStartNode() {
 			n.canCampaign = true
 		}
 	}
-	go n.processRollups()
+	go n.processTabletSizes()
 	go n.processApplyCh()
 	go n.BatchAndSendMessages()
+	// Ignoring the error since InitAndStartNode does not return an error and using x.Check would
+	// not be the right thing to do.
+	_, _ = n.startTask(opRollup)
+	go n.stopAllTasks()
 	go n.Run()
 }
 

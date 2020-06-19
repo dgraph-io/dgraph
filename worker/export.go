@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -35,8 +36,9 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	bpb "github.com/dgraph-io/badger/v2/pb"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
@@ -126,7 +128,7 @@ func escapedString(str string) string {
 		// All valid stings should be able to be escaped to a JSON string so
 		// it's safe to panic here. Marshal has to return an error because it
 		// accepts an interface.
-		panic("Could not marshal string to JSON string")
+		x.Panic(errors.New("Could not marshal string to JSON string"))
 	}
 	return string(byt)
 }
@@ -333,7 +335,15 @@ func toType(attr string, update pb.TypeUpdate) (*bpb.KVList, error) {
 func fieldToString(update *pb.SchemaUpdate) string {
 	var builder strings.Builder
 	x.Check2(builder.WriteString("\t"))
-	x.Check2(builder.WriteString(update.Predicate))
+	// While exporting type definitions, "<" and ">" brackets must be written around
+	// the name of reverse predicates or Dgraph won't be able to parse the exported schema.
+	if strings.HasPrefix(update.Predicate, "~") {
+		x.Check2(builder.WriteString("<"))
+		x.Check2(builder.WriteString(update.Predicate))
+		x.Check2(builder.WriteString(">"))
+	} else {
+		x.Check2(builder.WriteString(update.Predicate))
+	}
 	x.Check2(builder.WriteString("\n"))
 	return builder.String()
 }
@@ -350,9 +360,12 @@ func (writer *fileWriter) open(fpath string) error {
 	if err != nil {
 		return err
 	}
-
 	writer.bw = bufio.NewWriterSize(writer.fd, 1e6)
-	writer.gw, err = gzip.NewWriterLevel(writer.bw, gzip.BestCompression)
+	w, err := enc.GetWriter(x.WorkerConfig.EncryptionKey, writer.bw)
+	if err != nil {
+		return err
+	}
+	writer.gw, err = gzip.NewWriterLevel(w, gzip.BestCompression)
 	return err
 }
 
@@ -422,11 +435,34 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 
+	// Open graphql schema.
+	gqlSchemaPath, err := fpath(".gql_schema.gz")
+	if err != nil {
+		return errors.Wrapf(err, "cannot get path for the GraphQL schema file")
+	}
+	glog.Infof("Exporting GraphQL schema at %s", gqlSchemaPath)
+	gqlSchemaWriter := &fileWriter{}
+	if err := gqlSchemaWriter.open(gqlSchemaPath); err != nil {
+		return errors.Wrapf(err, "cannot open export GraphQL schema file at %s", gqlSchemaPath)
+	}
+
 	stream := pstore.NewStreamAt(in.ReadTs)
 	stream.LogPrefix = "Export"
 	stream.ChooseKey = func(item *badger.Item) bool {
+		// Skip exporting delete data including Schema and Types.
+		if item.IsDeletedOrExpired() {
+			return false
+		}
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err,
+				hex.EncodeToString(item.Key()))
+			return false
+		}
+
+		// Do not pick keys storing parts of a multi-part list. They will be read
+		// from the main key.
+		if pk.HasStartUid {
 			return false
 		}
 
@@ -451,6 +487,8 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		item := itr.Item()
 		pk, err := x.Parse(item.Key())
 		if err != nil {
+			glog.Errorf("error %v while parsing key %v during export. Skip.", err,
+				hex.EncodeToString(item.Key()))
 			return nil, err
 		}
 		e := &exporter{
@@ -486,11 +524,56 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 			}
 			return toType(pk.Attr, update)
 
+		case pk.Attr == "dgraph.graphql.xid":
+			// Ignore this predicate.
+
+		case pk.IsData() && pk.Attr == "dgraph.graphql.schema":
+			// Export the graphql schema.
+			pl, err := posting.ReadPostingList(key, itr)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read posting list for GraphQL schema")
+			}
+			vals, err := pl.AllValues(in.ReadTs)
+			if err != nil {
+				return nil, errors.Wrapf(err, "cannot read value of GraphQL schema")
+			}
+			if len(vals) != 1 {
+				return nil, errors.Errorf("found multiple values for the GraphQL schema")
+			}
+			val, ok := vals[0].Value.([]byte)
+			if !ok {
+				return nil, errors.Errorf("cannot convert value of GraphQL schema to byte array")
+			}
+			kv := &bpb.KV{
+				Value:   val,
+				Version: 3, // GraphQL schema value
+			}
+			return listWrap(kv), nil
+
 		case pk.IsData():
 			e.pl, err = posting.ReadPostingList(key, itr)
 			if err != nil {
 				return nil, err
 			}
+
+			// The GraphQL layer will create a node of type "dgraph.graphql". That entry
+			// should not be exported.
+			if pk.Attr == "dgraph.type" {
+				vals, err := e.pl.AllValues(in.ReadTs)
+				if err != nil {
+					return nil, errors.Wrapf(err, "cannot read value of dgraph.type entry")
+				}
+				if len(vals) == 1 {
+					val, ok := vals[0].Value.([]byte)
+					if !ok {
+						return nil, errors.Errorf("cannot read value of dgraph.type entry")
+					}
+					if string(val) == "dgraph.graphql" {
+						return nil, nil
+					}
+				}
+			}
+
 			switch in.Format {
 			case "json":
 				return e.toJSON()
@@ -520,12 +603,20 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 	stream.Send = func(list *bpb.KVList) error {
 		for _, kv := range list.Kv {
+			// Skip nodes that have no data. Otherwise, the exported data could have
+			// formatting and/or syntax errors.
+			if len(kv.Value) == 0 {
+				continue
+			}
+
 			var writer *fileWriter
 			switch kv.Version {
 			case 1: // data
 				writer = dataWriter
 			case 2: // schema and types
 				writer = schemaWriter
+			case 3:
+				writer = gqlSchemaWriter
 			default:
 				glog.Fatalf("Invalid data type found: %x", kv.Key)
 			}
@@ -540,6 +631,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 				// prepended
 				hasDataBefore = true
 			}
+
 			if _, err := writer.gw.Write(kv.Value); err != nil {
 				return err
 			}
@@ -562,6 +654,9 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		return err
 	}
 	if err := schemaWriter.Close(); err != nil {
+		return err
+	}
+	if err := gqlSchemaWriter.Close(); err != nil {
 		return err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
@@ -647,6 +742,7 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 			return rerr
 		}
 	}
+
 	glog.Infof("Export at readTs %d DONE", readTs)
 	return nil
 }

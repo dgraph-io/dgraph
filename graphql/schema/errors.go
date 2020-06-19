@@ -19,8 +19,10 @@ package schema
 import (
 	"fmt"
 
+	"github.com/vektah/gqlparser/v2/ast"
+
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // AsGQLErrors formats an error as a list of GraphQL errors.
@@ -50,7 +52,7 @@ func toGqlError(err *gqlerror.Error) *x.GqlError {
 	return &x.GqlError{
 		Message:   err.Message,
 		Locations: convertLocations(err.Locations),
-		Path:      err.Path,
+		Path:      convertPath(err.Path),
 	}
 }
 
@@ -66,6 +68,15 @@ func convertLocations(locs []gqlerror.Location) []x.Location {
 	var result []x.Location
 	for _, loc := range locs {
 		result = append(result, x.Location{Line: loc.Line, Column: loc.Column})
+	}
+	return result
+}
+
+func convertPath(path ast.Path) []interface{} {
+	pathElements := []ast.PathElement(path)
+	var result []interface{}
+	for _, p := range pathElements {
+		result = append(result, p)
 	}
 	return result
 }

@@ -30,8 +30,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
@@ -107,10 +107,24 @@ func runJSONMutation(m string) error {
 }
 
 func alterSchema(s string) error {
-	_, _, err := runWithRetries("PUT", "", addr+"/alter", s)
+	return alterSchemaHelper(s, false)
+}
+
+func alterSchemaInBackground(s string) error {
+	return alterSchemaHelper(s, true)
+}
+
+func alterSchemaHelper(s string, bg bool) error {
+	url := addr + "/alter"
+	if bg {
+		url += "?runInBackground=true"
+	}
+
+	_, _, err := runWithRetries("PUT", "", url, s)
 	if err != nil {
 		return errors.Wrapf(err, "while running request with retries")
 	}
+
 	return nil
 }
 
@@ -229,12 +243,13 @@ func TestDeletePredicate(t *testing.T) {
 
 	output, err = runGraphqlQuery(`schema{}`)
 	require.NoError(t, err)
+
 	testutil.CompareJSON(t, `{"data":{"schema":[`+
 		`{"predicate":"age","type":"default"},`+
 		`{"predicate":"name","type":"string","index":true, "tokenizer":["term"]},`+
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"dgraph.type","type":"string","index":true, "tokenizer":["exact"],
-			"list":true}]}}`, output)
+			"list":true}],`+x.InitialTypes+`}}`, output)
 
 	output, err = runGraphqlQuery(q1)
 	require.NoError(t, err)
@@ -404,7 +419,7 @@ func TestSchemaMutationUidError1(t *testing.T) {
 	var s2 = `
             friend: uid .
 	`
-	require.Error(t, alterSchemaWithRetry(s2))
+	require.Error(t, alterSchema(s2))
 }
 
 // add index
@@ -1065,7 +1080,7 @@ func TestListTypeSchemaChange(t *testing.T) {
 		x.AclPredicates+","+x.GraphqlPredicates+","+
 		`{"predicate":"occupations","type":"string"},`+
 		`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer": ["exact"],
-			"list":true}]}}`, res)
+			"list":true}],`+x.InitialTypes+`}}`, res)
 }
 
 func TestDeleteAllSP2(t *testing.T) {
@@ -1312,7 +1327,7 @@ func TestDropAll(t *testing.T) {
 		`{"data":{"schema":[`+
 			x.AclPredicates+","+x.GraphqlPredicates+","+
 			`{"predicate":"dgraph.type", "type":"string", "index":true, "tokenizer":["exact"],
-				"list":true}]}}`, output)
+				"list":true}],`+x.InitialTypes+`}}`, output)
 
 	// Reinstate schema so that we can re-run the original query.
 	err = alterSchemaWithRetry(s)
@@ -1665,7 +1680,7 @@ func TestMain(m *testing.M) {
 	if _, err := zc.AssignUids(context.Background(), &pb.Num{Val: 1e6}); err != nil {
 		log.Fatal(err)
 	}
-	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/login")
+	grootAccessJwt, grootRefreshJwt = testutil.GrootHttpLogin(addr + "/admin")
 
 	r := m.Run()
 	os.Exit(r)

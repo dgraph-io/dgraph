@@ -19,7 +19,7 @@ package gql
 import (
 	"strconv"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	errInvalidUID = errors.New("UID has to be greater than one")
+	errInvalidUID = errors.New("UID must to be greater than 0")
 )
 
 // Mutation stores the strings corresponding to set and delete operations.

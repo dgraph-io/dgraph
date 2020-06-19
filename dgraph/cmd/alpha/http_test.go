@@ -34,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/dgraph-io/dgraph/x"
@@ -79,7 +80,7 @@ func runGzipWithRetry(contentType, url string, buf io.Reader, gzReq, gzResp bool
 		resp, err = client.Do(req)
 		if err != nil && strings.Contains(err.Error(), "Token is expired") {
 			grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-				Endpoint:   addr + "/login",
+				Endpoint:   addr + "/admin",
 				RefreshJwt: grootRefreshJwt,
 			})
 
@@ -269,7 +270,7 @@ func runWithRetries(method, contentType, url string, body string) (
 	qr, respBody, err := runRequest(req)
 	if err != nil && strings.Contains(err.Error(), "Token is expired") {
 		grootAccessJwt, grootRefreshJwt, err = testutil.HttpLogin(&testutil.LoginParams{
-			Endpoint:   addr + "/login",
+			Endpoint:   addr + "/admin",
 			RefreshJwt: grootRefreshJwt,
 		})
 		if err != nil {
@@ -728,25 +729,27 @@ func TestHealth(t *testing.T) {
 	data, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 
-	var info struct {
-		Version  string        `json:"version"`
-		Instance string        `json:"instance"`
-		Uptime   time.Duration `json:"uptime"`
-	}
+	var info []pb.HealthInfo
 	require.NoError(t, json.Unmarshal(data, &info))
-	require.Equal(t, "alpha", info.Instance)
-	require.True(t, info.Uptime > time.Duration(1))
+	require.Equal(t, "alpha", info[0].Instance)
+	require.True(t, info[0].Uptime > int64(time.Duration(1)))
 }
 
-func setDrainingMode(t *testing.T, enable bool) {
-	url := fmt.Sprintf("%s/admin/draining?enable=%v", addr, enable)
-	req, err := http.NewRequest("POST", url, nil)
-	require.NoError(t, err, "Error while creating post request for %s", url)
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	require.NoError(t, err, "Error while sending post request to %s", url)
-	status := resp.StatusCode
-	require.Equal(t, http.StatusOK, status, "Unexpected status code: %v", status)
+func setDrainingMode(t *testing.T, enable bool, accessJwt string) {
+	drainingRequest := `mutation drain($enable: Boolean) {
+		draining(enable: $enable) {
+			response {
+				code
+			}
+		}
+	}`
+	params := &testutil.GraphQLParams{
+		Query:     drainingRequest,
+		Variables: map[string]interface{}{"enable": enable},
+	}
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	resp.RequireNoGraphQLErrors(t)
+	require.JSONEq(t, `{"draining":{"response":{"code":"Success"}}}`, string(resp.Data))
 }
 
 func TestDrainingMode(t *testing.T) {
@@ -788,9 +791,22 @@ func TestDrainingMode(t *testing.T) {
 
 	}
 
-	setDrainingMode(t, true)
+	grootJwt, _ := testutil.GrootHttpLogin(addr + "/admin")
+
+	setDrainingMode(t, true, grootJwt)
 	runRequests(true)
 
-	setDrainingMode(t, false)
+	setDrainingMode(t, false, grootJwt)
 	runRequests(false)
+}
+
+func TestOptionsForUiKeywords(t *testing.T) {
+	req, err := http.NewRequest(http.MethodOptions, fmt.Sprintf("%s/ui/keywords", addr), nil)
+	require.NoError(t, err)
+
+	client := &http.Client{}
+
+	resp, err := client.Do(req)
+	require.NoError(t, err)
+	require.True(t, resp.StatusCode >= 200 && resp.StatusCode < 300)
 }

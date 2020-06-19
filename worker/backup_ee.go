@@ -14,12 +14,16 @@ package worker
 
 import (
 	"context"
+	"net/url"
+	"sort"
+	"time"
 
-	"github.com/dgraph-io/dgraph/ee/backup"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/glog"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -46,7 +50,7 @@ func backupCurrentGroup(ctx context.Context, req *pb.BackupRequest) (*pb.Status,
 		return nil, err
 	}
 
-	bp := &backup.Processor{DB: pstore, Request: req}
+	bp := NewBackupProcessor(pstore, req)
 	return bp.WriteBackup(ctx)
 }
 
@@ -68,5 +72,135 @@ func BackupGroup(ctx context.Context, in *pb.BackupRequest) (*pb.Status, error) 
 		return nil, err
 	}
 
+	return res, nil
+}
+
+func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull bool) error {
+	if !EnterpriseEnabled() {
+		return errors.New("you must enable enterprise features first. " +
+			"Supply the appropriate license file to Dgraph Zero using the HTTP endpoint.")
+	}
+
+	if req.Destination == "" {
+		return errors.Errorf("you must specify a 'destination' value")
+	}
+
+	if err := x.HealthCheck(); err != nil {
+		glog.Errorf("Backup canceled, not ready to accept requests: %s", err)
+		return err
+	}
+
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
+	if err != nil {
+		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
+		return err
+	}
+
+	req.ReadTs = ts.ReadOnly
+	req.UnixTs = time.Now().UTC().Format("20060102.150405.000")
+
+	// Read the manifests to get the right timestamp from which to start the backup.
+	uri, err := url.Parse(req.Destination)
+	if err != nil {
+		return err
+	}
+	handler, err := NewUriHandler(uri, GetCredentialsFromRequest(req))
+	if err != nil {
+		return err
+	}
+	latestManifest, err := handler.GetLatestManifest(uri)
+	if err != nil {
+		return err
+	}
+
+	req.SinceTs = latestManifest.Since
+	if forceFull {
+		req.SinceTs = 0
+	} else {
+		if x.WorkerConfig.EncryptionKey != nil {
+			// If encryption key given, latest backup should be encrypted.
+			if latestManifest.Type != "" && !latestManifest.Encrypted {
+				err = errors.Errorf("latest manifest indicates the last backup was not encrypted " +
+					"but this instance has encryption turned on. Try \"forceFull\" flag.")
+				return err
+			}
+		} else {
+			// If encryption turned off, latest backup should be unencrypted.
+			if latestManifest.Type != "" && latestManifest.Encrypted {
+				err = errors.Errorf("latest manifest indicates the last backup was encrypted " +
+					"but this instance has encryption turned off. Try \"forceFull\" flag.")
+				return err
+			}
+		}
+	}
+
+	// Update the membership state to get the latest mapping of groups to predicates.
+	if err := UpdateMembershipState(ctx); err != nil {
+		return err
+	}
+
+	// Get the current membership state and parse it for easier processing.
+	state := GetMembershipState()
+	var groups []uint32
+	predMap := make(map[uint32][]string)
+	for gid, group := range state.Groups {
+		groups = append(groups, gid)
+		predMap[gid] = make([]string, 0)
+		for pred := range group.Tablets {
+			predMap[gid] = append(predMap[gid], pred)
+		}
+	}
+
+	glog.Infof("Created backup request: %s. Groups=%v\n", req, groups)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	errCh := make(chan error, len(state.Groups))
+	for _, gid := range groups {
+		br := proto.Clone(req).(*pb.BackupRequest)
+		br.GroupId = gid
+		br.Predicates = predMap[gid]
+		go func(req *pb.BackupRequest) {
+			_, err := BackupGroup(ctx, req)
+			errCh <- err
+		}(br)
+	}
+
+	for range groups {
+		if err := <-errCh; err != nil {
+			glog.Errorf("Error received during backup: %v", err)
+			return err
+		}
+	}
+
+	m := Manifest{Since: req.ReadTs, Groups: predMap}
+	if req.SinceTs == 0 {
+		m.Type = "full"
+		m.BackupId = x.GetRandomName(1)
+		m.BackupNum = 1
+	} else {
+		m.Type = "incremental"
+		m.BackupId = latestManifest.BackupId
+		m.BackupNum = latestManifest.BackupNum + 1
+	}
+	m.Encrypted = (x.WorkerConfig.EncryptionKey != nil)
+
+	bp := NewBackupProcessor(nil, req)
+	return bp.CompleteBackup(ctx, &m)
+}
+
+func ProcessListBackups(ctx context.Context, location string, creds *Credentials) (
+	[]*Manifest, error) {
+
+	manifests, err := ListBackupManifests(location, creds)
+	if err != nil {
+		return nil, errors.Wrapf(err, "cannot read manfiests at location %s", location)
+	}
+
+	res := make([]*Manifest, 0)
+	for _, m := range manifests {
+		res = append(res, m)
+	}
+	sort.Slice(res, func(i, j int) bool { return res[i].Path < res[j].Path })
 	return res, nil
 }

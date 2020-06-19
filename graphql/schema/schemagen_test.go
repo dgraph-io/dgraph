@@ -22,9 +22,11 @@ import (
 	"testing"
 
 	dschema "github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	_ "github.com/vektah/gqlparser/v2/validator/rules"
 	"gopkg.in/yaml.v2"
 )
 
@@ -38,7 +40,7 @@ type TestCase struct {
 }
 
 func TestDGSchemaGen(t *testing.T) {
-	fileName := "schemagen_test.yml"
+	fileName := "dgraph_schemagen_test.yml"
 	byts, err := ioutil.ReadFile(fileName)
 	require.NoError(t, err, "Unable to read file %s", fileName)
 
@@ -89,7 +91,6 @@ func TestSchemaString(t *testing.T) {
 			outputFileName := outputDir + testFile.Name()
 			str2, err := ioutil.ReadFile(outputFileName)
 			require.NoError(t, err)
-
 			if diff := cmp.Diff(string(str2), newSchemaStr); diff != "" {
 				// fmt.Printf("Generated Schema (%s):\n%s\n", testFile.Name(), newSchemaStr)
 				t.Errorf("schema mismatch - diff (-want +got):\n%s", diff)
@@ -110,8 +111,13 @@ func TestSchemas(t *testing.T) {
 	t.Run("Valid Schemas", func(t *testing.T) {
 		for _, sch := range tests["valid_schemas"] {
 			t.Run(sch.Name, func(t *testing.T) {
-				_, errlist := NewHandler(sch.Input)
+				schHandler, errlist := NewHandler(sch.Input)
 				require.NoError(t, errlist, sch.Name)
+
+				newSchemaStr := schHandler.GQLSchema()
+
+				_, err = FromString(newSchemaStr)
+				require.NoError(t, err)
 			})
 		}
 	})
@@ -121,6 +127,48 @@ func TestSchemas(t *testing.T) {
 			t.Run(sch.Name, func(t *testing.T) {
 				_, errlist := NewHandler(sch.Input)
 				if diff := cmp.Diff(sch.Errlist, errlist); diff != "" {
+					t.Errorf("error mismatch (-want +got):\n%s", diff)
+				}
+			})
+		}
+	})
+}
+
+func TestAuthSchemas(t *testing.T) {
+	fileName := "auth_schemas_test.yaml"
+	byts, err := ioutil.ReadFile(fileName)
+	require.NoError(t, err, "Unable to read file %s", fileName)
+
+	var tests map[string][]struct {
+		Name    string
+		Input   string
+		Errlist x.GqlErrorList
+		Output  string
+	}
+	err = yaml.Unmarshal(byts, &tests)
+	require.NoError(t, err, "Error Unmarshalling to yaml!")
+
+	t.Run("Valid Schemas", func(t *testing.T) {
+		for _, sch := range tests["valid_schemas"] {
+			t.Run(sch.Name, func(t *testing.T) {
+				schHandler, errlist := NewHandler(sch.Input)
+				require.NoError(t, errlist, sch.Name)
+
+				_, authError := FromString(schHandler.GQLSchema())
+				require.NoError(t, authError, sch.Name)
+			})
+		}
+	})
+
+	t.Run("Invalid Schemas", func(t *testing.T) {
+		for _, sch := range tests["invalid_schemas"] {
+			t.Run(sch.Name, func(t *testing.T) {
+				schHandler, errlist := NewHandler(sch.Input)
+				require.NoError(t, errlist, sch.Name)
+
+				_, authError := FromString(schHandler.GQLSchema())
+
+				if diff := cmp.Diff(authError, sch.Errlist); diff != "" {
 					t.Errorf("error mismatch (-want +got):\n%s", diff)
 				}
 			})

@@ -23,9 +23,9 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/stretchr/testify/require"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // Various helpers used in GQL testing
@@ -35,15 +35,14 @@ import (
 func LoadSchema(t *testing.T, gqlSchema string) schema.Schema {
 
 	doc, gqlErr := parser.ParseSchemas(validator.Prelude, &ast.Source{Input: gqlSchema})
-	require.Nil(t, gqlErr)
-	// ^^ We can't use NoError here because gqlErr is of type *gqlerror.Error,
-	// so passing into something that just expects an error, will always be a
-	// non-nil interface.
+	requireNoGQLErrors(t, gqlErr)
 
 	gql, gqlErr := validator.ValidateSchemaDocument(doc)
-	require.Nil(t, gqlErr)
+	requireNoGQLErrors(t, gqlErr)
 
-	return schema.AsSchema(gql)
+	schema, err := schema.AsSchema(gql)
+	requireNoGQLErrors(t, err)
+	return schema
 }
 
 // LoadSchemaFromFile reads a graphql schema file as would be the initial schema
@@ -58,7 +57,7 @@ func LoadSchemaFromFile(t *testing.T, gqlFile string) schema.Schema {
 
 func LoadSchemaFromString(t *testing.T, sch string) schema.Schema {
 	handler, err := schema.NewHandler(string(sch))
-	require.NoError(t, err, "input schema contained errors")
+	requireNoGQLErrors(t, err)
 
 	return LoadSchema(t, handler.GQLSchema())
 }
@@ -75,8 +74,8 @@ func GetMutation(t *testing.T, op schema.Operation) schema.Mutation {
 	return mutations[0]
 }
 
-// GetQuery gets a single schema.Mutation from a schema.Operation.
-// It will fail if op is not a mutation or there's more than one mutation in
+// GetQuery gets a single schema.Query from a schema.Operation.
+// It will fail if op is not a query or there's more than one query in
 // op.
 func GetQuery(t *testing.T, op schema.Operation) schema.Query {
 	require.NotNil(t, op)
@@ -108,4 +107,17 @@ func RequireJSONEqStr(t *testing.T, expected string, got interface{}) {
 	require.NoError(t, err)
 
 	require.JSONEq(t, expected, string(jsonGot))
+}
+
+func requireNoGQLErrors(t *testing.T, err error) {
+	require.Nil(t, err,
+		"required no GraphQL errors, but received :\n%s", serializeOrError(err))
+}
+
+func serializeOrError(toSerialize interface{}) string {
+	byts, err := json.Marshal(toSerialize)
+	if err != nil {
+		return "unable to serialize because " + err.Error()
+	}
+	return string(byts)
 }

@@ -32,8 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -114,7 +114,12 @@ func handleError(err error, isRetry bool) {
 	s := status.Convert(err)
 	switch {
 	case s.Code() == codes.Internal, s.Code() == codes.Unavailable:
-		x.Fatalf(s.Message())
+		// Let us not crash live loader due to this. Instead, we should infinitely retry to
+		// reconnect and retry the request.
+		dur := time.Duration(1+rand.Intn(60)) * time.Second
+		fmt.Printf("Connection has been possibly interrupted. Got error: %v."+
+			" Will retry after %s.\n", err, dur.Round(time.Second))
+		time.Sleep(dur)
 	case strings.Contains(s.Message(), "x509"):
 		x.Fatalf(s.Message())
 	case s.Code() == codes.Aborted:
@@ -191,6 +196,7 @@ func getTypeVal(val *api.Value) (types.Val, error) {
 	}
 
 	p1.Value = p1.Value.([]byte)
+	p1.Tid = p.Tid
 	return p1, nil
 }
 
@@ -240,7 +246,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	pred, found := l.schema.preds[nq.Predicate]
 
 	// We dont' need to generate conflict keys for predicate with noconflict directive.
-	if found && pred.NoConflict {
+	if found && pred.NoConflict || opt.ludicrousMode {
 		return nil, nil
 	}
 
@@ -306,7 +312,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 		if err != nil {
 			errs = append(errs, err.Error())
 		}
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(token, nq.Lang))
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(token, nq.Lang))
 		if err != nil {
 			errs = append(errs, err.Error())
 		}

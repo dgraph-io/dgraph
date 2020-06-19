@@ -1,0 +1,162 @@
+- name: "custom POST mutation creating movies gets body filled from variables"
+  gqlquery: |
+    mutation createMovies($movs: [MovieInput!]) {
+      createMyFavouriteMovies(input: $movs) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  variables: |
+    {
+      "movs": [
+        { "name": "Mov1", "director": [ { "name": "Dir1" } ] },
+        { "name": "Mov2" }
+      ]
+    }
+  httpresponse: |
+    [
+      {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Mov2"
+      }
+    ]
+  url: http://myapi.com/favMovies
+  method: POST
+  body: |
+    {
+      "movies": [
+        { "name": "Mov1", "director": [ { "name": "Dir1" } ] },
+        { "name": "Mov2" }
+      ]
+    }
+  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"] }
+  resolvedresponse: |
+    {
+      "createMyFavouriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Mov1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "Dir1"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Mov2"
+        }
+      ]
+    }
+
+- name: "custom PATCH mutation updating movies gets url & body filled from variables"
+  gqlquery: |
+    mutation updateMovies($id: ID!, $mov: MovieInput!) {
+      updateMyFavouriteMovie(id: $id, input: $mov) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  variables: |
+    {
+      "id": "0x01",
+      "mov": {
+        "name": "Mov1",
+        "director": [ { "name": "Dir1" } ]
+      }
+    }
+  httpresponse: |
+    {
+      "id": "0x1",
+      "name": "Mov1",
+      "director": [
+        {
+          "id": "0x2",
+          "name": "Dir1"
+        }
+      ]
+    }
+  url: http://myapi.com/favMovies/0x01
+  method: PATCH
+  body: |
+    {
+      "movie": {
+        "name": "Mov1",
+        "director": [ { "name": "Dir1" } ]
+      }
+    }
+  resolvedresponse: |
+    {
+      "updateMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      }
+    }
+
+- name: "custom DELETE mutation deleting movie, gets url filled from variables"
+  gqlquery: |
+    mutation deleteMovie($id: ID!) {
+      deleteMyFavouriteMovie(id: $id) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  variables: |
+    {
+      "id": "0x01"
+    }
+  httpresponse: |
+    {
+      "id": "0x1",
+      "name": "Mov1",
+      "director": [
+        {
+          "id": "0x2",
+          "name": "Dir1"
+        }
+      ]
+    }
+  url: http://myapi.com/favMovies/0x01
+  method: DELETE
+  resolvedresponse: |
+    {
+      "deleteMyFavouriteMovie": {
+        "id": "0x1",
+        "name": "Mov1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "Dir1"
+          }
+        ]
+      }
+    }

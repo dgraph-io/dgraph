@@ -20,22 +20,24 @@ import (
 	"bytes"
 	"context"
 	"math"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/badger/v2"
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	otrace "go.opencensus.io/trace"
 
+	"github.com/dgraph-io/badger/v2"
+	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/dgraph-io/dgraph/x"
-
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	otrace "go.opencensus.io/trace"
 )
 
 var (
@@ -55,10 +57,11 @@ func isDeletePredicateEdge(edge *pb.DirectedEdge) bool {
 
 // runMutation goes through all the edges and applies them.
 func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) error {
+	ctx = schema.GetWriteContext(ctx)
+
 	// We shouldn't check whether this Alpha serves this predicate or not. Membership information
 	// isn't consistent across the entire cluster. We should just apply whatever is given to us.
-
-	su, ok := schema.State().Get(edge.Attr)
+	su, ok := schema.State().Get(ctx, edge.Attr)
 	if edge.Op == pb.DirectedEdge_SET {
 		if !ok {
 			return errors.Errorf("runMutation: Unable to find schema for %s", edge.Attr)
@@ -115,65 +118,149 @@ func runMutation(ctx context.Context, edge *pb.DirectedEdge, txn *posting.Txn) e
 	return plist.AddMutationWithIndex(ctx, edge, txn)
 }
 
-// This is serialized with mutations, called after applied watermarks catch up
-// and further mutations are blocked until this is done.
-func runSchemaMutation(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if err := runSchemaMutationHelper(ctx, update, startTs); err != nil {
-		// on error, we restore the memory state to be the same as the disk
-		maxRetries := 10
-		loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
-			return schema.Load(update.Predicate)
-		})
+func undoSchemaUpdate(predicate string) {
+	maxRetries := 10
+	loadErr := x.RetryUntilSuccess(maxRetries, 10*time.Millisecond, func() error {
+		return schema.Load(predicate)
+	})
 
-		if loadErr != nil {
-			glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
-		}
-		return err
+	if loadErr != nil {
+		glog.Fatalf("failed to load schema after %d retries: %v", maxRetries, loadErr)
 	}
-
-	return updateSchema(update)
 }
 
-func runSchemaMutationHelper(ctx context.Context, update *pb.SchemaUpdate, startTs uint64) error {
-	if tablet, err := groups().Tablet(update.Predicate); err != nil {
+func runSchemaMutation(ctx context.Context, updates []*pb.SchemaUpdate, startTs uint64) error {
+	if len(updates) == 0 {
+		return nil
+	}
+	// Wait until schema modification for all predicates is complete. There cannot be two
+	// background tasks running as this is a race condition. We typically won't propose an
+	// index update if one is already going on. If that's not the case, then the receiver
+	// of the update had probably finished the previous index update but some follower
+	// (or perhaps leader) had not finished it.
+	// In other words, the proposer checks whether there is another indexing in progress.
+	// If that's the case, the alter request is rejected. Otherwise, the request is accepted.
+	// Before reaching here, the proposer P would have checked that no indexing is in progress
+	// (could also be because proposer was done earlier than others). If P was still indexing
+	// when the req was received, it would have rejected the Alter request. Only if P is
+	// not indexing, it would accept and propose the request.
+	// It is possible that a receiver R of the proposal is still indexing. In that case, R would
+	// block here and wait for indexing to be finished.
+	gr.Node.waitForTask(opIndexing)
+
+	// done is used to ensure that we only stop the indexing task once.
+	var done uint32
+	start := time.Now()
+	stopIndexing := func(closer *y.Closer) {
+		// runSchemaMutation can return. stopIndexing could be called by goroutines.
+		if !schema.State().IndexingInProgress() {
+			if atomic.CompareAndSwapUint32(&done, 0, 1) {
+				closer.Done()
+				// Time check is here so that we do not propose snapshot too frequently.
+				if time.Since(start) < 10*time.Second || !gr.Node.AmLeader() {
+					return
+				}
+				if err := gr.Node.proposeSnapshot(1); err != nil {
+					glog.Errorf("error in proposing snapshot: %v", err)
+				}
+			}
+		}
+	}
+
+	// Ensure that rollup is not running.
+	closer, err := gr.Node.startTask(opIndexing)
+	if err != nil {
 		return err
-	} else if tablet.GetGroupId() != groups().groupId() {
-		return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+	}
+	defer stopIndexing(closer)
+
+	buildIndexesHelper := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) error {
+		wrtCtx := schema.GetWriteContext(context.Background())
+		if err := rebuild.BuildIndexes(wrtCtx); err != nil {
+			return err
+		}
+		if err := updateSchema(update); err != nil {
+			return err
+		}
+
+		glog.Infof("Done schema update %+v\n", update)
+		return nil
 	}
 
-	if err := checkSchema(update); err != nil {
-		return err
+	// This wg allows waiting until setup for all the predicates is complete
+	// before running buildIndexes for any of those predicates.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	defer wg.Done()
+	buildIndexes := func(update *pb.SchemaUpdate, rebuild posting.IndexRebuild) {
+		// In case background indexing is running, we should call it here again.
+		defer stopIndexing(closer)
+
+		// We should only start building indexes once this function has returned.
+		// This is in order to ensure that we do not call DropPrefix for one predicate
+		// and write indexes for another predicate simultaneously. because that could
+		// cause writes to badger to fail leading to undesired indexing failures.
+		wg.Wait()
+
+		// undo schema changes in case re-indexing fails.
+		if err := buildIndexesHelper(update, rebuild); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(update.Predicate)
+		}
 	}
-	old, _ := schema.State().Get(update.Predicate)
-	// Sets only in memory, we will update it on disk only after schema mutations
-	// are successful and  written to disk.
-	schema.State().Set(update.Predicate, update)
 
-	// Once we remove index or reverse edges from schema, even though the values
-	// are present in db, they won't be used due to validation in work/task.go
+	for _, su := range updates {
+		if tablet, err := groups().Tablet(su.Predicate); err != nil {
+			return err
+		} else if tablet.GetGroupId() != groups().groupId() {
+			return errors.Errorf("Tablet isn't being served by this group. Tablet: %+v", tablet)
+		}
 
-	// We don't want to use sync watermarks for background removal, because it would block
-	// linearizable read requests. Only downside would be on system crash, stale edges
-	// might remain, which is ok.
+		if err := checkSchema(su); err != nil {
+			return err
+		}
 
-	// Indexing can't be done in background as it can cause race conditons with new
-	// index mutations (old set and new del)
-	// We need watermark for index/reverse edge addition for linearizable reads.
-	// (both applied and synced watermarks).
-	defer glog.Infof("Done schema update %+v\n", update)
-	rebuild := posting.IndexRebuild{
-		Attr:          update.Predicate,
-		StartTs:       startTs,
-		OldSchema:     &old,
-		CurrentSchema: update,
+		old, _ := schema.State().Get(ctx, su.Predicate)
+		rebuild := posting.IndexRebuild{
+			Attr:          su.Predicate,
+			StartTs:       startTs,
+			OldSchema:     &old,
+			CurrentSchema: su,
+		}
+		querySchema := rebuild.GetQuerySchema()
+		// Sets the schema only in memory. The schema is written to
+		// disk only after schema mutations are successful.
+		schema.State().Set(su.Predicate, querySchema)
+		schema.State().SetMutSchema(su.Predicate, su)
+
+		// TODO(Aman): If we return an error, we may not have right schema reflected.
+		setup := func() error {
+			if err := rebuild.DropIndexes(ctx); err != nil {
+				return err
+			}
+			return rebuild.BuildData(ctx)
+		}
+		if err := setup(); err != nil {
+			glog.Errorf("error in building indexes, aborting :: %v\n", err)
+			undoSchemaUpdate(su.Predicate)
+			return err
+		}
+
+		if rebuild.NeedIndexRebuild() {
+			go buildIndexes(su, rebuild)
+		} else if err := updateSchema(su); err != nil {
+			return err
+		}
 	}
-	return rebuild.Run(ctx)
+
+	return nil
 }
 
 // updateSchema commits the schema to disk in blocking way, should be ok because this happens
 // only during schema mutations or we see a new predicate.
 func updateSchema(s *pb.SchemaUpdate) error {
 	schema.State().Set(s.Predicate, s)
+	schema.State().DeleteMutSchema(s.Predicate)
 	txn := pstore.NewTransactionAt(1, true)
 	defer txn.Discard()
 	data, err := s.Marshal()
@@ -190,9 +277,11 @@ func updateSchema(s *pb.SchemaUpdate) error {
 }
 
 func createSchema(attr string, typ types.TypeID, hint pb.Metadata_HintType) error {
+	ctx := schema.GetWriteContext(context.Background())
+
 	// Don't overwrite schema blindly, acl's might have been set even though
 	// type is not present
-	s, ok := schema.State().Get(attr)
+	s, ok := schema.State().Get(ctx, attr)
 	if ok {
 		s.ValueType = typ.Enum()
 	} else {
@@ -390,6 +479,17 @@ func ValidateAndConvert(edge *pb.DirectedEdge, su *pb.SchemaUpdate) error {
 	if err = types.Marshal(dst, &b); err != nil {
 		return err
 	}
+
+	if x.WorkerConfig.AclEnabled && edge.GetAttr() == "dgraph.rule.permission" {
+		perm, ok := dst.Value.(int64)
+		if !ok {
+			return errors.Errorf("Value for predicate <dgraph.rule.permission> should be of type int")
+		}
+		if perm < 0 || perm > 7 {
+			return errors.Errorf("Can't set <dgraph.rule.permission> to %d, Value for this predicate should be between 0 and 7", perm)
+		}
+	}
+
 	edge.ValueType = schemaType.Enum()
 	edge.Value = b.Value.([]byte)
 	return nil

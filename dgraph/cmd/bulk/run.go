@@ -17,7 +17,6 @@
 package bulk
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -56,8 +55,11 @@ func init() {
 		"Location of *.rdf(.gz) or *.json(.gz) file(s) to load.")
 	flag.StringP("schema", "s", "",
 		"Location of schema file.")
+	flag.StringP("graphql_schema", "g", "", "Location of the GraphQL schema file.")
 	flag.String("format", "",
 		"Specify file format (rdf or json) instead of getting it from filename.")
+	flag.Bool("encrypted", false,
+		"Flag to indicate whether schema and data files are encrypted.")
 	flag.String("out", defaultOutDir,
 		"Location to write the final dgraph data directories.")
 	flag.Bool("replace_out", false,
@@ -65,10 +67,6 @@ func init() {
 	flag.String("tmp", "tmp",
 		"Temp directory used to use for on-disk scratch space. Requires free space proportional"+
 			" to the size of the RDF file and the amount of indexing used.")
-	flag.String("encryption_key_file", "",
-		"The file that stores the encryption key. The key size must be 16, 24, or 32 bytes long. "+
-			"The key size determines the corresponding block size for AES encryption "+
-			"(AES-128, AES-192, and AES-256 respectively). Enterprise feature.")
 
 	flag.IntP("num_go_routines", "j", int(math.Ceil(float64(runtime.NumCPU())/4.0)),
 		"Number of worker threads to use. MORE THREADS LEAD TO HIGHER RAM USAGE.")
@@ -83,8 +81,9 @@ func init() {
 		"Number of reducers to run concurrently. Increasing this can improve performance, and "+
 			"must be less than or equal to the number of reduce shards.")
 	flag.Bool("version", false, "Prints the version of Dgraph Bulk Loader.")
-	flag.BoolP("store_xids", "x", false, "Generate an xid edge for each node.")
+	flag.Bool("store_xids", false, "Generate an xid edge for each node.")
 	flag.StringP("zero", "z", "localhost:5080", "gRPC address for Dgraph zero")
+	flag.String("xidmap", "", "Directory to store xid to uid mapping")
 	// TODO: Potentially move http server to main.
 	flag.String("http", "localhost:8080",
 		"Address to serve http (pprof).")
@@ -101,40 +100,54 @@ func init() {
 		"Comma separated list of tokenizer plugins")
 	flag.Bool("new_uids", false,
 		"Ignore UIDs in load files and assign new ones.")
+
+	// Options around how to set up Badger.
+	flag.Int("badger.compression_level", 1,
+		"The compression level for Badger. A higher value uses more resources.")
+
+	// Encryption and Vault options
+	enc.RegisterFlags(flag)
 }
 
 func run() {
+	var err error
 	opt := options{
-		DataFiles:        Bulk.Conf.GetString("files"),
-		DataFormat:       Bulk.Conf.GetString("format"),
-		SchemaFile:       Bulk.Conf.GetString("schema"),
-		OutDir:           Bulk.Conf.GetString("out"),
-		ReplaceOutDir:    Bulk.Conf.GetBool("replace_out"),
-		TmpDir:           Bulk.Conf.GetString("tmp"),
-		BadgerKeyFile:    Bulk.Conf.GetString("encryption_key_file"),
-		NumGoroutines:    Bulk.Conf.GetInt("num_go_routines"),
-		MapBufSize:       uint64(Bulk.Conf.GetInt("mapoutput_mb")),
-		SkipMapPhase:     Bulk.Conf.GetBool("skip_map_phase"),
-		CleanupTmp:       Bulk.Conf.GetBool("cleanup_tmp"),
-		NumReducers:      Bulk.Conf.GetInt("reducers"),
-		Version:          Bulk.Conf.GetBool("version"),
-		StoreXids:        Bulk.Conf.GetBool("store_xids"),
-		ZeroAddr:         Bulk.Conf.GetString("zero"),
-		HttpAddr:         Bulk.Conf.GetString("http"),
-		IgnoreErrors:     Bulk.Conf.GetBool("ignore_errors"),
-		MapShards:        Bulk.Conf.GetInt("map_shards"),
-		ReduceShards:     Bulk.Conf.GetInt("reduce_shards"),
-		CustomTokenizers: Bulk.Conf.GetString("custom_tokenizers"),
-		NewUids:          Bulk.Conf.GetBool("new_uids"),
+		DataFiles:              Bulk.Conf.GetString("files"),
+		DataFormat:             Bulk.Conf.GetString("format"),
+		SchemaFile:             Bulk.Conf.GetString("schema"),
+		GqlSchemaFile:          Bulk.Conf.GetString("graphql_schema"),
+		Encrypted:              Bulk.Conf.GetBool("encrypted"),
+		OutDir:                 Bulk.Conf.GetString("out"),
+		ReplaceOutDir:          Bulk.Conf.GetBool("replace_out"),
+		TmpDir:                 Bulk.Conf.GetString("tmp"),
+		NumGoroutines:          Bulk.Conf.GetInt("num_go_routines"),
+		MapBufSize:             uint64(Bulk.Conf.GetInt("mapoutput_mb")),
+		SkipMapPhase:           Bulk.Conf.GetBool("skip_map_phase"),
+		CleanupTmp:             Bulk.Conf.GetBool("cleanup_tmp"),
+		NumReducers:            Bulk.Conf.GetInt("reducers"),
+		Version:                Bulk.Conf.GetBool("version"),
+		StoreXids:              Bulk.Conf.GetBool("store_xids"),
+		ZeroAddr:               Bulk.Conf.GetString("zero"),
+		HttpAddr:               Bulk.Conf.GetString("http"),
+		IgnoreErrors:           Bulk.Conf.GetBool("ignore_errors"),
+		MapShards:              Bulk.Conf.GetInt("map_shards"),
+		ReduceShards:           Bulk.Conf.GetInt("reduce_shards"),
+		CustomTokenizers:       Bulk.Conf.GetString("custom_tokenizers"),
+		NewUids:                Bulk.Conf.GetBool("new_uids"),
+		ClientDir:              Bulk.Conf.GetString("xidmap"),
+		BadgerCompressionLevel: Bulk.Conf.GetInt("badger.compression_level"),
 	}
 
 	x.PrintVersion()
 	if opt.Version {
 		os.Exit(0)
 	}
-	// OSS, non-nil key file --> crash
-	if !enc.EeBuild && opt.BadgerKeyFile != "" {
-		fmt.Printf("Cannot enable encryption: %s", x.ErrNotSupported)
+	if opt.EncryptionKey, err = enc.ReadKey(Bulk.Conf); err != nil {
+		fmt.Printf("unable to read key %v", err)
+		return
+	}
+	if opt.Encrypted && len(opt.EncryptionKey) == 0 {
+		fmt.Printf("Must use --encryption_key_file or vault option(s) with --encrypted option.\n")
 		os.Exit(1)
 	}
 	if opt.SchemaFile == "" {
@@ -174,11 +187,6 @@ func run() {
 	}
 
 	opt.MapBufSize <<= 20 // Convert from MB to B.
-
-	optBuf, err := json.MarshalIndent(&opt, "", "\t")
-	x.Check(err)
-	fmt.Println(string(optBuf))
-
 	maxOpenFilesWarning()
 
 	go func() {

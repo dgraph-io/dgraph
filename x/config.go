@@ -30,6 +30,8 @@ type Options struct {
 	QueryEdgeLimit uint64
 	// NormalizeNodeLimit is the maximum number of nodes allowed in a normalize query.
 	NormalizeNodeLimit int
+	// PollInterval is the polling interval for graphql subscription.
+	PollInterval time.Duration
 }
 
 // Config stores the global instance of this package's options.
@@ -53,8 +55,10 @@ type WorkerOptions struct {
 	Tracing float64
 	// MyAddr stores the address and port for this alpha.
 	MyAddr string
-	// ZeroAddr stores the address and port for the zero instance associated with this alpha.
-	ZeroAddr string
+	// ZeroAddr stores the list of address:port for the zero instances associated with this alpha.
+	// Alpha would communicate via only one zero address from the list. All
+	// the other addresses serve as fallback.
+	ZeroAddr []string
 	// RaftId represents the id of this alpha instance for participating in the RAFT
 	// consensus protocol.
 	RaftId uint64
@@ -76,6 +80,15 @@ type WorkerOptions struct {
 	ProposedGroupId uint32
 	// StartTime is the start time of the alpha
 	StartTime time.Time
+	// LudicrousMode is super fast mode with fewer guarantees.
+	LudicrousMode bool
+	// EncryptionKey is the key used for encryption at rest, backups, exports. Enterprise only feature.
+	EncryptionKey SensitiveByteSlice
+	// LogRequest indicates whether alpha should log all query/mutation requests coming to it.
+	// Ideally LogRequest should be a bool value. But we are reading it using atomics across
+	// queries hence it has been kept as int32. LogRequest value 1 enables logging of requests
+	// coming to alphas and 0 disables it.
+	LogRequest int32
 }
 
 // WorkerConfig stores the global instance of the worker package's options.

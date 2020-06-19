@@ -105,6 +105,8 @@ var (
 		20, 25, 30, 40, 50, 65, 80, 100, 130, 160, 200, 250, 300, 400, 500,
 		650, 800, 1000, 2000, 5000, 10000, 20000, 50000, 100000)
 
+	// Use this tag for the metric view if it needs status or method granularity.
+	// Metrics would be viewed separately for different tag values.
 	allTagKeys = []tag.Key{
 		KeyStatus, KeyMethod,
 	}
@@ -151,15 +153,15 @@ var (
 			Name:        PendingQueries.Name(),
 			Measure:     PendingQueries,
 			Description: PendingQueries.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        PendingProposals.Name(),
 			Measure:     PendingProposals,
 			Description: PendingProposals.Description(),
 			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 		{
 			Name:        MemoryInUse.Name(),
@@ -186,15 +188,15 @@ var (
 			Name:        ActiveMutations.Name(),
 			Measure:     ActiveMutations,
 			Description: ActiveMutations.Description(),
-			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			Aggregation: view.Sum(),
+			TagKeys:     nil,
 		},
 		{
 			Name:        AlphaHealth.Name(),
 			Measure:     AlphaHealth,
 			Description: AlphaHealth.Description(),
 			Aggregation: view.LastValue(),
-			TagKeys:     allTagKeys,
+			TagKeys:     nil,
 		},
 	}
 )
@@ -221,7 +223,11 @@ func init() {
 
 	CheckfNoTrace(view.Register(allViews...))
 
+	prometheus.MustRegister(NewBadgerCollector())
+
 	pe, err := oc_prom.NewExporter(oc_prom.Options{
+		// DefaultRegisterer includes a ProcessCollector for process_* metrics, a GoCollector for
+		// go_* metrics, and the badger_* metrics.
 		Registry:  prometheus.DefaultRegisterer.(*prometheus.Registry),
 		Namespace: "dgraph",
 		OnError:   func(err error) { glog.Errorf("%v", err) },
@@ -230,6 +236,67 @@ func init() {
 	view.RegisterExporter(pe)
 
 	http.Handle("/debug/prometheus_metrics", pe)
+}
+
+// NewBadgerCollector returns a prometheus Collector for Badger metrics from expvar.
+func NewBadgerCollector() prometheus.Collector {
+	return prometheus.NewExpvarCollector(map[string]*prometheus.Desc{
+		"badger_v2_disk_reads_total": prometheus.NewDesc(
+			"badger_v2_disk_reads_total",
+			"Number of cumulative reads by Badger",
+			nil, nil,
+		),
+		"badger_v2_disk_writes_total": prometheus.NewDesc(
+			"badger_v2_disk_writes_total",
+			"Number of cumulative writes by Badger",
+			nil, nil,
+		),
+		"badger_v2_read_bytes": prometheus.NewDesc(
+			"badger_v2_read_bytes",
+			"Number of cumulative bytes read by Badger",
+			nil, nil,
+		),
+		"badger_v2_written_bytes": prometheus.NewDesc(
+			"badger_v2_written_bytes",
+			"Number of cumulative bytes written by Badger",
+			nil, nil,
+		),
+		"badger_v2_lsm_level_gets_total": prometheus.NewDesc(
+			"badger_v2_lsm_level_gets_total",
+			"Total number of LSM gets",
+			[]string{"level"}, nil,
+		),
+		"badger_v2_lsm_bloom_hits_total": prometheus.NewDesc(
+			"badger_v2_lsm_bloom_hits_total",
+			"Total number of LSM bloom hits",
+			[]string{"level"}, nil,
+		),
+		"badger_v2_gets_total": prometheus.NewDesc(
+			"badger_v2_gets_total",
+			"Total number of gets",
+			nil, nil,
+		),
+		"badger_v2_puts_total": prometheus.NewDesc(
+			"badger_v2_puts_total",
+			"Total number of puts",
+			nil, nil,
+		),
+		"badger_v2_memtable_gets_total": prometheus.NewDesc(
+			"badger_v2_memtable_gets_total",
+			"Total number of memtable gets",
+			nil, nil,
+		),
+		"badger_v2_lsm_size": prometheus.NewDesc(
+			"badger_v2_lsm_size",
+			"Size of the LSM in bytes",
+			[]string{"dir"}, nil,
+		),
+		"badger_v2_vlog_size": prometheus.NewDesc(
+			"badger_v2_vlog_size",
+			"Size of the value log in bytes",
+			[]string{"dir"}, nil,
+		),
+	})
 }
 
 // MetricsContext returns a context with tags that are useful for

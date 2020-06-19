@@ -303,7 +303,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	if err := p.Unmarshal(e.Data); err != nil {
 		return p.Key, err
 	}
-	if len(p.Key) == 0 {
+	if p.Key == "" {
 		return p.Key, errInvalidProposal
 	}
 	span := otrace.FromContext(n.Proposals.Ctx(p.Key))
@@ -324,6 +324,7 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 			return p.Key, errInvalidProposal
 		}
 		state.MaxRaftId = p.MaxRaftId
+		n.server.nextRaftId = x.Max(n.server.nextRaftId, p.MaxRaftId+1)
 	}
 	if p.SnapshotTs != nil {
 		for gid, ts := range p.SnapshotTs {
@@ -348,8 +349,8 @@ func (n *node) applyProposal(e raftpb.Entry) (string, error) {
 	}
 	if p.Tablet != nil {
 		if err := n.handleTabletProposal(p.Tablet); err != nil {
-			span.Annotatef(nil, "While applying tablet proposal: %+v", err)
-			glog.Errorf("While applying tablet proposal: %+v", err)
+			span.Annotatef(nil, "While applying tablet proposal: %v", err)
+			glog.Errorf("While applying tablet proposal: %v", err)
 			return p.Key, err
 		}
 	}
@@ -507,6 +508,7 @@ func (n *node) initAndStartNode() error {
 				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
 				if err == nil {
 					glog.Infof("CID set for cluster: %v", id)
+					x.WriteCidFile(id)
 					break
 				}
 				if err == errInvalidProposal {
@@ -517,8 +519,11 @@ func (n *node) initAndStartNode() error {
 				time.Sleep(3 * time.Second)
 			}
 
-			if err := n.proposeTrialLicense(); err != nil {
-				glog.Errorf("while proposing trial license to cluster: %v", err)
+			// Apply trial license only if not already licensed.
+			if n.server.license() == nil {
+				if err := n.proposeTrialLicense(); err != nil {
+					glog.Errorf("while proposing trial license to cluster: %v", err)
+				}
 			}
 		}()
 	}
@@ -618,6 +623,7 @@ func (n *node) trySnapshot(skip uint64) {
 
 func (n *node) Run() {
 	var leader bool
+	licenseApplied := false
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -636,6 +642,10 @@ func (n *node) Run() {
 	go n.updateZeroMembershipPeriodically(closer)
 	go n.checkQuorum(closer)
 	go n.RunReadIndexLoop(closer, readStateCh)
+	if opts.LudicrousMode {
+		closer.AddRunning(1)
+		go x.StoreSync(n.Store, closer)
+	}
 	// We only stop runReadIndexLoop after the for loop below has finished interacting with it.
 	// That way we know sending to readStateCh will not deadlock.
 
@@ -676,13 +686,13 @@ func (n *node) Run() {
 			}
 			n.SaveToStorage(&rd.HardState, rd.Entries, &rd.Snapshot)
 			timer.Record("disk")
-			if rd.MustSync {
+			span.Annotatef(nil, "Saved to storage")
+			if !x.WorkerConfig.LudicrousMode && rd.MustSync {
 				if err := n.Store.Sync(); err != nil {
 					glog.Errorf("Error while calling Store.Sync: %v", err)
 				}
 				timer.Record("sync")
 			}
-			span.Annotatef(nil, "Saved to storage")
 
 			if !raft.IsEmptySnap(rd.Snapshot) {
 				var state pb.MembershipState
@@ -730,6 +740,17 @@ func (n *node) Run() {
 					"Raft.Ready took too long to process: %s."+
 						" Num entries: %d. MustSync: %v",
 					timer.String(), len(rd.Entries), rd.MustSync)
+			}
+
+			// Apply license when I am the leader.
+			if !licenseApplied && n.AmLeader() {
+				licenseApplied = true
+				// Apply the EE License given on CLI which may over-ride previous
+				// license, if present. That is an intended behavior to allow customers
+				// to apply new/renewed licenses.
+				if license := Zero.Conf.GetString("enterprise_license"); len(license) > 0 {
+					go n.server.applyLicenseFile(license)
+				}
 			}
 		}
 	}

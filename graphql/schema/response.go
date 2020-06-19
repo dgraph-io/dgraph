@@ -27,11 +27,38 @@ import (
 	"github.com/pkg/errors"
 )
 
+// Extensions represents GraphQL extensions
+type Extensions struct {
+	TouchedUids uint64 `json:"touched_uids,omitempty"`
+}
+
+// GetTouchedUids returns TouchedUids
+func (e *Extensions) GetTouchedUids() uint64 {
+	if e == nil {
+		return 0
+	}
+	return e.TouchedUids
+}
+
+// Merge merges ext with e
+func (e *Extensions) Merge(ext *Extensions) {
+	if e == nil || ext == nil {
+		return
+	}
+
+	e.TouchedUids += ext.TouchedUids
+}
+
 // GraphQL spec on response is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Response
 
 // GraphQL spec on errors is here:
 // https://graphql.github.io/graphql-spec/June2018/#sec-Errors
+
+// GraphQL spec on extensions says just this:
+// The response map may also contain an entry with key extensions. This entry, if set, must have a
+// map as its value. This entry is reserved for implementors to extend the protocol however they
+// see fit, and hence there are no additional restrictions on its contents.
 
 // Response represents a GraphQL response
 type Response struct {
@@ -40,21 +67,22 @@ type Response struct {
 	Extensions *Extensions
 }
 
-// Extensions : GraphQL specifies allowing "extensions" in results, but the
-// format is up to the implementation.
-type Extensions struct {
-	RequestID string `json:"requestID,omitempty"`
-}
-
 // ErrorResponse formats an error as a list of GraphQL errors and builds
 // a response with that error list and no data.  Because it doesn't add data, it
 // should be used before starting execution - GraphQL spec requires no data if an
 // error is detected before execution begins.
-func ErrorResponse(err error, requestID string) *Response {
+func ErrorResponse(err error) *Response {
 	return &Response{
-		Errors:     AsGQLErrors(err),
-		Extensions: &Extensions{RequestID: requestID},
+		Errors: AsGQLErrors(err),
 	}
+}
+
+// GetExtensions returns a *Extensions
+func (r *Response) GetExtensions() *Extensions {
+	if r == nil {
+		return nil
+	}
+	return r.Extensions
 }
 
 // WithError generates GraphQL errors from err and records those in r.
@@ -71,31 +99,63 @@ func (r *Response) AddData(p []byte) {
 		return
 	}
 
-	if r.Data.Len() > 0 {
-		// The end of the buffer is always the closing `}`
-		r.Data.Truncate(r.Data.Len() - 1)
-		x.Check2(r.Data.WriteRune(','))
-	}
-
 	if r.Data.Len() == 0 {
-		x.Check2(r.Data.WriteRune('{'))
+		x.Check2(r.Data.Write(p))
+		return
 	}
 
-	x.Check2(r.Data.Write(p))
+	// The end of the buffer is always the closing `}`
+	r.Data.Truncate(r.Data.Len() - 1)
+	x.Check2(r.Data.WriteRune(','))
+
+	x.Check2(r.Data.Write(p[1 : len(p)-1]))
 	x.Check2(r.Data.WriteRune('}'))
+}
+
+// MergeExtensions merges the extensions given in ext to r.
+// If r.Extensions is nil before the call, then r.Extensions becomes ext.
+// Otherwise, r.Extensions gets merged with ext.
+func (r *Response) MergeExtensions(ext *Extensions) {
+	if r == nil {
+		return
+	}
+
+	if r.Extensions == nil {
+		r.Extensions = ext
+		return
+	}
+
+	r.Extensions.Merge(ext)
 }
 
 // WriteTo writes the GraphQL response as unindented JSON to w
 // and returns the number of bytes written and error, if any.
 func (r *Response) WriteTo(w io.Writer) (int64, error) {
-	if r == nil {
-		i, err := w.Write([]byte(
-			`{ "errors": [{"message": "Internal error - no response to write."}], ` +
-				` "data": null, "extensions": { "requestID": "unknown request ID" } }`))
-		return int64(i), err
+	js, err := json.Marshal(r.Output())
+
+	if err != nil {
+		msg := "Internal error - failed to marshal a valid JSON response"
+		glog.Errorf("%+v", errors.Wrap(err, msg))
+		js = []byte(fmt.Sprintf(
+			`{ "errors": [{"message": "%s"}], "data": null }`, msg))
 	}
 
-	js, err := json.Marshal(struct {
+	i, err := w.Write(js)
+	return int64(i), err
+}
+
+// Output returns json interface of the response
+func (r *Response) Output() interface{} {
+	if r == nil {
+		return struct {
+			Errors json.RawMessage `json:"errors,omitempty"`
+			Data   json.RawMessage `json:"data,omitempty"`
+		}{
+			Errors: []byte(`[{"message": "Internal error - no response to write."}]`),
+			Data:   []byte("null"),
+		}
+	}
+	return struct {
 		Errors     []*x.GqlError   `json:"errors,omitempty"`
 		Data       json.RawMessage `json:"data,omitempty"`
 		Extensions *Extensions     `json:"extensions,omitempty"`
@@ -103,22 +163,5 @@ func (r *Response) WriteTo(w io.Writer) (int64, error) {
 		Errors:     r.Errors,
 		Data:       r.Data.Bytes(),
 		Extensions: r.Extensions,
-	})
-
-	if err != nil {
-		var reqID string
-		if r.Extensions != nil {
-			reqID = r.Extensions.RequestID
-		} else {
-			reqID = "unknown request ID"
-		}
-		msg := "Internal error - failed to marshal a valid JSON response"
-		glog.Errorf("[%s] %+v", reqID, errors.Wrap(err, msg))
-		js = []byte(fmt.Sprintf(
-			`{ "errors": [{"message": "%s"}], "data": null, "extensions": { "requestID": "%s" } }`,
-			msg, reqID))
 	}
-
-	i, err := w.Write(js)
-	return int64(i), err
 }

@@ -1,0 +1,105 @@
+-
+  name: "custom GET query returning users"
+  gqlquery: |
+    query {
+      myFavoriteMovies(id: "0x1", name: "Michael", num: null) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  httpresponse: |
+    [
+      {
+        "id": "0x1",
+        "name": "Star Wars",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "George Lucas"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Star Trek"
+      }
+    ]
+  url: http://myapi.com/favMovies/0x1?name=Michael&num=
+  method: GET
+  resolvedresponse: |
+    {
+      "myFavoriteMovies": [
+        {
+          "id": "0x1",
+          "name": "Star Wars",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek"
+        }
+      ]
+    }
+
+-
+  name: "custom POST query gets body filled from variables"
+  gqlquery: |
+    query movies($id: ID!) {
+      myFavoriteMoviesPart2(id: $id, name: "Michael", num: 10) {
+        id
+        name
+        director {
+          id
+          name
+        }
+      }
+    }
+  variables: |
+    { "id": "0x9" }
+  httpresponse: |
+    [
+      {
+        "id": "0x1",
+        "director": [
+          {
+            "id": "0x2",
+            "name": "George Lucas"
+          }
+        ]
+      },
+      {
+        "id": "0x3",
+        "name": "Star Trek"
+      }
+    ]
+  url: http://myapi.com/favMovies/0x9?name=Michael&num=10
+  method: POST
+  body: '{ "id": "0x9", "name": "Michael", "director": { "number": 10 }}'
+  headers: { "X-App-Token": ["val"], "Auth0-Token": ["tok"] }
+  resolvedresponse: |
+    {
+      "myFavoriteMoviesPart2": [
+        {
+          "id": "0x1",
+          "director": [
+            {
+              "id": "0x2",
+              "name": "George Lucas"
+            }
+          ]
+        },
+        {
+          "id": "0x3",
+          "name": "Star Trek"
+        }
+      ]
+    }

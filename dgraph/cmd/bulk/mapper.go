@@ -32,7 +32,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
@@ -43,6 +43,8 @@ import (
 	"github.com/dgraph-io/dgraph/x"
 	farm "github.com/dgryski/go-farm"
 )
+
+const partitionKeyShard = 10
 
 type mapper struct {
 	*state
@@ -119,6 +121,29 @@ func (m *mapper) writeMapEntriesToFile(entries []*pb.MapEntry, encodedSize uint6
 		x.Check(gzWriter.Flush())
 		x.Check(gzWriter.Close())
 	}()
+
+	// Create partition keys for the map file.
+	header := &pb.MapHeader{
+		PartitionKeys: [][]byte{},
+	}
+	shardPartitionNo := len(entries) / partitionKeyShard
+	for i := range entries {
+		if shardPartitionNo == 0 {
+			// we have very few entries so no need for partition keys.
+			break
+		}
+		if (i+1)%shardPartitionNo == 0 {
+			header.PartitionKeys = append(header.PartitionKeys, entries[i].GetKey())
+		}
+	}
+	// Write the header to the map file.
+	headerBuf, err := header.Marshal()
+	x.Check(err)
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(headerBuf)))
+	x.Check2(w.Write(lenBuf))
+	x.Check2(w.Write(headerBuf))
+	x.Check(err)
 
 	sizeBuf := make([]byte, binary.MaxVarintLen64)
 	for _, me := range entries {
@@ -206,10 +231,16 @@ func (m *mapper) addMapEntry(key []byte, p *pb.Posting, shard int) {
 
 func (m *mapper) processNQuad(nq gql.NQuad) {
 	sid := m.uid(nq.GetSubject())
+	if sid == 0 {
+		panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetSubject()))
+	}
 	var oid uint64
 	var de *pb.DirectedEdge
 	if nq.GetObjectValue() == nil {
 		oid = m.uid(nq.GetObjectId())
+		if oid == 0 {
+			panic(fmt.Sprintf("invalid UID with value 0 for %v", nq.GetObjectId()))
+		}
 		de = nq.CreateUidEdge(sid, oid)
 	} else {
 		var err error
@@ -331,7 +362,7 @@ func (m *mapper) addIndexMapEntries(nq gql.NQuad, de *pb.DirectedEdge) {
 		x.Check(err)
 
 		// Extract tokens.
-		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetLangTokenizer(toker, nq.Lang))
+		toks, err := tok.BuildTokens(schemaVal.Value, tok.GetTokenizerForLang(toker, nq.Lang))
 		x.Check(err)
 
 		// Store index posting.

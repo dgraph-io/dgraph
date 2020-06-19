@@ -31,8 +31,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
 )
@@ -43,6 +43,7 @@ var (
 	dur     = flag.String("dur", "1m", "How long to run the transactions.")
 	alpha   = flag.String("alpha", "localhost:9080", "Address of Dgraph alpha.")
 	verbose = flag.Bool("verbose", true, "Output all logs in verbose mode.")
+	login   = flag.Bool("login", true, "Login as groot. Used for ACL-enabled cluster.")
 )
 
 var startBal = 10
@@ -175,7 +176,7 @@ func (s *state) runTransaction(dg *dgo.Dgraph, buf *bytes.Buffer) error {
 	fmt.Fprintf(w, "==>\n")
 	defer func() {
 		fmt.Fprintf(w, "---\n")
-		w.Flush()
+		_ = w.Flush()
 	}()
 
 	ctx := context.Background()
@@ -313,8 +314,10 @@ func main() {
 		}
 		dc := api.NewDgraphClient(conn)
 		dg := dgo.NewDgraphClient(dc)
-		// login as groot to perform the DropAll operation later
-		x.Check(dg.Login(context.Background(), "groot", "password"))
+		if *login {
+			// login as groot to perform the DropAll operation later
+			x.Check(dg.Login(context.Background(), "groot", "password"))
+		}
 		clients = append(clients, dg)
 	}
 

@@ -23,7 +23,7 @@ import (
 
 	otrace "go.opencensus.io/trace"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/types/facets"
@@ -69,7 +69,7 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 				return nil, err
 			}
 			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.ReservedPredicates()...)
+			preds = append(preds, x.StarAllPredicates()...)
 		}
 
 		for _, pred := range preds {

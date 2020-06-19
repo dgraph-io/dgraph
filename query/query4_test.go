@@ -22,7 +22,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -636,19 +636,19 @@ func TestHasOrderDesc(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": ""
-			  },
-			  {
-				"name": ""
-			  },
-			  {
-				"name": "Badger"
-			  },
-			  {
 				"name": "name"
 			  },
 			  {
 				"name": "expand"
+			  },
+			  {
+				"name": "Shoreline Amphitheater"
+			  },
+			  {
+				"name": "School B"
+			  },
+			  {
+				"name": "School A"
 			  }
 			]
 		  }
@@ -665,19 +665,19 @@ func TestHasOrderDescOffset(t *testing.T) {
 		"data": {
 			"q": [
 			  {
-				"name": "Shoreline Amphitheater"
-			  },
-			  {
-				"name": "School B"
-			  },
-			  {
-				"name": "School A"
-			  },
-			  {
 				"name": "San Mateo School District"
 			  },
 			  {
 				"name": "San Mateo High School"
+			  },
+			  {
+				"name": "San Mateo County"
+			  },
+			  {
+				"name": "San Carlos Airport"
+			  },
+			  {
+				"name": "San Carlos"
 			  }
 			]
 		  }
@@ -1545,4 +1545,5 @@ func TestNumUids(t *testing.T) {
 	metrics := processQueryForMetrics(t, query)
 	require.Equal(t, metrics.NumUids["friend"], uint64(10))
 	require.Equal(t, metrics.NumUids["name"], uint64(16))
+	require.Equal(t, metrics.NumUids["_total"], uint64(26))
 }

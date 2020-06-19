@@ -28,12 +28,24 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/golang/glog"
+	"github.com/pkg/errors"
+	ostats "go.opencensus.io/stats"
+	"go.opencensus.io/tag"
+	"go.opencensus.io/trace"
+	otrace "go.opencensus.io/trace"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
+	"google.golang.org/grpc/status"
 
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/chunker"
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/dgraph/cmd/zero"
+	"github.com/dgraph-io/dgraph/ee"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -44,18 +56,6 @@ import (
 	"github.com/dgraph-io/dgraph/types/facets"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/gogo/protobuf/jsonpb"
-	"github.com/golang/glog"
-	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
-	"google.golang.org/grpc/status"
-
-	ostats "go.opencensus.io/stats"
-	"go.opencensus.io/tag"
-	"go.opencensus.io/trace"
-	otrace "go.opencensus.io/trace"
 )
 
 const (
@@ -67,7 +67,8 @@ const (
 type GraphqlContextKey int
 
 const (
-	// IsGraphql is used to validate requests which are allowed to mutate dgraph.graphql.schema.
+	// IsGraphql is used to validate requests which are allowed to mutate GraphQL reserved
+	// predicates, like dgraph.graphql.schema and dgraph.graphql.xid.
 	IsGraphql GraphqlContextKey = iota
 	// Authorize is used to set if the request requires validation.
 	Authorize
@@ -88,6 +89,10 @@ var (
 	numGraphQL   uint64
 )
 
+var (
+	errIndexingInProgress = errors.New("errIndexingInProgress. Please retry")
+)
+
 // Server implements protos.DgraphServer
 type Server struct{}
 
@@ -96,7 +101,7 @@ func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
 
 	start := time.Now()
-	ticker := time.NewTicker(time.Minute)
+	ticker := time.NewTicker(time.Minute * 10)
 	defer ticker.Stop()
 
 	var lastPostedAt time.Time
@@ -236,15 +241,20 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	// If a background task is already running, we should reject all the new alter requests.
+	if schema.State().IndexingInProgress() {
+		return nil, errIndexingInProgress
+	}
+
 	result, err := schema.Parse(op.Schema)
 	if err != nil {
 		return empty, err
 	}
 
 	for _, update := range result.Preds {
-		// Reserved predicates cannot be altered but let the update go through
+		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsReservedPredicateChanged(update.Predicate, update) {
+		if schema.IsPreDefinedPredicateChanged(update.Predicate, update) {
 			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
 				update.Predicate)
 			return nil, err
@@ -253,6 +263,25 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		if err := validatePredName(update.Predicate); err != nil {
 			return nil, err
 		}
+		// Users are not allowed to create a predicate under the reserved `dgraph.` namespace. But,
+		// there are pre-defined predicates (subset of reserved predicates), and for them we allow
+		// the schema update to go through if the update is equal to the existing one.
+		// So, here we check if the predicate is reserved but not pre-defined to block users from
+		// creating predicates in reserved namespace.
+		if x.IsReservedPredicate(update.Predicate) && !x.IsPreDefinedPredicate(update.Predicate) {
+			return nil, errors.Errorf("Can't alter predicate `%s` as it is prefixed with `dgraph.`"+
+				" which is reserved as the namespace for dgraph's internal types/predicates.",
+				update.Predicate)
+		}
+	}
+
+	for _, typ := range result.Types {
+		// Users are not allowed to create types in reserved namespace.
+		if x.IsReservedType(typ.TypeName) {
+			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
+				"which is reserved as the namespace for dgraph's internal types/predicates.",
+				typ.TypeName)
+		}
 	}
 
 	glog.Infof("Got schema: %+v\n", result)
@@ -260,7 +289,21 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	m.Types = result.Types
 	_, err = query.ApplyMutations(ctx, m)
-	return empty, err
+	if err != nil {
+		return empty, err
+	}
+
+	// wait for indexing to complete or context to be canceled.
+	for !op.RunInBackground {
+		if ctx.Err() != nil {
+			return empty, ctx.Err()
+		}
+		if !schema.State().IndexingInProgress() {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+	return empty, nil
 }
 
 func annotateStartTs(span *otrace.Span, ts uint64) {
@@ -271,9 +314,11 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if len(qc.gmuList) == 0 {
 		return nil
 	}
-
 	if ctx.Err() != nil {
 		return ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -323,6 +368,15 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
 	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
+
+	if x.WorkerConfig.LudicrousMode {
+		// Mutations are automatically committed in case of ludicrous mode, so we don't
+		// need to manually commit.
+		resp.Txn.Keys = resp.Txn.Keys[:0]
+		resp.Txn.CommitTs = qc.req.StartTs
+		return err
+	}
+
 	if !qc.req.CommitNow {
 		if err == zero.ErrConflict {
 			err = status.Error(codes.FailedPrecondition, err.Error())
@@ -473,7 +527,7 @@ func findMutationVars(qc *queryContext) []string {
 // Assumption is that Subject can contain UID, whereas Object can contain Val
 // If val(variable) exists in a query, but the values are not there for the variable,
 // it will ignore the mutation silently.
-func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
+func updateValInNQuads(nquads []*api.NQuad, qc *queryContext, isSet bool) []*api.NQuad {
 	getNewVals := func(s string) (map[uint64]types.Val, bool) {
 		if strings.HasPrefix(s, "val(") {
 			varName := s[4 : len(s)-1]
@@ -512,18 +566,24 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 		// to *api.Value before applying the mutation. For that, first
 		// we convert key to uint64 and get the UID to Value map from
 		// the result of the query.
-		if nq.Subject[0] == '_' {
-			// UID is of format "_:uid(u)". Ignore silently
+		var key uint64
+		var err error
+		switch {
+		case nq.Subject[0] == '_' && isSet:
+			// in case aggregate val(var) is there, that should work with blank node.
+			key = 0
+		case nq.Subject[0] == '_' && !isSet:
+			// UID is of format "_:uid(u)". Ignore the delete silently
 			continue
-		}
-
-		key, err := strconv.ParseUint(nq.Subject, 0, 64)
-		if err != nil {
-			// Key conversion failed, ignoring the nquad. Ideally,
-			// it shouldn't happen as this is the result of a query.
-			glog.Errorf("Conversion of subject %s failed. Error: %s",
-				nq.Subject, err.Error())
-			continue
+		default:
+			key, err = strconv.ParseUint(nq.Subject, 0, 64)
+			if err != nil {
+				// Key conversion failed, ignoring the nquad. Ideally,
+				// it shouldn't happen as this is the result of a query.
+				glog.Errorf("Conversion of subject %s failed. Error: %s",
+					nq.Subject, err.Error())
+				continue
+			}
 		}
 
 		// Get the value to the corresponding UID(key) from the query result
@@ -551,8 +611,8 @@ func updateValInNQuads(nquads []*api.NQuad, qc *queryContext) []*api.NQuad {
 // updateValInMuations does following transformations:
 // 0x123 <amount> val(v) -> 0x123 <amount> 13.0
 func updateValInMutations(gmu *gql.Mutation, qc *queryContext) {
-	gmu.Del = updateValInNQuads(gmu.Del, qc)
-	gmu.Set = updateValInNQuads(gmu.Set, qc)
+	gmu.Del = updateValInNQuads(gmu.Del, qc, false)
+	gmu.Set = updateValInNQuads(gmu.Set, qc, true)
 }
 
 // updateUIDInMutations does following transformations:
@@ -650,29 +710,37 @@ type queryContext struct {
 	graphql bool
 }
 
-// HealthAll handles health?all requests.
-func (s *Server) HealthAll(ctx context.Context) (*api.Response, error) {
+// Health handles /health and /health?all requests.
+func (s *Server) Health(ctx context.Context, all bool) (*api.Response, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if err := authorizeGroot(ctx); err != nil {
-		return nil, err
-	}
 
 	var healthAll []pb.HealthInfo
-	pool := conn.GetPools().GetAll()
-	for _, p := range pool {
-		healthAll = append(healthAll, p.HealthInfo())
+	if all {
+		if err := AuthorizeGuardians(ctx); err != nil {
+			return nil, err
+		}
+		pool := conn.GetPools().GetAll()
+		for _, p := range pool {
+			if p.Addr == x.WorkerConfig.MyAddr {
+				continue
+			}
+			healthAll = append(healthAll, p.HealthInfo())
+		}
 	}
 	// Append self.
 	healthAll = append(healthAll, pb.HealthInfo{
-		Instance: "alpha",
-		Addr:     x.WorkerConfig.MyAddr,
-		Status:   "healthy",
-		Group:    strconv.Itoa(int(worker.GroupId())),
-		Version:  x.Version(),
-		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
-		LastEcho: time.Now().Unix(),
+		Instance:   "alpha",
+		Address:    x.WorkerConfig.MyAddr,
+		Status:     "healthy",
+		Group:      strconv.Itoa(int(worker.GroupId())),
+		Version:    x.Version(),
+		Uptime:     int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho:   time.Now().Unix(),
+		Ongoing:    worker.GetOngoingTasks(),
+		Indexing:   schema.GetIndexingPredicates(),
+		EeFeatures: ee.GetEEFeaturesList(),
 	})
 
 	var err error
@@ -689,7 +757,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, ctx.Err()
 	}
 
-	if err := authorizeGroot(ctx); err != nil {
+	if err := AuthorizeGuardians(ctx); err != nil {
 		return nil, err
 	}
 
@@ -718,6 +786,9 @@ func (s *Server) Query(ctx context.Context, req *api.Request) (*api.Response, er
 
 func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode) (
 	resp *api.Response, rerr error) {
+	if bool(glog.V(3)) || worker.LogRequestEnabled() {
+		glog.Infof("Got a query: %+v", req)
+	}
 	isGraphQL, _ := ctx.Value(IsGraphql).(bool)
 	if isGraphQL {
 		atomic.AddUint64(&numGraphQL, 1)
@@ -789,7 +860,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// assigned in the processQuery function called below.
 	defer annotateStartTs(qc.span, qc.req.StartTs)
 	// For mutations, we update the startTs if necessary.
-	if isMutation && req.StartTs == 0 {
+	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
 		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
@@ -820,7 +891,12 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	if len(qc.req.Query) == 0 {
 		return resp, nil
 	}
-
+	if ctx.Err() != nil {
+		return resp, ctx.Err()
+	}
+	if x.WorkerConfig.LudicrousMode {
+		qc.req.StartTs = posting.Oracle().MaxAssigned()
+	}
 	qr := query.Request{
 		Latency:  qc.latency,
 		GqlQuery: &qc.gqlRes,
@@ -933,6 +1009,11 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	resp.Metrics = &api.Metrics{
 		NumUids: er.Metrics,
 	}
+	var total uint64
+	for _, num := range resp.Metrics.NumUids {
+		total += num
+	}
+	resp.Metrics.NumUids["_total"] = total
 
 	return resp, err
 }
@@ -988,7 +1069,7 @@ func parseRequest(qc *queryContext) error {
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
-	if err := authorizeQuery(ctx, &qc.gqlRes); err != nil {
+	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
 		return err
 	}
 

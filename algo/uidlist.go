@@ -96,9 +96,13 @@ func IntersectCompressedWithBin(dec *codec.Decoder, q []uint64, o *[]uint64) {
 	ld := dec.ApproxLen()
 	lq := len(q)
 
-	if ld == 0 || lq == 0 {
+	if lq == 0 {
+		// Not checking whether ld == 0 because that is an approximate size.
+		// If the actual length of the list is zero, the for loop below will
+		// do nothing as expected.
 		return
 	}
+
 	// Pick the shorter list and do binary search
 	if ld < lq {
 		uids := dec.Uids()
@@ -150,11 +154,12 @@ func IntersectWith(u, v, o *pb.List) {
 	}
 	// Select appropriate function based on heuristics.
 	ratio := float64(m) / float64(n)
-	if ratio < 100 {
+	switch {
+	case ratio < 100:
 		IntersectWithLin(u.Uids, v.Uids, &dst)
-	} else if ratio < 500 {
+	case ratio < 500:
 		IntersectWithJump(u.Uids, v.Uids, &dst)
-	} else {
+	default:
 		IntersectWithBin(u.Uids, v.Uids, &dst)
 	}
 	o.Uids = dst
@@ -168,14 +173,15 @@ func IntersectWithLin(u, v []uint64, o *[]uint64) (int, int) {
 	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
-		if uid > vid {
+		switch {
+		case uid > vid:
 			for k = k + 1; k < m && v[k] < uid; k++ {
 			}
-		} else if uid == vid {
+		case uid == vid:
 			*o = append(*o, uid)
 			k++
 			i++
-		} else {
+		default:
 			for i = i + 1; i < n && u[i] < vid; i++ {
 			}
 		}
@@ -192,18 +198,19 @@ func IntersectWithJump(u, v []uint64, o *[]uint64) (int, int) {
 	for i < n && k < m {
 		uid := u[i]
 		vid := v[k]
-		if uid == vid {
+		switch {
+		case uid == vid:
 			*o = append(*o, uid)
 			k++
 			i++
-		} else if k+jump < m && uid > v[k+jump] {
+		case k+jump < m && uid > v[k+jump]:
 			k += jump
-		} else if i+jump < n && vid > u[i+jump] {
+		case i+jump < n && vid > u[i+jump]:
 			i += jump
-		} else if uid > vid {
+		case uid > vid:
 			for k = k + 1; k < m && v[k] < uid; k++ {
 			}
-		} else {
+		default:
 			for i = i + 1; i < n && u[i] < vid; i++ {
 			}
 		}
@@ -330,15 +337,16 @@ func Difference(u, v *pb.List) *pb.List {
 	for i < n && k < m {
 		uid := u.Uids[i]
 		vid := v.Uids[k]
-		if uid < vid {
+		switch {
+		case uid < vid:
 			for i < n && u.Uids[i] < vid {
 				out = append(out, u.Uids[i])
 				i++
 			}
-		} else if uid == vid {
+		case uid == vid:
 			i++
 			k++
-		} else {
+		default:
 			for k = k + 1; k < m && v.Uids[k] < uid; k++ {
 			}
 		}

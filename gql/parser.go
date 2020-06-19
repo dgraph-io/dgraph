@@ -474,6 +474,9 @@ func substituteVariablesFilter(f *FilterTree, vmap varMap) error {
 		}
 
 		for idx, v := range f.Func.Args {
+			if !v.IsGraphQLVar {
+				continue
+			}
 			if f.Func.Name == uidFunc {
 				// This is to support GraphQL variables in uid functions.
 				idVal, ok := vmap[v.Value]
@@ -1553,11 +1556,11 @@ loop:
 	return nil
 }
 
-// parseIneqArgs will try to parse the arguments inside an array ([]). If the values
+// parseFuncArgs will try to parse the arguments inside an array ([]). If the values
 // are prefixed with $ they are treated as Gql variables, otherwise they are used as scalar values.
 // Returns nil on success while appending arguments to the function Args slice. Otherwise
 // returns an error, which can be a parsing or value error.
-func parseIneqArgs(it *lex.ItemIterator, g *Function) error {
+func parseFuncArgs(it *lex.ItemIterator, g *Function) error {
 	var expectArg, isDollar bool
 
 	expectArg = true
@@ -1610,7 +1613,7 @@ func getValueArg(val string) (string, error) {
 }
 
 func validFuncName(name string) bool {
-	if isGeoFunc(name) || isInequalityFn(name) {
+	if isGeoFunc(name) || IsInequalityFn(name) {
 		return true
 	}
 
@@ -1711,7 +1714,7 @@ L:
 						return nil,
 							itemInFunc.Errorf("Multiple variables not allowed in len function")
 					}
-					if !isInequalityFn(function.Name) {
+					if !IsInequalityFn(function.Name) {
 						return nil,
 							itemInFunc.Errorf("len function only allowed inside inequality" +
 								" function")
@@ -1760,8 +1763,11 @@ L:
 				case isGeoFunc(function.Name):
 					err = parseGeoArgs(it, function)
 
-				case isInequalityFn(function.Name):
-					err = parseIneqArgs(it, function)
+				case IsInequalityFn(function.Name):
+					err = parseFuncArgs(it, function)
+
+				case function.Name == "uid_in":
+					err = parseFuncArgs(it, function)
 
 				default:
 					err = itemInFunc.Errorf("Unexpected character [ while parsing request.")
@@ -2471,7 +2477,7 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 func parseLanguageList(it *lex.ItemIterator) ([]string, error) {
 	item := it.Item()
 	var langs []string
-	for ; item.Typ == itemName || item.Typ == itemPeriod; item = it.Item() {
+	for ; item.Typ == itemName || item.Typ == itemPeriod || item.Typ == itemStar; item = it.Item() {
 		langs = append(langs, item.Val)
 		it.Next()
 		if it.Item().Typ == itemColon {
@@ -3222,7 +3228,7 @@ func isGeoFunc(name string) bool {
 	return name == "near" || name == "contains" || name == "within" || name == "intersects"
 }
 
-func isInequalityFn(name string) bool {
+func IsInequalityFn(name string) bool {
 	switch name {
 	case "eq", "le", "ge", "gt", "lt":
 		return true

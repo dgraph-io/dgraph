@@ -20,8 +20,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -102,7 +102,7 @@ const (
 )
 
 func SchemaTest(t *testing.T, expectedDgraphSchema string) {
-	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))

@@ -17,6 +17,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -38,7 +40,7 @@ func TestLoaderXidmap(t *testing.T) {
 
 	data, err := filepath.Abs("testdata/first.rdf.gz")
 	require.NoError(t, err)
-	liveCmd := exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+	liveCmd := exec.Command(testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
@@ -50,7 +52,7 @@ func TestLoaderXidmap(t *testing.T) {
 	// Load another file, live should reuse the xidmap.
 	data, err = filepath.Abs("testdata/second.rdf.gz")
 	require.NoError(t, err)
-	liveCmd = exec.Command(os.ExpandEnv("$GOPATH/bin/dgraph"), "live",
+	liveCmd = exec.Command(testutil.DgraphBinaryPath(), "live",
 		"--files", data,
 		"--alpha", testutil.SockAddr,
 		"--zero", testutil.SockAddrZero,
@@ -61,12 +63,40 @@ func TestLoaderXidmap(t *testing.T) {
 	liveCmd.Stderr = os.Stdout
 	require.NoError(t, liveCmd.Run())
 
-	resp, err := http.Get(fmt.Sprintf("http://%s/admin/export", testutil.SockAddrHttp))
+	exportRequest := `mutation {
+		export(input: {format: "rdf"}) {
+			response {
+				code
+				message
+			}
+		}
+	}`
+
+	adminUrl := "http://" + testutil.SockAddrHttp + "/admin"
+	params := testutil.GraphQLParams{
+		Query:     exportRequest,
+		Variables: map[string]interface{}{"format": "json"},
+	}
+	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
-	b, _ := ioutil.ReadAll(resp.Body)
-	expected := `{"code": "Success", "message": "Export completed."}`
-	require.Equal(t, expected, string(b))
+	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	b, err = ioutil.ReadAll(resp.Body)
+	require.NoError(t, err)
+	expected := `{
+		"data": {
+		  "export": {
+			"response": {
+			  "code": "Success",
+			  "message": "Export completed."
+			}
+		  }
+		}
+	  }`
+	require.JSONEq(t, expected, string(b))
 
 	require.NoError(t, copyExportFiles(tmpDir))
 
@@ -77,11 +107,11 @@ func TestLoaderXidmap(t *testing.T) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	require.NoError(t, err)
 
-	expected = `<0x1> <age> "13" .
-<0x1> <friend> <0x2711> .
-<0x1> <location> "Wonderland" .
-<0x1> <name> "Alice" .
-<0x2711> <name> "Bob" .
+	expected = `<0x2712> <name> "Bob" .
+<0x2> <age> "13" .
+<0x2> <friend> <0x2712> .
+<0x2> <location> "Wonderland" .
+<0x2> <name> "Alice" .
 `
 	require.Equal(t, expected, string(out))
 }

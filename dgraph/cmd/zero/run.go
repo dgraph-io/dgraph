@@ -18,6 +18,7 @@ package zero
 
 import (
 	"context"
+	//	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -36,6 +37,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/conn"
+	"github.com/dgraph-io/dgraph/ee/enc"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/raftwal"
 	"github.com/dgraph-io/dgraph/x"
@@ -52,6 +54,7 @@ type options struct {
 	peer              string
 	w                 string
 	rebalanceInterval time.Duration
+	LudicrousMode     bool
 }
 
 var opts options
@@ -87,14 +90,17 @@ instances to achieve high-availability.
 	flag.StringP("wal", "w", "zw", "Directory storing WAL.")
 	flag.Duration("rebalance_interval", 8*time.Minute, "Interval for trying a predicate move.")
 	flag.Bool("telemetry", true, "Send anonymous telemetry data to Dgraph devs.")
+	flag.Bool("enable_sentry", true, "Turn on/off sending events to Sentry. (default on)")
 
 	// OpenCensus flags.
-	flag.Float64("trace", 1.0, "The ratio of queries to trace.")
+	flag.Float64("trace", 0.01, "The ratio of queries to trace.")
 	flag.String("jaeger.collector", "", "Send opencensus traces to Jaeger.")
 	// See https://github.com/DataDog/opencensus-go-exporter-datadog/issues/34
 	// about the status of supporting annotation logs through the datadog exporter
 	flag.String("datadog.collector", "", "Send opencensus traces to Datadog. As of now, the trace"+
 		" exporter does not support annotation logs and would discard them.")
+	flag.Bool("ludicrous_mode", false, "Run zero in ludicrous mode")
+	flag.String("enterprise_license", "", "Path to the enterprise license file.")
 }
 
 func setupListener(addr string, port int, kind string) (listener net.Listener, err error) {
@@ -158,6 +164,13 @@ func (st *state) serveGRPC(l net.Listener, store *raftwal.DiskStorage) {
 }
 
 func run() {
+	if Zero.Conf.GetBool("enable_sentry") {
+		x.InitSentry(enc.EeBuild)
+		defer x.FlushSentry()
+		x.ConfigureSentryScope("zero")
+		x.WrapPanics()
+	}
+
 	x.PrintVersion()
 	opts = options{
 		bindall:           Zero.Conf.GetBool("bindall"),
@@ -168,6 +181,15 @@ func run() {
 		peer:              Zero.Conf.GetString("peer"),
 		w:                 Zero.Conf.GetString("wal"),
 		rebalanceInterval: Zero.Conf.GetDuration("rebalance_interval"),
+		LudicrousMode:     Zero.Conf.GetBool("ludicrous_mode"),
+	}
+
+	x.WorkerConfig = x.WorkerOptions{
+		LudicrousMode: Zero.Conf.GetBool("ludicrous_mode"),
+	}
+
+	if !enc.EeBuild && Zero.Conf.GetString("enterprise_license") != "" {
+		log.Fatalf("ERROR: enterprise_license option cannot be applied to OSS builds. ")
 	}
 
 	if opts.numReplicas < 0 || opts.numReplicas%2 == 0 {
@@ -181,6 +203,12 @@ func run() {
 			return true, true
 		}
 	}
+
+	if opts.rebalanceInterval <= 0 {
+		log.Fatalf("ERROR: Rebalance interval must be greater than zero. Found: %d",
+			opts.rebalanceInterval)
+	}
+
 	grpc.EnableTracing = false
 	otrace.ApplyConfig(otrace.Config{
 		DefaultSampler: otrace.ProbabilitySampler(Zero.Conf.GetFloat64("trace"))})
@@ -189,32 +217,29 @@ func run() {
 	if opts.bindall {
 		addr = "0.0.0.0"
 	}
-	if len(opts.myAddr) == 0 {
+	if opts.myAddr == "" {
 		opts.myAddr = fmt.Sprintf("localhost:%d", x.PortZeroGrpc+opts.portOffset)
 	}
+
 	grpcListener, err := setupListener(addr, x.PortZeroGrpc+opts.portOffset, "grpc")
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 	httpListener, err := setupListener(addr, x.PortZeroHTTP+opts.portOffset, "http")
-	if err != nil {
-		log.Fatal(err)
-	}
+	x.Check(err)
 
 	// Open raft write-ahead log and initialize raft node.
 	x.Checkf(os.MkdirAll(opts.w, 0700), "Error while creating WAL dir.")
 	kvOpt := badger.LSMOnlyOptions(opts.w).WithSyncWrites(false).WithTruncate(true).
-		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20)
+		WithValueLogFileSize(64 << 20).WithMaxCacheSize(10 << 20).WithLoadBloomsOnOpen(false)
 
-	// TOOD(Ibrahim): Remove this once badger is updated.
-	kvOpt.ZSTDCompressionLevel = 1
+	kvOpt.ZSTDCompressionLevel = 3
 
 	kv, err := badger.Open(kvOpt)
 	x.Checkf(err, "Error while opening WAL store")
 	defer kv.Close()
 
-	// zero out from memory
-	kvOpt.EncryptionKey = nil
+	gcCloser := y.NewCloser(1) // closer for vLogGC
+	go x.RunVlogGC(kv, gcCloser)
+	defer gcCloser.SignalAndWait()
 
 	store := raftwal.Init(kv, opts.nodeId, 0)
 
@@ -243,10 +268,19 @@ func run() {
 
 	// handle signals
 	go func() {
+		var sigCnt int
 		for sig := range sdCh {
 			glog.Infof("--- Received %s signal", sig)
-			signal.Stop(sdCh)
-			st.zero.closer.Signal()
+			sigCnt++
+			if sigCnt == 1 {
+				signal.Stop(sdCh)
+				st.zero.closer.Signal()
+			} else if sigCnt == 3 {
+				glog.Infof("--- Got interrupt signal 3rd time. Aborting now.")
+				os.Exit(1)
+			} else {
+				glog.Infof("--- Ignoring interrupt signal.")
+			}
 		}
 	}()
 
@@ -263,9 +297,14 @@ func run() {
 		_ = httpListener.Close()
 		// Stop Raft.
 		st.node.closer.SignalAndWait()
+		// Try to generate a snapshot before the shutdown.
+		st.node.trySnapshot(0)
+		// Stop Raft store.
+		store.Closer.SignalAndWait()
 		// Stop all internal requests.
 		_ = grpcListener.Close()
-		st.node.trySnapshot(0)
+
+		x.RemoveCidFile()
 	}()
 
 	glog.Infoln("Running Dgraph Zero...")

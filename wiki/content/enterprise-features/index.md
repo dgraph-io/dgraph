@@ -11,10 +11,7 @@ forum](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code. The license can
-be applied to the cluster by including it as the body of a POST request and calling
-`/enterpriseLicense` HTTP endpoint on any Zero server.
-
+continue using the enterprise features released in the proprietary code.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
@@ -22,6 +19,20 @@ access to the enterprise features will be suspended. The cluster will continue t
 enterprise features.
 {{% /notice %}}
 
+When you have an enterprise license key, the license can be applied to the cluster by including it
+as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+
+```sh
+curl -X POST localhost:6080/enterpriseLicense --upload-file ./licensekey.txt
+```
+
+It can also be applied by passing the path to the enterprise license file (using the flag
+`--enterprise_license`) to the `dgraph zero` command used to start the server. The second option is
+useful when the process needs to be automated.
+
+```sh
+dgraph zero --enterprise_license ./licensekey.txt
+```
 
 [dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
 
@@ -35,7 +46,7 @@ Binary backups are full backups of Dgraph that are backed up directly to cloud
 storage such as Amazon S3 or any Minio storage backend. Backups can also be
 saved to an on-premise network file system shared by all alpha instances. These
 backups can be used to restore a new Dgraph cluster to the previous state from
-the backup. Unlike [exports]({{< relref "deploy/index.md#export-database" >}}),
+the backup. Unlike [exports]({{< relref "deploy/index.md#exporting-database" >}}),
 binary backups are Dgraph-specific and can be used to restore a cluster quickly.
 
 ### Configure Backup
@@ -66,21 +77,89 @@ environment variables:
 
 ### Create a Backup
 
-To create a backup, make an HTTP POST request to `/admin/backup` to a Dgraph
+To create a backup, make an HTTP POST request to `/admin` to a Dgraph
 Alpha HTTP address and port (default, "localhost:8080"). Like with all `/admin`
 endpoints, this is only accessible on the same machine as the Alpha unless
-[whitelisted for admin operations]({{< relref "deploy/index.md#whitelist-admin-operations" >}}).
+[whitelisted for admin operations]({{< relref "deploy/index.md#whitelisting-admin-operations" >}}).
+Execute the following mutation on /admin endpoint using any GraphQL compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
 #### Backup to Amazon S3
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=s3://s3.us-west-2.amazonaws.com/<bucketname>"
+```graphql
+mutation {
+  backup(input: {destination: "s3://s3.us-west-2.amazonaws.com/<bucketname>"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 #### Backup to Minio
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>"
+```graphql
+mutation {
+  backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>"}) {
+    response {
+      message
+      code
+    }
+  }
+}
+```
+
+
+#### Backup to Minio
+
+#### Backup to Google Cloud Storage via Minio Gateway
+
+1. [Create a Service Account key](https://github.com/minio/minio/blob/master/docs/gateway/gcs.md#11-create-a-service-account-ey-for-gcs-and-get-the-credentials-file) for GCS and get the Credentials File
+2. Run MinIO GCS Gateway Using Docker
+```
+docker run -p 9000:9000 --name gcs-s3 \
+ -v /path/to/credentials.json:/credentials.json \
+ -e "GOOGLE_APPLICATION_CREDENTIALS=/credentials.json" \
+ -e "MINIO_ACCESS_KEY=minioaccountname" \
+ -e "MINIO_SECRET_KEY=minioaccountkey" \
+ minio/minio gateway gcs yourprojectid
+```
+3. Run MinIO GCS Gateway Using the MinIO Binary
+```
+export GOOGLE_APPLICATION_CREDENTIALS=/path/to/credentials.json
+export MINIO_ACCESS_KEY=minioaccesskey
+export MINIO_SECRET_KEY=miniosecretkey
+minio gateway gcs yourprojectid
+```
+#### Test Using MinIO Browser
+MinIO Gateway comes with an embedded web-based object browser that outputs content to http://127.0.0.1:9000. To test that MinIO Gateway is running, open a web browser, navigate to http://127.0.0.1:9000, and ensure that the object browser is displayed.
+![](https://github.com/minio/minio/blob/master/docs/screenshots/minio-browser-gateway.png?raw=true)
+
+#### Test Using MinIO Client
+
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, mirror, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+MinIO Client is a command-line tool called mc that provides UNIX-like commands for interacting with the server (e.g. ls, cat, cp, diff, find, etc.). mc supports file systems and Amazon S3-compatible cloud storage services (AWS Signature v2 and v4).
+
+1. Configure the Gateway using MinIO Client
+
+Use the following command to configure the gateway:
+```
+mc config host add mygcs http://gateway-ip:9000 minioaccesskey miniosecretkey
+```
+
+2. List Containers on GCS
+
+Use the following command to list the containers on GCS:
+
+```
+mc ls mygcs
+```
+A response similar to this one should be displayed:
+
+```
+[2017-02-22 01:50:43 PST]     0B ferenginar/
+[2017-02-26 21:43:51 PST]     0B my-container/
+[2017-02-26 22:10:11 PST]     0B test-container1/
 ```
 
 #### Disabling HTTPS for S3 and Minio backups
@@ -88,15 +167,22 @@ $ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000
 By default, Dgraph assumes the destination bucket is using HTTPS. If that is not
 the case, the backup will fail. To send a backup to a bucket using HTTP
 (insecure), set the query parameter `secure=false` with the destination
-endpoint:
+endpoint in the `destination` field:
 
-```sh
-$ curl -XPOST localhost:8080/admin/backup -d "destination=minio://127.0.0.1:9000/<bucketname>?secure=false"
+```graphql
+mutation {
+  backup(input: {destination: "minio://127.0.0.1:9000/<bucketname>?secure=false"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 #### Overriding Credentials
 
-The `access_key`, `secret_key`, and `session_token` parameters can be used to
+The `accessKey`, `secretKey`, and `sessionToken` parameters can be used to
 override the default credentials. Please note that unless HTTPS is used, the
 credentials will be transmitted in plain text so use these parameters with
 discretion. The environment variables should be used by default but these
@@ -107,9 +193,15 @@ Minio bucket that requires no credentials (i.e a public bucket).
 
 #### Backup to NFS
 
-```
-# localhost:8080 is the default Alpha HTTP port
-$ curl -XPOST localhost:8080/admin/backup -d "destination=/path/to/local/directory"
+```graphql
+mutation {
+  backup(input: {destination: "/path/to/local/directory"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 A local filesystem will work only if all the Alphas have access to it (e.g all
@@ -120,11 +212,47 @@ multiple machines and/or containers.
 #### Forcing a Full Backup
 
 By default, an incremental backup will be created if there's another full backup
-in the specified location. To create a full backup, set the `force_full` parameter
-to `true`. Each series of backups can be
+in the specified location. To create a full backup, set the `forceFull` field
+to `true` in the mutation. Each series of backups can be
 identified by a unique ID and each backup in the series is assigned a
 monotonically increasing number. The following section contains more details on
 how to restore a backup series.
+```graphql
+mutation {
+  backup(input: {destination: "/path/to/local/directory", forceFull: true}) {
+    response {
+      message
+      code
+    }
+  }
+}
+```
+
+### Encrypted Backups
+
+Encrypted backups are a Enterprise feature that are available from v20.03.1 and v1.2.3 and allow you to encrypt your backups and restore them. This documentation describes how to implement encryption into your binary backups
+
+### New flag “Encrypted” in manifest.json
+
+A new flag “Encrypted” is added to the `manifest.json`. This flag indicates if the corresponding binary backup is encrypted or not. To be backward compatible, if this flag is absent, it is presumed that the corresponding backup is not encrypted.
+
+For a series of full and incremental backups, per the current design, we don't allow mixing of encrypted and unencrypted backups. As a result, all full and incremental backups in a series must either be encrypted fully or not at all. This flag helps with checking this restriction.
+
+### AES And Chaining with Gzip
+
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+
+During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
+
+### Backup
+
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+
+{{% notice "note" %}}
+encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
+{{% /notice %}}
+
+The restore utility is a standalone tool today. Hence, a new flag “keyfile” is added to the restore utility so it can decrypt the backup. This keyfile must be the same key that was used for encryption during backup.
 
 ### Restore from Backup
 
@@ -140,15 +268,22 @@ The `--postings` (`-p`) flag sets the directory to which the restored posting
 directories will be saved. This directory will contain a posting directory for
 each group in the restored backup.
 
-The `--zero` (`-z`) optional flag specifies a Dgraph Zero address to update the
-start timestamp using the restored version. Otherwise, the timestamp must be
-manually updated through Zero's HTTP 'assign' endpoint.
+The `--zero` (`-z`) flag specifies a Dgraph Zero address to update the start
+timestamp and UID lease using the restored version. If no zero address is
+passed, the command will complain unless you set the value of the
+`--force_zero` flag to false. If do not pass a zero value to this command,
+the timestamp and UID lease must be manually updated through Zero's HTTP
+'assign' endpoint using the values printed near the end of the command's output.
 
 The `--backup_id` optional flag specifies the ID of the backup series to
 restore. A backup series consists of a full backup and all the incremental
 backups built on top of it. Each time a new full backup is created, a new backup
 series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
+
+The `--encryption_key_file` flag is required if you took the backup in an
+encrypted cluster and should point to the location of the same key used to
+run the cluster.
 
 The restore feature will create a cluster with as many groups as the original
 cluster had at the time of the last backup. For each group, `dgraph restore`
@@ -157,11 +292,15 @@ example, a backup for Alpha group 2 would have the name `.../r32-g2.backup`
 and would be loaded to posting directory `p2`.
 
 After running the restore command, the directories inside the `postings`
-directory are copied over to the machines/containers running the alphas and
-`dgraph alpha` is started to load the copied data. For example, in a database
-cluster with two Alpha groups and one replica each, `p1` is moved to the
-location of the first Alpha and `p2` is moved to the location of the second
-Alpha.
+directory need to be manually copied over to the machines/containers running the
+alphas before running the `dgraph alpha` command. For example, in a database
+cluster with two Alpha groups and one replica each, `p1` needs to be moved to
+the location of the first Alpha and `p2` needs to be moved to the location of
+the second Alpha.
+
+By default, Dgraph will look for a posting directory with the name `p`, so make
+sure to rename the directories after moving them. You can also use the `-p`
+option of the `dgraph alpha` command to specify a different path from the default.
 
 #### Restore from Amazon S3
 ```sh
@@ -184,11 +323,11 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
-
 ## Access Control Lists
 
 {{% notice "note" %}}
 This feature was introduced in [v1.1.0](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.0).
+The Dgraph ACL tool is deprecated and would be removed in the next release. ACL changes can be made by using the `/admin` GraphQL endpoint on any Alpha node.
 {{% /notice %}}
 
 Access Control List (ACL) provides access protection to your data stored in
@@ -234,55 +373,125 @@ If you are using docker-compose, a sample cluster can be set up by:
 
 ### Set up ACL Rules
 
-Now that your cluster is running with the ACL feature turned on, let's set up the ACL
-rules. A typical workflow is the following:
+Now that your cluster is running with the ACL feature turned on, you can set up the ACL rules. This can be done using the web UI Ratel or by using a GraphQL tool which fires the mutations. Execute the following mutations using a GraphQL tool like Insomnia, GraphQL Playground or GraphiQL.
 
-1. Reset the root password. The example below uses the dgraph endpoint `localhost:9080`
-as a demo, make sure to choose the correct IP and port for your environment:
-```bash
-dgraph acl -a localhost:9080 mod -u groot --new_password
-```
-Now type in the password for the groot account, which is the superuser that has access to everything. The default password is `password`.
-`groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users
-to this group if required.
+A typical workflow is the following:
+
+1. Reset the root password
 2. Create a regular user
-```bash
-dgraph acl -a localhost:9080 add -u alice
-```
-Now you should see the following output
-```console
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-New password for alice:
-Retype new password for alice:
-Created new user with id alice
-```
 3. Create a group
-```bash
-dgraph acl -a localhost:9080 add -g dev
-```
-Again type in the groot password, and you should see the following output
-```console
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-Created new group with id dev
-```
 4. Assign the user to the group
-```bash
-dgraph acl -a localhost:9080 mod -u alice -l dev
-```
-The command above will add `alice` to the `dev` group. A user can be assigned to multiple groups.
-The multiple groups should be formated as a single string separated by `,`.
-For example, to assign the user `alice` to both the group `dev` and the group `sre`, the command should be
-```bash
-dgraph acl -a localhost:9080 mod -u alice -l dev,sre
-```
 5. Assign predicate permissions to the group
-```bash
-dgraph acl mod -a localhost:9080 -g dev -p friend -m 7
+
+#### Using GraphQL Admin API
+{{% notice "note" %}}
+All these mutations require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
+{{% /notice %}}
+
+1) Reset the root password. The example below uses the dgraph endpoint `localhost:8080/admin`as a demo, make sure to choose the correct IP and port for your environment:
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "groot"}}, set: {password: "newpassword"}}) {
+    user {
+      name
+    }
+  }
+}
 ```
+The default password is `password`. `groot` is part of a special group called `guardians`. Members of `guardians` group will have access to everything. You can add more users to this group if required.
+
+2) Create a regular user
+
+```graphql
+mutation {
+  addUser(input: [{name: "alice", password: "newpassword"}]) {
+    user {
+      name
+    }
+  }
+}
+```
+
+Now you should see the following output
+
+```json
+{
+  "data": {
+    "addUser": {
+      "user": [
+        {
+          "name": "alice"
+        }
+      ]
+    }
+  }
+}
+```
+
+3) Create a group
+
+```graphql
+mutation {
+  addGroup(input: [{name: "dev"}]) {
+    group {
+      name
+      users {
+        name
+      }
+    }
+  }
+}
+```
+
+Now you should see the following output
+
+```json
+{
+  "data": {
+    "addGroup": {
+      "group": [
+        {
+          "name": "dev",
+          "users": []
+        }
+      ]
+    }
+  }
+}
+```
+
+4) Assign the user to the group
+To assign the user `alice` to both the group `dev` and the group `sre`, the mutation should be
+
+```graphql
+mutation {
+  updateUser(input: {filter: {name: {eq: "alice"}}, set: {groups: [{name: "dev"}, {name: "sre"}]}}) {
+    user {
+      name
+      groups {
+        name
+    }
+    }
+  }
+}
+```
+
+5) Assign predicate permissions to the group
+
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "friend", permission: 7}]}}) {
+    group {
+      name
+      rules {
+        permission
+        predicate
+      }
+    }
+  }
+}
+```
+
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
 permission convention. That is, 4 (binary 100) represents `READ`, 2 (binary 010)
@@ -292,69 +501,218 @@ multiple permissions. For example, 7 (binary 111) represents all of `READ`, `WRI
 `MODIFY`. In order for the example in the next section to work, we also need to grant
 full permissions on another predicate `name` to the group `dev`. If there are no rules for
 a predicate, the default behavior is to block all (`READ`, `WRITE` and `MODIFY`) operations.
-```bash
-dgraph acl mod -a localhost:9080 -g dev -p name -m 7
-```
-6. Check information about a user
-```bash
-dgraph acl info -a localhost:9080 -u alice
-```
-and the output should show the groups that the user has been added to, e.g.
-```bash
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-User  : alice
-UID   : 0x3
-Group : dev
-Group : sre
-```
-7. Check information about a group
-```bash
-dgraph acl info -a localhost:9080 -g dev
-```
-and the output should include the users in the group, as well as the permissions the
-group's ACL rules, e.g.
-```bash
-Current password for groot:
-Running transaction with dgraph endpoint: localhost:9080
-Login successful.
-Group: dev
-UID  : 0x4
-ID   : dev
-Users: alice
-ACL  : {friend  7}
-ACL  : {name  7}
+
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "name", permission: 7}]}}) {
+    group {
+      name
+      rules {
+        permission
+        predicate
+      }
+    }
+  }
+}
 ```
 
-8. Run ACL commands as another guardian (Member of `guardians` group)
-You can also run ACL commands with other users. Say we have a user `alice` which is member
-of `guardians` group and its password is `simple_alice`. We can run ACL commands as shown below.
-```bash
-dgraph acl info -a localhost:9180 -u groot -w alice -x simple_alice
+### Retrieve Users and Groups Information 
+{{% notice "note" %}}
+All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
+{{% /notice %}}
+The following examples show how to retrieve information about users and groups.
+
+#### Using a GraphQL tool
+
+1) Check information about a user
+
+```graphql
+query {
+  getUser(name: "alice") {
+    name
+    groups {
+      name
+    }
+  }
+}
 ```
-Above command will show information about user `groot`.
+
+and the output should show the groups that the user has been added to, e.g.
+
+```json
+{
+  "data": {
+    "getUser": {
+      "name": "alice",
+      "groups": [
+        {
+          "name": "dev"
+        }
+      ]
+    }
+  }
+}
+```
+
+2) Check information about a group
+
+```graphql
+{
+  getGroup(name: "dev") {
+    name
+    users {
+      name
+    }
+    rules {
+      permission
+      predicate
+    }
+  }
+}
+```
+
+and the output should include the users in the group, as well as the permissions, the
+group's ACL rules, e.g.
+
+```json
+{
+  "data": {
+    "getGroup": {
+      "name": "dev",
+      "users": [
+        {
+          "name": "alice"
+        }
+      ],
+      "rules": [
+        {
+          "permission": 7,
+          "predicate": "friend"
+        },
+        {
+          "permission": 7,
+          "predicate": "name"
+        }
+      ]
+    }
+  }
+}
+```
+
+3) Query for users
+
+```graphql
+query {
+  queryUser(filter: {name: {eq: "alice"}}) {
+    name
+    groups {
+      name
+    }
+  }
+}
+```
+
+and the output should show the groups that the user has been added to, e.g.
+
+```json
+{
+  "data": {
+    "queryUser": [
+      {
+        "name": "alice",
+        "groups": [
+          {
+            "name": "dev"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+4) Query for groups
+
+```graphql
+query {
+  queryGroup(filter: {name: {eq: "dev"}}) {
+    name
+    users {
+      name
+    }
+    rules {
+      permission
+      predicate
+    }
+  }
+}
+```
+
+and the output should include the users in the group, as well as the permissions the
+group's ACL rules, e.g.
+
+```json
+{
+  "data": {
+    "queryGroup": [
+      {
+        "name": "dev",
+        "users": [
+          {
+            "name": "alice"
+          }
+        ],
+        "rules": [
+          {
+            "permission": 7,
+            "predicate": "friend"
+          },
+          {
+            "permission": 7,
+            "predicate": "name"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+5) Run ACL commands as another guardian (member of `guardians` group).
+
+You can also run ACL commands with other users. Say we have a user `alice` which is member
+of `guardians` group and its password is `simple_alice`.
+
 ### Access Data Using a Client
 
 Now that the ACL data are set, to access the data protected by ACL rules, we need to
-first log in through a user. A sample code using the dgo client can be found
-[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go).
+first log in through a user. This is tyically done via the client's `.login(USER_ID, USER_PASSWORD)` method.
 
-### Access Data Using Curl
+A sample code using the dgo client can be found
+[here](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go). An example using
+dgraph4j can be found [here](https://github.com/dgraph-io/dgraph4j/blob/master/src/test/java/io/dgraph/AclTest.java).
+
+### Access Data Using the GraphQL API
 
 Dgraph's HTTP API also supports authenticated operations to access ACL-protected
 data.
 
-To login, send a POST request to `/login` with the userid and password. For example, to log in as the root user groot:
+To login, send a POST request to `/admin` with the GraphQL mutation. For example, to log in as the root user groot:
 
-```sh
-$ curl -X POST localhost:8080/login -d '{
-  "userid": "groot",
-  "password": "password"
-}'
+```graphql
+mutation {
+  login(userId: "groot", password: "password") {
+    response {
+      accessJWT
+      refreshJWT
+    }
+  }
+}
 ```
 
 Response:
-```
+
+```json
 {
   "data": {
     "accessJWT": "<accessJWT>",
@@ -362,22 +720,32 @@ Response:
   }
 }
 ```
+
 The response includes the access and refresh JWTs which are used for the authentication itself and refreshing the authentication token, respectively. Save the JWTs from the response for later HTTP requests.
 
-You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. For example:
+You can run authenticated requests by passing the accessJWT to a request via the `X-Dgraph-AccessToken` header. Add the header `X-Dgraph-AccessToken` with the `accessJWT` value which you got in the login response in the GraphQL tool which you're using to make the request. For example:
 
-```sh
-$ curl -X POST -H 'Content-Type: application/graphql+-' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/query -d '...'
-$ curl -X POST -H 'Content-Type: application/json' -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/mutate -d '...'
-$ curl -X POST -H 'X-Dgraph-AccessToken: <accessJWT>' localhost:8080/alter -d '...'
+```graphql
+mutation {
+  addUser(input: [{name: "alice", password: "newpassword"}]) {
+    user {
+      name
+    }
+  }
+}
 ```
 
-The refresh token can be used in the `/login` POST body to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
+The refresh token can be used in the `/admin` POST GraphQL mutation to receive new access and refresh JWTs, which is useful to renew the authenticated session once the ACL access TTL expires (controlled by Dgraph Alpha's flag `--acl_access_ttl` which is set to 6h0m0s by default).
 
-```sh
-$ curl -X POST localhost:8080/login -d '{
-  "refresh_token": "<refreshJWT>"
-}'
+```graphql
+mutation {
+  login(userId: "groot", password: "newpassword", refreshToken: "<refreshJWT>") {
+    response {
+      accessJWT
+      refreshJWT
+    }
+  }
+}
 ```
 
 ## Encryption at Rest
@@ -385,8 +753,8 @@ $ curl -X POST localhost:8080/login -d '{
 {{% notice "note" %}}
 This feature was introduced in [v1.1.1](https://github.com/dgraph-io/dgraph/releases/tag/v1.1.1).
 For migrating unencrypted data to a new Dgraph cluster with encryption enabled, you need to
-[export the database](https://docs.dgraph.io/deploy/#export-database) and [fast data load](https://docs.dgraph.io/deploy/#fast-data-loading),
-preferably using the [bulk loader](https://docs.dgraph.io/deploy/#bulk-loader).
+[export the database](https://dgraph.io/docs/deploy/#exporting-database) and [fast data load](https://dgraph.io/docs/deploy/#fast-data-loading),
+preferably using the [bulk loader](https://dgraph.io/docs/deploy/#bulk-loader).
 {{% /notice %}}
 
 Encryption at rest refers to the encryption of data that is stored physically in any
@@ -402,30 +770,55 @@ To enable encryption, we need to pass a file that stores the data encryption key
 `--encryption_key_file`. The key size must be 16, 24, or 32 bytes long, and the key size determines
 the corresponding block size for AES encryption ,i.e. AES-128, AES-192, and AES-256, respectively.
 
-Here is an example encryption key file of size 16 bytes:
-
-*enc_key_file*
+You can use the following command to create the encryption key file (set _count_ to the
+desired key size):
 
 ```
-123456789012345
+dd if=/dev/random bs=1 count=32 of=enc_key_file
 ```
 
 ### Turn on Encryption
 
-Here is an example that starts one zero server and one alpha server with the encryption feature turned on:
+Here is an example that starts one Zero server and one Alpha server with the encryption feature turned on:
 
 ```bash
 dgraph zero --my=localhost:5080 --replicas 1 --idx 1
-dgraph alpha --encryption_key_file "./enc_key_file" --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
+dgraph alpha --encryption_key_file ./enc_key_file --my=localhost:7080 --lru_mb=1024 --zero=localhost:5080
 ```
 
-### Bulk loader with Encryption
+If multiple Alpha nodes are part of the cluster, you will need to pass the `--encryption_key_file` option to
+each of the Alphas.
 
-Even before Dgraph cluster starts, we can load data using bulk loader with encryption feature turned on.
-Later we can point the generated `p` directory to a new alpha server.
+Once an Alpha has encryption enabled, the encryption key must be provided in order to start the Alpha server.
+If the Alpha server restarts, the `--encryption_key_file` option must be set along with the key in order to
+restart successfully.
 
-Here's an example to run bulk loader with a key used to write encrypted data:
+### Turn off Encryption
 
-```bash
-dgraph bulk --encryption_key_file "./enc_key_file" -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+If you wish to turn off encryption from an existing Alpha, then you can export your data and import it
+into a new Dgraph instance without encryption enabled.
+
+### Change Encryption Key
+
+The master encryption key set by the `--encryption_key_file` option does not change automatically. The master
+encryption key encrypts underlying *data keys* which are changed on a regular basis automatically (more info
+about this is covered on the encryption-at-rest [blog][encblog] post).
+
+[encblog]: https://dgraph.io/blog/post/encryption-at-rest-dgraph-badger#one-key-to-rule-them-all-many-keys-to-find-them
+
+Changing the existing key to a new one is called key rotation. You can rotate the master encryption key by
+using the `badger rotate` command on both p and w directories for each Alpha. To maintain availability in HA
+cluster configurations, you can do this rotate the key one Alpha at a time in a rolling manner.
+
+You'll need both the current key and the new key in two different files. Specify the directory you
+rotate ("p" or "w") for the `--dir` flag, the old key for the `--old-key-path` flag, and the new key with the
+`--new-key-path` flag.
+
 ```
+badger rotate --dir p --old-key-path enc_key_file --new-key-path new_enc_key_file
+badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_file
+```
+
+Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
+
+

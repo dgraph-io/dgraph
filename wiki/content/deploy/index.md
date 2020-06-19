@@ -7,11 +7,12 @@ This page talks about running Dgraph in various deployment modes, in a distribut
 running multiple instances of Dgraph, over multiple servers in a cluster.
 
 {{% notice "tip" %}}
-For a single server setup, recommended for new users, please see [Get Started](/get-started) page.
+For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
 {{% /notice %}}
 
 ## Install Dgraph
-#### Docker
+
+### Docker
 
 ```sh
 docker pull dgraph/dgraph:latest
@@ -20,18 +21,52 @@ docker pull dgraph/dgraph:latest
 docker run -it dgraph/dgraph:latest dgraph
 ```
 
-#### Automatic download
+### Automatic download
 
 Running
+
 ```sh
 curl https://get.dgraph.io -sSf | bash
 
 # Test that it worked fine, by running:
 dgraph
 ```
+
 would install the `dgraph` binary into your system.
 
-#### Manual download [optional]
+Other instalation options:
+
+> Add `-s --` before the flags.
+
+`-y | --accept-license`: Automatically agree to the terms of the Dgraph Community License (default: "n").
+
+`-s | --systemd`: Automatically create Dgraph's installation as Systemd services (default: "n").
+
+`-v | --version`: Choose Dgraph's version manually (default: The latest stable release, you can do tag combinations e.g v2.0.0-beta1 or -rc1).
+
+>Installing Dgraph and requesting the automatic creation of systemd service. e.g:
+
+```sh
+curl https://get.dgraph.io -sSf | bash -s -- --systemd
+```
+
+Using Environment variables:
+
+`ACCEPT_LICENSE`: Automatically agree to the terms of the Dgraph Community License (default: "n").
+
+`INSTALL_IN_SYSTEMD`: Automatically create Dgraph's installation as Systemd services (default: "n").
+
+`VERSION`: Choose Dgraph's version manually (default: The latest stable release).
+
+```sh
+curl https://get.dgraph.io -sSf | VERSION=v2.0.0-beta1 bash
+```
+
+{{% notice "note" %}}
+Be aware that using this script will overwrite the installed version and can lead to compatibility problems. For example, if you were using version v1.0.5 and forced the installation of v2.0.0-Beta, the existing data won't be compatible with the new version. The data must be [exported]({{< relref "deploy/index.md#exporting-database" >}}) before running this script and reimported to the new cluster running the updated version.
+{{% /notice %}}
+
+### Manual download [optional]
 
 If you don't want to follow the automatic installation method, you could manually download the appropriate tar for your platform from **[Dgraph releases](https://github.com/dgraph-io/dgraph/releases)**. After downloading the tar for your platform from Github, extract the binary to `/usr/local/bin` like so.
 
@@ -46,7 +81,7 @@ $ sudo tar -C /usr/local/bin -xzf dgraph-darwin-amd64-VERSION.tar.gz
 dgraph
 ```
 
-#### Building from Source
+### Building from Source
 
 {{% notice "note" %}}
 You can build the Ratel UI from source seperately following its build
@@ -79,7 +114,7 @@ causes issues while using the Go client). Update your `go-grpc` by running.
 go get -u -v google.golang.org/grpc
 ```
 
-#### Config
+### Config
 
 The full set of dgraph's configuration options (along with brief descriptions)
 can be viewed by invoking dgraph with the `--help` flag. For example, to see
@@ -243,7 +278,7 @@ Users have to modify security rules or open firewall ports depending up on their
 
 **Port Offset** To make it easier for user to setup the cluster, Dgraph defaults the ports used by Dgraph nodes and let user to provide an offset  (through command option `--port_offset`) to define actual ports used by the node. Offset can also be used when starting multiple zero nodes in a HA setup.
 
-For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then the Alpha node binds to 7082 (gRPC-internal), 8082 (HTTP-external) & 9092 (gRPC-external) respectively.
+For example, when a user runs a Dgraph Alpha by setting `--port_offset 2`, then the Alpha node binds to 7082 (gRPC-internal), 8082 (HTTP-external) & 9082 (gRPC-external) respectively.
 
 **Ratel UI** by default listens on port 8000. You can use the `-port` flag to configure to listen on any other port.
 
@@ -270,7 +305,10 @@ can leave that flag empty, and Zero would auto-assign an id to the Alpha. This
 id would get persisted in the write-ahead log, so be careful not to delete it.
 
 The new Alphas will automatically detect each other by communicating with
-Dgraph zero and establish connections to each other.
+Dgraph zero and establish connections to each other. You can provide a list of
+zero addresses to alpha using the `--zero` flag. Alpha will try to connect to
+one of the zeros starting from the first zero address in the list. For example:
+`--zero=zero1,zero2,zero3` where zero1 is the `host:port` of a zero instance.
 
 Typically, Zero would first attempt to replicate a group, by assigning a new
 Dgraph alpha to run the same group as assigned to another. Once the group has
@@ -324,29 +362,36 @@ ifconfig # On Ubuntu/Mac
 ```
 We'll refer to the host IP address via `HOSTIPADDR`.
 
+**Create Docker network**
+
+```sh
+docker network create dgraph_default
+```
+
 **Run dgraph zero**
 
 ```sh
 mkdir ~/zero # Or any other directory where data should be stored.
 
-docker run -it -p 5080:5080 -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
+docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
 ```
 
 **Run dgraph alpha**
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
-
+docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+```
+```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8000:8000 dgraph/dgraph:latest dgraph-ratel
+docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:latest dgraph-ratel
 ```
 
 ### Run using Docker Compose (On single AWS instance)
@@ -393,34 +438,10 @@ group which allows inbound access on port 22, 2376 (required by Docker Machine),
 Docker Compose is a tool for running multi-container Docker applications. You can follow the
 instructions [here](https://docs.docker.com/compose/install/) to install it.
 
-Copy the file below in a directory on your machine and name it `docker-compose.yml`.
+Run the command below to download the `docker-compose.yml` file on your machine.
 
 ```sh
-version: "3.2"
-services:
-  zero:
-    image: dgraph/dgraph:latest
-    volumes:
-      - /data:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    restart: on-failure
-    command: dgraph zero --my=zero:5080
-  server:
-    image: dgraph/dgraph:latest
-    volumes:
-      - /data:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    restart: on-failure
-    command: dgraph alpha --my=server:7080 --lru_mb=2048 --zero=zero:5080
-  ratel:
-    image: dgraph/dgraph:latest
-    ports:
-      - 8000:8000
-    command: dgraph-ratel
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose.yml
 ```
 
 {{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
@@ -463,12 +484,12 @@ docker-machine --version
 You'll have to [configure your AWS credentials](http://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/setup-credentials.html) to create the instances using Docker Machine.
 
 Considering that you have AWS credentials setup, you can use the below commands to start 3 AWS
-`t2-micro` instances with Docker Engine installed on them.
+`t2-medium` instances with Docker Engine installed on them.
 
 ```sh
-docker-machine create --driver amazonec2 aws01
-docker-machine create --driver amazonec2 aws02
-docker-machine create --driver amazonec2 aws03
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws01
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws02
+docker-machine create --driver amazonec2 --amazonec2-instance-type t2.medium aws03
 ```
 
 Your output should look like
@@ -483,7 +504,7 @@ Docker is up and running!
 To see how to connect your Docker Client to the Docker Engine running on this virtual machine, run: docker-machine env aws01
 ```
 
-The command would provision a `t2-micro` instance with a security group called `docker-machine`
+The command would provision a `t2-medium` instance with a security group called `docker-machine`
 (allowing inbound access on 2376 and 22).
 
 You would need to edit the `docker-machine` security group to open inbound traffic on the following ports.
@@ -508,7 +529,7 @@ things.
 
 {{% notice "tip" %}}Docker machine supports [other drivers](https://docs.docker.com/machine/drivers/gce/) like GCE, Azure etc.{{% /notice %}}
 
-Running `docker-machine ps` shows all the AWS EC2 instances that we started.
+Running `docker-machine ls` shows all the AWS EC2 instances that we started.
 ```sh
 ➜  ~ docker-machine ls
 NAME    ACTIVE   DRIVER       STATE     URL                         SWARM   DOCKER        ERRORS
@@ -578,7 +599,8 @@ docker node ls
 ```
 
 Output:
-```sh
+
+```
 ID                            HOSTNAME            STATUS              AVAILABILITY        MANAGER STATUS
 ghzapjsto20c6d6l3n0m91zev     aws02               Ready               Active
 rb39d5lgv66it1yi4rto0gn6a     aws03               Ready               Active
@@ -587,88 +609,17 @@ waqdyimp8llvca9i09k4202x5 *   aws01               Ready               Active    
 
 * Start the Dgraph cluster
 
-Copy the following file on your host machine and name it as `docker-compose.yml`
+Run the command below to download the `docker-compose-multi.yml` file on your machine.
 
 ```sh
-version: "3"
-networks:
-  dgraph:
-services:
-  zero:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph zero --my=zero:5080 --replicas 3
-  alpha1:
-    image: dgraph/dgraph:latest
-    hostname: "alpha1"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero:5080
-  alpha2:
-    image: dgraph/dgraph:latest
-    hostname: "alpha2"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8081:8081
-      - 9081:9081
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero:5080 -o 1
-  alpha3:
-    image: dgraph/dgraph:latest
-    hostname: "alpha3"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8082:8082
-      - 9082:9082
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero:5080 -o 2
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
-volumes:
-  data-volume:
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose-multi.yml
 ```
+
 Run the following command on the Swarm leader to deploy the Dgraph Cluster.
 
 ```sh
 eval $(docker-machine env aws01)
-docker stack deploy -c docker-compose.yml dgraph
+docker stack deploy -c docker-compose-multi.yml dgraph
 ```
 
 This should run three Dgraph Alpha services (one on each VM because of the
@@ -695,18 +646,19 @@ docker service ls
 ```
 
 Output:
-```
-ID                  NAME                MODE                REPLICAS            IMAGE                PORTS
-vp5bpwzwawoe        dgraph_ratel        replicated          1/1                 dgraph/dgraph:latest   *:8000->8000/tcp
-69oge03y0koz        dgraph_alpha2      replicated          1/1                 dgraph/dgraph:latest   *:8081->8081/tcp,*:9081->9081/tcp
-kq5yks92mnk6        dgraph_alpha3      replicated          1/1                 dgraph/dgraph:latest   *:8082->8082/tcp,*:9082->9082/tcp
-uild5cqp44dz        dgraph_zero         replicated          1/1                 dgraph/dgraph:latest   *:5080->5080/tcp,*:6080->6080/tcp
-v9jlw00iz2gg        dgraph_alpha1      replicated          1/1                 dgraph/dgraph:latest   *:8080->8080/tcp,*:9080->9080/tcp
-```
-
-To stop the cluster run
 
 ```
+ID                NAME               MODE            REPLICAS      IMAGE                     PORTS
+vp5bpwzwawoe      dgraph_ratel       replicated      1/1           dgraph/dgraph:latest      *:8000->8000/tcp
+69oge03y0koz      dgraph_alpha2      replicated      1/1           dgraph/dgraph:latest      *:8081->8081/tcp,*:9081->9081/tcp
+kq5yks92mnk6      dgraph_alpha3      replicated      1/1           dgraph/dgraph:latest      *:8082->8082/tcp,*:9082->9082/tcp
+uild5cqp44dz      dgraph_zero        replicated      1/1           dgraph/dgraph:latest      *:5080->5080/tcp,*:6080->6080/tcp
+v9jlw00iz2gg      dgraph_alpha1      replicated      1/1           dgraph/dgraph:latest      *:8080->8080/tcp,*:9080->9080/tcp
+```
+
+To stop the cluster run:
+
+```sh
 docker stack rm dgraph
 ```
 
@@ -726,164 +678,53 @@ If you are on AWS, below is the security group (**docker-machine**) after necess
 
 {{% load-img "/images/aws.png" "AWS Security Group" %}}
 
-Copy the following file on your host machine and name it as docker-compose.yml
+Run the command below to download the `docker-compose-ha.yml` file on your machine.
 
 ```sh
-version: "3"
-networks:
-  dgraph:
-services:
-  zero1:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5080:5080
-      - 6080:6080
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph zero --my=zero1:5080 --replicas 3 --idx 1
-  zero2:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5081:5081
-      - 6081:6081
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph zero -o 1 --my=zero2:5081 --replicas 3 --peer zero1:5080 --idx 2
-  zero_3:
-    image: dgraph/dgraph:latest
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 5082:5082
-      - 6082:6082
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph zero -o 2 --my=zero_3:5082 --replicas 3 --peer zero1:5080 --idx 3
-  alpha1:
-    image: dgraph/dgraph:latest
-    hostname: "alpha1"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8080:8080
-      - 9080:9080
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws01
-    command: dgraph alpha --my=alpha1:7080 --lru_mb=2048 --zero=zero1:5080
-  alpha2:
-    image: dgraph/dgraph:latest
-    hostname: "alpha2"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8081:8081
-      - 9081:9081
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws02
-    command: dgraph alpha --my=alpha2:7081 --lru_mb=2048 --zero=zero1:5080 -o 1
-  alpha3:
-    image: dgraph/dgraph:latest
-    hostname: "alpha3"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8082:8082
-      - 9082:9082
-    networks:
-      - dgraph
-    deploy:
-      replicas: 1
-      placement:
-        constraints:
-          - node.hostname == aws03
-    command: dgraph alpha --my=alpha3:7082 --lru_mb=2048 --zero=zero1:5080 -o 2
-  alpha_4:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_4"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8083:8083
-      - 9083:9083
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws04
-    command: dgraph alpha --my=alpha_4:7083 --lru_mb=2048 --zero=zero1:5080 -o 3
-  alpha_5:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_5"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8084:8084
-      - 9084:9084
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws05
-    command: dgraph alpha --my=alpha_5:7084 --lru_mb=2048 --zero=zero1:5080 -o 4
-  alpha_6:
-    image: dgraph/dgraph:latest
-    hostname: "alpha_6"
-    volumes:
-      - data-volume:/dgraph
-    ports:
-      - 8085:8085
-      - 9085:9085
-    networks:
-      - dgraph
-    deploy:
-      placement:
-        constraints:
-          - node.hostname == aws06
-    command: dgraph alpha --my=alpha_6:7085 --lru_mb=2048 --zero=zero1:5080 -o 5
-  ratel:
-    image: dgraph/dgraph:latest
-    hostname: "ratel"
-    ports:
-      - 8000:8000
-    networks:
-      - dgraph
-    command: dgraph-ratel
-volumes:
-  data-volume:
+wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose-ha.yml
 ```
+
+Run the following command on the Swarm leader to deploy the Dgraph Cluster.
+
+```sh
+eval $(docker-machine env aws01)
+docker stack deploy -c docker-compose-ha.yml dgraph
+```
+
+You can verify that all services were created successfully by running:
+
+```sh
+docker service ls
+```
+
+Output:
+```
+ID                NAME               MODE            REPLICAS      IMAGE                     PORTS
+qck6v1lacvtu      dgraph_alpha1      replicated      1/1           dgraph/dgraph:latest      *:8080->8080/tcp, *:9080->9080/tcp
+i3iq5mwhxy8a      dgraph_alpha2      replicated      1/1           dgraph/dgraph:latest      *:8081->8081/tcp, *:9081->9081/tcp
+2ggma86bw7h7      dgraph_alpha3      replicated      1/1           dgraph/dgraph:latest      *:8082->8082/tcp, *:9082->9082/tcp
+wgn5adzk67n4      dgraph_alpha4      replicated      1/1           dgraph/dgraph:latest      *:8083->8083/tcp, *:9083->9083/tcp
+uzviqxv9fp2a      dgraph_alpha5      replicated      1/1           dgraph/dgraph:latest      *:8084->8084/tcp, *:9084->9084/tcp
+nl1j457ko54g      dgraph_alpha6      replicated      1/1           dgraph/dgraph:latest      *:8085->8085/tcp, *:9085->9085/tcp
+s11bwr4a6371      dgraph_ratel       replicated      1/1           dgraph/dgraph:latest      *:8000->8000/tcp
+vchibvpquaes      dgraph_zero1       replicated      1/1           dgraph/dgraph:latest      *:5080->5080/tcp, *:6080->6080/tcp
+199rezd7pw7c      dgraph_zero2       replicated      1/1           dgraph/dgraph:latest      *:5081->5081/tcp, *:6081->6081/tcp
+yb8ella56oxt      dgraph_zero3       replicated      1/1           dgraph/dgraph:latest      *:5082->5082/tcp, *:6082->6082/tcp
+```
+
+To stop the cluster run:
+
+```sh
+docker stack rm dgraph
+```
+
 {{% notice "note" %}}
 1. This setup assumes that you are using 6 hosts, but if you are running fewer than 6 hosts then you have to either use different volumes between Dgraph alphas or use `-p` & `-w` to configure data directories.
 2. This setup would create and use a local volume called `dgraph_data-volume` on the instances. If you plan to replace instances, you should use remote storage like [cloudstore](https://docs.docker.com/docker-for-aws/persistent-data-volumes) instead of local disk. {{% /notice %}}
 
-## Using Kubernetes (v1.8.4)
+## Using Kubernetes
+
+The following section covers running Dgraph with Kubernetes v1.8.4.
 
 {{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS config.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
@@ -932,7 +773,11 @@ NAME       READY     STATUS    RESTARTS   AGE
 dgraph-0   3/3       Running   0          1m
 ```
 
-{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-0 <container_name>`. For example, try `kubectl logs -f dgraph-0 alpha` for server logs.{{% /notice %}}
+{{% notice "tip" %}}
+You can check the logs for the containers in the pod using
+`kubectl logs -f dgraph-0 <container_name>`. For example, try
+`kubectl logs -f dgraph-0 alpha` for server logs.
+{{% /notice %}}
 
 * Test the setup
 
@@ -1079,7 +924,7 @@ To install the chart with the release name `my-release`:
 helm install my-release dgraph/dgraph
 ```
 
-The above command will  install the latest available dgraph docker image. In order to install the older versions:
+The above command will install the latest available dgraph docker image. In order to install the older versions:
 
 ```sh
 helm install my-release dgraph/dgraph --set image.tag="v1.1.0"
@@ -1099,7 +944,38 @@ Similarly, you can expose alpha and ratel service to the internet as follows:
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer" --set ratel.service.type="LoadBalancer"
 ```
 
-#### Deleting the Charts
+#### Upgrading the Chart
+
+You can update your cluster configuration by updating the configuration of the
+Helm chart. Dgraph is a stateful database that requires some attention on
+upgrading the configuration carefully in order to update your cluster to your
+desired configuration.
+
+In general, you can use [`helm upgrade`][helm-upgrade] to update the
+configuration values of the cluster. Depending on your change, you may need to
+upgrade the configuration in multiple steps following the steps below.
+
+[helm-upgrade]: https://helm.sh/docs/helm/helm_upgrade/
+
+**Upgrade to HA cluster setup**
+
+To upgrade to an [HA cluster setup]({{< relref "#ha-cluster-setup" >}}), ensure
+that the shard replication setting is more than 1. When `zero.shardReplicaCount`
+is not set to an HA configuration (3 or 5), follow the steps below:
+
+1. Set the shard replica flag on the Zero node group. For example: `zero.shardReplicaCount=3`.
+2. Next, run the Helm upgrade command to restart the Zero node group: 
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+3. Now set the Alpha replica count flag. For example: `alpha.replicaCount=3`.
+4. Finally, run the Helm upgrade command again:
+   ```sh
+   helm upgrade my-release dgraph/dgraph [options]
+   ```
+
+
+#### Deleting the Chart
 
 Delete the Helm deployment as normal
 
@@ -1178,7 +1054,7 @@ The following table lists the configurable parameters of the dgraph chart and th
 | `ratel.livenessProbe`                | Ratel liveness probes                                               | `See values.yaml for defaults`                      |
 | `ratel.readinessProbe`               | Ratel readiness probes                                              | `See values.yaml for defaults`                      |
 
-#### Monitoring
+### Monitoring in Kubernetes
 
 Dgraph exposes prometheus metrics to monitor the state of various components involved in the cluster, this includes dgraph alpha and zero.
 
@@ -1362,10 +1238,11 @@ corrupted and data cannot be recovered), you can use the `/removeNode` API to
 remove the node from the cluster. With a Kubernetes StatefulSet, you'll need to
 remove the node in this order:
 
-1. Call `/removeNode` to remove the Dgraph instance from the cluster (see [More
-   about Dgraph Zero]({{< relref "#more-about-dgraph-zero" >}})). The removed
-   instance will immediately stop running. Any further attempts to join the
-   cluster will fail for that instance since it has been removed.
+1. On the Zero leader, call `/removeNode` to remove the Dgraph instance from
+   the cluster (see [More about Dgraph Zero]({{< relref
+   "#more-about-dgraph-zero" >}})). The removed instance will immediately stop
+   running. Any further attempts to join the cluster will fail for that instance
+   since it has been removed.
 2. Remove the PersistentVolumeClaim associated with the pod to delete its data.
    This prepares the pod to join with a clean state.
 3. Restart the pod. This will create a new PersistentVolumeClaim to create new
@@ -1393,32 +1270,81 @@ to learn more.
 ## More about Dgraph Alpha
 
 On its HTTP port, a Dgraph Alpha exposes a number of admin endpoints.
+{{% notice "warning" %}}
+These HTTP endpoints are deprecated and will be removed in the next release. Please use the GraphQL endpoint at /admin.
+{{% /notice %}}
 
-* `/health` returns HTTP status code 200 if the worker is running, HTTP 503 otherwise.
-* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown">}}) of the Alpha.
-* `/admin/export` initiates a data [export]({{< relref "#export">}}).
+* `/health?all` returns information about the health of all the servers in the cluster.
+* `/admin/shutdown` initiates a proper [shutdown]({{< relref "#shutdown" >}}) of the Alpha.
+* `/admin/export` initiates a data [export]({{< relref "#export" >}}). The exported data will be
+encrypted if the alpha instance was configured with an encryption key file.
 
 By default the Alpha listens on `localhost` for admin actions (the loopback address only accessible from the same machine). The `--bindall=true` option binds to `0.0.0.0` and thus allows external connections.
 
 {{% notice "tip" %}}Set max file descriptors to a high value like 10000 if you are going to load a lot of data.{{% /notice %}}
 
-### More about /health endpoint
+### Querying Health
 
-The `/health` endpoint of Dgraph Alpha returns HTTP status 200 with a JSON consisting of basic information about the running worker.
+You can query the `/admin` graphql endpoint with a query like the one below to get a JSON consisting of basic information about health of all the servers in the cluster.
 
-Here’s an example of JSON returned from `/health` endpoint:
-
-```json
-{
-  "version": "v1.1.1",
-  "instance": "alpha",
-  "uptime": 75011100974
+```graphql
+query {
+  health {
+    instance
+    address
+    version
+    status
+    lastEcho
+    group
+    uptime
+    ongoing
+    indexing
+  }
 }
 ```
 
-- `version`: Version of Dgraph running the Alpha server.
-- `instance`: Name of the instance. Always set to `alpha`.
-- `uptime`: Time in nanoseconds since the Alpha server is up and running.
+Here’s an example of JSON returned from the above query:
+
+```json
+{
+  "data": {
+    "health": [
+      {
+        "instance": "zero",
+        "address": "localhost:5080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "0",
+        "uptime": 1504
+      },
+      {
+        "instance": "alpha",
+        "address": "localhost:7080",
+        "version": "v2.0.0-rc1",
+        "status": "healthy",
+        "lastEcho": 1582827418,
+        "group": "1",
+        "uptime": 1505,
+        "ongoing": ["opIndexing"],
+        "indexing": ["name", "age"]
+      }
+    ]
+  }
+}
+```
+
+- `instance`: Name of the instance. Either `alpha` or `zero`.
+- `status`: Health status of the instance. Either `healthy` or `unhealthy`.
+- `version`: Version of Dgraph running the Alpha or Zero server.
+- `uptime`: Time in nanoseconds since the Alpha or Zero server is up and running.
+- `address`: IP_ADDRESS:PORT of the instance.
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
+- `lastEcho`: Last time, in Unix epoch, when the instance was contacted by another Alpha or Zero server.
+- `ongoing`: List of ongoing operations in the background.
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
+
+The same information (except `ongoing` and `indexing`) is available from the `/health` and `/health?all` endpoints of Alpha server.
 
 ## More about Dgraph Zero
 
@@ -1597,10 +1523,33 @@ improve data scalability is to shard a predicate into separate tablets that coul
 be assigned to different groups.
 {{% /notice %}}
 
+## Log Format
+
+Dgraph's log format comes from the glog library and is [formatted](https://github.com/golang/glog/blob/23def4e6c14b4da8ac2ed8007337bc5eb5007998/glog.go#L523-L533) as follows:
+
+	`Lmmdd hh:mm:ss.uuuuuu threadid file:line] msg...`
+
+Where the fields are defined as follows:
+
+```
+	L                A single character, representing the log level (eg 'I' for INFO)
+	mm               The month (zero padded; ie May is '05')
+	dd               The day (zero padded)
+	hh:mm:ss.uuuuuu  Time in hours, minutes and fractional seconds
+	threadid         The space-padded thread ID as returned by GetTID()
+	file             The file name
+	line             The line number
+	msg              The user-supplied message
+```
+
+### Query Logging
+
+To enable query logging, you must set `-v=3` which will enable verbose logging for everything. Alternatively, you can set `--vmodule=server=3` for only the dgraph/server.go file which would only enable query/mutation logging.
+
 ## TLS configuration
 
 {{% notice "note" %}}
-This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://docs.dgraph.io/v1.0.7/deploy/#tls-configuration).
+This section refers to the `dgraph cert` command which was introduced in v1.0.9. For previous releases, see the previous [TLS configuration documentation](https://dgraph.io/docs/v1.0.7/deploy/#tls-configuration).
 {{% /notice %}}
 
 
@@ -1608,9 +1557,9 @@ Connections between client and server can be secured with TLS. Password protecte
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
-### Self-signed certificates
+### Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages self-signed certificates using a generated Dgraph Root CA. The _cert_ command simplifies certificate management for you.
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. The `dgraph cert` command simplifies certificate management for you.
 
 ```sh
 # To see the available flags.
@@ -1619,20 +1568,20 @@ $ dgraph cert --help
 # Create Dgraph Root CA, used to sign all other certificates.
 $ dgraph cert
 
-# Create node certificate (needed for Dgraph Live Loader using TLS)
-$ dgraph cert -n live
+# Create node certificate and private key
+$ dgraph cert -n localhost
 
-# Create client certificate
+# Create client certificate and private key for mTLS (mutual TLS)
 $ dgraph cert -c dgraphuser
 
 # Combine all in one command
-$ dgraph cert -n live -c dgraphuser
+$ dgraph cert -n localhost -c dgraphuser
 
 # List all your certificates and keys
 $ dgraph cert ls
 ```
 
-### File naming conventions
+#### File naming conventions
 
 To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
 
@@ -1665,7 +1614,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 {{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
 
-### Certificate inspection
+#### Certificate inspection
 
 The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
@@ -1714,43 +1663,75 @@ Important points:
 * Node certificates are only valid for the hosts listed.
 * Client certificates are only valid for the named client/user.
 
-### TLS options
+### TLS Options
 
 The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client Authentication Options](#client-authentication-options) for details.
+
+Dgraph Live Loader can be configured with the following options:
+
+* `--tls_cacert string` - Dgraph Root CA, such as `./tls/ca.crt`
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_cert` - User cert file provided by the client to Alpha
+* `--tls_key` - User private key file provided by the client to Alpha
+* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+
+
+#### Using TLS without Client Authentication
+
+For TLS without client authentication, you can configure certificates and run Alpha server using the following:
 
 ```sh
-# Default use for enabling TLS server (after generating certificates)
+# First, create rootca and node certificates and private keys
+$ dgraph cert -n localhost
+# Default use for enabling TLS server (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls
 ```
 
-Dgraph Live Loader can be configured with following options:
-
-* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
-* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+You can then run Dgraph live loader using the following:
 
 ```sh
-# First, create a client certificate for live loader. This will create 'tls/client.live.crt'
-$ dgraph cert -c live
-
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
+$ dgraph live --tls_cacert ./tls/ca.crt --tls_server_name "localhost" -s 21million.schema -f 21million.rdf.gz
 ```
 
-### Client authentication
+#### Using TLS with Client Authentication
 
-The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+If you do require Client Authentication (Mutual TLS), you can configure certificates and run Alpha server using the following:
 
-| Value | Description |
-|-------|-------------|
-| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
-| REQUIREANY | Server expects any certificate, valid and unverified |
-| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
-| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+```sh
+# First, create a rootca, node, and client certificates and private keys
+$ dgraph cert -n localhost -c dgraphuser
+# Default use for enabling TLS server with client authentication (after generating certificates and private keys)
+$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
+```
+
+You can then run Dgraph live loader using the following:
+
+```sh
+# Now, connect to server using mTLS (mutual TLS)
+$ dgraph live \
+   --tls_cacert ./tls/ca.crt \
+   --tls_cert ./tls/client.dgraphuser.crt \
+   --tls_key ./tls/client.dgraphuser.key \
+   --tls_server_name "localhost" \
+   -s 21million.schema \
+   -f 21million.rdf.gz
+```
+
+#### Client Authentication Options
+
+The server will always **request** Client Authentication.  There are four different values for the `--tls_client_auth` option that change the security policy of the client certificate.
+
+| Value              | Client Cert/Key | Client Certificate Verified |
+|--------------------|-----------------|--------------------|
+| `REQUEST`          | optional        | Client certificate is not VERIFIED if provided. (least secure) |
+| `REQUIREANY`       | required        | Client certificate is never VERIFIED |
+| `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
+| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
@@ -1760,17 +1741,17 @@ Ratel UI (and any other JavaScript clients built on top of `dgraph-js-http`)
 connect to Dgraph servers via HTTP, when TLS is enabled servers begin to expect
 HTTPS requests only. Therefore some adjustments need to be made.
 
-If the `--tls_client_auth` option is set to `REQUEST` (default) or
-`VERIFYIFGIVEN`:
+If the `--tls_client_auth` option is set to `REQUEST`or `VERIFYIFGIVEN` (default):
+
 1. Change the connection URL from `http://` to `https://` (e.g. `https://127.0.0.1:8080`).
-2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions.
-(E.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
+2. Install / make trusted the certificate of the Dgraph certificate authority `ca.crt`. Refer to the documentation of your OS / browser for instructions
+(e.g. on Mac OS this means adding `ca.crt` to the KeyChain and making it trusted
 for `Secure Socket Layer`).
 
 For `REQUIREANY` and `REQUIREANDVERIFY` you need to follow the steps above and
 also need to install client certificate on your OS / browser:
 
-1. Generate a client certificate: `dgraph -c MyLaptop`.
+1. Generate a client certificate: `dgraph cert -c MyLaptop`.
 2. Convert it to a `.p12` file:
 `openssl pkcs12 -export -out MyLaptopCert.p12 -in tls/client.MyLaptop.crt -inkey tls/client.MyLaptop.key`. Use any password you like for export.
 3. Install the generated `MyLaptopCert.p12` file on the client system
@@ -1779,6 +1760,31 @@ also need to install client certificate on your OS / browser:
 enabled the browser will prompt you for a client certificate to use. Select the
 certificate you've just installed in the step above and queries/mutations will
 succeed.
+
+### Using Curl with Client authentication
+
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
+
+```
+curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
+```
+
+If you are using `curl` with [Client Authentication](#client-authentication-options) set to `REQUIREANY` or `REQUIREANDVERIFY`, you will need to provide the client certificate and private key.  For instance (for an export request):
+
+```
+curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
+```
+
+Refer to the `curl` documentation for further information on its TLS options.
+
+### Access Data Using a Client
+
+Some examples of connecting via a [Client](/clients) when TLS is in use can be found below:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
+- [dgraph-js](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls)
+- [dgo](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/tree/master/examples/tls)
 
 ### Troubleshooting Ratel's Client authentication
 
@@ -1807,6 +1813,8 @@ In setting up a cluster be sure the check the following.
 * Does each instance have a unique ID on startup?
 * Has `--bindall=true` been set for networked communication?
 
+See the [Production Checklist]({{< relref "#production-checklist" >}}) docs for more info.
+
 ## Fast Data Loading
 
 There are two different tools that can be used for fast data loading:
@@ -1824,7 +1832,7 @@ Dgraph Live Loader (run with `dgraph live`) is a small helper program which read
 
 Dgraph Live Loader correctly handles assigning unique IDs to blank nodes across multiple files, and can optionally persist them to disk to save memory, in case the loader was re-run.
 
-{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `-x` flag, which can reused
+{{% notice "note" %}} Dgraph Live Loader can optionally write the xid->uid mapping to a directory specified using the `--xidmap` flag, which can reused
 given that live loader completed successfully in the previous run.{{% /notice %}}
 
 ```sh
@@ -1845,6 +1853,17 @@ $ dgraph live -C -f <path-to-gzipped-RDF-or-JSON-file>
 # Read RDFs and a schema file and send to Dgraph running at given address.
 $ dgraph live -f <path-to-gzipped-RDf-or-JSON-file> -s <path-to-schema-file> -a <dgraph-alpha-address:grpc_port> -z <dgraph-zero-address:grpc_port>
 ```
+
+#### Encrypted imports via Live Loader
+
+A new flag keyfile is added to the Live Loader. This option is required to decrypt the encrypted export data and schema files. Once the export files are decrypted, the Live Loader streams the data to a live Alpha instance.
+
+{{% notice "note" %}}
+If the live Alpha instance has encryption turned on, the `p` directory will be encrypted. Otherwise, the `p` directory is unencrypted.
+{{% /notice %}}
+
+#### Encrypted RDF/JSON file and schema via Live Loader
+`dgraph live -f <path-to-encrypted-gzipped-RDF-or-JSON-file> -s <path-to-encrypted-schema> -keyfile <path-to-keyfile-to-decrypt-files>`
 
 #### Other Live Loader options
 
@@ -1868,6 +1887,8 @@ Do not confuse with `-C`.
 Alpha server.
 
 `-a, --alpha` (default: `localhost:9080`): Dgraph Alpha gRPC server address to connect for live loading. This can be a comma-separated list of Alphas addresses in the same cluster to distribute the load, e.g.,  `"alpha:grpc_port,alpha2:grpc_port,alpha3:grpc_port"`.
+
+`-x, --xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
 ### Bulk Loader
 
@@ -2005,6 +2026,40 @@ $ dgraph bulk -f <file1.rdf, file2.rdf> ...
 
 ```
 
+#### Encryption at rest with Bulk Loader
+
+Even before the Dgraph cluster starts, we can load data using Bulk Loader with the encryption feature turned on. Later we can point the generated `p` directory to a new Alpha server.
+
+Here's an example to run Bulk Loader with a key used to write encrypted data:
+
+```bash
+dgraph bulk --encryption_key_file ./enc_key_file -f data.json.gz -s data.schema --map_shards=1 --reduce_shards=1 --http localhost:8000 --zero=localhost:5080
+```
+
+#### Encrypting imports via Bulk Loader
+
+The Bulk Loader’s `encryption_key_file` option was previously used to encrypt the output `p ` directory. This same option will also be used to decrypt the encrypted export data and schema files.
+
+Another option, `--encrypted`, indicates whether the input `rdf`/`json` data and schema files are encrypted or not. With this switch, we support the use case of migrating data from unencrypted exports to encrypted import.
+
+So, with the above two options we have 4 cases:
+
+1. `--encrypted=true` and no `encryption_key_file`.
+
+Error: If the input is encrypted, a key file must be provided.
+
+2. `--encrypted=true` and `encryption_key_file`=`path to key.
+
+Input is encrypted and output `p` dir is encrypted as well.
+
+3. `--encrypted=false` and no `encryption_key_file`.
+
+Input is not encrypted and the output `p` dir is also not encrypted.   
+
+4. `--encrypted=false` and `encryption_key_file`=`path to key`.
+
+Input is not encrypted but the output is encrypted. (This is the migration use case mentioned above).
+
 #### Other Bulk Loader options
 
 `--new_uids` (default: false): Assign new UIDs instead of using the existing
@@ -2017,6 +2072,10 @@ ending in .rdf, .rdf.gz, .json, and .json.gz will be loaded.
 
 `--format`: Specify file format (rdf or json) instead of getting it from
 filenames. This is useful if you need to define a strict format manually.
+
+`--store_xids`: Generate a xid edge for each node. It will store the XIDs (The identifier / Blank-nodes) in an attribute named `xid` in the entity itself. It is useful if you gonna use [External IDs](/mutations#external-ids).
+
+`--xidmap` (default: disabled. Need a path): Store xid to uid mapping to a directory. Dgraph will save all identifiers used in the load for later use in other data ingest operations. The mapping will be saved in the path you provide and you must indicate that same path in the next load. It is recommended to use this flag if you have full control over your identifiers (Blank-nodes). Because the identifier will be mapped to a specific UID.
 
 #### Tuning & monitoring
 
@@ -2063,8 +2122,46 @@ Dgraph alpha instances more evenly.
 - The `--shufflers` controls the level of parallelism in the shuffle/reduce
   stage. Increasing this increases memory consumption.
 
+## Ludicrous Mode
+
+Ludicrous mode is available in Dgraph v20.03.1 or later.
+
+Ludicrous mode allows Dgraph to ingest data at an incredibly fast speed. It differs from the normal mode as it provides fewer guarantees. In normal mode, Dgraph provides strong consistency. In ludicrous mode, Dgraph provides eventual consistency. In ludicrous mode, any mutation which succeeds **might be available eventually**. **Eventually** means the changes will be applied later and might not be reflected in queries away. If Dgraph crashes unexpectedly, there **might** be unapplied mutations which **will not** be picked up when Dgraph restarts. Dgraph with ludicrous mode enabled behaves as an eventually consistent system.
+
+
+**How do I enable it?**
+
+Ludicrous mode can be enabled by setting the `--ludicrous_mode` config option to all Zero and Alpha instances in the cluster.
+
+
+**What does it do?**
+
+It doesn't wait for mutations to be applied. When a mutation comes, it proposes the mutation to the cluster and as soon as the proposal reaches the other nodes, it returns the response right away. You don't need to send a commit request for mutation. It's equivalent to having CommitNow set automatically for all mutations. All the mutations are then sent to background workers which keep applying them.
+
+Also, Dgraph does not sync writes to disk. This increases throughput but may result in loss of unsynced writes in the event of hardware failure.
+
+
+**What is the trade off?**
+
+As mentioned in the section above, it provides amazing speed at the cost of some guarantees.
+
+It can be used when we have write-heavy operations and there is a time gap between queries and mutations, or you are fine with potentially reading stale data.
+
+There are no transactions in ludicrous mode. That is, you cannot open a transaction, apply a mutation, and then decide to cancel the transaction. Every mutation request is committed to Dgraph.
+
+**Can the cluster run with HA?**
+
+Yes, ludicrous mode works with the cluster set up in a highly-available (HA) configuration.
+
+**Can the cluster run with multiple data shards?**
+
+Yes, ludicrous mode works with the cluster set up with multiple data shards.
+
+
+
 ## Monitoring
 Dgraph exposes metrics via the `/debug/vars` endpoint in json format and the `/debug/prometheus_metrics` endpoint in Prometheus's text-based format. Dgraph doesn't store the metrics and only exposes the value of the metrics at that instant. You can either poll this endpoint to get the data in your monitoring systems or install **[Prometheus](https://prometheus.io/docs/introduction/install/)**. Replace targets in the below config file with the ip of your Dgraph instances and run prometheus using the command `prometheus -config.file my_config.yaml`.
+
 ```sh
 scrape_configs:
   - job_name: "dgraph"
@@ -2072,8 +2169,8 @@ scrape_configs:
     scrape_interval: "2s"
     static_configs:
     - targets:
-      - 172.31.9.133:6080 #For Dgraph zero, 6080 is the http endpoint exposing metrics.
-      - 172.31.15.230:8080
+      - 172.31.9.133:6080     # For Dgraph zero, 6080 is the http endpoint exposing metrics.
+      - 172.31.15.230:8080    # For Dgraph alpha, 8080 is the http endpoint exposing metrics.
       - 172.31.0.170:8080
       - 172.31.8.118:8080
 ```
@@ -2083,6 +2180,96 @@ Raw data exported by Prometheus is available via `/debug/prometheus_metrics` end
 {{% /notice %}}
 
 Install **[Grafana](http://docs.grafana.org/installation/)** to plot the metrics. Grafana runs at port 3000 in default settings. Create a prometheus datasource by following these **[steps](https://prometheus.io/docs/visualization/grafana/#creating-a-prometheus-data-source)**. Import **[grafana_dashboard.json](https://github.com/dgraph-io/benchmarks/blob/master/scripts/grafana_dashboard.json)** by following this **[link](http://docs.grafana.org/reference/export_import/#importing-a-dashboard)**.
+
+
+### CloudWatch
+
+Route53's health checks can be leveraged to create standard CloudWatch alarms to notify on change in the status of the `/health` endpoints of Alpha and Zero.
+
+Considering that the endpoints to monitor are publicly accessible and you have the AWS credentials and [awscli](https://aws.amazon.com/cli/) setup, we’ll go through an example of setting up a simple CloudWatch alarm configured to alert via email for the Alpha endpoint `alpha.acme.org:8080/health`. Dgraph Zero's `/health` endpoint can also be monitored in a similar way.
+
+
+
+#### Create the Route53 Health Check
+```sh
+aws route53 create-health-check \
+    --caller-reference $(date "+%Y%m%d%H%M%S") \
+    --health-check-config file:///tmp/create-healthcheck.json \
+    --query 'HealthCheck.Id'
+```
+The file `/tmp/create-healthcheck.json` would need to have the values for the parameters required to create the health check as such:
+```sh
+{
+  "Type": "HTTPS",
+  "ResourcePath": "/health",
+  "FullyQualifiedDomainName": "alpha.acme.org",
+  "Port": 8080,
+  "RequestInterval": 30,
+  "FailureThreshold": 3
+}
+```
+The reference for the values one can specify while creating or updating a health check can be found on the AWS [documentation](https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/health-checks-creating-values.html).
+
+The response to the above command would be the ID of the created health check.
+```sh
+"29bdeaaa-f5b5-417e-a5ce-7dba1k5f131b"
+```
+Make a note of the health check ID. This will be used to integrate CloudWatch alarms with the health check.
+
+{{% notice "note" %}}
+Currently, Route53 metrics are only (available)[https://docs.aws.amazon.com/Route53/latest/DeveloperGuide/monitoring-health-checks.html] in the **US East (N. Virginia)** region. The Cloudwatch Alarm (and the SNS Topic) should therefore be created in `us-east-1`.
+{{% /notice %}}
+
+#### [Optional] Creating an SNS Topic
+SNS topics are used to create message delivery channels. If you do not have any SNS topics configured, one can be created by running the following command:
+
+```sh
+aws sns create-topic --region=us-east-1 --name ops --query 'TopicArn'
+```
+
+The response to the above command would be as follows:
+```sh
+"arn:aws:sns:us-east-1:123456789012:ops"
+```
+Be sure to make a note of the topic ARN. This would be used to configure the CloudWatch alarm's action parameter.
+
+Run the following command to subscribe your email to the SNS topic:
+```sh
+aws sns subscribe \
+    --topic-arn arn:aws:sns:us-east-1:123456789012:ops \
+    --protocol email \
+    --notification-endpoint ops@acme.org
+```
+The subscription will need to be confirmed through *AWS Notification - Subscription Confirmation* sent through email. Once the subscription is confirmed, CloudWatch can be configured to use the SNS topic to trigger the alarm notification.
+
+
+
+#### Creating a CloudWatch Alarm
+The following command creates a CloudWatch alarm with `--alarm-actions` set to the ARN of the SNS topic and the `--dimensions` of the alarm set to the health check ID.
+```sh
+aws cloudwatch put-metric-alarm \
+    --region=us-east-1 \
+    --alarm-name dgraph-alpha \
+    --alarm-description "Alarm for when Alpha is down" \
+    --metric-name HealthCheckStatus \
+    --dimensions "Name=HealthCheckId,Value=29bdeaaa-f5b5-417e-a5ce-7dba1k5f131b" \
+    --namespace AWS/Route53 \
+    --statistic Minimum \
+    --period 60 \
+    --threshold 1 \
+    --comparison-operator LessThanThreshold \
+    --evaluation-periods 1 \
+    --treat-missing-data breaching \
+    --alarm-actions arn:aws:sns:us-east-1:123456789012:ops
+```
+
+One can verify the alarm status from the CloudWatch or Route53 consoles.
+
+##### Internal Endpoints
+If the Alpha endpoint is internal to the VPC network - one would need to create a Lambda function that would periodically (triggered using CloudWatch Event Rules) request the `/health` path and create CloudWatch metrics which could then be used to create the required CloudWatch alarms.
+The architecture and the CloudFormation template to achieve the same can be found [here](https://aws.amazon.com/blogs/networking-and-content-delivery/performing-route-53-health-checks-on-private-resources-in-a-vpc-with-aws-lambda-and-amazon-cloudwatch/).
+
+
 
 ## Metrics
 
@@ -2095,15 +2282,15 @@ The disk metrics let you track the disk activity of the Dgraph process. Dgraph d
 directly with the filesystem. Instead it relies on [Badger](https://github.com/dgraph-io/badger) to
 read from and write to disk.
 
- Metrics                          | Description
- -------                          | -----------
- `badger_disk_reads_total`        | Total count of disk reads in Badger.
- `badger_disk_writes_total`       | Total count of disk writes in Badger.
- `badger_gets_total`              | Total count of calls to Badger's `get`.
- `badger_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
- `badger_puts_total`              | Total count of calls to Badger's `put`.
- `badger_read_bytes`              | Total bytes read from Badger.
- `badger_written_bytes`           | Total bytes written to Badger.
+ Metrics                          	 | Description
+ -------                          	 | -----------
+ `badger_v2_disk_reads_total`        | Total count of disk reads in Badger.
+ `badger_v2_disk_writes_total`       | Total count of disk writes in Badger.
+ `badger_v2_gets_total`              | Total count of calls to Badger's `get`.
+ `badger_v2_memtable_gets_total`     | Total count of memtable accesses to Badger's `get`.
+ `badger_v2_puts_total`              | Total count of calls to Badger's `put`.
+ `badger_v2_read_bytes`              | Total bytes read from Badger.
+ `badger_v2_written_bytes`           | Total bytes written to Badger.
 
 ### Memory Metrics
 
@@ -2124,13 +2311,14 @@ operating system and how much is actively in use.
 
 The activity metrics let you track the mutations, queries, and proposals of an Dgraph instance.
 
- Metrics                          | Description
- -------                          | -----------
- `dgraph_goroutines_total`        | Total number of Goroutines currently running in Dgraph.
- `dgraph_active_mutations_total`  | Total number of mutations currently running.
- `dgraph_pending_proposals_total` | Total pending Raft proposals.
- `dgraph_pending_queries_total`   | Total number of queries in progress.
- `dgraph_num_queries_total`       | Total number of queries run in Dgraph.
+ Metrics                                            | Description
+ -------                                            | -----------
+ `go_goroutines`                                    | Total number of Goroutines currently running in Dgraph.
+ `dgraph_active_mutations_total`                    | Total number of mutations currently running.
+ `dgraph_pending_proposals_total`                   | Total pending Raft proposals.
+ `dgraph_pending_queries_total`                     | Total number of queries in progress.
+ `dgraph_num_queries_total{method="Server.Mutate"}` | Total number of mutations run in Dgraph.
+ `dgraph_num_queries_total{method="Server.Query"}`  | Total number of queries run in Dgraph.
 
 ### Health Metrics
 
@@ -2170,11 +2358,46 @@ Dgraph can be configured to send traces directly to a Jaeger collector with the 
 
 See [Jaeger's Getting Started docs](https://www.jaegertracing.io/docs/getting-started/) to get up and running with Jaeger.
 
+#### Setting up multiple Dgraph clusters with Jaeger
+
+Jaeger allows you to examine traces from multiple Dgraph clusters. To do this, use the `--collector.tags` on a Jaeger collector to set custom trace tags. For example, run one collector with `--collector.tags env=qa` and then another collector with `--collector.tags env=dev`. In Dgraph, set the `--jaeger.collector` flag in the Dgraph QA cluster to the first collector and the flag in the Dgraph Dev cluster to the second collector.
+You can run multiple Jaeger collector components for the same single Jaeger backend (e.g., many Jaeger collectors to a single Cassandra backend). This is still a single Jaeger installation but with different collectors customizing the tags per environment.
+
+Once you have this configured, you can filter by tags in the Jaeger UI. Filter traces by tags matching `env=dev`:
+
+{{% load-img "/images/jaeger-ui.png" "Jaeger UI" %}}
+
+Every trace has your custom tags set under the “Process” section of each span:
+
+{{% load-img "/images/jaeger-server-query.png" "Jaeger Query" %}}
+
+Filter traces by tags matching `env=qa`:
+
+{{% load-img "/images/jaeger-json.png" "Jaeger JSON" %}}
+
+{{% load-img "/images/jaeger-server-query-2.png" "Jaeger Query Result" %}}
+
+For more information, check out [Jaeger's Deployment Guide](https://www.jaegertracing.io/docs/deployment/).
+
+## Data compression on disk
+
+Alpha exposes the option `--badger.compression_level` to configure the compression
+level for data on disk using Zstd compression. The option can be set as
+
+```sh
+dgraph alpha --badger.compression_level=xxx
+```
+
+A higher compression level is more CPU intensive but offers a better compression
+ratio. The default level is 3.
+
+This option is available in v20.03.1 and later.
+
 ## Dgraph Administration
 
 Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
 
-### Whitelist Admin Operations
+### Whitelisting Admin Operations
 
 By default, admin operations can only be initiated from the machine on which the Dgraph Alpha runs.
 You can use the `--whitelist` option to specify whitelisted IP addresses and ranges for hosts from which admin operations can be initiated.
@@ -2185,12 +2408,12 @@ dgraph alpha --whitelist 172.17.0.0:172.20.0.0,192.168.1.1 --lru_mb <one-third R
 This would allow admin operations from hosts with IP between `172.17.0.0` and `172.20.0.0` along with
 the server which has IP address as `192.168.1.1`.
 
-### Restrict Mutation Operations
+### Restricting Mutation Operations
 
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
 the predicate gets added to the schema with an appropriate
-[Dgraph Type](https://docs.dgraph.io/master/query-language/#schema-types).
+[Dgraph Type]({{< relref "query-language/index.md#schema-types" >}}).
 
 You can use `--mutations disallow` to disable all mutations,
 which is set to `allow` by default.
@@ -2208,7 +2431,7 @@ you need to perform an alter operation with that predicate and its schema type.
 dgraph alpha --mutations strict
 ```
 
-### Secure Alter Operations
+### Securing Alter Operations
 
 Clients can use alter operations to apply schema updates and drop particular or all predicates from the database.
 By default, all clients are allowed to perform alter operations.
@@ -2242,19 +2465,24 @@ To fully secure alter operations in the cluster, the auth token must be set for 
 {{% /notice %}}
 
 
-### Export Database
+### Exporting Database
 
-An export of all nodes is started by locally accessing the export endpoint of any Alpha in the cluster.
+An export of all nodes is started by locally executing the following GraphQL mutation on /admin endpoint using any compatible client like Insomnia, GraphQL Playground or GraphiQL.
 
-```sh
-$ curl localhost:8080/admin/export
+```graphql
+mutation {
+  export(input: {format: "rdf"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 {{% notice "warning" %}}By default, this won't work if called from outside the server where the Dgraph Alpha is running.
 You can specify a list or range of whitelisted IP addresses from which export or other admin operations
 can be initiated using the `--whitelist` flag on `dgraph alpha`.
 {{% /notice %}}
-
-This also works from a browser, provided the HTTP GET is being run from the same server where the Dgraph alpha instance is running.
 
 This triggers an export for all Alpha groups of the cluster. The data is exported from the following Dgraph instances:
 
@@ -2271,27 +2499,51 @@ directory specified via the `--export` flag (defaults to a directory called `"ex
 entire export process is considered failed and an error is returned.
 
 The data is exported in RDF format by default. A different output format may be specified with the
-`format` URL parameter. For example:
+`format` field. For example:
 
-```sh
-$ curl 'localhost:8080/admin/export?format=json'
+```graphql
+mutation {
+  export(input: {format: "json"}) {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 Currently, "rdf" and "json" are the only formats supported.
 
-### Shutdown Database
+#### Encrypting Exports
 
-A clean exit of a single Dgraph node is initiated by running the following command on that node.
-{{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
+Export is available wherever an Alpha is running. To encrypt an export, the Alpha must be configured with the `encryption-key-file`.
+
+{{% notice "note" %}}
+The `encryption-key-file` was used for `encryption-at-rest` and will now also be used for encrypted backups and exports.
 {{% /notice %}}
 
-```sh
-$ curl localhost:8080/admin/shutdown
+### Shutting Down Database
+
+A clean exit of a single Dgraph node is initiated by running the following GraphQL mutation on /admin endpoint.
+{{% notice "warning" %}}This won't work if called from outside the server where Dgraph is running.
+You can specify a list or range of whitelisted IP addresses from which shutdown or other admin operations
+can be initiated using the `--whitelist` flag on `dgraph alpha`.
+{{% /notice %}}
+
+```graphql
+mutation {
+  shutdown {
+    response {
+      message
+      code
+    }
+  }
+}
 ```
 
 This stops the Alpha on which the command is executed and not the entire cluster.
 
-### Delete database
+### Deleting database
 
 Individual triples, patterns of triples and predicates can be deleted as described in the [query languge docs](/query-language#delete).
 
@@ -2299,22 +2551,47 @@ To drop all data, you could send a `DropAll` request via `/alter` endpoint.
 
 Alternatively, you could:
 
-* [stop Dgraph]({{< relref "#shutdown-database" >}}) and wait for all writes to complete,
-* delete (maybe do an export first) the `p` and `w` directories, then
-* restart Dgraph.
+* [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete,
+* Delete (maybe do an export first) the `p` and `w` directories, then
+* Restart Dgraph.
 
-### Upgrade Database
+### Upgrading Database
 
-Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps safely export and restart.
+Doing periodic exports is always a good idea. This is particularly useful if you wish to upgrade Dgraph or reconfigure the sharding of a cluster. The following are the right steps to safely export and restart.
 
-- Start an [export]({{< relref "#export">}})
-- Ensure it's successful
-- Bring down the cluster
-- Run Dgraph using new data directories.
-- Reload the data via [bulk loader]({{< relref "#bulk-loader" >}}).
-- If all looks good, you can delete the old directories (export serves as an insurance)
+1. Start an [export]({{< relref "#exporting-database">}})
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
+4. Start a new Dgraph cluster using new data directories (this can be done by passing empty directories to the options `-p` and `-w` for Alphas and `-w` for Zeros)
+5. Reload the data via [bulk loader]({{< relref "#bulk-loader" >}})
+6. Verify the correctness of the new Dgraph cluster. If all looks good, you can delete the old directories (export serves as an insurance)
 
 These steps are necessary because Dgraph's underlying data format could have changed, and reloading the export avoids encoding incompatibilities.
+
+Blue-green deployment is a common approach to minimize downtime during the upgrade process.
+This approach involves switching your application to read-only mode. To make sure that no mutations are executed during the maintenance window you can
+do a rolling restart of all your Alpha using the option `--mutations disallow` when you restart the Alphas. This will ensure the cluster is in read-only mode.
+
+At this point your application can still read from the old cluster and you can perform the steps 4. and 5. described above.
+When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
+
+#### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
+
+1. Use [binary]({{< relref "enterprise-features/index.md#binary-backups">}}) backup to export data from old cluster
+2. Ensure it is successful
+3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
+4. Upgrade `dgraph` binary to `v20.03.0`
+5. [Restore]({{< relref "enterprise-features/index.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+6. Start a new Dgraph cluster using the restored data directories
+7. Upgrade ACL data using the following command:
+
+```
+dgraph upgrade --acl -a localhost:9080 -u groot -p password
+```
+
+{{% notice "note" %}}
+If you are upgrading from v1.0, please make sure you follow the schema migration steps described in [this section](/howto/#schema-types-scalar-uid-and-list-uid).
+{{% /notice %}}
 
 ### Post Installation
 
@@ -2342,6 +2619,202 @@ During normal operations, Dgraph must be able to open many files. Your operating
 
 On Linux and Mac, you can check the file descriptor limit with `ulimit -n -H` for the hard limit and `ulimit -n -S` for the soft limit. The soft limit should be set high enough for Dgraph to run properly. A soft limit of 65535 is a good lower bound for a production setup. You can adjust the limit as needed.
 
+## Production Checklist
+
+This guide describes important setup recommendations for a production-ready Dgraph cluster.
+
+{{% notice "note" %}}
+In this guide, a node refers to a Dgraph instance unless specified otherwise.
+{{% /notice %}}
+
+A **Dgraph cluster** is comprised of multiple **Dgraph instances** (aka **nodes**) connected together to form a single distributed database. A Dgraph instance is either a **Dgraph Zero** or **Dgraph Alpha**, each of which serves a different role in the cluster.
+
+There can be one or more **Dgraph clients** connected to Dgraph to perform database operations (queries, mutations, alter schema, etc.). These clients connect via gRPC or HTTP. Dgraph provides official clients for Go, Java, Python, and JavaScript, and C#. All of these are gRPC-based, and JavaScript supports both gRPC and HTTP for browser support. Community-developed Dgraph clients for other languages are also available. The full list of clients can be found in [Clients]({{< relref "clients/index.md" >}}) page. You can also interact with Dgraph via curl over HTTP. Dgraph Ratel is a UI client used to visualize queries, run mutations, and manage the schema. Clients do not participate as a member of the database cluster, they simply connect to one or more Dgraph Alpha instances.
+
+#### Cluster Requirements
+
+A minimum of one Dgraph Zero and one Dgraph Alpha is needed for a working cluster.
+
+There can be multiple Dgraph Zeros and Dgraph Alphas running in a single cluster.
+
+
+#### Machine Requirements
+
+To ensure predictable performance characteristics, Dgraph instances should NOT run on "burstable" or throttled machines that limit resources. That includes t2 class machines on AWS.
+
+We recommend each Dgraph instance to be deployed to a single dedicated machine to ensure that Dgraph can take full advantage of machine resources. That is, for a 6-node Dgraph cluster with 3 Dgraph Zeros and 3 Dgraph Alphas, each process runs in its own machine (e.g., EC2 instance). In the event of a machine failure, only one instance is affected, instead of multiple if they were running on that same machine.
+
+If you'd like to run Dgraph with fewer machines, then the recommended configuration is to run a single Dgraph Zero and a single Dgraph Alpha per machine. In a high availability setup, that allows the cluster to lose a single machine (simultaneously losing a Dgraph Zero and a Dgraph Alpha) with continued availability of the database.
+
+Do not run multiple Dgraph Zeros or Dgraph Alpha processes on a single machine. This can affect performance due to shared resources and reduce high availability in the event of machine failures.
+
+#### Operating System
+
+The recommended operating system is Linux for production workloads. Dgraph provides release binaries in Linux, macOS, and Windows. For test environments, you can choose to run Dgraph on any operating system. This deployment guide assumes you are setting up Dgraph on Linux systems (see [Operating System Tuning]({{< relref
+   "#operating-system-tuning" >}})).
+
+#### CPU and Memory
+
+At the bare minimum, we recommend machines with at least 2 CPUs and 2 GiB of memory for testing.
+
+You'll want a sufficient CPU and memory according to your production workload. A common setup for Dgraph is 16 CPUs and 32 GiB of memory per machine. Dgraph is designed with concurrency in mind, so more cores means quicker processing and higher throughput of requests.
+
+You may find you'll need more CPU cores and memory for your specific use case.
+
+#### Disk
+
+Dgraph instances make heavy usage of disks, so storage with high IOPS is highly recommended to ensure reliable performance. Specifically, we recommend SSDs, not HDDs.
+
+Instances such as c5d.4xlarge have locally-attached NVMe SSDs with high IOPS. You can also use EBS volumes with provisioned IOPS (io1). If you are not running performance-critical workloads, you can also choose to use cheaper gp2 EBS volumes.
+
+Recommended disk sizes for Dgraph Zero and Dgraph Alpha:
+
+* Dgraph Zero: 200 GB to 300 GB. Dgraph Zero stores cluster metadata information and maintains a write-ahead log for cluster operations.
+* Dgraph Alpha: 250 GB to 750 GB. Dgraph Alpha stores database data, including the schema, indices, and the data values. It maintains a write-ahead log of changes to the database. Your cloud provider may provide better disk performance based on the volume size.
+
+Additional recommendations:
+
+* The recommended Linux filesystem is ext4.
+* Avoid using shared storage such as NFS, CIFS, and CEPH storage.
+
+#### Firewall Rules
+
+Dgraph instances communicate over several ports. Firewall rules should be configured appropriately for the ports documented in [Ports Usage]({{< relref "deploy/index.md#ports-usage" >}}).
+
+Internal ports must be accessible by all Zero and Alpha peers for proper cluster-internal communication. Database clients must be able to connect to Dgraph Alpha external ports either directly or through a load balancer.
+
+Dgraph Zeros can be set up in a private network where communication is only with Dgraph Alphas, database administrators, internal services (such as Prometheus or Jaeger), and possibly developers (see note below). Dgraph Zero's 6080 external port is only necessary for database administrators. For example, it can be used to inspect the cluster metadata (/state), allocate UIDs or set txn timestamps (/assign), move data shards (/moveTablet), or remove cluster nodes (/removeNode). The full docs about Zero's administrative tasks are in [More About Dgraph Zero]({{< relref "deploy/index.md#more-about-dgraph-zero" >}}).
+
+{{% notice "note" %}}
+Developers using Dgraph Live Loader or Dgraph Bulk Loader require access to both Dgraph Zero port 5080 and Dgraph Alpha port 9080. When using those tools, consider using them within your environment that has network access to both ports of the cluster.
+{{% /notice %}}
+
+#### Operating System Tuning
+
+The OS should be configured with the recommended settings to ensure that Dgraph runs properly.
+
+**File Descriptors Limit**
+
+Dgraph can use a large number of open file descriptors. Most operating systems set a default limit that is lower than what is required.
+
+It is recommended to set the file descriptors limit to unlimited. If that is not possible, set it to at least a million (1,048,576) which is recommended to account for cluster growth over time.
+
+#### Deployment
+
+A Dgraph instance is run as a single process from a single static binary. It does not require any additional dependencies or separate services in order to run (see the [Supplementary Services]({{< relref "#supplementary-services" >}}) section for third-party services that work alongside Dgraph). A Dgraph cluster is set up by running multiple Dgraph processes networked together.
+
+#### Terminology
+
+An **N-node cluster** is a Dgraph cluster that contains N number of Dgraph instances. For example, a 6-node cluster means six Dgraph instances. The **replication setting** specifies the number of Dgraph Alpha replicas are assigned per group. The replication setting is a configuration flag (`--replicas`) on Dgraph Zero. A **Dgraph Alpha group** is a set of Dgraph Alphas that store replications of the data amongst each other. Every Dgraph Alpha group is assigned a set of distinct predicates to store and serve.
+
+Examples of different cluster settings:
+* No sharding
+  * 2-node cluster: 1 Zero, 1 Alpha (one group).
+  * HA equivalent: x3 = 6-node cluster.
+* With 2-way sharding:
+  * 3-node cluster: 1 Zero, 2 Alphas (two groups).
+  * HA equivalent: x3 = 9-node cluster.
+
+In the following examples we outline the two most common cluster configurations: a 2-node cluster and a 6-node cluster.
+
+#### Basic setup: 2-node cluster
+We provide sample configs for both [Docker Compose](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/docker/docker-compose.yml) and [Kubernetes](https://github.com/dgraph-io/dgraph/tree/master/contrib/config/kubernetes/dgraph-single) for a 2-node cluster. You can also run Dgraph directly on your host machines.
+
+{{% load-img "/images/deploy-guide-1.png" "2-node cluster" %}}
+
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/index.md#config" >}})).
+
+Dgraph Zero:
+* The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Alpha (default: `localhost:5080`).
+* The `--idx` flag should be set to a unique Raft ID within the Dgraph Zero group (default: `1`).
+* The `--wal` flag should be set to the directory path to store write-ahead-log entries on disk (default: `zw`).
+* The `--bindall` flag should be set to true for machine-to-machine communication (default: `true`).
+* Recommended: For better issue diagnostics, set the log level verbosity to 2 with the option `--v=2`.
+
+Dgraph Alpha:
+* The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Zero (default: `localhost:7080`).
+* The `--zero` flag should be set to the corresponding Zero address set for Dgraph Zero's `--my` flag.
+* The `--postings` flag should be set to the directory path for data storage (default: `p`).
+* The `--wal` flag should be set to the directory path for write-ahead-log entries (default: `w`)
+* The `--bindall` flag should be set to true for machine-to-machine communication (default: `true`).
+* Recommended: For better issue diagnostics, set the log level verbosity to 2 `--v=2`.
+
+#### HA setup: 6-node cluster
+
+We provide sample configs for both [Docker Compose](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/docker/docker-compose-ha.yml) and [Kubernetes](https://github.com/dgraph-io/dgraph/tree/master/contrib/config/kubernetes/dgraph-ha) for a 6-node cluster with 3 Alpha replicas per group. You can also run Dgraph directly on your host machines.
+
+A Dgraph cluster can be configured in a high-availability setup with Dgraph Zero and Dgraph Alpha each set up with peers. These peers are part of Raft consensus groups, which elect a single leader amongst themselves. The non-leader peers are called followers. In the event that the peers cannot communicate with the leader (e.g., a network partition or a machine shuts down), the group automatically elects a new leader to continue.
+
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/index.md#config" >}})).
+
+In this setup, we assume the following hostnames are set:
+
+- `zero1`
+- `zero2`
+- `zero3`
+- `alpha1`
+- `alpha2`
+- `alpha3`
+
+We will configure the cluster with 3 Alpha replicas per group. The cluster group-membership topology will look like the following:
+
+{{% load-img "/images/deploy-guide-2.png" "Dgraph cluster image" %}}
+
+##### Set up Dgraph Zero group
+
+In the Dgraph Zero group you must set unique Raft IDs (`--idx`) per Dgraph Zero. Dgraph will not auto-assign Raft IDs to Dgraph Zero instances.
+
+The first Dgraph Zero that starts will initiate the database cluster. Any following Dgraph Zero instances must connect to the cluster via the `--peer` flag to join. If the `--peer` flag is omitted from the peers, then the Dgraph Zero will create its own independent Dgraph cluster.
+
+**First Dgraph Zero** example: `dgraph zero --replicas=3 --idx=1 --my=zero1:5080`
+
+The `--my` flag must be set to the address:port of this instance that peers will connect to. The `--idx` flag sets its Raft ID to `1`.
+
+**Second Dgraph Zero** example: `dgraph zero --replicas=3 --idx=2 --my=zero2:5080 --peer=zero1:5080`
+
+The `--my` flag must be set to the address:port of this instance that peers will connect to. The `--idx` flag sets its Raft ID to 2, and the `--peer` flag specifies a request to connect to the Dgraph cluster of zero1 instead of initializing a new one.
+
+**Third Dgraph Zero** example: `dgraph zero --replicas=3 --idx=3 --my=zero3:5080 --peer=zero1:5080`:
+
+The `--my` flag must be set to the address:port of this instance that peers will connect to. The `--idx` flag sets its Raft ID to 3, and the `--peer` flag specifies a request to connect to the Dgraph cluster of zero1 instead of initializing a new one.
+
+Dgraph Zero configuration options:
+
+* The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to Dgraph Alpha (default: `localhost:5080`).
+* The `--idx` flag should be set to a unique Raft ID within the Dgraph Zero group (default: `1`).
+* The `--wal` flag should be set to the directory path to store write-ahead-log entries on disk (default: `zw`).
+* The `--bindall` flag should be set to true for machine-to-machine communication (default: `true`).
+* Recommended: For more informative log info, set the log level verbosity to 2 with the option `--v=2`.
+
+##### Set up Dgraph Alpha group
+
+The number of replica members per Alpha group depends on the setting of Dgraph Zero's `--replicas` flag. Above, it is set to 3. So when Dgraph Alphas join the cluster, Dgraph Zero will assign it to an Alpha group to fill in its members up to the limit per group set by the `--replicas` flag.
+
+First Alpha example: `dgraph alpha --my=alpha1:7080 --zero=zero1:7080`
+
+Second Alpha example: `dgraph alpha --my=alpha2:7080 --zero=zero1:7080`
+
+First Alpha example: `dgraph alpha --my=alpha3:7080 --zero=zero1:7080`
+
+Dgraph Alpha configuration options:
+
+* The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Zero (default: `localhost:7080`).
+* The `--zero` flag should be set to the corresponding Zero address set for Dgraph Zero's `--my`flag.
+* The `--postings` flag should be set to the directory path for data storage (default: `p`).
+* The `--wal` flag should be set to the directory path for write-ahead-log entries (default: `w`)
+* The `--bindall` flag should be set to true for machine-to-machine communication (default: `true`).
+* Recommended: For more informative log info, set the log level verbosity to 2 `--v=2`.
+
+#### Supplementary Services
+
+These services are not required for a Dgraph cluster to function but are recommended for better insight when operating a Dgraph cluster.
+
+- [Metrics and monitoring][] with Prometheus and Grafana.
+- [Distributed tracing][] with Jaeger.
+
+[Metrics and monitoring]: {{< relref "deploy/index.md#monitoring" >}}
+[Distributed tracing]: {{< relref "deploy/index.md#tracing" >}}
+
 ## See Also
 
-* [Product Roadmap to v1.0](https://github.com/dgraph-io/dgraph/issues/1)
+* [Product Roadmap 2020](https://github.com/dgraph-io/dgraph/issues/4724)

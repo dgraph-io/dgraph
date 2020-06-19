@@ -1,6 +1,6 @@
 # Dgraph Wiki
 
-If you are looking for Dgraph documentation, you might find https://docs.dgraph.io much more readable.
+If you are looking for Dgraph documentation, you might find https://dgraph.io/docs/ much more readable.
 
 ## Contributing
 
@@ -8,7 +8,7 @@ We use [Hugo](https://gohugo.io/) for our documentation.
 
 ### Running locally
 
-1. Download and install hugo from [here](https://github.com/spf13/hugo/releases).
+1. Download and install the latest patch of hugo version v0.69.x from [here](https://github.com/gohugoio/hugo/releases/).
 
 2. From within the `wiki` folder, run the command below to get the theme.
 

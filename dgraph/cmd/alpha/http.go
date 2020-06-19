@@ -29,10 +29,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
@@ -40,7 +42,6 @@ import (
 	"github.com/golang/glog"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/pkg/errors"
-
 	"google.golang.org/grpc/metadata"
 )
 
@@ -143,20 +144,6 @@ func parseDuration(r *http.Request, name string) (time.Duration, error) {
 	return durationValue, nil
 }
 
-// Write response body, transparently compressing if necessary.
-func writeResponse(w http.ResponseWriter, r *http.Request, b []byte) (int, error) {
-	var out io.Writer = w
-
-	if strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		w.Header().Set("Content-Encoding", "gzip")
-		gzw := gzip.NewWriter(w)
-		defer gzw.Close()
-		out = gzw
-	}
-
-	return out.Write(b)
-}
-
 // This method should just build the request and proxy it to the Query method of dgraph.Server.
 // It can then encode the response as appropriate before sending it back to the user.
 func queryHandler(w http.ResponseWriter, r *http.Request) {
@@ -207,8 +194,8 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := context.WithValue(context.Background(), query.DebugKey, isDebugMode)
-	ctx = attachAccessJwt(ctx, r)
+	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
+	ctx = x.AttachAccessJwt(ctx, r)
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
@@ -277,7 +264,7 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	writeEntry("extensions", js)
 	x.Check2(out.WriteRune('}'))
 
-	if _, err := writeResponse(w, r, out.Bytes()); err != nil {
+	if _, err := x.WriteResponse(w, r, out.Bytes()); err != nil {
 		// If client crashes before server could write response, writeResponse will error out,
 		// Check2 will fatal and shut the server down in such scenario. We don't want that.
 		glog.Errorln("Unable to write response: ", err)
@@ -397,7 +384,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 	req.StartTs = startTs
 	req.CommitNow = commitNow
 
-	ctx := attachAccessJwt(context.Background(), r)
+	ctx := x.AttachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
 	if err != nil {
 		x.SetStatusWithData(w, x.ErrorInvalidRequest, err.Error())
@@ -432,7 +419,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func commitHandler(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +467,7 @@ func commitHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 func handleAbort(startTs uint64) (map[string]interface{}, error) {
@@ -548,19 +535,6 @@ func handleCommit(startTs uint64, reqText []byte) (map[string]interface{}, error
 	return response, nil
 }
 
-func attachAccessJwt(ctx context.Context, r *http.Request) context.Context {
-	if accessJwt := r.Header.Get("X-Dgraph-AccessToken"); accessJwt != "" {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			md = metadata.New(nil)
-		}
-
-		md.Append("accessJwt", accessJwt)
-		ctx = metadata.NewIncomingContext(ctx, md)
-	}
-	return ctx
-}
-
 func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if commonHandler(w, r) {
 		return
@@ -576,6 +550,13 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		op.Schema = string(b)
 	}
 
+	runInBackground, err := parseBool(r, "runInBackground")
+	if err != nil {
+		x.SetStatus(w, x.ErrorInvalidRequest, err.Error())
+		return
+	}
+	op.RunInBackground = runInBackground
+
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
 	fwd := r.Header.Get("X-Forwarded-For")
 	if len(fwd) > 0 {
@@ -586,12 +567,61 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	// Pass in an auth token, if present.
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
 	ctx := metadata.NewIncomingContext(context.Background(), md)
-	ctx = attachAccessJwt(ctx, r)
+	ctx = x.AttachAccessJwt(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return
 	}
 
+	writeSuccessResponse(w, r)
+}
+
+func adminSchemaHandler(w http.ResponseWriter, r *http.Request, adminServer web.IServeGraphQL) {
+	if commonHandler(w, r) {
+		return
+	}
+
+	b := readRequest(w, r)
+	if b == nil {
+		return
+	}
+
+	gqlReq := &schema.Request{
+		Query: `
+		mutation updateGqlSchema($sch: String!) {
+			updateGQLSchema(input: {
+				set: {
+					schema: $sch
+				}
+			}) {
+				gqlSchema {
+					id
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": string(b)},
+	}
+
+	response := resolveWithAdminServer(gqlReq, r, adminServer)
+	if len(response.Errors) > 0 {
+		x.SetStatus(w, x.Error, response.Errors.Error())
+		return
+	}
+
+	writeSuccessResponse(w, r)
+}
+
+func resolveWithAdminServer(gqlReq *schema.Request, r *http.Request,
+	adminServer web.IServeGraphQL) *schema.Response {
+	md := metadata.New(nil)
+	ctx := metadata.NewIncomingContext(context.Background(), md)
+	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
+
+	return adminServer.Resolve(ctx, gqlReq)
+}
+
+func writeSuccessResponse(w http.ResponseWriter, r *http.Request) {
 	res := map[string]interface{}{}
 	data := map[string]interface{}{}
 	data["code"] = x.Success
@@ -604,7 +634,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = writeResponse(w, r, js)
+	_, _ = x.WriteResponse(w, r, js)
 }
 
 // skipJSONUnmarshal stores the raw bytes as is while JSON unmarshaling.

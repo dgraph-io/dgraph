@@ -1,0 +1,383 @@
+- name: "Delete with auth"
+  gqlquery: |
+    mutation deleteUserSecret($filter: UserSecretFilter!) {
+      deleteUserSecret(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter": { "aSecret": { "anyofterms": "auth is applied" } } }
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" }
+        ]
+  dgquery: |-
+    query {
+      x as deleteUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+        uid
+      }
+      UserSecret1 as var(func: type(UserSecret)) @filter(anyofterms(UserSecret.aSecret, "auth is applied"))
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+    }
+
+- name: "Delete with deep auth"
+  gqlquery: |
+    mutation deleteTicket($filter: TicketFilter!) {
+      deleteTicket(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter": { "title": { "anyofterms": "auth is applied" } } }
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          { 
+            "uid":"uid(Column3)",
+            "Column.tickets": [ { "uid":"uid(x)" } ]
+          },
+          {
+            "uid":"uid(User4)",
+            "User.tickets": [ { "uid":"uid(x)" } ]
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+        uid
+        Column3 as Ticket.onColumn
+        User4 as Ticket.assignedTo
+      }
+      Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Delete with top level RBAC true."
+  gqlquery: |
+    mutation($projs: [ID!]) {
+      deleteProject (filter: { projID: $projs}) {
+          numUids
+        }
+    }
+  variables: |
+    {
+      "projs" : ["0x01", "0x02"]
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         },
+         {
+           "Column.inProject": {
+             "uid": "uid(x)"
+           },
+           "uid": "uid(Column2)"
+         }
+        ]
+  dgquery: |-
+    query {
+      x as deleteProject(func: uid(0x1, 0x2)) @filter(type(Project)) {
+        uid
+        Column2 as Project.columns
+      }
+    }
+
+- name: "Delete with top level RBAC false."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog()
+    }
+
+- name: "multiple rule in delete mutation"
+  gqlquery: |
+    mutation deleteUser($filter: UserFilter!) {
+      deleteUser(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "username": { "eq": "userxyz" }
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid" : "uid(x)" },
+          {
+            "Ticket.assignedTo" : [ {"uid":"uid(x)"} ],
+            "uid" : "uid(Ticket4)"
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteUser(func: uid(User1)) @filter((uid(User2) AND uid(User3))) {
+        uid
+        Ticket4 as User.tickets
+      }
+      User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
+      User2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
+      User3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
+    }
+
+- name: "Filtering by ID"
+  gqlquery: |
+    mutation deleteRegion($filter: RegionFilter!) {
+      deleteRegion(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" }
+        ]
+  dgquery: |-
+    query {
+      x as deleteRegion(func: uid(Region1)) @filter(uid(Region2)) {
+        uid
+      }
+      Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
+      Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
+    }
+
+- name: "Delete with top level RBAC false."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog()
+    }
+
+- name: "Delete with top level RBAC true."
+  gqlquery: |
+    mutation deleteLog($filter: LogFilter!) {
+      deleteLog(filter: $filter) {
+        msg
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteLog(func: uid(0x1, 0x2)) @filter(type(Log)) {
+        uid
+      }
+    }
+
+- name: "Delete with top level OR RBAC true."
+  gqlquery: |
+    mutation($ids: [ID!]) {
+      deleteComplexLog (filter: { id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids" : ["0x01", "0x02"]
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)" }]
+  dgquery: |-
+    query {
+      x as deleteComplexLog(func: uid(0x1, 0x2)) @filter(type(ComplexLog)) {
+        uid
+      }
+    }
+
+- name: "Delete with top level OR RBAC false."
+  gqlquery: |
+    mutation($ids: [ID!]) {
+      deleteComplexLog (filter: { id: $ids}) {
+        numUids
+      }
+    }
+  variables: |
+    {
+      "ids" : ["0x01", "0x02"]
+    }
+  dgmutations:
+    - deletejson: |
+        [{ "uid": "uid(x)" }]
+  dgquery: |-
+    query {
+      x as deleteComplexLog(func: uid(ComplexLog1)) @filter(uid(ComplexLog2)) {
+        uid
+      }
+      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
+      ComplexLog2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
+    }
+
+- name: "Delete with top level AND RBAC true."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteIssue(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+        uid
+      }
+      Issue1 as var(func: type(Issue))
+      Issue2 as var(func: uid(Issue1)) @cascade {
+        owner : Issue.owner @filter(eq(User.username, "user1"))
+        dgraph.uid : uid
+      }
+    }
+
+- name: "Delete with top level AND RBAC false."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteIssue(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteIssue()
+    }
+
+- name: "Delete with top level not RBAC false."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteRole(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "USER"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteRole()
+    }
+
+- name: "Delete with top level not RBAC true."
+  gqlquery: |
+    mutation ($ids: [ID!]) {
+      deleteRole(filter: {id: $ids}) {
+    	numUids
+      }
+    }
+  variables: |
+    { "filter":
+      {
+        "id": ["0x1", "0x2"]
+      }
+    }
+  role: "ADMIN"
+  dgmutations:
+    - deletejson: |
+        [{
+           "uid": "uid(x)"
+         }]
+  dgquery: |-
+    query {
+      x as deleteRole(func: type(Role)) {
+        uid
+      }
+    }

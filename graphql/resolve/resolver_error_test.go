@@ -18,11 +18,11 @@ package resolve
 
 import (
 	"context"
+	"encoding/json"
 	"io/ioutil"
 	"testing"
 
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/x"
@@ -45,6 +45,9 @@ type executor struct {
 	resp     string
 	assigned map[string]string
 	result   map[string]interface{}
+
+	queryTouched    uint64
+	mutationTouched uint64
 
 	// start reporting Dgraph fails at this point (0 = never fail, 1 = fail on
 	// first request, 2 = succeed once and then fail on 2nd request, etc.)
@@ -79,22 +82,42 @@ type Post {
 	author: Author!
 }`
 
-func (ex *executor) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	ex.failQuery--
-	if ex.failQuery == 0 {
-		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
-	}
-	return []byte(ex.resp), nil
-}
+func (ex *executor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	if len(req.Mutations) == 0 {
+		ex.failQuery--
+		if ex.failQuery == 0 {
+			return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph query failed")
+		}
 
-func (ex *executor) Mutate(ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
+		return &dgoapi.Response{
+			Json: []byte(ex.resp),
+			Metrics: &dgoapi.Metrics{
+				NumUids: map[string]uint64{touchedUidsKey: ex.queryTouched}},
+		}, nil
+	}
+
 	ex.failMutation--
 	if ex.failMutation == 0 {
-		return nil, nil, schema.GQLWrapf(errors.New("_bad stuff happend_"), "Dgraph mutation failed")
+		return nil, schema.GQLWrapf(errors.New("_bad stuff happend_"),
+			"Dgraph mutation failed")
 	}
-	return ex.assigned, ex.result, nil
+
+	res, err := json.Marshal(ex.result)
+	if err != nil {
+		panic(err)
+	}
+
+	return &dgoapi.Response{
+		Json: []byte(res),
+		Uids: ex.assigned,
+		Metrics: &dgoapi.Metrics{
+			NumUids: map[string]uint64{touchedUidsKey: ex.mutationTouched}},
+	}, nil
+
+}
+
+func (ex *executor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
 }
 
 // Tests in resolver_test.yaml are about what gets into a completed result (addition
@@ -103,7 +126,7 @@ func (ex *executor) Mutate(ctx context.Context,
 //
 // The []bytes built by Resolve() have some other properties, such as ordering of
 // fields, which are tested by TestResponseOrder().
-func TestResolver(t *testing.T) {
+func TestGraphQLErrorPropagation(t *testing.T) {
 	b, err := ioutil.ReadFile("resolver_error_test.yaml")
 	require.NoError(t, err, "Unable to read test file")
 
@@ -122,65 +145,6 @@ func TestResolver(t *testing.T) {
 			}
 
 			require.JSONEq(t, tcase.Expected, resp.Data.String(), tcase.Explanation)
-		})
-	}
-}
-
-// Ordering of results and inserted null values matters in GraphQL:
-// https://graphql.github.io/graphql-spec/June2018/#sec-Serialized-Map-Ordering
-func TestResponseOrder(t *testing.T) {
-	query := `query {
-		 getAuthor(id: "0x1") {
-			 name
-			 dob
-			 postsNullable {
-				 title
-				 text
-			 }
-		 }
-	 }`
-
-	tests := []QueryCase{
-		{Name: "Response is in same order as GQL query",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [ ` +
-				`{ "title": "A Title", "text": "Some Text" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-		{Name: "Response is in same order as GQL query no matter Dgraph order",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "dob": "2000-01-01", "name": "A.N. Author", ` +
-				`"postsNullable": [ ` +
-				`{ "text": "Some Text", "title": "A Title" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": "2000-01-01", ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": "Some Text"}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-		{Name: "Inserted null is in GQL query order",
-			GQLQuery: query,
-			Response: `{ "getAuthor": [ { "name": "A.N. Author", ` +
-				`"postsNullable": [ ` +
-				`{ "title": "A Title" }, ` +
-				`{ "title": "Another Title", "text": "More Text" } ] } ] }`,
-			Expected: `{"getAuthor": {"name": "A.N. Author", "dob": null, ` +
-				`"postsNullable": [` +
-				`{"title": "A Title", "text": null}, ` +
-				`{"title": "Another Title", "text": "More Text"}]}}`},
-	}
-
-	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
-
-	for _, test := range tests {
-		t.Run(test.Name, func(t *testing.T) {
-			resp := resolve(gqlSchema, test.GQLQuery, test.Response)
-
-			require.Nil(t, resp.Errors)
-			require.Equal(t, test.Expected, resp.Data.String())
 		})
 	}
 }
@@ -435,6 +399,109 @@ func TestManyMutationsWithError(t *testing.T) {
 	}
 }
 
+func TestQueriesPropagateExtensions(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	query := `
+	query {
+      getAuthor(id: "0x1") {
+        name
+      }
+    }`
+
+	resp := resolveWithClient(gqlSchema, query, nil,
+		&executor{
+			queryTouched:    2,
+			mutationTouched: 5,
+		})
+
+	expectedExtensions := &schema.Extensions{TouchedUids: 2}
+
+	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
+func TestMultipleQueriesPropagateExtensionsCorrectly(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	query := `
+	query {
+      a: getAuthor(id: "0x1") {
+        name
+      }
+      b: getAuthor(id: "0x2") {
+        name
+      }
+      c: getAuthor(id: "0x3") {
+        name
+      }
+    }`
+
+	resp := resolveWithClient(gqlSchema, query, nil,
+		&executor{
+			queryTouched:    2,
+			mutationTouched: 5,
+		})
+
+	expectedExtensions := &schema.Extensions{TouchedUids: 6}
+
+	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
+func TestMutationsPropagateExtensions(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	mutation := `mutation {
+		addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
+			post {
+				title
+			}
+		}
+	}`
+
+	resp := resolveWithClient(gqlSchema, mutation, nil,
+		&executor{
+			queryTouched:    2,
+			mutationTouched: 5,
+		})
+
+	// as both .Mutate() and .Query() should get called, so we should get their merged result
+	expectedExtensions := &schema.Extensions{TouchedUids: 7}
+
+	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
+func TestMultipleMutationsPropagateExtensionsCorrectly(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	mutation := `mutation {
+		a: addPost(input: [{title: "A Post", author: {id: "0x1"}}]) {
+			post {
+				title
+			}
+		}
+		b: addPost(input: [{title: "A Post", author: {id: "0x2"}}]) {
+			post {
+				title
+			}
+		}
+	}`
+
+	resp := resolveWithClient(gqlSchema, mutation, nil,
+		&executor{
+			queryTouched:    2,
+			mutationTouched: 5,
+		})
+
+	// as both .Mutate() and .Query() should get called, so we should get their merged result
+	expectedExtensions := &schema.Extensions{TouchedUids: 14}
+
+	require.NotNil(t, resp)
+	require.Nil(t, resp.Errors)
+	require.Equal(t, expectedExtensions, resp.Extensions)
+}
+
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
 	return resolveWithClient(gqlSchema, gqlQuery, nil, &executor{resp: dgResponse})
 }
@@ -443,15 +510,14 @@ func resolveWithClient(
 	gqlSchema schema.Schema,
 	gqlQuery string,
 	vars map[string]interface{},
-	ex *executor) *schema.Response {
+	ex DgraphExecutor) *schema.Response {
 	resolver := New(
 		gqlSchema,
 		NewResolverFactory(nil, nil).WithConventionResolvers(gqlSchema, &ResolverFns{
 			Qrw: NewQueryRewriter(),
 			Arw: NewAddRewriter,
 			Urw: NewUpdateRewriter,
-			Qe:  ex,
-			Me:  ex,
+			Ex:  ex,
 		}))
 
 	return resolver.Resolve(context.Background(), &schema.Request{Query: gqlQuery, Variables: vars})

@@ -27,7 +27,14 @@ import (
 
 func TestDataKey(t *testing.T) {
 	var uid uint64
-	for uid = 0; uid < 1001; uid++ {
+
+	// key with uid = 0 is invalid
+	uid = 0
+	key := DataKey("bad uid", uid)
+	_, err := Parse(key)
+	require.Error(t, err)
+
+	for uid = 1; uid < 1001; uid++ {
 		// Use the uid to derive the attribute so it has variable length and the test
 		// can verify that multiple sizes of attr work correctly.
 		sattr := fmt.Sprintf("attr:%d", uid)
@@ -55,13 +62,13 @@ func TestDataKey(t *testing.T) {
 	}
 }
 
-func TestParseDataKeysWithStartUid(t *testing.T) {
+func TestParseDataKeyWithStartUid(t *testing.T) {
 	var uid uint64
 	startUid := uint64(math.MaxUint64)
-	for uid = 0; uid < 1001; uid++ {
+	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 		key := DataKey(sattr, uid)
-		key, err := GetSplitKey(key, startUid)
+		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
 		require.NoError(t, err)
@@ -98,7 +105,7 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 		sterm := fmt.Sprintf("term:%d", uid)
 
 		key := IndexKey(sattr, sterm)
-		key, err := GetSplitKey(key, startUid)
+		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
 		require.NoError(t, err)
@@ -113,7 +120,7 @@ func TestIndexKeyWithStartUid(t *testing.T) {
 
 func TestReverseKey(t *testing.T) {
 	var uid uint64
-	for uid = 0; uid < 1001; uid++ {
+	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := ReverseKey(sattr, uid)
@@ -129,11 +136,11 @@ func TestReverseKey(t *testing.T) {
 func TestReverseKeyWithStartUid(t *testing.T) {
 	var uid uint64
 	startUid := uint64(math.MaxUint64)
-	for uid = 0; uid < 1001; uid++ {
+	for uid = 1; uid < 1001; uid++ {
 		sattr := fmt.Sprintf("attr:%d", uid)
 
 		key := ReverseKey(sattr, uid)
-		key, err := GetSplitKey(key, startUid)
+		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
 		require.NoError(t, err)
@@ -168,7 +175,7 @@ func TestCountKeyWithStartUid(t *testing.T) {
 		sattr := fmt.Sprintf("attr:%d", count)
 
 		key := CountKey(sattr, count, true)
-		key, err := GetSplitKey(key, startUid)
+		key, err := SplitKey(key, startUid)
 		require.NoError(t, err)
 		pk, err := Parse(key)
 		require.NoError(t, err)
@@ -211,7 +218,7 @@ func TestTypeKey(t *testing.T) {
 
 func TestBadStartUid(t *testing.T) {
 	testKey := func(key []byte) {
-		key, err := GetSplitKey(key, 10)
+		key, err := SplitKey(key, 10)
 		require.NoError(t, err)
 		_, err = Parse(key)
 		require.NoError(t, err)
@@ -231,4 +238,31 @@ func TestBadStartUid(t *testing.T) {
 
 	key = CountKey("aa", 0, true)
 	testKey(key)
+}
+
+func TestBadKeys(t *testing.T) {
+	// 0-len key
+	key := []byte{}
+	_, err := Parse(key)
+	require.Error(t, err)
+
+	// key of len < 3
+	key = []byte{1}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	key = []byte{1, 2}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	// key of len < sz (key[1], key[2])
+	key = []byte{1, 0x00, 0x04, 1, 2}
+	_, err = Parse(key)
+	require.Error(t, err)
+
+	// key with uid = 0 is invalid
+	uid := 0
+	key = DataKey("bad uid", uint64(uid))
+	_, err = Parse(key)
+	require.Error(t, err)
 }

@@ -19,24 +19,31 @@ package common
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http/httptest"
 	"sort"
 	"testing"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
-	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
+	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
+	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/test"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/peer"
 	"gopkg.in/yaml.v2"
+)
+
+const (
+	panicMsg = "\n****\nthis test should trap this panic.\n" +
+		"It's working as expected if this message is logged with a stack trace\n****"
 )
 
 type ErrorCase struct {
@@ -53,7 +60,7 @@ func graphQLCompletionOn(t *testing.T) {
 	// The schema states type Country `{ ... name: String! ... }`
 	// so a query error will be raised if we ask for the country's name in a
 	// query.  Don't think a GraphQL update can do this ATM, so do through Dgraph.
-	d, err := grpc.Dial(alphagRPC, grpc.WithInsecure())
+	d, err := grpc.Dial(AlphagRPC, grpc.WithInsecure())
 	require.NoError(t, err)
 	client := dgo.NewDgraphClient(api.NewDgraphClient(d))
 	mu := &api.Mutation{
@@ -228,14 +235,13 @@ func panicCatcher(t *testing.T) {
 		Arw: resolve.NewAddRewriter,
 		Urw: resolve.NewUpdateRewriter,
 		Drw: resolve.NewDeleteRewriter(),
-		Qe:  &panicClient{},
-		Me:  &panicClient{}}
+		Ex:  &panicClient{}}
 
 	resolverFactory := resolve.NewResolverFactory(nil, nil).
 		WithConventionResolvers(gqlSchema, fns)
-
+	schemaEpoch := uint64(0)
 	resolvers := resolve.New(gqlSchema, resolverFactory)
-	server := web.NewServer(resolvers)
+	server := web.NewServer(&schemaEpoch, resolvers)
 
 	ts := httptest.NewServer(server.HTTPHandler())
 	defer ts.Close()
@@ -245,26 +251,63 @@ func panicCatcher(t *testing.T) {
 			gqlResponse := test.ExecuteAsPost(t, ts.URL)
 
 			require.Equal(t, x.GqlErrorList{
-				{Message: fmt.Sprintf("[%s] Internal Server Error - a panic was trapped.  "+
-					"This indicates a bug in the GraphQL server.  A stack trace was logged.  "+
-					"Please let us know : https://github.com/dgraph-io/dgraph/issues.",
-					gqlResponse.Extensions["requestID"].(string))}},
+				{Message: fmt.Sprintf("Internal Server Error - a panic was trapped.  " +
+					"This indicates a bug in the GraphQL server.  A stack trace was logged.  " +
+					"Please let us know : https://github.com/dgraph-io/dgraph/issues.")}},
 				gqlResponse.Errors)
 
-			require.Nil(t, gqlResponse.Data)
+			require.Nil(t, gqlResponse.Data, string(gqlResponse.Data))
 		})
 	}
 }
 
 type panicClient struct{}
 
-func (dg *panicClient) Query(ctx context.Context, query *gql.GraphQuery) ([]byte, error) {
-	panic("bugz!!!")
+func (dg *panicClient) Execute(ctx context.Context, req *dgoapi.Request) (*dgoapi.Response, error) {
+	x.Panic(errors.New(panicMsg))
+	return nil, nil
 }
 
-func (dg *panicClient) Mutate(
-	ctx context.Context,
-	query *gql.GraphQuery,
-	mutations []*dgoapi.Mutation) (map[string]string, map[string]interface{}, error) {
-	panic("bugz!!!")
+func (dg *panicClient) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
+	return nil
+}
+
+// clientInfoLogin check whether the client info(IP address) is propagated in the request.
+// It mocks Dgraph like panicCatcher.
+func clientInfoLogin(t *testing.T) {
+	loginQuery := &GraphQLParams{
+		Query: `mutation {
+					login(userId: "groot", password: "password") {
+						response {
+							accessJWT
+						}
+					}
+				}`,
+	}
+
+	gqlSchema := test.LoadSchemaFromFile(t, "schema.graphql")
+
+	fns := &resolve.ResolverFns{}
+	var loginCtx context.Context
+	errFunc := func(name string) error { return nil }
+	mErr := resolve.MutationResolverFunc(
+		func(ctx context.Context, mutation schema.Mutation) (*resolve.Resolved, bool) {
+			loginCtx = ctx
+			return &resolve.Resolved{Err: errFunc(mutation.ResponseName()), Field: mutation}, false
+		})
+
+	resolverFactory := resolve.NewResolverFactory(nil, mErr).
+		WithConventionResolvers(gqlSchema, fns)
+	schemaEpoch := uint64(0)
+	resolvers := resolve.New(gqlSchema, resolverFactory)
+	server := web.NewServer(&schemaEpoch, resolvers)
+
+	ts := httptest.NewServer(server.HTTPHandler())
+	defer ts.Close()
+
+	_ = loginQuery.ExecuteAsPost(t, ts.URL)
+	require.NotNil(t, loginCtx)
+	peerInfo, found := peer.FromContext(loginCtx)
+	require.True(t, found)
+	require.NotNil(t, peerInfo.Addr.String())
 }

@@ -42,10 +42,50 @@ enum DgraphIndex {
 	hour
 }
 
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
 directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
 
 input IntFilter {
 	eq: Int
@@ -103,34 +143,42 @@ input StringHashFilter {
 
 type AddAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type AddGenrePayload {
 	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	numUids: Int
 }
 
 type AddPostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 type DeleteAuthorPayload {
 	msg: String
+	numUids: Int
 }
 
 type DeleteGenrePayload {
 	msg: String
+	numUids: Int
 }
 
 type DeletePostPayload {
 	msg: String
+	numUids: Int
 }
 
 type UpdateAuthorPayload {
 	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	numUids: Int
 }
 
 type UpdatePostPayload {
 	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	numUids: Int
 }
 
 #######################
@@ -280,4 +328,17 @@ type Mutation {
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
 	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
+}
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getPost(postID: ID!): Post
+	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	getAuthor(id: ID, name: String): Author
+	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	getGenre(name: String!): Genre
+	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 }

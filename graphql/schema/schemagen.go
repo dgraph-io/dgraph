@@ -17,14 +17,19 @@
 package schema
 
 import (
+	"bufio"
 	"fmt"
+	"sort"
 	"strings"
+	"sync"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/pkg/errors"
-	"github.com/vektah/gqlparser/ast"
-	"github.com/vektah/gqlparser/gqlerror"
-	"github.com/vektah/gqlparser/parser"
-	"github.com/vektah/gqlparser/validator"
+	"github.com/vektah/gqlparser/v2/ast"
+	"github.com/vektah/gqlparser/v2/gqlerror"
+	"github.com/vektah/gqlparser/v2/parser"
+	"github.com/vektah/gqlparser/v2/validator"
 )
 
 // A Handler can produce valid GraphQL and Dgraph schemas given an input of
@@ -32,6 +37,7 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
+	DisableSubscription()
 }
 
 type handler struct {
@@ -56,7 +62,7 @@ func FromString(schema string) (Schema, error) {
 		return nil, errors.Wrap(gqlErr, "while validating GraphQL schema")
 	}
 
-	return AsSchema(gqlSchema), nil
+	return AsSchema(gqlSchema)
 }
 
 func (s *handler) GQLSchema() string {
@@ -67,11 +73,71 @@ func (s *handler) DGSchema() string {
 	return s.dgraphSchema
 }
 
-// NewHandler processes the input schema.  If there are no errors, it returns
+func (s *handler) DisableSubscription() {
+	s.completeSchema.Subscription = nil
+}
+
+func parseSecrets(sch string) (map[string]string, error) {
+	m := make(map[string]string)
+	scanner := bufio.NewScanner(strings.NewReader(sch))
+	authSecret := ""
+	for scanner.Scan() {
+		text := strings.TrimSpace(scanner.Text())
+
+		if strings.HasPrefix(text, "# Dgraph.Authorization") {
+			if authSecret != "" {
+				return nil, errors.Errorf("Dgraph.Authorization should be only be specified once in "+
+					"a schema, found second mention: %v", text)
+			}
+			authSecret = text
+			continue
+		}
+		if !strings.HasPrefix(text, "# Dgraph.Secret") {
+			continue
+		}
+		parts := strings.Fields(text)
+		const doubleQuotesCode = 34
+
+		if len(parts) < 4 {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
+		val := strings.Join(parts[3:], " ")
+		if strings.Count(val, `"`) != 2 || val[0] != doubleQuotesCode || val[len(val)-1] != doubleQuotesCode {
+			return nil, errors.Errorf("incorrect format for specifying Dgraph secret found for "+
+				"comment: `%s`, it should be `# Dgraph.Secret key value`", text)
+		}
+
+		val = strings.Trim(val, `"`)
+		key := strings.Trim(parts[2], `"`)
+		m[key] = val
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrapf(err, "while trying to parse secrets from schema file")
+	}
+	if authSecret == "" {
+		return m, nil
+	}
+	err := authorization.ParseAuthMeta(authSecret)
+	return m, err
+}
+
+// NewHandler processes the input schema. If there are no errors, it returns
 // a valid Handler, otherwise it returns nil and an error.
 func NewHandler(input string) (Handler, error) {
 	if input == "" {
 		return nil, gqlerror.Errorf("No schema specified")
+	}
+
+	secrets, err := parseSecrets(input)
+	if err != nil {
+		return nil, err
+	}
+	// lets obfuscate the value of the secrets from here on.
+	schemaSecrets := make(map[string]x.SensitiveByteSlice, len(secrets))
+	for k, v := range secrets {
+		schemaSecrets[k] = x.SensitiveByteSlice([]byte(v))
 	}
 
 	// The input schema contains just what's required to describe the types,
@@ -112,12 +178,20 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlErrList
 	}
 
+	typesToComplete := make([]string, 0, len(doc.Definitions))
 	defns := make([]string, 0, len(doc.Definitions))
 	for _, defn := range doc.Definitions {
 		if defn.BuiltIn {
 			continue
 		}
 		defns = append(defns, defn.Name)
+		if defn.Kind == ast.Object || defn.Kind == ast.Interface {
+			remoteDir := defn.Directives.ForName(remoteDirective)
+			if remoteDir != nil {
+				continue
+			}
+		}
+		typesToComplete = append(typesToComplete, defn.Name)
 	}
 
 	expandSchema(doc)
@@ -127,13 +201,23 @@ func NewHandler(input string) (Handler, error) {
 		return nil, gqlerror.List{gqlErr}
 	}
 
-	gqlErrList = postGQLValidation(sch, defns)
+	gqlErrList = postGQLValidation(sch, defns, schemaSecrets)
 	if gqlErrList != nil {
 		return nil, gqlErrList
 	}
 
-	dgSchema := genDgSchema(sch, defns)
-	completeSchema(sch, defns)
+	headers := getAllowedHeaders(sch, defns)
+	dgSchema := genDgSchema(sch, typesToComplete)
+	completeSchema(sch, typesToComplete)
+
+	if len(sch.Query.Fields) == 0 && len(sch.Mutation.Fields) == 0 {
+		return nil, gqlerror.Errorf("No query or mutation found in the generated schema")
+	}
+
+	hc.Lock()
+	hc.allowed = headers
+	hc.secrets = schemaSecrets
+	hc.Unlock()
 
 	return &handler{
 		input:          input,
@@ -141,6 +225,81 @@ func NewHandler(input string) (Handler, error) {
 		completeSchema: sch,
 		originalDefs:   defns,
 	}, nil
+}
+
+type headersConfig struct {
+	// comma separated list of allowed headers. These are parsed from the forwardHeaders specified
+	// in the @custom directive. They are returned to the client as part of
+	// Access-Control-Allow-Headers.
+	allowed string
+	// secrets are key value pairs stored in the GraphQL schema which can be added as headers
+	// to requests which resolve custom queries/mutations.
+	secrets map[string]x.SensitiveByteSlice
+	sync.RWMutex
+}
+
+var hc = headersConfig{
+	allowed: x.AccessControlAllowedHeaders,
+}
+
+func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
+	headers := make(map[string]struct{})
+
+	setHeaders := func(dir *ast.Directive) {
+		if dir == nil {
+			return
+		}
+
+		httpArg := dir.Arguments.ForName("http")
+		if httpArg == nil {
+			return
+		}
+		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		if forwardHeaders == nil {
+			return
+		}
+		for _, h := range forwardHeaders.Children {
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			headers[key[1]] = struct{}{}
+		}
+	}
+
+	for _, defn := range definitions {
+		typ := sch.Types[defn]
+		custom := typ.Directives.ForName(customDirective)
+		setHeaders(custom)
+		for _, field := range typ.Fields {
+			custom := field.Directives.ForName(customDirective)
+			setHeaders(custom)
+		}
+	}
+
+	finalHeaders := make([]string, 0, len(headers)+1)
+	for h := range headers {
+		finalHeaders = append(finalHeaders, h)
+	}
+
+	// Add Auth Header to allowed headers list
+	if authorization.GetHeader() != "" {
+		finalHeaders = append(finalHeaders, authorization.GetHeader())
+	}
+
+	allowed := x.AccessControlAllowedHeaders
+	customHeaders := strings.Join(finalHeaders, ",")
+	if len(customHeaders) > 0 {
+		allowed += "," + customHeaders
+	}
+
+	return allowed
+}
+
+func AllowedHeaders() string {
+	hc.RLock()
+	defer hc.RUnlock()
+	return hc.allowed
 }
 
 func getAllSearchIndexes(val *ast.Value) []string {
@@ -167,32 +326,78 @@ func typeName(def *ast.Definition) string {
 }
 
 // fieldName returns the dgraph predicate corresponding to a field.
-// If the field had a dgraph directive, then it returns the value of the name field otherwise
+// If the field had a dgraph directive, then it returns the value of the pred arg otherwise
 // it returns typeName + "." + fieldName.
 func fieldName(def *ast.FieldDefinition, typName string) string {
-	name := typName + "." + def.Name
-	dir := def.Directives.ForName(dgraphDirective)
-	if dir == nil {
-		return name
-	}
-	predArg := dir.Arguments.ForName(dgraphPredArg)
+	predArg := getDgraphDirPredArg(def)
 	if predArg == nil {
-		return name
+		return typName + "." + def.Name
 	}
 	return predArg.Value.Raw
+}
+
+func getDgraphDirPredArg(def *ast.FieldDefinition) *ast.Argument {
+	dir := def.Directives.ForName(dgraphDirective)
+	if dir == nil {
+		return nil
+	}
+	predArg := dir.Arguments.ForName(dgraphPredArg)
+	return predArg
 }
 
 // genDgSchema generates Dgraph schema from a valid graphql schema.
 func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 	var typeStrings []string
 
+	type dgPred struct {
+		typ     string
+		indexes map[string]bool
+		upsert  string
+		reverse string
+	}
+
+	type field struct {
+		name string
+		// true if the field was inherited from an interface, we don't add the predicate schema
+		// for it then as the it would already have been added with the interface.
+		inherited bool
+	}
+
+	type dgType struct {
+		name   string
+		fields []field
+	}
+
+	dgTypes := make([]dgType, 0, len(definitions))
+	dgPreds := make(map[string]dgPred)
+
+	getUpdatedPred := func(fname, typStr, upsertStr string, indexes []string) dgPred {
+		pred, ok := dgPreds[fname]
+		if !ok {
+			pred = dgPred{
+				typ:     typStr,
+				indexes: make(map[string]bool),
+				upsert:  upsertStr,
+			}
+		}
+		for _, index := range indexes {
+			pred.indexes[index] = true
+		}
+		return pred
+	}
+
 	for _, key := range definitions {
+		if isQueryOrMutation(key) {
+			continue
+		}
 		def := gqlSch.Types[key]
 		switch def.Kind {
 		case ast.Object, ast.Interface:
 			typName := typeName(def)
-			var typeDef, preds strings.Builder
-			fmt.Fprintf(&typeDef, "type %s {\n", typName)
+
+			typ := dgType{name: typName}
+			pwdField := getPasswordField(def)
+
 			for _, f := range def.Fields {
 				if f.Type.Name() == "ID" {
 					continue
@@ -219,66 +424,112 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 				case ast.Object:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s .\n", fname, typStr)
+						if strings.HasPrefix(fname, "~") {
+							// remove ~
+							forwardEdge := fname[1:]
+							forwardPred := dgPreds[forwardEdge]
+							forwardPred.reverse = "@reverse "
+							dgPreds[forwardEdge] = forwardPred
+						} else {
+							pred := dgPreds[fname]
+							pred.typ = typStr
+							dgPreds[fname] = pred
+						}
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Scalar:
 					typStr = fmt.Sprintf(
 						"%s%s%s",
 						prefix, scalarToDgraph[f.Type.Name()], suffix,
 					)
 
-					indexStr := ""
+					var indexes []string
 					upsertStr := ""
 					search := f.Directives.ForName(searchDirective)
 					id := f.Directives.ForName(idDirective)
 					if id != nil {
 						upsertStr = "@upsert "
+						indexes = append(indexes, "hash")
 					}
 
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes := getAllSearchIndexes(arg.Value)
-							indexes = addHashIfRequired(f, indexes)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+							indexes = append(indexes, getAllSearchIndexes(arg.Value)...)
 						} else {
-							indexStr = fmt.Sprintf(" @index(%s)", defaultSearches[f.Type.Name()])
+							indexes = append(indexes, defaultSearches[f.Type.Name()])
 						}
-					} else if id != nil {
-						indexStr = fmt.Sprintf(" @index(hash)")
 					}
 
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s%s %s.\n", fname, typStr, indexStr, upsertStr)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, upsertStr, indexes)
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				case ast.Enum:
 					typStr = fmt.Sprintf("%s%s%s", prefix, "string", suffix)
 
-					indexStr := " @index(hash)"
+					indexes := []string{"hash"}
 					search := f.Directives.ForName(searchDirective)
 					if search != nil {
 						arg := search.Arguments.ForName(searchArgs)
 						if arg != nil {
-							indexes := getAllSearchIndexes(arg.Value)
-							indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+							indexes = getAllSearchIndexes(arg.Value)
 						}
 					}
-					fmt.Fprintf(&typeDef, "  %s: %s\n", fname, typStr)
 					if parentInt == nil {
-						fmt.Fprintf(&preds, "%s: %s%s .\n", fname, typStr, indexStr)
+						dgPreds[fname] = getUpdatedPred(fname, typStr, "", indexes)
 					}
+					typ.fields = append(typ.fields, field{fname, parentInt != nil})
 				}
 			}
-			fmt.Fprintf(&typeDef, "}\n")
+			if pwdField != nil {
+				parentInt := parentInterfaceForPwdField(gqlSch, def, pwdField.Name)
+				if parentInt != nil {
+					typName = typeName(parentInt)
+				}
+				fname := fieldName(pwdField, typName)
 
-			typeStrings = append(
-				typeStrings,
-				fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
-			)
+				if parentInt == nil {
+					dgPreds[fname] = dgPred{typ: "password"}
+				}
+
+				typ.fields = append(typ.fields, field{fname, parentInt != nil})
+			}
+			dgTypes = append(dgTypes, typ)
 		}
+	}
+
+	predWritten := make(map[string]bool, len(dgPreds))
+	for _, typ := range dgTypes {
+		var typeDef, preds strings.Builder
+		fmt.Fprintf(&typeDef, "type %s {\n", typ.name)
+		for _, fld := range typ.fields {
+			f, ok := dgPreds[fld.name]
+			if !ok {
+				continue
+			}
+			fmt.Fprintf(&typeDef, "  %s\n", fld.name)
+			if !fld.inherited && !predWritten[fld.name] {
+				indexStr := ""
+				if len(f.indexes) > 0 {
+					indexes := make([]string, 0)
+					for index := range f.indexes {
+						indexes = append(indexes, index)
+					}
+					sort.Strings(indexes)
+					indexStr = fmt.Sprintf(" @index(%s)", strings.Join(indexes, ", "))
+				}
+				fmt.Fprintf(&preds, "%s: %s%s %s%s.\n", fld.name, f.typ, indexStr, f.upsert,
+					f.reverse)
+				predWritten[fld.name] = true
+			}
+		}
+		fmt.Fprintf(&typeDef, "}\n")
+		typeStrings = append(
+			typeStrings,
+			fmt.Sprintf("%s%s", typeDef.String(), preds.String()),
+		)
 	}
 
 	return strings.Join(typeStrings, "")

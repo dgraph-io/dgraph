@@ -29,7 +29,7 @@ import (
 	"github.com/dgraph-io/dgraph/tok"
 	"github.com/golang/glog"
 
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/types"
 	"github.com/stretchr/testify/require"
 )
@@ -134,14 +134,14 @@ func TestNquadsFromJson1(t *testing.T) {
 name
 age
 married
-address 
+address
 }}`,
 		expected: `{"alice": [
 {"name": "Alice",
 "age": 26,
 "married": true,
 "address": {"coordinates": [2,1.1], "type": "Point"}}
-]}								
+]}
 `}
 	exp.verify()
 }
@@ -544,6 +544,189 @@ func TestNquadsFromJsonFacets2(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 3, len(nq))
 	checkCount(t, nq, "friend", 1)
+}
+
+// Test valid facets json.
+func TestNquadsFromJsonFacets3(t *testing.T) {
+	json := `
+	[
+		{
+			"name":"Alice",
+			"friend": ["Joshua", "David", "Josh"],
+			"friend|from": {
+				"0": "school",
+				"2": "college"
+			},
+			"friend|age": {
+				"1": 20,
+				"2": 21
+			}
+		}
+	]`
+
+	nqs, err := Parse([]byte(json), SetNquads)
+	require.NoError(t, err)
+	require.Equal(t, 4, len(nqs))
+	for _, nq := range nqs {
+		predVal := nq.ObjectValue.GetStrVal()
+		switch predVal {
+		case "Alice":
+			require.Equal(t, 0, len(nq.Facets))
+		case "Joshua":
+			require.Equal(t, 1, len(nq.Facets))
+		case "David":
+			require.Equal(t, 1, len(nq.Facets))
+		case "Josh":
+			require.Equal(t, 2, len(nq.Facets))
+		}
+	}
+}
+
+// Test invalid facet format with scalar list predicate.
+func TestNquadsFromJsonFacets4(t *testing.T) {
+	type input struct {
+		Name     string
+		ErrorOut bool
+		Json     string
+	}
+
+	inputs := []input{
+		{
+			"facets_should_be_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": 20
+				}
+			]`,
+		},
+		{
+			"predicate_should_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": "Joshua",
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"only_scalar_values_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"0": {
+							"1": 20
+						}
+					}
+				}
+			]`,
+		},
+		{
+			"invalid_key_in_facet_map",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": {
+						"a": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"predicate_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": null,
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			// Facets will be ignored here.
+			"empty_scalar_list",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": [],
+					"friend|age": {
+						"0": 20
+					}
+				}
+			]`,
+		},
+		{
+			"facet_map_is_null",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua"],
+					"friend|age": null
+				}
+			]`,
+		},
+		{
+			"facet_vales_should_not_be_list",
+			true,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": ["20"]
+				}
+			]`,
+		},
+		{
+			// Facets with higher index will be ignored.
+			"facet_map_with_index_greater_than_scalarlist_length",
+			false,
+			`
+			[
+				{
+					"name":"Alice",
+					"friend": ["Joshua", "David", "Josh"],
+					"friend|age": {
+						"100": 30,
+						"20": 28
+					}
+				}
+			]`,
+		},
+	}
+
+	for _, input := range inputs {
+		_, err := Parse([]byte(input.Json), SetNquads)
+		if input.ErrorOut {
+			require.Error(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		} else {
+			require.NoError(t, err, "TestNquadsFromJsonFacets4-%s", input.Name)
+		}
+	}
 }
 
 func TestNquadsFromJsonError1(t *testing.T) {

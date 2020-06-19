@@ -15,8 +15,8 @@ package acl
 import (
 	"encoding/json"
 
-	"github.com/dgraph-io/dgo/v2"
-	"github.com/dgraph-io/dgo/v2/protos/api"
+	"github.com/dgraph-io/dgo/v200"
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -106,8 +106,8 @@ func UnmarshalUser(resp *api.Response, userKey string) (user *User, err error) {
 // Acl represents the permissions in the ACL system.
 // An Acl can have a predicate and permission for that predicate.
 type Acl struct {
-	Predicate string `json:"predicate"`
-	Perm      int32  `json:"perm"`
+	Predicate string `json:"dgraph.rule.predicate"`
+	Perm      int32  `json:"dgraph.rule.permission"`
 }
 
 // Group represents a group in the ACL system.
@@ -115,7 +115,7 @@ type Group struct {
 	Uid     string `json:"uid"`
 	GroupID string `json:"dgraph.xid"`
 	Users   []User `json:"~dgraph.user.group"`
-	Acls    string `json:"dgraph.group.acl"`
+	Rules   []Acl  `json:"dgraph.acl.rule"`
 }
 
 // GetUid returns the UID of the group.
@@ -190,7 +190,7 @@ func CreateUserNQuads(userId, password string) []*api.NQuad {
 		{
 			Subject:     "_:newuser",
 			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "User"}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.User"}},
 		},
 	}
 }
@@ -206,7 +206,7 @@ func CreateGroupNQuads(groupId string) []*api.NQuad {
 		{
 			Subject:     "_:newgroup",
 			Predicate:   "dgraph.type",
-			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "Group"}},
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: "dgraph.type.Group"}},
 		},
 	}
 }
