@@ -697,9 +697,10 @@ func initialSchemaInternal(all bool) []*pb.SchemaUpdate {
 	return initialSchema
 }
 
-// ComparePreDefPred returns true if the initial update for the pre-defined
+// IsPreDefPredChanged returns true if the initial update for the pre-defined
 // predicate is different than the passed update.
-func ComparePreDefPred(update *pb.SchemaUpdate) bool {
+//If the passed update is not a pre-defined predicate then it just returns false.
+func IsPreDefPredChanged(update *pb.SchemaUpdate) bool {
 	// Return false for non-pre-defined predicates.
 	if !x.IsPreDefinedPredicate(update.Predicate) {
 		return false
@@ -715,9 +716,10 @@ func ComparePreDefPred(update *pb.SchemaUpdate) bool {
 	return true
 }
 
-// ComparePreDefType returns true if the initial update for the pre-defined
+// IsPreDefTypeChanged returns true if the initial update for the pre-defined
 // type is different than the passed update.
-func ComparePreDefType(update *pb.TypeUpdate) bool {
+// If the passed update is not a pre-defined type than it just returns false.
+func IsPreDefTypeChanged(update *pb.TypeUpdate) bool {
 	// Return false for non-pre-defined types.
 	if !x.IsPreDefinedType(update.TypeName) {
 		return false
