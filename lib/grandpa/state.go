@@ -30,8 +30,8 @@ type BlockState interface {
 	GetHeaderByNumber(num *big.Int) (*types.Header, error)
 	IsDescendantOf(parent, child common.Hash) (bool, error)
 	HighestCommonAncestor(a, b common.Hash) (common.Hash, error)
-	GetFinalizedHeader() (*types.Header, error)
-	SetFinalizedHash(hash common.Hash) error
+	GetFinalizedHeader(uint64) (*types.Header, error)
+	SetFinalizedHash(common.Hash, uint64) error
 	BestBlockHeader() (*types.Header, error)
 	Leaves() []common.Hash
 	BlocktreeAsString() string

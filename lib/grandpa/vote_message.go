@@ -254,6 +254,7 @@ func validateMessageSignature(pk *ed25519.PublicKey, m *VoteMessage) error {
 	if err != nil {
 		return err
 	}
+
 	ok, err := pk.Verify(msg, m.Message.Signature[:])
 	if err != nil {
 		return err

@@ -53,9 +53,9 @@ type BlockState interface {
 	GetSlotForBlock(common.Hash) (uint64, error)
 	HighestBlockHash() common.Hash
 	HighestBlockNumber() *big.Int
-	GetFinalizedHeader() (*types.Header, error)
-	GetFinalizedHash() (common.Hash, error)
-	SetFinalizedHash(common.Hash) error
+	GetFinalizedHeader(uint64) (*types.Header, error)
+	GetFinalizedHash(uint64) (common.Hash, error)
+	SetFinalizedHash(common.Hash, uint64) error
 }
 
 // StorageState interface for storage state methods
@@ -97,6 +97,7 @@ type FinalityGadget interface {
 type FinalityMessage interface {
 	ToConsensusMessage() (*network.ConsensusMessage, error)
 	GetFinalizedHash() (common.Hash, error)
+	GetRound() uint64
 }
 
 // BlockProducer is the interface that a block production service must implement

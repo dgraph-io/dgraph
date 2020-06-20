@@ -84,6 +84,7 @@ func TestSendFinalizationMessages(t *testing.T) {
 		MsgSend:        msgSend,
 		FinalityGadget: fg,
 	})
+	s.started.Store(true)
 
 	go s.sendFinalizationMessages()
 	fg.finalized <- &mockFinalityMessage{}
@@ -95,7 +96,7 @@ func TestSendFinalizationMessages(t *testing.T) {
 		t.Fatal("did not receive finality message")
 	}
 
-	h, err := s.blockState.GetFinalizedHash()
+	h, err := s.blockState.GetFinalizedHash(1)
 	require.NoError(t, err)
 	require.Equal(t, testFinalizedHash, h)
 }

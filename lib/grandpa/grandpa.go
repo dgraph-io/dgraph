@@ -82,7 +82,8 @@ func NewService(cfg *Config) (*Service, error) {
 
 	log.Info("[grandpa] creating service", "key", cfg.Keypair.Public().Hex(), "voter set", Voters(cfg.Voters))
 
-	head, err := cfg.BlockState.GetFinalizedHeader()
+	// get latest finalized header
+	head, err := cfg.BlockState.GetFinalizedHeader(0)
 	if err != nil {
 		return nil, err
 	}
@@ -449,8 +450,14 @@ func (s *Service) finalize() error {
 		return err
 	}
 
-	// set finalized head in db
-	return s.blockState.SetFinalizedHash(bfc.hash)
+	// set finalized head for round in db
+	err = s.blockState.SetFinalizedHash(bfc.hash, s.state.round)
+	if err != nil {
+		return err
+	}
+
+	// set latest finalized head in db
+	return s.blockState.SetFinalizedHash(bfc.hash, 0)
 }
 
 // derivePrimary returns the primary for the current round

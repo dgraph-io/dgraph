@@ -56,17 +56,6 @@ func (s *Service) sendVoteMessages() {
 func (s *Service) sendFinalizationMessages() {
 	out := s.finalityGadget.GetFinalizedChannel()
 	for v := range out {
-		// TODO: safety
-		// update state.finalizedHead
-		hash, err := v.GetFinalizedHash()
-		if err == nil {
-			err = s.blockState.SetFinalizedHash(hash)
-			if err != nil {
-				log.Error("[core] could not set finalized block hash", "hash", hash, "error", err)
-			}
-		}
-
-		log.Debug("[core] sending FinalityMessage to network", "msg", v)
 		log.Info("[core] finalized block!!!", "msg", v)
 		msg, err := v.ToConsensusMessage()
 		if err != nil {
@@ -74,6 +63,25 @@ func (s *Service) sendFinalizationMessages() {
 			continue
 		}
 
-		s.msgSend <- msg
+		// update finalized hash for this round in database
+		// TODO: this also happens in grandpa.finalize(); decide which is preferred
+		hash, err := v.GetFinalizedHash()
+		if err == nil {
+			err = s.blockState.SetFinalizedHash(hash, v.GetRound())
+			if err != nil {
+				log.Error("[core] could not set finalized block hash", "hash", hash, "error", err)
+			}
+
+			err = s.blockState.SetFinalizedHash(hash, 0)
+			if err != nil {
+				log.Error("[core] could not set finalized block hash", "hash", hash, "error", err)
+			}
+		}
+
+		log.Debug("[core] sending FinalityMessage to network", "msg", v)
+		err = s.safeMsgSend(msg)
+		if err != nil {
+			log.Error("[core] failed to send finalization message to network", "error", err)
+		}
 	}
 }

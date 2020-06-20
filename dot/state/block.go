@@ -96,13 +96,6 @@ func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, e
 		return nil, err
 	}
 
-	// set the latest finalized head to the genesis header
-	// TODO: will need to load and set this upon node startup to the actual hash stored in the db
-	err = bs.SetFinalizedHash(bs.genesisHash)
-	if err != nil {
-		return nil, err
-	}
-
 	return bs, nil
 }
 
@@ -129,12 +122,17 @@ func NewBlockStateFromGenesis(db chaindb.Database, header *types.Header) (*Block
 	}
 
 	err = bs.SetBlockBody(header.Hash(), types.NewBody([]byte{}))
-
 	if err != nil {
 		return nil, err
 	}
 
 	bs.genesisHash = header.Hash()
+
+	// set the latest finalized head to the genesis header
+	err = bs.SetFinalizedHash(bs.genesisHash, 0)
+	if err != nil {
+		return nil, err
+	}
 
 	return bs, nil
 }
@@ -176,6 +174,13 @@ func blockBodyKey(hash common.Hash) []byte {
 // arrivalTimeKey = arrivalTimePrefix + hash
 func arrivalTimeKey(hash common.Hash) []byte {
 	return append(arrivalTimePrefix, hash.ToBytes()...)
+}
+
+// finalizedHashKey = hashkey + round (LE encoded)
+func finalizedHashKey(round uint64) []byte {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, round)
+	return append(common.FinalizedBlockHashKey, buf...)
 }
 
 // GenesisHash returns the hash of the genesis block
@@ -309,8 +314,8 @@ func (bs *BlockState) GetBlockBody(hash common.Hash) (*types.Body, error) {
 }
 
 // GetFinalizedHeader returns the latest finalized block header
-func (bs *BlockState) GetFinalizedHeader() (*types.Header, error) {
-	h, err := bs.GetFinalizedHash()
+func (bs *BlockState) GetFinalizedHeader(round uint64) (*types.Header, error) {
+	h, err := bs.GetFinalizedHash(round)
 	if err != nil {
 		return nil, err
 	}
@@ -324,8 +329,8 @@ func (bs *BlockState) GetFinalizedHeader() (*types.Header, error) {
 }
 
 // GetFinalizedHash gets the latest finalized block header
-func (bs *BlockState) GetFinalizedHash() (common.Hash, error) {
-	h, err := bs.db.Get(common.FinalizedBlockHashKey)
+func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
+	h, err := bs.db.Get(finalizedHashKey(round))
 	if err != nil {
 		return common.Hash{}, err
 	}
@@ -334,8 +339,8 @@ func (bs *BlockState) GetFinalizedHash() (common.Hash, error) {
 }
 
 // SetFinalizedHash sets the latest finalized block header
-func (bs *BlockState) SetFinalizedHash(hash common.Hash) error {
-	return bs.db.Put(common.FinalizedBlockHashKey, hash[:])
+func (bs *BlockState) SetFinalizedHash(hash common.Hash, round uint64) error {
+	return bs.db.Put(finalizedHashKey(round), hash[:])
 }
 
 // SetBlockBody will add a block body to the db

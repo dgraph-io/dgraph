@@ -104,6 +104,11 @@ func (v *VoteMessage) GetFinalizedHash() (common.Hash, error) {
 	return common.Hash{}, ErrNotFinalizationMessage
 }
 
+// GetRound returns the round associated with the VoteMessage
+func (v *VoteMessage) GetRound() uint64 {
+	return v.Round
+}
+
 // Justification represents a justification for a finalized block
 type Justification struct {
 	Vote        *Vote
@@ -153,6 +158,11 @@ func (f *FinalizationMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 // GetFinalizedHash returns the hash of the block that's being finalized
 func (f *FinalizationMessage) GetFinalizedHash() (common.Hash, error) {
 	return f.Vote.hash, nil
+}
+
+// GetRound returns the round associated with the FinalizationMessage
+func (f *FinalizationMessage) GetRound() uint64 {
+	return f.Round
 }
 
 func (s *Service) newFinalizationMessage(header *types.Header, round uint64) *FinalizationMessage {

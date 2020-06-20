@@ -153,6 +153,10 @@ func (fm *mockFinalityMessage) GetFinalizedHash() (common.Hash, error) {
 	return testFinalizedHash, nil
 }
 
+func (fm *mockFinalityMessage) GetRound() uint64 {
+	return 1
+}
+
 // NewTestService creates a new test core service
 func NewTestService(t *testing.T, cfg *Config) *Service {
 	if cfg == nil {

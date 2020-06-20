@@ -227,6 +227,27 @@ func TestChainGetFinalizedHead(t *testing.T) {
 	require.Equal(t, common.BytesToHex(expected[:]), res)
 }
 
+func TestChainGetFinalizedHeadByRound(t *testing.T) {
+	chain := newTestChainService(t)
+	svc := NewChainModule(chain.Block)
+
+	var res ChainHashResponse
+	req := ChainIntRequest(0)
+	err := svc.GetFinalizedHeadByRound(nil, &req, &res)
+	require.NoError(t, err)
+	expected := genesisHeader.Hash()
+	require.Equal(t, common.BytesToHex(expected[:]), res)
+
+	testhash := common.Hash{1, 2, 3, 4}
+	err = chain.Block.SetFinalizedHash(testhash, 77)
+	require.NoError(t, err)
+
+	req = ChainIntRequest(77)
+	err = svc.GetFinalizedHeadByRound(nil, &req, &res)
+	require.NoError(t, err)
+	require.Equal(t, common.BytesToHex(testhash[:]), res)
+}
+
 var genesisHeader, _ = types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 
 func newTestChainService(t *testing.T) *state.Service {
