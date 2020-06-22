@@ -175,6 +175,13 @@ func intersection(a, b []uint64) []uint64 {
 func addUID(dgQuery *gql.GraphQuery, Isauth bool) {
 	if len(dgQuery.Children) == 0 && !Isauth {
 		addUIDChild(dgQuery)
+	} else {
+		addUID1(dgQuery)
+	}
+}
+
+func addUID1(dgQuery *gql.GraphQuery) {
+	if len(dgQuery.Children) == 0 {
 		return
 	}
 	hasUid := false
@@ -182,13 +189,15 @@ func addUID(dgQuery *gql.GraphQuery, Isauth bool) {
 		if c.Attr == "uid" {
 			hasUid = true
 		}
-		addUID(c, false)
+		addUID1(c)
 	}
+
 	// If uid was already requested by the user then we don't need to add it again.
 	if hasUid {
 		return
 	}
 	addUIDChild(dgQuery)
+
 }
 
 func addUIDChild(dgQuery *gql.GraphQuery) {
@@ -198,6 +207,7 @@ func addUIDChild(dgQuery *gql.GraphQuery) {
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
 }
+
 func (authRw *authRewriter) writingAuth() bool {
 	if authRw == nil || !authRw.isWritingAuth {
 		return false
