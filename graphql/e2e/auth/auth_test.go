@@ -147,11 +147,26 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	return h
 }
 
+func deleteStudentByEmail(t *testing.T, email string) {
+	getParams := &common.GraphQLParams{
+		Query: `
+			mutation {
+  				deleteStudent (filter: { email : { eq: "` + email + `"}}) {
+    				numUids
+  				}
+			}
+		`,
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func TestAuthWithDgraphDirective(t *testing.T) {
+	emails := []string{"user1@gmail.com", "user2@gmail.com"}
 	mutation := &common.GraphQLParams{
 		Query: `
 		mutation {
-			addStudent(input : [{email : "user1@gmail.com"}, {email : "user2@gmail.com"}]) {
+			addStudent(input : [{email : "` + emails[0] + `"}, {email : "` + emails[1] + `"}]) {
 				numUids
 			}
 		}`,
@@ -162,7 +177,7 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 	require.JSONEq(t, result, string(gqlResponse.Data))
 
 	queryParams := &common.GraphQLParams{
-		Headers: getJWT(t, "user1@gmail.com", ""),
+		Headers: getJWT(t, emails[0], ""),
 		Query: `
 		query {
 			queryStudent {
@@ -170,10 +185,15 @@ func TestAuthWithDgraphDirective(t *testing.T) {
 			}
 		}`,
 	}
-	result = `{"queryStudent":[{"email":"user1@gmail.com"}]}`
+	result = `{"queryStudent":[{"email":"` + emails[0] + `"}]}`
 	gqlResponse = queryParams.ExecuteAsPost(t, graphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	require.JSONEq(t, result, string(gqlResponse.Data))
+
+	// Clean up
+	for _, email := range emails {
+		deleteStudentByEmail(t, email)
+	}
 }
 
 func TestAuthRulesWithMissingJWT(t *testing.T) {
