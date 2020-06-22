@@ -6,7 +6,10 @@
 # binaries and prepare them such that any human or script can then pick these up
 # and use them as they deem fit.
 
-scriptdir="$(dirname $0)"
+# Path to this script
+scriptdir="$(cd "$(dirname $0)">/dev/null; pwd)"
+# Path to the root repo directory
+repodir="$(cd "$scriptdir/..">/dev/null; pwd)"
 
 # Output colors
 RED='\033[91;1m'
@@ -92,7 +95,7 @@ mkdir -p "$basedir"
 
 # Clone Dgraph repo.
 pushd $basedir
-  git clone "$scriptdir/.."
+  git clone "$repodir"
 popd
 
 pushd $basedir/dgraph
