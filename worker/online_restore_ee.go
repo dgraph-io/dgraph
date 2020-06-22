@@ -64,6 +64,10 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
 	errCh := make(chan error, len(currentGroups))
+	restoreId, err := rt.Add()
+	if err != nil {
+		return errors.Wrapf(err, "cannot assign ID to restore operation")
+	}
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
@@ -73,11 +77,16 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		}()
 	}
 
-	for range currentGroups {
-		if err := <-errCh; err != nil {
-			return errors.Wrapf(err, "cannot complete restore proposal")
+	go func(restoreId string) {
+		errs := make([]error, 0)
+		for range currentGroups {
+			if err := <-errCh; err != nil {
+				errs = append(errs, err)
+			}
 		}
-	}
+		rt.Done(restoreId, errs)
+
+	}(restoreId)
 
 	return nil
 }

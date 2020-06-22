@@ -17,9 +17,11 @@
 package worker
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/pkg/errors"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
@@ -91,4 +93,74 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 		SessionToken: req.GetSessionToken(),
 		Anonymous:    req.GetAnonymous(),
 	}
+}
+
+type RestoreStatus struct {
+	status string
+	errors []error
+}
+
+type restoreTracker struct {
+	sync.RWMutex
+	// status is a map of restore task ID to the status of said task.
+	status  map[string]*RestoreStatus
+	counter int
+}
+
+func newRestoreTracker() *restoreTracker {
+	return &restoreTracker{status: make(map[string]*RestoreStatus)}
+}
+
+func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
+	rt.RLock()
+	defer rt.RUnlock()
+
+	status, ok := rt.status[restoreId]
+	if ok {
+		return status
+	}
+	return &RestoreStatus{status: "UNKNOWN"}
+}
+
+func (rt *restoreTracker) Add() (string, error) {
+	if rt == nil {
+		return "", errors.Errorf("uninitialized restore operation tracker")
+	}
+
+	rt.Lock()
+	defer rt.Unlock()
+
+	rt.counter += 1
+	restoreId := fmt.Sprintf("restore-%d", rt.counter)
+	if _, ok := rt.status[restoreId]; ok {
+		return "", errors.Errorf("another restore operation with ID %s already exists", restoreId)
+	}
+
+	rt.status[restoreId] = &RestoreStatus{status: "IN_PROGRESS", errors: make([]error, 0)}
+	return restoreId, nil
+}
+
+func (rt *restoreTracker) Done(restoreId string, errs []error) error {
+	if restoreId == "" {
+		return errors.Errorf("restoreId cannot be empty")
+	}
+
+	rt.Lock()
+	defer rt.Unlock()
+
+	if _, ok := rt.status[restoreId]; !ok {
+		return errors.Errorf("unknown restore operation with ID %s", restoreId)
+	}
+
+	status := "OK"
+	validErrs := make([]error, 0)
+	for _, err := range errs {
+		if err == nil {
+			continue
+		}
+		validErrs = append(validErrs, err)
+		status = "ERR"
+	}
+	rt.status[restoreId] = &RestoreStatus{status: status, errors: validErrs}
+	return nil
 }
