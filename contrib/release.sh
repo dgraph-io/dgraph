@@ -243,8 +243,16 @@ docker run -it dgraph/dgraph:$DTAG dgraph
 ls -alh $TMP
 
 echo "To release:"
-echo "Push the git tag"
-echo "  git push origin $TAG"
+echo
+if git show-ref -q --verify "refs/tags/$TAG"; then
+    echo "Push the git tag"
+    echo "  git push origin $TAG"
+fi
+echo
 echo "Push the Docker tag:"
 echo "  docker push dgraph/dgraph:$DTAG"
-
+echo
+echo "If this should be the latest release, then tag"
+echo "the image as latest too."
+echo "  docker tag dgraph/dgraph:$DTAG dgraph/dgraph:latest"
+echo "  docker push dgraph/dgraph:latest"
