@@ -44,15 +44,15 @@ function run_index_test {
 }
 
 echo -e "Running some queries and checking count of results returned."
-run_index_test basic name 138677
-run_index_test allof_the name 25432
-run_index_test allof_the_a name 368
-run_index_test allof_the_first name 4384
+run_index_test basic name 138678
+run_index_test allof_the name 25433
+run_index_test allof_the_a name 369
+run_index_test allof_the_first name 4385
 run_index_test releasedate release_date 137859
 run_index_test releasedate_sort release_date 137859
 run_index_test releasedate_sort_first_offset release_date 2316
 run_index_test releasedate_geq release_date 60992
-run_index_test gen_anyof_good_bad name 1104
+run_index_test gen_anyof_good_bad name 1105
 
 popd &> /dev/null
 
