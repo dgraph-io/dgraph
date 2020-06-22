@@ -847,8 +847,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	if secretHeaders != nil {
 		hc.RLock()
 		for _, h := range secretHeaders.Children {
-			val := string(hc.secrets[h.Value.Raw])
-			fconf.ForwardHeaders.Set(h.Value.Raw, val)
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			val := string(hc.secrets[key[1]])
+			fconf.ForwardHeaders.Set(key[0], val)
 		}
 		hc.RUnlock()
 	}
@@ -857,8 +861,12 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	if forwardHeaders != nil {
 		for _, h := range forwardHeaders.Children {
 			// We would override the header if it was also specified as part of secretHeaders.
-			reqHeaderVal := f.op.header.Get(h.Value.Raw)
-			fconf.ForwardHeaders.Set(h.Value.Raw, reqHeaderVal)
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			reqHeaderVal := f.op.header.Get(key[1])
+			fconf.ForwardHeaders.Set(key[0], reqHeaderVal)
 		}
 	}
 
@@ -1958,6 +1966,19 @@ func buildGraphqlRequestFields(writer *bytes.Buffer, field *ast.Field) {
 	for i := 0; i < len(field.SelectionSet); i++ {
 		castedField := field.SelectionSet[i].(*ast.Field)
 		writer.WriteString(castedField.Name)
+
+		if len(castedField.Arguments) > 0 {
+			writer.WriteString("(")
+			for idx, arg := range castedField.Arguments {
+				if idx != 0 {
+					writer.WriteString(", ")
+				}
+				writer.WriteString(arg.Name)
+				writer.WriteString(": ")
+				writer.WriteString(arg.Value.String())
+			}
+			writer.WriteString(")")
+		}
 
 		if len(castedField.SelectionSet) > 0 {
 			// recursively add fields.

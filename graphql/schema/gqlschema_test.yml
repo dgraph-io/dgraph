@@ -63,16 +63,6 @@ invalid_schemas:
     ]
 
   -
-    name: "There shoudnt be arguments on any field"
-    input: |
-      type T {
-        f(a: Int): String
-      }
-    errlist: [
-      {"message": "Type T; Field f: You can't give arguments to fields.", "locations": [{"line": 2, "column": 3}]}
-    ]
-
-  -
     name: "Enum indexes clash trigram and regexp"
     input: |
       type T {
@@ -816,6 +806,7 @@ invalid_schemas:
     errlist: [
     {"message": "Type Query; Field getAuthor1: has 2 arguments for @custom directive, it should contain exactly 1 argument.",
      "locations":[{"line":7, "column":32}]},
+    {"message" : "Type Query; Field getAuthor1; url field inside @custom directive is invalid.", "locations" : [{"line":7, "column":52}]}
     ]
 
   - name: "@custom directive without http argument"
@@ -980,7 +971,7 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/?q=$id",
           method: "POST",
-          graphql: "query { getAuthor(id: $id) }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
         })
       }
     errlist: [
@@ -1001,7 +992,7 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "GET",
-          graphql: "query { getAuthor(id: $id) }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
         })
       }
     errlist: [
@@ -1022,7 +1013,7 @@ invalid_schemas:
           url: "http://google.com/",
           method: "POST",
           body: "{id: $id}",
-          graphql: "query { getAuthor(id: $id) }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) }"
         })
       }
     errlist: [
@@ -1141,7 +1132,7 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "subscription { getAuthor(id: $id) }"
+          graphql: "subscription ($id: ID!) { getAuthor(id: $id) }"
         })
       }
     errlist: [
@@ -1161,12 +1152,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query opName { getAuthor(id: $id) }"
+          graphql: "query opName ($id: ID!) { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with name `opName`, it can't have a name.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1181,12 +1179,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query @test { getAuthor(id: $id) }"
+          graphql: "query ($id: ID!) @test { getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found operation with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1201,12 +1206,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query { getAuthor(id: $id) getUser(id: $id) }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) getUser(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found 2 fields inside operation `query`, it can have exactly one field.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1221,12 +1233,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "mutation { authors: getAuthor(id: $id) }"
+          graphql: "mutation ($id: ID!) { authors: getAuthor(id: $id) }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found mutation `getAuthor` with alias `authors`, it can't have any alias.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1261,12 +1280,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query { getAuthor(id: $id) @test }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) @test }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with directives, it can't have any directives.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1281,12 +1307,19 @@ invalid_schemas:
         getAuthor1(id: ID): Author! @custom(http: {
           url: "http://google.com/",
           method: "POST",
-          graphql: "query { getAuthor(id: $id) { id } }"
+          graphql: "query ($id: ID!) { getAuthor(id: $id) { id } }"
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
-     "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthor1: inside graphql in @custom directive, found query `getAuthor` with a selection set, it can't have any selection set.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1308,10 +1341,16 @@ invalid_schemas:
         name: String
       }
     errlist: [
-    {"message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
-     "locations":[{"line":11, "column":15}]},
+    {
+      "message": "Type Post; Field author: inside graphql in @custom directive, for BATCH mode, query `getAuthor` can have only one argument whose value should be a variable.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
     ]
-
   -
     name: "@custom directive not allowed on field of type ID!"
     input: |
@@ -1324,9 +1363,33 @@ invalid_schemas:
         name: String
       }
     errlist: [
-    {"message": "Type Author; Field id; custom directive not allowed on field of type ID! or
-      field with @id directive.",
-     "locations":[{"line":2, "column":12}]},
+    {
+      "message": "Type Author; Field id; custom directive not allowed on field of type ID! or field with @id directive.",
+      "locations": [
+      {
+        "line": 2,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id; @custom directive, body template must use fields defined within the type, found `foo`.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field id: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1359,8 +1422,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, body template can't require itself.",
-     "locations":[{"line":6, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template can't use another field with @custom directive, found field `name` with @custom.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1376,8 +1455,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
-      "locations":[{"line":6, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1454,8 +1549,24 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql can't require itself.",
-     "locations":[{"line":6, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't require itself.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, graphql can't use another field with @custom directive, found field `name` with @custom.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1471,8 +1582,15 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
-     "locations":[{"line":6, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1490,10 +1608,16 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
-     "locations":[{"line":8, "column":12}]},
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 12
+      }
+      ]
+    },
     ]
-
   -
     name: "@custom directive on field where graphql doesn't use scalar field"
     input: |
@@ -1511,8 +1635,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
-     "locations":[{"line":11, "column":15}]},
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql must use scalar fields, found field `foo` of type `Note`.",
+      "locations": [
+      {
+        "line": 11,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1533,8 +1664,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
-     "locations":[{"line":12, "column":15}]},
+    {
+      "message": "Type Author; Field yo; @custom directive, graphql can't use another field with @custom directive, found field `foo` with @custom.",
+      "locations": [
+      {
+        "line": 12,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1551,8 +1689,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
-     "locations":[{"line":8, "column":15}]},
+    {
+      "message": "Type Author; Field yo: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1568,9 +1713,33 @@ invalid_schemas:
         bar: String
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive is only allowed on fields where the type
-       definition has a field with type ID! or a field with @id directive.",
-      "locations":[{"line":3, "column":18}]},
+    {
+      "message": "Type Author; Field name; @custom directive is only allowed on fields where the type definition has a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 3,
+        "column": 18
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; @custom directive, body template must use fields defined within the type, found `abc`.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, body template must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 12
+      }
+      ]
+    }
     ]
 
   -
@@ -1620,9 +1789,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
-          "locations":[{"line":5, "column":11}]},
-        ]
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field fooz that is not defined.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 5,
+        "column": 11
+      }
+      ]
+    }
+    ]
 
   -
     name: "@custom directive on a field in a type, only mandatory fields allowed in url path"
@@ -1638,10 +1823,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
-          "locations":[{"line":6, "column":11}]},
-        ]
-
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field foo that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    },
+    {
+      "message": "Type Author; Field name; url path inside @custom directive uses a field bar that can be null.",
+      "locations": [
+      {
+        "line": 6,
+        "column": 11
+      }
+      ]
+    }
+    ]
   -
     name: "@custom directive with variable definitions in operation in graphql"
     input: |
@@ -1658,9 +1858,16 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
-        "locations": [{"line": 10, "column": 15}]},
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql variables must use fields defined within the type, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
       ]
+    },
+    ]
 
   -
     name: "@custom directive on a field in a type, should only use fields defined in the type as GraphQL variables"
@@ -1676,10 +1883,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
-        "locations": [{"line": 8, "column": 15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields defined within the type, found `fooz`.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
       ]
-
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 8,
+        "column": 15
+      }
+      ]
+    },
+    ]
   -
     name: "@custom directive on a field in a type, should only use scalar fields as GraphQL variables"
     input: |
@@ -1699,9 +1921,25 @@ invalid_schemas:
         })
       }
     errlist: [
-      {"message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
-        "locations": [{"line": 13, "column": 15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use scalar fields, found field `car` of type `Car`.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
       ]
+    },
+    {
+      "message": "Type Author; Field name: @custom directive, graphql must use a field with type ID! or a field with @id directive.",
+      "locations": [
+      {
+        "line": 13,
+        "column": 15
+      }
+      ]
+    },
+    ]
 
   -
     name: "@custom directive on a field in a type, only defined fields allowed in url query"
@@ -1766,8 +2004,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `age`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1786,8 +2031,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":10, "column":15}]},
+    {
+      "message": "Type Query; Field getAuthors; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 10,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1810,8 +2062,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":14, "column":15}]},
+    {
+      "message": "Type Mutation; Field setCountry1; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 14,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1829,8 +2088,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; @custom directive, graphql must use fields with a variable definition, found `input`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1848,8 +2114,15 @@ invalid_schemas:
         })
       }
     errlist: [
-    {"message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
-      "locations":[{"line":7, "column":15}]},
+    {
+      "message": "Type Author; Field name; skipIntrospection in @custom directive can only be true/false, found: `random`.",
+      "locations": [
+      {
+        "line": 7,
+        "column": 15
+      }
+      ]
+    },
     ]
 
   -
@@ -1901,6 +2174,145 @@ invalid_schemas:
     errlist: [
     {"message": "Interface X; @auth directive is not allowed on interfaces.",
      "locations":[{"line":1, "column":11}]},
+    ]
+
+
+  - name: "There shoudnt be any reserved arguments on any field"
+    input: |
+      type T {
+        f(first: Int): String
+      }
+    errlist: [
+    {"message": "Type T; Field f: can't have first as an argument because it is a reserved argument.", "locations": [{"line": 2, "column": 3}]}]
+
+  - name: "remote type with @custom directives on fields shouldn't be allowed."
+    description: "Remote types are not resolved further currently, hence they shouldn't have
+    fields with @custom directive on them."
+    input: |
+      type User {
+        id: ID!
+        name: String!
+      }
+
+      type School @remote {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type School; field name; can't have @custom directive as a @remote
+     type can't have fields with @custom directive.", "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a non-remote type can't have fields which are of remote type"
+    description: "This is disallowed because we don't generate UserRef etc., so we can't
+    allow adding/updating user from author."
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!]
+      }
+    errlist: [
+    {"message": "Type Author; field neighbour; is of a type that has @remote directive. Those
+    would need to be resolved by a @custom directive.",
+     "locations": [{"line":9, "column":3}]}
+    ]
+
+  -
+    name: "a remote type can't implement a non-remote interface"
+    description: "Since we won't be adding/update the remote type, it wouldn't show up in
+    getPerson, queryPerson etc., hence causing confusion."
+    input: |
+      interface Person {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; with @remote directive implements interface Person; which doesn't have
+     @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+  -
+    name: "non-remote type can't implement a remote type"
+    description: "Dgraph schema generation and possibly the way we do field mapping would have to
+     be re-worked to make this work correctly."
+    input: |
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person {
+        age: Int!
+      }
+    errlist: [
+    {"message": "Type User; without @remote directive can't implement an interface Person; with
+     have @remote directive.",
+     "locations": [{"line":5, "column":6}]}
+    ]
+
+  - name: "ID field can't have @dgraph directive and @search directive"
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id") @search
+          name: String
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't
+          have the @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field id: has the @search directive but fields of type ID can't
+          have the @search directive.",
+     "locations":[{"line":2, "column":35}]}
+    ]
+
+  - name: "@dgraph directive on ID field and @dgraph directive with reverse pred argument on scalar
+  field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type X; Field f1 is of type String, but reverse predicate in @dgraph directive
+    only applies to fields with object types.",
+     "locations":[{"line":3, "column":5}]}
+    ]
+
+  - name: "Multiple type: @dgraph directive on ID field and @dgraph directive with reverse pred
+  argument on scalar field is not allowed."
+    input: |
+      type X {
+          id: ID @dgraph(pred: "X.id")
+          name: String
+      }
+      type Y {
+          f1: String! @dgraph(pred:"~movie")
+      }
+    errlist: [
+    {"message": "Type X; Field id: has the @dgraph directive but fields of type ID can't have the
+    @dgraph directive.",
+     "locations":[{"line":2, "column":13}]},
+    {"message": "Type Y; Field f1 is of type String, but reverse predicate in @dgraph directive only
+     applies to fields with object types.",
+     "locations":[{"line":6, "column":5}]}
     ]
 
 valid_schemas:
@@ -2120,4 +2532,54 @@ valid_schemas:
           graphql: "query ($id: ID!, $age: Int!) { getAuthor(id: $id, age: $age) }",
           skipIntrospection: true
         })
+      }
+
+  -
+    name: "remote type can use other types which are dgraph types"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+        author: Author
+      }
+
+      type Author {
+          id: ID!
+          age: Int!
+      }
+
+  -
+    name: "remote type can implement a remote type"
+    input: |
+      type Car {
+        id: ID!
+        name: String!
+      }
+
+      interface Person @remote {
+        id: ID!
+        name: String!
+      }
+      type User implements Person @remote {
+        age: Int!
+      }
+
+
+  -
+    name: "a non-remote type can have fields which are of remote type if they have @custom
+     directive"
+    input: |
+      type User @remote {
+        id: ID!
+        name: String!
+      }
+
+      type Author {
+        id: ID!
+        age: Int!
+        neighbour: [User!] @custom(http: {
+          url: "http://mock:8888/neighbour",
+          method: "POST",
+          body: "{sid: $id}"
+          })
       }

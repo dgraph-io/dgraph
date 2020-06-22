@@ -4,17 +4,22 @@ set -eo pipefail
 
 repo="dgraph-io/dgraph"
 
+# Fetch existing configuration if it exists when required Env vars not set
+GIT_NAME=${GIT_NAME:-"$(git config --get user.name)"}
+GIT_EMAIL=${GIT_EMAIL:-$(git config --get user.email) }
 
-[ -z "$RELEASE_BRANCHES" ] && echo "Please set RELEASE_BRANCHES" && exit 0
-[ -z "$GIT_EMAIL" ] && echo "Please set GIT_EMAIL" && exit 0
-[ -z "$GIT_NAME" ] && echo "Please set GIT_NAME" && exit 0
-[ -z "$GH_USERNAME" ] && echo "Please set GH_USERNAME" && exit 0
-[ -z "$GH_TOKEN" ] && echo "Please set GH_TOKEN" && exit 0
+# Check for empty variables
+[ -z "$RELEASE_BRANCHES" ] && echo "Please set RELEASE_BRANCHES" && exit 1
+[ -z "$GIT_EMAIL" ] && echo "Please set GIT_EMAIL" && exit 1
+[ -z "$GIT_NAME" ] && echo "Please set GIT_NAME" && exit 1
+[ -z "$GH_USERNAME" ] && echo "Please set GH_USERNAME" && exit 1
+[ -z "$GH_TOKEN" ] && echo "Please set GH_TOKEN" && exit 1
 
-if [[ ${RELEASE_BRANCHES[@]} == *","* ]]; then
-    echo "Release branches should not contain commas. Set it as RELEASE_BRANCHES=('x' 'y')"
+# Verify No Commas in space delimited string
+if grep -q "," <<< $RELEASE_BRANCHES; then
+  echo 'Release branches should not contain commas. Set it as RELEASE_BRANCHES="(release/vX.X release/vY.Y)"'
+  exit 1
 fi
-
 
 TMP="/tmp/badger-update"
 rm -Rf $TMP
@@ -28,14 +33,14 @@ cd dgraph
 git config user.name "$GIT_NAME"
 git config user.email "$GIT_EMAIL"
 
-for base in "${RELEASE_BRANCHES[@]}"
+for base in $RELEASE_BRANCHES
 do
 	# Ensure directory is clean before updating badger
 	if [[ $(git diff --stat) != '' ]]; then
 		echo 'Working directory dirty. Following changes were found'
 		git --no-pager diff
 		echo 'Exiting'
-		exit 0
+		exit 1
 	fi
 
 	git fetch origin $base
@@ -85,7 +90,7 @@ do
 	PR_id=$(curl --silent -X POST -H "Authorization: Bearer $GH_TOKEN" -d "${body}" "${apiURL}" \
 		| sed -n 's/.*"number": \(.*\),/\1/p' )
 
-	[[ -z $PR_id ]] && echo "Failed to create PR" && exit 0
+	[[ -z $PR_id ]] && echo "Failed to create PR" && exit 1
 
 	echo "Created PR https://github.com/$repo/pull/${PR_id}"
 	echo "DONE"

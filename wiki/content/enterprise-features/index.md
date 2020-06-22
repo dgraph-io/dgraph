@@ -11,13 +11,7 @@ forum](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
-continue enjoying the enterprise features released in the proprietary code.
-
-The license can be applied to the cluster by including it as the body of a POST
-request and calling `/enterpriseLicense` HTTP endpoint on any Zero server. It
-can also be applied by passing the path to the enterprise license file (using
-the flag `--enterprise_license`) to the `dgraph zero` command used to start the
-server. The second option is useful when the process needs to be automated.
+continue using the enterprise features released in the proprietary code.
 
 {{% notice "note" %}}
 At the conclusion of your 30-day trial period if a license has not been applied to the cluster,
@@ -25,6 +19,20 @@ access to the enterprise features will be suspended. The cluster will continue t
 enterprise features.
 {{% /notice %}}
 
+When you have an enterprise license key, the license can be applied to the cluster by including it
+as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+
+```sh
+curl -X POST localhost:6080/enterpriseLicense --upload-file ./licensekey.txt
+```
+
+It can also be applied by passing the path to the enterprise license file (using the flag
+`--enterprise_license`) to the `dgraph zero` command used to start the server. The second option is
+useful when the process needs to be automated.
+
+```sh
+dgraph zero --enterprise_license ./licensekey.txt
+```
 
 [dcl]: https://github.com/dgraph-io/dgraph/blob/master/licenses/DCL.txt
 
@@ -272,6 +280,10 @@ restore. A backup series consists of a full backup and all the incremental
 backups built on top of it. Each time a new full backup is created, a new backup
 series with a different ID is started. The backup series ID is stored in each
 `manifest.json` file stored in every backup folder.
+
+The `--encryption_key_file` flag is required if you took the backup in an
+encrypted cluster and should point to the location of the same key used to
+run the cluster.
 
 The restore feature will create a cluster with as many groups as the original
 cluster had at the time of the last backup. For each group, `dgraph restore`
@@ -735,6 +747,33 @@ mutation {
   }
 }
 ```
+
+### Reset Groot Password
+
+If you've forgotten the password to your groot user, then you may reset the groot password (or
+the password for any user) by following these steps.
+
+1. Stop Dgraph Alpha.
+2. Turn off ACLs by removing the `--acl_hmac_secret` config flag in the Alpha config. This leaves
+   the Alpha open with no ACL rules, so be sure to restrict access, including stopping request
+   traffic to this Alpha.
+3. Start Dgraph Alpha.
+4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
+   to `newpassword` (choose your own secure password):
+   ```text
+   upsert {
+     query {
+       groot as var(func: eq(dgraph.xid, "groot"))
+     }
+     mutation {
+       set {
+         uid(groot) <dgraph.password> "newpassword" .
+       }
+     }
+   }
+   ```
+5. Restart Dgraph Alpha with ACLs turned on by setting the `--acl_hmac_secret` config flag.
+6. Login as groot with your new password.
 
 ## Encryption at Rest
 
