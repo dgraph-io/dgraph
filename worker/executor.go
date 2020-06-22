@@ -41,12 +41,15 @@ type executor struct {
 	sync.RWMutex
 	predChan map[string]chan *subMutation
 	closer   *y.Closer
+
+	watermark uint64
 }
 
 func newExecutor() *executor {
 	ex := &executor{
-		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
+		predChan:  make(map[string]chan *subMutation),
+		closer:    y.NewCloser(0),
+		watermark: 0,
 	}
 	go ex.shutdown()
 	return ex
@@ -137,7 +140,9 @@ func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.Dir
 		return
 	default:
 		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
+		val := atomic.AddUint64(&e.watermark, 1)
 		for attr, payload := range payloadMap {
+			payload.startTs = val
 			e.getChannelUnderLock(attr) <- payload
 		}
 	}
