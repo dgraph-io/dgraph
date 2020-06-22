@@ -198,6 +198,12 @@ func addUIDChild(dgQuery *gql.GraphQuery) {
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
 }
+func (authRw *authRewriter) writingAuth() bool {
+	if authRw == nil || !authRw.isWritingAuth {
+		return false
+	}
+	return true
+}
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
 	rbac := authRw.evaluateStaticRules(field.Type())
@@ -221,7 +227,13 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-	addUID(dgQuery)
+
+	if authRw.writingAuth() {
+		addUID(dgQuery, true)
+	} else {
+		addUID(dgQuery, false)
+	}
+
 	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
@@ -318,7 +330,11 @@ func rewriteAsGet(
 		}
 	}
 	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
-	addUID(dgQuery)
+	if auth.writingAuth() {
+		addUID(dgQuery, true)
+	} else {
+		addUID(dgQuery, false)
+	}
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
 
@@ -366,7 +382,13 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-	addUID(dgQuery)
+
+	if authRw.writingAuth() {
+		addUID(dgQuery, true)
+	} else {
+		addUID(dgQuery, false)
+	}
+
 	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
