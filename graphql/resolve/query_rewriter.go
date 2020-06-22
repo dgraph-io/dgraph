@@ -227,12 +227,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-
-	if authRw.writingAuth() {
-		addUID(dgQuery, true)
-	} else {
-		addUID(dgQuery, false)
-	}
+	addUID(dgQuery, authRw.writingAuth())
 
 	addCascadeDirective(dgQuery, field)
 
@@ -330,11 +325,7 @@ func rewriteAsGet(
 		}
 	}
 	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
-	if auth.writingAuth() {
-		addUID(dgQuery, true)
-	} else {
-		addUID(dgQuery, false)
-	}
+	addUID(dgQuery, auth.writingAuth())
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
 
@@ -383,11 +374,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 
-	if authRw.writingAuth() {
-		addUID(dgQuery, true)
-	} else {
-		addUID(dgQuery, false)
-	}
+	addUID(dgQuery, authRw.writingAuth())
 
 	addCascadeDirective(dgQuery, field)
 
