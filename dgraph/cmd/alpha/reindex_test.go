@@ -197,7 +197,7 @@ func checkSchema(t *testing.T, query, key string) {
 		}
 		time.Sleep(100 * time.Millisecond)
 
-		if i == 9 {
+		if i == 10 {
 			t.Fatalf("expected %v, got schema: %v", key, res)
 		}
 	}

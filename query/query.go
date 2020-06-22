@@ -30,6 +30,7 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/metadata"
 
+	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/algo"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -860,6 +861,7 @@ func toFacetsFilter(gft *gql.FilterTree) (*pb.FilterTree, error) {
 
 // createTaskQuery generates the query buffer.
 func createTaskQuery(sg *SubGraph) (*pb.Query, error) {
+	y.AssertTrue(sg.Params.Namespace != "")
 	attr := sg.Attr
 	// Might be safer than just checking first byte due to i18n
 	reverse := strings.HasPrefix(attr, "~")
@@ -2095,6 +2097,7 @@ func ProcessGraph(ctx context.Context, sg, parent *SubGraph, rch chan error) {
 			filter.SrcUIDs = sg.DestUIDs
 			// Passing the pointer is okay since the filter only reads.
 			filter.Params.ParentVars = sg.Params.ParentVars // Pass to the child.
+			filter.Params.Namespace = sg.Params.Namespace
 			go ProcessGraph(ctx, filter, sg, filterChan)
 		}
 
