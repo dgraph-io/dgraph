@@ -79,24 +79,23 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	expected := `{
-		"data": {
 		  "export": {
 			"response": {
 			  "code": "Success",
 			  "message": "Export completed."
 			}
 		  }
-		}
-	  }`
-	require.JSONEq(t, expected, string(b))
+		}`
+	res1 := &testutil.GraphQLResponse{}
+	err=json.Unmarshal(b,res1)
+	require.NoError(t, err)
+	require.JSONEq(t, expected, string(res1.Data))
 
 	require.NoError(t, copyExportFiles(tmpDir))
 
