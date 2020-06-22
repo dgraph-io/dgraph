@@ -4,6 +4,10 @@
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
         msg
+        author {
+          id
+          name
+        }
       }
     }
   gqlvariables: |
@@ -26,6 +30,7 @@
         uid
         Post2 as Author.posts
       }
+      msg(func: uid(x))
     }
 
 -

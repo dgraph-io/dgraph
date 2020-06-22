@@ -38,6 +38,7 @@ const (
 	MutationQueryVar        = "x"
 	MutationQueryVarUID     = "uid(x)"
 	updateMutationCondition = `gt(len(x), 0)`
+	QueryDelete             = "querydelete"
 )
 
 type AddRewriter struct {
@@ -726,8 +727,14 @@ func (drw *deleteRewriter) Rewrite(
 
 	b, err := json.Marshal(deletes)
 
+	queryDel := rewriteAsQuery(m.QueryField(), authRw)
+	queryDel.Func = &gql.Function{
+		Name: "uid",
+		Args: []gql.Arg{{Value: MutationQueryVar}},
+	}
+	finalQry := &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
 	upsert := &UpsertMutation{
-		Query:     dgQry,
+		Query:     finalQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
