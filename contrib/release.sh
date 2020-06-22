@@ -6,6 +6,8 @@
 # binaries and prepare them such that any human or script can then pick these up
 # and use them as they deem fit.
 
+scriptdir="$(dirname $0)"
+
 # Output colors
 RED='\033[91;1m'
 RESET='\033[0m'
@@ -18,7 +20,7 @@ exit_error() {
     print_error "$@"
     exit 1
 }
-check_cmd_exists() {
+check_command_exists() {
     if ! command -v "$1" > /dev/null; then
         exit_error "$1: command not found"
     fi
@@ -28,15 +30,19 @@ export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
 
-check_cmd_exists strip
-check_cmd_exists gcc
-check_cmd_exists go
-check_cmd_exists docker
-check_cmd_exists nvm
-check_cmd_exists npm
-check_cmd_exists protoc
-check_cmd_exists strip
-check_cmd_exists shasum
+check_command_exists strip
+check_command_exists make
+check_command_exists gcc
+check_command_exists go
+check_command_exists docker
+check_command_exists docker-compose
+check_command_exists nvm
+check_command_exists npm
+check_command_exists protoc
+check_command_exists strip
+check_command_exists shasum
+check_command_exists tar
+check_command_exists zip
 
 # Don't use standard GOPATH. Create a new one.
 unset GOBIN
@@ -86,7 +92,7 @@ mkdir -p "$basedir"
 
 # Clone Dgraph repo.
 pushd $basedir
-  git clone /home/dmai/go/src/github.com/dgraph-io/dgraph
+  git clone "$scriptdir/.."
 popd
 
 pushd $basedir/dgraph
