@@ -1,3 +1,21 @@
+- name: "Auth query with @dgraph pred."
+  gqlquery: |
+    query {
+      queryStudent {
+        email
+      }
+    }
+  role: "USER"
+  dgquery: |-
+    query {
+      queryStudent(func: uid(Student1)) @filter(uid(Student2)) {
+        email : IOw80vnV
+        dgraph.uid : uid
+      }
+      Student1 as var(func: type(is7sowSm))
+      Student2 as var(func: uid(Student1)) @filter(eq(IOw80vnV, "user1")) @cascade
+    }
+
 - name: "Auth with deep get query."
   gqlquery: |
     query {
