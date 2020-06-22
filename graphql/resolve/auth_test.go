@@ -140,28 +140,6 @@ func (ex *authExecutor) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext
 	return nil
 }
 
-func TestAuthQuery(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	result, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "../e2e/auth/sample_public_key.pem")
-	require.NoError(t, err)
-	strSchema := string(result)
-
-	authMeta, err := authorization.Parse(strSchema)
-	metaInfo := &testutil.AuthMeta{
-		PublicKey: authMeta.PublicKey,
-		Namespace: authMeta.Namespace,
-		Algo:      authMeta.Algo,
-	}
-
-	require.NoError(t, err)
-
-	t.Run("Query Rewriting ", func(t *testing.T) {
-		queryRewriting(t, strSchema, metaInfo)
-	})
-}
-
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // when it also needs to write in auth.
 func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
@@ -177,10 +155,6 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			if !strings.HasPrefix(tcase.Name, "Test Query") {
-				return
-			}
-
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query: tcase.GQLQuery,

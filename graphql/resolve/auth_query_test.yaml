@@ -412,101 +412,111 @@
       }
     }
 
-- name: "Test  Query 0 level"
+- name: "Auth deep query - 0 level"
   gqlquery: |
     query {
-      queryMovie {
+      queryMovie(filter: { content: { eq: "A. N. Author" } },  order: { asc: content }, first: 10, offset: 10)  {
         content
       }
     }
   dgquery: |-
     query {
-      queryMovie(func: uid(Movie2)) {
+      queryMovie(func: uid(MovieRoot)) {
         content : Movie.content
         dgraph.uid : uid
       }
-      Movie2 as var(func: type(Movie)) @filter((NOT (uid(MovieAuth3)) AND (uid(MovieAuth4) OR uid(MovieAuth7))))
-      MovieAuth3 as var(func: uid(Movie2)) @filter(eq(Movie.hidden, true)) @cascade
-      MovieAuth4 as var(func: uid(Movie2)) @cascade {
+      MovieRoot as var(func: uid(Movie1), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth2)) AND (uid(MovieAuth3) OR uid(MovieAuth4))))
+      Movie1 as var(func: type(Movie)) @filter(eq(Movie.content, "A. N. Author"))
+      MovieAuth2 as var(func: uid(Movie1)) @filter(eq(Movie.hidden, true)) @cascade
+      MovieAuth3 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable {
           users : Region.users @filter(eq(User.username, "user1"))
           dgraph.uid : uid
         }
         dgraph.uid : uid
       }
-      MovieAuth7 as var(func: uid(RegionAuth6)) @cascade {
+      MovieAuth4 as var(func: uid(Movie1)) @cascade {
         regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
         dgraph.uid : uid
       }
     }
 
-- name: "Test  Query 0 level"
+- name: "Auth deep query - 1 level"
   gqlquery: |
     query {
-      queryUser(filter: { username: { eq: "A. N. Author" } },  order: { asc: username }, first: 10, offset: 10) {
-        username
+      queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10)  {
+        content
+        regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) {
+          name
+          global
+        }
       }
     }
   dgquery: |-
     query {
-      queryUser(func: uid(User2)) {
-        username : User.username
+      queryMovie(func: uid(MovieRoot)) {
+        content : Movie.content
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) {
+          name : Region.name
+          global : Region.global
+          dgraph.uid : uid
+        }
         dgraph.uid : uid
       }
-      User2 as var(func: type(User), orderasc: User.username, first: 10, offset: 10) @filter((eq(User.username, "A. N. Author") AND (NOT (uid(UserAuth3)) AND (uid(UserAuth4) OR uid(UserAuth5)))))
-      UserAuth3 as var(func: uid(User2)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth4 as var(func: uid(User2)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth5 as var(func: uid(User2)) @filter(eq(User.username, "user1")) @cascade
+      MovieRoot as var(func: uid(Movie3), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth4)) AND (uid(MovieAuth5) OR uid(MovieAuth6))))
+      Movie3 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      MovieAuth4 as var(func: uid(Movie3)) @filter(eq(Movie.hidden, true)) @cascade
+      MovieAuth5 as var(func: uid(Movie3)) @cascade {
+        regionsAvailable : Movie.regionsAvailable {
+          users : Region.users @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      MovieAuth6 as var(func: uid(Movie3)) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+        dgraph.uid : uid
+      }
+      var(func: uid(MovieRoot)) {
+        Region1 as regionsAvailable
+      }
+      Region2 as var(func: uid(Region1), orderasc: Region.name, first: 10, offset: 10) @filter(eq(Region.name, "Region123"))
     }
 
-- name: "Test Query 3 level"
+- name: "Auth deep query - 3 level"
   gqlquery: |
     query {
-      queryUser(filter: { username: { eq: "A. N. Author" } }, order: { asc: username }, first: 10, offset: 10) {
-        username
-        tickets(filter: { title: { allofterms: "A. N. Author" } }, order: { asc: title }, first: 10, offset: 10) {
-          id
-          title
-          assignedTo(filter: { username: { eq: "B. L. Author" } },  order: { asc: username }, first: 10, offset: 10)  {
+      queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10)  {
+        content
+        regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) {
+          name
+          global
+          users(filter: { username: { eq: "User321" } },  order: { asc: username }, first: 10, offset: 10)  {
             username
+            age
+            isPublic
+            secrets(filter: { aSecret: { allofterms : "Secret132" } },  order: { asc: aSecret }, first: 10, offset: 10)  {
+              aSecret
+              ownedBy
+            }
           }
         }
       }
     }
   dgquery: |-
     query {
-      queryUser(func: uid(UserRoot)) {
-        username : User.username
-        tickets : User.tickets @filter(uid(Ticket2)) {
-          id : uid
-          title : Ticket.title
-          assignedTo : Ticket.assignedTo @filter(uid(User5)) {
+      queryMovie(func: uid(MovieRoot)) {
+        content : Movie.content
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) {
+          name : Region.name
+          global : Region.global
+          users : Region.users @filter(uid(User6)) {
             username : User.username
-            dgraph.uid : uid
-          }
-        }
-        dgraph.uid : uid
-      }
-      UserRoot as var(func: type(User), orderasc: User.username, first: 10, offset: 10) @filter((eq(User.username, "A. N. Author") AND (NOT (uid(UserAuth17)) AND (uid(UserAuth18) OR uid(UserAuth19)))))
-      UserAuth17 as var(func: uid(UserRoot)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth18 as var(func: uid(UserRoot)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth19 as var(func: uid(UserRoot)) @filter(eq(User.username, "user1")) @cascade
-      var(func: uid(UserRoot)) {
-        Ticket16 as tickets
-      }
-      Ticket2 as var(func: uid(Ticket16), orderasc: Ticket.title, first: 10, offset: 10) @filter((allofterms(Ticket.title, "A. N. Author") AND uid(TicketAuth11)))
-      var(func: uid(Ticket2)) {
-        User10 as assignedTo
-      }
-      User5 as var(func: uid(User10), orderasc: User.username, first: 10, offset: 10) @filter((eq(User.username, "B. L. Author") AND (NOT (uid(UserAuth7)) AND (uid(UserAuth8) OR uid(UserAuth9)))))
-      UserAuth7 as var(func: uid(User5)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth8 as var(func: uid(User5)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth9 as var(func: uid(User5)) @filter(eq(User.username, "user1")) @cascade
-      TicketAuth11 as var(func: uid(Ticket2)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+            age : User.age
+            isPublic : User.isPublic
+            secrets : User.secrets @filter(uid(UserSecret5)) {
+              aSecret : UserSecret.aSecret
+              ownedBy : UserSecret.ownedBy
               dgraph.uid : uid
             }
             dgraph.uid : uid
@@ -515,6 +525,33 @@
         }
         dgraph.uid : uid
       }
+      MovieRoot as var(func: uid(Movie8), orderasc: Movie.content, first: 10, offset: 10) @filter((NOT (uid(MovieAuth9)) AND (uid(MovieAuth10) OR uid(MovieAuth11))))
+      Movie8 as var(func: type(Movie)) @filter(eq(Movie.content, "MovieXYZ"))
+      MovieAuth9 as var(func: uid(Movie8)) @filter(eq(Movie.hidden, true)) @cascade
+      MovieAuth10 as var(func: uid(Movie8)) @cascade {
+        regionsAvailable : Movie.regionsAvailable {
+          users : Region.users @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      MovieAuth11 as var(func: uid(Movie8)) @cascade {
+        regionsAvailable : Movie.regionsAvailable @filter(eq(Region.global, true))
+        dgraph.uid : uid
+      }
+      var(func: uid(MovieRoot)) {
+        Region1 as regionsAvailable
+      }
+      Region7 as var(func: uid(Region1), orderasc: Region.name, first: 10, offset: 10) @filter(eq(Region.name, "Region123"))
+      var(func: uid(Region1)) {
+        User2 as users
+      }
+      User6 as var(func: uid(User2), orderasc: User.username, first: 10, offset: 10) @filter(eq(User.username, "User321"))
+      var(func: uid(User2)) {
+        UserSecret3 as secrets
+      }
+      UserSecret5 as var(func: uid(UserSecret3), orderasc: UserSecret.aSecret, first: 10, offset: 10) @filter((allofterms(UserSecret.aSecret, "Secret132") AND uid(UserSecretAuth4)))
+      UserSecretAuth4 as var(func: uid(UserSecret3)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Auth with complex filter"
