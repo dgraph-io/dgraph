@@ -30,7 +30,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -374,8 +373,8 @@ func setupListener(addr string, port int) (net.Listener, error) {
 	return net.Listen("tcp", fmt.Sprintf("%s:%d", addr, port))
 }
 
-func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
-	defer wg.Done()
+func serveGRPC(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+	defer closer.Done()
 
 	x.RegisterExporters(Alpha.Conf, "dgraph.alpha")
 
@@ -397,8 +396,8 @@ func serveGRPC(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
 	s.Stop()
 }
 
-func serveHTTP(l net.Listener, tlsCfg *tls.Config, wg *sync.WaitGroup) {
-	defer wg.Done()
+func serveHTTP(l net.Listener, tlsCfg *tls.Config, closer *y.Closer) {
+	defer closer.Done()
 	srv := &http.Server{
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 600 * time.Second,
@@ -519,19 +518,19 @@ func setupServer(closer *y.Closer) {
 	http.HandleFunc("/", homeHandler)
 	http.HandleFunc("/ui/keywords", keywordHandler)
 
-	// Initilize the servers.
-	var wg sync.WaitGroup
-	wg.Add(3)
-	go serveGRPC(grpcListener, tlsCfg, &wg)
-	go serveHTTP(httpListener, tlsCfg, &wg)
+	// Initialize the servers.
+	admin.ServerCloser = y.NewCloser(3)
+	go serveGRPC(grpcListener, tlsCfg, admin.ServerCloser)
+	go serveHTTP(httpListener, tlsCfg, admin.ServerCloser)
 
 	if Alpha.Conf.GetBool("telemetry") {
 		go edgraph.PeriodicallyPostTelemetry()
 	}
 
 	go func() {
-		defer wg.Done()
-		<-worker.ShutdownCh
+		defer admin.ServerCloser.Done()
+
+		<-admin.ServerCloser.HasBeenClosed()
 		atomic.StoreUint64(&globalEpoch, math.MaxUint64)
 
 		// Stops grpc/http servers; Already accepted connections are not closed.
@@ -545,7 +544,8 @@ func setupServer(closer *y.Closer) {
 
 	glog.Infoln("gRPC server started.  Listening on port", grpcPort())
 	glog.Infoln("HTTP server started.  Listening on port", httpPort())
-	wg.Wait()
+
+	admin.ServerCloser.Wait()
 }
 
 func run() {
@@ -664,7 +664,6 @@ func run() {
 
 	// setup shutdown os signal handler
 	sdCh := make(chan os.Signal, 3)
-	worker.ShutdownCh = make(chan struct{})
 
 	defer func() {
 		signal.Stop(sdCh)
@@ -676,9 +675,9 @@ func run() {
 		var numShutDownSig int
 		for range sdCh {
 			select {
-			case <-worker.ShutdownCh:
+			case <-admin.ServerCloser.HasBeenClosed():
 			default:
-				close(worker.ShutdownCh)
+				admin.ServerCloser.Signal()
 			}
 			numShutDownSig++
 			glog.Infoln("Caught Ctrl-C. Terminating now (this may take a few seconds)...")
