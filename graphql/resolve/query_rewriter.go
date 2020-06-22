@@ -172,8 +172,8 @@ func intersection(a, b []uint64) []uint64 {
 // then Dgraph would just return 7 posts.  And we'd have no way of knowing if
 // there's only 7 posts, or if there's more that are missing 'text'.
 // But, for GraphQL, we want to know about those missing values.
-func addUID(dgQuery *gql.GraphQuery, addIfNoChild bool) {
-	if len(dgQuery.Children) == 0 && addIfNoChild {
+func addUID(dgQuery *gql.GraphQuery, Isauth bool) {
+	if len(dgQuery.Children) == 0 && !Isauth {
 		addUIDChild(dgQuery)
 		return
 	}
