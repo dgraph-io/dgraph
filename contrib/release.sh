@@ -242,6 +242,7 @@ echo "Release $TAG is ready."
 docker run -it dgraph/dgraph:$DTAG dgraph
 ls -alh $TMP
 
+set +o xtrace
 echo "To release:"
 echo
 if git show-ref -q --verify "refs/tags/$TAG"; then
