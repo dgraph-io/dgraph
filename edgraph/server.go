@@ -207,11 +207,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			attr = op.DropValue
 		}
 
-		// Reserved predicates cannot be dropped.
-		if x.IsReservedPredicate(attr) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be dropped",
-				attr)
-			return empty, err
+		// Pre-defined predicates cannot be dropped.
+		if x.IsPreDefinedPredicate(attr) {
+			return empty, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" dropped", attr)
 		}
 
 		nq := &api.NQuad{
@@ -235,6 +234,12 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to TYPE, DropValue must not be empty")
 		}
 
+		// Pre-defined types cannot be dropped.
+		if x.IsPreDefinedType(op.DropValue) {
+			return empty, errors.Errorf("type %s is pre-defined and is not allowed to be dropped",
+				op.DropValue)
+		}
+
 		m.DropOp = pb.Mutations_TYPE
 		m.DropValue = op.DropValue
 		_, err := query.ApplyMutations(ctx, m)
@@ -254,10 +259,9 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	for _, update := range result.Preds {
 		// Pre-defined predicates cannot be altered but let the update go through
 		// if the update is equal to the existing one.
-		if schema.IsPreDefinedPredicateChanged(update.Predicate, update) {
-			err := errors.Errorf("predicate %s is reserved and is not allowed to be modified",
-				update.Predicate)
-			return nil, err
+		if schema.IsPreDefPredChanged(update) {
+			return nil, errors.Errorf("predicate %s is pre-defined and is not allowed to be"+
+				" modified", update.Predicate)
 		}
 
 		if err := validatePredName(update.Predicate); err != nil {
@@ -276,8 +280,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for _, typ := range result.Types {
-		// Users are not allowed to create types in reserved namespace.
-		if x.IsReservedType(typ.TypeName) {
+		// Pre-defined types cannot be altered but let the update go through
+		// if the update is equal to the existing one.
+		if schema.IsPreDefTypeChanged(typ) {
+			return nil, errors.Errorf("type %s is pre-defined and is not allowed to be modified",
+				typ.TypeName)
+		}
+
+		// Users are not allowed to create types in reserved namespace. But, there are pre-defined
+		// types for which the update should go through if the update is equal to the existing one.
+		if x.IsReservedType(typ.TypeName) && !x.IsPreDefinedType(typ.TypeName) {
 			return nil, errors.Errorf("Can't alter type `%s` as it is prefixed with `dgraph.` "+
 				"which is reserved as the namespace for dgraph's internal types/predicates.",
 				typ.TypeName)
