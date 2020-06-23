@@ -359,14 +359,14 @@ func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 	if err != nil {
 		return err
 	}
+	if len(expandedTypes) == 0 {
+		return nil
+	}
 	return matchRemoteTypes(expandedTypes, localSchema)
 }
 
 func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) error {
 	for typeName, def := range schema.Types {
-		if len(expandedTypes) == 0 {
-			return nil
-		}
 		origTyp := schema.Types[typeName]
 		remoteDir := origTyp.Directives.ForName(remoteDirective)
 		if remoteDir != nil {
