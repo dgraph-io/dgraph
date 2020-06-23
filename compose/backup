@@ -1,0 +1,36 @@
+# Auto-generated with: [/var/folders/m6/mnfrtkcs5m5b5fwxg9zv3yzc0000gn/T/go-build406702073/b001/exe/compose -a 1 -z 1]
+#
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8080:8080
+    - 9080:9080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 0 --my=alpha1:7080 --lru_mb=1024 --zero=zero1:5080
+      --logtostderr -v=2 --idx=1
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5080:5080
+    - 6080:6080
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 0 --idx=1 --my=zero1:5080 --logtostderr -v=2 --bindall
+volumes: {}
