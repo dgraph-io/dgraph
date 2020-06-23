@@ -54,7 +54,7 @@ func registerVaultFlags(flag *pflag.FlagSet) {
 	flag.String(vaultField, "enc_key",
 		"Vault kv store field whose value is the Base64 encoded encryption key.")
 	flag.String(vaultFormat, "base64",
-		"Vault field format. raw|base64")
+		"Vault field format. raw or base64")
 }
 
 // vaultKeyReader implements the KeyReader interface. It reads the key from vault server.
@@ -151,7 +151,7 @@ func (vkr *vaultKeyReader) readKey() (x.SensitiveByteSlice, error) {
 		return nil, errors.Errorf("secret key not found at %v", vkr.field)
 	}
 	kbyte := []byte(kVal.(string))
-	if vkr.field == "base64" {
+	if vkr.format == "base64" {
 		kbyte, err = base64.StdEncoding.DecodeString(kVal.(string))
 		if err != nil {
 			return nil, errors.Errorf("Unable to decode the Base64 Encoded key: err %v", err)
