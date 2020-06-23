@@ -24,6 +24,7 @@ import (
 	"path"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -39,6 +40,12 @@ var zeroService = testutil.SockAddrZero
 var (
 	testDataDir string
 	dg          *dgo.Dgraph
+)
+
+const (
+	alphaName       = "alpha1"
+	alphaExportPath = alphaName + ":/data/" + alphaName + "/export"
+	localExportPath = "./export_copy"
 )
 
 func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
@@ -169,6 +176,58 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
+}
+
+func TestLiveLoadExportedSchema(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	// initiate export
+	params := &testutil.GraphQLParams{
+		Query: `
+			mutation {
+			  export(input: {format: "rdf"}) {
+				response {
+				  code
+				  message
+				}
+			  }
+			}`,
+	}
+	accessJwt, _ := testutil.GrootHttpLogin("http://" + testutil.SockAddrHttp + "/admin")
+	resp := testutil.MakeGQLRequestWithAccessJwt(t, params, accessJwt)
+	require.Nilf(t, resp.Errors, resp.Errors.Error())
+
+	// wait a bit to be sure export is complete
+	time.Sleep(time.Second)
+
+	// copy the export files from docker
+	exportId := copyExportToLocalFs(t)
+
+	// then loading the exported files should work
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", localExportPath + "/" + exportId + "/g01.schema.gz",
+			"--files", localExportPath + "/" + exportId + "/g01.rdf.gz",
+			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+	err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading exported schema exited with error")
+
+	// cleanup copied export files
+	require.NoError(t, os.RemoveAll(localExportPath), "Error removing export copy directory")
+}
+
+func copyExportToLocalFs(t *testing.T) string {
+	require.NoError(t, os.RemoveAll(localExportPath), "Error removing directory")
+	require.NoError(t, testutil.DockerCp(alphaExportPath, localExportPath),
+		"Error copying files from docker container")
+
+	childDirs, err := ioutil.ReadDir(localExportPath)
+	require.NoError(t, err, "Couldn't read local export copy directory")
+	require.True(t, len(childDirs) > 0, "Local export copy directory is empty!!!")
+
+	return childDirs[0].Name()
 }
 
 func TestMain(m *testing.M) {

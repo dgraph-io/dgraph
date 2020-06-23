@@ -172,7 +172,7 @@ spec:
           successThreshold: 1
         readinessProbe:
           httpGet:
-            path: /state
+            path: /health
             port: 6080
           initialDelaySeconds: 15
           periodSeconds: 10
