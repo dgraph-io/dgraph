@@ -64,8 +64,13 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	namespace := r.Header.Get(x.NamespaceHeader)
 
-	num := &pb.Num{Val: uint64(val)}
+	if namespace == "" {
+		namespace = x.DefaultNamespace
+	}
+
+	num := &pb.Num{Val: uint64(val), Namespace: namespace}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

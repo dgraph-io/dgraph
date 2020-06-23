@@ -145,6 +145,8 @@ func TestBasicRestore(t *testing.T) {
 }
 
 func TestMoveTablets(t *testing.T) {
+	t.Skip()
+	// TODO: @balaji
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))

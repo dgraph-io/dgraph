@@ -114,7 +114,8 @@ func (s *Server) movePredicate(predicate string, srcGroup, dstGroup uint32) erro
 
 	// Get a new timestamp, beyond which we are sure that no new txns would be committed for this
 	// predicate. Source Alpha leader must reach this timestamp before streaming the data.
-	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1})
+	_, namespace := x.ParseNamespaceAttr(predicate)
+	ids, err := s.Timestamps(ctx, &pb.Num{Val: 1, Namespace: namespace})
 	if err != nil || ids.StartId == 0 {
 		return errors.Wrapf(err, "while leasing txn timestamp. Id: %+v", ids)
 	}

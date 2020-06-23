@@ -90,7 +90,7 @@ func ProcessBackupRequest(ctx context.Context, req *pb.BackupRequest, forceFull 
 		return err
 	}
 
-	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
+	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true, Namespace: x.DefaultNamespace})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly timestamp for backup: %s", err)
 		return err

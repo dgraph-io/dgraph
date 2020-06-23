@@ -154,7 +154,7 @@ func (o *oracle) MinPendingStartTs() (uint64, string) {
 	o.RLock()
 	defer o.RUnlock()
 	min := uint64(math.MaxUint64)
-	minNamespace := ""
+	minNamespace := x.DefaultNamespace
 
 	for namespace, txn := range o.pendingTxns {
 		for ts := range txn {

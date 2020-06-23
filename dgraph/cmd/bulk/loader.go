@@ -136,7 +136,7 @@ func getWriteTimestamp(zero *grpc.ClientConn) uint64 {
 	client := pb.NewZeroClient(zero)
 	for {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1})
+		ts, err := client.Timestamps(ctx, &pb.Num{Val: 1, Namespace: x.DefaultNamespace})
 		cancel()
 		if err == nil {
 			return ts.GetStartId()
