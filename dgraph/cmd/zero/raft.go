@@ -439,6 +439,31 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
+func (n *node) ProposeNewCID() {
+	// This is a new cluster. So, propose a new ID for the cluster.
+	for {
+		id := uuid.New().String()
+		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
+		if err == nil {
+			glog.Infof("CID set for cluster: %v", id)
+			break
+		}
+		if err == errInvalidProposal {
+			glog.Errorf("invalid proposal error while proposing cluster id")
+			return
+		}
+		glog.Errorf("While proposing CID: %v. Retrying...", err)
+		time.Sleep(3 * time.Second)
+	}
+
+	// Apply trial license only if not already licensed.
+	if n.server.license() == nil {
+		if err := n.proposeTrialLicense(); err != nil {
+			glog.Errorf("while proposing trial license to cluster: %v", err)
+		}
+	}
+}
+
 func (n *node) initAndStartNode() error {
 	_, restart, err := n.PastLife()
 	x.Check(err)
@@ -461,6 +486,20 @@ func (n *node) initAndStartNode() error {
 		}
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
+		lo, _ := n.Store.FirstIndex()
+		hi, _ := n.Store.LastIndex()
+		AllEntries, _ := n.Store.Entries(lo, hi+1, 64<<20)
+
+		CIDPresent := false
+		for _, entry := range AllEntries {
+			if strings.Contains(entry.String(), "$") {
+				CIDPresent = true
+				break
+			}
+		}
+		if !CIDPresent {
+			go n.ProposeNewCID()
+		}
 
 	case len(opts.peer) > 0:
 		p := conn.GetPools().Connect(opts.peer)
@@ -500,32 +539,7 @@ func (n *node) initAndStartNode() error {
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
-
-		go func() {
-			// This is a new cluster. So, propose a new ID for the cluster.
-			for {
-				id := uuid.New().String()
-				err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
-				if err == nil {
-					glog.Infof("CID set for cluster: %v", id)
-					x.WriteCidFile(id)
-					break
-				}
-				if err == errInvalidProposal {
-					glog.Errorf("invalid proposal error while proposing cluster id")
-					return
-				}
-				glog.Errorf("While proposing CID: %v. Retrying...", err)
-				time.Sleep(3 * time.Second)
-			}
-
-			// Apply trial license only if not already licensed.
-			if n.server.license() == nil {
-				if err := n.proposeTrialLicense(); err != nil {
-					glog.Errorf("while proposing trial license to cluster: %v", err)
-				}
-			}
-		}()
+		go n.ProposeNewCID()
 	}
 
 	go n.Run()
