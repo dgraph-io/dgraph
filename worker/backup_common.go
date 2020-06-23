@@ -96,6 +96,8 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 }
 
 type RestoreStatus struct {
+	// status is a string representing the status, one of "UNKNOWN", "IN_PROGRESS", "OK",
+	// or "ERR".
 	status string
 	errors []error
 }
@@ -112,6 +114,10 @@ func newRestoreTracker() *restoreTracker {
 }
 
 func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
+	if rt == nil {
+		return &RestoreStatus{status: "UNKNOWN"}
+	}
+
 	rt.RLock()
 	defer rt.RUnlock()
 
@@ -141,6 +147,10 @@ func (rt *restoreTracker) Add() (string, error) {
 }
 
 func (rt *restoreTracker) Done(restoreId string, errs []error) error {
+	if rt == nil {
+		return errors.Errorf("uninitialized restore operation tracker")
+	}
+
 	if restoreId == "" {
 		return errors.Errorf("restoreId cannot be empty")
 	}
