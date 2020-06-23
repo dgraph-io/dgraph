@@ -62,13 +62,24 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultPath:         input.VaultPath,
 		VaultField:        input.VaultField,
 	}
-	err = worker.ProcessRestoreRequest(context.Background(), &req)
+	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
-		return resolve.EmptyResult(m, err), false
+		return &resolve.Resolved{
+			Data: map[string]interface{}{m.Name(): map[string]interface{}{
+				"code":      "Failure",
+				"message":   err.Error(),
+				"restoreId": restoreId,
+			}},
+			Field: m,
+		}, false
 	}
 
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Restore completed.")},
+		Data: map[string]interface{}{m.Name(): map[string]interface{}{
+			"code":      "Success",
+			"message":   "Restore operation started.",
+			"restoreId": restoreId,
+		}},
 		Field: m,
 	}, true
 }

@@ -31,13 +31,18 @@ import (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string, error) {
+	restoreId, err := rt.Add()
+	if err != nil {
+		return "", errors.Wrapf(err, "cannot assign ID to restore operation")
+	}
+
 	if req == nil {
-		return errors.Errorf("restore request cannot be nil")
+		return restoreId, errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return errors.Wrapf(err, "cannot update membership state before restore")
+		return restoreId, errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -53,21 +58,17 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
-		return errors.Wrapf(err, "failed to verify backup")
+		return restoreId, errors.Wrapf(err, "failed to verify backup")
 	}
 
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+		return restoreId, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 	req.RestoreTs = State.GetTimestamp(false)
 
 	// TODO: prevent partial restores when proposeRestoreOrSend only sends the restore
 	// request to a subset of groups.
 	errCh := make(chan error, len(currentGroups))
-	restoreId, err := rt.Add()
-	if err != nil {
-		return errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
 	for _, gid := range currentGroups {
 		reqCopy := proto.Clone(req).(*pb.RestoreRequest)
 		reqCopy.GroupId = gid
@@ -88,7 +89,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 
 	}(restoreId)
 
-	return nil
+	return restoreId, nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -294,4 +295,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
+}
+
+func ProcessRestoreStatus(ctx context.Context, restoreId string) (*RestoreStatus, error) {
+	return rt.Status(restoreId), nil
 }

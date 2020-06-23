@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -36,14 +37,13 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string) {
+func sendRestoreRequest(t *testing.T, backupId string) string {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
-			response {
-				code
-				message
-			}
+			code
+			message
+			restoreId
 		}
 	}`, backupId)
 
@@ -57,8 +57,42 @@ func sendRestoreRequest(t *testing.T, backupId string) {
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
+	bufString := string(buf)
 	require.NoError(t, err)
-	require.Contains(t, string(buf), "Restore completed.")
+	require.Contains(t, bufString, "Success")
+	jsonMap := make(map[string]map[string]interface{})
+	require.NoError(t, json.Unmarshal([]byte(bufString), &jsonMap))
+	restoreId, _ := jsonMap["data"]["restore"].(map[string]interface{})["restoreId"].(string)
+	require.NotEqual(t, "", restoreId)
+	return restoreId
+}
+
+func waitForRestore(t *testing.T, restoreId string) {
+	query := fmt.Sprintf(`query status() {
+		 restoreStatus(restoreId: "%s") {
+			status
+			errors
+		}
+	}`, restoreId)
+	adminUrl := "http://localhost:8180/admin"
+	params := testutil.GraphQLParams{
+		Query: query,
+	}
+	b, err := json.Marshal(params)
+	require.NoError(t, err)
+
+	for i := 0; i < 15; i++ {
+		resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
+		require.NoError(t, err)
+		buf, err := ioutil.ReadAll(resp.Body)
+		require.NoError(t, err)
+		sbuf := string(buf)
+		if strings.Contains(sbuf, "OK") {
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	require.True(t, false, "restore operation did not complete after max number of retries")
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -163,7 +197,8 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "youthful_rhodes3")
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
+	waitForRestore(t, restoreId)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -178,12 +213,14 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "youthful_rhodes3")
+	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
+	waitForRestore(t, restoreId)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "blissful_hermann1")
+	restoreId = sendRestoreRequest(t, "blissful_hermann1")
+	waitForRestore(t, restoreId)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -210,10 +247,9 @@ func TestInvalidBackupId(t *testing.T) {
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "bad-backup-id",
 			encryptionKeyFile: "/data/keys/enc_key"}) {
-			response {
 				code
 				message
-			}
+				restoreId
 		}
 	}`
 

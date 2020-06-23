@@ -96,15 +96,15 @@ func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 }
 
 type RestoreStatus struct {
-	// status is a string representing the status, one of "UNKNOWN", "IN_PROGRESS", "OK",
+	// Status is a string representing the Status, one of "UNKNOWN", "IN_PROGRESS", "OK",
 	// or "ERR".
-	status string
-	errors []error
+	Status string
+	Errors []error
 }
 
 type restoreTracker struct {
 	sync.RWMutex
-	// status is a map of restore task ID to the status of said task.
+	// Status is a map of restore task ID to the Status of said task.
 	status  map[string]*RestoreStatus
 	counter int
 }
@@ -115,7 +115,7 @@ func newRestoreTracker() *restoreTracker {
 
 func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
 	if rt == nil {
-		return &RestoreStatus{status: "UNKNOWN"}
+		return &RestoreStatus{Status: "UNKNOWN"}
 	}
 
 	rt.RLock()
@@ -125,7 +125,7 @@ func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
 	if ok {
 		return status
 	}
-	return &RestoreStatus{status: "UNKNOWN"}
+	return &RestoreStatus{Status: "UNKNOWN"}
 }
 
 func (rt *restoreTracker) Add() (string, error) {
@@ -142,7 +142,7 @@ func (rt *restoreTracker) Add() (string, error) {
 		return "", errors.Errorf("another restore operation with ID %s already exists", restoreId)
 	}
 
-	rt.status[restoreId] = &RestoreStatus{status: "IN_PROGRESS", errors: make([]error, 0)}
+	rt.status[restoreId] = &RestoreStatus{Status: "IN_PROGRESS", Errors: make([]error, 0)}
 	return restoreId, nil
 }
 
@@ -171,6 +171,6 @@ func (rt *restoreTracker) Done(restoreId string, errs []error) error {
 		validErrs = append(validErrs, err)
 		status = "ERR"
 	}
-	rt.status[restoreId] = &RestoreStatus{status: status, errors: validErrs}
+	rt.status[restoreId] = &RestoreStatus{Status: status, Errors: validErrs}
 	return nil
 }
