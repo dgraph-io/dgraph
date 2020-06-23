@@ -39,8 +39,10 @@ func validateUrl(rawURL string) error {
 		return fmt.Errorf("POST method cannot have query parameters in url: %s", rawURL)
 	}
 	return nil
+}
+
 type IntrospectionRequest struct {
-	Query     string `json:"query"`
+	Query string `json:"query"`
 }
 
 // introspectRemoteSchema introspectes remote schema
@@ -361,30 +363,43 @@ func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 }
 
 func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) error {
-	for typeName, fields := range expandedTypes {
-		localType, ok := schema.Types[typeName]
-		if !ok {
-			return errors.Errorf(
-				"Unable to find remote type %s in the local schema",
-				typeName,
-			)
+	for typeName, def := range schema.Types {
+		if len(expandedTypes) == 0 {
+			return nil
 		}
-		for _, field := range fields {
-			localField := localType.Fields.ForName(field.Name)
-			if localField == nil {
+		origTyp := schema.Types[typeName]
+		remoteDir := origTyp.Directives.ForName(remoteDirective)
+		if remoteDir != nil {
+			remoteType, ok := expandedTypes[def.Name]
+			fields := def.Fields
+			if !ok {
 				return errors.Errorf(
-					"%s field for the remote type %s is not present in the local type %s",
-					field.Name, localType.Name, localType.Name,
-				)
-			}
-			if localField.Type.String() != field.Type.String() {
-				return errors.Errorf(
-					"expected type for the field %s is %s but got %s in type %s",
-					field.Name,
-					field.Type.String(),
-					localField.Type.String(),
+					"Unable to find local type %s in the remote schema",
 					typeName,
 				)
+			}
+			for _, field := range fields {
+				var remoteField *gqlField = nil
+				for _, it := range remoteType {
+					if it.Name == field.Name {
+						remoteField = it
+					}
+				}
+				if remoteField == nil {
+					return errors.Errorf(
+						"%s field for the local type %s is not present in the remote type %s",
+						field.Name, typeName, remoteField.Name,
+					)
+				}
+				if remoteField.Type.String() != field.Type.String() {
+					return errors.Errorf(
+						"expected type for the field %s is %s but got %s in type %s",
+						remoteField.Name,
+						remoteField.Type.String(),
+						field.Type.String(),
+						typeName,
+					)
+				}
 			}
 		}
 	}
