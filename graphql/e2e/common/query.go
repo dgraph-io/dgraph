@@ -1170,7 +1170,25 @@ func queryNestedTypename(t *testing.T) {
 }
 
 func queryOnlyTypename(t *testing.T) {
+
+	var expected, result struct {
+		QueryCountry []*country
+	}
+
 	getCountryParams := &GraphQLParams{
+		Query: `query queryCountry {
+			queryCountry {
+				id
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	err := json.Unmarshal([]byte(gqlResponse.Data), &expected)
+	require.NoError(t, err)
+
+	getCountryParams = &GraphQLParams{
 		Query: `query queryCountry {
 			queryCountry {
 				__typename
@@ -1178,28 +1196,35 @@ func queryOnlyTypename(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-
-	expected := `{
-	"queryCountry": [
-          {
-                "__typename": "Country"
-          },
-          {
-                "__typename": "Country"
-          },
-          {
-                "__typename": "Country"
-          }
-        ]
-}`
-	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, len(result.QueryCountry), len(expected.QueryCountry))
 
 }
 
 func queryNestedOnlyTypename(t *testing.T) {
+
+	var expected, result struct {
+		QueryCountry []*country
+	}
 	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				posts {
+					PostID
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+	err := json.Unmarshal([]byte(gqlResponse.Data), &expected)
+	require.NoError(t, err)
+
+	getCountryParams = &GraphQLParams{
 		Query: `query {
 			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
 				posts {
@@ -1209,24 +1234,12 @@ func queryNestedOnlyTypename(t *testing.T) {
 		}`,
 	}
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
+	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
+	require.NoError(t, err)
+	require.Equal(t, len(result.QueryCountry), len(expected.QueryCountry))
 
-	expected := `{
-	"queryAuthor": [
-	  {
-		"posts": [
-		  {
-			"__typename": "Post"
-		  },
-          {
-			"__typename": "Post"
-		  }
-		]
-	  }
-	]
-}`
-	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 }
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)

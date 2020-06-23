@@ -172,40 +172,32 @@ func intersection(a, b []uint64) []uint64 {
 // then Dgraph would just return 7 posts.  And we'd have no way of knowing if
 // there's only 7 posts, or if there's more that are missing 'text'.
 // But, for GraphQL, we want to know about those missing values.
-func addUID(dgQuery *gql.GraphQuery, Isauth bool) {
-	if len(dgQuery.Children) == 0 && !Isauth {
-		addUIDChild(dgQuery)
-	} else {
-		addUID1(dgQuery)
-	}
-}
 
-func addUID1(dgQuery *gql.GraphQuery) {
+func addUID(dgQuery *gql.GraphQuery, IfAddChild bool) {
+
 	if len(dgQuery.Children) == 0 {
 		return
 	}
+
 	hasUid := false
 	for _, c := range dgQuery.Children {
 		if c.Attr == "uid" {
 			hasUid = true
 		}
-		addUID1(c)
+		addUID(c, IfAddChild)
 	}
-
 	// If uid was already requested by the user then we don't need to add it again.
 	if hasUid {
 		return
 	}
-	addUIDChild(dgQuery)
-
-}
-
-func addUIDChild(dgQuery *gql.GraphQuery) {
-	uidChild := &gql.GraphQuery{
-		Attr:  "uid",
-		Alias: "dgraph.uid",
+	if !IfAddChild {
+		uidChild := &gql.GraphQuery{
+			Attr:  "uid",
+			Alias: "dgraph.uid",
+		}
+		dgQuery.Children = append(dgQuery.Children, uidChild)
 	}
-	dgQuery.Children = append(dgQuery.Children, uidChild)
+
 }
 
 func (authRw *authRewriter) writingAuth() bool {
