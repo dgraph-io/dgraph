@@ -42,7 +42,6 @@ check_command_exists docker-compose
 check_command_exists nvm
 check_command_exists npm
 check_command_exists protoc
-check_command_exists strip
 check_command_exists shasum
 check_command_exists tar
 check_command_exists zip
@@ -66,6 +65,12 @@ TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
 # The initial slash is taken from the repository name dgraph/dgraph:tag
 DTAG=$(echo "$TAG" | tr '/' '-')
+
+
+(
+    cd "$repodir"
+    git rev-parse -q --verify "$TAG" > /dev/null
+) || exit_error "Ref $TAG does not exist"
 
 # DO NOT change the /tmp/build directory, because Dockerfile also picks up binaries from there.
 TMP="/tmp/build"
