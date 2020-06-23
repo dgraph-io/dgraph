@@ -16,6 +16,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -666,24 +667,32 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 }
 
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
+	//fmt.Printf("GQL Query: %+v\n", *gqls[0])
 	predsMap := make(map[string]struct{})
 	for _, gq := range gqls {
+		fmt.Printf("Processing gqs %+v\n", gq)
 		if gq.Func != nil {
+			fmt.Printf("gq processed Func is: %+v\n ", gq.Func)
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 && gq.Attr != "uid" {
+		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" {
+			fmt.Printf("gq processed Attr is: %+v\n ", gq.Attr)
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {
+			fmt.Printf("gq processed Order is: %+v\n ", gq.Order)
 			predsMap[ord.Attr] = struct{}{}
 		}
 		for _, gbAttr := range gq.GroupbyAttrs {
+			fmt.Printf("gq processed GroupBy is: %+v\n ", gq.GroupbyAttrs)
 			predsMap[gbAttr.Attr] = struct{}{}
 		}
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
+			fmt.Printf("gq processed Filter is: %+v\n ", gq.Filter)
 			predsMap[pred] = struct{}{}
 		}
 		for _, childPred := range parsePredsFromQuery(gq.Children) {
+			fmt.Printf("gq processed childPred is: %+v\n ", childPred)
 			predsMap[childPred] = struct{}{}
 		}
 	}
@@ -735,10 +744,21 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		// the user has not turned on the acl feature
 		return nil
 	}
-
+	fmt.Printf("Parsed Request: \n")
+	fmt.Println("Query: ")
+	for i, val := range parsedReq.Query {
+		fmt.Printf("i is %v\n", i)
+		fmt.Printf("query is: %+v\n", val)
+	}
+	fmt.Println("Query Vars: ")
+	for i, val := range parsedReq.QueryVars {
+		fmt.Printf("i is %v\n", i)
+		fmt.Printf("query vars is: %+v\n", val)
+	}
 	var userId string
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
+	fmt.Printf("Preds: %v\n", preds)
 
 	doAuthorizeQuery := func() (map[string]struct{}, error) {
 		userData, err := extractUserAndGroups(ctx)
@@ -773,6 +793,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		return err
 	}
 
+	fmt.Println("blockedPreds are : %+v", reflect.ValueOf(blockedPreds).MapKeys())
 	if len(blockedPreds) != 0 {
 		// For GraphQL requests, we allow filtered access to the ACL predicates.
 		// Filter for user_id and group_id is applied for the currently logged in user.
@@ -789,6 +810,8 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			delete(blockedPreds, "~dgraph.user.group")
 		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+		fmt.Println("What is left if everything is removed?")
+		fmt.Printf("Parsed Query %+v\n", parsedReq.Query)
 	}
 
 	return nil

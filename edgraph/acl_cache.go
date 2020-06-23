@@ -13,6 +13,7 @@
 package edgraph
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -78,7 +79,7 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	aclCachePtr.RLock()
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
-
+	fmt.Printf("Pred Perms inside authorizePredicate: %+v\n", predPerms)
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil

@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -1081,6 +1082,8 @@ func parseRequest(qc *queryContext) error {
 }
 
 func authorizeRequest(ctx context.Context, qc *queryContext) error {
+	fmt.Println("Inside authorizeQuery")
+	//fmt.Printf("")
 	if err := authorizeQuery(ctx, &qc.gqlRes, qc.graphql); err != nil {
 		return err
 	}
