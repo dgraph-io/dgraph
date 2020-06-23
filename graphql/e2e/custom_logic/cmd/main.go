@@ -301,11 +301,11 @@ func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		urlSuffix: "/verifyCustomNameHeaders",
 		body:      "",
 		headers: map[string][]string{
-			"X-App-Token":      {"app-token"},
-			"X-User-Id":        {"123"},
-			"Authorization": {"random-fake-token"},
-			"Accept-Encoding":  nil,
-			"User-Agent":       nil,
+			"X-App-Token":     {"app-token"},
+			"X-User-Id":       {"123"},
+			"Authorization":   {"random-fake-token"},
+			"Accept-Encoding": nil,
+			"User-Agent":      nil,
 		},
 	})
 	if err != nil {

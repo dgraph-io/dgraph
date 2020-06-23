@@ -155,7 +155,7 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 
 func TestBasicRestore(t *testing.T) {
 	disableDraining(t)
-	
+
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
 	require.NoError(t, err)
 	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
