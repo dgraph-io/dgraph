@@ -176,9 +176,17 @@ func intersection(a, b []uint64) []uint64 {
 func addUID(dgQuery *gql.GraphQuery, IfAddChild bool) {
 
 	if len(dgQuery.Children) == 0 {
-		return
+		if IfAddChild {
+			return
+		} else {
+			uidChild := &gql.GraphQuery{
+				Attr:  "uid",
+				Alias: "dgraph.uid",
+			}
+			dgQuery.Children = append(dgQuery.Children, uidChild)
+			return
+		}
 	}
-
 	hasUid := false
 	for _, c := range dgQuery.Children {
 		if c.Attr == "uid" {
@@ -190,13 +198,12 @@ func addUID(dgQuery *gql.GraphQuery, IfAddChild bool) {
 	if hasUid {
 		return
 	}
-	if !IfAddChild {
-		uidChild := &gql.GraphQuery{
-			Attr:  "uid",
-			Alias: "dgraph.uid",
-		}
-		dgQuery.Children = append(dgQuery.Children, uidChild)
+
+	uidChild := &gql.GraphQuery{
+		Attr:  "uid",
+		Alias: "dgraph.uid",
 	}
+	dgQuery.Children = append(dgQuery.Children, uidChild)
 
 }
 
@@ -327,6 +334,7 @@ func rewriteAsGet(
 		}
 	}
 	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
+
 	addUID(dgQuery, field.Name() == "numUids" || auth.writingAuth())
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
@@ -376,7 +384,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
 
-	addUID(dgQuery, field.Name() == "numUids" || authRw.writingAuth())
+	addUID(dgQuery, field.Name() == "numUids" || (authRw != nil && authRw.writingAuth()))
 
 	addCascadeDirective(dgQuery, field)
 
