@@ -152,8 +152,14 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal the auth variables for a particular namespace.
-	if authVariables, ok := result[metainfo.Namespace]; ok {
-		c.AuthVariables, _ = authVariables.(map[string]interface{})
+	if authValue, ok := result[metainfo.Namespace]; ok {
+		if authJson, ok := authValue.(string); ok {
+			if err := json.Unmarshal([]byte(authJson), &c.AuthVariables); err != nil {
+				return err
+			}
+		} else {
+			c.AuthVariables, _ = authValue.(map[string]interface{})
+		}
 	}
 	return nil
 }
