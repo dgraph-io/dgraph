@@ -142,8 +142,7 @@ func (vkr *vaultKeyReader) readKey() (x.SensitiveByteSlice, error) {
 	var m map[string]interface{}
 	m, ok := secret.Data["data"].(map[string]interface{})
 	if !ok {
-		glog.Infof("kv store read response from vault is bad. Trying kv v1.")
-		// try kv v1
+		glog.Infof("Unable to extract key from kv v2 response. Trying kv v1.")
 		m = secret.Data
 	}
 	kVal, ok := m[vkr.field]
