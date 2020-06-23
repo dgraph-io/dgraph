@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -85,8 +86,10 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string,
 				errs = append(errs, err)
 			}
 		}
-		rt.Done(restoreId, errs)
-
+		if err := rt.Done(restoreId, errs); err != nil {
+			glog.Warningf("Could not mark restore operation with ID %s as done. Error: %s",
+				restoreId, err)
+		}
 	}(restoreId)
 
 	return restoreId, nil
