@@ -19,9 +19,11 @@
 package enc
 
 import (
+	"encoding/base64"
 	"io/ioutil"
 
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 	"github.com/hashicorp/vault/api"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -46,10 +48,10 @@ func registerVaultFlags(flag *pflag.FlagSet) {
 		"File containing Vault role-id used for approle auth.")
 	flag.String(vaultSecretIDFile, "",
 		"File containing Vault secret-id used for approle auth.")
-	flag.String(vaultPath, "dgraph",
-		"Vault kv store path.")
+	flag.String(vaultPath, "secret/data/dgraph",
+		"Vault kv store path. e.g. secret/data/dgraph for kv-v2, kv/dgraph for kv-v1.")
 	flag.String(vaultField, "enc_key",
-		"Vault kv store field whose value is the encryption key.")
+		"Vault kv store field whose value is the Base64 encoded encryption key.")
 }
 
 // vaultKeyReader implements the KeyReader interface. It reads the key from vault server.
@@ -120,25 +122,31 @@ func (vkr *vaultKeyReader) readKey() (x.SensitiveByteSlice, error) {
 	}
 	client.SetToken(resp.Auth.ClientToken)
 
-	// Read from KV store
-	secret, err := client.Logical().Read("secret/data/" + vkr.path)
+	// Read from KV store. The given path must be v1 or v2 format. We use it as is.
+	secret, err := client.Logical().Read(vkr.path)
 	if err != nil || secret == nil {
 		return nil, errors.Errorf("error or nil secret on reading key at %v: "+
 			"err %v", vkr.path, err)
 	}
 
 	// Parse key from response
+	var m map[string]interface{}
 	m, ok := secret.Data["data"].(map[string]interface{})
 	if !ok {
-		return nil, errors.Errorf("kv store read response from vault is bad")
+		glog.Infof("kv store read response from vault is bad. Trying kv v1.")
+		// try kv v1
+		m = secret.Data
 	}
 	kVal, ok := m[vkr.field]
 	if !ok {
 		return nil, errors.Errorf("secret key not found at %v", vkr.field)
 	}
-	kbyte := []byte(kVal.(string))
-
-	// Validate key length suitable for AES
+	// The field is assumed to be base64 encoded. Decode it here.
+	kbyte, err := base64.StdEncoding.DecodeString(kVal.(string))
+	if err != nil {
+		return nil, errors.Errorf("Unable to decode the Base64 Encoded key:", err)
+	}
+	// Validate key length suitable for AES.
 	klen := len(kbyte)
 	if klen != 16 && klen != 32 && klen != 64 {
 		return nil, errors.Errorf("bad key length %v from vault", klen)
