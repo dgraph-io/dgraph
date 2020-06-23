@@ -512,13 +512,13 @@ type Review @auth() {
 }
 
 type Student @dgraph(type: "is7sowSm")
-@auth(query: {rule: """
+@auth(query:  { and : [ {rule: """
 query($USER: String!) {
     queryStudent(filter: {email: { eq: $USER}}) {
         __typename
     }
 }
-"""}) {
+"""},{ rule: "{$ROLE: { eq: \"ADMIN\" }}"}]}) {
     id: ID!
     email: String! @dgraph(pred: "IOw80vnV") @search(by: [hash])
 }

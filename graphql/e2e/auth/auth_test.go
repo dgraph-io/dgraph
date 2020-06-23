@@ -113,6 +113,11 @@ type Project struct {
 	Columns []*Column `json:"columns,omitempty"`
 }
 
+type Student struct {
+	Id    string `json:"id,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
 type TestCase struct {
 	user      string
 	role      string
@@ -147,52 +152,84 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	return h
 }
 
-func deleteStudentByEmail(t *testing.T, email string) {
+func (s Student) deleteByEmail(t *testing.T) {
 	getParams := &common.GraphQLParams{
 		Query: `
-			mutation {
-  				deleteStudent (filter: { email : { eq: "` + email + `"}}) {
-    				numUids
-  				}
+			mutation delStudent ($filter : StudentFilter!){
+			  	deleteStudent (filter: $filter) {
+					numUids
+			  	}
 			}
 		`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"email": map[string]interface{}{"eq": s.Email},
+		}},
 	}
 	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 }
 
-func TestAuthWithDgraphDirective(t *testing.T) {
-	emails := []string{"user1@gmail.com", "user2@gmail.com"}
+func (s Student) add(t *testing.T) {
 	mutation := &common.GraphQLParams{
 		Query: `
-		mutation {
-			addStudent(input : [{email : "` + emails[0] + `"}, {email : "` + emails[1] + `"}]) {
+		mutation addStudent($student : AddStudentInput!) {
+			addStudent(input: [$student]) {
 				numUids
 			}
 		}`,
+		Variables: map[string]interface{}{"student": s},
 	}
-	result := `{"addStudent":{"numUids": 2}}`
+	result := `{"addStudent":{"numUids": 1}}`
 	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
 	common.RequireNoGQLErrors(t, gqlResponse)
 	require.JSONEq(t, result, string(gqlResponse.Data))
+}
 
-	queryParams := &common.GraphQLParams{
-		Headers: getJWT(t, emails[0], ""),
-		Query: `
-		query {
-			queryStudent {
-				email
-			}
-		}`,
+func TestAuthWithDgraphDirective(t *testing.T) {
+	students := []Student{
+		{
+			Email: "user1@gmail.com",
+		},
+		{
+			Email: "user2@gmail.com",
+		},
 	}
-	result = `{"queryStudent":[{"email":"` + emails[0] + `"}]}`
-	gqlResponse = queryParams.ExecuteAsPost(t, graphqlURL)
-	common.RequireNoGQLErrors(t, gqlResponse)
-	require.JSONEq(t, result, string(gqlResponse.Data))
+	for _, student := range students {
+		student.add(t)
+	}
+
+	testCases := []TestCase{{
+		user:   students[0].Email,
+		role:   "ADMIN",
+		result: `{"queryStudent":[{"email":"` + students[0].Email + `"}]}`,
+	}, {
+		user:   students[0].Email,
+		role:   "USER",
+		result: `{"queryStudent" : []}`,
+	}}
+
+	queryStudent := `
+	query {
+		queryStudent {
+			email
+		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+"_"+tcase.user, func(t *testing.T) {
+			queryParams := &common.GraphQLParams{
+				Query:   queryStudent,
+				Headers: getJWT(t, tcase.user, tcase.role),
+			}
+			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
 
 	// Clean up
-	for _, email := range emails {
-		deleteStudentByEmail(t, email)
+	for _, student := range students {
+		student.deleteByEmail(t)
 	}
 }
 
