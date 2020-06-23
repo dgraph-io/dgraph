@@ -1131,6 +1131,44 @@ func queryTypename(t *testing.T) {
 
 }
 
+func queryNestedTypename(t *testing.T) {
+	getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
+				name
+				dob
+				posts {
+					title
+					__typename
+				}
+			}
+		}`,
+	}
+
+	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+	RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryAuthor": [
+	  {
+		"name": "Ann Author",
+		"dob": "2000-01-01T00:00:00Z",
+		"posts": [
+		  {
+			"title": "Introducing GraphQL in Dgraph",
+			"__typename": "Post"
+		  },
+		  {
+			"title": "GraphQL doco",
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+}
+
 func queryOnlyTypename(t *testing.T) {
 	getCountryParams := &GraphQLParams{
 		Query: `query queryCountry {
@@ -1190,44 +1228,6 @@ func queryNestedOnlyTypename(t *testing.T) {
 }`
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 }
-func queryNestedTypename(t *testing.T) {
-	getCountryParams := &GraphQLParams{
-		Query: `query {
-			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
-				name
-				dob
-				posts {
-					title
-					__typename
-				}
-			}
-		}`,
-	}
-
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expected := `{
-	"queryAuthor": [
-	  {
-		"name": "Ann Author",
-		"dob": "2000-01-01T00:00:00Z",
-		"posts": [
-		  {
-			"title": "Introducing GraphQL in Dgraph",
-			"__typename": "Post"
-		  },
-		  {
-			"title": "GraphQL doco",
-			"__typename": "Post"
-		  }
-		]
-	  }
-	]
-}`
-	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
-}
-
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
