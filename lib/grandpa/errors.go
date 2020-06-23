@@ -37,6 +37,9 @@ var ErrInvalidSignature = errors.New("signature is not valid")
 // ErrSetIDMismatch is returned when trying to validate a vote message with an invalid voter set ID
 var ErrSetIDMismatch = errors.New("set IDs do not match")
 
+// ErrRoundMismatch is returned when trying to validate a vote message that isn't for the current round
+var ErrRoundMismatch = errors.New("rounds do not match")
+
 // ErrEquivocation is returned when trying to validate a vote for that is equivocatory
 var ErrEquivocation = errors.New("vote is equivocatory")
 

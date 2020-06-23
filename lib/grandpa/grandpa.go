@@ -103,7 +103,6 @@ func NewService(cfg *Config) (*Service, error) {
 		preVotedBlock:      make(map[uint64]*Vote),
 		bestFinalCandidate: make(map[uint64]*Vote),
 		justification:      make(map[uint64][]*Justification),
-		tracker:            newTracker(cfg.BlockState, in),
 		head:               head,
 		in:                 in,
 		out:                make(chan FinalityMessage, 128),
@@ -119,11 +118,10 @@ func (s *Service) Start() error {
 	go func() {
 		err := s.initiate()
 		if err != nil {
-			log.Error("[grandpa] failed to initiate")
+			log.Error("[grandpa] failed to initiate", "error", err)
 		}
 	}()
 
-	s.tracker.start()
 	return nil
 }
 
@@ -154,6 +152,9 @@ func (s *Service) initiate() error {
 	}
 
 	s.state.round++
+	if s.tracker != nil {
+		s.tracker.stop()
+	}
 
 	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
 	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
@@ -162,6 +163,9 @@ func (s *Service) initiate() error {
 	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.justification = make(map[uint64][]*Justification)
+	s.tracker = newTracker(s.blockState, s.in)
+	s.tracker.start()
+	log.Trace("[grandpa] started message tracker")
 
 	for {
 		err := s.playGrandpaRound()
@@ -264,12 +268,24 @@ func (s *Service) playGrandpaRound() error {
 	log.Debug("sending pre-commit message...", "vote", pc, "votes", s.precommits)
 	s.mapLock.Unlock()
 
-	go func() {
-		err = s.sendMessage(pc, precommit)
-		if err != nil {
-			log.Error("[grandpa] could not send precommit message", "error", err)
+	finalized := false
+
+	// continue to send precommit messages until round is done
+	go func(finalized *bool) {
+		for {
+			if *finalized {
+				return
+			}
+
+			err = s.sendMessage(pc, precommit)
+			if err != nil {
+				log.Error("[grandpa] could not send precommit message", "error", err)
+			}
+
+			time.Sleep(time.Second)
 		}
-	}()
+
+	}(&finalized)
 
 	go func() {
 		// receive messages until current round is completable and previous round is finalizable
@@ -285,11 +301,11 @@ func (s *Service) playGrandpaRound() error {
 				return false
 			}
 
-			// this shouldn't happen as long as playGrandpaRound is called through initiate
 			s.mapLock.Lock()
 			prevBfc := s.bestFinalCandidate[s.state.round-1]
 			s.mapLock.Unlock()
 
+			// this shouldn't happen as long as playGrandpaRound is called through initiate
 			if prevBfc == nil {
 				return false
 			}
@@ -304,9 +320,11 @@ func (s *Service) playGrandpaRound() error {
 
 	err = s.attemptToFinalize()
 	if err != nil {
+		log.Error("[grandpa] failed to finalize", "error", err)
 		return err
 	}
 
+	finalized = true
 	return nil
 }
 
@@ -329,7 +347,7 @@ func (s *Service) attemptToFinalize() error {
 		}
 
 		// if we haven't received a finalization message for this block yet, broadcast a finalization message
-		log.Debug("[grandpa] finalized block!!!", "hash", s.head)
+		log.Debug("[grandpa] finalized block!!!", "round", s.state.round, "hash", s.head.Hash())
 		msg := s.newFinalizationMessage(s.head, s.state.round)
 
 		// TODO: safety
@@ -525,6 +543,17 @@ func (s *Service) getBestFinalCandidate() (*Vote, error) {
 				hash:   h,
 				number: n,
 			}
+		}
+	}
+
+	// TODO: this returns the first block in the map of blocks w/ >=2/3 precommits, should
+	// the prevoted block be returned instead?
+	if [32]byte(bfc.hash) == [32]byte{} {
+		for h, n := range blocks {
+			return &Vote{
+				hash:   h,
+				number: n,
+			}, nil
 		}
 	}
 

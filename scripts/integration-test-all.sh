@@ -84,7 +84,7 @@ if [[ -z $TEST || $TEST == "rpc" ]]; then
 
   for i in $(seq 1 "$TEST_QTD"); do
     echo "going to test gossamer node $(($RPC_PORT + $i))..."
-    GOSSAMER_INTEGRATION_TEST_MODE=$MODE NETWORK_SIZE=$QTD HOSTNAME=$HOSTNAME PORT=$(($RPC_PORT + $i)) go test ./tests/rpc/... -timeout=60s -v -count=1
+    MODE=$MODE NETWORK_SIZE=$QTD HOSTNAME=$HOSTNAME PORT=$(($RPC_PORT + $i)) go test ./tests/rpc/... -timeout=60s -v -count=1
 
     RPC_FAIL=$?
   done

@@ -1,6 +1,7 @@
 package grandpa
 
 import (
+	"fmt"
 	"io"
 
 	"github.com/ChainSafe/gossamer/dot/core"
@@ -75,6 +76,11 @@ type SignedMessage struct {
 	Number      uint64
 	Signature   [64]byte // ed25519.SignatureLength
 	AuthorityID ed25519.PublicKeyBytes
+}
+
+// String returns the SignedMessage as a string
+func (m *SignedMessage) String() string {
+	return fmt.Sprintf("hash=%s number=%d authorityID=0x%x", m.Hash, m.Number, m.AuthorityID)
 }
 
 // VoteMessage represents a network-level vote message

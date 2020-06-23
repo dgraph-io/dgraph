@@ -43,7 +43,7 @@ import (
 
 var (
 	numNodes   = 3
-	maxRetries = 8
+	maxRetries = 24
 )
 
 // compareChainHeads calls getChainHead for each node in the array
@@ -64,13 +64,35 @@ func compareChainHeads(t *testing.T, nodes []*utils.Node) (map[common.Hash][]str
 	return hashes, err
 }
 
-// compareFinalizedHeads calls getFinalizedHead for each node in the array
+// compareFinalizedHeads calls getFinalizedHeadByRound for each node in the array
 // it returns a map of finalizedHead hashes to node key names, and an error if the hashes don't all match
 func compareFinalizedHeads(t *testing.T, nodes []*utils.Node) (map[common.Hash][]string, error) {
 	hashes := make(map[common.Hash][]string)
 	for _, node := range nodes {
 		hash := utils.GetFinalizedHead(t, node)
 		log.Info("got finalized head from node", "hash", hash, "node", node.Key)
+		hashes[hash] = append(hashes[hash], node.Key)
+	}
+
+	var err error
+	if len(hashes) != 1 {
+		err = errors.New("node finalized head hashes don't match")
+	}
+
+	return hashes, err
+}
+
+// compareFinalizedHeadsByRound calls getFinalizedHeadByRound for each node in the array
+// it returns a map of finalizedHead hashes to node key names, and an error if the hashes don't all match
+func compareFinalizedHeadsByRound(t *testing.T, nodes []*utils.Node, round uint64) (map[common.Hash][]string, error) {
+	hashes := make(map[common.Hash][]string)
+	for _, node := range nodes {
+		hash, err := utils.GetFinalizedHeadByRound(t, node, round)
+		if err != nil {
+			continue
+		}
+
+		log.Info("got finalized head from node", "hash", hash, "node", node.Key, "round", round)
 		hashes[hash] = append(hashes[hash], node.Key)
 	}
 
@@ -98,14 +120,14 @@ func compareChainHeadsWithRetry(t *testing.T, nodes []*utils.Node) {
 	require.NoError(t, err, hashes)
 }
 
-// compareFinalizedHeadsWithRetry calls compareFinalizedHeads, retrying up to maxRetries times if it errors.
+// compareFinalizedHeadsWithRetry calls compareFinalizedHeadsByRound, retrying up to maxRetries times if it errors.
 // it returns the finalized hash if it succeeds
-func compareFinalizedHeadsWithRetry(t *testing.T, nodes []*utils.Node) common.Hash {
+func compareFinalizedHeadsWithRetry(t *testing.T, nodes []*utils.Node, round uint64) common.Hash {
 	var hashes map[common.Hash][]string
 	var err error
 
 	for i := 0; i < maxRetries; i++ {
-		hashes, err = compareFinalizedHeads(t, nodes)
+		hashes, err = compareFinalizedHeadsByRound(t, nodes, round)
 		if err == nil {
 			break
 		}
@@ -122,7 +144,7 @@ func compareFinalizedHeadsWithRetry(t *testing.T, nodes []*utils.Node) common.Ha
 }
 
 func TestMain(m *testing.M) {
-	if utils.GOSSAMER_INTEGRATION_TEST_MODE != "stress" {
+	if utils.MODE != "stress" {
 		_, _ = fmt.Fprintln(os.Stdout, "Going to skip stress test")
 		return
 	}
@@ -138,8 +160,7 @@ func TestMain(m *testing.M) {
 	}
 
 	if utils.HOSTNAME == "" {
-		_, _ = fmt.Fprintln(os.Stdout, "HOSTNAME is not set, skipping stress test")
-		return
+		utils.HOSTNAME = "localhost"
 	}
 
 	// Start all tests
@@ -342,10 +363,10 @@ func TestStress_Grandpa_OneAuthority(t *testing.T) {
 	time.Sleep(time.Second * 10)
 
 	compareChainHeadsWithRetry(t, nodes)
-	prev := compareFinalizedHeadsWithRetry(t, nodes)
+	prev, _ := compareFinalizedHeads(t, nodes)
 
 	time.Sleep(time.Second * 10)
-	curr := compareFinalizedHeadsWithRetry(t, nodes)
+	curr, _ := compareFinalizedHeads(t, nodes)
 	require.NotEqual(t, prev, curr)
 
 	errList := utils.TearDown(t, nodes)
@@ -353,19 +374,17 @@ func TestStress_Grandpa_OneAuthority(t *testing.T) {
 }
 
 func TestStress_Grandpa_ThreeAuthorities(t *testing.T) {
-	t.Skip() // this is blocked by #923
 	numNodes = 3
 	nodes, err := utils.InitializeAndStartNodes(t, numNodes, utils.GenesisThreeAuths)
 	require.NoError(t, err)
 
 	time.Sleep(time.Second * 10)
+	fin := compareFinalizedHeadsWithRetry(t, nodes, 1)
+	t.Logf("finalized hash in round 1: %s", fin)
 
-	compareChainHeadsWithRetry(t, nodes)
-	prev := compareFinalizedHeadsWithRetry(t, nodes)
-
-	time.Sleep(time.Second * 20)
-	curr := compareFinalizedHeadsWithRetry(t, nodes)
-	require.NotEqual(t, prev, curr)
+	time.Sleep(time.Second * 10)
+	fin = compareFinalizedHeadsWithRetry(t, nodes, 2)
+	t.Logf("finalized hash in round 2: %s", fin)
 
 	errList := utils.TearDown(t, nodes)
 	require.Len(t, errList, 0)

@@ -30,11 +30,10 @@ import (
 )
 
 func TestStableNetworkRPC(t *testing.T) {
-	if utils.GOSSAMER_INTEGRATION_TEST_MODE != "stable" {
+	if utils.MODE != "stable" {
 		t.Skip("Integration tests are disabled, going to skip.")
 	}
 	log.Info("Going to run NetworkAPI tests",
-		"GOSSAMER_INTEGRATION_TEST_MODE", utils.GOSSAMER_INTEGRATION_TEST_MODE,
 		"HOSTNAME", utils.HOSTNAME,
 		"PORT", utils.PORT,
 	)

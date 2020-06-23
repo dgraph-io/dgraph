@@ -19,6 +19,7 @@ package utils
 import (
 	"fmt"
 	"math/big"
+	"strconv"
 	"testing"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
@@ -60,6 +61,21 @@ func GetFinalizedHead(t *testing.T, node *Node) common.Hash {
 	err = DecodeRPC(t, respBody, &hash)
 	require.NoError(t, err)
 	return common.MustHexToHash(hash)
+}
+
+// GetFinalizedHeadByRound calls the endpoint chain_getFinalizedHeadByRound to get the finalized head at a given round
+func GetFinalizedHeadByRound(t *testing.T, node *Node, round uint64) (common.Hash, error) {
+	p := strconv.Itoa(int(round))
+	respBody, err := PostRPC(ChainGetFinalizedHeadByRound, NewEndpoint(node.RPCPort), "["+p+"]")
+	require.NoError(t, err)
+
+	var hash string
+	err = DecodeRPC(t, respBody, &hash)
+	if err != nil {
+		return common.Hash{}, err
+	}
+
+	return common.MustHexToHash(hash), nil
 }
 
 // GetBlock calls the endpoint chain_getBlock

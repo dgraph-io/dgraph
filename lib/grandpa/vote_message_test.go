@@ -296,6 +296,7 @@ func TestValidateMessage_BlockDoesNotExist(t *testing.T) {
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
 	state.AddBlocksToState(t, st.Block, 3)
+	gs.tracker = newTracker(st.Block, gs.in)
 
 	fake := &types.Header{
 		Number: big.NewInt(77),

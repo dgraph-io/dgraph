@@ -43,7 +43,7 @@ var checks = []checkDBCall{
 }
 
 func TestMain(m *testing.M) {
-	if utils.GOSSAMER_INTEGRATION_TEST_MODE != "sync" {
+	if utils.MODE != "sync" {
 		_, _ = fmt.Fprintln(os.Stdout, "Going to skip stress test")
 		return
 	}

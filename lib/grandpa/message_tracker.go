@@ -29,6 +29,7 @@ type tracker struct {
 	mapLock  *sync.Mutex
 	in       <-chan common.Hash
 	out      chan<- FinalityMessage // send a VoteMessage back to grandpa. corresponds to grandpa's in channel
+	stopped  bool
 }
 
 func newTracker(bs BlockState, out chan<- FinalityMessage) *tracker {
@@ -40,15 +41,18 @@ func newTracker(bs BlockState, out chan<- FinalityMessage) *tracker {
 		mapLock:  &sync.Mutex{},
 		in:       in,
 		out:      out,
+		stopped:  true,
 	}
 }
 
 func (t *tracker) start() {
+	t.stopped = false
 	go t.handleBlocks()
 }
 
 func (t *tracker) stop() {
 	// close channel
+	t.stopped = true
 }
 
 func (t *tracker) add(v *VoteMessage) {
@@ -59,6 +63,10 @@ func (t *tracker) add(v *VoteMessage) {
 
 func (t *tracker) handleBlocks() {
 	for h := range t.in {
+		if t.stopped {
+			return
+		}
+
 		t.mapLock.Lock()
 
 		if t.messages[h] != nil {

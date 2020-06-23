@@ -29,8 +29,8 @@ import (
 )
 
 func TestChainRPC(t *testing.T) {
-	if utils.GOSSAMER_INTEGRATION_TEST_MODE != rpcSuite {
-		_, _ = fmt.Fprintln(os.Stdout, "Going to skip RPC suite tests", utils.GOSSAMER_INTEGRATION_TEST_MODE)
+	if utils.MODE != rpcSuite {
+		_, _ = fmt.Fprintln(os.Stdout, "Going to skip RPC suite tests")
 		return
 	}
 

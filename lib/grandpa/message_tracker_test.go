@@ -35,6 +35,8 @@ func TestMessageTracker_ValidateMessage(t *testing.T) {
 
 	gs, _, _, _ := setupGrandpa(t, kr.Bob)
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
+	gs.tracker = newTracker(gs.blockState, gs.in)
+	gs.tracker.start()
 
 	fake := &types.Header{
 		Number: big.NewInt(77),
@@ -54,6 +56,7 @@ func TestMessageTracker_SendMessage(t *testing.T) {
 
 	gs, in, _, _ := setupGrandpa(t, kr.Bob)
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
+	gs.tracker = newTracker(gs.blockState, gs.in)
 	gs.tracker.start()
 
 	parent, err := gs.blockState.BestBlockHeader()
@@ -106,7 +109,7 @@ func TestMessageTracker_ProcessMessage(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = gs.validateMessage(msg)
-	require.Equal(t, err, ErrBlockDoesNotExist)
+	require.Equal(t, ErrBlockDoesNotExist, err)
 	require.Equal(t, []*VoteMessage{msg}, gs.tracker.messages[next.Hash()])
 
 	err = gs.blockState.(*state.BlockState).AddBlock(&types.Block{
@@ -120,5 +123,5 @@ func TestMessageTracker_ProcessMessage(t *testing.T) {
 		hash:   msg.Message.Hash,
 		number: msg.Message.Number,
 	}
-	require.Equal(t, expected, gs.prevotes[kr.Alice.Public().(*ed25519.PublicKey).AsBytes()])
+	require.Equal(t, expected, gs.prevotes[kr.Alice.Public().(*ed25519.PublicKey).AsBytes()], gs.tracker.messages)
 }
