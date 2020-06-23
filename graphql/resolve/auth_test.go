@@ -367,29 +367,6 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 	}
 }
 
-func TestAuthDelete(t *testing.T) {
-	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
-	require.NoError(t, err, "Unable to read schema file")
-
-	result, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "../e2e/auth/sample_public_key.pem")
-	require.NoError(t, err)
-	strSchema := string(result)
-
-	authMeta, err := authorization.Parse(strSchema)
-	metaInfo := &testutil.AuthMeta{
-		PublicKey: authMeta.PublicKey,
-		Namespace: authMeta.Namespace,
-		Algo:      authMeta.Algo,
-	}
-
-	require.NoError(t, err)
-
-	t.Run("Delete Query Rewriting ", func(t *testing.T) {
-		deleteQueryRewriting(t, strSchema, metaInfo)
-	})
-
-}
-
 // Tests showing that the query rewriter produces the expected Dgraph queries
 // for delete when it also needs to write in auth - this doesn't extend to other nodes
 // it only ever applies at the top level because delete only deletes the nodes
@@ -419,9 +396,6 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
-			if tcase.Name != "Delete with auth" {
-				return
-			}
 			// -- Arrange --
 			var vars map[string]interface{}
 			if tcase.Variables != "" {

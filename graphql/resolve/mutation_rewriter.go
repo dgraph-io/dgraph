@@ -38,7 +38,6 @@ const (
 	MutationQueryVar        = "x"
 	MutationQueryVarUID     = "uid(x)"
 	updateMutationCondition = `gt(len(x), 0)`
-	QueryDelete             = "querydelete"
 )
 
 type AddRewriter struct {
@@ -658,6 +657,31 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
+func addUidFilterToQuery(q *gql.GraphQuery, filter *gql.FilterTree, queryName string) {
+	if q.Attr != "" {
+		addToFilterTree(q, filter)
+		return
+	}
+
+	var query *gql.GraphQuery
+	for _, c := range q.Children {
+		if c.Attr == queryName {
+			query = c
+			break
+		}
+		for _, cq := range c.Children {
+			if cq.Attr == queryName {
+				query = cq
+				break
+			}
+		}
+	}
+
+	if query != nil {
+		addToFilterTree(query, filter)
+	}
+}
+
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation) ([]*UpsertMutation, error) {
@@ -727,12 +751,22 @@ func (drw *deleteRewriter) Rewrite(
 
 	b, err := json.Marshal(deletes)
 
-	queryDel := rewriteAsQuery(m.QueryField(), authRw)
-	queryDel.Func = &gql.Function{
-		Name: "uid",
-		Args: []gql.Arg{{Value: MutationQueryVar}},
+	var finalQry *gql.GraphQuery
+	if queryField := m.QueryField(); queryField != nil {
+		queryDel := rewriteAsQuery(queryField, authRw)
+		uidFilter := &gql.FilterTree{
+			Func: &gql.Function{
+				Name: "uid",
+				Args: []gql.Arg{{Value: MutationQueryVar}},
+			},
+		}
+
+		addUidFilterToQuery(queryDel, uidFilter, queryField.Name())
+		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
+	} else {
+		finalQry = dgQry
 	}
-	finalQry := &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
+
 	upsert := &UpsertMutation{
 		Query:     finalQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},

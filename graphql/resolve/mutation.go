@@ -283,6 +283,8 @@ func (mr *dgraphResolver) rewriteAndExecute(
 	// merge the extensions we got from Mutate and Query into extM
 	extM.Merge(extQ)
 
+	numUids := getNumUids(mutation, mutResp.Uids, result)
+
 	var qryResult []byte
 	if mutation.MutationType() == schema.DeleteMutation {
 		qryResult = mutResp.GetJson()
@@ -290,7 +292,6 @@ func (mr *dgraphResolver) rewriteAndExecute(
 		qryResult = qryResp.GetJson()
 	}
 
-	numUids := getNumUids(mutation, mutResp.Uids, result)
 	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResult, errs)
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{

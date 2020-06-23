@@ -4,9 +4,48 @@
     mutation deleteAuthor($filter: AuthorFilter!) {
       deleteAuthor(filter: $filter) {
         msg
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
+        uid
+        Post2 as Author.posts
+      }
+    }
+
+-
+  name: "Delete with deep query in result"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+        numUids
         author {
           id
           name
+          country {
+            name
+            states {
+              code
+              name
+              capital
+            }
+          }
         }
       }
     }
@@ -30,7 +69,20 @@
         uid
         Post2 as Author.posts
       }
-      msg(func: uid(x))
+      author(func: type(Author)) @filter(uid(x)) {
+        id : uid
+        name : Author.name
+        country : Author.country {
+          name : Country.name
+          states : Country.states {
+            code : State.code
+            name : State.name
+            capital : State.capital
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
     }
 
 -

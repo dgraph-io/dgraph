@@ -51,6 +51,7 @@ const (
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
+	Msg                 = "msg"
 
 	Typename = "__typename"
 

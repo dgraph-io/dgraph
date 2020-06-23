@@ -1192,7 +1192,7 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which
@@ -1203,7 +1203,7 @@ func (m *mutation) QueryField() Field {
 		}
 		return f
 	}
-	return m.SelectionSet()[0]
+	return nil
 }
 
 func (m *mutation) NumUidsField() Field {
