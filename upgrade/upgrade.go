@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -41,11 +43,16 @@ var (
 type versionComparisonResult uint8
 
 const (
-	alpha    = "alpha"
-	user     = "user"
-	password = "password"
-	from     = "from"
-	to       = "to"
+	acl       = "acl"
+	alpha     = "alpha"
+	user      = "user"
+	password  = "password"
+	deleteOld = "deleteOld"
+	from      = "from"
+	to        = "to"
+
+	versionFmtBeforeCalVer = "v%d.%d.%d"
+	versionFmtAfterCalVer  = "v%d.%02d.%d"
 
 	less versionComparisonResult = iota
 	equal
@@ -64,7 +71,13 @@ func (v *version) String() string {
 	if v == nil {
 		v = zeroVersion
 	}
-	return fmt.Sprintf("v%d.%d.%d", v.major, v.minor, v.patch)
+
+	versionFmt := versionFmtAfterCalVer
+	if v.major < 20 {
+		versionFmt = versionFmtBeforeCalVer
+	}
+
+	return fmt.Sprintf(versionFmt, v.major, v.minor, v.patch)
 }
 
 // Compare compares v with other version, and tells if v is equal, less, or greater than other.
@@ -104,6 +117,12 @@ type change struct {
 	// For a version less than this value, this change is not applicable
 	minFromVersion *version
 	applyFunc      func() error // function which applies the change
+	// whether we should skip applying this change. This is useful in cases like huge data
+	// migrations when we want the user to apply the change manually, instead of automating it.
+	// This way, while upgrading user gets notified that they need to do something manually too.
+	// Also, it helps in managing the sample code for the upgrade.
+	skip       bool
+	skipReason string // reason, why this change is being skipped
 }
 
 // changeSet represents a set of changes that were introduced in some version
@@ -137,10 +156,11 @@ func init() {
 	}
 
 	flag := Upgrade.Cmd.Flags()
+	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
 	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
-	flag.StringP(user, "u", "", "Username if login is required.")
-	flag.StringP(password, "p", "", "Password of the user.")
-	flag.BoolP("deleteOld", "d", true, "Delete the older ACL predicates")
+	flag.StringP(user, "u", "", "Username of ACL user")
+	flag.StringP(password, "p", "", "Password of ACL user")
+	flag.BoolP(deleteOld, "d", true, "Delete the older ACL predicates")
 	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
 	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
 }
@@ -155,15 +175,12 @@ func run() {
 	applyChangeList(cmdInput, allChanges)
 }
 
-func formatAsFlagParsingError(flag string, err error) error {
-	return fmt.Errorf("error parsing flag `%s`: %w", flag, err)
-}
-
-func formatAsFlagRequiredError(flag string) error {
-	return formatAsFlagParsingError(flag, fmt.Errorf("`%s` is required", flag))
-}
-
 func validateAndParseInput() (*commandInput, error) {
+	if !Upgrade.Conf.GetBool(acl) {
+		return nil, formatAsFlagParsingError(acl,
+			fmt.Errorf("we only support acl upgrade as of now"))
+	}
+
 	_, _, err := net.SplitHostPort(strings.TrimSpace(Upgrade.Conf.GetString(alpha)))
 	if err != nil {
 		return nil, formatAsFlagParsingError(alpha, err)
@@ -192,6 +209,14 @@ func validateAndParseInput() (*commandInput, error) {
 	}
 
 	return &commandInput{fromVersion: fromVersionParsed, toVersion: toVersionParsed}, nil
+}
+
+func formatAsFlagParsingError(flag string, err error) error {
+	return fmt.Errorf("error parsing flag `%s`: %w", flag, err)
+}
+
+func formatAsFlagRequiredError(flag string) error {
+	return formatAsFlagParsingError(flag, fmt.Errorf("`%s` is required", flag))
 }
 
 // parseVersionFromString parses a version given as string to internal representation.
@@ -266,9 +291,23 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 			// Go over every change in the change set and check if it should be applied. If yes,
 			// apply it, otherwise skip it.
 			for i, change := range changeSet.changes {
+				if change.skip {
+					fmt.Println(fmt.Sprintf(""+
+						"\tSkipping change %d:\n"+
+						"\t\tName       : %s\n"+
+						"\t\tDescription: %s\n"+
+						"\t\tReason     : %s\n"+
+						"\t\tAction     : Please have a look at `%s` function in `upgrade/change_"+
+						"%s.go` in dgraph repo on GitHub, for a sample code.",
+						i+1, change.name, change.description, change.skipReason,
+						runtime.FuncForPC(reflect.ValueOf(change.applyFunc).Pointer()).Name(),
+						changeSet.introducedIn))
+					continue
+				}
+
 				fmt.Println(fmt.Sprintf(""+
 					"\tApplying change %d:\n"+
-					"\t\tName       : %s,\n"+
+					"\t\tName       : %s\n"+
 					"\t\tDescription: %s", i+1, change.name, change.description))
 				// apply the change only if the min version from which it should be applied
 				// is <= the version from which we want to upgrade
@@ -282,7 +321,7 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 						fmt.Println("\t\tStatus     : Successful")
 					}
 				} else {
-					fmt.Println("\t\tStatus     : Skipped")
+					fmt.Println("\t\tStatus     : Skipped (min version mismatch)")
 				}
 			}
 			// update the fromVersion to reflect the version till which DB has been upgraded,

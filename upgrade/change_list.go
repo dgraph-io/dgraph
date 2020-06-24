@@ -51,6 +51,11 @@ func init() {
 						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
 					minFromVersion: zeroVersion,
 					applyFunc:      upgradeNonPredefinedNamesInReservedNamespace,
+					skip:           true,
+					skipReason: "This should be manually applied by the user as this is a" +
+						" data migration, and there can be millions of user-defined nodes in the " +
+						"db having types/predicates starting with `dgraph.`. So, pagination may " +
+						"be required.",
 				},
 			},
 		},
