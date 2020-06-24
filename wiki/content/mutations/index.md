@@ -836,7 +836,10 @@ Schema:
 <nickname>: [string] .
 ```
 
-To create a List-type you need to create it by inserting multiple nodes. You cannot create a single node with all values and facets in a single block all together. For each value in the list, you must create a new node using the blank-node reference created for this list. E.g.
+To create a List-type predicate you need to specify all value in a single list. Facets for all
+predicate values should be specified together. It is done in map format with index of predicate
+values inside list being map key and their respective facets value as map values. Predicate values
+which does not have facets values will be missing from facets map. E.g.
 
 ```JSON
 {
@@ -844,24 +847,18 @@ To create a List-type you need to create it by inserting multiple nodes. You can
     {
       "uid": "_:Julian",
       "name": "Julian",
-      "nickname|kind": "first",
-      "nickname": "Jay-Jay"
-    },
-    {
-      "uid": "_:Julian",
-      "nickname|kind": "official",
-      "nickname": "Jules"
-    },
-    {
-      "uid": "_:Julian",
-      "nickname|kind": "CS-GO",
-      "nickname": "JB"
+      "nickname": ["Jay-Jay", "Jules", "JB"],
+      "nickname|kind": {
+        "0": "first",
+        "1": "official",
+        "2": "CS-GO"
+      }
     }
   ]
 }
 ```
 
-Above you see that we have three values ​​to enter the list. They are separated into three blocks in the mutation. They are related to each other via the blank-node `"uid": "_:Julian"`.
+Above you see that we have three values ​​to enter the list with their respective facets.
 
 You can run this query to check the list with facets:
 
