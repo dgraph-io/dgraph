@@ -329,8 +329,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if x.WorkerConfig.LudicrousMode {
-	}
 
 	start := time.Now()
 	defer func() {

@@ -643,7 +643,7 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
-			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil {
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
 				proposal.Mutations.StartTs = State.GetTimestamp(false)
 			}
 
