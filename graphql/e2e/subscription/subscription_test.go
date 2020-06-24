@@ -159,6 +159,7 @@ func TestSubscription(t *testing.T) {
 }
 
 func TestSubscriptionOnError(t *testing.T) {
+	t.Skip()
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
