@@ -167,11 +167,11 @@ func queryWithGz(queryText, contentType, debug, timeout string, gzReq, gzResp bo
 }
 
 func queryWithTs(queryText, contentType, debug string, ts uint64) (string, uint64, error) {
-	return queryWithTsWithNamespace(x.DefaultNamespace, queryText, contentType, debug, ts)
+	return queryWithTsWithNamespace(queryText, contentType, debug, ts, x.DefaultNamespace)
 }
 
-func queryWithTsWithNamespace(namespace,
-	queryText, contentType, debug string, ts uint64) (string, uint64, error) {
+func queryWithTsWithNamespace(
+	queryText, contentType, debug string, ts uint64, namespace string) (string, uint64, error) {
 	params := make([]string, 0, 2)
 	if debug != "" {
 		params = append(params, "debug="+debug)
@@ -470,10 +470,10 @@ func TestTransactionBasicNoPreds(t *testing.T) {
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }
 
-func TestHttpMultiTennacy(t *testing.T) {
+func TestHttpMultiTenancy(t *testing.T) {
 	require.NoError(t, dropAll())
 	createNamespace("demo")
-	require.NoError(t, alterSchemaWithNamespace("demo", `name: string @index(term) .`))
+	require.NoError(t, alterSchemaWithNamespace(`name: string @index(term) .`, "demo"))
 
 	q1 := `
 	{
@@ -483,7 +483,7 @@ func TestHttpMultiTennacy(t *testing.T) {
 	  }
 	}
 	`
-	_, ts, err := queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", 0)
+	_, ts, err := queryWithTsWithNamespace(q1, "application/graphql+-", "", 0, "demo")
 	require.NoError(t, err)
 
 	m1 := `
@@ -500,13 +500,13 @@ func TestHttpMultiTennacy(t *testing.T) {
 	require.NoError(t, err)
 
 	// Query with same timestamp.
-	data, _, err := queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", ts)
+	data, _, err := queryWithTsWithNamespace(q1, "application/graphql+-", "", ts, "demo")
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 
 	// Commit and query.
 	require.NoError(t, commitWithTs(mr.keys, nil, ts))
-	data, _, err = queryWithTsWithNamespace("demo", q1, "application/graphql+-", "", 0)
+	data, _, err = queryWithTsWithNamespace(q1, "application/graphql+-", "", 0, "demo")
 	require.NoError(t, err)
 	require.Equal(t, `{"data":{"balances":[{"name":"Bob","balance":"110"}]}}`, data)
 }

@@ -558,7 +558,6 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	op.RunInBackground = runInBackground
-	op.CreateNamespace = r.URL.Query().Get("createNamespace")
 
 	glog.Infof("Got alter request via HTTP from %s\n", r.RemoteAddr)
 	fwd := r.Header.Get("X-Forwarded-For")

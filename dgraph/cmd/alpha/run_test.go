@@ -109,7 +109,7 @@ func runJSONMutation(m string) error {
 func alterSchema(s string) error {
 	return alterSchemaHelper(x.DefaultNamespace, s, false)
 }
-func alterSchemaWithNamespace(namespace, s string) error {
+func alterSchemaWithNamespace(s, namespace string) error {
 	return alterSchemaHelper(namespace, s, false)
 }
 
@@ -148,7 +148,9 @@ func dropAll() error {
 }
 
 func createNamespace(namespace string) error {
-	op := `{}`
+	op := `{
+		"create_namespace":"` + namespace + `"
+	}`
 	_, _, err := runWithRetries(namespace, "PUT", "", addr+"/alter", op)
 	return err
 }
