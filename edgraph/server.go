@@ -330,7 +330,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 		return ctx.Err()
 	}
 	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -874,7 +873,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
-		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
