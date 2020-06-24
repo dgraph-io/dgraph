@@ -1973,10 +1973,9 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					mutation {
 					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						response {
-						  code
-						  message
-						}
+						code
+						message
+						restoreId
 					  }
 					}`,
 			queryName:          "restore",
