@@ -1170,8 +1170,7 @@ func queryNestedTypename(t *testing.T) {
 }
 
 func queryOnlyTypename(t *testing.T) {
-
-	var expected, result struct {
+	var countryCountResp struct {
 		QueryCountry []*country
 	}
 
@@ -1182,11 +1181,10 @@ func queryOnlyTypename(t *testing.T) {
 			}
 		}`,
 	}
-
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	err := json.Unmarshal([]byte(gqlResponse.Data), &expected)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &countryCountResp))
+	require.True(t, len(countryCountResp.QueryCountry) > 0)
 
 	getCountryParams = &GraphQLParams{
 		Query: `query queryCountry {
@@ -1195,51 +1193,76 @@ func queryOnlyTypename(t *testing.T) {
 			}
 		}`,
 	}
-
 	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-	require.Equal(t, len(result.QueryCountry), len(expected.QueryCountry))
 
+	expectedResponse := `{
+	"queryCountry": [%s
+        ]
+}`
+	var builder strings.Builder
+	for i := 0; i < len(countryCountResp.QueryCountry); i++ {
+		builder.WriteString(`
+          {
+                "__typename": "Country"
+          }`)
+		if i != len(countryCountResp.QueryCountry)-1 {
+			builder.WriteString(",")
+		}
+	}
+	expectedResponse = fmt.Sprintf(expectedResponse, builder.String())
+
+	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
 }
 
 func queryNestedOnlyTypename(t *testing.T) {
-
-	var expected, result struct {
-		QueryCountry []*country
+	var authorCountResp struct {
+		QueryAuthor []*author
 	}
+
 	getCountryParams := &GraphQLParams{
 		Query: `query {
-			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
-				posts {
-					PostID
-				}
+			queryAuthor {
+				id
 			}
 		}`,
 	}
-
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	err := json.Unmarshal([]byte(gqlResponse.Data), &expected)
-	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &authorCountResp))
+	require.True(t, len(authorCountResp.QueryAuthor) > 0)
 
 	getCountryParams = &GraphQLParams{
 		Query: `query {
-			queryAuthor(filter: { name: { eq: "Ann Author" } }) {
-				posts {
+			queryAuthor {
+				country {
 					__typename
 				}
 			}
 		}`,
 	}
-
 	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	err = json.Unmarshal([]byte(gqlResponse.Data), &result)
-	require.NoError(t, err)
-	require.Equal(t, len(result.QueryCountry), len(expected.QueryCountry))
 
+	expectedResponse := `{
+	"queryAuthor": [%s
+        ]
+}`
+	var builder strings.Builder
+	for i := 0; i < len(authorCountResp.QueryAuthor); i++ {
+		builder.WriteString(`
+          {
+                "country": {
+                  "__typename": "Country"
+                }
+          }`)
+		if i != len(authorCountResp.QueryAuthor)-1 {
+			builder.WriteString(",")
+		}
+	}
+	expectedResponse = fmt.Sprintf(expectedResponse, builder.String())
+
+	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
 }
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)

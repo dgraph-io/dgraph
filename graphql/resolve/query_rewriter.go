@@ -176,16 +176,16 @@ func intersection(a, b []uint64) []uint64 {
 func addUID(dgQuery *gql.GraphQuery, IfAddChild bool) {
 
 	if len(dgQuery.Children) == 0 {
-		if IfAddChild {
-			return
-		} else {
-			uidChild := &gql.GraphQuery{
-				Attr:  "uid",
-				Alias: "dgraph.uid",
-			}
-			dgQuery.Children = append(dgQuery.Children, uidChild)
-			return
-		}
+		//if IfAddChild {
+		return
+		//} else {
+		//	uidChild := &gql.GraphQuery{
+		//		Attr:  "uid",
+		//		Alias: "dgraph.uid",
+		//	}
+		//	dgQuery.Children = append(dgQuery.Children, uidChild)
+		//	return
+		//}
 	}
 	hasUid := false
 	for _, c := range dgQuery.Children {
@@ -619,7 +619,7 @@ func addSelectionSetFrom(
 	// Only add dgraph.type as a child if this field is an interface type and has some children.
 	// dgraph.type would later be used in completeObject as different objects in the resulting
 	// JSON would return different fields based on their concrete type.
-	if field.InterfaceType() && len(field.SelectionSet()) > 0 {
+	if len(field.SelectionSet()) > 0 {
 		q.Children = append(q.Children, &gql.GraphQuery{
 			Attr: "dgraph.type",
 		})
