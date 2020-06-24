@@ -33,7 +33,7 @@ run() {
 
   if [ ! -d "hugo-docs" ]; then
     echo -e "$(date) $GREEN  Hugo-docs repository not found. Cloning the repo. $RESET"
-    git clone https://github.com/dgraph-io/hugo-docs.git
+    git clone https://github.com/chrischinchilla/hugo-docs.git
   else
     echo -e "$(date) $GREEN  Hugo-docs repository found. Pulling the latest version from master. $RESET"
     pushd hugo-docs > /dev/null
