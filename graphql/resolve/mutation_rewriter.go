@@ -664,14 +664,14 @@ func addUidFilterToQuery(q *gql.GraphQuery, filter *gql.FilterTree, queryName st
 	}
 
 	var query *gql.GraphQuery
-	for _, c := range q.Children {
-		if c.Attr == queryName {
-			query = c
+	for _, cq := range q.Children {
+		if cq.Attr == queryName {
+			query = cq
 			break
 		}
-		for _, cq := range c.Children {
-			if cq.Attr == queryName {
-				query = cq
+		for _, ccq := range cq.Children {
+			if ccq.Attr == queryName {
+				query = ccq
 				break
 			}
 		}
