@@ -6,7 +6,7 @@ title = "Loading CSV Data"
     weight = 6
 +++
 
-[Dgraph mutations]({{< relref "mutations/index.md" >}}) are accepted in RDF
+[Dgraph mutations]({{< relref "mutations/_index.md" >}}) are accepted in RDF
 N-Quad and JSON formats. To load CSV-formatted data into Dgraph, first convert
 the dataset into one of the accepted formats and then load the resulting dataset
 into Dgraph. This section demonstrates converting CSV into JSON. There are
@@ -35,12 +35,12 @@ $ cat names.json | jq '.'
 ```
 
 This JSON can be loaded into Dgraph via the programmatic clients. This follows
-the [JSON Mutation Format]({{< relref "mutations#json-mutation-format" >}}).
+the [JSON Mutation Format]({{< relref "mutations/json-mutation-format.md" >}}).
 Note that each JSON object in the list above will be assigned a unique UID since
 the `uid` field is omitted.
 
 [The Ratel UI (and HTTP clients) expect JSON data to be stored within the `"set"`
-key]({{< relref "mutations/index.md#json-syntax-using-raw-http-or-ratel-ui"
+key]({{< relref "mutations/json-mutation-format.md#json-syntax-using-raw-http-or-ratel-ui"
 >}}). You can use `jq` to transform the JSON into the correct format:
 
 ```sh

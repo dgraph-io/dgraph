@@ -34,7 +34,7 @@ friend: [uid] .
 ```
 ## Type system
 
-The new [type system]({{< relref "query-language/index.md#type-system" >}}) introduced in Dgraph 1.1 should not affect migrating data from a previous version. However, a couple of features in the query language will not work as they did before: `expand()` and `_predicate_`.
+The new [type system]({{< relref "query-language/type-system.md" >}}) introduced in Dgraph 1.1 should not affect migrating data from a previous version. However, a couple of features in the query language will not work as they did before: `expand()` and `_predicate_`.
 
 The reason is that the internal predicate that associated each node with its predicates (called `_predicate_`) has been removed. Instead, to get the predicates that belong to a node, the type system is used.
 
@@ -156,7 +156,7 @@ curl -H 'Content-Type: application/graphql+-' localhost:8080/query -d '{
 }'
 ```
 
-For queries using [GraphQL Variables]({{< relref "query-language/index.md#graphql-variables" >}}), the query must be sent via the `application/json` content type, with the query and variables sent in a JSON payload:
+For queries using [GraphQL Variables]({{< relref "query-language/graphql-variables.md" >}}), the query must be sent via the `application/json` content type, with the query and variables sent in a JSON payload:
 
 Before (in Dgraph v1.0):
 

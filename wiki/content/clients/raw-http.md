@@ -406,7 +406,7 @@ $ curl -X POST --compressed -H "Content-Type: application/graphql+-" localhost:8
 
 ## Run a query in JSON format
 
-The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables". The JSON format is required to set [GraphQL Variables]({{< relref "query-language/index.md#graphql-variables" >}}) with the HTTP API.
+The HTTP API also accepts requests in JSON format. For queries you have the keys "query" and "variables". The JSON format is required to set [GraphQL Variables]({{< relref "query-language/graphql-variables.md" >}}) with the HTTP API.
 
 This query:
 

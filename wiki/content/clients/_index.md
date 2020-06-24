@@ -51,6 +51,6 @@ transactions conflict when both transactions:
 - write values to the same scalar predicate of the same node (e.g both
   attempting to set a particular node's `address` predicate); or
 - write to a singular `uid` predicate of the same node (changes to `[uid]` predicates can be concurrently written); or
-- write a value that conflicts on an index for a predicate with `@upsert` set in the schema (see [upserts]({{< relref "howto/index.md#upserts">}})).
+- write a value that conflicts on an index for a predicate with `@upsert` set in the schema (see [upserts]({{< relref "howto/upserts.md">}})).
 
 When a transaction is aborted, all its changes are discarded.  Transactions can be manually aborted.

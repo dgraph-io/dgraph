@@ -11,7 +11,7 @@ In this guide, a node refers to a Dgraph instance unless specified otherwise.
 
 A **Dgraph cluster** is comprised of multiple **Dgraph instances** (aka **nodes**) connected together to form a single distributed database. A Dgraph instance is either a **Dgraph Zero** or **Dgraph Alpha**, each of which serves a different role in the cluster.
 
-There can be one or more **Dgraph clients** connected to Dgraph to perform database operations (queries, mutations, alter schema, etc.). These clients connect via gRPC or HTTP. Dgraph provides official clients for Go, Java, Python, and JavaScript, and C#. All of these are gRPC-based, and JavaScript supports both gRPC and HTTP for browser support. Community-developed Dgraph clients for other languages are also available. The full list of clients can be found in [Clients]({{< relref "clients/index.md" >}}) page. You can also interact with Dgraph via curl over HTTP. Dgraph Ratel is a UI client used to visualize queries, run mutations, and manage the schema. Clients do not participate as a member of the database cluster, they simply connect to one or more Dgraph Alpha instances.
+There can be one or more **Dgraph clients** connected to Dgraph to perform database operations (queries, mutations, alter schema, etc.). These clients connect via gRPC or HTTP. Dgraph provides official clients for Go, Java, Python, and JavaScript, and C#. All of these are gRPC-based, and JavaScript supports both gRPC and HTTP for browser support. Community-developed Dgraph clients for other languages are also available. The full list of clients can be found in [Clients]({{< relref "clients/_index.md" >}}) page. You can also interact with Dgraph via curl over HTTP. Dgraph Ratel is a UI client used to visualize queries, run mutations, and manage the schema. Clients do not participate as a member of the database cluster, they simply connect to one or more Dgraph Alpha instances.
 
 ### Cluster Requirements
 
@@ -61,11 +61,11 @@ Additional recommendations:
 
 ### Firewall Rules
 
-Dgraph instances communicate over several ports. Firewall rules should be configured appropriately for the ports documented in [Ports Usage]({{< relref "deploy/index.md#ports-usage" >}}).
+Dgraph instances communicate over several ports. Firewall rules should be configured appropriately for the ports documented in [Ports Usage]({{< relref "deploy/ports-usage.md" >}}).
 
 Internal ports must be accessible by all Zero and Alpha peers for proper cluster-internal communication. Database clients must be able to connect to Dgraph Alpha external ports either directly or through a load balancer.
 
-Dgraph Zeros can be set up in a private network where communication is only with Dgraph Alphas, database administrators, internal services (such as Prometheus or Jaeger), and possibly developers (see note below). Dgraph Zero's 6080 external port is only necessary for database administrators. For example, it can be used to inspect the cluster metadata (/state), allocate UIDs or set txn timestamps (/assign), move data shards (/moveTablet), or remove cluster nodes (/removeNode). The full docs about Zero's administrative tasks are in [More About Dgraph Zero]({{< relref "deploy/index.md#more-about-dgraph-zero" >}}).
+Dgraph Zeros can be set up in a private network where communication is only with Dgraph Alphas, database administrators, internal services (such as Prometheus or Jaeger), and possibly developers (see note below). Dgraph Zero's 6080 external port is only necessary for database administrators. For example, it can be used to inspect the cluster metadata (/state), allocate UIDs or set txn timestamps (/assign), move data shards (/moveTablet), or remove cluster nodes (/removeNode). The full docs about Zero's administrative tasks are in [More About Dgraph Zero]({{< relref "deploy/dgraph-zero.md" >}}).
 
 {{% notice "note" %}}
 Developers using Dgraph Live Loader or Dgraph Bulk Loader require access to both Dgraph Zero port 5080 and Dgraph Alpha port 9080. When using those tools, consider using them within your environment that has network access to both ports of the cluster.
@@ -104,7 +104,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 {{% load-img "/images/deploy-guide-1.png" "2-node cluster" %}}
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
 
 Dgraph Zero:
 * The `--my` flag should be set to the address:port (the internal-gRPC port) that will be accessible to the Dgraph Alpha (default: `localhost:5080`).
@@ -127,7 +127,7 @@ We provide sample configs for both [Docker Compose](https://github.com/dgraph-io
 
 A Dgraph cluster can be configured in a high-availability setup with Dgraph Zero and Dgraph Alpha each set up with peers. These peers are part of Raft consensus groups, which elect a single leader amongst themselves. The non-leader peers are called followers. In the event that the peers cannot communicate with the leader (e.g., a network partition or a machine shuts down), the group automatically elects a new leader to continue.
 
-Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/index.md#config" >}})).
+Configuration can be set either as command-line flags, environment variables, or in a config file (see [Config]({{< relref "deploy/_index.md#config" >}})).
 
 In this setup, we assume the following hostnames are set:
 
@@ -194,5 +194,5 @@ These services are not required for a Dgraph cluster to function but are recomme
 - [Metrics and monitoring][] with Prometheus and Grafana.
 - [Distributed tracing][] with Jaeger.
 
-[Metrics and monitoring]: {{< relref "deploy/index.md#monitoring" >}}
-[Distributed tracing]: {{< relref "deploy/index.md#tracing" >}}
+[Metrics and monitoring]: {{< relref "deploy/monitoring.md" >}}
+[Distributed tracing]: {{< relref "deploy/tracing.md" >}}

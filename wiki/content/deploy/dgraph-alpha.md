@@ -70,15 +70,15 @@ Here’s an example of JSON returned from the above query:
   }
 }
 ```
-
+<!-- TODO: Redirects -->
 - `instance`: Name of the instance. Either `alpha` or `zero`.
 - `status`: Health status of the instance. Either `healthy` or `unhealthy`.
 - `version`: Version of Dgraph running the Alpha or Zero server.
 - `uptime`: Time in nanoseconds since the Alpha or Zero server is up and running.
 - `address`: IP_ADDRESS:PORT of the instance.
-- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/index.md#cluster-setup" >}}).
+- `group`: Group assigned based on the replication factor. Read more [here]({{< relref "/deploy/cluster-setup.md" >}}).
 - `lastEcho`: Last time, in Unix epoch, when the instance was contacted by another Alpha or Zero server.
 - `ongoing`: List of ongoing operations in the background.
-- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/index.md#indexes-in-background" >}}).
+- `indexing`: List of predicates for which indexes are built in the background. Read more [here]({{< relref "/query-language/schema.md#indexes-in-background" >}}).
 
 The same information (except `ongoing` and `indexing`) is available from the `/health` and `/health?all` endpoints of Alpha server.

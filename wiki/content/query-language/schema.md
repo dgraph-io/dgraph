@@ -227,7 +227,7 @@ Query:
 
 ## Upsert directive
 
-To use [upsert operations]({{< relref "howto/index.md#upserts">}}) on a
+To use [upsert operations]({{< relref "howto/upserts.md">}}) on a
 predicate, specify the `@upsert` directive in the schema. When committing
 transactions involving predicates with the `@upsert` directive, Dgraph checks
 index keys for conflicts, helping to enforce uniqueness constraints when running
@@ -252,7 +252,7 @@ email: string @index(exact) @noconflict .
 
 ## RDF Types
 
-Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/index.md#language-and-rdf-types" >}}).
+Dgraph supports a number of [RDF types in mutations]({{< relref "mutations/language-rdf-types.md" >}}).
 
 As well as implying a schema type for a [first mutation]({{< relref "#schema" >}}), an RDF type can override a schema type for storage.
 

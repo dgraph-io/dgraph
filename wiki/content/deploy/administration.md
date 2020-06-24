@@ -24,7 +24,7 @@ the server which has IP address as `192.168.1.1`.
 By default, you can perform mutation operations for any predicate.
 If the predicate in mutation doesn't exist in the schema,
 the predicate gets added to the schema with an appropriate
-[Dgraph Type]({{< relref "query-language/index.md#schema-types" >}}).
+[Dgraph Type]({{< relref "query-language/schema.md" >}}).
 
 You can use `--mutations disallow` to disable all mutations,
 which is set to `allow` by default.
@@ -187,12 +187,12 @@ At this point your application can still read from the old cluster and you can p
 When the new cluster (that uses the upgraded version of Dgraph) is up and running, you can point your application to it, and shutdown the old cluster.
 
 ### Upgrading from v1.2.2 to v20.03.0 for Enterprise Customers
-
-1. Use [binary]({{< relref "enterprise-features/index.md#binary-backups">}}) backup to export data from old cluster
+<!-- TODO: Redirect(s) -->
+1. Use [binary]({{< relref "enterprise-features/binary-backups.md">}}) backup to export data from old cluster
 2. Ensure it is successful
 3. [Shutdown Dgraph]({{< relref "#shutting-down-database" >}}) and wait for all writes to complete
 4. Upgrade `dgraph` binary to `v20.03.0`
-5. [Restore]({{< relref "enterprise-features/index.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
+5. [Restore]({{< relref "enterprise-features/binary-backups.md#restore-from-backup">}}) from the backups using upgraded `dgraph` binary
 6. Start a new Dgraph cluster using the restored data directories
 7. Upgrade ACL data using the following command:
 

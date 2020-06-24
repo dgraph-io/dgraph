@@ -7,4 +7,4 @@ title = "Giving Nodes a Type"
 +++
 
 It's often useful to give the nodes in a graph *types* (also commonly referred
-to as *labels* or *kinds*). You can do so using the [type system]({{< relref "query-language/index.md#type-system" >}}).
+to as *labels* or *kinds*). You can do so using the [type system]({{< relref "query-language/type-system.md" >}}).

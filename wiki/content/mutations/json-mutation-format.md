@@ -237,7 +237,7 @@ If no predicates are specified, then all of the node's known outbound edges (to
 other nodes and to literal values) are deleted (corresponding to deleting `S *
 *`). The predicates to delete are derived using the type system. Refer to the
 [RDF format]({{< relref "#delete" >}}) documentation and the section on the
-[type system]({{< relref "query-language/index.md#type-system" >}}) for more
+[type system]({{< relref "query-language/type-system.md" >}}) for more
 information:
 
 ```json

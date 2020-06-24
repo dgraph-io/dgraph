@@ -306,7 +306,7 @@ list UIDs / value.
 
 If the query was run via HTTP interface `/query`, this subgraph gets converted into JSON for
 replying back to the client. If the query was run via [gRPC](https://www.grpc.io/) interface using
-the language [clients]({{< relref "clients/index.md" >}}), the subgraph gets converted to
+the language [clients]({{< relref "clients/_index.md" >}}), the subgraph gets converted to
 [protocol buffer](https://developers.google.com/protocol-buffers/) format and then returned to client.
 
 ### Network Calls
