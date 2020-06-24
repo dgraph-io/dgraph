@@ -28,13 +28,21 @@ func Test_version_String(t *testing.T) {
 		want    string
 	}{
 		{
+			name:    "nil version",
+			version: nil,
+			want:    "v0.0.0",
+		}, {
 			name:    "zero version",
 			version: &version{},
 			want:    "v0.0.0",
 		}, {
-			name:    "some version",
+			name:    "prior to CalVer versioning",
+			version: &version{major: 1, minor: 2, patch: 1},
+			want:    "v1.2.1",
+		}, {
+			name:    "CalVer versioning",
 			version: &version{major: 20, minor: 3, patch: 1},
-			want:    "v20.3.1",
+			want:    "v20.03.1",
 		},
 	}
 	for _, tt := range tests {
