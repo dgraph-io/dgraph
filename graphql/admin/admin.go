@@ -618,7 +618,7 @@ func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
 		return nil, err
 	}
 	// Disable subscription.
-	schHandler.DisableSubscription()
+	//schHandler.DisableSubscription()
 
 	sch.GeneratedSchema = schHandler.GQLSchema()
 	generatedSchema, err := schema.FromString(sch.GeneratedSchema)

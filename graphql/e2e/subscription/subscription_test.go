@@ -53,7 +53,7 @@ const (
 )
 
 func TestSubscription(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {

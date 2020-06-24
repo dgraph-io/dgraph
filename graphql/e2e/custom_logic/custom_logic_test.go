@@ -299,7 +299,7 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
-	t.Skip()
+	//	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Teacher {
 		tid: ID!
@@ -329,7 +329,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
-	t.Skip()
+	//t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Episode {
 		name: String! @id
