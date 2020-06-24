@@ -18,12 +18,14 @@ package zero
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
 	"strconv"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/gogo/protobuf/jsonpb"
@@ -235,8 +237,27 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 	x.AddCorsHeaders(w)
 
+	var healthAll []pb.HealthInfo
+
+	// Append Self
+	healthAll = append(healthAll, pb.HealthInfo{
+		Instance: "zero",
+		Address:  x.WorkerConfig.MyAddr,
+		Status:   "healthy",
+		Version:  x.Version(),
+		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
+		LastEcho: time.Now().Unix(),
+	})
+	var resp *api.Response
+	var err error
+	var jsonOut []byte
+	if jsonOut, err = json.Marshal(healthAll); err != nil {
+		return
+	}
+	resp = &api.Response{Json: jsonOut}
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte("OK"))
+	_, _ = w.Write(resp.Json)
 }
 
 func (st *state) serveHTTP(l net.Listener) {
