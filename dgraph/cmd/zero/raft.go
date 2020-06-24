@@ -486,17 +486,51 @@ func (n *node) initAndStartNode() error {
 		}
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		lo, _ := n.Store.FirstIndex()
-		hi, _ := n.Store.LastIndex()
-		AllEntries, _ := n.Store.Entries(lo, hi+1, 64<<20)
-
+		first, _ := n.Store.FirstIndex()
+		last, _ := n.Store.LastIndex()
 		CIDPresent := false
-		for _, entry := range AllEntries {
-			if strings.Contains(entry.String(), "$") {
-				CIDPresent = true
+
+		var lastEntry raftpb.Entry
+		for batchFirst := first; batchFirst <= last; {
+			entries, _ := n.Store.Entries(batchFirst, last+1, 64<<20)
+			/* what to do about the error
+
+			if err != nil {
+				span.Annotatef(nil, "Error: %v", err)
+				return nil, err
+			}
+			*/
+
+			// Exit early from the loop if no entries were found.
+			if len(entries) == 0 {
 				break
 			}
+
+			// Store the last entry (as it might be needed outside the loop) and set the
+			// start of the new batch at the entry following it. Also set foundEntries to
+			// true to indicate to the code outside the loop that entries were retrieved.
+			lastEntry = entries[len(entries)-1]
+			batchFirst = lastEntry.Index + 1
+
+			glog.Infoln("+++++++++++++++++ entries ++++++++++++++++++\n")
+			for _, entry := range entries {
+				if entry.Type != raftpb.EntryNormal {
+					continue
+				}
+				var proposal pb.ZeroProposal
+				_ = proposal.Unmarshal(entry.Data)
+				//what to do about the error
+				glog.Infoln(len(proposal.Cid))
+				if len(proposal.Cid) > 0 {
+					CIDPresent = true
+				}
+				// if err := proposal.Unmarshal(entry.Data); err != nil {
+				// 	span.Annotatef(nil, "Error: %v", err)
+				// 	return nil, err
+				// }
+			}
 		}
+
 		if !CIDPresent {
 			go n.ProposeNewCID()
 		}
