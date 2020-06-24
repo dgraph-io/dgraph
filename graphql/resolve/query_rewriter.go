@@ -172,46 +172,27 @@ func intersection(a, b []uint64) []uint64 {
 // then Dgraph would just return 7 posts.  And we'd have no way of knowing if
 // there's only 7 posts, or if there's more that are missing 'text'.
 // But, for GraphQL, we want to know about those missing values.
-
-func addUID(dgQuery *gql.GraphQuery, IfAddChild bool) {
-
+func addUID(dgQuery *gql.GraphQuery) {
 	if len(dgQuery.Children) == 0 {
-		//if IfAddChild {
 		return
-		//} else {
-		//	uidChild := &gql.GraphQuery{
-		//		Attr:  "uid",
-		//		Alias: "dgraph.uid",
-		//	}
-		//	dgQuery.Children = append(dgQuery.Children, uidChild)
-		//	return
-		//}
 	}
 	hasUid := false
 	for _, c := range dgQuery.Children {
 		if c.Attr == "uid" {
 			hasUid = true
 		}
-		addUID(c, IfAddChild)
+		addUID(c)
 	}
+
 	// If uid was already requested by the user then we don't need to add it again.
 	if hasUid {
 		return
 	}
-
 	uidChild := &gql.GraphQuery{
 		Attr:  "uid",
 		Alias: "dgraph.uid",
 	}
 	dgQuery.Children = append(dgQuery.Children, uidChild)
-
-}
-
-func (authRw *authRewriter) writingAuth() bool {
-	if authRw == nil || !authRw.isWritingAuth {
-		return false
-	}
-	return true
 }
 
 func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter) *gql.GraphQuery {
@@ -236,8 +217,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-	addUID(dgQuery, field.Name() == "numUids" || authRw.writingAuth())
-
+	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
@@ -334,8 +314,7 @@ func rewriteAsGet(
 		}
 	}
 	selectionAuth := addSelectionSetFrom(dgQuery, field, auth)
-
-	addUID(dgQuery, field.Name() == "numUids" || auth.writingAuth())
+	addUID(dgQuery)
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
 
@@ -383,9 +362,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 
 	addArgumentsToField(dgQuery, field)
 	selectionAuth := addSelectionSetFrom(dgQuery, field, authRw)
-
-	addUID(dgQuery, field.Name() == "numUids" || (authRw != nil && authRw.writingAuth()))
-
+	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
@@ -397,6 +374,13 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	}
 
 	return dgQuery
+}
+
+func (authRw *authRewriter) writingAuth() bool {
+	if authRw == nil || !authRw.isWritingAuth {
+		return false
+	}
+	return true
 }
 
 // addAuthQueries takes a field and the GraphQuery that has so far been constructed for
@@ -619,11 +603,17 @@ func addSelectionSetFrom(
 	// Only add dgraph.type as a child if this field is an interface type and has some children.
 	// dgraph.type would later be used in completeObject as different objects in the resulting
 	// JSON would return different fields based on their concrete type.
-	if len(field.SelectionSet()) > 0 {
+	selSet := field.SelectionSet()
+	if len(selSet) > 0 &&
+		(field.InterfaceType() ||
+			(!auth.writingAuth() &&
+				len(selSet) == 1 &&
+				selSet[0].Name() == schema.Typename)) {
 		q.Children = append(q.Children, &gql.GraphQuery{
 			Attr: "dgraph.type",
 		})
 	}
+	selSet = nil
 
 	// These fields might not have been requested by the user directly as part of the query but
 	// are required in the body template for other fields requested within the query. We must
