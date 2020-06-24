@@ -2230,7 +2230,7 @@ upsert {
 	result := QueryResult{}
 	require.NoError(t, json.Unmarshal(mr.data, &result))
 	require.Equal(t, 0, len(result.Queries["q"]))
-	require.Equal(t, addNamespace(x.DefaultNamespace, []string{"email", "name", "work_for"}),
+	require.Equal(t, addNamespace(x.DefaultNamespace, []string{"email", "name", "works_for"}),
 		splitPreds(mr.preds))
 }
 
