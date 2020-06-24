@@ -44,11 +44,10 @@ const (
 
 // SentryOptOutNote - This is an opt out banner.
 func SentryOptOutNote() {
-	glog.Infof("Note: This instance of Dgraph has enabled reporting panics back to the " +
-		"Dgraph Labs' dashboard on Sentry. It allows us to improve the the software quality. " +
-		"See https://dgraph.io/docs/howto/#data-handling on how the reports are handled. " +
-		"No confidential information is sent.\n" +
-		"To opt-out, restart your instance with the --enable_sentry=false flag.")
+	glog.Infof("This instance of Dgraph will send anonymous reports of panics back " +
+		"to Dgraph Labs via Sentry. No confidential information is sent. These reports " +
+		"help improve Dgraph. To opt-out, restart your instance with the --enable_sentry=false " +
+		"flag. For more info, see https://dgraph.io/docs/howto/#data-handling.")
 }
 
 // InitSentry initializes the sentry machinery.
