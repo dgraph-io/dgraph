@@ -871,6 +871,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	// For mutations, we update the startTs if necessary.
 	if isMutation && req.StartTs == 0 && !x.WorkerConfig.LudicrousMode {
 		start := time.Now()
+		req.StartTs = worker.State.GetTimestamp(false)
 		qc.latency.AssignTimestamp = time.Since(start)
 	}
 
