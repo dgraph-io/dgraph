@@ -1,5 +1,9 @@
 +++
 title = "GraphQL+-: Tips and Tricks"
+[menu.main]
+  url = "/tips/"
+  identifier = "tips"
+  weight = 5
 +++
 
 ## Get Sample Data
