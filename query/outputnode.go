@@ -165,9 +165,9 @@ const (
 // 1. Attr => predicate associated with this node.
 // 2. ScalarVal => Any value associated with node, if it is a leaf node.
 // 3. List => Stores boolean value, true if this node is part of list.
-// 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is node
-//    which is parent for facets values for a scalar list predicaite. Eg: node "country|city" will
-//	  have FacetsParent value as true.
+// 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
+//    node which is parent for facets values for a scalar list predicaite. Eg: node "country|city"
+//    will have FacetsParent value as true.
 //    {
 //		"city": ["Bengaluru", "San Francisco"],
 //		"city|country": {
