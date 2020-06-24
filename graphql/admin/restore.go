@@ -42,7 +42,6 @@ type restoreInput struct {
 }
 
 func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
-
 	input, err := getRestoreInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
@@ -67,10 +66,10 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
 				"code":      "Failure",
-				"message":   err.Error(),
 				"restoreId": restoreId,
 			}},
 			Field: m,
+			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
 		}, false
 	}
 
