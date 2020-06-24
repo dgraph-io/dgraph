@@ -604,15 +604,24 @@ func addSelectionSetFrom(
 	// dgraph.type would later be used in completeObject as different objects in the resulting
 	// JSON would return different fields based on their concrete type.
 	selSet := field.SelectionSet()
-	if len(selSet) > 0 &&
-		(field.InterfaceType() ||
-			(!auth.writingAuth() &&
-				len(selSet) == 1 &&
-				selSet[0].Name() == schema.Typename)) {
-		q.Children = append(q.Children, &gql.GraphQuery{
-			Attr: "dgraph.type",
-		})
+	if len(selSet) > 0 {
+		if field.InterfaceType() {
+			{
+				q.Children = append(q.Children, &gql.GraphQuery{
+					Attr: "dgraph.type",
+				})
+			}
+		} else if !auth.writingAuth() &&
+			len(selSet) == 1 &&
+			selSet[0].Name() == schema.Typename {
+			q.Children = append(q.Children, &gql.GraphQuery{
+				Attr:  "uid",
+				Alias: "dgraph.uid",
+			})
+		}
+
 	}
+
 	selSet = nil
 
 	// These fields might not have been requested by the user directly as part of the query but

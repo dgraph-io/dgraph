@@ -1264,6 +1264,7 @@ func queryNestedOnlyTypename(t *testing.T) {
 
 	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
 }
+
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
