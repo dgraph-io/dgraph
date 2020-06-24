@@ -169,7 +169,6 @@ func run() {
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("zero")
 		x.WrapPanics()
-		x.SentryOptOutNote()
 	}
 
 	x.PrintVersion()
