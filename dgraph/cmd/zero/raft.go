@@ -512,7 +512,6 @@ func (n *node) initAndStartNode() error {
 			lastEntry = entries[len(entries)-1]
 			batchFirst = lastEntry.Index + 1
 
-			glog.Infoln("+++++++++++++++++ entries ++++++++++++++++++\n")
 			for _, entry := range entries {
 				if entry.Type != raftpb.EntryNormal {
 					continue
