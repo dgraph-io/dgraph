@@ -1265,6 +1265,55 @@ func queryNestedOnlyTypename(t *testing.T) {
 	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
 }
 
+func onlytypenameForInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test __onlytypename for interface types", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: [EMPIRE]
+					}
+				}) {
+					
+					__typename
+					... on Human {
+						
+			                }
+					... on Droid {
+						
+			                }
+				}
+			}`,
+		}
+
+		expected := `{
+		"queryCharacter": [
+		  {
+			"name":"Han Solo",
+			"__typename": "Human",
+			"totalCredits": 10
+		  },
+		  {
+			"name": "R2-D2",
+			"__typename": "Droid",
+			"primaryFunction": "Robot"
+		  }
+		]
+	  }`
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
