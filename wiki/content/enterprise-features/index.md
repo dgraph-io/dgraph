@@ -240,13 +240,13 @@ For a series of full and incremental backups, per the current design, we don't a
 
 ### AES And Chaining with Gzip
 
-If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data. 
+If encryption is turned on an alpha, then we use the configured encryption key. The key size (16, 24, 32 bytes) determines AES-128/192/256 cipher chosen. We use the AES CTR mode. Currently, the binary backup is already gzipped. With encryption, we will encrypt the gzipped data.
 
 During **backup**: the 16 bytes IV is prepended to the Cipher-text data after encryption.
 
 ### Backup
 
-Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”. 
+Backup is an online tool, meaning it is available when alpha is running. For encrypted backups, the alpha must be configured with the “encryption_key_file”.
 
 {{% notice "note" %}}
 encryption_key_file was used for encryption-at-rest and will now also be used for encrypted backups.
@@ -584,6 +584,24 @@ mutation {
   }
 }
 ```
+Here we assigned a permission rule for the friend predicate to the group. In case you have [reverse edges]({{< relref "query-language/index.md#reverse-edges" >}}), they have to be given the permission to the group as well
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "~friend", permission: 7}]}}) {
+    group {
+      name
+      rules {
+        permission
+        predicate
+      }
+    }
+  }
+}
+```
+You can also resolve this by using the `dgraph acl` tool
+```
+dgraph acl -a <ALPHA_ADDRESS:PORT> -w <GROOT_USER> -x <GROOT_PASSWORD>  mod --group dev --pred ~friend --perm 7
+```
 
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
@@ -609,7 +627,7 @@ mutation {
 }
 ```
 
-### Retrieve Users and Groups Information 
+### Retrieve Users and Groups Information
 {{% notice "note" %}}
 All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
@@ -940,5 +958,3 @@ badger rotate --dir w --old-key-path enc_key_file --new-key-path new_enc_key_fil
 ```
 
 Then, you can start Alpha with the `new_enc_key_file` key file to use the new key.
-
-
