@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -75,6 +76,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 
 	for range currentGroups {
 		if err := <-errCh; err != nil {
+			glog.Warningf("Error when processing restore proposal %v", err)
 			return errors.Wrapf(err, "cannot complete restore proposal")
 		}
 	}
