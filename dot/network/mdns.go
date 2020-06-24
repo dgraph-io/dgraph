@@ -30,27 +30,30 @@ const MDNSPeriod = time.Minute
 
 // Notifee See https://godoc.org/github.com/libp2p/go-libp2p/p2p/discovery#Notifee
 type Notifee struct {
-	ctx  context.Context
-	host *host
+	logger log.Logger
+	ctx    context.Context
+	host   *host
 }
 
 // mdns submodule
 type mdns struct {
-	host *host
-	mdns discovery.Service
+	logger log.Logger
+	host   *host
+	mdns   discovery.Service
 }
 
 // newMDNS creates a new mDNS instance from the host
 func newMDNS(host *host) *mdns {
 	return &mdns{
-		host: host,
+		logger: host.logger.New("module", "mdns"),
+		host:   host,
 	}
 }
 
 // startMDNS starts a new mDNS discovery service
 func (m *mdns) start() {
-	log.Trace(
-		"[network] Starting mDNS discovery service...",
+	m.logger.Trace(
+		"Starting mDNS discovery service...",
 		"host", m.host.id(),
 		"period", MDNSPeriod,
 		"protocol", m.host.protocolID,
@@ -64,14 +67,15 @@ func (m *mdns) start() {
 		string(m.host.protocolID),
 	)
 	if err != nil {
-		log.Error("[network] Failed to start mDNS discovery service", "error", err)
+		m.logger.Error("Failed to start mDNS discovery service", "error", err)
 		return
 	}
 
 	// register Notifee on service
 	mdns.RegisterNotifee(Notifee{
-		ctx:  m.host.ctx,
-		host: m.host,
+		logger: m.logger,
+		ctx:    m.host.ctx,
+		host:   m.host,
 	})
 
 	m.mdns = mdns
@@ -86,7 +90,7 @@ func (m *mdns) close() error {
 		// close service
 		err := m.mdns.Close()
 		if err != nil {
-			log.Error("[network] Failed to close mDNS discovery service", "error", err)
+			m.logger.Error("Failed to close mDNS discovery service", "error", err)
 			return err
 		}
 	}
@@ -96,8 +100,8 @@ func (m *mdns) close() error {
 
 // HandlePeerFound is event handler called when a peer is found
 func (n Notifee) HandlePeerFound(p peer.AddrInfo) {
-	log.Trace(
-		"[network] Peer found using mDNS discovery",
+	n.logger.Trace(
+		"Peer found using mDNS discovery",
 		"host", n.host.id(),
 		"peer", p.ID,
 	)
@@ -105,6 +109,6 @@ func (n Notifee) HandlePeerFound(p peer.AddrInfo) {
 	// connect to found peer
 	err := n.host.connect(p)
 	if err != nil {
-		log.Error("[network] Failed to connect to peer using mDNS discovery", "error", err)
+		n.logger.Error("Failed to connect to peer using mDNS discovery", "error", err)
 	}
 }

@@ -76,8 +76,8 @@ func newTestContext(description string, flags []string, values []interface{}) (*
 	return ctx, nil
 }
 
-// TestStartLogger
-func TestStartLogger(t *testing.T) {
+// TestSetupLogger
+func TestSetupLogger(t *testing.T) {
 	testApp := cli.NewApp()
 	testApp.Writer = ioutil.Discard
 
@@ -119,7 +119,7 @@ func TestStartLogger(t *testing.T) {
 			ctx, err := newTestContext(c.description, c.flags, c.values)
 			require.Nil(t, err)
 
-			err = startLogger(ctx)
+			_, err = setupLogger(ctx)
 			require.Equal(t, c.expected, err)
 		})
 	}

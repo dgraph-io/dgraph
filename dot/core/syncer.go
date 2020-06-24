@@ -49,6 +49,8 @@ type Verifier interface {
 
 // Syncer deals with chain syncing by sending block request messages and watching for responses.
 type Syncer struct {
+	logger log.Logger
+
 	// State interfaces
 	blockState       BlockState // retrieve our current head of chain from BlockState
 	transactionQueue TransactionQueue
@@ -72,7 +74,9 @@ type Syncer struct {
 }
 
 // SyncerConfig is the configuration for the Syncer.
+// TODO: unexport these or separate syncer into another package
 type SyncerConfig struct {
+	logger           log.Logger
 	BlockState       BlockState
 	BlockProducer    BlockProducer
 	BlockNumIn       <-chan *big.Int
@@ -113,6 +117,7 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 	}
 
 	return &Syncer{
+		logger:           cfg.logger.New("module", "sync"),
 		blockState:       cfg.BlockState,
 		blockProducer:    cfg.BlockProducer,
 		blockNumIn:       cfg.BlockNumIn,
@@ -156,7 +161,7 @@ func (s *Syncer) watchForBlocks() {
 
 		blockNum, ok := <-s.blockNumIn
 		if !ok || blockNum == nil {
-			log.Warn("[sync] Failed to receive from blockNumIn channel")
+			s.logger.Warn("Failed to receive from blockNumIn channel")
 			continue
 		}
 
@@ -168,7 +173,7 @@ func (s *Syncer) watchForBlocks() {
 
 				err := s.blockProducer.Pause()
 				if err != nil {
-					log.Warn("[sync] failed to pause block production")
+					s.logger.Warn("failed to pause block production")
 				}
 			} else {
 				s.requestStart = s.highestSeenBlock.Int64()
@@ -193,17 +198,17 @@ func (s *Syncer) watchForResponses() {
 		case msg, ok = <-s.respIn:
 			// handle response
 			if !ok || msg == nil {
-				log.Warn("[sync] Failed to receive from respIn channel")
+				s.logger.Warn("Failed to receive from respIn channel")
 				continue
 			}
 
 			s.processBlockResponse(msg)
 		case <-time.After(responseTimeout):
-			log.Debug("[sync] timeout waiting for BlockResponse")
+			s.logger.Debug("timeout waiting for BlockResponse")
 			if !s.synced {
 				err := s.blockProducer.Resume()
 				if err != nil {
-					log.Warn("[sync] failed to resume block production")
+					s.logger.Warn("failed to resume block production")
 				}
 				s.synced = true
 			}
@@ -225,10 +230,10 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 			if s.requestStart <= 0 {
 				s.requestStart = 1
 			}
-			log.Trace("[sync] Retrying block request", "start", s.requestStart)
+			s.logger.Trace("Retrying block request", "start", s.requestStart)
 			go s.sendBlockRequest()
 		} else {
-			log.Error("[sync]", "error", err)
+			s.logger.Error("[sync]", "error", err)
 		}
 
 	} else {
@@ -236,17 +241,17 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 
 		bestNum, err := s.blockState.BestBlockNumber()
 		if err != nil {
-			log.Crit("[sync] Failed to get best block number", "error", err)
+			s.logger.Crit("Failed to get best block number", "error", err)
 		} else {
 
 			// check if we are synced or not
 			if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
-				log.Debug("[sync] All synced up!", "number", bestNum)
+				s.logger.Debug("All synced up!", "number", bestNum)
 
 				if !s.synced {
 					err = s.blockProducer.Resume()
 					if err != nil {
-						log.Warn("[sync] failed to resume block production")
+						s.logger.Warn("failed to resume block production")
 					}
 					s.synced = true
 				}
@@ -279,11 +284,11 @@ func (s *Syncer) sendBlockRequest() {
 
 	start, err := variadic.NewUint64OrHash(uint64(s.requestStart))
 	if err != nil {
-		log.Error("[sync] Failed to create StartingBlock", "error", err)
+		s.logger.Error("Failed to create StartingBlock", "error", err)
 		return
 	}
 
-	log.Trace("[sync] Block request", "start", start)
+	s.logger.Trace("Block request", "start", start)
 
 	blockRequest := &network.BlockRequestMessage{
 		ID:            randomID, // random
@@ -297,7 +302,7 @@ func (s *Syncer) sendBlockRequest() {
 	// send block request message to network service
 	err = s.safeMsgSend(blockRequest)
 	if err != nil {
-		log.Error("[sync] Failed to send block request", "error", err)
+		s.logger.Error("Failed to send block request", "error", err)
 	}
 }
 
@@ -377,7 +382,7 @@ func (s *Syncer) handleHeader(header *types.Header) (int64, error) {
 			return 0, err
 		}
 
-		log.Info("[sync] saved block header", "hash", header.Hash(), "number", header.Number)
+		s.logger.Info("saved block header", "hash", header.Hash(), "number", header.Number)
 	}
 
 	ok, err := s.verifier.VerifyBlock(header)
@@ -400,7 +405,7 @@ func (s *Syncer) handleHeader(header *types.Header) (int64, error) {
 func (s *Syncer) handleBody(body *types.Body) error {
 	exts, err := body.AsExtrinsics()
 	if err != nil {
-		log.Error("[sync] cannot parse body as extrinsics", "error", err)
+		s.logger.Error("cannot parse body as extrinsics", "error", err)
 		return err
 	}
 
@@ -429,8 +434,8 @@ func (s *Syncer) handleBlock(block *types.Block) error {
 			return err
 		}
 	} else {
-		log.Info("[sync] imported block", "number", block.Header.Number, "hash", block.Header.Hash())
-		log.Debug("[sync] imported block", "header", block.Header, "body", block.Body)
+		s.logger.Info("imported block", "number", block.Header.Number, "hash", block.Header.Hash())
+		s.logger.Debug("imported block", "header", block.Header, "body", block.Body)
 	}
 
 	// TODO: if block is from the next epoch, increment epoch

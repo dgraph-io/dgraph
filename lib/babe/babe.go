@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,6 +40,8 @@ const RandomnessLength = 32
 
 // Service contains the VRF keys for the validator, as well as BABE configuation data
 type Service struct {
+	logger log.Logger
+
 	// Storage interfaces
 	blockState       BlockState
 	storageState     StorageState
@@ -69,6 +72,7 @@ type Service struct {
 
 // ServiceConfig represents a BABE configuration
 type ServiceConfig struct {
+	LogLvl           log.Lvl
 	BlockState       BlockState
 	StorageState     StorageState
 	TransactionQueue TransactionQueue
@@ -89,7 +93,12 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, errors.New("blockState is nil")
 	}
 
+	logger := log.New("pkg", "babe")
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
+
 	babeService := &Service{
+		logger:           logger,
 		blockState:       cfg.BlockState,
 		storageState:     cfg.StorageState,
 		keypair:          cfg.Keypair,
@@ -110,10 +119,10 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, err
 	}
 
-	log.Info("[babe] config", "SlotDuration (ms)", babeService.config.SlotDuration, "EpochLength (slots)", babeService.config.EpochLength)
+	logger.Info("config", "SlotDuration (ms)", babeService.config.SlotDuration, "EpochLength (slots)", babeService.config.EpochLength)
 
 	if babeService.authorityData == nil {
-		log.Info("[babe] setting authority data to genesis authorities", "authorities", babeService.config.GenesisAuthorities)
+		logger.Info("setting authority data to genesis authorities", "authorities", babeService.config.GenesisAuthorities)
 
 		babeService.authorityData, err = types.BABEAuthorityDataRawToAuthorityData(babeService.config.GenesisAuthorities)
 		if err != nil {
@@ -122,7 +131,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	}
 
 	// TODO: format this
-	log.Info("[babe]", "authorities", babeService.authorityData)
+	logger.Info("[babe]", "authorities", babeService.authorityData)
 
 	babeService.randomness = babeService.config.Randomness
 
@@ -131,7 +140,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, err
 	}
 
-	log.Trace("[babe]", "authority index", babeService.authorityIndex)
+	logger.Trace("[babe]", "authority index", babeService.authorityIndex)
 
 	return babeService, nil
 }
@@ -147,7 +156,7 @@ func (b *Service) Start() error {
 		}
 	}
 
-	log.Debug("[babe]", "epochThreshold", b.epochThreshold)
+	b.logger.Debug("[babe]", "epochThreshold", b.epochThreshold)
 
 	i := b.startSlot
 	var err error
@@ -235,7 +244,7 @@ func (b *Service) SetEpochData(data *NextEpochDescriptor) error {
 func (b *Service) setAuthorityIndex() error {
 	pub := b.keypair.Public()
 
-	log.Debug("[babe]", "authority key", pub.Hex(), "authorities", b.authorityData)
+	b.logger.Debug("[babe]", "authority key", pub.Hex(), "authorities", b.authorityData)
 
 	for i, auth := range b.authorityData {
 		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
@@ -253,24 +262,24 @@ func (b *Service) isStopped() bool {
 
 func (b *Service) invokeBlockAuthoring() {
 	if b.config == nil {
-		log.Error("[babe] block authoring", "error", "config is nil")
+		b.logger.Error("block authoring", "error", "config is nil")
 		return
 	}
 
 	if b.blockState == nil {
-		log.Error("[babe] block authoring", "error", "blockState is nil")
+		b.logger.Error("block authoring", "error", "blockState is nil")
 		return
 	}
 
 	if b.storageState == nil {
-		log.Error("[babe] block authoring", "error", "storageState is nil")
+		b.logger.Error("block authoring", "error", "storageState is nil")
 		return
 	}
 
 	slotNum := b.startSlot
 	bestNum, err := b.blockState.BestBlockNumber()
 	if err != nil {
-		log.Error("[babe] Failed to get best block number", "error", err)
+		b.logger.Error("Failed to get best block number", "error", err)
 		return
 	}
 
@@ -280,21 +289,21 @@ func (b *Service) invokeBlockAuthoring() {
 		if bestNum.Cmp(big.NewInt(int64(slotTail))) != -1 {
 			slotNum, err = b.getCurrentSlot()
 			if err != nil {
-				log.Error("[babe] cannot get current slot", "error", err)
+				b.logger.Error("cannot get current slot", "error", err)
 				return
 			}
 		} else {
-			log.Warn("[babe] cannot use median algorithm, not enough blocks synced")
+			b.logger.Warn("cannot use median algorithm, not enough blocks synced")
 
 			slotNum, err = b.estimateCurrentSlot()
 			if err != nil {
-				log.Error("[babe] cannot get current slot", "error", err)
+				b.logger.Error("cannot get current slot", "error", err)
 				return
 			}
 		}
 	}
 
-	log.Debug("[babe]", "calculated slot", slotNum)
+	b.logger.Debug("[babe]", "calculated slot", slotNum)
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
 		start := time.Now().Unix()
@@ -318,12 +327,12 @@ func (b *Service) invokeBlockAuthoring() {
 func (b *Service) handleSlot(slotNum uint64) {
 	parentHeader, err := b.blockState.BestBlockHeader()
 	if err != nil {
-		log.Error("[babe] block authoring", "error", "parent header is nil")
+		b.logger.Error("block authoring", "error", "parent header is nil")
 		return
 	}
 
 	if parentHeader == nil {
-		log.Error("[babe] block authoring", "error", "parent header is nil")
+		b.logger.Error("block authoring", "error", "parent header is nil")
 		return
 	}
 
@@ -338,21 +347,21 @@ func (b *Service) handleSlot(slotNum uint64) {
 	}
 
 	// TODO: move block authorization check here
-	log.Debug("[babe] going to build block", "parent", parent)
+	b.logger.Debug("going to build block", "parent", parent)
 
 	block, err := b.buildBlock(parent, currentSlot)
 	if err != nil {
-		log.Error("[babe] block authoring", "error", err)
+		b.logger.Error("block authoring", "error", err)
 	} else {
 		// TODO: loop until slot is done, attempt to produce multiple blocks
 
 		hash := block.Header.Hash()
-		log.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
-		log.Debug("[babe] built block", "header", block.Header, "body", block.Body, "parent", parent)
+		b.logger.Info("[babe]", "built block", hash.String(), "number", block.Header.Number, "slot", slotNum)
+		b.logger.Debug("built block", "header", block.Header, "body", block.Body, "parent", parent)
 
 		err = b.safeSend(*block)
 		if err != nil {
-			log.Error("[babe] Failed to send block to core", "error", err)
+			b.logger.Error("Failed to send block to core", "error", err)
 			return
 		}
 	}
@@ -384,7 +393,7 @@ func (b *Service) runLottery(slot uint64) (*VrfOutputAndProof, error) {
 		copy(outbytes[:], output)
 		proofbytes := [sr25519.VrfProofLength]byte{}
 		copy(proofbytes[:], proof)
-		log.Trace("[babe] lottery", "won slot", slot)
+		b.logger.Trace("lottery", "won slot", slot)
 		return &VrfOutputAndProof{
 			output: outbytes,
 			proof:  proofbytes,

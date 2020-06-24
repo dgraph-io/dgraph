@@ -24,15 +24,13 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
 	"github.com/ChainSafe/gossamer/lib/transaction"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // BlockRequestMessage 1
 
 // ProcessBlockRequestMessage processes a block request message, returning a block response message
 func (s *Service) ProcessBlockRequestMessage(msg *network.BlockRequestMessage) error {
-	log.Debug("[core] received BlockRequestMessage")
+	s.logger.Debug("received BlockRequestMessage")
 
 	res, err := s.createBlockResponse(msg)
 	if err != nil {
@@ -68,7 +66,7 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 		endHash = s.blockState.BestBlockHash()
 	}
 
-	log.Debug("[core] BlockRequestMessage", "startHash", startHash, "endHash", endHash)
+	s.logger.Debug("BlockRequestMessage", "startHash", startHash, "endHash", endHash)
 
 	// get sub-chain of block hashes
 	subchain, err := s.blockState.SubChain(startHash, endHash)
@@ -80,7 +78,7 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 		subchain = subchain[:maxResponseSize]
 	}
 
-	log.Trace("[core] subchain", "start", subchain[0], "end", subchain[len(subchain)-1])
+	s.logger.Trace("subchain", "start", subchain[0], "end", subchain[len(subchain)-1])
 
 	responseData := []*types.BlockData{}
 
@@ -147,7 +145,7 @@ func (s *Service) createBlockResponse(blockRequest *network.BlockRequestMessage)
 // chain by calling `core_execute_block`. Valid blocks are stored in the block
 // database to become part of the canonical chain.
 func (s *Service) ProcessBlockResponseMessage(msg *network.BlockResponseMessage) error {
-	log.Debug("[core] received BlockResponseMessage")
+	s.logger.Debug("received BlockResponseMessage")
 
 	// send block response message to syncer
 	s.respOut <- msg
@@ -167,7 +165,7 @@ func (s *Service) ProcessBlockResponseMessage(msg *network.BlockResponseMessage)
 // announce messages (block announce messages include the header but the full
 // block is required to execute `core_execute_block`).
 func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage) error {
-	log.Debug("[core] received BlockAnnounceMessage")
+	s.logger.Debug("received BlockAnnounceMessage")
 
 	// create header from message
 	header, err := types.NewHeader(
@@ -193,8 +191,8 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 		if err != nil {
 			return err
 		}
-		log.Debug(
-			"[core] saved block header to block state",
+		s.logger.Debug(
+			"saved block header to block state",
 			"number", header.Number,
 			"hash", header.Hash(),
 		)
@@ -203,8 +201,8 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 	// check if block body is stored in block state (if we should send to syncer)
 	_, err = s.blockState.GetBlockBody(header.Hash())
 	if err != nil && err.Error() == "Key not found" {
-		log.Debug(
-			"[core] sending block number to syncer",
+		s.logger.Debug(
+			"sending block number to syncer",
 			"number", msg.Number,
 		)
 		s.blockNumOut <- msg.Number
@@ -220,7 +218,7 @@ func (s *Service) ProcessBlockAnnounceMessage(msg *network.BlockAnnounceMessage)
 // ProcessTransactionMessage validates each transaction in the message and
 // adds valid transactions to the transaction queue of the BABE session
 func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) error {
-	log.Debug("[core] received TransactionMessage")
+	s.logger.Debug("received TransactionMessage")
 
 	// get transactions from message extrinsics
 	txs := msg.Extrinsics
@@ -231,7 +229,7 @@ func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) err
 		// validate each transaction
 		val, err := s.rt.ValidateTransaction(tx)
 		if err != nil {
-			log.Error("[core] failed to validate transaction", "err", err)
+			s.logger.Error("failed to validate transaction", "err", err)
 			return err // exit
 		}
 
@@ -242,9 +240,9 @@ func (s *Service) ProcessTransactionMessage(msg *network.TransactionMessage) err
 			// push to the transaction queue of BABE session
 			hash, err := s.transactionQueue.Push(vtx)
 			if err != nil {
-				log.Trace("[core] Failed to push transaction to queue", "error", err)
+				s.logger.Trace("Failed to push transaction to queue", "error", err)
 			} else {
-				log.Trace("[core] Added transaction to queue", "hash", hash)
+				s.logger.Trace("Added transaction to queue", "hash", hash)
 			}
 		}
 	}

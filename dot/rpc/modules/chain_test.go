@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/utils"
 
 	database "github.com/ChainSafe/chaindb"
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -253,7 +254,7 @@ var genesisHeader, _ = types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0),
 func newTestChainService(t *testing.T) *state.Service {
 	testDir := utils.NewTestDir(t)
 	defer utils.RemoveTestDir(t)
-	stateSrvc := state.NewService(testDir)
+	stateSrvc := state.NewService(testDir, log.LvlInfo)
 
 	tr := trie.NewEmptyTrie()
 

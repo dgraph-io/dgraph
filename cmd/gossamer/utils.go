@@ -29,22 +29,21 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 )
 
-// startLogger starts the gossamer logger
-func startLogger(ctx *cli.Context) error {
-	logger := log.Root()
-	handler := logger.GetHandler()
+// setupLogger sets up the gossamer logger
+func setupLogger(ctx *cli.Context) (log.Lvl, error) {
+	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
 
 	var lvl log.Lvl
 
 	if lvlToInt, err := strconv.Atoi(ctx.String(LogFlag.Name)); err == nil {
 		lvl = log.Lvl(lvlToInt)
 	} else if lvl, err = log.LvlFromString(ctx.String(LogFlag.Name)); err != nil {
-		return err
+		return 0, err
 	}
 
 	log.Root().SetHandler(log.LvlFilterHandler(lvl, handler))
 
-	return nil
+	return lvl, nil
 }
 
 // getPassword prompts user to enter password

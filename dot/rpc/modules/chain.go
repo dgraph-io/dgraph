@@ -24,7 +24,6 @@ import (
 	"regexp"
 
 	"github.com/ChainSafe/gossamer/dot/types"
-
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 

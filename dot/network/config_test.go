@@ -23,6 +23,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,6 +33,7 @@ func TestBuildIdentity(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	configA := &Config{
+		logger:   log.New("srvc", "NET"),
 		BasePath: testDir,
 	}
 
@@ -41,6 +43,7 @@ func TestBuildIdentity(t *testing.T) {
 	}
 
 	configB := &Config{
+		logger:   log.New("srvc", "NET"),
 		BasePath: testDir,
 	}
 
@@ -54,6 +57,7 @@ func TestBuildIdentity(t *testing.T) {
 	}
 
 	configC := &Config{
+		logger:   log.New("srvc", "NET"),
 		RandSeed: 1,
 	}
 
@@ -63,6 +67,7 @@ func TestBuildIdentity(t *testing.T) {
 	}
 
 	configD := &Config{
+		logger:   log.New("srvc", "NET"),
 		RandSeed: 2,
 	}
 
@@ -87,6 +92,7 @@ func TestBuild(t *testing.T) {
 	testRandSeed := int64(1)
 
 	cfg := &Config{
+		logger:       log.New("srvc", "NET"),
 		BlockState:   testBlockState,
 		NetworkState: testNetworkState,
 		BasePath:     testBasePath,

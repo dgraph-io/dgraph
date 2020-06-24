@@ -29,12 +29,14 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	log "github.com/ChainSafe/log15"
 )
 
 var testEpoch = uint64(2)
 
 func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEpochDescriptor) *VerificationManager {
-	dbSrv := state.NewService("")
+	dbSrv := state.NewService("", log.LvlInfo)
 	dbSrv.UseMemDB()
 
 	genesisData := new(genesis.Data)

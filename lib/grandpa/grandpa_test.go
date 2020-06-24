@@ -30,6 +30,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -40,7 +41,7 @@ var testGenesisHeader = &types.Header{
 }
 
 func newTestState(t *testing.T) *state.Service {
-	stateSrvc := state.NewService("")
+	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
 	genesisData := new(genesis.Data)

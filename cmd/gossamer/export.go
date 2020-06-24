@@ -22,18 +22,11 @@ import (
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
-	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
 // exportAction is the action for the "export" subcommand
 func exportAction(ctx *cli.Context) error {
-	err := startLogger(ctx)
-	if err != nil {
-		log.Error("[cmd] failed to start logger", "error", err)
-		return err
-	}
-
 	// use --config value as export destination
 	config := ctx.GlobalString(ConfigFlag.Name)
 
@@ -44,8 +37,8 @@ func exportAction(ctx *cli.Context) error {
 
 	// check if configuration file already exists at export destination
 	if utils.PathExists(config) {
-		log.Warn(
-			"[cmd] toml configuration file already exists",
+		logger.Warn(
+			"toml configuration file already exists",
 			"config", config,
 		)
 
@@ -54,13 +47,13 @@ func exportAction(ctx *cli.Context) error {
 
 		// prompt user to confirm overwriting existing toml configuration file
 		if force || confirmMessage("Are you sure you want to overwrite the file? [Y/n]") {
-			log.Warn(
-				"[cmd] overwriting toml configuration file",
+			logger.Warn(
+				"overwriting toml configuration file",
 				"config", config,
 			)
 		} else {
-			log.Warn(
-				"[cmd] exiting without exporting toml configuration file",
+			logger.Warn(
+				"exiting without exporting toml configuration file",
 				"config", config,
 			)
 			return nil // exit if reinitialization is not confirmed
@@ -72,7 +65,7 @@ func exportAction(ctx *cli.Context) error {
 	file := dot.ExportConfig(cfg, config)
 	// export config will exit and log error on error
 
-	log.Info("[cmd] exported toml configuration file", "path", file.Name())
+	logger.Info("exported toml configuration file", "path", file.Name())
 
 	return nil
 }

@@ -22,8 +22,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto"
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/scale"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // receiveMessages receives messages from the in channel until the specified condition is met
@@ -33,25 +31,25 @@ func (s *Service) receiveMessages(cond func() bool) {
 	go func(done *bool) {
 		for msg := range s.in {
 			if *done {
-				log.Debug("[grandpa] returning from receiveMessages")
+				s.logger.Debug("returning from receiveMessages")
 				return
 			}
 
-			log.Debug("[grandpa] received vote message", "msg", msg)
+			s.logger.Debug("received vote message", "msg", msg)
 
 			vm, ok := msg.(*VoteMessage)
 			if !ok {
-				log.Warn("[grandpa] failed to cast message to VoteMessage")
+				s.logger.Warn("failed to cast message to VoteMessage")
 				continue
 			}
 
 			v, err := s.validateMessage(vm)
 			if err != nil {
-				log.Debug("[grandpa] failed to validate vote message", "message", vm, "error", err)
+				s.logger.Debug("failed to validate vote message", "message", vm, "error", err)
 				continue
 			}
 
-			log.Debug("[grandpa] validated vote message", "vote", v, "subround", vm.Stage)
+			s.logger.Debug("validated vote message", "vote", v, "subround", vm.Stage)
 		}
 	}(&done)
 
@@ -78,7 +76,7 @@ func (s *Service) sendMessage(vote *Vote, stage subround) error {
 	}
 
 	s.out <- msg
-	log.Debug("[grandpa] sent VoteMessage", "msg", msg)
+	s.logger.Debug("sent VoteMessage", "msg", msg)
 
 	return nil
 }

@@ -18,8 +18,6 @@ package core
 
 import (
 	"github.com/ChainSafe/gossamer/dot/network"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // processConsensusMessage routes a consensus message from the network to the finality gadget
@@ -31,7 +29,7 @@ func (s *Service) processConsensusMessage(msg *network.ConsensusMessage) error {
 	}
 
 	// TODO: safety
-	log.Debug("[core] sending VoteMessage to FinalityGadget", "msg", msg)
+	s.logger.Debug("sending VoteMessage to FinalityGadget", "msg", msg)
 	in <- fm
 	return nil
 }
@@ -43,11 +41,11 @@ func (s *Service) sendVoteMessages() {
 		// TODO: safety
 		msg, err := v.ToConsensusMessage()
 		if err != nil {
-			log.Error("[core] failed to convert VoteMessage to ConsensusMessage", "msg", msg)
+			s.logger.Error("failed to convert VoteMessage to ConsensusMessage", "msg", msg)
 			continue
 		}
 
-		log.Debug("[core] sending VoteMessage to network", "msg", msg)
+		s.logger.Debug("sending VoteMessage to network", "msg", msg)
 		s.msgSend <- msg
 	}
 }
@@ -56,10 +54,10 @@ func (s *Service) sendVoteMessages() {
 func (s *Service) sendFinalizationMessages() {
 	out := s.finalityGadget.GetFinalizedChannel()
 	for v := range out {
-		log.Info("[core] finalized block!!!", "msg", v)
+		s.logger.Info("finalized block!!!", "msg", v)
 		msg, err := v.ToConsensusMessage()
 		if err != nil {
-			log.Error("[core] failed to convert FinalizationMessage to ConsensusMessage", "msg", msg)
+			s.logger.Error("failed to convert FinalizationMessage to ConsensusMessage", "msg", msg)
 			continue
 		}
 
@@ -69,19 +67,19 @@ func (s *Service) sendFinalizationMessages() {
 		if err == nil {
 			err = s.blockState.SetFinalizedHash(hash, v.GetRound())
 			if err != nil {
-				log.Error("[core] could not set finalized block hash", "hash", hash, "error", err)
+				s.logger.Error("could not set finalized block hash", "hash", hash, "error", err)
 			}
 
 			err = s.blockState.SetFinalizedHash(hash, 0)
 			if err != nil {
-				log.Error("[core] could not set finalized block hash", "hash", hash, "error", err)
+				s.logger.Error("could not set finalized block hash", "hash", hash, "error", err)
 			}
 		}
 
-		log.Debug("[core] sending FinalityMessage to network", "msg", v)
+		s.logger.Debug("sending FinalityMessage to network", "msg", v)
 		err = s.safeMsgSend(msg)
 		if err != nil {
-			log.Error("[core] failed to send finalization message to network", "error", err)
+			s.logger.Error("failed to send finalization message to network", "error", err)
 		}
 	}
 }

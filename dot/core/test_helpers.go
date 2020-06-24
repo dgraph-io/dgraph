@@ -32,6 +32,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -195,8 +196,9 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 	}
 
 	cfg.Verifier = &mockVerifier{}
+	cfg.LogLvl = 3
 
-	stateSrvc := state.NewService("")
+	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
 	genesisData := new(genesis.Data)

@@ -37,6 +37,8 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
+var logger = log.New("pkg", "dot")
+
 // Node is a container for all the components of a node.
 type Node struct {
 	Name     string
@@ -48,8 +50,13 @@ type Node struct {
 // InitNode initializes a new dot node from the provided dot node configuration
 // and JSON formatted genesis file.
 func InitNode(cfg *Config) error {
-	log.Info(
-		"[dot] initializing node...",
+	err := setupLogger(cfg)
+	if err != nil {
+		return err
+	}
+
+	logger.Info(
+		"initializing node...",
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"basepath", cfg.Global.BasePath,
@@ -75,7 +82,7 @@ func InitNode(cfg *Config) error {
 	}
 
 	// create new state service
-	stateSrvc := state.NewService(cfg.Global.BasePath)
+	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.lvl)
 
 	// declare genesis data
 	data := gen.GenesisData()
@@ -95,8 +102,8 @@ func InitNode(cfg *Config) error {
 		return fmt.Errorf("failed to initialize state service: %s", err)
 	}
 
-	log.Info(
-		"[dot] node initialized",
+	logger.Info(
+		"node initialized",
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"basepath", cfg.Global.BasePath,
@@ -110,14 +117,13 @@ func InitNode(cfg *Config) error {
 // NodeInitialized returns true if, within the configured data directory for the
 // node, the state database has been created and the genesis data has been loaded
 func NodeInitialized(basepath string, expected bool) bool {
-
 	// check if key registry exists
 	registry := path.Join(basepath, "KEYREGISTRY")
 	_, err := os.Stat(registry)
 	if os.IsNotExist(err) {
 		if expected {
-			log.Warn(
-				"[dot] node has not been initialized",
+			logger.Warn(
+				"node has not been initialized",
 				"basepath", basepath,
 				"error", "failed to locate KEYREGISTRY file in data directory",
 			)
@@ -130,8 +136,8 @@ func NodeInitialized(basepath string, expected bool) bool {
 	_, err = os.Stat(manifest)
 	if os.IsNotExist(err) {
 		if expected {
-			log.Warn(
-				"[dot] node has not been initialized",
+			logger.Warn(
+				"node has not been initialized",
 				"basepath", basepath,
 				"error", "failed to locate MANIFEST file in data directory",
 			)
@@ -142,8 +148,8 @@ func NodeInitialized(basepath string, expected bool) bool {
 	// initialize database using data directory
 	db, err := database.NewBadgerDB(basepath)
 	if err != nil {
-		log.Error(
-			"[dot] failed to create database",
+		logger.Error(
+			"failed to create database",
 			"basepath", basepath,
 			"error", err,
 		)
@@ -153,8 +159,8 @@ func NodeInitialized(basepath string, expected bool) bool {
 	// load genesis data from initialized node database
 	_, err = state.LoadGenesisData(db)
 	if err != nil {
-		log.Warn(
-			"[dot] node has not been initialized",
+		logger.Warn(
+			"node has not been initialized",
 			"basepath", basepath,
 			"error", err,
 		)
@@ -164,7 +170,7 @@ func NodeInitialized(basepath string, expected bool) bool {
 	// close database
 	err = db.Close()
 	if err != nil {
-		log.Error("[dot] failed to close database", "error", err)
+		logger.Error("failed to close database", "error", err)
 	}
 
 	return true
@@ -172,6 +178,10 @@ func NodeInitialized(basepath string, expected bool) bool {
 
 // NewNode creates a new dot node from a dot node configuration
 func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
+	err := setupLogger(cfg)
+	if err != nil {
+		return nil, err
+	}
 
 	// if authority node, should have at least 1 key in keystore
 	if cfg.Core.Authority && ks.NumSr25519Keys() == 0 {
@@ -180,8 +190,8 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	// Node Services
 
-	log.Info(
-		"[dot] initializing node services...",
+	logger.Info(
+		"initializing node services...",
 		"name", cfg.Global.Name,
 		"id", cfg.Global.ID,
 		"basepath", cfg.Global.BasePath,
@@ -204,7 +214,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
 	// create runtime
-	rt, err := createRuntime(stateSrvc, ks)
+	rt, err := createRuntime(stateSrvc, ks, cfg.Global.lvl)
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +268,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	} else {
 
 		// do not create or append network service if network service is not enabled
-		log.Debug("[dot] network service disabled", "network", enabled, "roles", cfg.Core.Roles)
+		logger.Debug("network service disabled", "network", enabled, "roles", cfg.Core.Roles)
 
 	}
 
@@ -280,7 +290,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	} else {
 
 		// do not create or append rpc service if rpc service is not enabled
-		log.Debug("[dot] rpc service disabled by default", "rpc", enabled)
+		logger.Debug("rpc service disabled by default", "rpc", enabled)
 
 	}
 
@@ -299,7 +309,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 // Start starts all dot node services
 func (n *Node) Start() error {
-	log.Info("[dot] starting node services...")
+	logger.Info("starting node services...")
 
 	// start all dot node services
 	n.Services.StartAll()
@@ -309,7 +319,7 @@ func (n *Node) Start() error {
 		signal.Notify(sigc, syscall.SIGINT, syscall.SIGTERM)
 		defer signal.Stop(sigc)
 		<-sigc
-		log.Info("[dot] signal interrupt, shutting down...")
+		logger.Info("signal interrupt, shutting down...")
 		n.Stop()
 		os.Exit(130)
 	}()

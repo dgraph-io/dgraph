@@ -18,6 +18,7 @@ package core
 import (
 	"bytes"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 
@@ -43,6 +44,8 @@ var maxResponseSize int64 = 8 // maximum number of block datas to reply with in 
 // BABE session, and network service. It deals with the validation of transactions
 // and blocks by calling their respective validation functions in the runtime.
 type Service struct {
+	logger log.Logger
+
 	// State interfaces
 	blockState       BlockState
 	storageState     StorageState
@@ -78,6 +81,7 @@ type Service struct {
 
 // Config holds the configuration for the core Service.
 type Config struct {
+	LogLvl           log.Lvl
 	BlockState       BlockState
 	StorageState     StorageState
 	TransactionQueue TransactionQueue
@@ -118,6 +122,10 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, ErrNilBlockProducer
 	}
 
+	logger := log.New("pkg", "core")
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
+
 	codeHash, err := cfg.StorageState.LoadCodeHash()
 	if err != nil {
 		return nil, err
@@ -130,6 +138,7 @@ func NewService(cfg *Config) (*Service, error) {
 	var srv = &Service{}
 
 	srv = &Service{
+		logger:           logger,
 		rt:               cfg.Runtime,
 		codeHash:         codeHash,
 		keys:             cfg.Keystore,
@@ -181,6 +190,7 @@ func NewService(cfg *Config) (*Service, error) {
 	srv.started.Store(false)
 
 	syncerCfg := &SyncerConfig{
+		logger:           logger,
 		BlockState:       cfg.BlockState,
 		BlockNumIn:       cfg.SyncChan,
 		RespIn:           respChan,
@@ -215,12 +225,12 @@ func (s *Service) Start() error {
 	// start syncer
 	err := s.syncer.Start()
 	if err != nil {
-		log.Error("[core] could not start syncer", "error", err)
+		s.logger.Error("could not start syncer", "error", err)
 		return err
 	}
 
 	if s.finalityGadget != nil {
-		log.Debug("[core] routing finality gadget messages")
+		s.logger.Debug("routing finality gadget messages")
 		go s.sendVoteMessages()
 		go s.sendFinalizationMessages()
 	}
@@ -277,10 +287,10 @@ func (s *Service) receiveBlocks() {
 		if block.Header != nil {
 			err := s.handleReceivedBlock(&block)
 			if err != nil {
-				log.Error("[core] failed to handle block from BABE session", "err", err)
+				s.logger.Error("failed to handle block from BABE session", "err", err)
 			}
 		} else {
-			log.Trace("[core] receiveBlocks got nil Header")
+			s.logger.Trace("receiveBlocks got nil Header")
 		}
 	}
 }
@@ -290,15 +300,15 @@ func (s *Service) receiveMessages() {
 	// receive message from network service
 	for msg := range s.msgRec {
 		if msg == nil {
-			log.Error("[core] failed to receive message from network service")
+			s.logger.Error("failed to receive message from network service")
 			continue
 		}
 
 		err := s.handleReceivedMessage(msg)
 		if err == blocktree.ErrDescendantNotFound || err == blocktree.ErrStartNodeNotFound || err == database.ErrKeyNotFound {
-			log.Trace("[core] failed to handle message from network service", "err", err)
+			s.logger.Trace("failed to handle message from network service", "err", err)
 		} else if err != nil {
-			log.Trace("[core] failed to handle message from network service", "err", err)
+			s.logger.Trace("failed to handle message from network service", "err", err)
 		}
 	}
 }
@@ -314,7 +324,7 @@ func (s *Service) handleReceivedBlock(block *types.Block) (err error) {
 		return err
 	}
 
-	log.Debug("[core] added block from BABE", "header", block.Header, "body", block.Body)
+	s.logger.Debug("added block from BABE", "header", block.Header, "body", block.Body)
 
 	msg := &network.BlockAnnounceMessage{
 		ParentHash:     block.Header.ParentHash,
@@ -394,7 +404,14 @@ func (s *Service) checkForRuntimeChanges() error {
 
 		s.rt.Stop()
 
-		s.rt, err = runtime.NewRuntime(code, s.storageState, s.keys, runtime.RegisterImports_NodeRuntime)
+		cfg := &runtime.Config{
+			Storage:  s.storageState,
+			Keystore: s.keys,
+			Imports:  runtime.RegisterImports_NodeRuntime,
+			LogLvl:   -1, // don't change runtime package log level
+		}
+
+		s.rt, err = runtime.NewRuntime(code, cfg)
 		if err != nil {
 			return err
 		}

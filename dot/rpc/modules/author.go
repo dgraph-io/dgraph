@@ -30,6 +30,7 @@ import (
 
 // AuthorModule holds a pointer to the API
 type AuthorModule struct {
+	logger     log.Logger
 	coreAPI    CoreAPI
 	runtimeAPI RuntimeAPI
 	txQueueAPI TransactionQueueAPI
@@ -80,8 +81,13 @@ type ExtrinsicStatus struct {
 type ExtrinsicHashResponse string
 
 // NewAuthorModule creates a new Author module.
-func NewAuthorModule(coreAPI CoreAPI, runtimeAPI RuntimeAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
+func NewAuthorModule(logger log.Logger, coreAPI CoreAPI, runtimeAPI RuntimeAPI, txQueueAPI TransactionQueueAPI) *AuthorModule {
+	if logger == nil {
+		logger = log.New("service", "RPC", "module", "author")
+	}
+
 	return &AuthorModule{
+		logger:     logger.New("module", "author"),
 		coreAPI:    coreAPI,
 		runtimeAPI: runtimeAPI,
 		txQueueAPI: txQueueAPI,
@@ -112,7 +118,7 @@ func (cm *AuthorModule) InsertKey(r *http.Request, req *KeyInsertRequest, res *K
 	}
 
 	cm.coreAPI.InsertKey(keyPair)
-	log.Info("[rpc] inserted key into keystore", "key", keyPair.Public().Hex())
+	cm.logger.Info("inserted key into keystore", "key", keyPair.Public().Hex())
 	return nil
 }
 
@@ -162,7 +168,7 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 		return err
 	}
 
-	log.Trace("[rpc]", "extrinsic", extBytes)
+	cm.logger.Trace("[rpc]", "extrinsic", extBytes)
 
 	ext := types.Extrinsic(extBytes)
 	// validate the transaction
@@ -177,18 +183,18 @@ func (cm *AuthorModule) SubmitExtrinsic(r *http.Request, req *Extrinsic, res *Ex
 		var hash common.Hash
 		hash, err = cm.txQueueAPI.Push(vtx)
 		if err != nil {
-			log.Trace("[rpc] submitted extrinsic failed to push transaction to queue", "error", err)
+			cm.logger.Trace("submitted extrinsic failed to push transaction to queue", "error", err)
 			return err
 		}
 
 		*res = ExtrinsicHashResponse(hash.String())
-		log.Trace("[rpc] submitted extrinsic", "tx", vtx, "hash", hash.String())
+		cm.logger.Trace("submitted extrinsic", "tx", vtx, "hash", hash.String())
 	}
 
 	//broadcast
 	err = cm.coreAPI.HandleSubmittedExtrinsic(ext)
 	if err != nil {
-		log.Trace("[rpc] submitted extrinsic failed to submit Extrinsic to network", "error", err)
+		cm.logger.Trace("submitted extrinsic failed to submit Extrinsic to network", "error", err)
 	}
 
 	return err

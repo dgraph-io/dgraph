@@ -55,7 +55,14 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 	fp, err := filepath.Abs(testRuntimeFilePath)
 	require.Nil(t, err, "could not create testRuntimeFilePath", "targetRuntime", targetRuntime)
 
-	r, err := NewRuntimeFromFile(fp, rs, keystore.NewKeystore(), importsFunc)
+	cfg := &Config{
+		Storage:  rs,
+		Keystore: keystore.NewKeystore(),
+		Imports:  importsFunc,
+		LogLvl:   3,
+	}
+
+	r, err := NewRuntimeFromFile(fp, cfg)
 	require.Nil(t, err, "Got error when trying to create new VM", "targetRuntime", targetRuntime)
 	require.NotNil(t, r, "Could not create new VM instance", "targetRuntime", targetRuntime)
 

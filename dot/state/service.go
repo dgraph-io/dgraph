@@ -18,6 +18,7 @@ package state
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -31,6 +32,7 @@ import (
 
 // Service is the struct that holds storage, block and network states
 type Service struct {
+	logger           log.Logger
 	dbPath           string
 	db               chaindb.Database
 	isMemDB          bool // set to true if using an in-memory database; only used for testing.
@@ -41,8 +43,13 @@ type Service struct {
 }
 
 // NewService create a new instance of Service
-func NewService(path string) *Service {
+func NewService(path string, lvl log.Lvl) *Service {
+	logger := log.New("pkg", "state")
+	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	logger.SetHandler(log.LvlFilterHandler(lvl, handler))
+
 	return &Service{
+		logger:  logger,
 		dbPath:  path,
 		db:      nil,
 		isMemDB: false,
@@ -195,7 +202,7 @@ func (s *Service) Start() error {
 		return fmt.Errorf("failed to get best block hash: %s", err)
 	}
 
-	log.Trace("[state] start", "best block hash", fmt.Sprintf("0x%x", bestHash))
+	s.logger.Trace("start", "best block hash", fmt.Sprintf("0x%x", bestHash))
 
 	// create storage state
 	s.Storage, err = NewStorageState(db, trie.NewEmptyTrie())
@@ -221,7 +228,7 @@ func (s *Service) Start() error {
 		return fmt.Errorf("cannot load latest storage root: %s", err)
 	}
 
-	log.Debug("[state] start", "latest state root", stateRoot)
+	s.logger.Debug("start", "latest state root", stateRoot)
 
 	// load current storage state
 	err = s.Storage.LoadFromDB(stateRoot)
@@ -266,7 +273,7 @@ func (s *Service) Stop() error {
 		return err
 	}
 
-	log.Debug("[state] stop", "best block hash", hash)
+	s.logger.Debug("stop", "best block hash", hash)
 
 	return s.db.Close()
 }

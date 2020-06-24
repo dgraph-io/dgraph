@@ -21,24 +21,25 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
+
+	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
 )
 
 // helper method to create and start test state service
 func newTestService(t *testing.T) (state *Service) {
 	testDir := utils.NewTestDir(t)
-	state = NewService(testDir)
+	state = NewService(testDir, log.LvlTrace)
 	return state
 }
 
 func newTestMemDBService() *Service {
-	state := NewService("")
+	state := NewService("", log.LvlTrace)
 	state.UseMemDB()
 	return state
 }
@@ -90,7 +91,7 @@ func TestService_BlockTree(t *testing.T) {
 	// removes all data directories created within test directory
 	defer utils.RemoveTestDir(t)
 
-	stateA := NewService(testDir)
+	stateA := NewService(testDir, log.LvlTrace)
 
 	genesisHeader, err := types.NewHeader(common.NewHash([]byte{0}), big.NewInt(0), trie.EmptyHash, trie.EmptyHash, [][]byte{})
 	require.Nil(t, err)
@@ -110,7 +111,7 @@ func TestService_BlockTree(t *testing.T) {
 	err = stateA.Stop()
 	require.Nil(t, err)
 
-	stateB := NewService(testDir)
+	stateB := NewService(testDir, log.LvlTrace)
 
 	err = stateB.Start()
 	require.Nil(t, err)

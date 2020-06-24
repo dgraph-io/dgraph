@@ -28,8 +28,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/scale"
 	"github.com/ChainSafe/gossamer/lib/transaction"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // BuildBlock builds a block for the slot with the given parent.
@@ -41,7 +39,7 @@ func (b *Service) BuildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 // construct a block for this slot with the given parent
 func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, error) {
-	log.Trace("[babe] build block", "parent", parent, "slot", slot)
+	b.logger.Trace("build block", "parent", parent, "slot", slot)
 
 	// create pre-digest
 	preDigest, err := b.buildBlockPreDigest(slot)
@@ -49,7 +47,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, err
 	}
 
-	log.Trace("[babe] built pre-digest")
+	b.logger.Trace("built pre-digest")
 
 	// create new block header
 	number := big.NewInt(0).Add(parent.Number, big.NewInt(1))
@@ -64,7 +62,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, err
 	}
 
-	log.Trace("[babe] initialized block")
+	b.logger.Trace("initialized block")
 
 	// add block inherents
 	err = b.buildBlockInherents(slot)
@@ -72,7 +70,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, fmt.Errorf("cannot build inherents: %s", err)
 	}
 
-	log.Trace("[babe] built block inherents")
+	b.logger.Trace("built block inherents")
 
 	// add block extrinsics
 	included, err := b.buildBlockExtrinsics(slot)
@@ -80,7 +78,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, fmt.Errorf("cannot build extrinsics: %s", err)
 	}
 
-	log.Trace("[babe] built block extrinsics")
+	b.logger.Trace("built block extrinsics")
 
 	// finalize block
 	header, err = b.rt.FinalizeBlock()
@@ -89,7 +87,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 		return nil, fmt.Errorf("cannot finalize block: %s", err)
 	}
 
-	log.Trace("[babe] finalized block")
+	b.logger.Trace("finalized block")
 
 	header.ParentHash = parent.Hash()
 	header.Number.Add(parent.Number, big.NewInt(1))
@@ -105,7 +103,7 @@ func (b *Service) buildBlock(parent *types.Header, slot Slot) (*types.Block, err
 
 	header.Digest = append(header.Digest, seal.Encode())
 
-	log.Trace("[babe] built block seal")
+	b.logger.Trace("built block seal")
 
 	body, err := extrinsicsToBody(included)
 	if err != nil {
@@ -190,7 +188,7 @@ func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 	included := []*transaction.ValidTransaction{}
 
 	for !hasSlotEnded(slot) && next != nil {
-		log.Trace("[babe] build block", "applying extrinsic", next)
+		b.logger.Trace("build block", "applying extrinsic", next)
 		ret, err := b.rt.ApplyExtrinsic(next)
 		if err != nil {
 			return nil, err
@@ -212,7 +210,7 @@ func (b *Service) buildBlockExtrinsics(slot Slot) ([]*transaction.ValidTransacti
 
 		}
 
-		log.Trace("[babe] build block applied extrinsic", "extrinsic", next)
+		b.logger.Trace("build block applied extrinsic", "extrinsic", next)
 
 		// keep track of included transactions; re-add them to queue later if block building fails
 		t := b.transactionQueue.Pop()
@@ -295,9 +293,9 @@ func (b *Service) addToQueue(txs []*transaction.ValidTransaction) {
 	for _, t := range txs {
 		hash, err := b.transactionQueue.Push(t)
 		if err != nil {
-			log.Trace("[babe] Failed to add transaction to queue", "error", err)
+			b.logger.Trace("Failed to add transaction to queue", "error", err)
 		} else {
-			log.Trace("[babe] Added transaction to queue", "hash", hash)
+			b.logger.Trace("Added transaction to queue", "hash", hash)
 		}
 	}
 }
@@ -326,7 +324,6 @@ func extrinsicsToBody(txs []*transaction.ValidTransaction) (*types.Body, error) 
 }
 
 func determineError(res []byte) (string, error) {
-	log.Error("[babe] build block apply extrinsic", "error", res)
 	var errTxt strings.Builder
 	var err error
 

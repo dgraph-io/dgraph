@@ -24,7 +24,6 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/utils"
 
-	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
@@ -33,18 +32,10 @@ import (
 // then, if the import flag is set, if so, it imports a keypair
 // finally, if the list flag is set, it lists all the keys in the keystore
 func accountAction(ctx *cli.Context) error {
-
-	// start gossamer logger
-	err := startLogger(ctx)
-	if err != nil {
-		log.Error("[cmd] failed to start logger", "error", err)
-		return err
-	}
-
 	// create dot configuration
 	cfg, err := createDotConfig(ctx)
 	if err != nil {
-		log.Error("[cmd] failed to create dot configuration", "error", err)
+		logger.Error("failed to create dot configuration", "error", err)
 		return err
 	}
 
@@ -63,25 +54,25 @@ func accountAction(ctx *cli.Context) error {
 
 	// check --generate flag and generate new keypair
 	if keygen := ctx.Bool(GenerateFlag.Name); keygen {
-		log.Info("[cmd] generating keypair...")
+		logger.Info("generating keypair...")
 
 		file, err = keystore.GenerateKeypair(keytype, nil, basepath, getKeystorePassword(ctx))
 		if err != nil {
-			log.Error("[cmd] failed to generate keypair", "error", err)
+			logger.Error("failed to generate keypair", "error", err)
 			return err
 		}
 
-		log.Info("[cmd] generated key", "file", file)
+		logger.Info("generated key", "file", file)
 	}
 
 	// check if --import is set
 	if keyimport := ctx.String(ImportFlag.Name); keyimport != "" {
-		log.Info("[cmd] importing keypair...")
+		logger.Info("importing keypair...")
 
 		// import keypair
 		_, err = keystore.ImportKeypair(keyimport, basepath)
 		if err != nil {
-			log.Error("[cmd] failed to import key", "error", err)
+			logger.Error("failed to import key", "error", err)
 			return err
 		}
 	}
@@ -90,7 +81,7 @@ func accountAction(ctx *cli.Context) error {
 	if keylist := ctx.Bool(ListFlag.Name); keylist {
 		_, err = utils.KeystoreFilepaths(basepath)
 		if err != nil {
-			log.Error("[cmd] failed to list keys", "error", err)
+			logger.Error("failed to list keys", "error", err)
 			return err
 		}
 	}
@@ -99,11 +90,11 @@ func accountAction(ctx *cli.Context) error {
 	if importraw := ctx.String(ImportRawFlag.Name); importraw != "" {
 		file, err = keystore.ImportRawPrivateKey(importraw, keytype, basepath, getKeystorePassword(ctx))
 		if err != nil {
-			log.Error("[cmd] failed to import private key", "error", err)
+			logger.Error("failed to import private key", "error", err)
 			return err
 		}
 
-		log.Info("[cmd] imported key", "file", file)
+		logger.Info("imported key", "file", file)
 	}
 
 	return nil

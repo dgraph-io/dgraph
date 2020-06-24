@@ -60,6 +60,7 @@ func TestExportCommand(t *testing.T) {
 					Name:     testName,
 					ID:       testCfg.Global.ID,
 					BasePath: testCfg.Global.BasePath,
+					LogLevel: "trace",
 				},
 				Init: dot.InitConfig{
 					Genesis: genFile.Name(),
@@ -79,7 +80,7 @@ func TestExportCommand(t *testing.T) {
 		{
 			"Test gossamer export --config --genesis --bootnodes --log --force",
 			[]string{"config", "genesis", "bootnodes", "log", "force"},
-			[]interface{}{testConfig, genFile.Name(), testBootnode, "trace", "true"},
+			[]interface{}{testConfig, genFile.Name(), testBootnode, "info", "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
@@ -100,7 +101,7 @@ func TestExportCommand(t *testing.T) {
 		{
 			"Test gossamer export --config --genesis --protocol --log --force",
 			[]string{"config", "genesis", "protocol", "log", "force"},
-			[]interface{}{testConfig, genFile.Name(), testProtocol, "trace", "true"},
+			[]interface{}{testConfig, genFile.Name(), testProtocol, "info", "true"},
 			&dot.Config{
 				Global: testCfg.Global,
 				Init: dot.InitConfig{

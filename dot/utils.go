@@ -28,7 +28,26 @@ import (
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/utils"
 	"github.com/stretchr/testify/require"
+
+	log "github.com/ChainSafe/log15"
 )
+
+// setupLogger sets up the gossamer logger
+func setupLogger(cfg *Config) error {
+	if cfg.Global.LogLevel == "" {
+		cfg.Global.LogLevel = "info"
+	}
+
+	handler := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	lvl, err := log.LvlFromString(cfg.Global.LogLevel)
+	if err != nil {
+		return err
+	}
+
+	logger.SetHandler(log.LvlFilterHandler(lvl, handler))
+	cfg.Global.lvl = lvl
+	return nil
+}
 
 // NewTestConfig returns a new test configuration using the provided basepath
 func NewTestConfig(t *testing.T) *Config {
@@ -41,6 +60,7 @@ func NewTestConfig(t *testing.T) *Config {
 			Name:     GssmrConfig().Global.Name,
 			ID:       GssmrConfig().Global.ID,
 			BasePath: dir,
+			LogLevel: "info",
 		},
 		Init:    GssmrConfig().Init,
 		Account: GssmrConfig().Account,

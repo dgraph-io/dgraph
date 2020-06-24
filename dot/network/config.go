@@ -53,6 +53,9 @@ var DefaultBootnodes = []string(nil)
 
 // Config is used to configure a network service
 type Config struct {
+	LogLvl log.Lvl
+	logger log.Logger
+
 	// BasePath the data directory for the node
 	BasePath string
 	// Roles a bitmap value that represents the different roles for the sender node (see Table D.2)
@@ -129,7 +132,7 @@ func (c *Config) build() error {
 
 	// check bootnoode configuration
 	if !c.NoBootstrap && len(c.Bootnodes) == 0 {
-		log.Warn("[network] Bootstrap is enabled but no bootstrap nodes are defined")
+		c.logger.Warn("Bootstrap is enabled but no bootstrap nodes are defined")
 	}
 
 	return nil
@@ -162,8 +165,8 @@ func (c *Config) buildIdentity() error {
 
 		// generate key if no key exists
 		if key == nil {
-			log.Info(
-				"[network] Generating p2p identity",
+			c.logger.Info(
+				"Generating p2p identity",
 				"RandSeed", c.RandSeed,
 				"KeyFile", path.Join(c.BasePath, DefaultKeyFile),
 			)
@@ -178,8 +181,8 @@ func (c *Config) buildIdentity() error {
 		// set private key
 		c.privateKey = key
 	} else {
-		log.Info(
-			"[network] Generating p2p identity from seed",
+		c.logger.Info(
+			"Generating p2p identity from seed",
 			"RandSeed", c.RandSeed,
 			"KeyFile", path.Join(c.BasePath, DefaultKeyFile),
 		)
@@ -200,8 +203,8 @@ func (c *Config) buildIdentity() error {
 // buildProtocol verifies and applies defaults to the protocol configuration
 func (c *Config) buildProtocol() error {
 	if c.ProtocolID == "" {
-		log.Warn(
-			"[network] ProtocolID not defined, using DefaultProtocolID",
+		c.logger.Warn(
+			"ProtocolID not defined, using DefaultProtocolID",
 			"DefaultProtocolID", DefaultProtocolID,
 		)
 		c.ProtocolID = DefaultProtocolID
@@ -211,16 +214,16 @@ func (c *Config) buildProtocol() error {
 		s := strings.Split(c.ProtocolID, "/")
 		// expecting the default protocol format ("/gossamer/gssmr/0")
 		if len(s) != 4 {
-			log.Warn(
-				"[network] Unable to parse ProtocolID, using DefaultProtocolVersion",
+			c.logger.Warn(
+				"Unable to parse ProtocolID, using DefaultProtocolVersion",
 				"DefaultProtocolVersion", DefaultProtocolVersion,
 			)
 		} else {
 			// get the last item in the slice ("0" in the default protocol format)
 			i, err := strconv.Atoi(s[len(s)-1])
 			if err != nil {
-				log.Warn(
-					"[network] Unable to parse ProtocolID, using DefaultProtocolVersion",
+				c.logger.Warn(
+					"Unable to parse ProtocolID, using DefaultProtocolVersion",
 					"DefaultProtocolVersion", DefaultProtocolVersion,
 				)
 			} else {
@@ -230,8 +233,8 @@ func (c *Config) buildProtocol() error {
 	}
 
 	if c.MinSupportedVersion < c.ProtocolVersion {
-		log.Warn(
-			"[network] MinSupportedVersion less than ProtocolVersion, using ProtocolVersion",
+		c.logger.Warn(
+			"MinSupportedVersion less than ProtocolVersion, using ProtocolVersion",
 			"ProtocolVersion", c.ProtocolVersion,
 		)
 		c.MinSupportedVersion = c.ProtocolVersion

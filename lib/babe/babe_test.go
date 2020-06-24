@@ -30,6 +30,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/runtime"
 	"github.com/ChainSafe/gossamer/lib/trie"
+
+	log "github.com/ChainSafe/log15"
 )
 
 var emptyHash = trie.EmptyHash
@@ -78,7 +80,7 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	}
 
 	if cfg.BlockState == nil || cfg.StorageState == nil {
-		dbSrv := state.NewService("")
+		dbSrv := state.NewService("", log.LvlInfo)
 		dbSrv.UseMemDB()
 
 		genesisData := new(genesis.Data)
@@ -92,6 +94,8 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 		cfg.BlockState = dbSrv.Block
 		cfg.StorageState = dbSrv.Storage
 	}
+
+	cfg.LogLvl = 3
 
 	babeService, err := NewService(cfg)
 	require.NoError(t, err)
@@ -263,6 +267,7 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 	bs := &Service{
 		authorityData: authData,
 		keypair:       kpA,
+		logger:        log.New("BABE"),
 	}
 
 	err = bs.setAuthorityIndex()
@@ -277,6 +282,7 @@ func TestDetermineAuthorityIndex(t *testing.T) {
 	bs = &Service{
 		authorityData: authData,
 		keypair:       kpB,
+		logger:        log.New("BABE"),
 	}
 
 	err = bs.setAuthorityIndex()

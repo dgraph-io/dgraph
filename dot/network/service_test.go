@@ -79,6 +79,10 @@ func createTestService(t *testing.T, cfg *Config) (srvc *Service) {
 		cfg.SyncChan = make(chan *big.Int, 10)
 	}
 
+	if cfg.LogLvl == 0 {
+		cfg.LogLvl = 3
+	}
+
 	srvc, err := NewService(cfg)
 	if err != nil {
 		t.Fatal(err)

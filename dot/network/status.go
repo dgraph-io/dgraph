@@ -35,6 +35,7 @@ const ExpireStatusInterval = SendStatusInterval + time.Minute
 
 // status submodule
 type status struct {
+	logger        log.Logger
 	host          *host
 	hostMessage   *StatusMessage
 	peerConfirmed *sync.Map //map of peer.ID to time.Time
@@ -44,6 +45,7 @@ type status struct {
 // newStatus creates a new status instance from host
 func newStatus(host *host) *status {
 	return &status{
+		logger:        host.logger.New("module", "status"),
 		host:          host,
 		peerConfirmed: &sync.Map{},
 		peerMessage:   &sync.Map{},
@@ -75,8 +77,8 @@ func (status *status) handleConn(conn network.Conn) {
 		// send initial host status message to peer upon connection
 		err := status.host.send(remotePeer, status.hostMessage)
 		if err != nil {
-			log.Error(
-				"[network] Failed to send status message to peer",
+			status.logger.Error(
+				"Failed to send status message to peer",
 				"peer", remotePeer,
 				"error", err,
 			)
@@ -86,8 +88,8 @@ func (status *status) handleConn(conn network.Conn) {
 		go status.expireStatus(ctx, remotePeer)
 
 	} else {
-		log.Error(
-			"[network] Failed to send status message to peer",
+		status.logger.Error(
+			"Failed to send status message to peer",
 			"peer", remotePeer,
 			"error", "host status message not set",
 		)
@@ -116,7 +118,7 @@ func (status *status) handleMessage(peer peer.ID, msg *StatusMessage) {
 		// close connection with peer if status message is not valid
 		err := status.closePeer(ctx, peer)
 		if err != nil {
-			log.Error("[network] Failed to close peer with invalid status message", "error", err)
+			status.logger.Error("Failed to close peer with invalid status message", "error", err)
 		}
 	}
 }
@@ -127,24 +129,24 @@ func (status *status) validMessage(msg *StatusMessage) bool {
 		return false
 	}
 
-	log.Debug("[network] Validating peer status message", "GenesisHash", msg.GenesisHash)
+	status.logger.Debug("Validating peer status message", "GenesisHash", msg.GenesisHash)
 
 	switch {
 	case !bytes.Equal(msg.GenesisHash[:], status.hostMessage.GenesisHash[:]):
-		log.Error(
-			"[network] Failed to validate status message",
+		status.logger.Error(
+			"Failed to validate status message",
 			"error", "host and peer genesis hashes do not match",
 		)
 		return false
 	case msg.ProtocolVersion < status.hostMessage.MinSupportedVersion:
-		log.Error(
-			"[network] Failed to validate status message",
+		status.logger.Error(
+			"Failed to validate status message",
 			"error", "protocol version less than minimum supported version",
 		)
 		return false
 	case msg.MinSupportedVersion > status.hostMessage.ProtocolVersion:
-		log.Error(
-			"[network] Failed to validate status message",
+		status.logger.Error(
+			"Failed to validate status message",
 			"error", "minimum supported version greater than protocol version",
 		)
 		return false
@@ -170,8 +172,8 @@ func (status *status) sendNextMessage(ctx context.Context, peer peer.ID) {
 		// send host status message to peer
 		err := status.host.send(peer, status.hostMessage)
 		if err != nil {
-			log.Error(
-				"[network] Failed to send host status message to peer",
+			status.logger.Error(
+				"Failed to send host status message to peer",
 				"peer", peer,
 				"error", err,
 			)
@@ -211,7 +213,7 @@ func (status *status) expireStatus(ctx context.Context, peer peer.ID) {
 		// update peer information and close connection
 		err := status.closePeer(ctx, peer)
 		if err != nil {
-			log.Error("[network] Failed to close peer with expired status message", "error", err)
+			status.logger.Error("Failed to close peer with expired status message", "error", err)
 		}
 	}
 }

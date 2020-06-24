@@ -33,6 +33,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/grandpa"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/runtime"
+
 	log "github.com/ChainSafe/log15"
 )
 
@@ -43,9 +44,9 @@ var ErrNoKeysProvided = errors.New("no keys provided for authority node")
 
 // createStateService creates the state service and initialize state database
 func createStateService(cfg *Config) (*state.Service, error) {
-	log.Info("[dot] creating state service...")
+	logger.Info("creating state service...")
 
-	stateSrvc := state.NewService(cfg.Global.BasePath)
+	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.lvl)
 
 	// start state service (initialize state database)
 	err := stateSrvc.Start()
@@ -68,15 +69,22 @@ func createStateService(cfg *Config) (*state.Service, error) {
 	return stateSrvc, nil
 }
 
-func createRuntime(st *state.Service, ks *keystore.Keystore) (*runtime.Runtime, error) {
+func createRuntime(st *state.Service, ks *keystore.Keystore, lvl log.Lvl) (*runtime.Runtime, error) {
 	// load runtime code from trie
 	code, err := st.Storage.GetStorage([]byte(":code"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve :code from trie: %s", err)
 	}
 
+	cfg := &runtime.Config{
+		Storage:  st.Storage,
+		Keystore: ks,
+		Imports:  runtime.RegisterImports_NodeRuntime,
+		LogLvl:   lvl,
+	}
+
 	// create runtime executor
-	rt, err := runtime.NewRuntime(code, st.Storage, ks, runtime.RegisterImports_NodeRuntime)
+	rt, err := runtime.NewRuntime(code, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime executor: %s", err)
 	}
@@ -85,8 +93,8 @@ func createRuntime(st *state.Service, ks *keystore.Keystore) (*runtime.Runtime, 
 }
 
 func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *keystore.Keystore) (*babe.Service, error) {
-	log.Info(
-		"[dot] creating BABE service...",
+	logger.Info(
+		"creating BABE service...",
 		"authority", cfg.Core.Authority,
 	)
 
@@ -112,6 +120,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 	}
 
 	bcfg := &babe.ServiceConfig{
+		LogLvl:           cfg.Global.lvl,
 		Keypair:          kps[0].(*sr25519.Keypair),
 		Runtime:          rt,
 		BlockState:       st.Block,
@@ -123,7 +132,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 	// create new BABE service
 	bs, err := babe.NewService(bcfg)
 	if err != nil {
-		log.Error("[dot] failed to initialize BABE service", "error", err)
+		logger.Error("failed to initialize BABE service", "error", err)
 		return nil, err
 	}
 
@@ -134,13 +143,14 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 
 // createCoreService creates the core service from the provided core configuration
 func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
-	log.Info(
-		"[dot] creating core service...",
+	logger.Info(
+		"creating core service...",
 		"authority", cfg.Core.Authority,
 	)
 
 	// set core configuration
 	coreConfig := &core.Config{
+		LogLvl:           cfg.Global.lvl,
 		BlockState:       stateSrvc.Block,
 		StorageState:     stateSrvc.Storage,
 		TransactionQueue: stateSrvc.TransactionQueue,
@@ -157,7 +167,7 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 	// create new core service
 	coreSrvc, err := core.NewService(coreConfig)
 	if err != nil {
-		log.Error("[dot] failed to create core service", "error", err)
+		logger.Error("failed to create core service", "error", err)
 		return nil, err
 	}
 
@@ -168,8 +178,8 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 
 // createNetworkService creates a network service from the command configuration and genesis data
 func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*network.Service, error) {
-	log.Info(
-		"[dot] creating network service...",
+	logger.Info(
+		"creating network service...",
 		"roles", cfg.Core.Roles,
 		"port", cfg.Network.Port,
 		"bootnodes", cfg.Network.Bootnodes,
@@ -196,7 +206,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 
 	networkSrvc, err := network.NewService(&networkConfig)
 	if err != nil {
-		log.Error("[dot] failed to create network service", "error", err)
+		logger.Error("failed to create network service", "error", err)
 		return nil, err
 	}
 
@@ -207,8 +217,8 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 
 // createRPCService creates the RPC service from the provided core configuration
 func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, rt *runtime.Runtime, sysSrvc *system.Service) *rpc.HTTPServer {
-	log.Info(
-		"[dot] creating rpc service...",
+	logger.Info(
+		"creating rpc service...",
 		"host", cfg.RPC.Host,
 		"rpc port", cfg.RPC.Port,
 		"mods", cfg.RPC.Modules,

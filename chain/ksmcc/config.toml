@@ -2,6 +2,7 @@
 name = "ksmcc"
 id = "ksmcc"
 basepath = "~/.gossamer/ksmcc"
+log = "info"
 
 [init]
 genesis = "./chain/ksmcc/genesis.json"
