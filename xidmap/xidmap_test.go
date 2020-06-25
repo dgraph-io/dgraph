@@ -36,7 +36,7 @@ func TestXidmap(t *testing.T) {
 	require.NotNil(t, conn)
 
 	withDB(t, func(db *badger.DB) {
-		xidmap := New(conn, db)
+		xidmap := New(conn, db, x.DefaultNamespace)
 
 		uida, isNew := xidmap.AssignUid("a")
 		require.True(t, isNew)
@@ -59,7 +59,7 @@ func TestXidmap(t *testing.T) {
 		require.NoError(t, xidmap.Flush())
 		xidmap = nil
 
-		xidmap2 := New(conn, db)
+		xidmap2 := New(conn, db, x.DefaultNamespace)
 		uida2, isNew := xidmap2.AssignUid("a")
 		require.Equal(t, uida, uida2)
 		require.False(t, isNew)
@@ -101,7 +101,7 @@ func TestXidmapMemory(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, conn)
 
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, x.DefaultNamespace)
 
 	start := time.Now()
 	var wg sync.WaitGroup
@@ -129,7 +129,7 @@ func BenchmarkXidmap(b *testing.B) {
 	}
 
 	var counter uint64
-	xidmap := New(conn, nil)
+	xidmap := New(conn, nil, x.DefaultNamespace)
 	b.ResetTimer()
 
 	b.RunParallel(func(pb *testing.PB) {

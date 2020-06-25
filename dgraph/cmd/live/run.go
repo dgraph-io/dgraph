@@ -383,7 +383,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 	connzero, err := x.SetupConnection(opt.zero, nil, false)
 	x.Checkf(err, "Unable to connect to zero, Is it running at %s?", opt.zero)
 
-	alloc := xidmap.New(connzero, db)
+	alloc := xidmap.New(connzero, db, x.DefaultNamespace)
 	l := &loader{
 		opts:      opts,
 		dc:        dc,
