@@ -1271,7 +1271,7 @@ func onlytypenameForInterface(t *testing.T) {
 	droidID := addDroid(t)
 	updateCharacter(t, humanID)
 
-	t.Run("test __onlytypename for interface types", func(t *testing.T) {
+	t.Run("test onlytypename for interface types", func(t *testing.T) {
 		queryCharacterParams := &GraphQLParams{
 			Query: `query {
 				queryCharacter (filter: {
