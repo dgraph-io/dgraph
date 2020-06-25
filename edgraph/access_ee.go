@@ -990,7 +990,9 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
 	filteredGQs := gqs[:0]
+
 	for _, gq := range gqs {
+		fmt.Printf("GQs before dropping %+v\n", gq)
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
 				continue
@@ -1015,6 +1017,7 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
 		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
 		filteredGQs = append(filteredGQs, gq)
+		fmt.Printf("GQs after dropping %+v\n", gq)
 	}
 
 	return filteredGQs
