@@ -13,7 +13,6 @@
 package edgraph
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/ee/acl"
@@ -51,8 +50,6 @@ func (cache *aclCache) update(groups []acl.Group) {
 	// predPerms is the map descriebed above that maps a single
 	// predicate to a submap, and the submap maps a group to a permission
 
-	fmt.Println("Groups inside update")
-	fmt.Printf("Groups: %+v", groups)
 	predPerms := make(map[string]map[string]int32)
 	userPredPerms := make(map[string]map[string]int32)
 	for _, group := range groups {
@@ -94,7 +91,6 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	aclCachePtr.RLock()
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
-	fmt.Printf("Pred Perms inside authorizePredicate: %+v\n", predPerms)
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil

@@ -1866,8 +1866,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(typeNames)
-			fmt.Printf("Preds Inside query processing: %+v\n", preds)
-			fmt.Printf("Accessible Preds Inside query processing: %+v\n", sg.Params.AccessiblePredicates)
 			if len(sg.Params.AccessiblePredicates) != 0 {
 				// Take intersection of both the predicate lists
 				intersectPreds := make([]string, 0)
