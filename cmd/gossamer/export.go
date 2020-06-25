@@ -60,7 +60,10 @@ func exportAction(ctx *cli.Context) error {
 		}
 	}
 
-	cfg := createExportConfig(ctx)
+	cfg, err := createExportConfig(ctx)
+	if err != nil {
+		return err
+	}
 
 	file := dot.ExportConfig(cfg, config)
 	// export config will exit and log error on error

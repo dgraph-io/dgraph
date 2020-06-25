@@ -544,6 +544,15 @@ func TestUpdateConfigFromGenesisJSON(t *testing.T) {
 			BasePath: testCfg.Global.BasePath,
 			LogLevel: testCfg.Global.LogLevel,
 		},
+		Log: dot.LogConfig{
+			CoreLvl:           "info",
+			NetworkLvl:        "info",
+			RPCLvl:            "info",
+			StateLvl:          "info",
+			RuntimeLvl:        "info",
+			BlockProducerLvl:  "info",
+			FinalityGadgetLvl: "info",
+		},
 		Init: dot.InitConfig{
 			Genesis: genFile.Name(),
 		},
@@ -586,6 +595,15 @@ func TestUpdateConfigFromGenesisJSON_Default(t *testing.T) {
 			BasePath: testCfg.Global.BasePath,
 			LogLevel: testCfg.Global.LogLevel,
 		},
+		Log: dot.LogConfig{
+			CoreLvl:           "info",
+			NetworkLvl:        "info",
+			RPCLvl:            "info",
+			StateLvl:          "info",
+			RuntimeLvl:        "info",
+			BlockProducerLvl:  "info",
+			FinalityGadgetLvl: "info",
+		},
 		Init: dot.InitConfig{
 			Genesis: DefaultCfg.Init.Genesis,
 		},
@@ -623,6 +641,15 @@ func TestUpdateConfigFromGenesisData(t *testing.T) {
 			ID:       testCfg.Global.ID,
 			BasePath: testCfg.Global.BasePath,
 			LogLevel: testCfg.Global.LogLevel,
+		},
+		Log: dot.LogConfig{
+			CoreLvl:           "info",
+			NetworkLvl:        "info",
+			RPCLvl:            "info",
+			StateLvl:          "info",
+			RuntimeLvl:        "info",
+			BlockProducerLvl:  "info",
+			FinalityGadgetLvl: "info",
 		},
 		Init: dot.InitConfig{
 			Genesis: genFile.Name(),

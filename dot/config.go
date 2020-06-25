@@ -35,6 +35,7 @@ import (
 // Config is a collection of configurations throughout the system
 type Config struct {
 	Global  GlobalConfig     `toml:"global"`
+	Log     LogConfig        `toml:"log"`
 	Init    InitConfig       `toml:"init"`
 	Account AccountConfig    `toml:"account"`
 	Core    CoreConfig       `toml:"core"`
@@ -50,6 +51,17 @@ type GlobalConfig struct {
 	BasePath string `toml:"basepath"`
 	LogLevel string `toml:"log"`
 	lvl      log.Lvl
+}
+
+// LogConfig represents the log levels for individual packages
+type LogConfig struct {
+	CoreLvl           string `toml:"core"`
+	NetworkLvl        string `toml:"network"`
+	RPCLvl            string `toml:"rpc"`
+	StateLvl          string `toml:"state"`
+	RuntimeLvl        string `toml:"runtime"`
+	BlockProducerLvl  string `toml:"babe"`
+	FinalityGadgetLvl string `toml:"grandpa"`
 }
 
 // InitConfig is the configuration for the node initialization
@@ -111,6 +123,16 @@ func GssmrConfig() *Config {
 			Name:     gssmr.DefaultName,
 			ID:       gssmr.DefaultID,
 			BasePath: gssmr.DefaultBasePath,
+			LogLevel: gssmr.DefaultLvl,
+		},
+		Log: LogConfig{
+			CoreLvl:           gssmr.DefaultLvl,
+			NetworkLvl:        gssmr.DefaultLvl,
+			RPCLvl:            gssmr.DefaultLvl,
+			StateLvl:          gssmr.DefaultLvl,
+			RuntimeLvl:        gssmr.DefaultLvl,
+			BlockProducerLvl:  gssmr.DefaultLvl,
+			FinalityGadgetLvl: gssmr.DefaultLvl,
 		},
 		Init: InitConfig{
 			Genesis: gssmr.DefaultGenesis,
@@ -150,6 +172,15 @@ func KsmccConfig() *Config {
 			Name:     ksmcc.DefaultName,
 			ID:       ksmcc.DefaultID,
 			BasePath: ksmcc.DefaultBasePath,
+		},
+		Log: LogConfig{
+			CoreLvl:           ksmcc.DefaultLvl,
+			NetworkLvl:        ksmcc.DefaultLvl,
+			RPCLvl:            ksmcc.DefaultLvl,
+			StateLvl:          ksmcc.DefaultLvl,
+			RuntimeLvl:        ksmcc.DefaultLvl,
+			BlockProducerLvl:  ksmcc.DefaultLvl,
+			FinalityGadgetLvl: ksmcc.DefaultLvl,
 		},
 		Init: InitConfig{
 			Genesis: ksmcc.DefaultGenesis,

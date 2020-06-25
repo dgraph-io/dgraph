@@ -26,6 +26,8 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
+
+	log "github.com/ChainSafe/log15"
 	"github.com/urfave/cli"
 )
 
@@ -84,6 +86,15 @@ func createDotConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 		return nil, err
 	}
 
+	// set log config
+	err = setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	if err != nil {
+		logger.Error("failed to set log configuration", "error", err)
+		return nil, err
+	}
+
+	logger.Info("loaded package log configuration", "cfg", cfg.Log)
+
 	// set global configuration values
 	setDotGlobalConfig(ctx, &cfg.Global)
 
@@ -110,6 +121,13 @@ func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 	// set global configuration values
 	setDotGlobalConfig(ctx, &cfg.Global)
 
+	// set log config
+	err = setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	if err != nil {
+		logger.Error("failed to set log configuration", "error", err)
+		return nil, err
+	}
+
 	// set init configuration values
 	setDotInitConfig(ctx, &cfg.Init)
 
@@ -123,11 +141,18 @@ func createInitConfig(ctx *cli.Context) (cfg *dot.Config, err error) {
 }
 
 // createExportConfig creates a new dot configuration from the provided flag values
-func createExportConfig(ctx *cli.Context) (cfg *dot.Config) {
-	cfg = DefaultCfg // start with default configuration
+func createExportConfig(ctx *cli.Context) (*dot.Config, error) {
+	cfg := DefaultCfg // start with default configuration
 
 	// set global configuration values
 	setDotGlobalConfig(ctx, &cfg.Global)
+
+	// set log config
+	err := setLogConfig(ctx, &cfg.Global, &cfg.Log)
+	if err != nil {
+		logger.Error("failed to set log configuration", "error", err)
+		return nil, err
+	}
 
 	// set init configuration values
 	setDotInitConfig(ctx, &cfg.Init)
@@ -147,7 +172,54 @@ func createExportConfig(ctx *cli.Context) (cfg *dot.Config) {
 	// set log config
 	cfg.Global.LogLevel = ctx.String(LogFlag.Name)
 
-	return cfg
+	return cfg, nil
+}
+
+func setLogConfig(ctx *cli.Context, globalCfg *dot.GlobalConfig, logCfg *dot.LogConfig) error {
+	var lvl log.Lvl
+	if lvlStr := ctx.String(LogFlag.Name); lvlStr != "" {
+		if lvlToInt, err := strconv.Atoi(lvlStr); err == nil {
+			lvl = log.Lvl(lvlToInt)
+		} else if lvl, err = log.LvlFromString(lvlStr); err != nil {
+			return err
+		}
+	}
+
+	if lvlStr := ctx.String(LogFlag.Name); lvlStr != "" {
+		globalCfg.LogLevel = lvl.String()
+	}
+
+	// check and set log levels for each pkg
+	if logCfg.CoreLvl == "" {
+		logCfg.CoreLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.NetworkLvl == "" {
+		logCfg.NetworkLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.RPCLvl == "" {
+		logCfg.RPCLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.StateLvl == "" {
+		logCfg.StateLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.RuntimeLvl == "" {
+		logCfg.RuntimeLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.BlockProducerLvl == "" {
+		logCfg.BlockProducerLvl = globalCfg.LogLevel
+	}
+
+	if logCfg.FinalityGadgetLvl == "" {
+		logCfg.FinalityGadgetLvl = globalCfg.LogLevel
+	}
+
+	logger.Debug("set log configuration", "--log", ctx.String(LogFlag.Name), "global", globalCfg.LogLevel)
+	return nil
 }
 
 // setDotInitConfig sets dot.InitConfig using flag values from the cli context
@@ -178,6 +250,14 @@ func setDotGlobalConfig(ctx *cli.Context, cfg *dot.GlobalConfig) {
 	// check --basepath flag and update node configuration
 	if basepath := ctx.GlobalString(BasePathFlag.Name); basepath != "" {
 		cfg.BasePath = basepath
+	}
+
+	// check --log flag
+	if lvlToInt, err := strconv.Atoi(ctx.String(LogFlag.Name)); err == nil {
+		lvl := log.Lvl(lvlToInt)
+		cfg.LogLevel = lvl.String()
+	} else if lvl, err := log.LvlFromString(ctx.String(LogFlag.Name)); err == nil {
+		cfg.LogLevel = lvl.String()
 	}
 
 	logger.Debug(

@@ -54,13 +54,22 @@ func TestExportCommand(t *testing.T) {
 		{
 			"Test gossamer export --config --genesis --basepath --name --log",
 			[]string{"config", "genesis", "basepath", "name", "log"},
-			[]interface{}{testConfig, genFile.Name(), testDir, testName, "trace"},
+			[]interface{}{testConfig, genFile.Name(), testDir, testName, "info"},
 			&dot.Config{
 				Global: dot.GlobalConfig{
 					Name:     testName,
 					ID:       testCfg.Global.ID,
 					BasePath: testCfg.Global.BasePath,
-					LogLevel: "trace",
+					LogLevel: "info",
+				},
+				Log: dot.LogConfig{
+					CoreLvl:           "info",
+					NetworkLvl:        "info",
+					RPCLvl:            "info",
+					StateLvl:          "info",
+					RuntimeLvl:        "info",
+					BlockProducerLvl:  "info",
+					FinalityGadgetLvl: "info",
 				},
 				Init: dot.InitConfig{
 					Genesis: genFile.Name(),
@@ -86,6 +95,15 @@ func TestExportCommand(t *testing.T) {
 				Init: dot.InitConfig{
 					Genesis: genFile.Name(),
 				},
+				Log: dot.LogConfig{
+					CoreLvl:           "info",
+					NetworkLvl:        "info",
+					RPCLvl:            "info",
+					StateLvl:          "info",
+					RuntimeLvl:        "info",
+					BlockProducerLvl:  "info",
+					FinalityGadgetLvl: "info",
+				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,
 				Network: dot.NetworkConfig{
@@ -106,6 +124,15 @@ func TestExportCommand(t *testing.T) {
 				Global: testCfg.Global,
 				Init: dot.InitConfig{
 					Genesis: genFile.Name(),
+				},
+				Log: dot.LogConfig{
+					CoreLvl:           "info",
+					NetworkLvl:        "info",
+					RPCLvl:            "info",
+					StateLvl:          "info",
+					RuntimeLvl:        "info",
+					BlockProducerLvl:  "info",
+					FinalityGadgetLvl: "info",
 				},
 				Account: testCfg.Account,
 				Core:    testCfg.Core,

@@ -74,7 +74,7 @@ func TestCreateCoreService(t *testing.T) {
 
 	ks := keystore.NewKeystore()
 	require.NotNil(t, ks)
-	rt, err := createRuntime(stateSrvc, ks, 3)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
 	coreMsgs := make(chan network.Message)
@@ -145,7 +145,7 @@ func TestCreateRPCService(t *testing.T) {
 	networkMsgs := make(chan network.Message)
 
 	ks := keystore.NewKeystore()
-	rt, err := createRuntime(stateSrvc, ks, 3)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
 	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
@@ -155,7 +155,7 @@ func TestCreateRPCService(t *testing.T) {
 
 	sysSrvc := createSystemService(&cfg.System)
 
-	rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
+	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
@@ -186,7 +186,7 @@ func TestCreateBABEService(t *testing.T) {
 	require.Nil(t, err)
 	ks.Insert(kr.Alice)
 
-	rt, err := createRuntime(stateSrvc, ks, 3)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
 	bs, err := createBABEService(cfg, rt, stateSrvc, ks)
@@ -218,10 +218,10 @@ func TestCreateGrandpaService(t *testing.T) {
 	require.Nil(t, err)
 	ks.Insert(kr.Alice)
 
-	rt, err := createRuntime(stateSrvc, ks, 3)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
-	gs, err := createGRANDPAService(rt, stateSrvc, ks)
+	gs, err := createGRANDPAService(cfg, rt, stateSrvc, ks)
 	require.NoError(t, err)
 	require.NotNil(t, gs)
 }

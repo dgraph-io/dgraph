@@ -214,7 +214,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	nodeSrvcs = append(nodeSrvcs, stateSrvc)
 
 	// create runtime
-	rt, err := createRuntime(stateSrvc, ks, cfg.Global.lvl)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +224,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 
 	if cfg.Core.Authority {
 		// create GRANDPA service
-		fg, err = createGRANDPAService(rt, stateSrvc, ks)
+		fg, err = createGRANDPAService(cfg, rt, stateSrvc, ks)
 		if err != nil {
 			return nil, err
 		}
@@ -284,7 +284,10 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
+		rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
+		if err != nil {
+			return nil, err
+		}
 		nodeSrvcs = append(nodeSrvcs, rpcSrvc)
 
 	} else {

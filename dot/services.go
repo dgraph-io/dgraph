@@ -46,10 +46,15 @@ var ErrNoKeysProvided = errors.New("no keys provided for authority node")
 func createStateService(cfg *Config) (*state.Service, error) {
 	logger.Info("creating state service...")
 
-	stateSrvc := state.NewService(cfg.Global.BasePath, cfg.Global.lvl)
+	lvl, err := log.LvlFromString(cfg.Log.StateLvl)
+	if err != nil {
+		return nil, err
+	}
+
+	stateSrvc := state.NewService(cfg.Global.BasePath, lvl)
 
 	// start state service (initialize state database)
-	err := stateSrvc.Start()
+	err = stateSrvc.Start()
 	if err != nil {
 		return nil, fmt.Errorf("failed to start state service: %s", err)
 	}
@@ -69,14 +74,19 @@ func createStateService(cfg *Config) (*state.Service, error) {
 	return stateSrvc, nil
 }
 
-func createRuntime(st *state.Service, ks *keystore.Keystore, lvl log.Lvl) (*runtime.Runtime, error) {
+func createRuntime(cfg *Config, st *state.Service, ks *keystore.Keystore) (*runtime.Runtime, error) {
 	// load runtime code from trie
 	code, err := st.Storage.GetStorage([]byte(":code"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve :code from trie: %s", err)
 	}
 
-	cfg := &runtime.Config{
+	lvl, err := log.LvlFromString(cfg.Log.RuntimeLvl)
+	if err != nil {
+		return nil, err
+	}
+
+	rtCfg := &runtime.Config{
 		Storage:  st.Storage,
 		Keystore: ks,
 		Imports:  runtime.RegisterImports_NodeRuntime,
@@ -84,7 +94,7 @@ func createRuntime(st *state.Service, ks *keystore.Keystore, lvl log.Lvl) (*runt
 	}
 
 	// create runtime executor
-	rt, err := runtime.NewRuntime(code, cfg)
+	rt, err := runtime.NewRuntime(code, rtCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create runtime executor: %s", err)
 	}
@@ -119,8 +129,13 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 		}
 	}
 
+	lvl, err := log.LvlFromString(cfg.Log.BlockProducerLvl)
+	if err != nil {
+		return nil, err
+	}
+
 	bcfg := &babe.ServiceConfig{
-		LogLvl:           cfg.Global.lvl,
+		LogLvl:           lvl,
 		Keypair:          kps[0].(*sr25519.Keypair),
 		Runtime:          rt,
 		BlockState:       st.Block,
@@ -148,9 +163,14 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		"authority", cfg.Core.Authority,
 	)
 
+	lvl, err := log.LvlFromString(cfg.Log.CoreLvl)
+	if err != nil {
+		return nil, err
+	}
+
 	// set core configuration
 	coreConfig := &core.Config{
-		LogLvl:           cfg.Global.lvl,
+		LogLvl:           lvl,
 		BlockState:       stateSrvc.Block,
 		StorageState:     stateSrvc.Storage,
 		TransactionQueue: stateSrvc.TransactionQueue,
@@ -188,8 +208,14 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 		"nomdns", cfg.Network.NoMDNS,
 	)
 
+	lvl, err := log.LvlFromString(cfg.Log.NetworkLvl)
+	if err != nil {
+		return nil, err
+	}
+
 	// network service configuation
 	networkConfig := network.Config{
+		LogLvl:       lvl,
 		BlockState:   stateSrvc.Block,
 		NetworkState: stateSrvc.Network,
 		BasePath:     cfg.Global.BasePath,
@@ -216,7 +242,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 // RPC Service
 
 // createRPCService creates the RPC service from the provided core configuration
-func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, rt *runtime.Runtime, sysSrvc *system.Service) *rpc.HTTPServer {
+func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, rt *runtime.Runtime, sysSrvc *system.Service) (*rpc.HTTPServer, error) {
 	logger.Info(
 		"creating rpc service...",
 		"host", cfg.RPC.Host,
@@ -226,7 +252,14 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		"ws port", cfg.RPC.WSPort,
 	)
 	rpcService := rpc.NewService()
+
+	lvl, err := log.LvlFromString(cfg.Log.RPCLvl)
+	if err != nil {
+		return nil, err
+	}
+
 	rpcConfig := &rpc.HTTPServerConfig{
+		LogLvl:              lvl,
 		BlockAPI:            stateSrvc.Block,
 		StorageAPI:          stateSrvc.Storage,
 		NetworkAPI:          networkSrvc,
@@ -242,7 +275,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		Modules:             cfg.RPC.Modules,
 	}
 
-	return rpc.NewHTTPServer(rpcConfig)
+	return rpc.NewHTTPServer(rpcConfig), nil
 }
 
 // System service
@@ -252,7 +285,7 @@ func createSystemService(cfg *types.SystemInfo) *system.Service {
 }
 
 // createGRANDPAService creates a new GRANDPA service
-func createGRANDPAService(rt *runtime.Runtime, st *state.Service, ks *keystore.Keystore) (*grandpa.Service, error) {
+func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *keystore.Keystore) (*grandpa.Service, error) {
 	ad, err := rt.GrandpaAuthorities()
 	if err != nil {
 		return nil, err
@@ -265,11 +298,17 @@ func createGRANDPAService(rt *runtime.Runtime, st *state.Service, ks *keystore.K
 		return nil, errors.New("no ed25519 keys provided for GRANDPA")
 	}
 
-	cfg := &grandpa.Config{
+	lvl, err := log.LvlFromString(cfg.Log.FinalityGadgetLvl)
+	if err != nil {
+		return nil, err
+	}
+
+	gsCfg := &grandpa.Config{
+		LogLvl:     lvl,
 		BlockState: st.Block,
 		Voters:     voters,
 		Keypair:    keys[0].(*ed25519.Keypair),
 	}
 
-	return grandpa.NewService(cfg)
+	return grandpa.NewService(gsCfg)
 }
