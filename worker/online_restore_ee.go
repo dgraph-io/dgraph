@@ -171,7 +171,9 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 			req.GroupId)
 	}
 	for _, pred := range preds {
-		if tablet, err := groups().Tablet(pred); err != nil {
+		// Force the tablet to be moved to this group, even if it's currently being served
+		// by another group.
+		if tablet, err := groups().ForceTablet(pred); err != nil {
 			return errors.Wrapf(err, "cannot create tablet for restored predicate %s", pred)
 		} else if tablet.GetGroupId() != req.GroupId {
 			return errors.Errorf("cannot assign tablet for pred %s to group %d", pred, req.GroupId)

@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"path"
@@ -35,16 +36,16 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T) {
-	restoreRequest := `mutation restore() {
-		 restore(input: {location: "/data/backup", backupId: "cranky_bartik8",
+func sendRestoreRequest(t *testing.T, backupId string) {
+	restoreRequest := fmt.Sprintf(`mutation restore() {
+		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
 			response {
 				code
 				message
 			}
 		}
-	}`
+	}`, backupId)
 
 	adminUrl := "http://localhost:8180/admin"
 	params := testutil.GraphQLParams{
@@ -60,7 +61,7 @@ func sendRestoreRequest(t *testing.T) {
 	require.Contains(t, string(buf), "Restore completed.")
 }
 
-func runQueries(t *testing.T, dg *dgo.Dgraph) {
+func runQueries(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	queryDir := path.Join(path.Dir(thisFile), "queries")
 
@@ -82,8 +83,12 @@ func runQueries(t *testing.T, dg *dgo.Dgraph) {
 		bodies := strings.SplitN(contents, "\n---\n", 2)
 
 		resp, err := dg.NewTxn().Query(context.Background(), bodies[0])
-		require.NoError(t, err)
-		require.True(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
+		if shouldFail {
+			require.Error(t, err)
+		} else {
+			require.NoError(t, err)
+			require.True(t, testutil.EqualJSON(t, bodies[1], string(resp.GetJson()), "", true))
+		}
 	}
 }
 
@@ -132,9 +137,45 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t)
-	runQueries(t, dg)
+	sendRestoreRequest(t, "cranky_bartik8")
+	runQueries(t, dg, false)
 	runMutations(t, dg)
+}
+
+func TestMoveTablets(t *testing.T) {
+	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
+	require.NoError(t, err)
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	ctx := context.Background()
+	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
+
+	sendRestoreRequest(t, "cranky_bartik8")
+	runQueries(t, dg, false)
+
+	// Send another restore request with a different backup. This backup has some of the
+	// same predicates as the previous one but they are stored in different groups.
+	sendRestoreRequest(t, "awesome_dirac9")
+
+	resp, err := dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(name), orderasc: name) {
+		name
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"name":"Person 1"}, {"name": "Person 2"}]}`, string(resp.Json))
+
+	resp, err = dg.NewTxn().Query(context.Background(), `{
+	  q(func: has(tagline), orderasc: tagline) {
+		tagline
+	  }
+	}`)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"q":[{"tagline":"Tagline 1"}]}`, string(resp.Json))
+
+	// Run queries based on the first restored backup and verify none of the old data
+	// is still accessible.
+	runQueries(t, dg, true)
 }
 
 func TestInvalidBackupId(t *testing.T) {
