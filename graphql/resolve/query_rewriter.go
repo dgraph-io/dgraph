@@ -606,11 +606,10 @@ func addSelectionSetFrom(
 	selSet := field.SelectionSet()
 	if len(selSet) > 0 {
 		if field.InterfaceType() {
-			{
-				q.Children = append(q.Children, &gql.GraphQuery{
-					Attr: "dgraph.type",
-				})
-			}
+			q.Children = append(q.Children, &gql.GraphQuery{
+				Attr: "dgraph.type",
+			})
+
 		} else if !auth.writingAuth() &&
 			len(selSet) == 1 &&
 			selSet[0].Name() == schema.Typename {
