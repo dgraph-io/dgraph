@@ -1,4 +1,4 @@
-/*
+																																																																																																																																																																																																																											/*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -610,7 +610,7 @@ func addSelectionSetFrom(
 				Attr: "dgraph.type",
 			})
 
-		} else if !auth.writingAuth() &&
+		} else if !auth.writingAuth() &&  field.Name() != "numUids" &&
 			len(selSet) == 1 &&
 			selSet[0].Name() == schema.Typename {
 			q.Children = append(q.Children, &gql.GraphQuery{

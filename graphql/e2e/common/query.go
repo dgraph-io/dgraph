@@ -1169,132 +1169,6 @@ func queryNestedTypename(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 }
 
-//
-//func queryOnlyTypename(t *testing.T) {
-//
-//	newCountry := addCountry(t, postExecutor)
-//	//newAuthor := addAuthor(t, newCountry.ID, postExecutor)
-//	//newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-//	requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
-//	getCountryParams := &GraphQLParams{
-//		Query: `query queryCountry {
-//			queryCountry(filter:{name: "Testland"}) {
-//				__typename
-//			}
-//		}`,
-//	}
-//	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-//	RequireNoGQLErrors(t, gqlResponse)
-//
-//	expected := `{
-//	"queryCountry": [
-//          {
-//                "__typename": "Country"
-//          },
-//          }
-//        ]
-//}`
-//
-//	require.JSONEq(t, expected, string(gqlResponse.Data))
-//	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
-//}
-
-func queryNestedOnlyTypename(t *testing.T) {
-	var authorCountResp struct {
-		QueryAuthor []*author
-	}
-
-	getCountryParams := &GraphQLParams{
-		Query: `query {
-			queryAuthor {
-				id
-			}
-		}`,
-	}
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-	require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &authorCountResp))
-	require.True(t, len(authorCountResp.QueryAuthor) > 0)
-
-	getCountryParams = &GraphQLParams{
-		Query: `query {
-			queryAuthor {
-				country {
-					__typename
-				}
-			}
-		}`,
-	}
-	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expectedResponse := `{
-	"queryAuthor": [%s
-        ]
-}`
-	var builder strings.Builder
-	for i := 0; i < len(authorCountResp.QueryAuthor); i++ {
-		builder.WriteString(`
-          {
-                "country": {
-                  "__typename": "Country"
-                }
-          }`)
-		if i != len(authorCountResp.QueryAuthor)-1 {
-			builder.WriteString(",")
-		}
-	}
-	expectedResponse = fmt.Sprintf(expectedResponse, builder.String())
-
-	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
-}
-
-//
-//func onlytypenameForInterface(t *testing.T) {
-//	newStarship := addStarship(t)
-//	humanID := addHuman(t, newStarship.ID)
-//	droidID := addDroid(t)
-//	updateCharacter(t, humanID)
-//
-//	t.Run("test onlytypename for interface types", func(t *testing.T) {
-//		queryCharacterParams := &GraphQLParams{
-//			Query: `query {
-//				queryCharacter (filter: {
-//					appearsIn: {
-//						eq: [EMPIRE]
-//					}
-//				}) {
-//
-//					__typename
-//					... on Human {
-//
-//			                }
-//					... on Droid {
-//
-//			                }
-//				}
-//			}`,
-//		}
-//
-//		expected := `{
-//		"queryCharacter": [
-//		  {
-//			"__typename": "Human",
-//		  },
-//		  {
-//			"__typename": "Droid",
-//		  }
-//		]
-//	  }`
-//
-//		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
-//		RequireNoGQLErrors(t, gqlResponse)
-//		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
-//	})
-//
-//	cleanupStarwars(t, newStarship.ID, humanID, droidID)
-//}
-
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
 	humanID := addHuman(t, newStarship.ID)
@@ -1343,6 +1217,132 @@ func typenameForInterface(t *testing.T) {
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
+
+func queryOnlyTypename(t *testing.T) {
+
+	newCountry1 := addCountry(t, postExecutor)
+        newCountry2 := addCountry(t, postExecutor)
+        newCountry3 := addCountry(t, postExecutor)
+
+	getCountryParams := &GraphQLParams{
+         Query: `query {
+			queryCountry(filter: { name: {eq: "Testland"}}) {
+				__typename
+			}
+		}`,
+           }
+	
+        gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+        RequireNoGQLErrors(t, gqlResponse)
+
+	expected := `{
+	"queryCountry": [
+         {
+               "__typename": "Country"
+         },
+         {
+               "__typename": "Country"
+         },
+         {
+               "__typename": "Country"
+         }
+
+       ]
+}`
+     
+      require.JSONEq(t, expected, string(gqlResponse.Data))
+      cleanUp(t, []*country{newCountry1,newCountry2,newCountry3}, []*author{}, []*post{})
+}
+
+func querynestedOnlyTypename(t *testing.T) {
+
+	newCountry := addCountry(t, postExecutor)
+        newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+        newPost1 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+        newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+        newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+     
+   getCountryParams := &GraphQLParams{
+		Query: `query {
+			queryAuthor(filter: { name: { eq: "Test Author" } }) {
+				posts {
+					__typename
+				}
+			}
+		}`,
+	}   
+         
+         gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+         RequireNoGQLErrors(t, gqlResponse)
+
+      expected := `{
+	"queryAuthor": [
+	  {
+		"posts": [
+		  {
+			"__typename": "Post"
+		  },
+                  {
+			"__typename": "Post"
+		  },  
+		  {
+			
+			"__typename": "Post"
+		  }
+		]
+	  }
+	]
+}`
+         require.JSONEq(t, expected, string(gqlResponse.Data))
+         cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1,newPost2,newPost3})
+}
+
+
+func onlytypenameForInterface(t *testing.T) {
+	newStarship := addStarship(t)
+	humanID := addHuman(t, newStarship.ID)
+	droidID := addDroid(t)
+	updateCharacter(t, humanID)
+
+	t.Run("test __typename for interface types", func(t *testing.T) {
+		queryCharacterParams := &GraphQLParams{
+			Query: `query {
+				queryCharacter (filter: {
+					appearsIn: {
+						eq: [EMPIRE]
+					}
+				}) {
+					
+					
+					... on Human {
+						__typename
+			                }
+					... on Droid {
+						__typename
+			                }
+				}
+			}`,
+		}
+
+		expected := `{
+		"queryCharacter": [
+		  {
+                      "__typename": "Human"			
+		  },
+		  {
+	             "__typename": "Droid"
+		  }
+		]
+	  }`
+
+		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+		RequireNoGQLErrors(t, gqlResponse)
+		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+	})
+
+	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+}
+
 
 func defaultEnumFilter(t *testing.T) {
 	newStarship := addStarship(t)
