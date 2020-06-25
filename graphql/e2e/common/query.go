@@ -1169,34 +1169,35 @@ func queryNestedTypename(t *testing.T) {
 	testutil.CompareJSON(t, expected, string(gqlResponse.Data))
 }
 
-func queryOnlyTypename(t *testing.T) {
-
-	newCountry := addCountry(t, postExecutor)
-	//newAuthor := addAuthor(t, newCountry.ID, postExecutor)
-	//newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-	requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
-	getCountryParams := &GraphQLParams{
-		Query: `query queryCountry {
-			queryCountry(filter:{name: "Testland"}) {
-				__typename
-			}
-		}`,
-	}
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expected := `{
-	"queryCountry": [
-          {
-                "__typename": "Country"
-          },
-          }
-        ]
-}`
-
-	require.JSONEq(t, expected, string(gqlResponse.Data))
-	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
-}
+//
+//func queryOnlyTypename(t *testing.T) {
+//
+//	newCountry := addCountry(t, postExecutor)
+//	//newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+//	//newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+//	requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
+//	getCountryParams := &GraphQLParams{
+//		Query: `query queryCountry {
+//			queryCountry(filter:{name: "Testland"}) {
+//				__typename
+//			}
+//		}`,
+//	}
+//	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+//	RequireNoGQLErrors(t, gqlResponse)
+//
+//	expected := `{
+//	"queryCountry": [
+//          {
+//                "__typename": "Country"
+//          },
+//          }
+//        ]
+//}`
+//
+//	require.JSONEq(t, expected, string(gqlResponse.Data))
+//	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
+//}
 
 func queryNestedOnlyTypename(t *testing.T) {
 	var authorCountResp struct {
