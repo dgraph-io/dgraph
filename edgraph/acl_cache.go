@@ -24,11 +24,13 @@ import (
 // aclCache is the cache mapping group names to the corresponding group acls
 type aclCache struct {
 	sync.RWMutex
-	predPerms map[string]map[string]int32
+	predPerms     map[string]map[string]int32
+	userPredPerms map[string]map[string]int32
 }
 
 var aclCachePtr = &aclCache{
-	predPerms: make(map[string]map[string]int32),
+	predPerms:     make(map[string]map[string]int32),
+	userPredPerms: make(map[string]map[string]int32),
 }
 
 func (cache *aclCache) update(groups []acl.Group) {
@@ -48,9 +50,21 @@ func (cache *aclCache) update(groups []acl.Group) {
 
 	// predPerms is the map descriebed above that maps a single
 	// predicate to a submap, and the submap maps a group to a permission
+
+	fmt.Println("Groups inside update")
+	fmt.Printf("Groups: %+v", groups)
 	predPerms := make(map[string]map[string]int32)
+	userPredPerms := make(map[string]map[string]int32)
 	for _, group := range groups {
 		acls := group.Rules
+		users := group.Users
+		for _, user := range users {
+			userPredPerms[user.UserID] = make(map[string]int32)
+			//TODO make it cleaner later.
+			for _, acl := range acls {
+				userPredPerms[user.UserID][acl.Predicate] = acl.Perm
+			}
+		}
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {
@@ -68,6 +82,7 @@ func (cache *aclCache) update(groups []acl.Group) {
 	aclCachePtr.Lock()
 	defer aclCachePtr.Unlock()
 	aclCachePtr.predPerms = predPerms
+	aclCachePtr.userPredPerms = userPredPerms
 }
 
 func (cache *aclCache) authorizePredicate(groups []string, predicate string,

@@ -325,8 +325,14 @@ func RefreshAcls(closer *y.Closer) {
 		if err != nil {
 			return err
 		}
-
+		fmt.Printf("Groups are: %+v\n", groups)
+		if len(groups) != 0 {
+			for group := range groups {
+				fmt.Printf("Group details: %+v\n", group)
+			}
+		}
 		aclCachePtr.update(groups)
+		fmt.Printf("ACL Cache after group ping: %+v\n", aclCachePtr.userPredPerms)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
 	}
@@ -350,6 +356,9 @@ const queryAcls = `
 	dgraph.acl.rule {
 		dgraph.rule.predicate
 		dgraph.rule.permission
+	}
+	~dgraph.user.group{
+		dgraph.xid
 	}
   }
 }
@@ -456,7 +465,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 }
 
 func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) map[string]struct{} {
+	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
@@ -472,7 +481,13 @@ func authorizePreds(userId string, groupIds, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	return blockedPreds
+	fmt.Printf("ACL Cache: %+v\n", aclCachePtr.userPredPerms)
+	accessiblePredsForUser := make([]string, len(aclCachePtr.userPredPerms[userId]))
+	for predicate := range aclCachePtr.userPredPerms[userId] {
+		accessiblePredsForUser = append(accessiblePredsForUser, predicate)
+	}
+	fmt.Printf("Calculates accessible Preds: %v\n\n", accessiblePredsForUser)
+	return blockedPreds, accessiblePredsForUser
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -528,7 +543,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -636,7 +651,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -760,10 +775,10 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	preds := parsePredsFromQuery(parsedReq.Query)
 	fmt.Printf("Preds: %v\n", preds)
 
-	doAuthorizeQuery := func() (map[string]struct{}, error) {
+	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
 		userData, err := extractUserAndGroups(ctx)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, err.Error())
+			return nil, nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		userId = userData[0]
@@ -771,14 +786,18 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
-			return nil, nil
+			return nil, nil, nil
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		fmt.Printf("UserData: %+v\n", userData)
+
+		blockedPreds, accessiblePreds := authorizePreds(userId, groupIds, preds, acl.Read)
+		return blockedPreds, accessiblePreds, nil
 	}
 
-	blockedPreds, err := doAuthorizeQuery()
+	blockedPreds, accessiblePreds, err := doAuthorizeQuery()
 
+	// accessiblePreds, err :=
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
@@ -809,9 +828,17 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// In query context ~predicate and predicate are considered different.
 			delete(blockedPreds, "~dgraph.user.group")
 		}
-		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
-		fmt.Println("What is left if everything is removed?")
-		fmt.Printf("Parsed Query %+v\n", parsedReq.Query)
+		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds, accessiblePreds)
+	}
+	for i := range parsedReq.Query {
+		parsedReq.Query[i].AccessiblePreds = accessiblePreds
+	}
+
+	fmt.Println("What is left if everything is removed?")
+	if len(parsedReq.Query) != 0 {
+		for _, query := range parsedReq.Query {
+			fmt.Printf("Parsed Query %+v\n", *query)
+		}
 	}
 
 	return nil
@@ -987,12 +1014,12 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 // removePredsFromQuery removes all the predicates in blockedPreds
 // from all the queries in gqs.
 func removePredsFromQuery(gqs []*gql.GraphQuery,
-	blockedPreds map[string]struct{}) []*gql.GraphQuery {
+	blockedPreds map[string]struct{}, accessiblePreds []string) []*gql.GraphQuery {
 
 	filteredGQs := gqs[:0]
 
 	for _, gq := range gqs {
-		fmt.Printf("GQs before dropping %+v\n", gq)
+		fmt.Printf("GQs before dropping\n\n %+v\n", gq)
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
 				continue
@@ -1015,9 +1042,10 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 		gq.Order = order
 		gq.Filter = removeFilters(gq.Filter, blockedPreds)
 		gq.GroupbyAttrs = removeGroupBy(gq.GroupbyAttrs, blockedPreds)
-		gq.Children = removePredsFromQuery(gq.Children, blockedPreds)
+		gq.Children = removePredsFromQuery(gq.Children, blockedPreds, accessiblePreds)
+		gq.AccessiblePreds = accessiblePreds
 		filteredGQs = append(filteredGQs, gq)
-		fmt.Printf("GQs after dropping %+v\n", gq)
+		fmt.Printf("GQs after dropping\n\n %+v\n", gq)
 	}
 
 	return filteredGQs
