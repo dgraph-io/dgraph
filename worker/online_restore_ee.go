@@ -23,6 +23,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
+	"github.com/dgraph-io/dgraph/x"
 
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
@@ -126,6 +127,10 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Errorf("nil restore request")
 	}
 
+	// Enable draining mode for the duration of the restore processing.
+	x.UpdateDrainingMode(true)
+	defer x.UpdateDrainingMode(false)
+
 	// Drop all the current data. This also cancels all existing transactions.
 	dropProposal := pb.Proposal{
 		Mutations: &pb.Mutations{
@@ -190,16 +195,22 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(err, "cannot load schema after restore")
 	}
 
+	// Disable draining mode as soon as all data is written to disk. The defer statement
+	// is used to avoid having to call this funciton every time it returns with an error
+	// and it is a no-op in the case where writing the backup to disk is successful.
+	x.UpdateDrainingMode(false)
+
+	// Update the membership state to re-compute the group checksums.
+	if err := UpdateMembershipState(ctx); err != nil {
+		return errors.Wrapf(err, "cannot update membership state after restore")
+	}
+
 	// Propose a snapshot immediately after all the work is done to prevent the restore
 	// from being replayed.
 	if err := groups().Node.proposeSnapshot(1); err != nil {
 		return errors.Wrapf(err, "cannot propose snapshot after processing restore proposal")
 	}
 
-	// Update the membership state to re-compute the group checksums.
-	if err := UpdateMembershipState(ctx); err != nil {
-		return errors.Wrapf(err, "cannot update membership state after restore")
-	}
 	return nil
 }
 

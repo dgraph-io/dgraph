@@ -581,9 +581,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		return nil
 
 	case proposal.Restore != nil:
-		// Enable draining mode for the duration of the restore processing.
-		x.UpdateDrainingMode(true)
-
 		var err error
 		var closer *y.Closer
 		closer, err = n.startTask(opRestore)
@@ -594,7 +591,6 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 		defer closer.Done()
 
 		err = handleRestoreProposal(ctx, proposal.Restore)
-		x.UpdateDrainingMode(false)
 		if err != nil {
 			return err
 		}
