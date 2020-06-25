@@ -1170,49 +1170,32 @@ func queryNestedTypename(t *testing.T) {
 }
 
 func queryOnlyTypename(t *testing.T) {
-	var countryCountResp struct {
-		QueryCountry []*country
-	}
 
+	newCountry := addCountry(t, postExecutor)
+	//newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+	//newPost := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+	requireCountry(t, newCountry.ID, newCountry, false, postExecutor)
 	getCountryParams := &GraphQLParams{
 		Query: `query queryCountry {
-			queryCountry {
-				id
+			queryCountry(filter:{name: "Testland"}) {
+				__typename
 			}
 		}`,
 	}
 	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
 	RequireNoGQLErrors(t, gqlResponse)
-	require.NoError(t, json.Unmarshal([]byte(gqlResponse.Data), &countryCountResp))
-	require.True(t, len(countryCountResp.QueryCountry) > 0)
 
-	getCountryParams = &GraphQLParams{
-		Query: `query queryCountry {
-			queryCountry {
-				__typename
-			}
-		}`,
-	}
-	gqlResponse = getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expectedResponse := `{
-	"queryCountry": [%s
-        ]
-}`
-	var builder strings.Builder
-	for i := 0; i < len(countryCountResp.QueryCountry); i++ {
-		builder.WriteString(`
+	expected := `{
+	"queryCountry": [
           {
                 "__typename": "Country"
-          }`)
-		if i != len(countryCountResp.QueryCountry)-1 {
-			builder.WriteString(",")
-		}
-	}
-	expectedResponse = fmt.Sprintf(expectedResponse, builder.String())
+          },
+          }
+        ]
+}`
 
-	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
+	require.JSONEq(t, expected, string(gqlResponse.Data))
+	cleanUp(t, []*country{newCountry}, []*author{}, []*post{})
 }
 
 func queryNestedOnlyTypename(t *testing.T) {
@@ -1265,54 +1248,51 @@ func queryNestedOnlyTypename(t *testing.T) {
 	require.JSONEq(t, expectedResponse, string(gqlResponse.Data))
 }
 
-func onlytypenameForInterface(t *testing.T) {
-	newStarship := addStarship(t)
-	humanID := addHuman(t, newStarship.ID)
-	droidID := addDroid(t)
-	updateCharacter(t, humanID)
-
-	t.Run("test onlytypename for interface types", func(t *testing.T) {
-		queryCharacterParams := &GraphQLParams{
-			Query: `query {
-				queryCharacter (filter: {
-					appearsIn: {
-						eq: [EMPIRE]
-					}
-				}) {
-					
-					__typename
-					... on Human {
-						
-			                }
-					... on Droid {
-						
-			                }
-				}
-			}`,
-		}
-
-		expected := `{
-		"queryCharacter": [
-		  {
-			"name":"Han Solo",
-			"__typename": "Human",
-			"totalCredits": 10
-		  },
-		  {
-			"name": "R2-D2",
-			"__typename": "Droid",
-			"primaryFunction": "Robot"
-		  }
-		]
-	  }`
-
-		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
-		RequireNoGQLErrors(t, gqlResponse)
-		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
-	})
-
-	cleanupStarwars(t, newStarship.ID, humanID, droidID)
-}
+//
+//func onlytypenameForInterface(t *testing.T) {
+//	newStarship := addStarship(t)
+//	humanID := addHuman(t, newStarship.ID)
+//	droidID := addDroid(t)
+//	updateCharacter(t, humanID)
+//
+//	t.Run("test onlytypename for interface types", func(t *testing.T) {
+//		queryCharacterParams := &GraphQLParams{
+//			Query: `query {
+//				queryCharacter (filter: {
+//					appearsIn: {
+//						eq: [EMPIRE]
+//					}
+//				}) {
+//
+//					__typename
+//					... on Human {
+//
+//			                }
+//					... on Droid {
+//
+//			                }
+//				}
+//			}`,
+//		}
+//
+//		expected := `{
+//		"queryCharacter": [
+//		  {
+//			"__typename": "Human",
+//		  },
+//		  {
+//			"__typename": "Droid",
+//		  }
+//		]
+//	  }`
+//
+//		gqlResponse := queryCharacterParams.ExecuteAsPost(t, graphqlURL)
+//		RequireNoGQLErrors(t, gqlResponse)
+//		testutil.CompareJSON(t, expected, string(gqlResponse.Data))
+//	})
+//
+//	cleanupStarwars(t, newStarship.ID, humanID, droidID)
+//}
 
 func typenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)

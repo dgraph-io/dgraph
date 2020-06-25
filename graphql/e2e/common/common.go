@@ -265,7 +265,6 @@ func RunAll(t *testing.T) {
 	t.Run("typename for interface", typenameForInterface)
 	t.Run("query only typename", queryOnlyTypename)
 	t.Run("query nested only typename", queryNestedOnlyTypename)
-	t.Run("test onlytypename for interface types", onlytypenameForInterface)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
