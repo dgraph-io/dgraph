@@ -118,13 +118,13 @@
 	{
 		"uid": "_:log1",
 		"dgraph.type": "Log",
-		"Log.random": "RandomLog1",
+		"Log.random": "test",
 		"Log.logs": "Log1"
 	},
 	{
 		"uid": "_:log2",
 		"dgraph.type": "Log",
-		"Log.random": "RandomLog2",
+		"Log.random": "test",
 		"Log.logs": "Log2"
 	},
 	{

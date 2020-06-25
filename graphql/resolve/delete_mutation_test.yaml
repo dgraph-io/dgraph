@@ -35,12 +35,12 @@
       deleteAuthor(filter: $filter) {
         msg
         numUids
-        author {
+        author (filter: { name: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
           id
           name
           country {
             name
-            states {
+            states (filter: { code: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
               code
               name
               capital
@@ -69,12 +69,12 @@
         uid
         Post2 as Author.posts
       }
-      author(func: type(Author)) @filter(uid(x)) {
+      author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
         id : uid
         name : Author.name
         country : Author.country {
           name : Country.name
-          states : Country.states {
+          states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
             code : State.code
             name : State.name
             capital : State.capital

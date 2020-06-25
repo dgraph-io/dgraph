@@ -657,9 +657,18 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
-func addUidFilterToQuery(q *gql.GraphQuery, filter *gql.FilterTree, queryName string) {
+// addUidFuncToQuery adds the uid func to the query with name `queryName`. This is useful when we
+// have auth queries since the top level query might be present in the children. We pass
+// `queryName` of top level query and it finds the appropriate query and adds `uidFunc` to it.
+func addUidFuncToQuery(q *gql.GraphQuery, uidFunc *gql.Function, queryName string) {
+	// This handles the case when root auth query is a dummy query due to RBAC evaluation to false.
+	// In such case since the query doesn't return anything, we don't need to add uid func.
+	if q.Attr == queryName+"()" {
+		return
+	}
+
 	if q.Attr != "" {
-		addToFilterTree(q, filter)
+		q.Func = uidFunc
 		return
 	}
 
@@ -678,7 +687,7 @@ func addUidFilterToQuery(q *gql.GraphQuery, filter *gql.FilterTree, queryName st
 	}
 
 	if query != nil {
-		addToFilterTree(query, filter)
+		query.Func = uidFunc
 	}
 }
 
@@ -752,6 +761,8 @@ func (drw *deleteRewriter) Rewrite(
 	b, err := json.Marshal(deletes)
 
 	var finalQry *gql.GraphQuery
+	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
+	// is later added to delete mutation result.
 	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
 		queryAuthRw := &authRewriter{
 			authVariables: authVariables,
@@ -760,13 +771,11 @@ func (drw *deleteRewriter) Rewrite(
 		}
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
-		uidFilter := &gql.FilterTree{
-			Func: &gql.Function{
-				Name: "uid",
-				Args: []gql.Arg{{Value: MutationQueryVar}},
-			},
+		uidFunc := &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: MutationQueryVar}},
 		}
-		addUidFilterToQuery(queryDel, uidFilter, queryField.Name())
+		addUidFuncToQuery(queryDel, uidFunc, queryField.Name())
 		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
 	} else {
 		finalQry = dgQry

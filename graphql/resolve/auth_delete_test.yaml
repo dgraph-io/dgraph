@@ -130,12 +130,12 @@
         }
         dgraph.uid : uid
       }
-      ticket(func: uid(Ticket10)) @filter((uid(Ticket11) AND uid(x))) {
+      ticket(func: uid(x)) @filter(uid(Ticket8)) {
         title : Ticket.title
-        onColumn : Ticket.onColumn @filter(uid(Column7)) {
-          inProject : Column.inProject {
+        onColumn : Ticket.onColumn @filter(uid(Column6)) {
+          inProject : Column.inProject @filter(uid(Project5)) {
             roles : Project.roles {
-              assignedTo : Role.assignedTo @filter((uid(User5) AND uid(User6))) {
+              assignedTo : Role.assignedTo {
                 username : User.username
                 age : User.age
                 dgraph.uid : uid
@@ -146,7 +146,7 @@
           }
           dgraph.uid : uid
         }
-        assignedTo : Ticket.assignedTo @filter((uid(User8) AND uid(User9))) {
+        assignedTo : Ticket.assignedTo {
           username : User.username
           age : User.age
           isPublic : User.isPublic
@@ -155,11 +155,11 @@
         }
         dgraph.uid : uid
       }
-      Ticket10 as var(func: type(Ticket))
-      Ticket11 as var(func: uid(Ticket10)) @cascade {
+      Ticket7 as var(func: type(Ticket))
+      Ticket8 as var(func: uid(Ticket7)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
               dgraph.uid : uid
             }
@@ -169,9 +169,16 @@
         }
         dgraph.uid : uid
       }
-      Column7 as var(func: uid(Ticket1)) @cascade {
+      Project5 as var(func: type(Project)) @cascade {
+        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
+          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+          dgraph.uid : uid
+        }
+        dgraph.uid : uid
+      }
+      Column6 as var(func: type(Column)) @cascade {
         inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
+          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
             assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             dgraph.uid : uid
           }
@@ -179,8 +186,6 @@
         }
         dgraph.uid : uid
       }
-      User8 as var(func: uid(Ticket1)) @filter(eq(User.username, "user1")) @cascade
-      User9 as var(func: uid(Ticket1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
 - name: "Delete with top level RBAC true."
@@ -217,7 +222,7 @@
         uid
         Column2 as Project.columns
       }
-      project(func: type(Project)) @filter(uid(x)) {
+      project(func: uid(x)) {
         name : Project.name
         random : Project.random
         dgraph.uid : uid
@@ -250,7 +255,7 @@
   dgquery: |-
     query {
       x as deleteLog()
-      log() @filter(uid(x))
+      log()
     }
 
 - name: "multiple rule in delete mutation"

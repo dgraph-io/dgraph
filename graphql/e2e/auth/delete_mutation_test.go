@@ -174,7 +174,7 @@ func TestDeleteRootFilter(t *testing.T) {
 func TestDeleteRBACFilter(t *testing.T) {
 	testCases := []TestCase{
 		{role: "USER", result: `{"deleteLog":{"numUids":0, "msg":"No nodes were deleted", "log":[]}}`},
-		{role: "ADMIN", result: `{"deleteLog":{"numUids":2, "msg":"Deleted", "log":[{"logs":"Log1","random":"RandomLog1"}, {"logs":"Log2","random":"RandomLog2"}]}}`}}
+		{role: "ADMIN", result: `{"deleteLog":{"numUids":2, "msg":"Deleted", "log":[{"logs":"Log1","random":"test"}, {"logs":"Log2","random":"test"}]}}`}}
 
 	query := `
 		mutation ($logs: [ID!]) {
