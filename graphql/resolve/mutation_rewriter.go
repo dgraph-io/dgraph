@@ -753,14 +753,19 @@ func (drw *deleteRewriter) Rewrite(
 
 	var finalQry *gql.GraphQuery
 	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
-		queryDel := rewriteAsQuery(queryField, authRw)
+		queryAuthRw := &authRewriter{
+			authVariables: authVariables,
+			varGen:        varGen,
+			selector:      queryAuthSelector,
+		}
+		queryDel := rewriteAsQuery(queryField, queryAuthRw)
+
 		uidFilter := &gql.FilterTree{
 			Func: &gql.Function{
 				Name: "uid",
 				Args: []gql.Arg{{Value: MutationQueryVar}},
 			},
 		}
-
 		addUidFilterToQuery(queryDel, uidFilter, queryField.Name())
 		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
 	} else {
