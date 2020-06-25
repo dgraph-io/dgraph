@@ -1203,7 +1203,7 @@ func (m *mutation) QueryField() Field {
 		}
 		return f
 	}
-	return nil
+	return m.SelectionSet()[0]
 }
 
 func (m *mutation) NumUidsField() Field {

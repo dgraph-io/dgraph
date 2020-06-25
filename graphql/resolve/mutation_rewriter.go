@@ -752,7 +752,7 @@ func (drw *deleteRewriter) Rewrite(
 	b, err := json.Marshal(deletes)
 
 	var finalQry *gql.GraphQuery
-	if queryField := m.QueryField(); queryField != nil {
+	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
 		queryDel := rewriteAsQuery(queryField, authRw)
 		uidFilter := &gql.FilterTree{
 			Func: &gql.Function{

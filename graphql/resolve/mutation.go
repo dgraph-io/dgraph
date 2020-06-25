@@ -311,7 +311,7 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
 	var qryResult []byte
-	if mutation.MutationType() == schema.DeleteMutation && mutation.QueryField() != nil {
+	if mutation.MutationType() == schema.DeleteMutation && mutation.QueryField().SelectionSet() != nil {
 		qryResult = mutResp.GetJson()
 	} else {
 		qryResult = qryResp.GetJson()
