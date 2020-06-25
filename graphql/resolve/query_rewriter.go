@@ -1,4 +1,4 @@
-																																																																																																																																																																																																																											/*
+/*
  * Copyright 2019 Dgraph Labs, Inc. and Contributors
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -377,10 +377,8 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 }
 
 func (authRw *authRewriter) writingAuth() bool {
-	if authRw == nil || !authRw.isWritingAuth {
-		return false
-	}
-	return true
+	return authRw != nil && authRw.isWritingAuth
+
 }
 
 // addAuthQueries takes a field and the GraphQuery that has so far been constructed for
@@ -610,18 +608,18 @@ func addSelectionSetFrom(
 				Attr: "dgraph.type",
 			})
 
-		} else if !auth.writingAuth() &&  field.Name() != "numUids" &&
+		} else if !auth.writingAuth() &&
 			len(selSet) == 1 &&
 			selSet[0].Name() == schema.Typename {
 			q.Children = append(q.Children, &gql.GraphQuery{
+				//we don't need this for auth queries because they are added by us used for internal purposes.
+				// Querying it for them would just add an overhead which we can avoid.
 				Attr:  "uid",
 				Alias: "dgraph.uid",
 			})
 		}
 
 	}
-
-	selSet = nil
 
 	// These fields might not have been requested by the user directly as part of the query but
 	// are required in the body template for other fields requested within the query. We must
