@@ -6,8 +6,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ## Unreleased
 
-**Note:** In v20.07.0-beta.Jun15, there's a known issue with re-importing exported data. The workaround is to remove the type `dgraph.graphql` from the schema in order to live load.
-
 ### Changed
 
 - GraphQL
@@ -18,6 +16,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Send CID for sentry events. ([#5625][])
 - Alpha: Enable bloom filter caching ([#5552][])
 - Add support for multiple uids in uid_in function ([#5292][])
+- Tag sentry events with additional version details. ([#5726][])
+- Sentry opt out banner. ([#5727][]) 
 - Update badger to commit [e7b6e76f96e8][]. ([#5537][])
 - Update Badger ([#5661][])
   - Fix assert in background compression and encryption. ([dgraph-io/badger#1366][])
@@ -36,6 +36,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - GraphQL Changes for /health endpoint's Enterprise features info. Fixes [#5234][]. ([#5308][])
   - Use encryption in temp badger, fix compilation on 32-bit. ([#4963][])
   - Only process restore request in the current alpha if it's the leader. ([#5657][])
+  - Vault: Support kv v1 and decode base64 key. ([#5725][])
   - **Breaking changes**
     - [BREAKING] GraphQL: Add camelCase for add/update mutation. Fixes [#5380][]. ([#5547][])
 
@@ -98,13 +99,17 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - If we don't have any schema updates, avoid running the indexing sequence. ([#5126][])
 - Pass read timestamp to getNew. ([#5085][])
 - Indicate dev environment in Sentry events. ([#5051][])	
-- Replaced s2 contains point methods with go-geom. ([#5023][])	
+- Replaced s2 contains point methods with go-geom. ([#5023][]
+- Change tablet size calculation to not depend on the right key. Fixes [#5408][]. ([#5684][])	
 - **Breaking changes**
   - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])
   - [BREAKING] Remove shorthand for store_xids in bulk loader.  ([#5148][])
   - [BREAKING] Introduce new facets format. Fixes [#4798][], [#4581][], [#4907][]. ([#5424][])
 - Enterprise:
   - Backup: Change groupId from int to uint32. ([#5605][])
+  - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
+  - Restore: Make backupId optional in restore GraphQL interface. ([#5685][])
+  - Restore: Move tablets to right group when restoring a backup. ([#5682][])
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
 [dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
@@ -118,6 +123,10 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [dgraph-io/badger#1328]: https://github.com/dgraph-io/badger/issues/1328
 [dgraph-io/badger#1341]: https://github.com/dgraph-io/badger/issues/1341
 [dgraph-io/badger#1345]: https://github.com/dgraph-io/badger/issues/1345
+[#5725]: https://github.com/dgraph-io/dgraph/issues/5725
+[#5579]: https://github.com/dgraph-io/dgraph/issues/5579
+[#5685]: https://github.com/dgraph-io/dgraph/issues/5685
+[#5682]: https://github.com/dgraph-io/dgraph/issues/5682
 [#5572]: https://github.com/dgraph-io/dgraph/issues/5572
 [#4789]: https://github.com/dgraph-io/dgraph/issues/4789
 [#5179]: https://github.com/dgraph-io/dgraph/issues/5179
@@ -203,6 +212,10 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5436]: https://github.com/dgraph-io/dgraph/issues/5436
 [#5537]: https://github.com/dgraph-io/dgraph/issues/5537
 [#5657]: https://github.com/dgraph-io/dgraph/issues/5657
+[#5726]: https://github.com/dgraph-io/dgraph/issues/5726
+[#5727]: https://github.com/dgraph-io/dgraph/issues/5727
+[#5408]: https://github.com/dgraph-io/dgraph/issues/5408
+[#5684]: https://github.com/dgraph-io/dgraph/issues/5684
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
 
 ## [20.03.4] - Unreleased
