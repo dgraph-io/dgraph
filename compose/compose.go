@@ -63,28 +63,29 @@ type composeConfig struct {
 }
 
 type options struct {
-	NumZeros      int
-	NumAlphas     int
-	NumReplicas   int
-	LruSizeMB     int
-	AclSecret     string
-	DataDir       string
-	DataVol       bool
-	TmpFS         bool
-	UserOwnership bool
-	Jaeger        bool
-	Metrics       bool
-	PortOffset    int
-	Verbosity     int
-	Vmodule       string
-	OutFile       string
-	LocalBin      bool
-	Tag           string
-	WhiteList     bool
-	Ratel         bool
-	RatelPort     int
-	TlsDir        string
-	ExposePorts   bool
+	NumZeros          int
+	NumAlphas         int
+	NumReplicas       int
+	LruSizeMB         int
+	AclSecret         string
+	DataDir           string
+	DataVol           bool
+	TmpFS             bool
+	UserOwnership     bool
+	Jaeger            bool
+	Metrics           bool
+	PortOffset        int
+	Verbosity         int
+	Vmodule           string
+	OutFile           string
+	LocalBin          bool
+	Tag               string
+	WhiteList         bool
+	Ratel             bool
+	RatelPort         int
+	TlsDir            string
+	ExposePorts       bool
+	EncryptionKeyFile string
 }
 
 var opts options
@@ -232,6 +233,15 @@ func getAlpha(idx int) service {
 			Type:     "bind",
 			Source:   opts.AclSecret,
 			Target:   "/secret/hmac",
+			ReadOnly: true,
+		})
+	}
+	if opts.EncryptionKeyFile != "" {
+		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   opts.EncryptionKeyFile,
+			Target:   "/secret/enc_key",
 			ReadOnly: true,
 		})
 	}
@@ -402,7 +412,8 @@ func main() {
 		"expose host:container ports for each service")
 	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
 		"comma-separated list of pattern=N settings for file-filtered logging")
-
+	cmd.PersistentFlags().StringVar(&opts.EncryptionKeyFile, "encryption_key_file", "",
+		"enable encryption-at-rest feature with specified encryption key file")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
