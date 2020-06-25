@@ -464,6 +464,50 @@ func (n *node) ProposeNewCID() {
 	}
 }
 
+func (n *node) GetCIDFromEntries() (FoundCID bool, err error) {
+	first, err := n.Store.FirstIndex()
+	if err != nil {
+		return false, err
+	}
+	last, err := n.Store.LastIndex()
+	if err != nil {
+		return false, err
+	}
+	FoundCID = false
+
+	var lastEntry raftpb.Entry
+	for batchFirst := first; batchFirst <= last; {
+		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+		if err != nil {
+			return FoundCID, err
+		}
+
+		// Exit early from the loop if no entries were found.
+		if len(entries) == 0 {
+			break
+		}
+
+		lastEntry = entries[len(entries)-1]
+		batchFirst = lastEntry.Index + 1
+
+		for _, entry := range entries {
+			if entry.Type != raftpb.EntryNormal {
+				continue
+			}
+			var proposal pb.ZeroProposal
+			err = proposal.Unmarshal(entry.Data)
+			if err != nil {
+				return FoundCID, err
+			}
+			glog.Infoln(len(proposal.Cid))
+			if len(proposal.Cid) > 0 {
+				FoundCID = true
+			}
+		}
+	}
+	return FoundCID, nil
+}
+
 func (n *node) initAndStartNode() error {
 	_, restart, err := n.PastLife()
 	x.Check(err)
@@ -486,51 +530,11 @@ func (n *node) initAndStartNode() error {
 		}
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		first, _ := n.Store.FirstIndex()
-		last, _ := n.Store.LastIndex()
-		CIDPresent := false
-
-		var lastEntry raftpb.Entry
-		for batchFirst := first; batchFirst <= last; {
-			entries, _ := n.Store.Entries(batchFirst, last+1, 64<<20)
-			/* what to do about the error
-
-			if err != nil {
-				span.Annotatef(nil, "Error: %v", err)
-				return nil, err
-			}
-			*/
-
-			// Exit early from the loop if no entries were found.
-			if len(entries) == 0 {
-				break
-			}
-
-			// Store the last entry (as it might be needed outside the loop) and set the
-			// start of the new batch at the entry following it. Also set foundEntries to
-			// true to indicate to the code outside the loop that entries were retrieved.
-			lastEntry = entries[len(entries)-1]
-			batchFirst = lastEntry.Index + 1
-
-			for _, entry := range entries {
-				if entry.Type != raftpb.EntryNormal {
-					continue
-				}
-				var proposal pb.ZeroProposal
-				_ = proposal.Unmarshal(entry.Data)
-				//what to do about the error
-				glog.Infoln(len(proposal.Cid))
-				if len(proposal.Cid) > 0 {
-					CIDPresent = true
-				}
-				// if err := proposal.Unmarshal(entry.Data); err != nil {
-				// 	span.Annotatef(nil, "Error: %v", err)
-				// 	return nil, err
-				// }
-			}
+		FoundCID, err := n.GetCIDFromEntries()
+		if err != nil {
+			return err // error
 		}
-
-		if !CIDPresent {
+		if !FoundCID {
 			go n.ProposeNewCID()
 		}
 
@@ -760,7 +764,6 @@ func (n *node) Run() {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
-
 				default:
 					glog.Infof("Unhandled entry: %+v\n", entry)
 				}
