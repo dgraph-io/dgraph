@@ -229,7 +229,7 @@ func newNode(store *raftwal.DiskStorage, gid uint32, id uint64, myAddr string) *
 		ops:     make(map[op]*y.Closer),
 	}
 	if x.WorkerConfig.LudicrousMode {
-		n.ex = newExecutor()
+		n.ex = newExecutor(&m.Applied)
 	}
 	return n
 }
@@ -434,7 +434,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	})
 
 	if x.WorkerConfig.LudicrousMode {
-		n.ex.addEdges(ctx, m.StartTs, m.Edges)
+		n.ex.addEdges(ctx, proposal)
 		return nil
 	}
 
@@ -503,14 +503,7 @@ func (n *node) applyCommitted(proposal *pb.Proposal) error {
 			span.Annotatef(nil, "While applying mutations: %v", err)
 			return err
 		}
-		if x.WorkerConfig.LudicrousMode {
-			ts := proposal.Mutations.StartTs
-			return n.commitOrAbort(proposal.Key, &pb.OracleDelta{
-				Txns: []*pb.TxnStatus{
-					{StartTs: ts, CommitTs: ts},
-				},
-			})
-		}
+
 		span.Annotate(nil, "Done")
 		return nil
 	}
@@ -1482,13 +1475,18 @@ func (n *node) calculateSnapshot(startIdx uint64, discardN int) (*pb.Snapshot, e
 				span.Annotatef(nil, "Error: %v", err)
 				return nil, err
 			}
+
+			var start uint64
 			if proposal.Mutations != nil {
-				start := proposal.Mutations.StartTs
+				start = proposal.Mutations.StartTs
 				if start >= minPendingStart && snapshotIdx == 0 {
 					snapshotIdx = entry.Index - 1
 				}
 			}
-			if proposal.Delta != nil {
+			// In ludicrous mode commitTs for any transaction is same as startTs.
+			if x.WorkerConfig.LudicrousMode {
+				maxCommitTs = x.Max(maxCommitTs, start)
+			} else if proposal.Delta != nil {
 				for _, txn := range proposal.Delta.GetTxns() {
 					maxCommitTs = x.Max(maxCommitTs, txn.CommitTs)
 				}
