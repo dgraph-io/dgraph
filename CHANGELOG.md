@@ -6,8 +6,6 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 ## Unreleased
 
-**Note:** In v20.07.0-beta.Jun15, there's a known issue with re-importing exported data. The workaround is to remove the type `dgraph.graphql` from the schema in order to live load.
-
 ### Changed
 
 - GraphQL
