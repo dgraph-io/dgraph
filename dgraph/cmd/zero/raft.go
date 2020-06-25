@@ -764,6 +764,7 @@ func (n *node) Run() {
 						glog.Errorf("While applying proposal: %v\n", err)
 					}
 					n.Proposals.Done(key, err)
+
 				default:
 					glog.Infof("Unhandled entry: %+v\n", entry)
 				}
