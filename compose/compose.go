@@ -102,6 +102,7 @@ type options struct {
 	MemLimit      string
 	TlsDir        string
 	ExposePorts   bool
+	Encryption    bool
 }
 
 var opts options
@@ -294,6 +295,15 @@ func getAlpha(idx int) service {
 			Limits: limit{Memory: opts.MemLimit},
 		}
 	}
+	if opts.Encryption {
+		svc.Command += " --encryption_key_file=/secret/enc_key"
+		svc.Volumes = append(svc.Volumes, volume{
+			Type:     "bind",
+			Source:   "./enc-secret",
+			Target:   "/secret/enc_key",
+			ReadOnly: true,
+		})
+	}
 	if opts.TlsDir != "" {
 		svc.Command += " --tls_dir=/secret/tls"
 		svc.Volumes = append(svc.Volumes, volume{
@@ -478,6 +488,8 @@ func main() {
 		"expose host:container ports for each service")
 	cmd.PersistentFlags().StringVar(&opts.Vmodule, "vmodule", "",
 		"comma-separated list of pattern=N settings for file-filtered logging")
+	cmd.PersistentFlags().BoolVar(&opts.Encryption, "encryption", false,
+		"enable encryption-at-rest feature.")
 
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
@@ -548,6 +560,13 @@ func main() {
 	if opts.Acl {
 		err = ioutil.WriteFile("acl-secret", []byte("12345678901234567890123456789012"), 0644)
 		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "acl-secret"))
+		if err != nil {
+			fatal(errors.Errorf("unable to write file: %v", err))
+		}
+	}
+	if opts.Encryption {
+		err = ioutil.WriteFile("enc-secret", []byte("12345678901234567890123456789012"), 0644)
+		x.Check2(fmt.Fprintf(os.Stdout, "Writing file: %s\n", "enc-secret"))
 		if err != nil {
 			fatal(errors.Errorf("unable to write file: %v", err))
 		}
