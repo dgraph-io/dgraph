@@ -58,8 +58,7 @@ options:
     --quiet         just report which queries differ, without a diff
     --mode          normal = run dgraph in normal mode
                     none = run dgraph in normal mode
-		    ludicrous = run dgraph in ludicrous mode
-EOF
+                    ludicrous = run dgraph in ludicrous mode
     exit 0
 fi
 
