@@ -136,12 +136,15 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, err
 	}
 
-	// perform dgraph schema alter
-	_, err = MutateOverNetwork(ctx, &pb.Mutations{
-		StartTs: State.GetTimestamp(false), // StartTs must be provided
-		Schema:  req.DgraphSchema,
-		Types:   req.DgraphTypes,
-	})
+	// perform dgraph schema alter, if required. As the schema could be empty if it only has custom
+	// types/queries/mutations.
+	if len(req.DgraphSchema) != 0 && len(req.DgraphTypes) != 0 {
+		_, err = MutateOverNetwork(ctx, &pb.Mutations{
+			StartTs: State.GetTimestamp(false), // StartTs must be provided
+			Schema:  req.DgraphSchema,
+			Types:   req.DgraphTypes,
+		})
+	}
 
 	// commit or abort GraphQL schema mutation based on whether alter succeeded or not
 	if err != nil {

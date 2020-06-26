@@ -129,15 +129,18 @@ func PeriodicallyPostTelemetry() {
 
 func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	dgraphSchema string) (*pb.UpdateGraphQLSchemaResponse, error) {
-	var parsedDgraphSchema *schema.ParsedSchema
 	var err error
+	parsedDgraphSchema := &schema.ParsedSchema{}
 
-	op := &api.Operation{Schema: dgraphSchema}
-	if err = validateAlterOperation(ctx, op); err != nil {
-		return nil, err
-	}
-	if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
-		return nil, err
+	// The schema could be empty if it only has custom types/queries/mutations.
+	if dgraphSchema != "" {
+		op := &api.Operation{Schema: dgraphSchema}
+		if err = validateAlterOperation(ctx, op); err != nil {
+			return nil, err
+		}
+		if parsedDgraphSchema, err = parseSchemaFromAlterOperation(op); err != nil {
+			return nil, err
+		}
 	}
 
 	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
