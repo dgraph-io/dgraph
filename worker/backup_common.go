@@ -17,11 +17,17 @@
 package worker
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/pkg/errors"
+)
+
+const (
+	unknownStatus    = "UNKNOWN"
+	inProgressStatus = "IN_PROGRESS"
+	okStatus         = "OK"
+	errStatus        = "ERR"
 )
 
 // predicateSet is a map whose keys are predicates. It is meant to be used as a set.
@@ -105,17 +111,17 @@ type RestoreStatus struct {
 type restoreTracker struct {
 	sync.RWMutex
 	// Status is a map of restore task ID to the Status of said task.
-	status  map[string]*RestoreStatus
+	status  map[int]*RestoreStatus
 	counter int
 }
 
 func newRestoreTracker() *restoreTracker {
-	return &restoreTracker{status: make(map[string]*RestoreStatus)}
+	return &restoreTracker{status: make(map[int]*RestoreStatus)}
 }
 
-func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
+func (rt *restoreTracker) Status(restoreId int) *RestoreStatus {
 	if rt == nil {
-		return &RestoreStatus{Status: "UNKNOWN"}
+		return &RestoreStatus{Status: unknownStatus}
 	}
 
 	rt.RLock()
@@ -125,34 +131,29 @@ func (rt *restoreTracker) Status(restoreId string) *RestoreStatus {
 	if ok {
 		return status
 	}
-	return &RestoreStatus{Status: "UNKNOWN"}
+	return &RestoreStatus{Status: unknownStatus}
 }
 
-func (rt *restoreTracker) Add() (string, error) {
+func (rt *restoreTracker) Add() (int, error) {
 	if rt == nil {
-		return "", errors.Errorf("uninitialized restore operation tracker")
+		return 0, errors.Errorf("uninitialized restore operation tracker")
 	}
 
 	rt.Lock()
 	defer rt.Unlock()
 
 	rt.counter += 1
-	restoreId := fmt.Sprintf("restore-%d", rt.counter)
-	if _, ok := rt.status[restoreId]; ok {
-		return "", errors.Errorf("another restore operation with ID %s already exists", restoreId)
+	if _, ok := rt.status[rt.counter]; ok {
+		return 0, errors.Errorf("another restore operation with ID %d already exists", rt.counter)
 	}
 
-	rt.status[restoreId] = &RestoreStatus{Status: "IN_PROGRESS", Errors: make([]error, 0)}
-	return restoreId, nil
+	rt.status[rt.counter] = &RestoreStatus{Status: inProgressStatus, Errors: make([]error, 0)}
+	return rt.counter, nil
 }
 
-func (rt *restoreTracker) Done(restoreId string, errs []error) error {
+func (rt *restoreTracker) Done(restoreId int, errs []error) error {
 	if rt == nil {
 		return errors.Errorf("uninitialized restore operation tracker")
-	}
-
-	if restoreId == "" {
-		return errors.Errorf("restoreId cannot be empty")
 	}
 
 	rt.Lock()
@@ -162,14 +163,14 @@ func (rt *restoreTracker) Done(restoreId string, errs []error) error {
 		return errors.Errorf("unknown restore operation with ID %s", restoreId)
 	}
 
-	status := "OK"
+	status := okStatus
 	validErrs := make([]error, 0)
 	for _, err := range errs {
 		if err == nil {
 			continue
 		}
 		validErrs = append(validErrs, err)
-		status = "ERR"
+		status = errStatus
 	}
 	rt.status[restoreId] = &RestoreStatus{Status: status, Errors: validErrs}
 	return nil

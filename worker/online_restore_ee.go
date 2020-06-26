@@ -32,18 +32,13 @@ import (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string, error) {
-	restoreId, err := rt.Add()
-	if err != nil {
-		return "", errors.Wrapf(err, "cannot assign ID to restore operation")
-	}
-
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
 	if req == nil {
-		return restoreId, errors.Errorf("restore request cannot be nil")
+		return 0, errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return restoreId, errors.Wrapf(err, "cannot update membership state before restore")
+		return 0, errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -59,11 +54,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string,
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
-		return restoreId, errors.Wrapf(err, "failed to verify backup")
+		return 0, errors.Wrapf(err, "failed to verify backup")
 	}
 
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return restoreId, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 	req.RestoreTs = State.GetTimestamp(false)
 
@@ -79,7 +74,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string,
 		}()
 	}
 
-	go func(restoreId string) {
+	restoreId, err := rt.Add()
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
+	}
+	go func(restoreId int) {
 		errs := make([]error, 0)
 		for range currentGroups {
 			if err := <-errCh; err != nil {
@@ -300,6 +299,6 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
-func ProcessRestoreStatus(ctx context.Context, restoreId string) (*RestoreStatus, error) {
+func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
 	return rt.Status(restoreId), nil
 }

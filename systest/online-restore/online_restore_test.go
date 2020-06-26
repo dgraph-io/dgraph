@@ -37,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string) string {
+func sendRestoreRequest(t *testing.T, backupId string) int {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -62,14 +62,14 @@ func sendRestoreRequest(t *testing.T, backupId string) string {
 	require.Contains(t, bufString, "Success")
 	jsonMap := make(map[string]map[string]interface{})
 	require.NoError(t, json.Unmarshal([]byte(bufString), &jsonMap))
-	restoreId, _ := jsonMap["data"]["restore"].(map[string]interface{})["restoreId"].(string)
+	restoreId := int(jsonMap["data"]["restore"].(map[string]interface{})["restoreId"].(float64))
 	require.NotEqual(t, "", restoreId)
 	return restoreId
 }
 
-func waitForRestore(t *testing.T, restoreId string, dg *dgo.Dgraph) {
+func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	query := fmt.Sprintf(`query status() {
-		 restoreStatus(restoreId: "%s") {
+		 restoreStatus(restoreId: %d) {
 			status
 			errors
 		}

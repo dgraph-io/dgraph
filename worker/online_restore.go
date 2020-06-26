@@ -41,6 +41,6 @@ func handleRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	return nil
 }
 
-func ProcessRestoreStatus(ctx context.Context, restoreId string) (*RestoreStatus, error) {
+func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
 	return nil, x.ErrNotSupported
 }

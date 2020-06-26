@@ -125,7 +125,8 @@ const adminTypes = `
 
 	type RestorePayload {
 		"""
-		A short string indicating whether the operation was successful.
+		A short string indicating whether the restore operation was successfully scheduled.
+		The status of the operation can be queried using the restoreStatus endpoint.
 		"""
 		code: String
 
@@ -137,7 +138,7 @@ const adminTypes = `
 		"""
 		The unique ID that can be used to query the status of the restore operation.
 		"""
-		restoreId: String
+		restoreId: Int
 	}
 
 	input ListBackupsInput {
@@ -490,4 +491,4 @@ const adminQueries = `
 	"""
 	Get information about a restore operation.
 	"""
-	restoreStatus(restoreId: String!) : RestoreStatus`
+	restoreStatus(restoreId: Int!) : RestoreStatus`

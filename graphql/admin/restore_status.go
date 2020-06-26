@@ -30,37 +30,32 @@ type restoreStatus struct {
 	Errors []string `json:"errors,omitempty"`
 }
 
+func unknownStatus(q schema.Query, err error) *resolve.Resolved {
+	return &resolve.Resolved{
+		Data: map[string]interface{}{q.Name(): map[string]interface{}{
+			"status": "UNKNOWN",
+		}},
+		Field: q,
+		Err:   schema.GQLWrapLocationf(err, q.Location(), "resolving %s failed", q.Name()),
+	}
+}
+
 func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved {
-	restoreId := q.ArgValue("restoreId").(string)
+	restoreId := int(q.ArgValue("restoreId").(int64))
 	status, err := worker.ProcessRestoreStatus(ctx, restoreId)
 	if err != nil {
-		return &resolve.Resolved{
-			Data: map[string]interface{}{q.Name(): map[string]interface{}{
-				"status": "UNKNOWN",
-			}},
-			Field: q,
-		}
+		return unknownStatus(q, err)
 	}
 	convertedStatus := convertStatus(status)
 
 	b, err := json.Marshal(convertedStatus)
 	if err != nil {
-		return &resolve.Resolved{
-			Data: map[string]interface{}{q.Name(): map[string]interface{}{
-				"status": "UNKNOWN",
-			}},
-			Field: q,
-		}
+		return unknownStatus(q, err)
 	}
 	result := make(map[string]interface{})
 	err = json.Unmarshal(b, &result)
 	if err != nil {
-		return &resolve.Resolved{
-			Data: map[string]interface{}{q.Name(): map[string]interface{}{
-				"status": "UNKNOWN",
-			}},
-			Field: q,
-		}
+		return unknownStatus(q, err)
 	}
 
 	return &resolve.Resolved{
