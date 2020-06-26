@@ -103,6 +103,11 @@ const adminTypes = `
 		vaultField: String
 
 		"""
+		Vault kv store field's format. Must be "base64" or "raw".
+		"""
+		vaultFormat: String
+
+		"""
 		Access key credential for the destination.
 		"""
 		accessKey: String
