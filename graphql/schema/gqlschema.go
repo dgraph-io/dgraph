@@ -34,15 +34,16 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective  = "dgraph"
-	dgraphTypeArg    = "type"
-	dgraphPredArg    = "pred"
-	idDirective      = "id"
-	secretDirective  = "secret"
-	authDirective    = "auth"
-	customDirective  = "custom"
-	remoteDirective  = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective = "cascade"
+	dgraphDirective       = "dgraph"
+	dgraphTypeArg         = "type"
+	dgraphPredArg         = "pred"
+	idDirective           = "id"
+	secretDirective       = "secret"
+	authDirective         = "auth"
+	customDirective       = "custom"
+	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
+	cascadeDirective      = "cascade"
+	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
 	mode   = "mode"
@@ -111,6 +112,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
