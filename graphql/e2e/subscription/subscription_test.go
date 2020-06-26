@@ -157,33 +157,3 @@ func TestSubscription(t *testing.T) {
 
 	require.Nil(t, res)
 }
-
-func TestSubscriptionOnError(t *testing.T) {
-	t.Skip()
-	add := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
-	require.Nil(t, addResult.Errors)
-
-	time.Sleep(2 * time.Second)
-
-	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
-		Query: `subscription{
-			getProduct(productID: "0x2"){
-			  name
-			}
-		  }`,
-	})
-	require.Nil(t, err)
-
-	_, err = subscriptionClient.RecvMsg()
-	require.Contains(t, err.Error(), "Subscriptions are not supported")
-}

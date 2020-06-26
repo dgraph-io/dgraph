@@ -299,9 +299,9 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
-	//	t.Skip()
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
-	type Teacher {
+	type Teacher @withSubscriptions {
 		tid: ID!
 		age: Int!
 		name: String
@@ -329,9 +329,9 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
-	//t.Skip()
+	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
-	type Episode {
+	type Episode @withSubscriptions{
 		name: String! @id
 		anotherName: String! @custom(http: {
 					url: "http://mock:8888/userNames",
@@ -341,7 +341,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 				})
 	}
 
-	type Character {
+	type Character @withSubscriptions{
 		name: String! @id
 		lastName: String @custom(http: {
 						url: "http://mock:8888/userNames",

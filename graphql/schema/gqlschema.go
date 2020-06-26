@@ -1071,7 +1071,10 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1088,7 +1091,11 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1127,7 +1134,6 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
