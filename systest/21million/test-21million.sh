@@ -59,6 +59,7 @@ options:
     --mode          normal = run dgraph in normal mode
                     none = run dgraph in normal mode
                     ludicrous = run dgraph in ludicrous mode
+EOF
     exit 0
 fi
 
@@ -74,12 +75,14 @@ if [[ $LOADER == none && -z $CLEANUP ]]; then
 fi
 
 if [[ $MODE == ludicrous ]]; then
-function DockerCompose {
-    docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
-}
-function DgraphLive {
-    dgraph live --ludicrous_mode "$@"
-}
+    Info "removing old data (if any)"
+    DockerCompose down -v --remove-orphans
+    function DockerCompose {
+        docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
+    }
+    function DgraphLive {
+        dgraph live --ludicrous_mode "$@"
+    }
 fi
 
 # default to cleaning up both services and volume
