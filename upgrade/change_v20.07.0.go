@@ -17,15 +17,11 @@
 package upgrade
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/protos/pb"
-	"github.com/dgraph-io/dgraph/x"
 )
 
 const (
@@ -50,13 +46,6 @@ const (
 			}
 		}
 	`
-	typeQuery = `
-		{
-			nodes(func: type(%s)) {
-				uid
-			}
-		}
-	`
 	typeCountQuery = `
 		{
 			nodes(func: type(%s)) {
@@ -64,25 +53,6 @@ const (
 			}
 		}
 	`
-	scalarPredicateQuery = `
-		{
-			nodes(func: has(%s)) {
-				uid
-				%s
-			}
-		}
-	`
-	uidPredicateQuery = `
-		{
-			nodes(func: has(%s)) {
-				uid
-				%s {
-					uid
-				}
-			}
-		}
-	`
-	schemaQuery     = `schema{}`
 	typeSchemaQuery = `schema (type: %s) {}`
 )
 
@@ -96,10 +66,6 @@ type countNodeQueryResp struct {
 	Nodes []*struct {
 		Count int `json:"count"`
 	} `json:"nodes"`
-}
-
-type predicateQueryResp struct {
-	Nodes []map[string]interface{} `json:"nodes"`
 }
 
 type schemaTypeField struct {
@@ -122,12 +88,6 @@ type updateTypeNameInfo struct {
 	oldUidNodeQuery          string
 	dropOldTypeIfUnused      bool
 	predsToRemoveFromOldType map[string]struct{}
-}
-
-type updatePredNameInfo struct {
-	oldPredName string
-	newPredName string
-	isUidPred   bool
 }
 
 func upgradeAclTypeNames() error {
@@ -181,136 +141,6 @@ func upgradeAclTypeNames() error {
 		}
 		if err = typeNameInfo.updateTypeSchema(dg); err != nil {
 			return fmt.Errorf("error upgrading schema for old ACL type `%s`: %w",
-				typeNameInfo.oldTypeName, err)
-		}
-	}
-
-	return nil
-}
-
-func upgradeNonPredefinedNamesInReservedNamespace() error {
-	// get dgo client
-	dg, conn, err := getDgoClient(true)
-	if err != nil {
-		return fmt.Errorf("error getting dgo client: %w", err)
-	}
-	defer conn.Close()
-
-	// query full schema
-	var schemaQueryResp schemaQueryResp
-	if err = getQueryResult(dg, schemaQuery, &schemaQueryResp); err != nil {
-		return fmt.Errorf("unable to query schema: %w", err)
-	}
-
-	// collect predicates to change
-	reservedPredicatesInSchema := make(map[string]*pb.SchemaNode)
-	nonReservedPredicatesInSchema := make(map[string]struct{})
-	for _, schemaNode := range schemaQueryResp.Schema {
-		if x.IsReservedPredicate(schemaNode.Predicate) && !x.IsPreDefinedPredicate(schemaNode.
-			Predicate) {
-			reservedPredicatesInSchema[schemaNode.Predicate] = schemaNode
-		} else {
-			nonReservedPredicatesInSchema[schemaNode.Predicate] = struct{}{}
-		}
-	}
-
-	// collect types to change
-	reservedTypesInSchema := make(map[string]*schemaTypeNode)
-	nonReservedTypesInSchema := make(map[string]struct{})
-	nonReservedTypesWithReservedPredicatesInSchema := make(map[string]*schemaTypeNode)
-	for _, typeNode := range schemaQueryResp.Types {
-		if x.IsReservedType(typeNode.Name) && !x.IsPreDefinedType(typeNode.Name) {
-			reservedTypesInSchema[typeNode.Name] = typeNode
-		} else {
-			nonReservedTypesInSchema[typeNode.Name] = struct{}{}
-			for _, field := range typeNode.Fields {
-				if _, ok := reservedPredicatesInSchema[field.Name]; ok {
-					nonReservedTypesWithReservedPredicatesInSchema[typeNode.Name] = typeNode
-					break
-				}
-			}
-		}
-	}
-
-	// return if no change is required
-	if len(reservedPredicatesInSchema) == 0 && len(reservedTypesInSchema) == 0 && len(
-		nonReservedTypesWithReservedPredicatesInSchema) == 0 {
-		return nil
-	}
-
-	// ask user for new predicate names
-	newPredicateNames := make(map[string]string)
-	if len(reservedPredicatesInSchema) > 0 {
-		fmt.Println("Please provide new names for predicates.")
-		for oldPredName := range reservedPredicatesInSchema {
-			newPredicateNames[oldPredName] = askUserForNewName(os.Stdin, os.Stdout, oldPredName,
-				x.IsReservedPredicate, nonReservedPredicatesInSchema)
-		}
-	}
-
-	// ask user for new type names
-	newTypeNames := make(map[string]string)
-	if len(reservedTypesInSchema) > 0 {
-		fmt.Println("Please provide new names for types.")
-		for oldTypeName := range reservedTypesInSchema {
-			newTypeNames[oldTypeName] = askUserForNewName(os.Stdin, os.Stdout, oldTypeName,
-				x.IsReservedType, nonReservedTypesInSchema)
-		}
-	}
-
-	var newSchemaBuilder strings.Builder
-	// start building new schema for alter
-	// 1. add new predicates to schema
-	for oldPredName, predDef := range reservedPredicatesInSchema {
-		newSchemaBuilder.WriteString(getPredSchemaString(newPredicateNames[oldPredName], predDef))
-	}
-	// 2. add new types to schema, with correct predicates
-	for oldTypeName, typeDef := range reservedTypesInSchema {
-		newSchemaBuilder.WriteString(getTypeSchemaString(newTypeNames[oldTypeName], typeDef,
-			newPredicateNames, nil))
-	}
-	// 3. overwrite new predicates in existing types which uses old predicates
-	for typeName, typeDef := range nonReservedTypesWithReservedPredicatesInSchema {
-		newSchemaBuilder.WriteString(getTypeSchemaString(typeName, typeDef, newPredicateNames, nil))
-	}
-
-	// execute the alter for new schema, don't drop any old types/predicates yet
-	if err = alterWithClient(dg, &api.Operation{Schema: newSchemaBuilder.String()}); err != nil {
-		return fmt.Errorf("error updating new schema: %w", err)
-	}
-
-	// upgrade all the nodes with old predicates and drop the old predicates from schema
-	for oldPredName, schemaNode := range reservedPredicatesInSchema {
-		newPredName := newPredicateNames[oldPredName]
-		upgradePredNameInfo := &updatePredNameInfo{
-			oldPredName: oldPredName,
-			newPredName: newPredName,
-			isUidPred:   schemaNode.Type == "uid",
-		}
-		if err = upgradePredNameInfo.updatePredicateName(dg); err != nil {
-			return fmt.Errorf("error upgrading predicate name from `%s` to `%s`: %w", oldPredName,
-				newPredName, err)
-		}
-		if err = upgradePredNameInfo.dropOldPredFromSchema(dg); err != nil {
-			return fmt.Errorf("error upgrading schema for old predicate `%s``: %w", oldPredName,
-				err)
-		}
-	}
-
-	// upgrade all the nodes with old types and drop the old types from schema
-	for oldTypeName, newTypeName := range newTypeNames {
-		typeNameInfo := &updateTypeNameInfo{
-			oldTypeName:         oldTypeName,
-			newTypeName:         newTypeName,
-			oldUidNodeQuery:     fmt.Sprintf(typeQuery, oldTypeName),
-			dropOldTypeIfUnused: true,
-		}
-		if err = typeNameInfo.updateTypeName(dg); err != nil {
-			return fmt.Errorf("error upgrading type name from `%s` to `%s`: %w", oldTypeName,
-				newTypeName, err)
-		}
-		if err = typeNameInfo.updateTypeSchema(dg); err != nil {
-			return fmt.Errorf("error upgrading schema for old type `%s`: %w",
 				typeNameInfo.oldTypeName, err)
 		}
 	}
@@ -404,77 +234,6 @@ func (t *updateTypeNameInfo) updateTypeSchema(dg *dgo.Dgraph) error {
 		if err := alterWithClient(dg, &api.Operation{Schema: schema}); err != nil {
 			return fmt.Errorf("unable to update schema for type `%s`: %w", t.oldTypeName, err)
 		}
-	}
-
-	return nil
-}
-
-// updatePredicateName changes the name of the given predicate from old name to new name for all
-// the nodes that have it.
-func (p *updatePredNameInfo) updatePredicateName(dg *dgo.Dgraph) error {
-	var query string
-	if p.isUidPred {
-		query = uidPredicateQuery
-	} else {
-		query = scalarPredicateQuery
-	}
-
-	// find out the nodes having old predicate
-	var predicateQueryResp predicateQueryResp
-	if err := getQueryResult(dg, fmt.Sprintf(query, p.oldPredName,
-		p.oldPredName), &predicateQueryResp); err != nil {
-		return fmt.Errorf("unable to query nodes having old predicate `%s`: %w", p.oldPredName, err)
-	}
-
-	// nothing to do
-	if len(predicateQueryResp.Nodes) == 0 {
-		return nil
-	}
-
-	// prepare setJson and deleteJson for the update
-	var setJson, deleteJson []map[string]interface{}
-	for _, setJsonNode := range predicateQueryResp.Nodes {
-		deleteJsonNode := copyMap(setJsonNode)
-
-		setJsonNode[p.newPredName] = setJsonNode[p.oldPredName]
-		delete(setJsonNode, p.oldPredName)
-
-		deleteJsonNode[p.oldPredName] = nil
-
-		setJson = append(setJson, setJsonNode)
-		deleteJson = append(deleteJson, deleteJsonNode)
-	}
-
-	// marshal the JSONs
-	setJsonBytes, err := json.Marshal(setJson)
-	if err != nil {
-		return fmt.Errorf("unable to marshal setJson for new predicate `%s`: %w", p.newPredName,
-			err)
-	}
-	setJson = nil
-	deleteJsonBytes, err := json.Marshal(deleteJson)
-	if err != nil {
-		return fmt.Errorf("unable to marshal deleteJson for old predicate `%s`: %w",
-			p.oldPredName, err)
-	}
-	deleteJson = nil
-
-	// perform the mutation for upgrade
-	err = mutateWithClient(dg, &api.Mutation{SetJson: setJsonBytes, DeleteJson: deleteJsonBytes})
-	if err != nil {
-		return fmt.Errorf("unable to mutate old predicate `%s`: %w", p.oldPredName, err)
-	}
-
-	return nil
-}
-
-// dropOldPredFromSchema deletes the old predicate name from schema via alter.
-func (p *updatePredNameInfo) dropOldPredFromSchema(dg *dgo.Dgraph) error {
-	if err := alterWithClient(dg, &api.Operation{
-		DropOp:    api.Operation_ATTR,
-		DropValue: p.oldPredName,
-	}); err != nil {
-		return fmt.Errorf("unable to delete old predicate `%s` from schema: %w", p.oldPredName, err)
 	}
 
 	return nil

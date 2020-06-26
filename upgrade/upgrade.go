@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"reflect"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -117,12 +115,6 @@ type change struct {
 	// For a version less than this value, this change is not applicable
 	minFromVersion *version
 	applyFunc      func() error // function which applies the change
-	// whether we should skip applying this change. This is useful in cases like huge data
-	// migrations when we want the user to apply the change manually, instead of automating it.
-	// This way, while upgrading user gets notified that they need to do something manually too.
-	// Also, it helps in managing the sample code for the upgrade.
-	skip       bool
-	skipReason string // reason, why this change is being skipped
 }
 
 // changeSet represents a set of changes that were introduced in some version
@@ -291,20 +283,6 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 			// Go over every change in the change set and check if it should be applied. If yes,
 			// apply it, otherwise skip it.
 			for i, change := range changeSet.changes {
-				if change.skip {
-					fmt.Println(fmt.Sprintf(""+
-						"\tSkipping change %d:\n"+
-						"\t\tName       : %s\n"+
-						"\t\tDescription: %s\n"+
-						"\t\tReason     : %s\n"+
-						"\t\tAction     : Please have a look at `%s` function in `upgrade/change_"+
-						"%s.go` in dgraph repo on GitHub, for a sample code.",
-						i+1, change.name, change.description, change.skipReason,
-						runtime.FuncForPC(reflect.ValueOf(change.applyFunc).Pointer()).Name(),
-						changeSet.introducedIn))
-					continue
-				}
-
 				fmt.Println(fmt.Sprintf(""+
 					"\tApplying change %d:\n"+
 					"\t\tName       : %s\n"+

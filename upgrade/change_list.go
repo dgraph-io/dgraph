@@ -41,22 +41,15 @@ func init() {
 					minFromVersion: &version{major: 20, minor: 3, patch: 0},
 					applyFunc:      upgradeAclTypeNames,
 				},
-				{
-					name: "Upgrade non-predefined types/predicates using reserved namespace",
-					description: "This updates any user-defined types/predicates which start with" +
-						" `dgraph.` to use a name which doesn't start with `dgraph.`. The user " +
-						"will have to provide a new name to use for such types/predicates. " +
-						"This change was introduced in v20.07.0, " +
-						"and is applied while upgrading from any version less than v20.07.0+. " +
-						"For more info, see: https://github.com/dgraph-io/dgraph/pull/5185",
-					minFromVersion: zeroVersion,
-					applyFunc:      upgradeNonPredefinedNamesInReservedNamespace,
-					skip:           true,
-					skipReason: "This should be manually applied by the user as this is a" +
-						" data migration, and there can be millions of user-defined nodes in the " +
-						"db having types/predicates starting with `dgraph.`. So, pagination may " +
-						"be required.",
-				},
+				// another change in 20.07.0 version is if someone was having types/predicates in
+				// reserved namespace, then data should be migrated for such cases,
+				// to not use the reserved namespace. Migration is expected to be done by the user,
+				// and we will only provide a documentation mentioning the steps to be taken.
+				// This is not being automated because:
+				// 	1. There is very less chance that someone was using the reserved namespace,
+				//	so this automation may not be used at all.
+				// 	2. The data migration can be huge, if needed to migrate. The automated code
+				//	can't handle every scenario. So, it is best to let the user do it.
 			},
 		},
 	}

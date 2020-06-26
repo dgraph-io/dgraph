@@ -20,21 +20,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
 	"google.golang.org/grpc"
-)
-
-var (
-	reservedNameError = fmt.Errorf("new name can't start with `dgraph.`, please try again! ")
-	existingNameError = fmt.Errorf("new name can't be same as a name in existing schema, " +
-		"please try again! ")
 )
 
 // getDgoClient creates a gRPC connection and uses that to create a new dgo client.
@@ -127,94 +119,6 @@ func alterWithClient(dg *dgo.Dgraph, operation *api.Operation) error {
 	}
 
 	return err
-}
-
-// copyMap returns a copy of the input map
-func copyMap(m map[string]interface{}) map[string]interface{} {
-	m1 := make(map[string]interface{})
-	for k, v := range m {
-		m1[k] = v
-	}
-	return m1
-}
-
-// askUserForNewName prompts the user to input a new name on the terminal,
-// and validates that the user-provided name is not reserved as well as doesn't exist in the
-// existingNameMap argument. It will only return the newName if the user provides a valid name,
-// otherwise it will ask the user to keep trying again until a valid name is not obtained.
-func askUserForNewName(r io.Reader, w io.Writer, oldName string,
-	checkReservedFunc func(string) bool, existingNameMap map[string]struct{}) string {
-	var newName string
-
-	// until the user doesn't supply a valid name, keep asking him
-	for {
-		x.Check2(fmt.Fprintf(w, "Enter new name for `%s`: ", oldName))
-		if _, err := fmt.Fscan(r, &newName); err != nil {
-			x.Check2(fmt.Fprintln(w, "Something went wrong while scanning input: ", err))
-			x.Check2(fmt.Fprintln(w, "Try again!"))
-			continue
-		}
-		if checkReservedFunc(newName) {
-			x.Check2(fmt.Fprintln(w, reservedNameError))
-			continue
-		}
-		if _, ok := existingNameMap[newName]; ok {
-			x.Check2(fmt.Fprintln(w, existingNameError))
-			continue
-		}
-		// if no error encountered, means name is valid, so break
-		break
-	}
-
-	return newName
-}
-
-// getPredSchemaString generates a string which can be used to alter the schema for a predicate.
-// It uses newPredName as the name of the predicate, other things are same as what is provided in
-// schemaNode argument.
-func getPredSchemaString(newPredName string, schemaNode *pb.SchemaNode) string {
-	var builder strings.Builder
-	builder.WriteString(newPredName)
-	builder.WriteString(": ")
-
-	if schemaNode.List {
-		builder.WriteString("[")
-	}
-	builder.WriteString(schemaNode.Type)
-	if schemaNode.List {
-		builder.WriteString("]")
-	}
-	builder.WriteString(" ")
-
-	if schemaNode.Count {
-		builder.WriteString("@count ")
-	}
-	if schemaNode.Index {
-		builder.WriteString("@index(")
-		comma := ""
-		for _, tokenizer := range schemaNode.Tokenizer {
-			builder.WriteString(comma)
-			builder.WriteString(tokenizer)
-			comma = ", "
-		}
-		builder.WriteString(") ")
-	}
-	if schemaNode.Lang {
-		builder.WriteString("@lang ")
-	}
-	if schemaNode.NoConflict {
-		builder.WriteString("@noconflict ")
-	}
-	if schemaNode.Reverse {
-		builder.WriteString("@reverse ")
-	}
-	if schemaNode.Upsert {
-		builder.WriteString("@upsert ")
-	}
-
-	builder.WriteString(".\n")
-
-	return builder.String()
 }
 
 // getTypeSchemaString generates a string which can be used to alter a type in schema.
