@@ -266,3 +266,34 @@ func TestBadKeys(t *testing.T) {
 	_, err = Parse(key)
 	require.Error(t, err)
 }
+
+func TestParseAttr(t *testing.T) {
+	a := NamespaceAttr(DefaultNamespace, "demo")
+	require.Equal(t, ParseAttr(a), "demo")
+	// reverse index
+	a = NamespaceAttr(DefaultNamespace, "~demo")
+	require.Equal(t, ParseAttr(a), "~demo")
+}
+
+func TestParseNamespaceAttr(t *testing.T) {
+	a := NamespaceAttr(DefaultNamespace, "demo")
+	namespace, attr := ParseNamespaceAttr(a)
+	require.Equal(t, attr, "demo")
+	require.Equal(t, namespace, DefaultNamespace)
+	// reverse index
+	a = NamespaceAttr(DefaultNamespace, "~demo")
+	namespace, attr = ParseNamespaceAttr(a)
+	require.Equal(t, attr, "~demo")
+	require.Equal(t, namespace, DefaultNamespace)
+}
+
+func TestNamespaceAttr(t *testing.T) {
+	require.Equal(t,
+		NamespaceAttr(DefaultNamespace, "demo"),
+		DefaultNamespace+string(NamespaceSeparator)+"demo")
+
+	//Testing reverse index
+	require.Equal(t,
+		NamespaceAttr(DefaultNamespace, "~demo"),
+		"~"+DefaultNamespace+string(NamespaceSeparator)+"demo")
+}

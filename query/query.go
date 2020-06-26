@@ -2787,7 +2787,8 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 
 	schemaProcessingStart := time.Now()
 	if req.GqlQuery.Schema != nil {
-		preds := []string{}
+
+		preds := make([]string, 0, len(req.GqlQuery.Schema.Predicates))
 		for _, pred := range req.GqlQuery.Schema.Predicates {
 			preds = append(preds, x.NamespaceAttr(req.Namespace, pred))
 		}
@@ -2795,7 +2796,8 @@ func (req *Request) Process(ctx context.Context) (er ExecutionResult, err error)
 		if er.SchemaNode, err = worker.GetSchemaOverNetwork(ctx, req.GqlQuery.Schema); err != nil {
 			return er, errors.Wrapf(err, "while fetching schema")
 		}
-		typeNames := []string{}
+
+		typeNames := make([]string, 0, len(req.GqlQuery.Schema.Types))
 		for _, typeName := range req.GqlQuery.Schema.Types {
 			typeNames = append(typeNames, x.NamespaceAttr(req.Namespace, typeName))
 		}
