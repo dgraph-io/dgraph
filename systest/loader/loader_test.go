@@ -107,11 +107,11 @@ func TestLoaderXidmap(t *testing.T) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	require.NoError(t, err)
 
-	expected = `<0x2711> <name> "Bob" .
-<0x1> <age> "13" .
-<0x1> <friend> <0x2712> .
+	expected = `<0x1> <age> "13" .
+<0x1> <friend> <0x2711> .
 <0x1> <location> "Wonderland" .
 <0x1> <name> "Alice" .
+<0x2711> <name> "Bob" .
 `
 	require.Equal(t, expected, string(out))
 }
