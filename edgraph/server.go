@@ -141,6 +141,7 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	}
 
 	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
+		StartTs:       worker.State.GetTimestamp(false),
 		GraphqlSchema: gqlSchema,
 		DgraphSchema:  parsedDgraphSchema.Preds,
 		DgraphTypes:   parsedDgraphSchema.Types,
@@ -179,7 +180,6 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 }
 
 func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
-	// TODO: check if this should be here or only in Server.Alter()
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
 		return nil, errIndexingInProgress
@@ -346,15 +346,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	// wait for indexing to complete or context to be canceled.
-	for !op.RunInBackground {
-		if ctx.Err() != nil {
-			return empty, ctx.Err()
-		}
-		if !schema.State().IndexingInProgress() {
-			break
-		}
-		time.Sleep(time.Second * 2)
+	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
+		return empty, ctx.Err()
 	}
+
 	return empty, nil
 }
 

@@ -18,7 +18,6 @@ package worker
 
 import (
 	"context"
-	"math"
 	"sync"
 	"time"
 
@@ -62,14 +61,14 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	defer schemaLock.Unlock()
 
 	var err error
-	// TODO: what does readTs do here? can we share the same with other startTs as well for mutation
-	// and alter? Can it be part of incoming req?
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    "dgraph.graphql.schema",
 		SrcFunc: &pb.SrcFunction{Name: "has"},
-		ReadTs:  State.GetTimestamp(true),
-		First:   math.MaxInt32, // TODO: should we request just first 2, as that will also get error
+		ReadTs:  req.StartTs,
+		// there can only be one GraphQL schema node,
+		// so querying two just to detect if this condition is ever violated
+		First: 2,
 	})
 	if err != nil {
 		return nil, err
@@ -97,12 +96,25 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 
 	// prepare GraphQL schema mutation
 	m := &pb.Mutations{
-		StartTs: State.GetTimestamp(false),
+		StartTs: req.StartTs,
 		Edges: []*pb.DirectedEdge{
 			{
 				Entity:    schemaNodeUid,
 				Attr:      "dgraph.graphql.schema",
 				Value:     []byte(req.GraphqlSchema),
+				ValueType: pb.Posting_STRING,
+				Op:        pb.DirectedEdge_SET,
+			},
+			{
+				// if this server is no more the Group-1 leader and is mutating the GraphQL
+				// schema node, also if concurrently another schema update is requested which is
+				// being performed at the actual Group-1 leader, then mutating the xid with the
+				// same value will cause one of the mutations to abort, because of the upsert
+				// directive on xid. So, this way we make sure that even in this rare case there can
+				// only be one server which is able to successfully update the GraphQL schema.
+				Entity:    schemaNodeUid,
+				Attr:      "dgraph.graphql.xid",
+				Value:     []byte("dgraph.graphql.schema"),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
 			},
@@ -126,8 +138,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 
 	// perform dgraph schema alter
 	_, err = MutateOverNetwork(ctx, &pb.Mutations{
-		// TODO: why is startTs required here? need to understand
-		StartTs: State.GetTimestamp(false),
+		StartTs: State.GetTimestamp(false), // StartTs must be provided
 		Schema:  req.DgraphSchema,
 		Types:   req.DgraphTypes,
 	})
@@ -140,18 +151,12 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		return nil, err
 	} else {
 		// busy waiting for indexing to finish
-		for schema.State().IndexingInProgress() {
-			// return if context was Canceled or DeadlineExceeded
-			if ctx.Err() != nil {
-				return nil, ctx.Err()
-			}
-			time.Sleep(time.Second * 2)
+		if err = WaitForIndexingOrCtxError(ctx, true); err != nil {
+			return nil, err
 		}
 
-		// TODO: check when do we receive badger update, on commit or on mutate?
 		// commit the GraphQL schema mutation as alter succeeded
-		_, err = CommitOverNetwork(ctx, tctx)
-		if err != nil {
+		if _, err = CommitOverNetwork(ctx, tctx); err != nil {
 			// this is a problem, now we can't rollback the dgraph schema alter, so the system is
 			// in an inconsistent state. So, lets just report the error asking the user to send the
 			// GraphQL schema update again.
@@ -161,6 +166,19 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 
 	// return the uid of the GraphQL schema node
 	return &pb.UpdateGraphQLSchemaResponse{Uid: schemaNodeUid}, nil
+}
+
+func WaitForIndexingOrCtxError(ctx context.Context, shouldWait bool) error {
+	for shouldWait {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if !schema.State().IndexingInProgress() {
+			break
+		}
+		time.Sleep(time.Second * 2)
+	}
+	return nil
 }
 
 func isGroup1Leader() bool {
