@@ -127,7 +127,7 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
-// CreateNamespace bootstraps the namespace by creating deafult types for the given namespace.
+// CreateNamespace bootstraps the namespace by creating default types for the given namespace.
 func (s *Server) createNamespace(ctx context.Context, namespace string) error {
 	m := &pb.Mutations{
 		StartTs: worker.State.GetTimestamp(false),
@@ -148,10 +148,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// Alter is used for the following scenarios
 	// - Dropping Predicate (deleting all values for the given predicate)
-	// - Dropping Database (deleting all the values and bootstrapping default namespace)
+	// - Dropping Database (deleting all the values and schema.Then bootstrapping default namespace)
 	// - Applying new schema (namespaced for the given namespace. By default `Default` Namespace)
 	// - Creating Namespace (creating a namespace and bootstring default types for the given
 	//   namespace)
+	// - Drop data (deletes all the value and indexes but keeps the schema)
 	// TODO: @balaji Droping namespace (drop all values in the namespace and bootstrap default
 	// values)
 

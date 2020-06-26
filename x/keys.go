@@ -60,11 +60,10 @@ const (
 
 // NamespaceAttr is used to generate attr from namespace.
 func NamespaceAttr(namespace, attr string) string {
+	AssertTrue(len(attr) > 0)
+
 	if namespace == "" {
 		namespace = DefaultNamespace
-	}
-	if len(attr) == 0 {
-		return namespace + string(NamespaceSeparator) + attr
 	}
 	if attr[0] == '~' {
 		attr = attr[1:]
@@ -89,12 +88,8 @@ func ParseNamespaceAttr(attr string) (string, string) {
 
 // ParseAttr returns the attr from the given value.
 func ParseAttr(attr string) string {
-	splits := strings.Split(attr, string(NamespaceSeparator))
-	AssertTrue(len(splits) == 2)
-	if splits[0][0] == '~' {
-		splits[1] = "~" + splits[1]
-	}
-	return splits[1]
+	_, attr = ParseNamespaceAttr(attr)
+	return attr
 }
 
 func writeAttr(buf []byte, attr string) []byte {

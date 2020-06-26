@@ -1893,6 +1893,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 		}
 
 		for _, pred := range preds {
+			// Predicates are already namespaced so triming the namspace
+			// to pupulate the subgraph.
+
 			// Convert attribute name for the given namespace.
 			typeNamespace, attr := x.ParseNamespaceAttr(pred)
 			if typeNamespace != child.Params.Namespace {
