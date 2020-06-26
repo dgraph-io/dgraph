@@ -67,7 +67,7 @@ func sendRestoreRequest(t *testing.T, backupId string) string {
 	return restoreId
 }
 
-func waitForRestore(t *testing.T, restoreId string) {
+func waitForRestore(t *testing.T, restoreId string, dg *dgo.Dgraph) {
 	query := fmt.Sprintf(`query status() {
 		 restoreStatus(restoreId: "%s") {
 			status
@@ -93,6 +93,21 @@ func waitForRestore(t *testing.T, restoreId string) {
 		time.Sleep(time.Second)
 	}
 	require.True(t, false, "restore operation did not complete after max number of retries")
+
+	// Wait for the client to exit draining mode. This is needed because the client might
+	// be connected to a follower and might be behind the leader in applying the restore.
+	for i := 0; i < 10; i++ {
+		// This is a dummy query that returns no results.
+		_, err = dg.NewTxn().Query(context.Background(), `{
+		q(func: has(invalid_pred)) {
+			invalid_pred
+		}}`)
+		if err == nil {
+			break
+		}
+		require.Contains(t, err.Error(), "the server is in draining mode")
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -198,7 +213,7 @@ func TestBasicRestore(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
-	waitForRestore(t, restoreId)
+	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -214,13 +229,13 @@ func TestMoveTablets(t *testing.T) {
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
 	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
-	waitForRestore(t, restoreId)
+	waitForRestore(t, restoreId, dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
 	restoreId = sendRestoreRequest(t, "blissful_hermann1")
-	waitForRestore(t, restoreId)
+	waitForRestore(t, restoreId, dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
