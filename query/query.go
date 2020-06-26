@@ -200,8 +200,9 @@ type params struct {
 	// Shortest is true when the subgraph holds the results of a shortest paths query.
 	Shortest bool
 
-	//AccessiblePredicates is alist of predicates accessible to query in context of ACL
-	AccessiblePredicates []string
+	// AllowedPreds is a list of predicates accessible to query in context of ACL.
+	// For OSS this should remain empty.
+	AllowedPreds []string
 }
 
 type pathMetadata struct {
@@ -1866,12 +1867,14 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(typeNames)
-			if len(sg.Params.AccessiblePredicates) != 0 {
+			// If AllowedPreds is empty then ACL is turned off
+			// TODO (Anurag): What if ACL is on and user has access to no predicate?
+			if len(sg.Params.AllowedPreds) != 0 {
 				// Take intersection of both the predicate lists
 				intersectPreds := make([]string, 0)
 				hashMap := make(map[string]bool)
-				for _, accessiblePredicate := range sg.Params.AccessiblePredicates {
-					hashMap[accessiblePredicate] = true
+				for _, allowedPred := range sg.Params.AllowedPreds {
+					hashMap[allowedPred] = true
 				}
 				for _, pred := range preds {
 					if _, found := hashMap[pred]; found {

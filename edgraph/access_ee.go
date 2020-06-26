@@ -473,11 +473,11 @@ func authorizePreds(userId string, groupIds, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	accessiblePredsForUser := make([]string, len(aclCachePtr.userPredPerms[userId]))
+	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
 	for predicate := range aclCachePtr.userPredPerms[userId] {
-		accessiblePredsForUser = append(accessiblePredsForUser, predicate)
+		allowedPreds = append(allowedPreds, predicate)
 	}
-	return blockedPreds, accessiblePredsForUser
+	return blockedPreds, allowedPreds
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -674,13 +674,10 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	predsMap := make(map[string]struct{})
 	for _, gq := range gqls {
-		fmt.Printf("Processing gqs %+v\n", gq)
 		if gq.Func != nil {
-			fmt.Printf("gq processed Func is: %+v\n ", gq.Func)
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
 		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" {
-			fmt.Printf("gq processed Attr is: %+v\n ", gq.Attr)
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {
@@ -693,7 +690,6 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 			predsMap[pred] = struct{}{}
 		}
 		for _, childPred := range parsePredsFromQuery(gq.Children) {
-			fmt.Printf("gq processed childPred is: %+v\n ", childPred)
 			predsMap[childPred] = struct{}{}
 		}
 	}
