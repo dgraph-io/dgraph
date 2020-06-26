@@ -73,7 +73,7 @@ func sendRestoreRequest(t *testing.T, backupId string, dg *dgo.Dgraph) {
 			break
 		}
 		require.Contains(t, err.Error(), "the server is in draining mode")
-		time.Sleep(250 * time.Millisecond)
+		time.Sleep(1 * time.Second)
 	}
 }
 
