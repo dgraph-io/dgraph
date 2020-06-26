@@ -99,7 +99,7 @@ func populateClusterWithFacets() error {
 	triples += fmt.Sprintf("<34> <friend> <31> %s .\n", friendFacets8)
 	triples += fmt.Sprintf("<34> <friend> <25> %s .\n", friendFacets9)
 
-	err := addTriplesToCluster(triples)
+	err := addTriplesToCluster(triples, "")
 
 	// Mark the setup as done so that the next tests do not have to perform it.
 	facetSetupDone = true
@@ -896,7 +896,7 @@ func TestFacetsMutation(t *testing.T) {
 	friendFacets := "(since = 2001-11-10T00:00:00Z, close = false, family = false)"
 	// 101 is not close friend now.
 	require.NoError(t,
-		addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets)))
+		addTriplesToCluster(fmt.Sprintf(`<1> <friend> <101> %s .`, friendFacets), ""))
 	// This test messes with the test setup, so set facetSetupDone to false so
 	// the next test redoes the setup.
 	facetSetupDone = false

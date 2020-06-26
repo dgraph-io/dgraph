@@ -55,29 +55,29 @@ name: string .
 func TestSchema(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaVal), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &pb.SchemaUpdate{
-			Predicate: "name",
+		{x.NamespaceAttr(x.DefaultNamespace, "name"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"address", &pb.SchemaUpdate{
-			Predicate: "address",
+		{x.NamespaceAttr(x.DefaultNamespace, "address"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "address"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"http://scalar.com/helloworld/", &pb.SchemaUpdate{
-			Predicate: "http://scalar.com/helloworld/",
+		{x.NamespaceAttr(x.DefaultNamespace, "http://scalar.com/helloworld/"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "http://scalar.com/helloworld/"),
 			ValueType: pb.Posting_STRING,
 		}},
-		{"age", &pb.SchemaUpdate{
-			Predicate: "age",
+		{x.NamespaceAttr(x.DefaultNamespace, "age"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "age"),
 			ValueType: pb.Posting_INT,
 		}},
 	})
 
-	typ, err := State().TypeOf("age")
+	typ, err := State().TypeOf(x.NamespaceAttr(x.DefaultNamespace, "age"))
 	require.NoError(t, err)
 	require.Equal(t, types.IntID, typ)
 
-	_, err = State().TypeOf("agea")
+	_, err = State().TypeOf(x.NamespaceAttr(x.DefaultNamespace, "agea"))
 	require.Error(t, err)
 }
 
@@ -165,36 +165,39 @@ friend  : [uid] @reverse @count .
 func TestSchemaIndexCustom(t *testing.T) {
 	require.NoError(t, ParseBytes([]byte(schemaIndexVal5), 1))
 	checkSchema(t, State().predicate, []nameType{
-		{"name", &pb.SchemaUpdate{
-			Predicate: "name",
+		{x.NamespaceAttr(x.DefaultNamespace, "name"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "name"),
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"exact"},
 			Directive: pb.SchemaUpdate_INDEX,
 			Count:     true,
 		}},
-		{"address", &pb.SchemaUpdate{
-			Predicate: "address",
+		{x.NamespaceAttr(x.DefaultNamespace, "address"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "address"),
 			ValueType: pb.Posting_STRING,
 			Tokenizer: []string{"term"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"age", &pb.SchemaUpdate{
-			Predicate: "age",
+		{x.NamespaceAttr(x.DefaultNamespace, "age"), &pb.SchemaUpdate{
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "age"),
 			ValueType: pb.Posting_INT,
 			Tokenizer: []string{"int"},
 			Directive: pb.SchemaUpdate_INDEX,
 		}},
-		{"friend", &pb.SchemaUpdate{
+		{x.NamespaceAttr(x.DefaultNamespace, "friend"), &pb.SchemaUpdate{
 			ValueType: pb.Posting_UID,
-			Predicate: "friend",
+			Predicate: x.NamespaceAttr(x.DefaultNamespace, "friend"),
 			Directive: pb.SchemaUpdate_REVERSE,
 			Count:     true,
 			List:      true,
 		}},
 	})
-	require.True(t, State().IsIndexed(context.Background(), "name"))
-	require.False(t, State().IsReversed(context.Background(), "name"))
-	require.Equal(t, "int", State().Tokenizer(context.Background(), "age")[0].Name())
+	require.True(t, State().IsIndexed(context.Background(),
+		x.NamespaceAttr(x.DefaultNamespace, "name")))
+	require.False(t, State().IsReversed(context.Background(),
+		x.NamespaceAttr(x.DefaultNamespace, "name")))
+	require.Equal(t, "int", State().Tokenizer(context.Background(),
+		x.NamespaceAttr(x.DefaultNamespace, "age"))[0].Name())
 }
 
 func TestParse(t *testing.T) {

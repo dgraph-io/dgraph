@@ -204,9 +204,10 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req := api.Request{
-		Vars:    params.Variables,
-		Query:   params.Query,
-		StartTs: startTs,
+		Vars:      params.Variables,
+		Query:     params.Query,
+		StartTs:   startTs,
+		Namespace: r.Header.Get(x.NamespaceHeader),
 	}
 
 	if req.StartTs == 0 {
@@ -383,6 +384,7 @@ func mutationHandler(w http.ResponseWriter, r *http.Request) {
 
 	req.StartTs = startTs
 	req.CommitNow = commitNow
+	req.Namespace = r.Header.Get(x.NamespaceHeader)
 
 	ctx := x.AttachAccessJwt(context.Background(), r)
 	resp, err := (&edgraph.Server{}).Query(ctx, req)
@@ -562,6 +564,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	if len(fwd) > 0 {
 		glog.Infof("The alter request is forwarded by %s\n", fwd)
 	}
+	op.Namespace = r.Header.Get(x.NamespaceHeader)
 
 	md := metadata.New(nil)
 	// Pass in an auth token, if present.

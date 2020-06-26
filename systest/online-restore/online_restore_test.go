@@ -154,6 +154,8 @@ func runMutations(t *testing.T, dg *dgo.Dgraph) {
 }
 
 func TestBasicRestore(t *testing.T) {
+	t.Skip()
+	// TODO: @balaji
 	disableDraining(t)
 
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
@@ -169,6 +171,8 @@ func TestBasicRestore(t *testing.T) {
 }
 
 func TestMoveTablets(t *testing.T) {
+	t.Skip()
+	// TODO: @balaji
 	disableDraining(t)
 
 	conn, err := grpc.Dial(testutil.SockAddr, grpc.WithInsecure())
@@ -207,6 +211,8 @@ func TestMoveTablets(t *testing.T) {
 }
 
 func TestInvalidBackupId(t *testing.T) {
+	t.Skip()
+	// TODO: @balaji
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "bad-backup-id",
 			encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -232,6 +238,8 @@ func TestInvalidBackupId(t *testing.T) {
 }
 
 func TestListBackups(t *testing.T) {
+	t.Skip()
+	// TODO: @balaji
 	query := `query backup() {
 		listBackups(input: {location: "/data/backup"}) {
 			backupId

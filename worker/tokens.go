@@ -80,7 +80,7 @@ func getStringTokens(funcArgs []string, lang string, funcType FuncType) ([]strin
 func pickTokenizer(ctx context.Context, attr string, f string) (tok.Tokenizer, error) {
 	// Get the tokenizers and choose the corresponding one.
 	if !schema.State().IsIndexed(ctx, attr) {
-		return nil, errors.Errorf("Attribute %s is not indexed.", attr)
+		return nil, errors.Errorf("Attribute %s is not indexed.", x.ParseAttr(attr))
 	}
 
 	tokenizers := schema.State().Tokenizer(ctx, attr)

@@ -94,9 +94,11 @@ func TestBackupMinio(t *testing.T) {
 		time.Sleep(3 * time.Second)
 		state, err := testutil.GetState()
 		require.NoError(t, err)
-		if _, ok := state.Groups["1"].Tablets["movie"]; ok {
-			moveOk = true
-			break
+		for _, tablet := range state.Groups["1"].Tablets {
+			if strings.Contains(tablet.Predicate, "movie") {
+				moveOk = true
+				break
+			}
 		}
 	}
 	require.True(t, moveOk)
@@ -114,8 +116,14 @@ func TestBackupMinio(t *testing.T) {
 
 	// Check the predicates and types in the schema are as expected.
 	// TODO: refactor tests so that minio and filesystem tests share most of their logic.
-	preds := []string{"dgraph.graphql.schema", "dgraph.graphql.xid", "dgraph.type", "movie"}
-	types := []string{"Node", "dgraph.graphql"}
+	preds := []string{
+		x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql.schema"),
+		x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql.xid"),
+		x.NamespaceAttr(x.DefaultNamespace, "dgraph.type"),
+		x.NamespaceAttr(x.DefaultNamespace, "movie")}
+	types := []string{
+		x.NamespaceAttr(x.DefaultNamespace, "Node"),
+		x.NamespaceAttr(x.DefaultNamespace, "dgraph.graphql")}
 	testutil.CheckSchema(t, preds, types)
 
 	checks := []struct {
@@ -158,8 +166,8 @@ func TestBackupMinio(t *testing.T) {
 	restored = runRestore(t, "", incr1.Txn.CommitTs)
 
 	// Check the predicates and types in the schema are as expected.
-	preds = append(preds, "actor")
-	types = append(types, "NewNode")
+	preds = append(preds, x.NamespaceAttr(x.DefaultNamespace, "actor"))
+	types = append(types, x.NamespaceAttr(x.DefaultNamespace, "NewNode"))
 	testutil.CheckSchema(t, preds, types)
 
 	checks = []struct {
@@ -309,8 +317,11 @@ func runRestore(t *testing.T, lastDir string, commitTs uint64) map[string]string
 		require.Equal(t, uint32(i+1), groupId)
 	}
 	pdir := "./data/restore/p1"
-	restored, err := testutil.GetPredicateValues(pdir, "movie", commitTs)
+	restored, err := testutil.GetPredicateValues(pdir,
+		x.NamespaceAttr(x.DefaultNamespace, "movie"),
+		commitTs)
 	require.NoError(t, err)
+
 	t.Logf("--- Restored values: %+v\n", restored)
 	return restored
 }
