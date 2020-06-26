@@ -2142,44 +2142,7 @@ loop:
 			if !expectArg {
 				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
 			}
-
-			val := collectName(it, item.Val)
-
-			// TODO: Do we need alias and lang checks like groupby ? - pshah
-			// peekIt, err := it.Peek(1)
-			// if err != nil {
-			// 	return err
-			// }
-			// if peekIt[0].Typ == itemColon {
-			// 	if alias != "" {
-			// 		return item.Errorf("Expected predicate after %s:", alias)
-			// 	}
-			// 	if validKey(val) {
-			// 		return item.Errorf("Can't use keyword %s as alias in groupby", val)
-			// 	}
-			// 	alias = val
-			// 	it.Next() // Consume the itemColon
-			// 	continue
-			// }
-
-			// var langs []string
-			// items, err := it.Peek(1)
-			// if err == nil && items[0].Typ == itemAt {
-			// 	it.Next() // consume '@'
-			// 	it.Next() // move forward
-			// 	langs, err = parseLanguageList(it)
-			// 	if err != nil {
-			// 		return err
-			// 	}
-			// }
-			// attrLang := GroupByAttr{
-			// 	Attr:  val,
-			// 	Alias: alias,
-			// 	Langs: langs,
-			// }
-			// alias = ""
-
-			gq.Cascade = append(gq.Cascade, val)
+			gq.Cascade = append(gq.Cascade, collectName(it, item.Val))
 			count++
 			expectArg = false
 		}
