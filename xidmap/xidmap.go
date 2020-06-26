@@ -62,6 +62,7 @@ type shard struct {
 	dir    string
 	db     *badger.DB
 	bmutex sync.RWMutex
+	wg     sync.WaitGroup
 }
 
 type block struct {
@@ -84,7 +85,7 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations.
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
-	numShards := 2
+	numShards := 32
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
@@ -177,11 +178,11 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 		return uid, false
 	}
 
-	sh.bmutex.RLock()
 	fp := farm.Fingerprint64([]byte(xid))
 
 	var valCopy []byte
 	if sh.bl.Has(fp) {
+		sh.bmutex.RLock()
 		err := sh.db.View(func(txn *badger.Txn) error {
 			item, err := txn.Get([]byte(xid))
 			if err != nil {
@@ -197,8 +198,8 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 		if err == nil {
 			uid = binary.BigEndian.Uint64(valCopy)
 		}
+		sh.bmutex.RUnlock()
 	}
-	sh.bmutex.RUnlock()
 
 	sh.Lock()
 	defer sh.Unlock()
@@ -216,9 +217,8 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	sh.uidMap[xid] = newUid
 
 	if len(sh.uidMap) > 1000000 {
-		fmt.Println("initial", len(sh.uidMap))
+		sh.wg.Add(1)
 		go func(uidMap map[string]uint64) {
-			fmt.Println("Entering", len(uidMap))
 			sh.bmutex.Lock()
 			sh.writer = sh.db.NewWriteBatch()
 			for key, value := range uidMap {
@@ -227,15 +227,16 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 				if err := sh.writer.Set([]byte(key), uidBuf[:]); err != nil {
 					x.Panic(err)
 				}
-				fp := farm.Fingerprint64([]byte(key))
-				sh.bl.Add(fp)
 			}
 			sh.writer.Flush()
 			sh.bmutex.Unlock()
 			uidMap = nil
-			fmt.Println("Unlock")
+			sh.wg.Done()
 		}(sh.uidMap)
-		fmt.Println("just after", len(sh.uidMap))
+		for key, _ := range sh.uidMap {
+			fp := farm.Fingerprint64([]byte(key))
+			sh.bl.Add(fp)
+		}
 		sh.uidMap = nil
 		sh.uidMap = make(map[string]uint64)
 	}
@@ -307,8 +308,9 @@ func (m *XidMap) Flush() error {
 	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
 	// TODO: find why xidmap is not getting GCed without below line.
 	for _, i := range m.shards {
-		os.RemoveAll(i.dir)
+		i.wg.Wait()
 		i.db.Close()
+		os.RemoveAll(i.dir)
 	}
 	m.shards = nil
 
