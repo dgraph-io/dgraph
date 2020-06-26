@@ -19,7 +19,10 @@ package xidmap
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
+	"io/ioutil"
 	"math/rand"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -29,6 +32,7 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
 )
@@ -51,6 +55,13 @@ type shard struct {
 	block
 
 	uidMap map[string]uint64
+
+	bl *z.Bloom
+
+	writer *badger.WriteBatch
+	dir    string
+	db     *badger.DB
+	bmutex sync.RWMutex
 }
 
 type block struct {
@@ -73,20 +84,28 @@ func (b *block) assign(ch <-chan *pb.AssignedIds) uint64 {
 // badger.DB can be provided to persist the xid to uid allocations. This would add latency to the
 // assignment operations.
 func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
-	numShards := 32
+	numShards := 2
 	xm := &XidMap{
 		newRanges: make(chan *pb.AssignedIds, numShards),
 		shards:    make([]*shard, numShards),
 	}
 	for i := range xm.shards {
+		dir, _ := ioutil.TempDir(".", fmt.Sprintf("tmp/shard-%d", i))
+
+		opt := badger.LSMOnlyOptions(dir)
+		db, _ := badger.Open(opt)
+
+		writer := db.NewWriteBatch()
 		xm.shards[i] = &shard{
 			uidMap: make(map[string]uint64),
+			writer: writer,
+			dir:    dir,
+			db:     db,
+			bl:     z.NewBloomFilter(112345678, 15),
 		}
 	}
 	if db != nil {
 		// If DB is provided, let's load up all the xid -> uid mappings in memory.
-		xm.writer = db.NewWriteBatch()
-
 		err := db.View(func(txn *badger.Txn) error {
 			var count int
 			opt := badger.DefaultIteratorOptions
@@ -158,8 +177,35 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 		return uid, false
 	}
 
+	sh.bmutex.RLock()
+	fp := farm.Fingerprint64([]byte(xid))
+
+	var valCopy []byte
+	if sh.bl.Has(fp) {
+		err := sh.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get([]byte(xid))
+			if err != nil {
+				return err
+			}
+
+			return item.Value(func(val []byte) error {
+				valCopy = append([]byte{}, val...)
+				return nil
+			})
+		})
+
+		if err == nil {
+			uid = binary.BigEndian.Uint64(valCopy)
+		}
+	}
+	sh.bmutex.RUnlock()
+
 	sh.Lock()
 	defer sh.Unlock()
+	if uid > 0 {
+		sh.uidMap[xid] = uid
+		return uid, false
+	}
 
 	uid = sh.uidMap[xid]
 	if uid > 0 {
@@ -168,6 +214,31 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 
 	newUid := sh.assign(m.newRanges)
 	sh.uidMap[xid] = newUid
+
+	if len(sh.uidMap) > 1000000 {
+		fmt.Println("initial", len(sh.uidMap))
+		go func(uidMap map[string]uint64) {
+			fmt.Println("Entering", len(uidMap))
+			sh.bmutex.Lock()
+			sh.writer = sh.db.NewWriteBatch()
+			for key, value := range uidMap {
+				var uidBuf [8]byte
+				binary.BigEndian.PutUint64(uidBuf[:], value)
+				if err := sh.writer.Set([]byte(key), uidBuf[:]); err != nil {
+					x.Panic(err)
+				}
+				fp := farm.Fingerprint64([]byte(key))
+				sh.bl.Add(fp)
+			}
+			sh.writer.Flush()
+			sh.bmutex.Unlock()
+			uidMap = nil
+			fmt.Println("Unlock")
+		}(sh.uidMap)
+		fmt.Println("just after", len(sh.uidMap))
+		sh.uidMap = nil
+		sh.uidMap = make(map[string]uint64)
+	}
 
 	if m.writer != nil {
 		var uidBuf [8]byte
@@ -235,6 +306,10 @@ func (m *XidMap) Flush() error {
 	// even during reduce phase. If bulk loader is running on large dataset, this occupies lot of
 	// memory and causing OOM sometimes. Making shards explicitly nil in this method fixes this.
 	// TODO: find why xidmap is not getting GCed without below line.
+	for _, i := range m.shards {
+		os.RemoveAll(i.dir)
+		i.db.Close()
+	}
 	m.shards = nil
 
 	if m.writer == nil {
