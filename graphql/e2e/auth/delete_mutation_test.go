@@ -181,7 +181,7 @@ func TestDeleteRBACFilter(t *testing.T) {
 			deleteLog(filter: {id: $logs}) {
           		numUids
 				msg
-				log (order: { asc: random }) {
+				log (order: { asc: logs }) {
 					logs
 					random
 				}
