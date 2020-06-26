@@ -210,7 +210,6 @@ func TestGetCurrentSlot(t *testing.T) {
 	babeService := createTestService(t, nil)
 
 	// 100 blocks / 1000 ms/s
-	// TODO: use time.Duration
 	addBlocksToState(t, babeService, 100, babeService.blockState, uint64(time.Now().Unix())-(babeService.config.SlotDuration/10))
 
 	res, err := babeService.getCurrentSlot()

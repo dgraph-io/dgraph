@@ -47,7 +47,9 @@ func (b *Service) estimateCurrentSlot() (uint64, error) {
 
 	// use slot duration to count up
 	for {
-		if arrivalTime >= uint64(time.Now().Unix())-(b.config.SlotDuration/1000) {
+		at := time.Unix(int64(arrivalTime), 0)
+
+		if time.Since(at) <= b.slotDuration() {
 			return slot, nil
 		}
 
@@ -70,7 +72,9 @@ func (b *Service) getCurrentSlot() (uint64, error) {
 			return 0, err
 		}
 
-		if slotTime > uint64(time.Now().Unix())-(b.config.SlotDuration/1000) {
+		st := time.Unix(int64(slotTime), 0)
+
+		if time.Since(st) <= b.slotDuration() {
 			return estimate, nil
 		}
 
@@ -103,7 +107,7 @@ func (b *Service) slotTime(slot uint64, slotTail uint64) (uint64, error) {
 		return 0, err
 	}
 
-	sd := (b.config.SlotDuration / 1000)
+	sd := uint64(b.slotDuration().Seconds())
 
 	var currSlot uint64
 	var so uint64

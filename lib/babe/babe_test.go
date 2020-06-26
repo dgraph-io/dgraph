@@ -105,6 +105,17 @@ func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	return babeService
 }
 
+func TestSlotDuration(t *testing.T) {
+	bs := &Service{
+		config: &types.BabeConfiguration{
+			SlotDuration: 1000,
+		},
+	}
+
+	dur := bs.slotDuration()
+	require.Equal(t, dur.Milliseconds(), int64(1000))
+}
+
 func TestCalculateThreshold(t *testing.T) {
 	// C = 1
 	var C1 uint64 = 1

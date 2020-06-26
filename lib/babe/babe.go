@@ -260,6 +260,10 @@ func (b *Service) isStopped() bool {
 	return !b.started.Load().(bool)
 }
 
+func (b *Service) slotDuration() time.Duration {
+	return time.Duration(b.config.SlotDuration * 1000000) // SlotDuration in ms, time.Duration in ns
+}
+
 func (b *Service) invokeBlockAuthoring() {
 	if b.config == nil {
 		b.logger.Error("block authoring", "error", "config is nil")
@@ -306,17 +310,18 @@ func (b *Service) invokeBlockAuthoring() {
 	b.logger.Debug("[babe]", "calculated slot", slotNum)
 
 	for ; slotNum < b.startSlot+b.config.EpochLength; slotNum++ {
-		start := time.Now().Unix()
+		start := time.Now()
 
-		if uint64(time.Now().Unix()-start) <= b.config.SlotDuration*1000000 {
+		if time.Since(start) <= b.slotDuration() {
 			if b.isStopped() {
 				return
 			}
 
 			b.handleSlot(slotNum)
 
-			// TODO: change this to sleep until start + slotDuration
-			time.Sleep(time.Millisecond * time.Duration(b.config.SlotDuration) * 2)
+			// sleep until the slot ends
+			until := time.Until(start.Add(b.slotDuration()))
+			time.Sleep(until)
 		}
 	}
 
