@@ -124,7 +124,6 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start starts the network service
 func (s *Service) Start() error {
-
 	// update network state
 	go s.updateNetworkState()
 
@@ -150,6 +149,7 @@ func (s *Service) Start() error {
 		s.mdns.start()
 	}
 
+	s.closed = false
 	return nil
 }
 
@@ -182,6 +182,11 @@ func (s *Service) Stop() error {
 	}
 
 	return nil
+}
+
+// IsStopped returns true if the service is stopped
+func (s *Service) IsStopped() bool {
+	return s.closed
 }
 
 // updateNetworkState updates the network state at the set time interval

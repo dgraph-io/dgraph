@@ -44,6 +44,7 @@ type HTTPServerConfig struct {
 	StorageAPI             modules.StorageAPI
 	NetworkAPI             modules.NetworkAPI
 	CoreAPI                modules.CoreAPI
+	BlockProducerAPI       modules.BlockProducerAPI
 	RuntimeAPI             modules.RuntimeAPI
 	TransactionQueueAPI    modules.TransactionQueueAPI
 	RPCAPI                 modules.RPCAPI
@@ -101,6 +102,8 @@ func (h *HTTPServer) RegisterModules(mods []string) {
 			srvc = modules.NewStateModule(h.serverConfig.NetworkAPI, h.serverConfig.StorageAPI, h.serverConfig.CoreAPI)
 		case "rpc":
 			srvc = modules.NewRPCModule(h.serverConfig.RPCAPI)
+		case "dev":
+			srvc = modules.NewDevModule(h.serverConfig.BlockProducerAPI, h.serverConfig.NetworkAPI)
 		default:
 			h.logger.Warn("Unrecognized module", "module", mod)
 			continue

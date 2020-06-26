@@ -242,7 +242,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 // RPC Service
 
 // createRPCService creates the RPC service from the provided core configuration
-func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, rt *runtime.Runtime, sysSrvc *system.Service) (*rpc.HTTPServer, error) {
+func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Service, networkSrvc *network.Service, bp BlockProducer, rt *runtime.Runtime, sysSrvc *system.Service) (*rpc.HTTPServer, error) {
 	logger.Info(
 		"creating rpc service...",
 		"host", cfg.RPC.Host,
@@ -264,6 +264,7 @@ func createRPCService(cfg *Config, stateSrvc *state.Service, coreSrvc *core.Serv
 		StorageAPI:          stateSrvc.Storage,
 		NetworkAPI:          networkSrvc,
 		CoreAPI:             coreSrvc,
+		BlockProducerAPI:    bp,
 		RuntimeAPI:          rt,
 		TransactionQueueAPI: stateSrvc.TransactionQueue,
 		RPCAPI:              rpcService,

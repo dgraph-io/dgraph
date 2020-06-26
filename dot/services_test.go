@@ -155,7 +155,7 @@ func TestCreateRPCService(t *testing.T) {
 
 	sysSrvc := createSystemService(&cfg.System)
 
-	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
+	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687

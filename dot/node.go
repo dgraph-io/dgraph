@@ -284,7 +284,7 @@ func NewNode(cfg *Config, ks *keystore.Keystore) (*Node, error) {
 	if enabled := RPCServiceEnabled(cfg); enabled {
 
 		// create rpc service and append rpc service to node services
-		rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, rt, sysSrvc)
+		rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, bp, rt, sysSrvc)
 		if err != nil {
 			return nil, err
 		}

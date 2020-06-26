@@ -32,6 +32,15 @@ type NetworkAPI interface {
 	NetworkState() common.NetworkState
 	Peers() []common.PeerInfo
 	NodeRoles() byte
+	Stop() error
+	Start() error
+	IsStopped() bool
+}
+
+// BlockProducerAPI is the interface for BlockProducer methods
+type BlockProducerAPI interface {
+	Pause() error
+	Resume() error
 }
 
 // TransactionQueueAPI ...
