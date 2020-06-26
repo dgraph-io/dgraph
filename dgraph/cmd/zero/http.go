@@ -244,14 +244,14 @@ func (st *state) pingResponse(w http.ResponseWriter, r *http.Request) {
 		Instance: "zero",
 		Address:  x.WorkerConfig.MyAddr,
 		Status:   "healthy",
+		Group:    "0",
 		Version:  x.Version(),
 		Uptime:   int64(time.Since(x.WorkerConfig.StartTime) / time.Second),
 		LastEcho: time.Now().Unix(),
 	})
 	var resp *api.Response
-	var err error
-	var jsonOut []byte
-	if jsonOut, err = json.Marshal(healthAll); err != nil {
+	jsonOut, err := json.Marshal(healthAll)
+	if err != nil {
 		return
 	}
 	resp = &api.Response{Json: jsonOut}
