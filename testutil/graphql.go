@@ -27,7 +27,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
