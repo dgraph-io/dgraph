@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
@@ -36,7 +37,7 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string) {
+func sendRestoreRequest(t *testing.T, backupId string, dg *dgo.Dgraph) {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
@@ -59,6 +60,21 @@ func sendRestoreRequest(t *testing.T, backupId string) {
 	buf, err := ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	require.Contains(t, string(buf), "Restore completed.")
+
+	// Wait for the client to exit draining mode. This is needed because the client might
+	// be connected to a follower and might be behind the leader in applying the restore.
+	for i := 0; i < 10; i++ {
+		// This is a dummy query that returns no results.
+		_, err = dg.NewTxn().Query(context.Background(), `{
+		q(func: has(invalid_pred)) {
+			invalid_pred
+		}}`)
+		if err == nil {
+			break
+		}
+		require.Contains(t, err.Error(), "the server is in draining mode")
+		time.Sleep(1 * time.Second)
+	}
 }
 
 // disableDraining disables draining mode before each test for increased reliability.
@@ -163,7 +179,7 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "youthful_rhodes3")
+	sendRestoreRequest(t, "youthful_rhodes3", dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -178,12 +194,12 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	sendRestoreRequest(t, "youthful_rhodes3")
+	sendRestoreRequest(t, "youthful_rhodes3", dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	sendRestoreRequest(t, "blissful_hermann1")
+	sendRestoreRequest(t, "blissful_hermann1", dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
