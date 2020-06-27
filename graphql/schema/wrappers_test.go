@@ -923,6 +923,62 @@ func TestParseSecrets(t *testing.T) {
 				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
 				` https://dgraph.io/jwt/claims HS256 "key"`),
 		},
+		{
+			"should throw an error if required fields are missing in Authorizaiton Information",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {}
+			`,
+			nil,
+			"",
+			errors.New("Required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+		},
+		{
+			"Valid Dgraph.Authorization with audience array field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+		},
+		{
+			"Valid Dgraph.Authorization with audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+		},
+		{
+			"Valid Dgraph.Authorization without audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+		},
 	}
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
