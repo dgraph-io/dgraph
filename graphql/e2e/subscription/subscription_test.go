@@ -31,18 +31,18 @@ const (
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
 	adminEndpoint        = "http://localhost:8180/admin"
 	sch                  = `
-	type Product {
+	type Product @withSubscription {
 		productID: ID!
 		name: String @search(by: [term])
 		reviews: [Review] @hasInverse(field: about)
 	}
 
-	type Customer {
+	type Customer @withSubscription {
 		username: String! @id @search(by: [hash, regexp])
 		reviews: [Review] @hasInverse(field: by)
 	}
 
-	type Review {
+	type Review @withSubscription{
 		id: ID!
 		about: Product!
 		by: Customer!
