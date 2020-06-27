@@ -25,9 +25,8 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -212,13 +211,6 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	claims, ok := token.Claims.(*CustomClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
-	}
-
-	// by default, the MapClaims.Valid will return true if the exp field is not set
-	// here we enforce the checking to make sure that the refresh token has not expired
-	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
-		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
 	}
 
 	return claims.AuthVariables, nil

@@ -27,7 +27,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -157,7 +157,7 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
 		a.Namespace,
 		a.AuthVars,
 		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute).Unix(),
+			ExpiresAt: jwt.At(time.Now().Add(time.Minute * 5)),
 			Issuer:    "test",
 		},
 	}
