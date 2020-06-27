@@ -210,3 +210,4 @@ type Mutation {
 	updateCar(input: UpdateCarInput!): UpdateCarPayload
 	deleteCar(filter: CarFilter!): DeleteCarPayload
 }
+

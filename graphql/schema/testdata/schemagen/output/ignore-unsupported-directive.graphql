@@ -224,3 +224,4 @@ type Mutation {
 	updateProduct(input: UpdateProductInput!): UpdateProductPayload
 	deleteProduct(filter: ProductFilter!): DeleteProductPayload
 }
+

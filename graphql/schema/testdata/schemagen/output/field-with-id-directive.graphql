@@ -330,3 +330,4 @@ type Mutation {
 	addGenre(input: [AddGenreInput!]!): AddGenrePayload
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
+

@@ -178,3 +178,4 @@ type Query {
 type Mutation {
 	addAtype(input: [AddAtypeInput!]!): AddAtypePayload
 }
+

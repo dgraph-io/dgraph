@@ -424,3 +424,4 @@ type Mutation {
 	updateAnswer(input: UpdateAnswerInput!): UpdateAnswerPayload
 	deleteAnswer(filter: AnswerFilter!): DeleteAnswerPayload
 }
+

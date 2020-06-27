@@ -265,3 +265,4 @@ type Mutation {
 	deleteBook(filter: BookFilter!): DeleteBookPayload
 	addLibrary(input: [AddLibraryInput!]!): AddLibraryPayload
 }
+

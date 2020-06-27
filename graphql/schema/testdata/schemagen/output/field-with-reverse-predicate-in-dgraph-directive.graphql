@@ -270,3 +270,4 @@ type Mutation {
 	updateMovieDirector(input: UpdateMovieDirectorInput!): UpdateMovieDirectorPayload
 	deleteMovieDirector(filter: MovieDirectorFilter!): DeleteMovieDirectorPayload
 }
+
