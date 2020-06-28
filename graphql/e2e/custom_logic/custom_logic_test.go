@@ -254,7 +254,6 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 				http: {
 				  url: "http://mock:8888/validatesecrettoken"
 				  method: "POST"
-				  forwardHeaders: ["Content-Type"]
 				  secretHeaders: ["GITHUB-API-TOKEN"]
 				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
 				}
@@ -2110,10 +2109,10 @@ func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
 func TestCustomGraphqlMutation1(t *testing.T) {
 	schema := `
 	type Country @remote {
-      code: String
-      name: String
-      states: [State]
-      std: Int
+		code: String
+		name: String
+		states: [State]
+		std: Int
     }
 
     type State @remote {
@@ -2134,14 +2133,11 @@ func TestCustomGraphqlMutation1(t *testing.T) {
 	}
 	
 	type Mutation {
-		addCountry1(input: CountryInput!): Country!
-		  @custom(
-			http: {
-			  url: "http://mock:8888/setCountry"
-			  method: "POST"
-			  graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
-			}
-		  )
+		addCountry1(input: CountryInput!): Country! @custom(http: {
+					url: "http://mock:8888/setCountry"
+					method: "POST"
+					graphql: "mutation($input: CountryInput!) { setCountry(country: $input) }"
+			})
 	  }`
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)

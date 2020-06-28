@@ -380,9 +380,9 @@ func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) 
 			}
 			for _, field := range fields {
 				var remoteField *gqlField = nil
-				for _, it := range remoteType {
-					if it.Name == field.Name {
-						remoteField = it
+				for _, rf := range remoteType {
+					if rf.Name == field.Name {
+						remoteField = rf
 					}
 				}
 				if remoteField == nil {
@@ -547,7 +547,7 @@ func expandTypeRecursively(typenameToExpand string, param *expandTypeParams) err
 	param.expandedTypes[typenameToExpand] = struct{}{}
 	typeFound := false
 	for _, typ := range param.remoteTypes {
-		if typ.Name == typenameToExpand {
+		if typ.Name == typenameToExpand && typ.Kind != "INPUT_OBJECT"{
 			typeFound = true
 			param.typesToFields[typ.Name] = make([]*gqlField, 0,
 				len(typ.Fields)+len(typ.InputFields))
@@ -565,6 +565,9 @@ func expandTypeRecursively(typenameToExpand string, param *expandTypeParams) err
 					}
 				}
 			}
+		} 
+		if (typ.Kind != "INPUT_OBJECT") {
+			typeFound = true
 		}
 	}
 	if !typeFound {
