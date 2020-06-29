@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"sort"
 	"strconv"
@@ -172,19 +171,16 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	ap.StartedWaiting = make(chan struct{}, 10000)
 
 	if worker.AdminPause != nil {
-		fmt.Println("Here issuing pause")
-		for pred, i := range worker.AdminPause {
+		for _, i := range worker.AdminPause {
 			a += 1
 			i <- &ap
-			fmt.Println("Sending to ", pred)
 		}
 		ap.Wg.Add(a)
 	}
 
 	num := a
-	for num >= 0 {
+	for num > 0 {
 		<-ap.StartedWaiting
-		fmt.Println("Got something", num)
 		num--
 	}
 

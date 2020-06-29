@@ -100,13 +100,14 @@ func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *AdminPa
 			fmt.Println("started waiting", pred)
 			ap.StartedWaiting <- struct{}{}
 			ap.Wg.Wait()
+			fmt.Println("Done waiting")
 		default:
-			fmt.Println("default", pred)
 			select {
 			case payload := <-ch:
 				run(payload)
+			default:
+				continue
 			}
-			fmt.Println("done", pred)
 		}
 	}
 }
