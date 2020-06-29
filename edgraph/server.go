@@ -319,6 +319,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		return empty, err
 	}
 
+	for i := 0; i < a; i++ {
+		wg.Done()
+	}
+
 	// wait for indexing to complete or context to be canceled.
 	for !op.RunInBackground {
 		if ctx.Err() != nil {
@@ -330,9 +334,6 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		time.Sleep(time.Second * 2)
 	}
 
-	for i := 0; i < a; i++ {
-		wg.Done()
-	}
 	return empty, nil
 }
 
