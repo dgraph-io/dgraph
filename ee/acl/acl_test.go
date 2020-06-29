@@ -997,6 +997,10 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		type TypeName {
+			name: string
+			age: int
+		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -1016,9 +1020,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
 		`),
 		CommitNow: true,
 	}
@@ -1030,7 +1036,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(6 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1100,6 +1106,17 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`,
 			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 			`filter won't work because <nickname> is unauthorized`,
+		},
+		{
+			`
+			{
+				me(func: has(name)) {
+					expand(_all_)
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`expand(_all_) expands to only <name> because other predicates are unauthorized`,
 		},
 	}
 
