@@ -223,14 +223,22 @@ func resetUser(t *testing.T) {
 	glog.Infof("created user")
 }
 
-func TestReservedPredicates(t *testing.T) {
-	// This test uses the groot account to ensure that reserved predicates
+func TestPreDefinedPredicates(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined predicates
 	// cannot be altered even if the permissions allow it.
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	alterReservedPredicates(t, dg1)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedPredicates(t, dg1)
+}
+
+func TestPreDefinedTypes(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined types
+	// cannot be altered even if the permissions allow it.
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedTypes(t, dg)
 }
 
 func TestAuthorization(t *testing.T) {
@@ -310,11 +318,11 @@ var query = fmt.Sprintf(`
 	}`, predicateToRead, queryAttr)
 var schemaQuery = "schema {}"
 
-func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
+func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	// Test that alter requests are allowed if the new update is the same as
-	// the initial update for a reserved predicate.
+	// the initial update for a pre-defined predicate.
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: string @index(exact) @upsert .",
 	})
@@ -325,22 +333,57 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be modified")
+		"predicate dgraph.xid is pre-defined and is not allowed to be modified")
 
 	err = dg.Alter(ctx, &api.Operation{
 		DropAttr: "dgraph.xid",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be dropped")
+		"predicate dgraph.xid is pre-defined and is not allowed to be dropped")
 
-	// Test that reserved predicates act as case-insensitive.
+	// Test that pre-defined predicates act as case-insensitive.
 	err = dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.XID: int .",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.XID is reserved and is not allowed to be modified")
+		"predicate dgraph.XID is pre-defined and is not allowed to be modified")
+}
+
+func alterPreDefinedTypes(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// Test that alter requests are allowed if the new update is the same as
+	// the initial update for a pre-defined type.
+	err := dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+				dgraph.acl.rule
+			}
+		`,
+	})
+	require.NoError(t, err)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+			}
+		`,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be modified")
+
+	err = dg.Alter(ctx, &api.Operation{
+		DropOp:    api.Operation_TYPE,
+		DropValue: "dgraph.type.Group",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be dropped")
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {

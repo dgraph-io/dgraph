@@ -552,6 +552,13 @@ var internalPredicateMap = map[string]struct{}{
 	"uid": {},
 }
 
+var preDefinedTypeMap = map[string]struct{}{
+	"dgraph.graphql":    {},
+	"dgraph.type.User":  {},
+	"dgraph.type.Group": {},
+	"dgraph.type.Rule":  {},
+}
+
 // IsGraphqlReservedPredicate returns true if it is the predicate is reserved by graphql.
 func IsGraphqlReservedPredicate(pred string) bool {
 	_, ok := graphqlReservedPredicate[pred]
@@ -630,8 +637,26 @@ func IsInternalPredicate(pred string) bool {
 // We reserve `dgraph.` as the namespace for the types/predicates we may create in future.
 // So, users are not allowed to create a type under this namespace.
 // Hence, we should always define internal types under `dgraph.` namespace.
+//
+// Pre-defined types are subset of reserved types.
+//
+// When critical, use IsPreDefinedType(typ string) to find out whether the typ was
+// actually defined internally or not.
 func IsReservedType(typ string) bool {
 	return isReservedName(typ)
+}
+
+// IsPreDefinedType returns true only if the typ has been defined by dgraph internally.
+// For example, `dgraph.graphql` or ACL types are defined in the initial internal types.
+//
+// We reserve `dgraph.` as the namespace for the types/predicates we may create in future.
+// So, users are not allowed to create a predicate under this namespace.
+// Hence, we should always define internal types under `dgraph.` namespace.
+//
+// Pre-defined types are subset of reserved types.
+func IsPreDefinedType(typ string) bool {
+	_, ok := preDefinedTypeMap[typ]
+	return ok
 }
 
 // isReservedName returns true if the given name is prefixed with `dgraph.`
