@@ -52,6 +52,10 @@ func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, erro
 }
 
 func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		return nil, x.ErrNoNamespace
+	}
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
@@ -68,8 +72,11 @@ func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, erro
 			if err != nil {
 				return nil, err
 			}
-			preds = append(preds, getPredicatesFromTypes(types)...)
-			preds = append(preds, x.StarAllPredicates()...)
+			preds = append(preds, getPredicatesFromTypes(namespace, types)...)
+			// Convert reserved predicates for the given namespace.
+			for _, pred := range x.StarAllPredicates() {
+				preds = append(preds, x.NamespaceAttr(namespace, pred))
+			}
 		}
 
 		for _, pred := range preds {
@@ -169,7 +176,7 @@ func AssignUids(ctx context.Context, gmuList []*gql.Mutation) (map[string]uint64
 }
 
 // ToDirectedEdges converts the gql.Mutation input into a set of directed edges.
-func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
+func ToDirectedEdges(namespace string, gmuList []*gql.Mutation, newUids map[string]uint64) (
 	edges []*pb.DirectedEdge, err error) {
 
 	// Wrapper for a pointer to protos.Nquad
@@ -182,6 +189,9 @@ func ToDirectedEdges(gmuList []*gql.Mutation, newUids map[string]uint64) (
 		}
 		// Get edge from nquad using newUids.
 		var edge *pb.DirectedEdge
+		if wnq.Predicate != x.Star {
+			wnq.Predicate = x.NamespaceAttr(namespace, nq.Predicate)
+		}
 		edge, err = wnq.ToEdgeUsing(newUids)
 		if err != nil {
 			return errors.Wrap(err, "")

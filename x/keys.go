@@ -49,7 +49,48 @@ const (
 	ByteSplit = byte(0x04)
 	// ByteUnused is a constant to specify keys which need to be discarded.
 	ByteUnused = byte(0xff)
+	// NamespaceSeparator is a constant used as seperator between namespace and attr name.
+	// byte 30 is chosen because it is ascii separator standard.
+	// refer:
+	// https://theasciicode.com.ar/ascii-control-characters/unit-separator-ascii-code-31.html
+	NamespaceSeparator = byte(30)
+	// DefaultNamespace is the default namespace name.
+	DefaultNamespace = "default"
 )
+
+// NamespaceAttr is used to generate attr from namespace.
+func NamespaceAttr(namespace, attr string) string {
+	AssertTrue(len(attr) > 0)
+
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+	if attr[0] == '~' {
+		attr = attr[1:]
+		// If the attr is reverse we need to convert that into ~namespaceattr so
+		// that predicate will be reverse indexed.
+		namespace = "~" + namespace
+	}
+	return namespace + string(NamespaceSeparator) + attr
+}
+
+// ParseNamespaceAttr returns the namespace and attr from the given value.
+func ParseNamespaceAttr(attr string) (string, string) {
+	splits := strings.Split(attr, string(NamespaceSeparator))
+	AssertTrue(len(splits) == 2)
+	reverse := splits[0][0] == '~'
+	if reverse {
+		splits[0] = splits[0][1:]
+		splits[1] = "~" + splits[1]
+	}
+	return splits[0], splits[1]
+}
+
+// ParseAttr returns the attr from the given value.
+func ParseAttr(attr string) string {
+	_, attr = ParseNamespaceAttr(attr)
+	return attr
+}
 
 func writeAttr(buf []byte, attr string) []byte {
 	AssertTrue(len(attr) < math.MaxUint16)
@@ -627,7 +668,7 @@ func AllACLPredicates() []string {
 // IsInternalPredicate returns true if the predicate is in the internal predicate list.
 // Currently, `uid` is the only such candidate.
 func IsInternalPredicate(pred string) bool {
-	_, ok := internalPredicateMap[strings.ToLower(pred)]
+	_, ok := internalPredicateMap[strings.ToLower(ParseAttr(pred))]
 	return ok
 }
 
