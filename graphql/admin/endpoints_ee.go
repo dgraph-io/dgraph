@@ -103,7 +103,7 @@ const adminTypes = `
 		vaultField: String
 
 		"""
-		Vault kv store field's format. Must be "base64" or "raw". Default base64.
+		Vault kv store field's format. Must be "base64" or "raw". Default "base64".
 		"""
 		vaultFormat: String
 
