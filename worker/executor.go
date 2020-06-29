@@ -153,8 +153,9 @@ func (e *executor) resumePredicate(pred string) {
 		return
 	}
 
-	e.closer.AddRunning(1)
-	go e.processMutationCh(ch, e.closerMap[pred])
+	closer := e.closerMap[pred]
+	closer.AddRunning(1)
+	go e.processMutationCh(ch, closer)
 }
 
 func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
