@@ -25,7 +25,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -169,15 +168,22 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	defer glog.Infof("ALTER op: %+v done", op)
 
 	a := 0
-	var wg sync.WaitGroup
+	var ap worker.AdminPausePayload
+	ap.StartedWaiting = make(chan struct{}, 10000)
 
 	if worker.AdminPause != nil {
 		fmt.Println("Here issuing pause")
 		for _, i := range worker.AdminPause {
 			a += 1
-			i <- &wg
+			i <- &ap
 		}
-		wg.Add(a)
+		ap.Wg.Add(a)
+	}
+
+	num := a
+	for num >= 0 {
+		<-ap.StartedWaiting
+		num--
 	}
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
