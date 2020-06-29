@@ -2,7 +2,7 @@
 # and Alpha in different Docker containers.
 
 # It mounts /tmp/data on the host machine to /dgraph within the
-# container. You can change /tmp/data to a more appropriate location.
+# container. You will need to change /tmp/data to a more appropriate location.
 # Run `docker-compose up` to start Dgraph.
 
 version: "3.2"
