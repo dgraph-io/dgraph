@@ -40,23 +40,25 @@ type executor struct {
 	pendingSize int64
 
 	sync.RWMutex
-	predChan map[string]chan *subMutation
-	closer   *y.Closer
-	applied  *y.WaterMark
+	predChan  map[string]chan *subMutation
+	closerMap map[string]*y.Closer
+	closer    *y.Closer
+	applied   *y.WaterMark
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
-		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
-		applied:  applied,
+		predChan:  make(map[string]chan *subMutation),
+		closerMap: make(map[string]*y.Closer),
+		closer:    y.NewCloser(0),
+		applied:   applied,
 	}
 	go ex.shutdown()
 	return ex
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
-	defer e.closer.Done()
+func (e *executor) processMutationCh(ch chan *subMutation, closer *y.Closer) {
+	defer closer.Done()
 
 	writer := posting.NewTxnWriter(pstore)
 	for payload := range ch {
@@ -97,16 +99,26 @@ func (e *executor) shutdown() {
 	}
 }
 
+func (e *executor) waitForClosers() {
+	e.RLock()
+	defer e.RUnlock()
+
+	for _, closer := range e.closerMap {
+		closer.Wait()
+	}
+}
+
 // getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
 func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
 	if ok {
 		return ch
 	}
+
+	e.closerMap[pred] = y.NewCloser(1)
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
-	e.closer.AddRunning(1)
-	go e.processMutationCh(ch)
+	go e.processMutationCh(ch, e.closerMap[pred])
 	return ch
 }
 
@@ -114,6 +126,36 @@ const (
 	maxPendingEdgesSize int64 = 64 << 20
 	executorAddEdges          = "executor.addEdges"
 )
+
+func (e *executor) pausePredicate(pred string) {
+	// TODO: check if indexing is already in progress for a predicate.
+
+	// Get old channel and closer, replace them with new one.
+	e.Lock()
+	defer e.Unlock()
+	ch, ok := e.predChan[pred]
+	if ok {
+		close(ch)
+		closer := e.closerMap[pred]
+		closer.Wait()
+	}
+
+	e.closerMap[pred] = y.NewCloser(0)
+	ch = make(chan *subMutation, 1000)
+	e.predChan[pred] = ch
+}
+
+func (e *executor) resumePredicate(pred string) {
+	e.RLock()
+	defer e.RUnlock()
+	ch, ok := e.predChan[pred]
+	if !ok {
+		return
+	}
+
+	e.closer.AddRunning(1)
+	go e.processMutationCh(ch, e.closerMap[pred])
+}
 
 func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)

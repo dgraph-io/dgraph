@@ -351,8 +351,26 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 				return err
 			}
 		}
+
+		shouldPause := x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetSchema()) > 0
+		if shouldPause {
+			for _, update := range proposal.Mutations.Schema {
+				n.ex.pausePredicate(update.Predicate)
+			}
+		}
 		if err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs); err != nil {
+			if shouldPause {
+				for _, update := range proposal.Mutations.Schema {
+					n.ex.resumePredicate(update.Predicate)
+				}
+			}
 			return err
+		}
+
+		if shouldPause {
+			for _, update := range proposal.Mutations.Schema {
+				n.ex.resumePredicate(update.Predicate)
+			}
 		}
 
 		for _, tupdate := range proposal.Mutations.Types {
@@ -940,7 +958,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			if x.WorkerConfig.LudicrousMode {
-				n.ex.closer.SignalAndWait()
+				n.ex.waitForClosers()
 			}
 			close(done)
 			return
