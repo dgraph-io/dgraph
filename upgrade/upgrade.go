@@ -42,6 +42,7 @@ type versionComparisonResult uint8
 
 const (
 	acl       = "acl"
+	dryRun    = "dry-run"
 	alpha     = "alpha"
 	user      = "user"
 	password  = "password"
@@ -149,6 +150,7 @@ func init() {
 
 	flag := Upgrade.Cmd.Flags()
 	flag.Bool(acl, false, "upgrade ACL from v1.2.2 to >=v20.03.0")
+	flag.Bool(dryRun, false, "dry-run the upgrade")
 	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
@@ -266,7 +268,7 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 
 	isInitialFromVersion := true
 
-	for _, changeSet := range list {
+	for j, changeSet := range list {
 		// apply the change set only if the version in which it was introduced is <= the version
 		// to which we want to upgrade and also >= the version from which we want to upgrade.
 		// If cmdInput.fromVersion hasn't been changed by us yet, then make sure that it is always
@@ -279,7 +281,8 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 			fromConditionSatisfied = cmdInput.fromVersion.Compare(changeSet.introducedIn) != greater
 		}
 		if cmdInput.toVersion.Compare(changeSet.introducedIn) != less && fromConditionSatisfied {
-			fmt.Println("Applying the change set introduced in version:", changeSet.introducedIn)
+			fmt.Printf("\n%d. Applying the change set introduced in version: %s\n", j+1,
+				changeSet.introducedIn)
 			// Go over every change in the change set and check if it should be applied. If yes,
 			// apply it, otherwise skip it.
 			for i, change := range changeSet.changes {
@@ -290,7 +293,11 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 				// apply the change only if the min version from which it should be applied
 				// is <= the version from which we want to upgrade
 				if cmdInput.fromVersion.Compare(change.minFromVersion) != less {
-					if err := change.applyFunc(); err != nil {
+					var err error
+					if !Upgrade.Conf.GetBool(dryRun) {
+						err = change.applyFunc()
+					}
+					if err != nil {
 						fmt.Println("\t\tStatus     : Error")
 						fmt.Println("\t\tError      :", err)
 						fmt.Println("\t\tCan't continue. Exiting!!!")
