@@ -164,7 +164,10 @@ func DropAll(t *testing.T, dg *dgo.Dgraph) {
 func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	for {
 		resp, err := dg.NewTxn().Query(context.Background(), q)
-		if err != nil && strings.Contains(err.Error(), "Please retry") {
+		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
+			strings.Contains(err.Error(), "connection closed")) {
+			// Retry connection issues because some tests (e.g TestSnapshot) are stopping and
+			// starting alphas.
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
@@ -196,7 +199,10 @@ func RetryMutation(dg *dgo.Dgraph, mu *api.Mutation) error {
 	for {
 		_, err := dg.NewTxn().Mutate(context.Background(), mu)
 		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
-			strings.Contains(err.Error(), "Tablet isn't being served by this instance")) {
+			strings.Contains(err.Error(), "Tablet isn't being served by this instance") ||
+			strings.Contains(err.Error(), "connection closed")) {
+			// Retry connection issues because some tests (e.g TestSnapshot) are stopping and
+			// starting alphas.
 			time.Sleep(10 * time.Millisecond)
 			continue
 		}
