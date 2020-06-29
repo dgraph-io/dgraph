@@ -529,7 +529,7 @@ func (n *node) initAndStartNode() error {
 		n.SetRaft(raft.RestartNode(n.Cfg))
 		foundCID, err := n.checkForCIDInEntries()
 		if err != nil {
-			return err // error
+			return err
 		}
 		if !foundCID {
 			go n.proposeNewCID()
