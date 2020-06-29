@@ -62,6 +62,8 @@ var (
 	// ErrNotSupported is thrown when an enterprise feature is requested in the open source version.
 	ErrNotSupported = errors.Errorf("Feature available only in Dgraph Enterprise Edition")
 	ErrNoJwt        = errors.New("no accessJwt available")
+	// ErrNoNamespace is returned when namespace is not available in context metadata.
+	ErrNoNamespace = errors.New("Namespace not found")
 )
 
 const (
@@ -980,4 +982,28 @@ func StoreSync(db DB, closer *y.Closer) {
 			return
 		}
 	}
+}
+
+// GetNamespaceFromContext retrives namespace form context
+func GetNamespaceFromContext(ctx context.Context) (string, bool) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return "", false
+	}
+	namespace := md.Get("namespace")
+	if len(namespace) == 0 {
+		return "", false
+	}
+	return namespace[0], true
+}
+
+// SetNamespaceToContext sets namespace to the context's metadata.
+func SetNamespaceToContext(ctx context.Context, namespace string) context.Context {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+		ctx = metadata.NewIncomingContext(ctx, md)
+	}
+	md.Set("namespace", namespace)
+	return ctx
 }

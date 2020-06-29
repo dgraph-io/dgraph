@@ -35,8 +35,8 @@ import (
 
 // ApplyMutations performs the required edge expansions and forwards the results to the
 // worker to perform the mutations.
-func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*api.TxnContext, error) {
-	edges, err := expandEdges(ctx, namespace, m)
+func ApplyMutations(ctx context.Context, m *pb.Mutations) (*api.TxnContext, error) {
+	edges, err := expandEdges(ctx, m)
 	if err != nil {
 		return nil, errors.Wrapf(err, "While adding pb.edges")
 	}
@@ -51,7 +51,11 @@ func ApplyMutations(ctx context.Context, namespace string, m *pb.Mutations) (*ap
 	return tctx, err
 }
 
-func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+func expandEdges(ctx context.Context, m *pb.Mutations) ([]*pb.DirectedEdge, error) {
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		return nil, x.ErrNoNamespace
+	}
 	edges := make([]*pb.DirectedEdge, 0, 2*len(m.Edges))
 	for _, edge := range m.Edges {
 		x.AssertTrue(edge.Op == pb.DirectedEdge_DEL || edge.Op == pb.DirectedEdge_SET)
@@ -63,7 +67,6 @@ func expandEdges(ctx context.Context, namespace string, m *pb.Mutations) ([]*pb.
 			sg := &SubGraph{}
 			sg.DestUIDs = &pb.List{Uids: []uint64{edge.GetEntity()}}
 			sg.ReadTs = m.StartTs
-			sg.Params.Namespace = namespace
 
 			types, err := getNodeTypes(ctx, sg)
 			if err != nil {

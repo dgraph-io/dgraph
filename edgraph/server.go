@@ -128,12 +128,16 @@ func PeriodicallyPostTelemetry() {
 }
 
 // CreateNamespace bootstraps the namespace by creating default types for the given namespace.
-func (s *Server) createNamespace(ctx context.Context, namespace string) error {
+func (s *Server) createNamespace(ctx context.Context) error {
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		return x.ErrNoNamespace
+	}
 	m := &pb.Mutations{
 		StartTs: worker.State.GetTimestamp(false),
 		Schema:  schema.InitialSchema(namespace),
 	}
-	_, err := query.ApplyMutations(ctx, namespace, m)
+	_, err := query.ApplyMutations(ctx, m)
 	return err
 }
 
@@ -145,6 +149,11 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// Always print out Alter operations because they are important and rare.
 	glog.Infof("Received ALTER op: %+v", op)
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		namespace = x.DefaultNamespace
+		ctx = x.SetNamespaceToContext(ctx, namespace)
+	}
 
 	// Alter is used for the following scenarios
 	// - Dropping Predicate (deleting all values for the given predicate)
@@ -158,12 +167,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if op.CreateNamespace != "" {
 		// When CreateNamespace is not nil we create namespace and return the result.
-		return &api.Payload{}, s.createNamespace(ctx, op.CreateNamespace)
-	}
-
-	if op.Namespace == "" {
-		// Setting default namespace if there is no namespace.
-		op.Namespace = x.DefaultNamespace
+		return &api.Payload{}, s.createNamespace(ctx)
 	}
 
 	// The following code block checks if the operation should run or not.
@@ -205,7 +209,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_ALL
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop all operation
 		ResetAcl()
@@ -218,7 +222,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		_, err := query.ApplyMutations(ctx, m)
 
 		// recreate the admin account after a drop data operation
 		ResetAcl()
@@ -243,7 +247,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 				" dropped", attr)
 		}
 
-		attr = x.NamespaceAttr(op.Namespace, attr)
+		attr = x.NamespaceAttr(namespace, attr)
 		nq := &api.NQuad{
 			Subject:     x.Star,
 			Predicate:   attr,
@@ -256,7 +260,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 		edges := []*pb.DirectedEdge{edge}
 		m.Edges = edges
-		_, err = query.ApplyMutations(ctx, op.Namespace, m)
+		_, err = query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
@@ -272,8 +276,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 		}
 
 		m.DropOp = pb.Mutations_TYPE
-		m.DropValue = x.NamespaceAttr(op.Namespace, op.DropValue)
-		_, err := query.ApplyMutations(ctx, op.Namespace, m)
+		m.DropValue = x.NamespaceAttr(namespace, op.DropValue)
+		_, err := query.ApplyMutations(ctx, m)
 		return empty, err
 	}
 
@@ -309,7 +313,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 				update.Predicate)
 		}
 		// Set the schema name according to the namespace.
-		update.Predicate = x.NamespaceAttr(op.Namespace, update.Predicate)
+		update.Predicate = x.NamespaceAttr(namespace, update.Predicate)
 	}
 
 	for _, typ := range result.Types {
@@ -334,15 +338,15 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	m.Schema = result.Preds
 	for _, schemaType := range result.Types {
 		// Convert the type name according to the current tenant.
-		schemaType.TypeName = x.NamespaceAttr(op.Namespace, schemaType.TypeName)
+		schemaType.TypeName = x.NamespaceAttr(namespace, schemaType.TypeName)
 
 		for _, field := range schemaType.Fields {
 			// Convert the type field according to the current tenant.
-			field.Predicate = x.NamespaceAttr(op.Namespace, field.Predicate)
+			field.Predicate = x.NamespaceAttr(namespace, field.Predicate)
 		}
 	}
 	m.Types = result.Types
-	_, err = query.ApplyMutations(ctx, op.Namespace, m)
+	_, err = query.ApplyMutations(ctx, m)
 	if err != nil {
 		return empty, err
 	}
@@ -371,6 +375,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		return x.ErrNoNamespace
+	}
 	if x.WorkerConfig.LudicrousMode {
 		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
@@ -397,7 +405,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	// 2. For a uid variable that is part of an upsert query,
 	//    like uid(foo), the key would be uid(foo).
 	resp.Uids = query.UidsToHex(query.StripBlankNode(newUids))
-	edges, err := query.ToDirectedEdges(qc.namespace, qc.gmuList, newUids)
+	edges, err := query.ToDirectedEdges(namespace, qc.gmuList, newUids)
 	if err != nil {
 		return err
 	}
@@ -405,10 +413,10 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	predHints := make(map[string]pb.Metadata_HintType)
 	for _, gmu := range qc.gmuList {
 		for pred, hint := range gmu.Metadata.GetPredHints() {
-			if oldHint := predHints[x.NamespaceAttr(qc.namespace, pred)]; oldHint == pb.Metadata_LIST {
+			if oldHint := predHints[x.NamespaceAttr(namespace, pred)]; oldHint == pb.Metadata_LIST {
 				continue
 			}
-			predHints[x.NamespaceAttr(qc.namespace, pred)] = hint
+			predHints[x.NamespaceAttr(namespace, pred)] = hint
 		}
 	}
 	m := &pb.Mutations{
@@ -420,7 +428,7 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 
 	qc.span.Annotatef(nil, "Applying mutations: %+v", m)
-	resp.Txn, err = query.ApplyMutations(ctx, qc.namespace, m)
+	resp.Txn, err = query.ApplyMutations(ctx, m)
 	qc.span.Annotatef(nil, "Txn Context: %+v. Err=%v", resp.Txn, err)
 
 	if x.WorkerConfig.LudicrousMode {
@@ -762,8 +770,6 @@ type queryContext struct {
 	span *trace.Span
 	// graphql indicates whether the given request is from graphql admin or not.
 	graphql bool
-	// namespace of the given request.
-	namespace string
 }
 
 // Health handles /health and /health?all requests.
@@ -851,8 +857,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	} else {
 		atomic.AddUint64(&numGraphQLPM, 1)
 	}
-	if req.Namespace == "" {
-		req.Namespace = x.DefaultNamespace
+	namespace, ok := x.GetNamespaceFromContext(ctx)
+	if !ok {
+		namespace = x.DefaultNamespace
+		ctx = x.SetNamespaceToContext(ctx, namespace)
 	}
 
 	if ctx.Err() != nil {
@@ -906,11 +914,10 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 	}
 
 	qc := &queryContext{
-		req:       req,
-		latency:   l,
-		span:      span,
-		graphql:   isGraphQL,
-		namespace: req.Namespace,
+		req:     req,
+		latency: l,
+		span:    span,
+		graphql: isGraphQL,
 	}
 	if rerr = parseRequest(qc); rerr != nil {
 		return
@@ -963,9 +970,8 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 		qc.req.StartTs = posting.Oracle().MaxAssigned()
 	}
 	qr := query.Request{
-		Latency:   qc.latency,
-		GqlQuery:  &qc.gqlRes,
-		Namespace: qc.namespace,
+		Latency:  qc.latency,
+		GqlQuery: &qc.gqlRes,
 	}
 
 	// Here we try our best effort to not contact Zero for a timestamp. If we succeed,
