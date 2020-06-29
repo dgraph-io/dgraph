@@ -173,9 +173,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	if worker.AdminPause != nil {
 		fmt.Println("Here issuing pause")
-		for _, i := range worker.AdminPause {
+		for pred, i := range worker.AdminPause {
 			a += 1
 			i <- &ap
+			fmt.Println("Sending to ", pred)
 		}
 		ap.Wg.Add(a)
 	}
@@ -183,6 +184,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	num := a
 	for num >= 0 {
 		<-ap.StartedWaiting
+		fmt.Println("Got something", num)
 		num--
 	}
 
@@ -326,7 +328,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	for i := 0; i < a; i++ {
-		wg.Done()
+		ap.Wg.Done()
 	}
 
 	// wait for indexing to complete or context to be canceled.

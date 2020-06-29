@@ -20,6 +20,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -91,16 +92,21 @@ func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *AdminPa
 		atomic.AddInt64(&e.pendingSize, -esize)
 	}
 
+	fmt.Println("processing", pred)
+
 	for {
 		select {
 		case ap := <-adminCh:
-			ap.startedWaiting <- struct{}{}
-			ap.wg.Wait()
+			fmt.Println("started waiting", pred)
+			ap.StartedWaiting <- struct{}{}
+			ap.Wg.Wait()
 		default:
+			fmt.Println("default", pred)
 			select {
 			case payload := <-ch:
 				run(payload)
 			}
+			fmt.Println("done", pred)
 		}
 	}
 }
