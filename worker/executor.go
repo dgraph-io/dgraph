@@ -20,6 +20,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -35,6 +36,8 @@ type subMutation struct {
 	startTs uint64
 }
 
+var AdminPause map[string]chan *sync.WaitGroup
+
 type executor struct {
 	pendingSize int64
 
@@ -44,6 +47,7 @@ type executor struct {
 }
 
 func newExecutor() *executor {
+	AdminPause = make(map[string]chan *sync.WaitGroup)
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
@@ -52,11 +56,11 @@ func newExecutor() *executor {
 	return ex
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
+func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *sync.WaitGroup) {
 	defer e.closer.Done()
 
 	writer := posting.NewTxnWriter(pstore)
-	for payload := range ch {
+	run := func(payload *subMutation) {
 		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
@@ -82,6 +86,21 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 		atomic.AddInt64(&e.pendingSize, -esize)
 	}
+
+LOOP:
+	for payload := range ch {
+		for {
+			select {
+			case wg := <-adminCh:
+				fmt.Println("Waiting")
+				wg.Wait()
+				fmt.Println("Done")
+			default:
+				run(payload)
+				break LOOP
+			}
+		}
+	}
 }
 
 func (e *executor) shutdown() {
@@ -99,10 +118,11 @@ func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	if ok {
 		return ch
 	}
+	AdminPause[pred] = make(chan *sync.WaitGroup, 1000)
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	go e.processMutationCh(ch)
+	go e.processMutationCh(ch, AdminPause[pred])
 	return ch
 }
 

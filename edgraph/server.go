@@ -20,10 +20,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 	"unicode"
@@ -165,6 +167,18 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	}
 
 	defer glog.Infof("ALTER op: %+v done", op)
+
+	a := 0
+	var wg sync.WaitGroup
+
+	if worker.AdminPause != nil {
+		fmt.Println("Here issuing pause")
+		for _, i := range worker.AdminPause {
+			a += 1
+			i <- &wg
+		}
+		wg.Add(a)
+	}
 
 	// StartTs is not needed if the predicate to be dropped lies on this server but is required
 	// if it lies on some other machine. Let's get it for safety.
@@ -314,6 +328,10 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			break
 		}
 		time.Sleep(time.Second * 2)
+	}
+
+	for i := 0; i < a; i++ {
+		wg.Done()
 	}
 	return empty, nil
 }
