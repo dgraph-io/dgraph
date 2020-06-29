@@ -27,6 +27,7 @@ import (
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/golang/glog"
+	"github.com/pkg/errors"
 )
 
 type subMutation struct {
@@ -40,18 +41,20 @@ type executor struct {
 	pendingSize int64
 
 	sync.RWMutex
-	predChan  map[string]chan *subMutation
-	closerMap map[string]*y.Closer
-	closer    *y.Closer
-	applied   *y.WaterMark
+	predChan   map[string]chan *subMutation
+	closerMap  map[string]*y.Closer
+	closer     *y.Closer
+	applied    *y.WaterMark
+	inProgress bool
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
-		predChan:  make(map[string]chan *subMutation),
-		closerMap: make(map[string]*y.Closer),
-		closer:    y.NewCloser(0),
-		applied:   applied,
+		predChan:   make(map[string]chan *subMutation),
+		closerMap:  make(map[string]*y.Closer),
+		closer:     y.NewCloser(0),
+		applied:    applied,
+		inProgress: true,
 	}
 	go ex.shutdown()
 	return ex
@@ -127,9 +130,33 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
-func (e *executor) pausePredicate(pred string) {
-	// TODO: check if indexing is already in progress for a predicate.
+func (e *executor) resumePredicates(schema []*pb.SchemaUpdate) error {
+	if e.inProgress == true {
+		return errors.Errorf("Can't resume execution, already running.")
+	}
 
+	e.inProgress = true
+	for _, update := range schema {
+		e.resumePredicate(update.Predicate)
+	}
+
+	return nil
+}
+
+func (e *executor) pausePredicates(schema []*pb.SchemaUpdate) error {
+	if e.inProgress == false {
+		return errors.Errorf("Can't pause execution, already paused.")
+	}
+
+	e.inProgress = false
+	for _, update := range schema {
+		e.pausePredicate(update.Predicate)
+	}
+
+	return nil
+}
+
+func (e *executor) pausePredicate(pred string) {
 	// Get old channel and closer, replace them with new one.
 	e.Lock()
 	defer e.Unlock()
