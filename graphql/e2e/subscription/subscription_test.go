@@ -37,12 +37,12 @@ const (
 		reviews: [Review] @hasInverse(field: about)
 	}
 
-	type Customer @withSubscription {
+	type Customer  {
 		username: String! @id @search(by: [hash, regexp])
 		reviews: [Review] @hasInverse(field: by)
 	}
 
-	type Review @withSubscription{
+	type Review {
 		id: ID!
 		about: Product!
 		by: Customer!

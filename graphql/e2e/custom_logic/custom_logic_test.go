@@ -331,7 +331,7 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 func TestSubscriptionInNestedCustomField(t *testing.T) {
 	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
-	type Episode @withSubscriptions{
+	type Episode {
 		name: String! @id
 		anotherName: String! @custom(http: {
 					url: "http://mock:8888/userNames",
