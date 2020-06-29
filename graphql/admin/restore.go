@@ -39,6 +39,7 @@ type restoreInput struct {
 	VaultSecretIDFile string
 	VaultPath         string
 	VaultField        string
+	VaultFormat       string
 }
 
 func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -60,6 +61,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultSecretidFile: input.VaultSecretIDFile,
 		VaultPath:         input.VaultPath,
 		VaultField:        input.VaultField,
+		VaultFormat:	   input.VaultFormat,
 	}
 	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
