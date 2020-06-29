@@ -7,7 +7,7 @@ type Post {
 	author(filter: AuthorFilter): Author! @hasInverse(field: "posts")
 }
 
-type Author {
+type Author @withSubscription {
 	id: ID!
 	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
 }

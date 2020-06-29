@@ -301,14 +301,15 @@ func ValidatorNoOp(
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchDirective:     searchValidation,
-	dgraphDirective:     dgraphDirectiveValidation,
-	idDirective:         idValidation,
-	secretDirective:     passwordValidation,
-	customDirective:     customDirectiveValidation,
-	remoteDirective:     ValidatorNoOp,
-	deprecatedDirective: ValidatorNoOp,
+	inverseDirective:      hasInverseValidation,
+	searchDirective:       searchValidation,
+	dgraphDirective:       dgraphDirectiveValidation,
+	idDirective:           idValidation,
+	secretDirective:       passwordValidation,
+	customDirective:       customDirectiveValidation,
+	remoteDirective:       ValidatorNoOp,
+	deprecatedDirective:   ValidatorNoOp,
+	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
 	authDirective: ValidatorNoOp,
 }
