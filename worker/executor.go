@@ -20,7 +20,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -56,7 +55,7 @@ func newExecutor() *executor {
 	return ex
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *sync.WaitGroup) {
+func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *sync.WaitGroup, pred string) {
 	defer e.closer.Done()
 
 	writer := posting.NewTxnWriter(pstore)
@@ -87,14 +86,12 @@ func (e *executor) processMutationCh(ch chan *subMutation, adminCh chan *sync.Wa
 		atomic.AddInt64(&e.pendingSize, -esize)
 	}
 
-LOOP:
 	for payload := range ch {
+	LOOP:
 		for {
 			select {
 			case wg := <-adminCh:
-				fmt.Println("Waiting")
 				wg.Wait()
-				fmt.Println("Done")
 			default:
 				run(payload)
 				break LOOP
@@ -122,7 +119,7 @@ func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	ch = make(chan *subMutation, 1000)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	go e.processMutationCh(ch, AdminPause[pred])
+	go e.processMutationCh(ch, AdminPause[pred], pred)
 	return ch
 }
 
