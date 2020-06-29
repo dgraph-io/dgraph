@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "JavaScript"
 [menu.main]
     parent = "clients"
-    weight = 4
+    weight = 5
 +++
 
 ## gRPC

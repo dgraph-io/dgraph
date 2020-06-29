@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Raw HTTP"
 [menu.main]
     parent = "clients"
-    weight = 7
+    weight = 8
 +++
 
 {{% notice "warning" %}}

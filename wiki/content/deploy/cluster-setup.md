@@ -3,8 +3,12 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Cluster Setup"
 [menu.main]
     parent = "deploy"
-    weight = 2
+    weight = 3
 +++
+
+{{% notice "tip" %}}
+For a single server setup, recommended for new users, please see [Get Started]({{< relref "get-started/index.md" >}}) page.
+{{% /notice %}}
 
 ## Understanding Dgraph cluster
 

@@ -8,12 +8,3 @@ title = "Mutations"
 +++
 
 Adding or removing data in Dgraph is called a mutation.
-
-A mutation that adds triples is done with the `set` keyword.
-```
-{
-  set {
-    # triples in here
-  }
-}
-```

@@ -6,6 +6,15 @@ title = "Triples"
     weight = 1
 +++
 
+A mutation that adds triples is done with the `set` keyword.
+```
+{
+  set {
+    # triples in here
+  }
+}
+```
+
 The input language is triples in the W3C standard [RDF N-Quad format](https://www.w3.org/TR/n-quads/).
 
 Each triple has the form
