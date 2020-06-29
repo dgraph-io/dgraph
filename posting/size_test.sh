@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 TEST_FAIL=0
 # get the p directory
-GCS_URL=https://storage.googleapis.com/dgraph-datasets/21million/p/p.tar.gz
-wget --quiet $GCS_URL || { echo "ERROR: Download from '$GCS_URL' failed." >&2; exit 2; }
+GCS_URL=https://storage.googleapis.com/dgraph-datasets/21million_test_p/p.tar.gz
+wget  $GCS_URL || { echo "ERROR: Download from '$GCS_URL' failed." >&2; exit 2; }
 
 #untar it
 [[ -f p.tar.gz ]] || { echo "ERROR: File 'p.tar.gz' does not exist. Exiting" >&2; exit 2; }
