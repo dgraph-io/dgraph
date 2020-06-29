@@ -71,7 +71,7 @@ func (cache *aclCache) update(groups []acl.Group) {
 		users := group.Users
 		for _, user := range users {
 			userPredPerms[user.UserID] = make(map[string]int32)
-			//TODO (Anurag) make it cleaner later.
+			//TODO (Anurag) Can we make this cleaner?
 			for _, acl := range acls {
 				userPredPerms[user.UserID][acl.Predicate] = acl.Perm
 			}
@@ -105,6 +105,7 @@ func (cache *aclCache) authorizePredicate(groups []string, predicate string,
 	aclCachePtr.RLock()
 	predPerms := aclCachePtr.predPerms
 	aclCachePtr.RUnlock()
+
 	if groupPerms, found := predPerms[predicate]; found {
 		if hasRequiredAccess(groupPerms, groups, operation) {
 			return nil

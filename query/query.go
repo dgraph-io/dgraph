@@ -199,7 +199,6 @@ type params struct {
 	ExpandAll bool
 	// Shortest is true when the subgraph holds the results of a shortest paths query.
 	Shortest bool
-
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
 	// For OSS this should remain empty.
 	AllowedPreds []string
@@ -759,23 +758,23 @@ func newGraph(ctx context.Context, gq *gql.GraphQuery) (*SubGraph, error) {
 	// For the root, the name to be used in result is stored in Alias, not Attr.
 	// The attr at root (if present) would stand for the source functions attr.
 	args := params{
-		Alias:                gq.Alias,
-		Cascade:              gq.Cascade,
-		GetUid:               isDebug(ctx),
-		IgnoreReflex:         gq.IgnoreReflex,
-		IsEmpty:              gq.IsEmpty,
-		Langs:                gq.Langs,
-		NeedsVar:             append(gq.NeedsVar[:0:0], gq.NeedsVar...),
-		Normalize:            gq.Normalize,
-		Order:                gq.Order,
-		ParentVars:           make(map[string]varValue),
-		Recurse:              gq.Recurse,
-		RecurseArgs:          gq.RecurseArgs,
-		ShortestPathArgs:     gq.ShortestPathArgs,
-		Var:                  gq.Var,
-		GroupbyAttrs:         gq.GroupbyAttrs,
-		IsGroupBy:            gq.IsGroupby,
-		AccessiblePredicates: gq.AccessiblePreds,
+		Alias:            gq.Alias,
+		Cascade:          gq.Cascade,
+		GetUid:           isDebug(ctx),
+		IgnoreReflex:     gq.IgnoreReflex,
+		IsEmpty:          gq.IsEmpty,
+		Langs:            gq.Langs,
+		NeedsVar:         append(gq.NeedsVar[:0:0], gq.NeedsVar...),
+		Normalize:        gq.Normalize,
+		Order:            gq.Order,
+		ParentVars:       make(map[string]varValue),
+		Recurse:          gq.Recurse,
+		RecurseArgs:      gq.RecurseArgs,
+		ShortestPathArgs: gq.ShortestPathArgs,
+		Var:              gq.Var,
+		GroupbyAttrs:     gq.GroupbyAttrs,
+		IsGroupBy:        gq.IsGroupby,
+		AllowedPreds:     gq.AllowedPreds,
 	}
 
 	for argk := range gq.Args {
@@ -1867,9 +1866,9 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			}
 
 			preds = getPredicatesFromTypes(typeNames)
-			// If AllowedPreds is empty then ACL is turned off
-			// TODO (Anurag): What if ACL is on and user has access to no predicate?
-			if len(sg.Params.AllowedPreds) != 0 {
+			// We check if enterprise is enabled and only
+			// restrict pred to allowed preds if ACL is turned on.
+			if worker.EnterpriseEnabled() {
 				// Take intersection of both the predicate lists
 				intersectPreds := make([]string, 0)
 				hashMap := make(map[string]bool)
@@ -1882,7 +1881,6 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 					}
 				}
 				preds = intersectPreds
-
 			}
 
 		default:

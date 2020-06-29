@@ -324,6 +324,7 @@ func RefreshAcls(closer *y.Closer) {
 		if err != nil {
 			return err
 		}
+
 		aclCachePtr.update(groups)
 		glog.V(3).Infof("Updated the ACL cache")
 		return nil
@@ -760,13 +761,12 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			return nil, nil, nil
 		}
 
-		blockedPreds, accessiblePreds := authorizePreds(userId, groupIds, preds, acl.Read)
-		return blockedPreds, accessiblePreds, nil
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Read)
+		return blockedPreds, allowedPreds, nil
 	}
 
-	blockedPreds, accessiblePreds, err := doAuthorizeQuery()
+	blockedPreds, allowedPreds, err := doAuthorizeQuery()
 
-	// accessiblePreds, err :=
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
 			userId:    userId,
@@ -799,14 +799,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
 	}
 	for i := range parsedReq.Query {
-		parsedReq.Query[i].AccessiblePreds = accessiblePreds
-	}
-
-	fmt.Println("What is left if everything is removed?")
-	if len(parsedReq.Query) != 0 {
-		for _, query := range parsedReq.Query {
-			fmt.Printf("Parsed Query %+v\n", *query)
-		}
+		parsedReq.Query[i].AllowedPreds = allowedPreds
 	}
 
 	return nil
@@ -983,6 +976,7 @@ func addUserFilterToFilter(filter *gql.FilterTree, userId string,
 // from all the queries in gqs.
 func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
+
 	filteredGQs := gqs[:0]
 	for _, gq := range gqs {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
