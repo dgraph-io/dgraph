@@ -439,8 +439,8 @@ func (n *node) triggerLeaderChange() {
 	n.server.updateZeroLeader()
 }
 
-func (n *node) ProposeNewCID() {
-	// This is a new cluster. So, propose a new ID for the cluster.
+func (n *node) proposeNewCID() {
+	// Either this is a new cluster or can't find a CID in the entries. So, propose a new ID for the cluster.
 	for {
 		id := uuid.New().String()
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
@@ -464,7 +464,7 @@ func (n *node) ProposeNewCID() {
 	}
 }
 
-func (n *node) GetCIDFromEntries() (FoundCID bool, err error) {
+func (n *node) checkForCIDInEntries() (bool, error) {
 	first, err := n.Store.FirstIndex()
 	if err != nil {
 		return false, err
@@ -473,13 +473,11 @@ func (n *node) GetCIDFromEntries() (FoundCID bool, err error) {
 	if err != nil {
 		return false, err
 	}
-	FoundCID = false
 
-	var lastEntry raftpb.Entry
 	for batchFirst := first; batchFirst <= last; {
 		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
 		if err != nil {
-			return FoundCID, err
+			return false, err
 		}
 
 		// Exit early from the loop if no entries were found.
@@ -487,8 +485,8 @@ func (n *node) GetCIDFromEntries() (FoundCID bool, err error) {
 			break
 		}
 
-		lastEntry = entries[len(entries)-1]
-		batchFirst = lastEntry.Index + 1
+		// increment the iterator to the next batch
+		batchFirst = entries[len(entries)-1].Index + 1
 
 		for _, entry := range entries {
 			if entry.Type != raftpb.EntryNormal {
@@ -497,15 +495,14 @@ func (n *node) GetCIDFromEntries() (FoundCID bool, err error) {
 			var proposal pb.ZeroProposal
 			err = proposal.Unmarshal(entry.Data)
 			if err != nil {
-				return FoundCID, err
+				return false, err
 			}
-			glog.Infoln(len(proposal.Cid))
 			if len(proposal.Cid) > 0 {
-				FoundCID = true
+				return true, err
 			}
 		}
 	}
-	return FoundCID, nil
+	return false, err
 }
 
 func (n *node) initAndStartNode() error {
@@ -530,12 +527,12 @@ func (n *node) initAndStartNode() error {
 		}
 
 		n.SetRaft(raft.RestartNode(n.Cfg))
-		FoundCID, err := n.GetCIDFromEntries()
+		foundCID, err := n.checkForCIDInEntries()
 		if err != nil {
 			return err // error
 		}
-		if !FoundCID {
-			go n.ProposeNewCID()
+		if !foundCID {
+			go n.proposeNewCID()
 		}
 
 	case len(opts.peer) > 0:
@@ -576,7 +573,7 @@ func (n *node) initAndStartNode() error {
 		x.Check(err)
 		peers := []raft.Peer{{ID: n.Id, Context: data}}
 		n.SetRaft(raft.StartNode(n.Cfg, peers))
-		go n.ProposeNewCID()
+		go n.proposeNewCID()
 	}
 
 	go n.Run()
