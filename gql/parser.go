@@ -2114,7 +2114,8 @@ func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 	// 4. @cascade\n someOtherPred
 	if items[0].Typ == itemLeftCurl || items[0].Typ == itemRightCurl || items[0].
 		Typ == itemAt || items[0].Typ == itemName {
-		gq.Cascade = append(gq.Cascade, "__all__") // __all__ implies @cascade, the old directive.
+		// __all__ implies @cascade i.e.  implies values for all the children are mandatory.
+		gq.Cascade = append(gq.Cascade, "__all__")
 		return nil
 	}
 
@@ -2122,7 +2123,6 @@ func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
 	expectArg := true
 	it.Next()
 	item = it.Item()
-	//alias := ""
 	if item.Typ != itemLeftRound {
 		return item.Errorf("Expected a left round after cascade, got: %s", item.String())
 	}
@@ -2145,6 +2145,8 @@ loop:
 			gq.Cascade = append(gq.Cascade, collectName(it, item.Val))
 			count++
 			expectArg = false
+		default:
+			return item.Errorf("Unexpected item while parsing: %v", item.Val)
 		}
 	}
 	if expectArg {

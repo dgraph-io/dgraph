@@ -748,21 +748,6 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 		in, out string
 	}{
 		{
-			in: `schema(pred: [name]) {}`,
-			out: `{
-				"schema": [
-				  {
-					"predicate": "name",
-					"type": "string",
-					"index": true,
-					"tokenizer": [
-					  "fulltext"
-					]
-				  }
-				]
-			  }`,
-		},
-		{
 			// value preds Parameterized at root.
 			in: `
 			{  
@@ -832,14 +817,31 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				  age  
 					friend {
 					  name
-				  	age
-				  }
+				  	  age
+				  	}
 				}
-			  }			  
+			}			  
 			  `,
 			out: `{
 				"q": []
-			  }`,
+			}`,
+		},
+		{
+			// @cascade(__all__) is same as @cascade
+			in: `{
+				q(func: anyoftext(name, "Alice")) @cascade(__all__) {
+				  name
+				  age  
+					friend {
+					  name
+				  	  age
+				  	}
+				}
+			}			  
+			  `,
+			out: `{
+				"q": []
+			}`,
 		},
 		{
 			// Plain cascade at root, explicit at lower level
@@ -849,14 +851,14 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				  age  
 					friend @cascade {
 					  name
-				  	age
-				  }
+				  	  age
+				    }
 				}
-			  }			  
+			}			  
 			  `,
 			out: `{
 				"q": []
-			  }`,
+			}`,
 		},
 		{
 			// No cascade anywhere.
@@ -865,12 +867,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) {
 				  name
 				  age
-					  friend {
-					  name
-				  age
+				  friend {
+				    name
+				    age
 				  }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
@@ -900,7 +902,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			  }
+			}
 			`,
 		},
 
@@ -911,12 +913,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) {
 				  name
 				  age
-					  friend @cascade(name, age) {
-					  name
-				  age
+				  friend @cascade(name, age) {
+					name
+				    age
 				  }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
@@ -933,7 +935,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			  }			
+			}			
 			`,
 		},
 
@@ -944,17 +946,17 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade(friend) {
 				  name
 				  age
-					  friend @cascade(name, age) {
-					  name
-				  age
+				  friend @cascade(name, age) {
+					name
+				    age
 				  }
 				}
-			  }						
+			}						
 			`,
 			out: `
 			{
 				"q": []
-			  }			
+			}			
 			`,
 		},
 
@@ -969,7 +971,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 						  age
 				  }
 				}
-			  }				  
+			}				  
 			`,
 			out: `
 			{
@@ -994,7 +996,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			  }			
+			}			
 			`,
 		},
 
@@ -1006,11 +1008,11 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade(friend) {
 				  name
 				  age
-					  friend @facets(eq(close, false)) {
+				  friend @facets(eq(close, false)) {
 					name
 				  }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
@@ -1024,7 +1026,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			  }			
+			}			
 			`,
 		},
 
@@ -1036,16 +1038,16 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade {
 				  name
 				  age
-					  friend @facets(eq(close, false)) {
+				  friend @facets(eq(close, false)) {
 					name
 				  }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
 				"q": []
-			  }			
+			}			
 			`,
 		},
 
@@ -1056,14 +1058,14 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade(friend) {
 				  name
 				  age
-					  friend @facets(eq(close, true)) {
+				  friend @facets(eq(close, true)) {
 					name
 					friend {
-						  name
+					  name
 					}
 				  }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
@@ -1083,7 +1085,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			  }			
+			}
 			`,
 		},
 
@@ -1094,14 +1096,11 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade(friend) {
 				  name
 					age
-					  friend @facets(eq(close, true) OR eq(close, false)) {
-					name
-					# friend {
-					# name
-					# }
-				  }
+				    friend @facets(eq(close, true) OR eq(close, false)) {
+				      name
+				    }
 				}
-			  }			
+			}	
 			`,
 			out: `
 			{
@@ -1124,7 +1123,7 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					]
 				  }
 				]
-			  }			
+			}			
 			`,
 		},
 
@@ -1135,15 +1134,12 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 				q(func: anyoftext(name, "Alice")) @cascade(foo) {
 				  name
 					age
-					  friend @facets(eq(close, true) OR eq(close, false)) {
-					name
-					age
-					# friend {
-					# name
-					# }
-				  }
+         		    friend @facets(eq(close, true) OR eq(close, false)) {
+					  name
+					  age
+				    }
 				}
-			  }			
+			}			
 			`,
 			out: `
 			{
@@ -1160,16 +1156,9 @@ func CascadeParams(t *testing.T, c *dgo.Dgraph) {
 					"age": "32"
 				  }
 				]
-			  }			
+			}
 			`,
 		},
-
-		// {
-		// 	in: `
-		// 	`,
-		// 	out: `
-		// 	`,
-		// },
 	}
 
 	for _, tc := range tests {
