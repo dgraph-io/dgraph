@@ -18,6 +18,10 @@ package upgrade
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 func Test_getTypeSchemaString(t *testing.T) {
@@ -72,4 +76,19 @@ func Test_getTypeSchemaString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_getTypeNquad(t *testing.T) {
+	uid := "0x1"
+	typeName := "Post"
+
+	wantNQuad := &api.NQuad{
+		Subject:   uid,
+		Predicate: "dgraph.type",
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{StrVal: typeName},
+		},
+	}
+
+	require.Equal(t, wantNQuad, getTypeNquad(uid, typeName))
 }

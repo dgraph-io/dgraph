@@ -78,11 +78,8 @@ func upgradeACLRules() error {
 		for _, r := range rs {
 			newRuleStr := fmt.Sprintf("_:newrule%d", counter)
 			nquads = append(nquads, []*api.NQuad{
-				{
-					Subject:   newRuleStr,
-					Predicate: "dgraph.type",
-					ObjectId:  "Rule", // the name of the type was Rule in v20.03.0
-				},
+				// the name of the type was Rule in v20.03.0
+				getTypeNquad(newRuleStr, "Rule"),
 				{
 					Subject:   newRuleStr,
 					Predicate: "dgraph.rule.predicate",

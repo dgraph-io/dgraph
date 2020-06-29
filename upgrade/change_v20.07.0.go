@@ -27,21 +27,21 @@ import (
 const (
 	queryACLUsersBefore_v20_07_0 = `
 		{
-			nodes(func: has(dgraph.xid)) @filter(type(User)) {
+			nodes(func: type(User)) @filter(has(dgraph.xid)) {
 				uid
 			}
 		}
 	`
 	queryACLGroupsBefore_v20_07_0 = `
 		{
-			nodes(func: has(dgraph.xid)) @filter(type(Group)) {
+			nodes(func: type(Group)) @filter(has(dgraph.xid)) {
 				uid
 			}
 		}
 	`
 	queryACLRulesBefore_v20_07_0 = `
 		{
-			nodes(func: has(dgraph.rule.predicate)) @filter(type(Rule)) {
+			nodes(func: type(Rule)) @filter(has(dgraph.rule.predicate)) {
 				uid
 			}
 		}
@@ -91,13 +91,14 @@ type updateTypeNameInfo struct {
 }
 
 func upgradeAclTypeNames() error {
+	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	// prepare upgrade info for ACL type names
 	aclTypeNameInfo := []*updateTypeNameInfo{
 		{
 			oldTypeName:         "User",
 			newTypeName:         "dgraph.type.User",
 			oldUidNodeQuery:     queryACLUsersBefore_v20_07_0,
-			dropOldTypeIfUnused: true,
+			dropOldTypeIfUnused: deleteOld,
 			predsToRemoveFromOldType: map[string]struct{}{
 				"dgraph.xid":        {},
 				"dgraph.password":   {},
@@ -108,7 +109,7 @@ func upgradeAclTypeNames() error {
 			oldTypeName:         "Group",
 			newTypeName:         "dgraph.type.Group",
 			oldUidNodeQuery:     queryACLGroupsBefore_v20_07_0,
-			dropOldTypeIfUnused: true,
+			dropOldTypeIfUnused: deleteOld,
 			predsToRemoveFromOldType: map[string]struct{}{
 				"dgraph.xid":      {},
 				"dgraph.acl.rule": {},
@@ -118,7 +119,7 @@ func upgradeAclTypeNames() error {
 			oldTypeName:         "Rule",
 			newTypeName:         "dgraph.type.Rule",
 			oldUidNodeQuery:     queryACLRulesBefore_v20_07_0,
-			dropOldTypeIfUnused: true,
+			dropOldTypeIfUnused: deleteOld,
 			predsToRemoveFromOldType: map[string]struct{}{
 				"dgraph.rule.predicate":  {},
 				"dgraph.rule.permission": {},
@@ -164,20 +165,8 @@ func (t *updateTypeNameInfo) updateTypeName(dg *dgo.Dgraph) error {
 	// build NQuads for changing old type name to new name
 	var setNQuads, delNQuads []*api.NQuad
 	for _, node := range oldQueryRes.Nodes {
-		setNQuads = append(setNQuads, &api.NQuad{
-			Subject:   node.Uid,
-			Predicate: "dgraph.type",
-			ObjectValue: &api.Value{
-				Val: &api.Value_StrVal{StrVal: t.newTypeName},
-			},
-		})
-		delNQuads = append(delNQuads, &api.NQuad{
-			Subject:   node.Uid,
-			Predicate: "dgraph.type",
-			ObjectValue: &api.Value{
-				Val: &api.Value_StrVal{StrVal: t.oldTypeName},
-			},
-		})
+		setNQuads = append(setNQuads, getTypeNquad(node.Uid, t.newTypeName))
+		delNQuads = append(delNQuads, getTypeNquad(node.Uid, t.oldTypeName))
 	}
 
 	// send the mutation to change the old type name to new name

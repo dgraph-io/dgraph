@@ -60,10 +60,19 @@ func getDgoClient(withLogin bool) (*dgo.Dgraph, *grpc.ClientConn, error) {
 // getQueryResult executes the given query and unmarshals the result in given pointer queryResPtr.
 // If any error is encountered, it returns the error.
 func getQueryResult(dg *dgo.Dgraph, query string, queryResPtr interface{}) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	var resp *api.Response
+	var err error
 
-	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	for i := 0; i < 3; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		resp, err = dg.NewReadOnlyTxn().Query(ctx, query)
+		if err != nil {
+			fmt.Println("error in query, retrying:", err)
+			continue
+		}
+	}
 	if err != nil {
 		return err
 	}
@@ -87,7 +96,7 @@ func mutateWithClient(dg *dgo.Dgraph, mutation *api.Mutation) error {
 
 		_, err = dg.NewTxn().Mutate(ctx, mutation)
 		if err != nil {
-			fmt.Println("error in running mutation, retrying:", err)
+			fmt.Println("error in mutation, retrying:", err)
 			continue
 		}
 
@@ -170,4 +179,14 @@ func getTypeSchemaString(newTypeName string, typeNode *schemaTypeNode,
 	builder.WriteString("}\n")
 
 	return builder.String()
+}
+
+func getTypeNquad(uid, typeName string) *api.NQuad {
+	return &api.NQuad{
+		Subject:   uid,
+		Predicate: "dgraph.type",
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{StrVal: typeName},
+		},
+	}
 }

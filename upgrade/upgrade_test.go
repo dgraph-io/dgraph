@@ -17,8 +17,11 @@
 package upgrade
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/dgraph-io/dgo/v200/protos/api"
 )
 
 func Test_version_String(t *testing.T) {
@@ -163,4 +166,20 @@ func Test_parseVersionFromString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test(t *testing.T) {
+	nq := &api.NQuad{
+		Subject:   "0x1",
+		Predicate: "dgraph.type",
+		ObjectValue: &api.Value{
+			Val: &api.Value_StrVal{StrVal: "Post"},
+		},
+	}
+	fmt.Println(nq)
+	fmt.Println(nq.String())
+	b, err := nq.Marshal()
+	fmt.Println(string(b))
+	fmt.Println(err)
+
 }

@@ -152,7 +152,7 @@ func init() {
 	flag.StringP(alpha, "a", "127.0.0.1:9080", "Dgraph Alpha gRPC server address")
 	flag.StringP(user, "u", "", "Username of ACL user")
 	flag.StringP(password, "p", "", "Password of ACL user")
-	flag.BoolP(deleteOld, "d", true, "Delete the older ACL predicates")
+	flag.BoolP(deleteOld, "d", true, "Delete the older ACL types/predicates")
 	flag.StringP(from, "f", "", "The version string from which to upgrade, e.g.: v1.2.2")
 	flag.StringP(to, "t", "", "The version string till which to upgrade, e.g.: v20.03.0")
 }
@@ -312,6 +312,5 @@ func applyChangeList(cmdInput *commandInput, list changeList) {
 		}
 	}
 
-	fmt.Println()
-	fmt.Println("Upgrade finished!!!")
+	fmt.Println("\nUpgrade finished!")
 }
