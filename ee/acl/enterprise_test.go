@@ -37,7 +37,7 @@ func TestEnterpriseLicense(t *testing.T) {
 	json.Unmarshal(data, &finalData)
 	xx := finalData.(map[string]interface{})["errors"]
 	t.Log("++++ errors +++\n", xx)
-	t.Log("burriha\n", (xx.([]interface{}))[0].(map[string]interface{})["message"])
+	t.Log("woohoo\n", (xx.([]interface{}))[0].(map[string]interface{})["message"])
 	t.Log(reflect.TypeOf(xx))
 	// for i := range finalData {
 	// 	t.Log("testsetet\n", i, finalData[i])
