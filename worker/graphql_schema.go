@@ -135,35 +135,34 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
+	// commit the mutation here itself. This has two benefits:
+	// 	1. If there was any concurrent request to update the GraphQL schema, then one of the two
+	//	will fail here itself, and the alter for the failed one won't happen.
+	// 	2. If the commit succeeds, then as alter takes some time to finish, so the badger
+	//	notification for dgraph.graphql.schema predicate will reach all the alphas in the meantime,
+	//	providing every alpha a chance to reflect the current GraphQL schema before the response is
+	//	sent back to the user.
+	if _, err = CommitOverNetwork(ctx, tctx); err != nil {
+		return nil, errors.Wrap(err, "error occurred updating GraphQL schema, please retry")
+	}
 
 	// perform dgraph schema alter, if required. As the schema could be empty if it only has custom
 	// types/queries/mutations.
 	if len(req.DgraphSchema) != 0 && len(req.DgraphTypes) != 0 {
-		_, err = MutateOverNetwork(ctx, &pb.Mutations{
+		if _, err = MutateOverNetwork(ctx, &pb.Mutations{
 			StartTs: State.GetTimestamp(false), // StartTs must be provided
 			Schema:  req.DgraphSchema,
 			Types:   req.DgraphTypes,
-		})
-	}
-
-	// commit or abort GraphQL schema mutation based on whether alter succeeded or not
-	if err != nil {
-		// abort the GraphQL schema mutation, don't care if error occurs during abort
-		tctx.Aborted = true
-		_, _ = CommitOverNetwork(ctx, tctx)
-		return nil, err
-	} else {
+		}); err != nil {
+			return nil, errors.Wrap(err,
+				"succeeded in saving GraphQL schema but failed to alter Dgraph schema - this"+
+					" indicates a bug in Dgraph schema generation. Please let us know : "+
+					"https://github.com/dgraph-io/dgraph/issues. "+
+					"Don't forget to post your old and new schemas in the issue description.")
+		}
 		// busy waiting for indexing to finish
 		if err = WaitForIndexingOrCtxError(ctx, true); err != nil {
 			return nil, err
-		}
-
-		// commit the GraphQL schema mutation as alter succeeded
-		if _, err = CommitOverNetwork(ctx, tctx); err != nil {
-			// this is a problem, now we can't rollback the dgraph schema alter, so the system is
-			// in an inconsistent state. So, lets just report the error asking the user to send the
-			// GraphQL schema update again.
-			return nil, errors.Wrap(err, "error occurred updating GraphQL schema, please retry")
 		}
 	}
 
