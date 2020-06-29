@@ -46,6 +46,9 @@ func resolveRestoreStatus(ctx context.Context, q schema.Query) *resolve.Resolved
 	if err != nil {
 		return unknownStatus(q, err)
 	}
+	if status == nil {
+		return unknownStatus(q, err)
+	}
 	convertedStatus := convertStatus(status)
 
 	b, err := json.Marshal(convertedStatus)

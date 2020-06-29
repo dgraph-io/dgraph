@@ -142,11 +142,24 @@ func (rt *restoreTracker) Add() (int, error) {
 	rt.Lock()
 	defer rt.Unlock()
 
+	for otherId, otherStatus := range rt.status {
+		if otherStatus.Status == inProgressStatus {
+			return 0, errors.Errorf("another restore operation with id %d is in progress", otherId)
+		}
+	}
+
 	rt.counter += 1
 	if _, ok := rt.status[rt.counter]; ok {
 		return 0, errors.Errorf("another restore operation with ID %d already exists", rt.counter)
 	}
 
+	// Cleanup the restore operation with ID equal to this ID - 50. This is a simple
+	// way to prevent the map from growing without bound.
+	oldId := rt.counter - 50
+	if _, ok := rt.status[oldId]; ok {
+		delete(rt.status, oldId)
+	}
+	
 	rt.status[rt.counter] = &RestoreStatus{Status: inProgressStatus, Errors: make([]error, 0)}
 	return rt.counter, nil
 }
@@ -163,15 +176,38 @@ func (rt *restoreTracker) Done(restoreId int, errs []error) error {
 		return errors.Errorf("unknown restore operation with ID %s", restoreId)
 	}
 
-	status := okStatus
 	validErrs := make([]error, 0)
 	for _, err := range errs {
 		if err == nil {
 			continue
 		}
 		validErrs = append(validErrs, err)
-		status = errStatus
 	}
+
+	var status string
+	if len(validErrs) > 0 {
+		status = errStatus
+	} else {
+		status = okStatus
+	}
+
 	rt.status[restoreId] = &RestoreStatus{Status: status, Errors: validErrs}
 	return nil
+}
+
+func (rt *restoreTracker) Delete(restoreId int) {
+	if rt == nil {
+		return
+	}
+	// Ignore values less than zero because they are not valid.
+	if restoreId <= 0 {
+		return
+	}
+	rt.Lock()
+	defer rt.Unlock()
+	delete(rt.status, restoreId)
+}
+
+func DeleteRestoreId(restoreId int) {
+	rt.Delete(restoreId)
 }
