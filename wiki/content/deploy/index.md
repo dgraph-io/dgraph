@@ -426,8 +426,10 @@ To see how to connect your Docker Client to the Docker Engine running on this vi
 ```
 
 The command would provision a `t2-micro` instance with a security group called `docker-machine`
-(allowing inbound access on 2376 and 22). You can either edit the security group to allow inbound access to '5080`, `8080`, `9080` (default ports for Dgraph Zero & Alpha) or you can provide your own security
-group which allows inbound access on port 22, 2376 (required by Docker Machine), 5080, 8080 and 9080. Remember port *5080* is only required if you are running Dgraph Live Loader or Dgraph Bulk Loader from outside.
+(allowing inbound access on `2376` and `22`). You can either edit the security group to allow inbound access to `5080`, `8080`, `9080` (default ports for Dgraph Zero & Alpha) or you can provide your own security
+group which allows inbound access on port `22`, `2376` (required by Docker Machine), `5080`, `8080` and `9080`. Remember port *`5080`* is only required if you are running Dgraph Live Loader or Dgraph Bulk Loader from outside.
+
+{{% notice "note" %}}Dgraph recommended memory is 7-8Gb. A `t2-micro` (free-tier eligible) is only provisioned with 1Gb and will not support larger schemas or data sets. We recommend using a `t2-large` (not free-tier eligible) or larger for a production server.{{% /notice %}}
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the instance type, security group, AMI among many other things.
 
@@ -444,8 +446,8 @@ Run the command below to download the `docker-compose.yml` file on your machine.
 wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose.yml
 ```
 
-{{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
-container for persistence.{{% /notice %}}
+{{% notice "note" %}}The config mounts `/tmp/data` on the instance to `/dgraph` within the
+container for persistence. You will need to change this to a different directory to persists data as the `tmp` directory is only for illustration purposes and will not persist in that directory.{{% /notice %}}
 
 * Connect to the Docker Engine running on the machine.
 
