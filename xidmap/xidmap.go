@@ -32,7 +32,6 @@ import (
 	"github.com/dgraph-io/badger/v2"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/ristretto"
 	"github.com/dgraph-io/ristretto/z"
 	farm "github.com/dgryski/go-farm"
 	"github.com/golang/glog"
@@ -64,7 +63,6 @@ type shard struct {
 	db     *badger.DB
 	bmutex sync.RWMutex
 	wg     sync.WaitGroup
-	cache  *ristretto.Cache
 }
 
 type block struct {
@@ -98,15 +96,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 		opt := badger.LSMOnlyOptions(dir).WithSyncWrites(false)
 		db, _ := badger.Open(opt)
 
-		cache, err := ristretto.NewCache(&ristretto.Config{
-			NumCounters: 1e7,     // number of keys to track frequency of (10M).
-			MaxCost:     1 << 28, // maximum cost of cache (1GB).
-			BufferItems: 64,      // number of keys per Get buffer.
-		})
-		if err != nil {
-			panic(err)
-		}
-
 		writer := db.NewWriteBatch()
 		xm.shards[i] = &shard{
 			uidMap: make(map[string]uint64),
@@ -114,7 +103,6 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			dir:    dir,
 			db:     db,
 			bl:     z.NewBloomFilter(112345678, 15),
-			cache:  cache,
 		}
 	}
 	if db != nil {
@@ -170,6 +158,7 @@ func New(zero *grpc.ClientConn, db *badger.DB) *XidMap {
 			time.Sleep(backoff)
 		}
 	}()
+
 	return xm
 }
 
@@ -195,28 +184,21 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	var valCopy []byte
 	if sh.bl.Has(fp) {
 		sh.bmutex.RLock()
-
-		uidInt, found := sh.cache.Get(xid)
-		if found {
-			uid = uidInt.(uint64)
-		} else {
-			err := sh.db.View(func(txn *badger.Txn) error {
-				item, err := txn.Get([]byte(xid))
-				if err != nil {
-					return err
-				}
-
-				return item.Value(func(val []byte) error {
-					valCopy = append([]byte{}, val...)
-					return nil
-				})
-			})
-
-			if err == nil {
-				uid = binary.BigEndian.Uint64(valCopy)
+		err := sh.db.View(func(txn *badger.Txn) error {
+			item, err := txn.Get([]byte(xid))
+			if err != nil {
+				return err
 			}
-		}
 
+			return item.Value(func(val []byte) error {
+				valCopy = append([]byte{}, val...)
+				return nil
+			})
+		})
+
+		if err == nil {
+			uid = binary.BigEndian.Uint64(valCopy)
+		}
 		sh.bmutex.RUnlock()
 	}
 
@@ -235,7 +217,7 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 	newUid := sh.assign(m.newRanges)
 	sh.uidMap[xid] = newUid
 
-	if len(sh.uidMap) > 1500000 {
+	if len(sh.uidMap) > 1000000 {
 		sh.wg.Add(1)
 		go func(uidMap map[string]uint64) {
 			sh.bmutex.Lock()
@@ -255,10 +237,9 @@ func (m *XidMap) AssignUid(xid string) (uint64, bool) {
 		for key, _ := range sh.uidMap {
 			fp := farm.Fingerprint64([]byte(key))
 			sh.bl.Add(fp)
-			sh.cache.Set(xid, newUid, 1)
 		}
 		sh.uidMap = nil
-		sh.uidMap = make(map[string]uint64)
+		sh.uidMap = make(map[string]uint64, 1000000)
 	}
 
 	if m.writer != nil {
