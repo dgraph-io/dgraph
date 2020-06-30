@@ -1991,6 +1991,28 @@ invalid_schemas:
      "locations":[{"line":1, "column":6}]},
     ]
 
+  - name: "@withSubscription and @remote directive on type"
+    input: |
+      type Class @withSubscription @remote  {
+        id: ID!
+        name: String!
+        numStudents: Int!
+      }
+
+      type School {
+        id: ID!
+        established: String!
+        name: String! @custom(http: {
+                url: "http://mock:8888/schoolNames/$id/$established",
+                method: "POST",
+                body: "{sid: $id}"
+                })
+      }
+    errlist: [
+    {"message": "Type Class; cannot have both @withSubscription and @remote directive",
+     "locations":[{"line":1, "column":6}]},
+    ]
+
   -
     name: "@custom directive on field where graphql uses a field without a variable definition"
     input: |

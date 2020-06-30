@@ -31,13 +31,13 @@ const (
 	subscriptionEndpoint = "ws://localhost:8180/graphql"
 	adminEndpoint        = "http://localhost:8180/admin"
 	sch                  = `
-	type Product {
+	type Product @withSubscription {
 		productID: ID!
 		name: String @search(by: [term])
 		reviews: [Review] @hasInverse(field: about)
 	}
 
-	type Customer {
+	type Customer  {
 		username: String! @id @search(by: [hash, regexp])
 		reviews: [Review] @hasInverse(field: by)
 	}
@@ -53,8 +53,6 @@ const (
 )
 
 func TestSubscription(t *testing.T) {
-	t.Skip()
-
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
 			updateGQLSchema(input: { set: { schema: $sch }}) {
@@ -156,33 +154,4 @@ func TestSubscription(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Nil(t, res)
-}
-
-func TestSubscriptionOnError(t *testing.T) {
-	add := &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult := add.ExecuteAsPost(t, adminEndpoint)
-	require.Nil(t, addResult.Errors)
-
-	time.Sleep(2 * time.Second)
-
-	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
-		Query: `subscription{
-			getProduct(productID: "0x2"){
-			  name
-			}
-		  }`,
-	})
-	require.Nil(t, err)
-
-	_, err = subscriptionClient.RecvMsg()
-	require.Contains(t, err.Error(), "Subscriptions are not supported")
 }
