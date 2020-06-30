@@ -6,7 +6,7 @@ metadata:
   labels:
     app: dgraph
 spec:
-  type: ClusterIP
+  type: LoadBalancer
   ports:
   - port: 5080
     targetPort: 5080
