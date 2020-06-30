@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -35,7 +36,7 @@ import (
 type Poller struct {
 	sync.Mutex
 	resolver       *resolve.RequestResolver
-	pollRegistry   map[uint64]map[uint64]chan interface{}
+	pollRegistry   map[uint64]map[uint64]Update
 	subscriptionID uint64
 	globalEpoch    *uint64
 }
@@ -44,7 +45,7 @@ type Poller struct {
 func NewPoller(globalEpoch *uint64, resolver *resolve.RequestResolver) *Poller {
 	return &Poller{
 		resolver:     resolver,
-		pollRegistry: make(map[uint64]map[uint64]chan interface{}),
+		pollRegistry: make(map[uint64]map[uint64]Update),
 		globalEpoch:  globalEpoch,
 	}
 }
@@ -56,9 +57,14 @@ type SubscriberResponse struct {
 	UpdateCh       chan interface{}
 }
 
+type Update struct {
+	Expiry   int64
+	updateCh chan interface{}
+}
+
 // AddSubscriber tries to add subscription into the existing polling goroutine if it exists.
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
-func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error) {
+func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
 
 	err := p.resolver.ValidateSubscription(req)
@@ -68,8 +74,9 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 
 	buf, err := json.Marshal(req)
 	x.Check(err)
-
-	bucketID := farm.Fingerprint64(buf)
+	authvariables, err := json.Marshal(customClaims.AuthVariables)
+	x.Check(err)
+	bucketID := farm.Fingerprint64(append(buf, authvariables...))
 	p.Lock()
 	defer p.Unlock()
 
@@ -88,10 +95,10 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	p.subscriptionID++
 	subscriptions, ok := p.pollRegistry[bucketID]
 	if !ok {
-		subscriptions = make(map[uint64]chan interface{})
+		subscriptions = make(map[uint64]Update)
 	}
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
-	subscriptions[subscriptionID] = updateCh
+	subscriptions[subscriptionID] = Update{customClaims.StandardClaims.ExpiresAt, updateCh}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if len(subscriptions) != 1 {
@@ -101,7 +108,7 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 		return &SubscriberResponse{
 			BucketID:       bucketID,
 			SubscriptionID: subscriptionID,
-			UpdateCh:       updateCh,
+			UpdateCh:       subscriptions[subscriptionID].updateCh,
 		}, nil
 	}
 
@@ -118,7 +125,7 @@ func (p *Poller) AddSubscriber(req *schema.Request) (*SubscriberResponse, error)
 	return &SubscriberResponse{
 		BucketID:       bucketID,
 		SubscriptionID: subscriptionID,
-		UpdateCh:       updateCh,
+		UpdateCh:       subscriptions[subscriptionID].updateCh,
 	}, nil
 }
 
@@ -129,7 +136,7 @@ type pollRequest struct {
 	localEpoch uint64
 }
 
-func (p *Poller) poll(req *pollRequest) {
+func (p *Poller) poll(req *pollRequest, customClaims *authorization.CustomClaims) {
 	resolver := p.resolver
 	pollID := uint64(0)
 	for {
@@ -162,6 +169,11 @@ func (p *Poller) poll(req *pollRequest) {
 				p.Unlock()
 				return
 			}
+			for _, Update := range subscribers {
+				if time.Now().Unix() >= Update.Expiry {
+					p.terminateSubscription(req.bucketID, p.subscriptionID)
+				}
+			}
 			p.Unlock()
 			continue
 		}
@@ -175,8 +187,14 @@ func (p *Poller) poll(req *pollRequest) {
 			p.Unlock()
 			return
 		}
-		for _, updateCh := range subscribers {
-			updateCh <- res.Output()
+		for _, Update := range subscribers {
+			if time.Now().Unix() >= Update.Expiry {
+				p.terminateSubscription(req.bucketID, p.subscriptionID)
+			}
+		}
+
+		for _, Update := range subscribers {
+			Update.updateCh <- res.Output()
 		}
 		p.Unlock()
 	}
@@ -197,25 +215,28 @@ func (p *Poller) terminateSubscriptions(bucketID uint64) {
 	if !ok {
 		return
 	}
-	for _, updateCh := range subscriptions {
+	for _, Update := range subscriptions {
 		// Closing the channel will close the graphQL websocket connection as well.
-		close(updateCh)
+		close(Update.updateCh)
 	}
 	delete(p.pollRegistry, bucketID)
 }
 
-// TerminateSubscription will terminate the polling subscription.
 func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 	p.Lock()
 	defer p.Unlock()
+	p.terminateSubscription(bucketID, subscriptionID)
+}
+
+func (p *Poller) terminateSubscription(bucketID, subscriptionID uint64) {
 	subscriptions, ok := p.pollRegistry[bucketID]
 	if !ok {
 		return
 	}
-	updateCh, ok := subscriptions[subscriptionID]
+	Update, ok := subscriptions[subscriptionID]
 	if ok {
 		glog.Infof("Terminating subscription for the subscription ID %d", subscriptionID)
-		close(updateCh)
+		close(Update.updateCh)
 	}
 	delete(subscriptions, subscriptionID)
 	p.pollRegistry[bucketID] = subscriptions

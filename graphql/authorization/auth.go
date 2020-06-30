@@ -223,3 +223,63 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 
 	return claims.AuthVariables, nil
 }
+
+func ExtractAuthVariablesSubscription(ctx context.Context) (*CustomClaims, error) {
+	// Extract the jwt and unmarshal the jwt to get the auth variables.
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, nil
+	}
+
+	jwtToken := md.Get(string(AuthJwtCtxKey))
+	if len(jwtToken) == 0 {
+		return nil, nil
+	} else if len(jwtToken) > 1 {
+		return nil, fmt.Errorf("invalid jwt auth token")
+	}
+	return validateTokenSubscription(jwtToken[0])
+}
+
+func validateTokenSubscription(jwtStr string) (*CustomClaims, error) {
+	if metainfo.Algo == "" {
+		return nil, fmt.Errorf(
+			"jwt token cannot be validated because verification algorithm is not set")
+	}
+
+	token, err :=
+		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
+			algo, _ := token.Header["alg"].(string)
+			if algo != metainfo.Algo {
+				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
+					metainfo.Algo, algo)
+			}
+			if algo == HMAC256 {
+				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
+					return []byte(metainfo.PublicKey), nil
+				}
+			} else if algo == RSA256 {
+				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
+					return metainfo.RSAPublicKey, nil
+				}
+			}
+			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
+		})
+
+	if err != nil {
+		return nil, errors.Errorf("unable to parse jwt token:%v", err)
+	}
+
+	claims, ok := token.Claims.(*CustomClaims)
+	if !ok || !token.Valid {
+		return nil, errors.Errorf("claims in jwt token is not map claims")
+	}
+
+	// by default, the MapClaims.Valid will return true if the exp field is not set
+	// here we enforce the checking to make sure that the refresh token has not expired
+	now := time.Now().Unix()
+	if !claims.VerifyExpiresAt(now, true) {
+		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
+	}
+
+	return claims, nil
+}

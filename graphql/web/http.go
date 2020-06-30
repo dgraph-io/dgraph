@@ -19,6 +19,7 @@ package web
 import (
 	"compress/gzip"
 	"context"
+	"crypto/rsa"
 	"encoding/json"
 	"strconv"
 
@@ -41,6 +42,14 @@ import (
 )
 
 const touchedUidsHeader = "Graphql-TouchedUids"
+
+type AuthMeta struct {
+	PublicKey    string
+	RSAPublicKey *rsa.PublicKey
+	Header       string
+	Namespace    string
+	Algo         string
+}
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
@@ -116,12 +125,17 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
+	customClaim, err := authorization.ExtractAuthVariablesSubscription(ctx)
+	if err != nil {
+		return nil, schema.GQLWrapf(err, "authorization failed")
+	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
 	}
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaim)
 	if err != nil {
 		return nil, err
 	}
