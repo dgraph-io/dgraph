@@ -2182,8 +2182,8 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		key := append(make([]byte, 0), item.Key()...)
-		pl, err := qs.cache.Get(key)
+		var key []byte
+		pl, err := qs.cache.Get(item.KeyCopy(key))
 		if err != nil {
 			return err
 		}
