@@ -136,7 +136,7 @@ type pollRequest struct {
 	localEpoch uint64
 }
 
-func (p *Poller) poll(req *pollRequest, customClaims *authorization.CustomClaims) {
+func (p *Poller) poll(req *pollRequest) {
 	resolver := p.resolver
 	pollID := uint64(0)
 	for {
