@@ -441,6 +441,7 @@ func (n *node) triggerLeaderChange() {
 
 func (n *node) proposeNewCID() {
 	// Either this is a new cluster or can't find a CID in the entries. So, propose a new ID for the cluster.
+	// CID check is needed for the case when a leader assigns a CID to the new node and the new node is proposing a CID
 	for len(n.server.membershipState().Cid) == 0 {
 		id := uuid.New().String()
 		err := n.proposeAndWait(context.Background(), &pb.ZeroProposal{Cid: id})
