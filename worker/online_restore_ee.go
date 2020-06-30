@@ -17,6 +17,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -69,7 +70,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		reqCopy.GroupId = gid
 
 		go func() {
-			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+			errCh <- retryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
@@ -96,6 +97,24 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	c := pb.NewWorkerClient(con)
 
 	_, err := c.Restore(ctx, req)
+	return err
+}
+
+func retryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = proposeRestoreOrSend(ctx, req)
+		if err == nil {
+			return err
+		}
+
+		// TODO: Add more conditions under which the prop
+		if err == conn.ErrNoConnection {
+			time.Sleep(time.Second)
+			continue
+		}
+		return err
+	}
 	return err
 }
 
