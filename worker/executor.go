@@ -130,11 +130,10 @@ const (
 )
 
 func (e *executor) pausePredicates(schemas ...*pb.SchemaUpdate) error {
-	if atomic.LoadInt32(&e.paused) > 0 {
+	if !atomic.CompareAndSwapInt32(&e.paused, 0, 1) {
 		return errors.Errorf("Error pausing predicates, cannot pause more than once at a time")
 	}
 
-	atomic.StoreInt32(&e.paused, 1)
 	closers := make([]*y.Closer, 0, len(schemas))
 
 	e.Lock()
