@@ -962,6 +962,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		if err = authorizeSchemaQuery(ctx, &er); err != nil {
+			return resp, err
+		}
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
 			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
