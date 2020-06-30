@@ -28,9 +28,14 @@ import (
 )
 
 var (
-	schemaLock                            sync.Mutex
-	errUpdatingGQLSchemaOnNonGroup1Leader = errors.New(
+	schemaLock                                sync.Mutex
+	errUpdatingGraphQLSchemaOnNonGroup1Leader = errors.New(
 		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
+	errGraphQLSchemaCommitFailed = "error occurred updating GraphQL schema, please retry"
+	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph" +
+		" schema - this indicates a bug in Dgraph schema generation. Please let us know : " +
+		"https://github.com/dgraph-io/dgraph/issues. " +
+		"Don't forget to post your old and new schemas in the issue description."
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
 )
 
@@ -53,7 +58,7 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	req *pb.UpdateGraphQLSchemaRequest) (*pb.UpdateGraphQLSchemaResponse, error) {
 	if !isGroup1Leader() {
-		return nil, errUpdatingGQLSchemaOnNonGroup1Leader
+		return nil, errUpdatingGraphQLSchemaOnNonGroup1Leader
 	}
 
 	// lock here so that only one request is served at a time by group 1 leader
@@ -143,7 +148,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	//	providing every alpha a chance to reflect the current GraphQL schema before the response is
 	//	sent back to the user.
 	if _, err = CommitOverNetwork(ctx, tctx); err != nil {
-		return nil, errors.Wrap(err, "error occurred updating GraphQL schema, please retry")
+		return nil, errors.Wrap(err, errGraphQLSchemaCommitFailed)
 	}
 
 	// perform dgraph schema alter, if required. As the schema could be empty if it only has custom
@@ -154,11 +159,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 			Schema:  req.DgraphSchema,
 			Types:   req.DgraphTypes,
 		}); err != nil {
-			return nil, errors.Wrap(err,
-				"succeeded in saving GraphQL schema but failed to alter Dgraph schema - this"+
-					" indicates a bug in Dgraph schema generation. Please let us know : "+
-					"https://github.com/dgraph-io/dgraph/issues. "+
-					"Don't forget to post your old and new schemas in the issue description.")
+			return nil, errors.Wrap(err, ErrGraphQLSchemaAlterFailed)
 		}
 		// busy waiting for indexing to finish
 		if err = WaitForIndexingOrCtxError(ctx, true); err != nil {
