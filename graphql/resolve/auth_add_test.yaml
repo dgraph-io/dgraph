@@ -17,11 +17,11 @@
     { "UserSecret1": "0x123" }
   authquery: |-
     query {
-      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      UserSecret(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2)) {
         uid
       }
       UserSecret1 as var(func: uid(0x123))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   authjson: |
     { "UserSecret": [ { "uid": "0x123" }] }  

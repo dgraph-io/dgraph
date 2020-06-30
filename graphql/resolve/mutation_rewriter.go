@@ -432,6 +432,7 @@ func (urw *UpdateRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      updateAuthSelector,
+		parentVarName: m.MutatedType().Name() + "Root",
 	}
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
@@ -544,6 +545,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
+		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
@@ -668,6 +670,7 @@ func (drw *deleteRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      deleteAuthSelector,
+		parentVarName: m.MutatedType().Name() + "Root",
 	}
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)

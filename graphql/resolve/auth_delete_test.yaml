@@ -14,11 +14,12 @@
         ]
   dgquery: |-
     query {
-      x as deleteUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
+      x as deleteUserSecret(func: uid(UserSecretRoot)) {
         uid
       }
+      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret)) @filter(anyofterms(UserSecret.aSecret, "auth is applied"))
-      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Delete with deep auth"

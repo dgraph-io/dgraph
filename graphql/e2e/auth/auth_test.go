@@ -538,14 +538,14 @@ func TestDeepRBACValue(t *testing.T) {
 	}
 
 	query := `
-{
-  queryUser (filter:{username:{eq:"user1"}}) {
-    username
-    issues {
-      msg
-    }
-  }
-}
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issues {
+		  msg
+		}
+	  }
+	}
 	`
 
 	for _, tcase := range testCases {
@@ -571,7 +571,7 @@ func TestRBACFilter(t *testing.T) {
 
 	query := `
 		query {
-                    queryLog (order: {asc: logs}) {
+			queryLog (order: {asc: logs}) {
 		    	logs
 		    }
 		}
@@ -716,8 +716,8 @@ func TestNestedFilter(t *testing.T) {
 	}}
 
 	query := `
-		query {
-                    queryMovie (order: {asc: content}) {
+		query {	
+			queryMovie (order: {asc: content}) {
 		           content
 		           regionsAvailable (order: {asc: name}) {
 		           	name

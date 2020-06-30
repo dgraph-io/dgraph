@@ -418,7 +418,7 @@ func (authRw *authRewriter) addAuthQueries(
 	authRw.varName = authRw.varGen.Next(typ, "", "", authRw.isWritingAuth)
 
 	fldAuthQueries, filter := authRw.rewriteAuthQueries(typ)
-	if len(fldAuthQueries) == 0 {
+	if len(fldAuthQueries) == 0 && !authRw.hasAuthRules {
 		return dgQuery
 	}
 
@@ -447,7 +447,6 @@ func (authRw *authRewriter) addAuthQueries(
 		Args:   dgQuery.Args,
 	}
 
-	dgQuery.Order = nil
 	dgQuery.Filter = nil
 	dgQuery.Args = nil
 
@@ -726,7 +725,7 @@ func addSelectionSetFrom(
 
 			// This adds the following query.
 			//	var(func: uid(Ticket)) {
-			//		User as assignedTo
+			//		User as Ticket.assignedTo
 			//	}
 			// where `Ticket` is the nodes selected at parent level and `User` is the nodes we
 			// need on the current level.
@@ -736,7 +735,7 @@ func addSelectionSetFrom(
 					Args: []gql.Arg{{Value: parentVarName}},
 				},
 				Attr:     "var",
-				Children: []*gql.GraphQuery{{Attr: f.Name(), Var: parentQryName}},
+				Children: []*gql.GraphQuery{{Attr: f.DgraphPredicate(), Var: parentQryName}},
 			}
 
 			// This query aggregates all filters and auth rules and is used by root query to filter
@@ -765,7 +764,6 @@ func addSelectionSetFrom(
 
 			// We already apply the following to `selectionQry` by calling addArgumentsToField()
 			// hence they are no longer required.
-			child.Order = nil
 			child.Args = nil
 		}
 		authQueries = append(authQueries, selectionAuth...)
