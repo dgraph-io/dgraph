@@ -1232,7 +1232,7 @@ func TestUidInWithErrors(t *testing.T) {
 	}
 	for _, test := range tcases {
 		t.Run(test.description, func(t *testing.T) {
-			js, err := processQuery(context.Background(), t, test.query)
+			_, err := processQuery(context.Background(), t, test.query)
 			require.EqualError(t, err, test.expectedErr.Error())
 		})
 	}
