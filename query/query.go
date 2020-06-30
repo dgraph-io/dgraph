@@ -1654,16 +1654,18 @@ func (sg *SubGraph) fillVars(mp map[string]varValue) error {
 			sg.ExpandPreds = l.strList
 
 		case (v.Typ == gql.UidVar && sg.SrcFunc != nil && sg.SrcFunc.Name == "uid_in"):
-			for i, uid := range l.Uids.Uids {
-				if i == 0 {
-					sg.SrcFunc.Args[i].Value = strconv.FormatUint(uid, 10)
-				} else {
-					arg := gql.Arg{Value: strconv.FormatUint(uid, 10),
+			srcFuncArgs := sg.SrcFunc.Args[:0]
+			if l.Uids != nil {
+				for _, uid := range l.Uids.Uids {
+					// We use base 10 here because the uid parser expects the uid to be in base 10.
+					arg := gql.Arg{
+						Value:        strconv.FormatUint(uid, 10),
 						IsValueVar:   false,
 						IsGraphQLVar: false}
-					sg.SrcFunc.Args = append(sg.SrcFunc.Args, arg)
+					srcFuncArgs = append(srcFuncArgs, arg)
 				}
 			}
+			sg.SrcFunc.Args = srcFuncArgs
 
 		case (v.Typ == gql.AnyVar || v.Typ == gql.UidVar) && l.Uids != nil:
 			lists = append(lists, l.Uids)
