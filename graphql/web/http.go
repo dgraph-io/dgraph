@@ -19,7 +19,6 @@ package web
 import (
 	"compress/gzip"
 	"context"
-	"crypto/rsa"
 	"encoding/json"
 	"strconv"
 
@@ -42,14 +41,6 @@ import (
 )
 
 const touchedUidsHeader = "Graphql-TouchedUids"
-
-type AuthMeta struct {
-	PublicKey    string
-	RSAPublicKey *rsa.PublicKey
-	Header       string
-	Namespace    string
-	Algo         string
-}
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
