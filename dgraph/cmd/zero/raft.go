@@ -474,8 +474,8 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 		return false, err
 	}
 
-	for batchFirst := first; batchFirst <= last; {
-		entries, err := n.Store.Entries(batchFirst, last+1, 64<<20)
+	for batch := first; batch <= last; {
+		entries, err := n.Store.Entries(batch, last+1, 64<<20)
 		if err != nil {
 			return false, err
 		}
@@ -486,7 +486,7 @@ func (n *node) checkForCIDInEntries() (bool, error) {
 		}
 
 		// increment the iterator to the next batch
-		batchFirst = entries[len(entries)-1].Index + 1
+		batch = entries[len(entries)-1].Index + 1
 
 		for _, entry := range entries {
 			if entry.Type != raftpb.EntryNormal {
