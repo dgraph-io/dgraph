@@ -762,7 +762,7 @@ Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://git
 
 #### Deploy Single Server
 
-From your machine, run the following command to start a StatefulSet that creates a Pod with Zero and Alpha running in it.
+From your machine, run the following command to start a StatefulSet that creates a single Pod with Zero, Alpha, and Ratel UI running in it.
 
 ```sh
 kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
@@ -804,9 +804,6 @@ kubectl port-forward pod/dgraph-0 8000:8000
 ```
 
 Go to `http://localhost:8000` and verify Dgraph is working as expected.
-
-{{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
-
 
 #### Remove Single Server Resources
 
