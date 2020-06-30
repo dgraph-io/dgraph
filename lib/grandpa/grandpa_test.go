@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
@@ -68,6 +69,42 @@ func newTestVoters(t *testing.T) []*Voter {
 	}
 
 	return voters
+}
+
+func TestUpdateAuthorities(t *testing.T) {
+	st := newTestState(t)
+	voters := newTestVoters(t)
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	cfg := &Config{
+		BlockState: st.Block,
+		Voters:     voters,
+		Keypair:    kr.Alice,
+	}
+
+	gs, err := NewService(cfg)
+	require.NoError(t, err)
+
+	gs.UpdateAuthorities([]*types.GrandpaAuthorityData{
+		{Key: kr.Alice.Public().(*ed25519.PublicKey), ID: 0},
+	})
+
+	err = gs.Start()
+	require.NoError(t, err)
+
+	time.Sleep(time.Second)
+	require.Equal(t, uint64(1), gs.state.setID)
+	require.Equal(t, []*Voter{
+		{key: kr.Alice.Public().(*ed25519.PublicKey), id: 0},
+	}, gs.state.voters)
+
+	gs.UpdateAuthorities([]*types.GrandpaAuthorityData{
+		{Key: kr.Alice.Public().(*ed25519.PublicKey), ID: 0},
+	})
+
+	err = gs.Stop()
+	require.NoError(t, err)
 }
 
 func TestGetDirectVotes(t *testing.T) {

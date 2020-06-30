@@ -37,8 +37,8 @@ func TestDecodeMessage_VoteMessage(t *testing.T) {
 	copy(sig[:], sigb)
 
 	expected := &VoteMessage{
-		SetID: 77,
-		Round: 99,
+		Round: 77,
+		SetID: 99,
 		Stage: precommit,
 		Message: &SignedMessage{
 			Hash:        common.MustHexToHash("0x7db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a"),
@@ -103,8 +103,8 @@ func TestVoteMessageToConsensusMessage(t *testing.T) {
 	v, err := NewVoteFromHash(st.Block.BestBlockHash(), st.Block)
 	require.NoError(t, err)
 
-	gs.state.setID = 77
-	gs.state.round = 99
+	gs.state.setID = 99
+	gs.state.round = 77
 	v.number = 0x7777
 	vm, err := gs.createVoteMessage(v, precommit, gs.keypair)
 	require.NoError(t, err)
@@ -114,7 +114,7 @@ func TestVoteMessageToConsensusMessage(t *testing.T) {
 
 	expected := &ConsensusMessage{
 		ConsensusEngineID: types.GrandpaEngineID,
-		Data:              common.MustHexToBytes("0x004d000000000000006300000000000000017db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a777700000000000036e6eca85489bebbb0f687ca5404748d5aa2ffabee34e3ed272cc7b2f6d0a82c65b99bc7cd90dbc21bb528289ebf96705dbd7d96918d34d815509b4e0e2a030f34602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
+		Data:              common.MustHexToBytes("0x004d000000000000006300000000000000017db9db5ed9967b80143100189ba69d9e4deab85ac3570e5df25686cabe32964a7777000000000000a28633c3a1046351931209fe9182fd530dc659d54ece48e9f88f4277e47f39eb78a84d50e3d37e1b50786d88abafceb5137044b6122fb6b7b5ae8ff62787cc0e34602b88f60513f1c805d87ef52896934baf6a662bc37414dbdbf69356b1a691"),
 	}
 
 	require.Equal(t, expected, cm)

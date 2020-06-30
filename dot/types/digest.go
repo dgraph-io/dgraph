@@ -176,6 +176,11 @@ func (d *ConsensusDigest) Decode(in []byte) error {
 	return nil
 }
 
+// DataType returns the data type of the runtime-to-consensus engine message
+func (d *ConsensusDigest) DataType() byte {
+	return d.Data[0]
+}
+
 // SealDigest contains the seal or signature. This is only used by native code.
 type SealDigest struct {
 	ConsensusEngineID ConsensusEngineID

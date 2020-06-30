@@ -71,6 +71,9 @@ type Syncer struct {
 
 	// BABE verification
 	verifier Verifier
+
+	// Consensus digest handling
+	digestHandler *digestHandler
 }
 
 // SyncerConfig is the configuration for the Syncer.
@@ -86,6 +89,7 @@ type SyncerConfig struct {
 	TransactionQueue TransactionQueue
 	Runtime          *runtime.Runtime
 	Verifier         Verifier
+	DigestHandler    *digestHandler
 }
 
 var responseTimeout = 3 * time.Second
@@ -130,6 +134,7 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		transactionQueue: cfg.TransactionQueue,
 		runtime:          cfg.Runtime,
 		verifier:         cfg.Verifier,
+		digestHandler:    cfg.DigestHandler,
 	}, nil
 }
 
@@ -440,6 +445,14 @@ func (s *Syncer) handleBlock(block *types.Block) error {
 
 	// TODO: if block is from the next epoch, increment epoch
 
+	// handle consensus digest for authority changes
+	if s.digestHandler != nil {
+		err = s.handleDigests(block.Header)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -461,4 +474,27 @@ func (s *Syncer) executeBlock(block *types.Block) ([]byte, error) {
 
 func (s *Syncer) executeBlockBytes(bd []byte) ([]byte, error) {
 	return s.runtime.Exec(runtime.CoreExecuteBlock, bd)
+}
+
+func (s *Syncer) handleDigests(header *types.Header) error {
+	for _, d := range header.Digest {
+		dg, err := types.DecodeDigestItem(d)
+		if err != nil {
+			return err
+		}
+
+		if dg.Type() == types.ConsensusDigestType {
+			cd, ok := dg.(*types.ConsensusDigest)
+			if !ok {
+				return errors.New("cannot cast invalid consensus digest item")
+			}
+
+			err = s.digestHandler.handleConsensusDigest(cd)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }

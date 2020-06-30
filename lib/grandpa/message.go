@@ -86,8 +86,8 @@ func (m *SignedMessage) String() string {
 // VoteMessage represents a network-level vote message
 // https://github.com/paritytech/substrate/blob/master/client/finality-grandpa/src/communication/gossip.rs#L336
 type VoteMessage struct {
-	SetID   uint64
 	Round   uint64
+	SetID   uint64
 	Stage   subround // 0 for pre-vote, 1 for pre-commit
 	Message *SignedMessage
 }

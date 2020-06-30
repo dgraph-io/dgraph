@@ -1,0 +1,236 @@
+// Copyright 2019 ChainSafe Systems (ON) Corp.
+// This file is part of gossamer.
+//
+// The gossamer library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The gossamer library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
+
+package core
+
+import (
+	"testing"
+	"time"
+
+	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/types"
+	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
+	"github.com/ChainSafe/gossamer/lib/genesis"
+	"github.com/ChainSafe/gossamer/lib/keystore"
+	"github.com/ChainSafe/gossamer/lib/trie"
+
+	log "github.com/ChainSafe/log15"
+	"github.com/stretchr/testify/require"
+)
+
+func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *digestHandler { //nolint
+	stateSrvc := state.NewService("", log.LvlInfo)
+	stateSrvc.UseMemDB()
+
+	genesisData := new(genesis.Data)
+
+	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
+	require.NoError(t, err)
+
+	err = stateSrvc.Start()
+	require.NoError(t, err)
+
+	var bp BlockProducer
+	if withBABE {
+		// TODO
+	}
+
+	var fg FinalityGadget
+	if withGrandpa {
+		fg = &mockFinalityGadget{}
+	}
+
+	time.Sleep(time.Second)
+	return newDigestHandler(stateSrvc.Block, bp, fg)
+}
+
+func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.start()
+	defer handler.stop()
+
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	sc := &types.GrandpaScheduledChange{
+		Auths: []*types.GrandpaAuthorityDataRaw{
+			{Key: kr.Alice.Public().(*ed25519.PublicKey).AsBytes(), ID: 0},
+		},
+		Delay: 3,
+	}
+
+	data, err := sc.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	addTestBlocksToState(t, 2, handler.blockState)
+	auths := handler.grandpa.Authorities()
+	require.Nil(t, auths)
+
+	// authorities should change on start of block 3 from start
+	addTestBlocksToState(t, 1, handler.blockState)
+	time.Sleep(time.Millisecond * 100)
+	auths = handler.grandpa.Authorities()
+	require.Equal(t, 1, len(auths))
+}
+
+func TestDigestHandler_GrandpaForcedChange(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.start()
+	defer handler.stop()
+
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	fc := &types.GrandpaForcedChange{
+		Auths: []*types.GrandpaAuthorityDataRaw{
+			{Key: kr.Alice.Public().(*ed25519.PublicKey).AsBytes(), ID: 0},
+		},
+		Delay: 3,
+	}
+
+	data, err := fc.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	addTestBlocksToState(t, 2, handler.blockState)
+	auths := handler.grandpa.Authorities()
+	require.Nil(t, auths)
+
+	// authorities should change on start of block 3 from start
+	addTestBlocksToState(t, 1, handler.blockState)
+	time.Sleep(time.Millisecond * 100)
+	auths = handler.grandpa.Authorities()
+	require.Equal(t, 1, len(auths))
+}
+
+func TestDigestHandler_GrandpaOnDisabled(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.start()
+	defer handler.stop()
+
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	handler.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{
+		{Key: kr.Alice.Public().(*ed25519.PublicKey), ID: 0},
+	})
+
+	// try with ID that doesn't exist
+	od := &types.OnDisabled{
+		ID: 1,
+	}
+
+	data, err := od.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	auths := handler.grandpa.Authorities()
+	require.Equal(t, 1, len(auths))
+
+	// try with ID that does exist
+	od = &types.OnDisabled{
+		ID: 0,
+	}
+
+	data, err = od.Encode()
+	require.NoError(t, err)
+
+	d = &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	auths = handler.grandpa.Authorities()
+	require.Equal(t, 0, len(auths))
+}
+
+func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
+	handler := newTestDigestHandler(t, false, true)
+	handler.start()
+	defer handler.stop()
+
+	kr, err := keystore.NewEd25519Keyring()
+	require.NoError(t, err)
+
+	handler.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{
+		{Key: kr.Alice.Public().(*ed25519.PublicKey), ID: 0},
+	})
+
+	p := &types.Pause{
+		Delay: 3,
+	}
+
+	data, err := p.Encode()
+	require.NoError(t, err)
+
+	d := &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	addTestBlocksToState(t, 3, handler.blockState)
+	time.Sleep(time.Millisecond * 100)
+	auths := handler.grandpa.Authorities()
+	require.Equal(t, 0, len(auths))
+
+	r := &types.Resume{
+		Delay: 3,
+	}
+
+	data, err = r.Encode()
+	require.NoError(t, err)
+
+	d = &types.ConsensusDigest{
+		ConsensusEngineID: types.GrandpaEngineID,
+		Data:              data,
+	}
+
+	err = handler.handleConsensusDigest(d)
+	require.NoError(t, err)
+
+	addTestBlocksToState(t, 3, handler.blockState)
+	time.Sleep(time.Millisecond * 110)
+	auths = handler.grandpa.Authorities()
+	require.Equal(t, 1, len(auths))
+}

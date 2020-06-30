@@ -52,6 +52,7 @@ type Service struct {
 	pcEquivocations  map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-commit stage
 	tracker          *tracker                           // tracker of vote messages we may need in the future
 	head             *types.Header                      // most recently finalized block
+	nextAuthorities  []*Voter                           // if not nil, the updated authorities for the next round
 
 	// historical information
 	preVotedBlock      map[uint64]*Vote            // map of round number -> pre-voted block
@@ -69,6 +70,7 @@ type Config struct {
 	LogLvl     log.Lvl
 	BlockState BlockState
 	Voters     []*Voter
+	SetID      uint64
 	Keypair    *ed25519.Keypair
 }
 
@@ -99,7 +101,7 @@ func NewService(cfg *Config) (*Service, error) {
 
 	s := &Service{
 		logger:             logger,
-		state:              NewState(cfg.Voters, 0, 0),
+		state:              NewState(cfg.Voters, cfg.SetID, 0),
 		blockState:         cfg.BlockState,
 		keypair:            cfg.Keypair,
 		prevotes:           make(map[ed25519.PublicKeyBytes]*Vote),
@@ -144,6 +146,42 @@ func (s *Service) Stop() error {
 	return nil
 }
 
+// Authorities returns the current grandpa authorities
+func (s *Service) Authorities() []*types.GrandpaAuthorityData {
+	ad := make([]*types.GrandpaAuthorityData, len(s.state.voters))
+	for i, v := range s.state.voters {
+		ad[i] = &types.GrandpaAuthorityData{
+			Key: v.key,
+			ID:  v.id,
+		}
+	}
+
+	return ad
+}
+
+// UpdateAuthorities schedules an update to the grandpa voter set and increments the setID at the end of the current round
+func (s *Service) UpdateAuthorities(ad []*types.GrandpaAuthorityData) {
+	v := make([]*Voter, len(ad))
+	for i, a := range ad {
+		v[i] = &Voter{
+			key: a.Key,
+			id:  a.ID,
+		}
+	}
+
+	s.nextAuthorities = v
+}
+
+// updateAuthorities updates the grandpa voter set, increments the setID, and resets the round numbers
+func (s *Service) updateAuthorities() {
+	if s.nextAuthorities != nil {
+		s.state.voters = s.nextAuthorities
+		s.state.setID++
+		s.state.round = 0
+		s.nextAuthorities = nil
+	}
+}
+
 func (s *Service) publicKeyBytes() ed25519.PublicKeyBytes {
 	return s.keypair.Public().(*ed25519.PublicKey).AsBytes()
 }
@@ -151,6 +189,9 @@ func (s *Service) publicKeyBytes() ed25519.PublicKeyBytes {
 // initiate initates a GRANDPA round
 func (s *Service) initiate() error {
 	s.stopped = false
+
+	// if there is an authority change, execute it
+	s.updateAuthorities()
 
 	if s.state.round == 0 {
 		s.mapLock.Lock()

@@ -106,8 +106,8 @@ func (s *Service) createVoteMessage(vote *Vote, stage subround, kp crypto.Keypai
 	}
 
 	return &VoteMessage{
-		SetID:   s.state.setID,
 		Round:   s.state.round,
+		SetID:   s.state.setID,
 		Stage:   stage,
 		Message: sm,
 	}, nil
@@ -204,7 +204,6 @@ func (s *Service) checkForEquivocation(voter *Voter, vote *Vote, stage subround)
 		votes = s.precommits
 	}
 
-	// TODO: check for votes we've already seen #923
 	if eq[v] != nil {
 		// if the voter has already equivocated, every vote in that round is an equivocatory vote
 		eq[v] = append(eq[v], vote)
