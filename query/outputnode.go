@@ -166,7 +166,7 @@ const (
 // 2. ScalarVal => Any value associated with node, if it is a leaf node.
 // 3. List => Stores boolean value, true if this node is part of list.
 // 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
-//    node which is parent for facets values for a scalar list predicaite. Eg: node "country|city"
+//    node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
 //    will have FacetsParent value as true.
 //    {
 //		"city": ["Bengaluru", "San Francisco"],
@@ -256,11 +256,11 @@ func (enc *encoder) getScalarVal(fj fastJsonNode) ([]byte, error) {
 }
 
 func (enc *encoder) getList(fj fastJsonNode) bool {
-	return ((enc.metaSlice[fj] & msbBit) > 0)
+	return (enc.metaSlice[fj] & msbBit) > 0
 }
 
 func (enc *encoder) getFacetsParent(fj fastJsonNode) bool {
-	return ((enc.metaSlice[fj] & secondMsbBit) > 0)
+	return (enc.metaSlice[fj] & secondMsbBit) > 0
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) []fastJsonNode {
@@ -685,7 +685,7 @@ func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 	for _, a := range fjAttrs {
 		// Here we are counting all non-scalar attributes of fj. If there are any such
 		// attributes, we will flatten it, otherwise we will return all attributes.
-		// We should only consider those nodes for falttening which have children and are not
+		// We should only consider those nodes for flattening which have children and are not
 		// facetsParent.
 		if len(enc.getAttrs(a)) > 0 && !enc.getFacetsParent(a) {
 			cnt++

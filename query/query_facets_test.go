@@ -2201,7 +2201,53 @@ func TestFacetUIDListPredicateWithNormalize(t *testing.T) {
 	`, js)
 }
 
-func TestFacetValueListPredicateWithNormalize(t *testing.T) {
+func TestNestedFacetUIDListPredicateWithNormalize(t *testing.T) {
+	populateClusterWithFacets()
+	query := `{
+		q(func: uid(0x1)) @normalize {
+			name: name
+			friend @facets(since) @normalize {
+				friend_name: name @facets
+			}
+		}
+	}`
+	js := processQueryNoErr(t, query)
+	fmt.Println(js)
+	require.JSONEq(t, `
+		{
+			"data": {
+			"q": [
+				{
+				"friend_name": "Rick Grimes",
+				"friend_name|dummy": true,
+				"friend_name|origin": "french",
+				"friend|since": "2006-01-02T15:04:05Z",
+				"name": "Michonne"
+				},
+				{
+				"friend_name": "Glenn Rhee",
+				"friend_name|dummy": true,
+				"friend_name|origin": "french",
+				"friend|since": "2004-05-02T15:04:05Z",
+				"name": "Michonne"
+				},
+				{
+				"friend_name": "Daryl Dixon",
+				"friend|since": "2007-05-02T15:04:05Z",
+				"name": "Michonne"
+				},
+				{
+				"friend_name": "Andrea",
+				"friend|since": "2006-01-02T15:04:05Z",
+				"name": "Michonne"
+				}
+			]
+			}
+		}
+	`, js)
+}
+
+func TestFacetValuePredicateWithNormalize(t *testing.T) {
 	populateClusterWithFacets()
 	query := `{
 		q(func: uid(1, 12000)) @normalize {
