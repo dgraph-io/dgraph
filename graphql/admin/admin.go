@@ -300,12 +300,11 @@ var (
 		resolve.GuardianAuthMW4Mutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":      {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
-		"state":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
-		"config":      commonAdminQueryMWs,
-		"listBackups": commonAdminQueryMWs,
-		// not applying ip whitelisting to keep it in sync with /alter
-		"getGQLSchema": {resolve.GuardianAuthMW4Query},
+		"health":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
+		"state":        {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"config":       commonAdminQueryMWs,
+		"listBackups":  commonAdminQueryMWs,
+		"getGQLSchema": commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":     {resolve.IpWhitelistingMW4Query},
@@ -315,15 +314,14 @@ var (
 		"getUser":        {resolve.IpWhitelistingMW4Query},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":   commonAdminMutationMWs,
-		"config":   commonAdminMutationMWs,
-		"draining": commonAdminMutationMWs,
-		"export":   commonAdminMutationMWs,
-		"login":    {resolve.IpWhitelistingMW4Mutation},
-		"restore":  commonAdminMutationMWs,
-		"shutdown": commonAdminMutationMWs,
-		// not applying ip whitelisting to keep it in sync with /alter
-		"updateGQLSchema": {resolve.GuardianAuthMW4Mutation},
+		"backup":          commonAdminMutationMWs,
+		"config":          commonAdminMutationMWs,
+		"draining":        commonAdminMutationMWs,
+		"export":          commonAdminMutationMWs,
+		"login":           {resolve.IpWhitelistingMW4Mutation},
+		"restore":         commonAdminMutationMWs,
+		"shutdown":        commonAdminMutationMWs,
+		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     {resolve.IpWhitelistingMW4Mutation},

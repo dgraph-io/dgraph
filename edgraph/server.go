@@ -37,7 +37,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -863,6 +862,16 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return
 	}
 
+	// make sure that requests for schema query are authenticated similar to admin requests
+	if qc.gqlRes.Schema != nil {
+		if _, err := x.HasWhitelistedIP(ctx); err != nil {
+			return nil, err
+		}
+		if err := hasPoormansAuth(ctx); err != nil {
+			return nil, err
+		}
+	}
+
 	if doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
@@ -1156,10 +1165,15 @@ func isMutationAllowed(ctx context.Context) bool {
 var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
 func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
+	ipAddr, err := x.HasWhitelistedIP(ctx)
+	if err != nil {
+		return err
 	}
+	glog.Infof("Got Alter request from %q\n", ipAddr)
+	return hasPoormansAuth(ctx)
+}
+
+func hasPoormansAuth(ctx context.Context) error {
 	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}
