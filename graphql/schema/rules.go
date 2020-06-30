@@ -1599,40 +1599,84 @@ func customDirectiveValidation(sch *ast.Schema,
 
 	// 12. Finally validate the given graphql operation on remote server, when all locally doable
 	// validations have finished
-	si := httpArg.Value.Children.ForName("skipIntrospection")
 	var skip bool
-	if si != nil {
-		skip, err = strconv.ParseBool(si.Raw)
-		if err != nil {
-			errs = append(errs, gqlerror.ErrorPosf(graphql.Position,
-				"Type %s; Field %s; skipIntrospection in @custom directive can only be "+
-					"true/false, found: `%s`.",
-				typ.Name, field.Name, si.Raw))
+	if body != nil || graphql != nil {
+		var errPos *ast.Position
+		switch {
+		case body != nil:
+			errPos = body.Position
+		case graphql != nil:
+			errPos = graphql.Position
+		default:
+			// this case is not possible, as requiredFields will have non-0 length only if there was
+			// some body or graphql. Written only to satisfy logic flow, so that errPos is always
+			// non-nil.
+			errPos = dir.Position
 		}
-	}
-
-	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
-	if forwardHeaders != nil {
-		for _, h := range forwardHeaders.Children {
-			key := strings.Split(h.Value.Raw, ":")
-			if len(key) > 2 {
-				return append(errs, gqlerror.ErrorPosf(graphql.Position,
-					"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
-						", found: `%s`.",
-					typ.Name, field.Name, h.Value.Raw))
+		si := httpArg.Value.Children.ForName("skipIntrospection")
+		if si != nil {
+			skip, err = strconv.ParseBool(si.Raw)
+			if err != nil {
+				errs = append(errs, gqlerror.ErrorPosf(errPos,
+					"Type %s; Field %s; skipIntrospection in @custom directive can only be "+
+						"true/false, found: `%s`.",
+					typ.Name, field.Name, si.Raw))
 			}
 		}
-	}
 
-	secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
-	if secretHeaders != nil {
-		for _, h := range secretHeaders.Children {
-			key := strings.Split(h.Value.Raw, ":")
-			if len(key) > 2 {
-				return append(errs, gqlerror.ErrorPosf(graphql.Position,
-					"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
-						", found: `%s`.",
-					typ.Name, field.Name, h.Value.Raw))
+		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		if forwardHeaders != nil {
+			for _, h := range forwardHeaders.Children {
+				key := strings.Split(h.Value.Raw, ":")
+				if len(key) > 2 {
+					return append(errs, gqlerror.ErrorPosf(errPos,
+						"Type %s; Field %s; forwardHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+							", found: `%s`.",
+						typ.Name, field.Name, h.Value.Raw))
+				}
+			}
+		}
+
+		secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+		if secretHeaders != nil {
+			for _, h := range secretHeaders.Children {
+				secretKey := strings.Split(h.Value.Raw, ":")
+				if len(secretKey) == 1 {
+					secretKey = []string{h.Value.Raw, h.Value.Raw}
+				}
+				if len(secretKey) > 2 {
+					return append(errs, gqlerror.ErrorPosf(errPos,
+						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+							", found: `%s`.",
+						typ.Name, field.Name, h.Value.Raw))
+				}
+				if forwardHeaders != nil {
+					for _, fh := range forwardHeaders.Children {
+						fhKey := strings.Split(fh.Value.Raw, ":")
+						if len(fhKey) == 1 {
+							fhKey = []string{fh.Value.Raw, fh.Value.Raw}
+						}
+						if fhKey[0] == secretKey[0] {
+							return append(errs, gqlerror.ErrorPosf(errPos,
+								"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
+									", found: `%s`.",
+								typ.Name, field.Name, fh.Value.Raw))
+						}
+					}
+				}
+			}
+		}
+
+		introspectionHeaders := httpArg.Value.Children.ForName("introspectionHeaders")
+		if introspectionHeaders != nil {
+			for _, h := range introspectionHeaders.Children {
+				key := strings.Split(h.Value.Raw, ":")
+				if len(key) > 2 {
+					return append(errs, gqlerror.ErrorPosf(errPos,
+						"Type %s; Field %s; introspectionHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
+							", found: `%s`.",
+						typ.Name, field.Name, h.Value.Raw))
+				}
 			}
 		}
 	}
@@ -1642,16 +1686,22 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	if graphql != nil && !skip && graphqlOpDef != nil {
-		secretHeaders := httpArg.Value.Children.ForName("secretHeaders")
+		introspectionHeaders := httpArg.Value.Children.ForName("introspectionHeaders")
 		headers := http.Header{}
-		if secretHeaders != nil {
-			for _, h := range secretHeaders.Children {
+		if introspectionHeaders != nil {
+			for _, h := range introspectionHeaders.Children {
 				key := strings.Split(h.Value.Raw, ":")
 				if len(key) == 1 {
 					key = []string{h.Value.Raw, h.Value.Raw}
 				}
 				// We try and fetch the value from the stored secrets.
-				val := secrets[key[1]]
+				val, ok := secrets[key[1]]
+				if !ok {
+					return append(errs, gqlerror.ErrorPosf(graphql.Position,
+						"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value"+
+							", found: `%s`.",
+						typ.Name, field.Name, h.Value.Raw))
+				}
 				headers.Add(key[0], string(val))
 			}
 		}
