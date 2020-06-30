@@ -26,9 +26,9 @@ import (
 	"github.com/golang/glog"
 )
 
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (string, error) {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
 	glog.Warningf("Restore failed: %v", x.ErrNotSupported)
-	return "", x.ErrNotSupported
+	return 0, x.ErrNotSupported
 }
 
 // Restore implements the Worker interface.
