@@ -37,7 +37,6 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
-	DisableSubscription()
 }
 
 type handler struct {
@@ -71,10 +70,6 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
-}
-
-func (s *handler) DisableSubscription() {
-	s.completeSchema.Subscription = nil
 }
 
 func parseSecrets(sch string) (map[string]string, error) {
