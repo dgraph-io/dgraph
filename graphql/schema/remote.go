@@ -85,6 +85,7 @@ func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchem
 const (
 	list        = "LIST"
 	nonNull     = "NON_NULL"
+	object = string(ast.Object)
 	inputObject = string(ast.InputObject)
 )
 
@@ -362,43 +363,49 @@ func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 	if len(expandedTypes) == 0 {
 		return nil
 	}
-	return matchRemoteTypes(expandedTypes, localSchema)
+	var kind string = remoteType.Kind
+	if (remoteType.OfType != nil) {
+		kind = remoteType.OfType.Kind
+	}
+	return matchRemoteTypes(expandedTypes, localSchema,  kind)
 }
 
-func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema) error {
+func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema, kind string) error {
 	for typeName, def := range schema.Types {
 		origTyp := schema.Types[typeName]
 		remoteDir := origTyp.Directives.ForName(remoteDirective)
 		if remoteDir != nil {
-			remoteType, ok := expandedTypes[def.Name]
-			fields := def.Fields
-			if !ok {
-				return errors.Errorf(
-					"Unable to find local type %s in the remote schema",
-					typeName,
-				)
-			}
-			for _, field := range fields {
-				var remoteField *gqlField = nil
-				for _, rf := range remoteType {
-					if rf.Name == field.Name {
-						remoteField = rf
-					}
-				}
-				if remoteField == nil {
+			if kind == string(def.Kind) || ((kind == nonNull || kind == list) && string(def.Kind) == object){
+				remoteType, ok := expandedTypes[def.Name]
+				fields := def.Fields
+				if !ok {
 					return errors.Errorf(
-						"%s field for the local type %s is not present in the remote type %s",
-						field.Name, typeName, remoteField.Name,
-					)
-				}
-				if remoteField.Type.String() != field.Type.String() {
-					return errors.Errorf(
-						"expected type for the field %s is %s but got %s in type %s",
-						remoteField.Name,
-						remoteField.Type.String(),
-						field.Type.String(),
+						"Unable to find local type %s in the remote schema",
 						typeName,
 					)
+				}
+				for _, field := range fields {
+					var remoteField *gqlField = nil
+					for _, rf := range remoteType {
+						if rf.Name == field.Name {
+							remoteField = rf
+						}
+					}
+					if remoteField == nil {
+						return errors.Errorf(
+							"%s field for the local type %s is not present in the remote type %s",
+							field.Name, typeName, remoteField.Name,
+						)
+					}
+					if remoteField.Type.String() != field.Type.String() {
+						return errors.Errorf(
+							"expected type for the field %s is %s but got %s in type %s",
+							remoteField.Name,
+							remoteField.Type.String(),
+							field.Type.String(),
+							typeName,
+						)
+					}
 				}
 			}
 		}
@@ -547,7 +554,7 @@ func expandTypeRecursively(typenameToExpand string, param *expandTypeParams) err
 	param.expandedTypes[typenameToExpand] = struct{}{}
 	typeFound := false
 	for _, typ := range param.remoteTypes {
-		if typ.Name == typenameToExpand && typ.Kind != "INPUT_OBJECT"{
+		if typ.Name == typenameToExpand {
 			typeFound = true
 			param.typesToFields[typ.Name] = make([]*gqlField, 0,
 				len(typ.Fields)+len(typ.InputFields))
@@ -565,9 +572,6 @@ func expandTypeRecursively(typenameToExpand string, param *expandTypeParams) err
 					}
 				}
 			}
-		} 
-		if (typ.Kind != "INPUT_OBJECT") {
-			typeFound = true
 		}
 	}
 	if !typeFound {
