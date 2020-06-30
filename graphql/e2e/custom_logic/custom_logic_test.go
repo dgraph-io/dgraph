@@ -246,6 +246,7 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 				  method: "POST"
 				  forwardHeaders: ["Content-Type"]
 				  secretHeaders: ["GITHUB-API-TOKEN"]
+				  introspectionHeaders: ["GITHUB-API-TOKEN"]
 				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
 				}
 			  )
