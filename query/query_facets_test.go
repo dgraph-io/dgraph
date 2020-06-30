@@ -2122,17 +2122,20 @@ func TestNestedFacetUIDListPredicateWithNormalize(t *testing.T) {
 			name: name
 			friend @facets(since) @normalize {
 				friend_name: name @facets
+				friend @facets(close)  {
+					friend_name_level2: name
+				}
 			}
 		}
 	}`
 	js := processQueryNoErr(t, query)
-	fmt.Println(js)
 	require.JSONEq(t, `
 		{
 			"data": {
 				"q": [
 					{
 						"friend_name": "Rick Grimes",
+						"friend_name_level2": "Michonne",
 						"friend_name|dummy": true,
 						"friend_name|origin": "french",
 						"friend|since": "2006-01-02T15:04:05Z",
@@ -2152,6 +2155,21 @@ func TestNestedFacetUIDListPredicateWithNormalize(t *testing.T) {
 					},
 					{
 						"friend_name": "Andrea",
+						"friend_name_level2": "Michonne",
+						"friend|close": false,
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend_name_level2": "Glenn Rhee",
+						"friend|since": "2006-01-02T15:04:05Z",
+						"name": "Michonne"
+					},
+					{
+						"friend_name": "Andrea",
+						"friend_name_level2": "Daryl Dixon",
+						"friend|close": false,
 						"friend|since": "2006-01-02T15:04:05Z",
 						"name": "Michonne"
 					}
