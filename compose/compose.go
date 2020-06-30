@@ -86,6 +86,8 @@ type options struct {
 	TlsDir            string
 	ExposePorts       bool
 	EncryptionKeyFile string
+	LudicrousMode     bool
+	SnapshotAfter     string
 }
 
 var opts options
@@ -171,6 +173,9 @@ func initService(basename string, idx, grpcPort int) service {
 	if opts.Jaeger {
 		svc.Command += " --jaeger.collector=http://jaeger:14268"
 	}
+	if opts.LudicrousMode {
+		svc.Command += " --ludicrous_mode=true"
+	}
 
 	return svc
 }
@@ -226,6 +231,9 @@ func getAlpha(idx int) service {
 	}
 	if opts.WhiteList {
 		svc.Command += " --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+	}
+	if opts.SnapshotAfter != "" {
+		svc.Command += fmt.Sprintf(" --snapshot_after=%s", opts.SnapshotAfter)
 	}
 	if opts.AclSecret != "" {
 		svc.Command += " --acl_secret_file=/secret/hmac --acl_access_ttl 3s --acl_cache_ttl 5s"
@@ -414,6 +422,10 @@ func main() {
 		"comma-separated list of pattern=N settings for file-filtered logging")
 	cmd.PersistentFlags().StringVar(&opts.EncryptionKeyFile, "encryption_key_file", "",
 		"enable encryption-at-rest feature with specified encryption key file")
+	cmd.PersistentFlags().BoolVar(&opts.LudicrousMode, "ludicrous_mode", false,
+		"enable zeros and alphas in ludicrous mode.")
+	cmd.PersistentFlags().StringVar(&opts.SnapshotAfter, "snapshot_after", "",
+		"create a new Raft snapshot after this many number of Raft entries.")
 	err := cmd.ParseFlags(os.Args)
 	if err != nil {
 		if err == pflag.ErrHelp {
