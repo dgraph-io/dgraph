@@ -41,20 +41,19 @@ type executor struct {
 	pendingSize int64
 
 	sync.RWMutex
-	predChan   map[string]chan *subMutation
-	closerMap  map[string]*y.Closer
-	closer     *y.Closer
-	applied    *y.WaterMark
-	inProgress bool
+	predChan  map[string]chan *subMutation
+	closerMap map[string]*y.Closer
+	closer    *y.Closer
+	applied   *y.WaterMark
+	paused    int32
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
-		predChan:   make(map[string]chan *subMutation),
-		closerMap:  make(map[string]*y.Closer),
-		closer:     y.NewCloser(0),
-		applied:    applied,
-		inProgress: true,
+		predChan:  make(map[string]chan *subMutation),
+		closerMap: make(map[string]*y.Closer),
+		closer:    y.NewCloser(0),
+		applied:   applied,
 	}
 	go ex.shutdown()
 	return ex
@@ -130,59 +129,60 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
-func (e *executor) resumePredicates(schema []*pb.SchemaUpdate) error {
-	if e.inProgress == true {
-		return errors.Errorf("Can't resume execution, already running.")
+func (e *executor) pausePredicates(schemas ...*pb.SchemaUpdate) error {
+	if atomic.LoadInt32(&e.paused) > 0 {
+		return errors.Errorf("Error pausing predicates, cannot pause more than once at a time")
 	}
 
-	e.inProgress = true
-	for _, update := range schema {
-		e.resumePredicate(update.Predicate)
-	}
+	atomic.StoreInt32(&e.paused, 1)
+	closers := make([]*y.Closer, 0, len(schemas))
 
-	return nil
-}
-
-func (e *executor) pausePredicates(schema []*pb.SchemaUpdate) error {
-	if e.inProgress == false {
-		return errors.Errorf("Can't pause execution, already paused.")
-	}
-
-	e.inProgress = false
-	for _, update := range schema {
-		e.pausePredicate(update.Predicate)
-	}
-
-	return nil
-}
-
-func (e *executor) pausePredicate(pred string) {
-	// Get old channel and closer, replace them with new one.
 	e.Lock()
-	defer e.Unlock()
-	ch, ok := e.predChan[pred]
-	if ok {
-		close(ch)
-		closer := e.closerMap[pred]
+	for _, schema := range schemas {
+		ch, ok := e.predChan[schema.Predicate]
+		if ok {
+			// close current channel and get closer for waiting later.
+			close(ch)
+			closers = append(closers, e.closerMap[schema.Predicate])
+		}
+
+		// Create new channel and closer for predicates.
+		e.closerMap[schema.Predicate] = y.NewCloser(0)
+		newCh := make(chan *subMutation, 1000)
+		e.predChan[schema.Predicate] = newCh
+	}
+	e.Unlock()
+
+	for _, closer := range closers {
 		closer.Wait()
 	}
 
-	e.closerMap[pred] = y.NewCloser(0)
-	ch = make(chan *subMutation, 1000)
-	e.predChan[pred] = ch
+	return nil
+}
+
+func (e *executor) resumePredicates(schemas ...*pb.SchemaUpdate) error {
+	if atomic.LoadInt32(&e.paused) == 0 {
+		return errors.Errorf("Error resuming predicates, nothing to resume")
+	}
+
+	e.RLock()
+	defer e.RUnlock()
+	for _, schema := range schemas {
+		ch, ok := e.predChan[schema.Predicate]
+		if !ok {
+			continue
+		}
+
+		closer := e.closerMap[schema.Predicate]
+		closer.AddRunning(1)
+		go e.processMutationCh(ch, closer)
+	}
+	atomic.StoreInt32(&e.paused, 0)
+	return nil
 }
 
 func (e *executor) resumePredicate(pred string) {
-	e.RLock()
-	defer e.RUnlock()
-	ch, ok := e.predChan[pred]
-	if !ok {
-		return
-	}
 
-	closer := e.closerMap[pred]
-	closer.AddRunning(1)
-	go e.processMutationCh(ch, closer)
 }
 
 func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {

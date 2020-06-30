@@ -354,14 +354,14 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 
 		shouldPause := x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetSchema()) > 0
 		if shouldPause {
-			if err := n.ex.pausePredicates(proposal.Mutations.Schema); err != nil {
+			if err := n.ex.pausePredicates(proposal.Mutations.Schema...); err != nil {
 				return err
 			}
 		}
 
 		err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs)
 		if shouldPause {
-			if err := n.ex.resumePredicates(proposal.Mutations.Schema); err != nil {
+			if err := n.ex.resumePredicates(proposal.Mutations.Schema...); err != nil {
 				return err
 			}
 		}
