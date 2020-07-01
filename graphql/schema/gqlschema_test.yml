@@ -1992,7 +1992,7 @@ invalid_schemas:
     ]
 
   - name: "@auth and @withSubscription directive on type"
-      input: |
+    input: |
         type Class @withSubscription @auth(query: { rule: "{ $X_MyApp_Role: { eq: \"ADMIN\" }}"}) {
           id: ID!
           name: String!
@@ -2008,8 +2008,8 @@ invalid_schemas:
                   body: "{sid: $id}"
                   })
         }
-      errlist: [
-      {"message": "Type Class; cannot have both @auth and @withSubscription directive",
+    errlist: [
+      {"message": "Type Class; cannot have both @withSubscription and @auth directive",
        "locations":[{"line":1, "column":6}]},
       ]
 
