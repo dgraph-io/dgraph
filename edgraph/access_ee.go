@@ -843,21 +843,24 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 	}
 
 	// remove those predicates from response
-	respPreds := make([]*pb.SchemaNode, 0)
-	for _, predNode := range er.SchemaNode {
-		if _, ok := blockedPreds[predNode.Predicate]; !ok {
-			respPreds = append(respPreds, predNode)
-		}
-	}
-	er.SchemaNode = respPreds
-	for _, typeNode := range er.Types {
-		respFields := make([]*pb.SchemaUpdate, 0)
-		for _, field := range typeNode.Fields {
-			if _, ok := blockedPreds[field.Predicate]; !ok {
-				respFields = append(respFields, field)
+	if len(blockedPreds) > 0 {
+		respPreds := make([]*pb.SchemaNode, 0)
+		for _, predNode := range er.SchemaNode {
+			if _, ok := blockedPreds[predNode.Predicate]; !ok {
+				respPreds = append(respPreds, predNode)
 			}
 		}
-		typeNode.Fields = respFields
+		er.SchemaNode = respPreds
+
+		for _, typeNode := range er.Types {
+			respFields := make([]*pb.SchemaUpdate, 0)
+			for _, field := range typeNode.Fields {
+				if _, ok := blockedPreds[field.Predicate]; !ok {
+					respFields = append(respFields, field)
+				}
+			}
+			typeNode.Fields = respFields
+		}
 	}
 
 	return nil
