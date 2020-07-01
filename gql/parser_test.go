@@ -18,7 +18,6 @@ package gql
 
 import (
 	"bytes"
-	"context"
 	"os"
 	"runtime/debug"
 	"testing"
@@ -4895,6 +4894,19 @@ func TestParseGraphQLVarArrayUID_IN(t *testing.T) {
 	}
 }
 
+func TestUidInWithNoParseErrors(t *testing.T) {
+	query := `{
+		schoolVar as q(func: uid(5000))
+		me(func: uid(1, 23, 24 )) {
+			friend @filter(uid_in(school, uid(schoolVar))) {
+				name
+			}
+		}
+	}`
+	_, err := Parse(Request{Str: query})
+	require.NoError(t, err)
+}
+
 func TestUidInWithParseErrors(t *testing.T) {
 	tcases := []struct {
 		description string
@@ -4910,7 +4922,7 @@ func TestUidInWithParseErrors(t *testing.T) {
 					}
 				}
 			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 3 column 38: Nested uid fn expects 1 uid variable, got 0"),
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
 		},
 		{
 			description: "query with nested uid with variable and constant",
@@ -4922,7 +4934,7 @@ func TestUidInWithParseErrors(t *testing.T) {
 					}
 				}
 			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 4 column 38: Nested uid fn expects only uid variable, got UID"),
+			expectedErr: errors.New("Nested uid fn expects only uid variable, got UID"),
 		},
 		{
 			description: "query with nested uid with two variables",
@@ -4935,7 +4947,7 @@ func TestUidInWithParseErrors(t *testing.T) {
 					}
 				}
 			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 5 column 38: Nested uid fn expects 1 uid variable, got 2"),
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 2"),
 		},
 		{
 			description: "query with nested uid with gql variable",
@@ -4946,13 +4958,13 @@ func TestUidInWithParseErrors(t *testing.T) {
 					}
 				}
 			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 3 column 38: Nested uid fn expects 1 uid variable, got 0"),
+			expectedErr: errors.New("Nested uid fn expects 1 uid variable, got 0"),
 		},
 	}
 	for _, test := range tcases {
 		t.Run(test.description, func(t *testing.T) {
-			_, err := processQuery(context.Background(), t, test.query)
-			require.EqualError(t, err, test.expectedErr.Error())
+			_, err := Parse(Request{Str: test.query})
+			require.Contains(t, err.Error(), test.expectedErr.Error())
 		})
 	}
 }
