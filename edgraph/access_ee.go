@@ -474,10 +474,12 @@ func authorizePreds(userId string, groupIds, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
+	aclCachePtr.RLock()
 	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
 	for predicate := range aclCachePtr.userPredPerms[userId] {
 		allowedPreds = append(allowedPreds, predicate)
 	}
+	aclCachePtr.RUnlock()
 	return blockedPreds, allowedPreds
 }
 

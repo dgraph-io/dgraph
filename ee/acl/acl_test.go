@@ -1036,7 +1036,7 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 
 	userClient, err := testutil.DgraphClient(testutil.SockAddr)
 	require.NoError(t, err)
-	time.Sleep(10 * time.Second)
+	time.Sleep(6 * time.Second)
 
 	err = userClient.Login(ctx, userid, userpassword)
 	require.NoError(t, err)
@@ -1130,6 +1130,79 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
+func TestQueryWithNewPermissions(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	// createGroup(t, accessJwt, devGroup)
+	// addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	// give read access of <name> to alice
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	type testCase struct {
+		query, expected, description string
+	}
+	testCaseOne := testCase{
+		query: `{
+			me(func: has(name)) {
+				expand(_all_)
+			}
+		}`,
+		expected:    `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+		description: `User has access to only name predicate right now`,
+	}
+	t.Run(testCaseOne.description, func(t *testing.T) {
+		resp, err := userClient.NewTxn().Query(ctx, testCaseOne.query)
+		require.Nil(t, err)
+		testutil.CompareJSON(t, testCaseOne.expected, string(resp.Json))
+	})
+
+}
 func TestNewACLPredicates(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 

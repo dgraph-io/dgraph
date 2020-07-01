@@ -51,10 +51,10 @@ func (cache *aclCache) update(groups []acl.Group) {
 	//
 	// Second in which ACL rules are divided by users, e.g.
 	// user-alice ->
-	// 			friend 	-> 4
-	//          name 	-> 6
+	//          friend  -> 4
+	//          name    -> 6
 	// user-bob  ->
-	//     		friend 	-> 7
+	//          friend  -> 7
 	// the reason is so that we can efficiently determine a list of predicates (allowedPreds)
 	// to which user has access for their queries
 
