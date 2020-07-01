@@ -157,6 +157,7 @@ type AddPostPayload {
 }
 
 type DeleteAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
 	numUids: Int
 }

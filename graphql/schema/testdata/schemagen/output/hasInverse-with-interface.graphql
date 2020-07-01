@@ -171,21 +171,25 @@ type AddQuestionPayload {
 }
 
 type DeleteAnswerPayload {
+	answer(filter: AnswerFilter, order: AnswerOrder, first: Int, offset: Int): [Answer]
 	msg: String
 	numUids: Int
 }
 
 type DeleteAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
 	numUids: Int
 }
 
 type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
 
 type DeleteQuestionPayload {
+	question(filter: QuestionFilter, order: QuestionOrder, first: Int, offset: Int): [Question]
 	msg: String
 	numUids: Int
 }
