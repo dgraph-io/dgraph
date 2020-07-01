@@ -131,6 +131,9 @@ func PopulateList(l *List, t *testing.T) {
 			continue
 		}
 		pl, err := ReadPostingList(item.Key(), itr)
+		if err == ErrInvalidKey {
+			continue
+		}
 		require.NoError(t, err)
 		l.mutationMap[i] = pl.plist
 		i++

@@ -500,7 +500,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
-	return errors.New("Subscriptions are not supported")
 	op, err := r.schema.Operation(req)
 	if err != nil {
 		return err

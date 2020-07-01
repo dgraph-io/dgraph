@@ -450,7 +450,7 @@ func collectFieldNames(idFields []*ast.FieldDefinition) (string, []gqlerror.Loca
 }
 
 func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gqlerror.List {
-	var hasAuth, hasRemote bool
+	var hasAuth, hasRemote, hasSubscription bool
 	for _, dir := range typ.Directives {
 		if dir.Name == authDirective {
 			hasAuth = true
@@ -458,10 +458,17 @@ func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gql
 		if dir.Name == remoteDirective {
 			hasRemote = true
 		}
+		if dir.Name == SubscriptionDirective {
+			hasSubscription = true
+		}
 	}
 	if hasAuth && hasRemote {
 		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
 			typ.Name, authDirective, remoteDirective)}
+	}
+	if hasSubscription && hasRemote {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
+			typ.Name, SubscriptionDirective, remoteDirective)}
 	}
 	return nil
 }
