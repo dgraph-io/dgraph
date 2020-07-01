@@ -17,6 +17,7 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -29,6 +30,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+)
+
+const (
+	errRestoreProposal = "cannot propose restore request"
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
@@ -100,16 +105,29 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	return err
 }
 
+func retriableRestoreError(err error) bool {
+	switch {
+	case err == conn.ErrNoConnection:
+		// Try to recover from temporary connection issues.
+		return true
+	case strings.Contains(err.Error(), errRestoreProposal):
+		// Do not try to recover from errors when sending the proposal.
+		return false
+	default:
+		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
+		return true
+	}
+}
+
 func retryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	var err error
 	for i := 0; i < 10; i++ {
 		err = proposeRestoreOrSend(ctx, req)
 		if err == nil {
-			return err
+			return nil
 		}
 
-		// TODO: Add more conditions under which the prop
-		if err == conn.ErrNoConnection {
+		if retriableRestoreError(err) {
 			time.Sleep(time.Second)
 			continue
 		}
@@ -133,7 +151,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
-		return &emptyRes, errors.Wrapf(err, "cannot propose restore request")
+		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
 	}
 
 	return &emptyRes, nil
