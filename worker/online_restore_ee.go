@@ -227,6 +227,9 @@ func getEncConfig(req *pb.RestoreRequest) (*viper.Viper, error) {
 	if req.VaultField != "" {
 		config.Set("vault_field", req.VaultField)
 	}
+	if req.VaultFormat != "" {
+		config.Set("vault_format", req.VaultField)
+	}
 	return config, nil
 }
 
