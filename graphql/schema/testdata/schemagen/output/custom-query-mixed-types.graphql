@@ -140,6 +140,7 @@ type AddCarPayload {
 }
 
 type DeleteCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	msg: String
 	numUids: Int
 }

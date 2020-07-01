@@ -135,6 +135,7 @@ type AddUserPayload {
 }
 
 type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
 }

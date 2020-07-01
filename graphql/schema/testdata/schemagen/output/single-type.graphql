@@ -137,6 +137,7 @@ type AddMessagePayload {
 }
 
 type DeleteMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	msg: String
 	numUids: Int
 }
