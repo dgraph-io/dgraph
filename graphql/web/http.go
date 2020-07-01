@@ -116,9 +116,9 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
-	customClaim, err := authorization.ExtractAuthVariablesSubscription(ctx)
+	customClaim, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
-		return nil, schema.GQLWrapf(err, "authorization failed")
+		return nil, err
 	}
 
 	req := &schema.Request{

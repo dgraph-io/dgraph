@@ -224,8 +224,8 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	return claims.AuthVariables, nil
 }
 
-func ExtractAuthVariablesSubscription(ctx context.Context) (*CustomClaims, error) {
-	// Extract the jwt and unmarshal the jwt to get the auth variables.
+func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
+	// return CustomClaims containing jwt and authvariables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return nil, nil
@@ -237,10 +237,10 @@ func ExtractAuthVariablesSubscription(ctx context.Context) (*CustomClaims, error
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
-	return validateTokenSubscription(jwtToken[0])
+	return validateJWTCustomClaims(jwtToken[0])
 }
 
-func validateTokenSubscription(jwtStr string) (*CustomClaims, error) {
+func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
 			"jwt token cannot be validated because verification algorithm is not set")
@@ -276,10 +276,5 @@ func validateTokenSubscription(jwtStr string) (*CustomClaims, error) {
 
 	// by default, the MapClaims.Valid will return true if the exp field is not set
 	// here we enforce the checking to make sure that the refresh token has not expired
-	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
-		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
-	}
-
 	return claims, nil
 }
