@@ -75,7 +75,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		reqCopy.GroupId = gid
 
 		go func() {
-			errCh <- retryRestoreProposal(ctx, reqCopy)
+			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
@@ -110,8 +110,11 @@ func retriableRestoreError(err error) bool {
 	case err == conn.ErrNoConnection:
 		// Try to recover from temporary connection issues.
 		return true
+	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
+		// Try to recover if raft has not been initialized.
+		return true
 	case strings.Contains(err.Error(), errRestoreProposal):
-		// Do not try to recover from errors when sending the proposal.
+		// Do not try to recover from other errors when sending the proposal.
 		return false
 	default:
 		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
@@ -119,7 +122,7 @@ func retriableRestoreError(err error) bool {
 	}
 }
 
-func retryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
 	var err error
 	for i := 0; i < 10; i++ {
 		err = proposeRestoreOrSend(ctx, req)
