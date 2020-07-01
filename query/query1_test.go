@@ -1115,7 +1115,7 @@ func TestUidInFunction4(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			description: "query inside with sorted input UIDs",
+			description: "query inside root with sorted input UIDs",
 			query: `{
 				me(func: uid(1, 23, 24 )) {
 					friend @filter(uid_in(school, [5000, 5001])) {
@@ -1127,7 +1127,7 @@ func TestUidInFunction4(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			description: "query inside with unsorted UIDs and absent UIDs",
+			description: "query inside root with unsorted and absent UIDs",
 			query: `{
 				me(func: uid(1, 23, 24 )) {
 					friend @filter(uid_in(school, [5001, 500])) {
@@ -1139,7 +1139,7 @@ func TestUidInFunction4(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			description: "query with uid variable where school uid for <31> is <5001> and <25> is <5000>",
+			description: "query inside root with nested uid variable uid variable which resolves to two uids",
 			query: `{
 				q(func: uid( 31, 25)){
 					schoolsVar as school
@@ -1154,7 +1154,7 @@ func TestUidInFunction4(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			description: "query with uid variable where school uid for <31> is <5001>",
+			description: "query inside root with nested uid variable which resolves to one uids",
 			query: `{
 				q(func: uid(31)){
 					schoolsVar as school
@@ -1176,66 +1176,22 @@ func TestUidInFunction4(t *testing.T) {
 		})
 	}
 }
-func TestUidInWithErrors(t *testing.T) {
-	tcases := []struct {
-		description string
-		query       string
-		expectedErr error
-	}{
-		{
-			description: "query with nested uid without variable",
-			query: `{
-				me(func: uid(1, 23, 24 )) {
-					friend @filter(uid_in(school, uid(5000))) {
-						name
-					}
-				}
-			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 3 column 38: Nested uid fn expects 1 uid variable, got 0"),
-		},
-		{
-			description: "query with nested uid with variable and constant",
-			query: `{
-				uidVar as q(func: uid( 5000))
-				me(func: uid(1, 23, 24 )) {
-					friend @filter(uid_in(school, uid(uidVar, 5001))) {
-						name
-					}
-				}
-			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 4 column 38: Nested uid fn expects only uid variable, got UID"),
-		},
-		{
-			description: "query with nested uid with two variables",
-			query: `{
-				uidVar1 as q(func: uid( 5000))
-				uidVar2 as q(func: uid( 5000))
-				me(func: uid(1, 23, 24 )) {
-					friend @filter(uid_in(school, uid(uidVar1, uidVar2))) {
-						name
-					}
-				}
-			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 5 column 38: Nested uid fn expects 1 uid variable, got 2"),
-		},
-		{
-			description: "query with nested uid with gql variable",
-			query: `query queryWithGQL($schoolUID: string = "5001"){
-				me(func: uid(1, 23, 24 )){
-					friend @filter(uid_in(school, uid( $schoolUID))) {
-						name
-					}
-				}
-			}`,
-			expectedErr: errors.New("rpc error: code = Unknown desc = line 3 column 38: Nested uid fn expects 1 uid variable, got 0"),
-		},
-	}
-	for _, test := range tcases {
-		t.Run(test.description, func(t *testing.T) {
-			_, err := processQuery(context.Background(), t, test.query)
-			require.EqualError(t, err, test.expectedErr.Error())
-		})
-	}
+
+func TestUidInFunctionWithError(t *testing.T) {
+	//query inside root with nested uid variable which resolves to zero uids
+	query := `{
+		q(func: uid(40)){
+			schoolsVar as school
+		}
+		me(func: uid(1, 23, 24 )){
+			friend @filter(uid_in(school, uid(schoolsVar))) {
+				name
+			}
+		}
+	}`
+	expectedErr := errors.New("rpc error: code = Unknown desc = : Function 'uid_in' requires atleast 1 argument, but got 0 ([])")
+	_, err := processQuery(context.Background(), t, query)
+	require.EqualError(t, err, expectedErr.Error())
 }
 func TestUidInFunctionAtRoot(t *testing.T) {
 	tcases := []struct {
