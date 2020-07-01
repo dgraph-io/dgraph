@@ -245,7 +245,6 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 				  url: "http://mock:8888/validatesecrettoken"
 				  method: "POST"
 				  forwardHeaders: ["Content-Type"]
-				  secretHeaders: ["GITHUB-API-TOKEN"]
 				  introspectionHeaders: ["GITHUB-API-TOKEN"]
 				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
 				}

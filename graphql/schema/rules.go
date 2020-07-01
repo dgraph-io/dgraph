@@ -1698,9 +1698,9 @@ func customDirectiveValidation(sch *ast.Schema,
 				val, ok := secrets[key[1]]
 				if !ok {
 					return append(errs, gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value"+
+						"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file."+
 							", found: `%s`.",
-						typ.Name, field.Name, h.Value.Raw))
+						typ.Name, field.Name, key[1], h.Value.Raw))
 				}
 				headers.Add(key[0], string(val))
 			}
