@@ -45,8 +45,12 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 )
 
+type resolveCtxKey string
+
 const (
 	methodResolve = "RequestResolver.Resolve"
+
+	resolveStartTime resolveCtxKey = "resolveStartTime"
 
 	resolverFailed    = false
 	resolverSucceeded = true
@@ -379,12 +383,26 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
+	startTime := time.Now()
+	resp := &schema.Response{
+		Extensions: &schema.Extensions{
+			Tracing: &schema.Trace{
+				Version:   1,
+				StartTime: startTime.Format(time.RFC3339Nano),
+			},
+		},
+	}
+	defer func() {
+		endTime := time.Now()
+		resp.Extensions.Tracing.EndTime = endTime.Format(time.RFC3339Nano)
+		resp.Extensions.Tracing.Duration = endTime.Sub(startTime).Nanoseconds()
+	}()
+	ctx = context.WithValue(ctx, resolveStartTime, startTime)
+
 	op, err := r.schema.Operation(gqlReq)
 	if err != nil {
 		return schema.ErrorResponse(err)
 	}
-
-	resp := &schema.Response{}
 
 	if glog.V(3) {
 		// don't log the introspection queries they are sent too frequently
@@ -418,7 +436,8 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 						allResolved[storeAt] = &Resolved{
 							Data:  nil,
 							Field: q,
-							Err:   err}
+							Err:   err,
+						}
 					})
 
 				allResolved[storeAt] = r.resolvers.queryResolverFor(q).Resolve(ctx, q)
@@ -432,6 +451,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 			// Errors and data in the same response is valid.  Both WithError and
 			// AddData handle nil cases.
 			addResult(resp, res)
+
 		}
 	}
 	// A single request can contain either queries or mutations - not both.
@@ -480,7 +500,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
-	return errors.New("Subscriptions are not supported")
 	op, err := r.schema.Operation(req)
 	if err != nil {
 		return err
@@ -1819,4 +1838,10 @@ func EmptyResult(f schema.Field, err error) *Resolved {
 		Field: f,
 		Err:   schema.GQLWrapLocationf(err, f.Location(), "resolving %s failed", f.Name()),
 	}
+}
+
+func newtimer(ctx context.Context, Duration *schema.OffsetDuration) schema.OffsetTimer {
+	resolveStartTime, _ := ctx.Value(resolveStartTime).(time.Time)
+	tf := schema.NewOffsetTimerFactory(resolveStartTime)
+	return tf.NewOffsetTimer(Duration)
 }

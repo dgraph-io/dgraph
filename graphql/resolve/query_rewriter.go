@@ -376,6 +376,11 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	return dgQuery
 }
 
+func (authRw *authRewriter) writingAuth() bool {
+	return authRw != nil && authRw.isWritingAuth
+
+}
+
 // addAuthQueries takes a field and the GraphQuery that has so far been constructed for
 // the field and builds any auth queries that are need to restrict the result to only
 // the nodes authorized to be queried, returning a new graphQuery that does the
@@ -539,7 +544,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
-		r1.Cascade = true
+		r1.Cascade = append(r1.Cascade, "__all__")
 
 		return []*gql.GraphQuery{r1}, &gql.FilterTree{
 			Func: &gql.Function{
@@ -596,10 +601,24 @@ func addSelectionSetFrom(
 	// Only add dgraph.type as a child if this field is an interface type and has some children.
 	// dgraph.type would later be used in completeObject as different objects in the resulting
 	// JSON would return different fields based on their concrete type.
-	if field.InterfaceType() && len(field.SelectionSet()) > 0 {
-		q.Children = append(q.Children, &gql.GraphQuery{
-			Attr: "dgraph.type",
-		})
+	selSet := field.SelectionSet()
+	if len(selSet) > 0 {
+		if field.InterfaceType() {
+			q.Children = append(q.Children, &gql.GraphQuery{
+				Attr: "dgraph.type",
+			})
+
+		} else if !auth.writingAuth() &&
+			len(selSet) == 1 &&
+			selSet[0].Name() == schema.Typename {
+			q.Children = append(q.Children, &gql.GraphQuery{
+				//we don't need this for auth queries because they are added by us used for internal purposes.
+				// Querying it for them would just add an overhead which we can avoid.
+				Attr:  "uid",
+				Alias: "dgraph.uid",
+			})
+		}
+
 	}
 
 	// These fields might not have been requested by the user directly as part of the query but

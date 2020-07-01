@@ -285,6 +285,7 @@ message RestoreRequest {
 	string vault_secretid_file = 12;
 	string vault_path = 13;
 	string vault_field = 14;
+	string vault_format = 15;
 }
 
 message Proposal {
