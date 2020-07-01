@@ -106,12 +106,6 @@ func TestSchemaSubscribe(t *testing.T) {
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 }
 
-func TestOne(t *testing.T) {
-	for i := 0; i < 100; i++ {
-		ConcurrentSchemaUpdates(t)
-	}
-}
-
 // TestConcurrentSchemaUpdates checks that if there are too many concurrent requests to update the
 // GraphQL schema, then the system works as expected by either:
 // 	1. failing the schema update because there is another one in progress, OR
@@ -120,7 +114,7 @@ func TestOne(t *testing.T) {
 //
 // It also makes sure that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
-func ConcurrentSchemaUpdates(t *testing.T) {
+func TestConcurrentSchemaUpdates(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
