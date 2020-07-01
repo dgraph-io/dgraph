@@ -78,6 +78,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -328,15 +329,3 @@ type Mutation {
 	deleteDirector(filter: DirectorFilter!): DeleteDirectorPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getMovie(id: ID!): Movie
-	queryMovie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
-	getOscarMovie(id: ID!): OscarMovie
-	queryOscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
-	getDirector(id: ID!): Director
-	queryDirector(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
-}

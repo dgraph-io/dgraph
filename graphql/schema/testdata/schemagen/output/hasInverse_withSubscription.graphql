@@ -3,21 +3,13 @@
 #######################
 
 type Post {
-	postID: ID
-	content: String!
-	author(filter: AuthorFilter): Author!
-	genre(filter: GenreFilter): Genre
+	id: ID!
+	author(filter: AuthorFilter): Author! @hasInverse(field: "posts")
 }
 
-type Author {
-	id: ID
-	name: String! @id @search(by: [regexp])
-	pen_name: String
-	posts(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-}
-
-type Genre {
-	name: String! @id
+type Author @withSubscription {
+	id: ID!
+	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
 }
 
 #######################
@@ -143,63 +135,33 @@ input StringHashFilter {
 #######################
 
 type AddAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	numUids: Int
-}
-
-type AddGenrePayload {
-	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
 	numUids: Int
 }
 
 type AddPostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
 	numUids: Int
 }
 
 type DeleteAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	msg: String
-	numUids: Int
-}
-
-type DeleteGenrePayload {
-	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 	msg: String
 	numUids: Int
 }
 
 type DeletePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
 
 type UpdateAuthorPayload {
-	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
 	numUids: Int
 }
 
 type UpdatePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
 	numUids: Int
-}
-
-#######################
-# Generated Enums
-#######################
-
-enum AuthorOrderable {
-	name
-	pen_name
-}
-
-enum GenreOrderable {
-	name
-}
-
-enum PostOrderable {
-	content
 }
 
 #######################
@@ -207,91 +169,39 @@ enum PostOrderable {
 #######################
 
 input AddAuthorInput {
-	name: String!
-	pen_name: String
-	posts: [PostRef]
-}
-
-input AddGenreInput {
-	name: String!
+	posts: [PostRef!]!
 }
 
 input AddPostInput {
-	content: String!
 	author: AuthorRef!
-	genre: GenreRef
 }
 
 input AuthorFilter {
 	id: [ID!]
-	name: StringHashFilter_StringRegExpFilter
-	and: AuthorFilter
-	or: AuthorFilter
 	not: AuthorFilter
 }
 
-input AuthorOrder {
-	asc: AuthorOrderable
-	desc: AuthorOrderable
-	then: AuthorOrder
-}
-
 input AuthorPatch {
-	pen_name: String
-	posts: [PostRef]
+	posts: [PostRef!]
 }
 
 input AuthorRef {
 	id: ID
-	name: String
-	pen_name: String
-	posts: [PostRef]
-}
-
-input GenreFilter {
-	name: StringHashFilter
-	and: GenreFilter
-	or: GenreFilter
-	not: GenreFilter
-}
-
-input GenreOrder {
-	asc: GenreOrderable
-	desc: GenreOrderable
-	then: GenreOrder
-}
-
-input GenreRef {
-	name: String!
+	posts: [PostRef!]
 }
 
 input PostFilter {
-	postID: [ID!]
+	id: [ID!]
 	not: PostFilter
 }
 
-input PostOrder {
-	asc: PostOrderable
-	desc: PostOrderable
-	then: PostOrder
-}
-
 input PostPatch {
-	content: String
 	author: AuthorRef
-	genre: GenreRef
 }
 
 input PostRef {
-	postID: ID
-	content: String
+	id: ID
 	author: AuthorRef
-	genre: GenreRef
-}
-
-input StringHashFilter_StringRegExpFilter {
-	eq: String
-	regexp: String
 }
 
 input UpdateAuthorInput {
@@ -311,12 +221,10 @@ input UpdatePostInput {
 #######################
 
 type Query {
-	getPost(postID: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID, name: String): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	getGenre(name: String!): Genre
-	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, first: Int, offset: Int): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
 }
 
 #######################
@@ -330,7 +238,13 @@ type Mutation {
 	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
 	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
 	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
-	addGenre(input: [AddGenreInput!]!): AddGenrePayload
-	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
+}

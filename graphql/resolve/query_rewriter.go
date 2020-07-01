@@ -544,7 +544,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
-		r1.Cascade = true
+		r1.Cascade = append(r1.Cascade, "__all__")
 
 		return []*gql.GraphQuery{r1}, &gql.FilterTree{
 			Func: &gql.Function{
