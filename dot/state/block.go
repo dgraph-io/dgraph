@@ -64,9 +64,12 @@ type BlockState struct {
 	lock               sync.RWMutex
 	genesisHash        common.Hash
 	highestBlockHeader *types.Header
-	hashNotifier       chan<- common.Hash
-	blockNotifier      chan<- *types.Block
-	doneNotifying      <-chan struct{}
+
+	// block notifiers
+	imported      map[byte]chan<- *types.Block
+	finalized     map[byte]chan<- *types.Header
+	importedLock  sync.RWMutex
+	finalizedLock sync.RWMutex
 }
 
 // NewBlockDB instantiates a badgerDB instance for storing relevant BlockData
@@ -83,8 +86,10 @@ func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, e
 	}
 
 	bs := &BlockState{
-		bt: bt,
-		db: NewBlockDB(db),
+		bt:        bt,
+		db:        NewBlockDB(db),
+		imported:  make(map[byte]chan<- *types.Block),
+		finalized: make(map[byte]chan<- *types.Header),
 	}
 
 	bs.genesisHash = bt.GenesisHash()
@@ -102,8 +107,10 @@ func NewBlockState(db chaindb.Database, bt *blocktree.BlockTree) (*BlockState, e
 // NewBlockStateFromGenesis initializes a BlockState from a genesis header, saving it to the database located at basePath
 func NewBlockStateFromGenesis(db chaindb.Database, header *types.Header) (*BlockState, error) {
 	bs := &BlockState{
-		bt: blocktree.NewBlockTreeFromGenesis(header, db),
-		db: NewBlockDB(db),
+		bt:        blocktree.NewBlockTreeFromGenesis(header, db),
+		db:        NewBlockDB(db),
+		imported:  make(map[byte]chan<- *types.Block),
+		finalized: make(map[byte]chan<- *types.Header),
 	}
 
 	err := bs.setArrivalTime(header.Hash(), uint64(time.Now().Unix()))
@@ -340,6 +347,7 @@ func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
 
 // SetFinalizedHash sets the latest finalized block header
 func (bs *BlockState) SetFinalizedHash(hash common.Hash, round uint64) error {
+	go bs.notifyFinalized(hash)
 	return bs.db.Put(finalizedHashKey(round), hash[:])
 }
 
@@ -449,22 +457,7 @@ func (bs *BlockState) AddBlockWithArrivalTime(block *types.Block, arrivalTime ui
 		return err
 	}
 
-	if bs.blockNotifier != nil {
-		select {
-		case <-bs.doneNotifying:
-			close(bs.blockNotifier)
-			bs.blockNotifier = nil
-		default:
-			bs.blockNotifier <- block
-		}
-	}
-
-	if bs.hashNotifier != nil {
-		go func(hash common.Hash) {
-			bs.hashNotifier <- hash
-		}(hash)
-	}
-
+	go bs.notifyImported(block)
 	return err
 }
 
@@ -651,15 +644,4 @@ func (bs *BlockState) SetBabeHeader(epoch uint64, slot uint64, bh *types.BabeHea
 	enc := bh.Encode()
 
 	return bs.db.Put(babeHeaderKey(epoch, slot), enc)
-}
-
-// SetBlockAddedChannel to sets channel that blocks will be received on
-func (bs *BlockState) SetBlockAddedChannel(rcvr chan<- *types.Block, done <-chan struct{}) {
-	bs.blockNotifier = rcvr
-	bs.doneNotifying = done
-}
-
-// SetHashChannel sets the write channel for new block hashes added to the blocktree
-func (bs *BlockState) SetHashChannel(h chan<- common.Hash) {
-	bs.hashNotifier = h
 }

@@ -19,30 +19,38 @@ package grandpa
 import (
 	"sync"
 
+	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 )
 
 // tracker keeps track of messages that have been received that have failed to validate with ErrBlockDoesNotExist
 // these messages may be needed again in the case that we are slightly out of sync with the rest of the network
 type tracker struct {
-	messages map[common.Hash][]*VoteMessage // map of vote block hash -> array of VoteMessages for that hash
-	mapLock  *sync.Mutex
-	in       <-chan common.Hash
-	out      chan<- FinalityMessage // send a VoteMessage back to grandpa. corresponds to grandpa's in channel
-	stopped  bool
+	blockState BlockState
+	messages   map[common.Hash][]*VoteMessage // map of vote block hash -> array of VoteMessages for that hash
+	mapLock    *sync.Mutex
+	in         chan *types.Block      // receive imported block from BlockState
+	chanID     byte                   // BlockState channel ID
+	out        chan<- FinalityMessage // send a VoteMessage back to grandpa. corresponds to grandpa's in channel
+	stopped    bool
 }
 
-func newTracker(bs BlockState, out chan<- FinalityMessage) *tracker {
-	in := make(chan common.Hash)
-	bs.SetHashChannel(in)
+func newTracker(bs BlockState, out chan<- FinalityMessage) (*tracker, error) {
+	in := make(chan *types.Block)
+	id, err := bs.RegisterImportedChannel(in)
+	if err != nil {
+		return nil, err
+	}
 
 	return &tracker{
-		messages: make(map[common.Hash][]*VoteMessage),
-		mapLock:  &sync.Mutex{},
-		in:       in,
-		out:      out,
-		stopped:  true,
-	}
+		blockState: bs,
+		messages:   make(map[common.Hash][]*VoteMessage),
+		mapLock:    &sync.Mutex{},
+		in:         in,
+		chanID:     id,
+		out:        out,
+		stopped:    true,
+	}, nil
 }
 
 func (t *tracker) start() {
@@ -51,7 +59,8 @@ func (t *tracker) start() {
 }
 
 func (t *tracker) stop() {
-	// close channel
+	t.blockState.UnregisterImportedChannel(t.chanID)
+	close(t.in)
 	t.stopped = true
 }
 
@@ -62,13 +71,14 @@ func (t *tracker) add(v *VoteMessage) {
 }
 
 func (t *tracker) handleBlocks() {
-	for h := range t.in {
+	for b := range t.in {
 		if t.stopped {
 			return
 		}
 
 		t.mapLock.Lock()
 
+		h := b.Header.Hash()
 		if t.messages[h] != nil {
 			for _, v := range t.messages[h] {
 				t.out <- v

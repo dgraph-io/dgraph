@@ -35,7 +35,8 @@ func TestMessageTracker_ValidateMessage(t *testing.T) {
 
 	gs, _, _, _ := setupGrandpa(t, kr.Bob)
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
-	gs.tracker = newTracker(gs.blockState, gs.in)
+	gs.tracker, err = newTracker(gs.blockState, gs.in)
+	require.NoError(t, err)
 	gs.tracker.start()
 
 	fake := &types.Header{
@@ -56,7 +57,8 @@ func TestMessageTracker_SendMessage(t *testing.T) {
 
 	gs, in, _, _ := setupGrandpa(t, kr.Bob)
 	state.AddBlocksToState(t, gs.blockState.(*state.BlockState), 3)
-	gs.tracker = newTracker(gs.blockState, gs.in)
+	gs.tracker, err = newTracker(gs.blockState, gs.in)
+	require.NoError(t, err)
 	gs.tracker.start()
 
 	parent, err := gs.blockState.BestBlockHeader()

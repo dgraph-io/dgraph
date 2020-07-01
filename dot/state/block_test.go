@@ -28,6 +28,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var testGenesisHeader = &types.Header{
+	Number:    big.NewInt(0),
+	StateRoot: trie.EmptyHash,
+}
+
 func newTestBlockState(t *testing.T, header *types.Header) *BlockState {
 	db := chaindb.NewMemDatabase()
 	blockDb := NewBlockDB(db)
@@ -78,14 +83,10 @@ func TestHasHeader(t *testing.T) {
 }
 
 func TestGetBlockByNumber(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number: big.NewInt(0),
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 
 	blockHeader := &types.Header{
-		ParentHash: genesisHeader.Hash(),
+		ParentHash: testGenesisHeader.Hash(),
 		Number:     big.NewInt(1),
 		Digest:     [][]byte{},
 	}
@@ -105,17 +106,13 @@ func TestGetBlockByNumber(t *testing.T) {
 }
 
 func TestAddBlock(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number: big.NewInt(0),
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 
 	// Create header
 	header0 := &types.Header{
 		Number:     big.NewInt(0),
 		Digest:     [][]byte{},
-		ParentHash: genesisHeader.Hash(),
+		ParentHash: testGenesisHeader.Hash(),
 	}
 	// Create blockHash
 	blockHash0 := header0.Hash()
@@ -178,12 +175,7 @@ func TestAddBlock(t *testing.T) {
 }
 
 func TestGetSlotForBlock(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 
 	preDigest, err := common.HexToBytes("0x064241424538e93dcef2efc275b72b4fa748332dc4c9f13be1125909cf90c8e9109c45da16b04bc5fdf9fe06a4f35e4ae4ed7e251ff9ee3d0d840c8237c9fb9057442dbf00f210d697a7b4959f792a81b948ff88937e30bf9709a8ab1314f71284da89a40000000000000000001100000000000000")
 	require.NoError(t, err)
@@ -192,7 +184,7 @@ func TestGetSlotForBlock(t *testing.T) {
 
 	block := &types.Block{
 		Header: &types.Header{
-			ParentHash: genesisHeader.Hash(),
+			ParentHash: testGenesisHeader.Hash(),
 			Number:     big.NewInt(int64(1)),
 			Digest:     [][]byte{preDigest},
 		},
@@ -208,12 +200,7 @@ func TestGetSlotForBlock(t *testing.T) {
 }
 
 func TestIsBlockOnCurrentChain(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 	currChain, branchChains := AddBlocksToState(t, bs, 8)
 
 	for _, header := range currChain {
@@ -236,12 +223,7 @@ func TestIsBlockOnCurrentChain(t *testing.T) {
 }
 
 func TestAddBlock_BlockNumberToHash(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 	currChain, branchChains := AddBlocksToState(t, bs, 8)
 
 	bestHash := bs.BestBlockHash()
@@ -287,15 +269,10 @@ func TestAddBlock_BlockNumberToHash(t *testing.T) {
 }
 
 func TestFinalizedHash(t *testing.T) {
-	genesisHeader := &types.Header{
-		Number:    big.NewInt(0),
-		StateRoot: trie.EmptyHash,
-	}
-
-	bs := newTestBlockState(t, genesisHeader)
+	bs := newTestBlockState(t, testGenesisHeader)
 	h, err := bs.GetFinalizedHash(0)
 	require.NoError(t, err)
-	require.Equal(t, genesisHeader.Hash(), h)
+	require.Equal(t, testGenesisHeader.Hash(), h)
 
 	testhash := common.Hash{1, 2, 3, 4}
 	err = bs.SetFinalizedHash(testhash, 1)

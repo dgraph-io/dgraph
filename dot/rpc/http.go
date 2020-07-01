@@ -35,28 +35,28 @@ type HTTPServer struct {
 	logger       log.Logger
 	rpcServer    *rpc.Server // Actual RPC call handler
 	serverConfig *HTTPServerConfig
+	blockChan    chan *types.Block
+	chanID       byte // channel ID
 }
 
 // HTTPServerConfig configures the HTTPServer
 type HTTPServerConfig struct {
-	LogLvl                 log.Lvl
-	BlockAPI               modules.BlockAPI
-	StorageAPI             modules.StorageAPI
-	NetworkAPI             modules.NetworkAPI
-	CoreAPI                modules.CoreAPI
-	BlockProducerAPI       modules.BlockProducerAPI
-	RuntimeAPI             modules.RuntimeAPI
-	TransactionQueueAPI    modules.TransactionQueueAPI
-	RPCAPI                 modules.RPCAPI
-	SystemAPI              modules.SystemAPI
-	Host                   string
-	RPCPort                uint32
-	WSEnabled              bool
-	WSPort                 uint32
-	Modules                []string
-	WSSubscriptions        map[uint32]*WebSocketSubscription
-	BlockAddedReceiver     chan *types.Block
-	BlockAddedReceiverDone chan struct{}
+	LogLvl              log.Lvl
+	BlockAPI            modules.BlockAPI
+	StorageAPI          modules.StorageAPI
+	NetworkAPI          modules.NetworkAPI
+	CoreAPI             modules.CoreAPI
+	BlockProducerAPI    modules.BlockProducerAPI
+	RuntimeAPI          modules.RuntimeAPI
+	TransactionQueueAPI modules.TransactionQueueAPI
+	RPCAPI              modules.RPCAPI
+	SystemAPI           modules.SystemAPI
+	Host                string
+	RPCPort             uint32
+	WSEnabled           bool
+	WSPort              uint32
+	Modules             []string
+	WSSubscriptions     map[uint32]*WebSocketSubscription
 }
 
 // WebSocketSubscription holds subscription details
@@ -153,9 +153,12 @@ func (h *HTTPServer) Start() error {
 
 	// init and start block received listener routine
 	if h.serverConfig.BlockAPI != nil {
-		h.serverConfig.BlockAddedReceiver = make(chan *types.Block)
-		h.serverConfig.BlockAddedReceiverDone = make(chan struct{})
-		h.serverConfig.BlockAPI.SetBlockAddedChannel(h.serverConfig.BlockAddedReceiver, h.serverConfig.BlockAddedReceiverDone)
+		var err error
+		h.blockChan = make(chan *types.Block)
+		h.chanID, err = h.serverConfig.BlockAPI.RegisterImportedChannel(h.blockChan)
+		if err != nil {
+			return err
+		}
 		go h.blockReceivedListener()
 	}
 
@@ -165,7 +168,8 @@ func (h *HTTPServer) Start() error {
 // Stop stops the server
 func (h *HTTPServer) Stop() error {
 	if h.serverConfig.WSEnabled {
-		close(h.serverConfig.BlockAddedReceiverDone) // notify sender we're done receiving so it can close
+		h.serverConfig.BlockAPI.UnregisterImportedChannel(h.chanID)
+		close(h.blockChan)
 	}
 	return nil
 }

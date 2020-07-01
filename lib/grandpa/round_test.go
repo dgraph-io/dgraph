@@ -335,6 +335,7 @@ func TestPlayGrandpaRound_VaryingChain(t *testing.T) {
 	wg.Wait()
 
 	for _, fb := range finalized {
+		require.NotNil(t, fb)
 		require.GreaterOrEqual(t, len(fb.Justification), len(kr.Keys)/2)
 		finalized[0].Justification = []*Justification{}
 		fb.Justification = []*Justification{}

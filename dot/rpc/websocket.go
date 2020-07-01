@@ -212,7 +212,7 @@ func (h *HTTPServer) blockReceivedListener() {
 		return
 	}
 
-	for block := range h.serverConfig.BlockAddedReceiver {
+	for block := range h.blockChan {
 		if block != nil {
 			for i, sub := range h.serverConfig.WSSubscriptions {
 				if sub.SubscriptionType == SUB_NEW_HEAD {

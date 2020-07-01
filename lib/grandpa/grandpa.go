@@ -205,6 +205,7 @@ func (s *Service) initiate() error {
 		s.tracker.stop()
 	}
 
+	var err error
 	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
 	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
 	s.pvJustifications = []*Justification{}
@@ -212,7 +213,10 @@ func (s *Service) initiate() error {
 	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.justification = make(map[uint64][]*Justification)
-	s.tracker = newTracker(s.blockState, s.in)
+	s.tracker, err = newTracker(s.blockState, s.in)
+	if err != nil {
+		return err
+	}
 	s.tracker.start()
 	log.Trace("[grandpa] started message tracker")
 
