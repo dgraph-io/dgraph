@@ -33,10 +33,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
+func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) []*types.Header {
 	previousHash := blockState.BestBlockHash()
 	previousNum, err := blockState.BestBlockNumber()
 	require.Nil(t, err)
+
+	headers := []*types.Header{}
 
 	for i := 1; i <= depth; i++ {
 		block := &types.Block{
@@ -52,7 +54,10 @@ func addTestBlocksToState(t *testing.T, depth int, blockState BlockState) {
 
 		err := blockState.AddBlock(block)
 		require.Nil(t, err)
+		headers = append(headers, block.Header)
 	}
+
+	return headers
 }
 
 func TestStartService(t *testing.T) {

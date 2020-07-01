@@ -54,7 +54,9 @@ func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *digestHandl
 	}
 
 	time.Sleep(time.Second)
-	return newDigestHandler(stateSrvc.Block, bp, fg)
+	dh, err := newDigestHandler(stateSrvc.Block, bp, fg)
+	require.NoError(t, err)
+	return dh
 }
 
 func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
@@ -83,12 +85,20 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 	err = handler.handleConsensusDigest(d)
 	require.NoError(t, err)
 
-	addTestBlocksToState(t, 2, handler.blockState)
+	headers := addTestBlocksToState(t, 2, handler.blockState)
+	for _, h := range headers {
+		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+	}
+
 	auths := handler.grandpa.Authorities()
 	require.Nil(t, auths)
 
 	// authorities should change on start of block 3 from start
-	addTestBlocksToState(t, 1, handler.blockState)
+	headers = addTestBlocksToState(t, 1, handler.blockState)
+	for _, h := range headers {
+		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+	}
+
 	time.Sleep(time.Millisecond * 100)
 	auths = handler.grandpa.Authorities()
 	require.Equal(t, 1, len(auths))
@@ -209,7 +219,11 @@ func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 	err = handler.handleConsensusDigest(d)
 	require.NoError(t, err)
 
-	addTestBlocksToState(t, 3, handler.blockState)
+	headers := addTestBlocksToState(t, 3, handler.blockState)
+	for _, h := range headers {
+		handler.blockState.SetFinalizedHash(h.Hash(), 0)
+	}
+
 	time.Sleep(time.Millisecond * 100)
 	auths := handler.grandpa.Authorities()
 	require.Equal(t, 0, len(auths))

@@ -19,7 +19,6 @@ package core
 import (
 	"errors"
 	"math/big"
-	"time"
 
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/scale"
@@ -30,6 +29,12 @@ type digestHandler struct {
 	blockState BlockState
 	grandpa    FinalityGadget
 	babe       BlockProducer
+
+	// block notification channels
+	imported    chan *types.Block
+	importedID  byte
+	finalized   chan *types.Header
+	finalizedID byte
 
 	// state variables
 	stopped bool
@@ -66,67 +71,96 @@ type resume struct {
 	atBlock *big.Int
 }
 
-func newDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget) *digestHandler {
-	return &digestHandler{
-		blockState: blockState,
-		grandpa:    grandpa,
-		babe:       babe,
-		stopped:    true,
+func newDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget) (*digestHandler, error) {
+	imported := make(chan *types.Block)
+	finalized := make(chan *types.Header)
+	iid, err := blockState.RegisterImportedChannel(imported)
+	if err != nil {
+		return nil, err
 	}
+
+	fid, err := blockState.RegisterFinalizedChannel(finalized)
+	if err != nil {
+		return nil, err
+	}
+
+	return &digestHandler{
+		blockState:  blockState,
+		grandpa:     grandpa,
+		babe:        babe,
+		stopped:     true,
+		imported:    imported,
+		importedID:  iid,
+		finalized:   finalized,
+		finalizedID: fid,
+	}, nil
 }
 
 func (h *digestHandler) start() {
-	go h.handleGrandpaChanges()
+	go h.handleBlockImport()
+	go h.handleBlockFinalization()
 	h.stopped = false
 }
 
 func (h *digestHandler) stop() {
 	h.stopped = true
+	h.blockState.UnregisterImportedChannel(h.importedID)
+	h.blockState.UnregisterFinalizedChannel(h.finalizedID)
+	close(h.imported)
+	close(h.finalized)
 }
 
-func (h *digestHandler) handleGrandpaChanges() {
-	for {
+func (h *digestHandler) handleBlockImport() {
+	for block := range h.imported {
 		if h.stopped {
 			return
 		}
 
-		// TODO: update block state to register new channels for added blocks
-		curr, err := h.blockState.BestBlockHeader()
-		if err != nil {
-			continue
-		}
-
-		pause := h.grandpaPause
-		if pause != nil && curr.Number.Cmp(pause.atBlock) == 0 {
-			// save authority data for Resume
-			h.grandpaAuths = h.grandpa.Authorities()
-			h.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{})
-			h.grandpaPause = nil
-			continue
-		}
-
-		resume := h.grandpaResume
-		if resume != nil && curr.Number.Cmp(resume.atBlock) == 0 {
-			h.grandpa.UpdateAuthorities(h.grandpaAuths)
-			h.grandpaResume = nil
-			continue
-		}
-
-		fc := h.grandpaForcedChange
-		if fc != nil && curr.Number.Cmp(fc.atBlock) == 0 {
-			h.grandpa.UpdateAuthorities(fc.auths)
-			h.grandpaForcedChange = nil
-			continue
-		}
-
-		sc := h.grandpaScheduledChange
-		if sc != nil && curr.Number.Cmp(sc.atBlock) == 0 {
-			h.grandpa.UpdateAuthorities(sc.auths)
-			h.grandpaScheduledChange = nil
-		}
-
-		time.Sleep(time.Millisecond * 100)
+		h.handleGrandpaChangesOnImport(block.Header.Number)
 	}
+}
+
+func (h *digestHandler) handleBlockFinalization() {
+	for header := range h.finalized {
+		if h.stopped {
+			return
+		}
+
+		h.handleGrandpaChangesOnFinalization(header.Number)
+	}
+}
+
+func (h *digestHandler) handleGrandpaChangesOnImport(num *big.Int) {
+	resume := h.grandpaResume
+	if resume != nil && num.Cmp(resume.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(h.grandpaAuths)
+		h.grandpaResume = nil
+	}
+
+	fc := h.grandpaForcedChange
+	if fc != nil && num.Cmp(fc.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(fc.auths)
+		h.grandpaForcedChange = nil
+	}
+}
+
+func (h *digestHandler) handleGrandpaChangesOnFinalization(num *big.Int) {
+	pause := h.grandpaPause
+	if pause != nil && num.Cmp(pause.atBlock) == 0 {
+		// save authority data for Resume
+		h.grandpaAuths = h.grandpa.Authorities()
+		h.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{})
+		h.grandpaPause = nil
+	}
+
+	sc := h.grandpaScheduledChange
+	if sc != nil && num.Cmp(sc.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(sc.auths)
+		h.grandpaScheduledChange = nil
+	}
+
+	// if blocks get finalized before forced change takes place, disregard it
+	h.grandpaForcedChange = nil
 }
 
 // handleConsensusDigest is the function used by the syncer to handler a consensus digest

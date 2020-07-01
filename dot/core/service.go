@@ -191,7 +191,10 @@ func NewService(cfg *Config) (*Service, error) {
 
 	var dh *digestHandler
 	if cfg.IsBlockProducer {
-		dh = newDigestHandler(cfg.BlockState, cfg.BlockProducer, cfg.FinalityGadget)
+		dh, err = newDigestHandler(cfg.BlockState, cfg.BlockProducer, cfg.FinalityGadget)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	syncerCfg := &SyncerConfig{

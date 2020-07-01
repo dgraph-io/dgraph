@@ -56,6 +56,10 @@ type BlockState interface {
 	GetFinalizedHeader(uint64) (*types.Header, error)
 	GetFinalizedHash(uint64) (common.Hash, error)
 	SetFinalizedHash(common.Hash, uint64) error
+	RegisterImportedChannel(ch chan<- *types.Block) (byte, error)
+	UnregisterImportedChannel(id byte)
+	RegisterFinalizedChannel(ch chan<- *types.Header) (byte, error)
+	UnregisterFinalizedChannel(id byte)
 }
 
 // StorageState interface for storage state methods
