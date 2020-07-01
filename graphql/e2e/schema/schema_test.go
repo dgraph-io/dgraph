@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dgraph-io/dgo/v200/protos/api"
+
 	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -252,7 +254,7 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	finalGraphQLSchema := tcases[lastSuccessTcaseIdx].graphQLSchema
 
 	// now check that both the final GraphQL schema and Dgraph schema are the ones we expect
-	require.Equal(t, finalGraphQLSchema, getGQLSchema(t, groupOneAdminServer))
+	require.Equal(t, finalGraphQLSchema, getGQLSchemaRequireId(t, groupOneAdminServer))
 	require.JSONEq(t, finalDgraphSchema, getDgraphSchema(t, dg))
 
 	// now check that there is exactly one node for GraphQL schema in Dgraph,
@@ -289,6 +291,10 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
+	// now retrieving the GraphQL schema should report no schema
+	gqlSchema := getGQLSchema(t, groupOneAdminServer)
+	require.Nil(t, gqlSchema)
+
 	// updating the schema now should work
 	schema := `
 			type A {
@@ -296,7 +302,25 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 			}`
 	updateGQLSchemaRequireNoErrors(t, schema, groupOneAdminServer)
 	// we should get the schema we expect
-	require.Equal(t, schema, getGQLSchema(t, groupOneAdminServer))
+	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
+}
+
+// TestGQLSchemaAfterDropData checks whether if the schema still exists after drop_data
+func TestGQLSchemaAfterDropData(t *testing.T) {
+	schema := `
+			type A {
+				b: String!
+			}`
+	updateGQLSchemaRequireNoErrors(t, schema, groupOneAdminServer)
+
+	// now do drop_data
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
+
+	// we should still get the schema we inserted earlier
+	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
+
 }
 
 func updateGQLSchema(t *testing.T, schema, url string) *common.GraphQLResponse {
@@ -328,7 +352,12 @@ func updateGQLSchemaConcurrent(t *testing.T, schema, url string) bool {
 	return res.Errors == nil
 }
 
-func getGQLSchema(t *testing.T, url string) string {
+type gqlSchema struct {
+	Id     string
+	Schema string
+}
+
+func getGQLSchema(t *testing.T, url string) gqlSchema {
 	get := &common.GraphQLParams{
 		Query: `query {
 			getGQLSchema {
@@ -341,15 +370,16 @@ func getGQLSchema(t *testing.T, url string) string {
 	require.Nil(t, getResult.Errors)
 
 	var resp struct {
-		GetGQLSchema struct {
-			Id     string
-			Schema string
-		}
+		GetGQLSchema gqlSchema
 	}
 	require.NoError(t, json.Unmarshal(getResult.Data, &resp))
-	require.NotEmpty(t, resp.GetGQLSchema.Id, "Got empty ID in getGQLSchema")
 
-	return resp.GetGQLSchema.Schema
+	return resp.GetGQLSchema
+}
+
+func getGQLSchemaRequireId(t *testing.T, url string) string {
+	schema := getGQLSchema(t, url)
+	require.NotEmpty(t, schema.Id, "Got empty ID in getGQLSchema")
 }
 
 func getDgraphSchema(t *testing.T, dg *dgo.Dgraph) string {

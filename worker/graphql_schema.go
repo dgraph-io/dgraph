@@ -27,15 +27,22 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	schemaLock                                  sync.Mutex
-	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
-		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
+const (
 	errGraphQLSchemaCommitFailed = "error occurred updating GraphQL schema, please retry"
 	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph" +
 		" schema - this indicates a bug in Dgraph schema generation. Please let us know : " +
 		"https://github.com/dgraph-io/dgraph/issues. " +
 		"Don't forget to post your old and new schemas in the issue description."
+
+	GqlSchemaPred    = "dgraph.graphql.schema"
+	gqlSchemaXidPred = "dgraph.graphql.xid"
+	gqlSchemaXidVal  = "dgraph.graphql.schema"
+)
+
+var (
+	schemaLock                                  sync.Mutex
+	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
+		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
 )
 
@@ -70,7 +77,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
-		Attr:    "dgraph.graphql.schema",
+		Attr:    GqlSchemaPred,
 		SrcFunc: &pb.SrcFunction{Name: "has"},
 		ReadTs:  req.StartTs,
 		// there can only be one GraphQL schema node,
@@ -107,7 +114,7 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 		Edges: []*pb.DirectedEdge{
 			{
 				Entity:    schemaNodeUid,
-				Attr:      "dgraph.graphql.schema",
+				Attr:      GqlSchemaPred,
 				Value:     []byte(req.GraphqlSchema),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
@@ -120,8 +127,8 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 				// directive on xid. So, this way we make sure that even in this rare case there can
 				// only be one server which is able to successfully update the GraphQL schema.
 				Entity:    schemaNodeUid,
-				Attr:      "dgraph.graphql.xid",
-				Value:     []byte("dgraph.graphql.schema"),
+				Attr:      gqlSchemaXidPred,
+				Value:     []byte(gqlSchemaXidVal),
 				ValueType: pb.Posting_STRING,
 				Op:        pb.DirectedEdge_SET,
 			},
