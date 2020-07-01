@@ -470,6 +470,10 @@ func conflictingDirectiveValidation(schema *ast.Schema, typ *ast.Definition) gql
 		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
 			typ.Name, SubscriptionDirective, remoteDirective)}
 	}
+	if hasSubscription && hasAuth {
+		return []*gqlerror.Error{gqlerror.ErrorPosf(typ.Position, `Type %s; cannot have both @%s and @%s directive`,
+			typ.Name, SubscriptionDirective, authDirective)}
+	}
 	return nil
 }
 
