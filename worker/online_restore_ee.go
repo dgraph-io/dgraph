@@ -24,6 +24,7 @@ import (
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/schema"
 
+	"github.com/golang/glog"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
@@ -31,13 +32,13 @@ import (
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
-func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
+func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
 	if req == nil {
-		return errors.Errorf("restore request cannot be nil")
+		return 0, errors.Errorf("restore request cannot be nil")
 	}
 
 	if err := UpdateMembershipState(ctx); err != nil {
-		return errors.Wrapf(err, "cannot update membership state before restore")
+		return 0, errors.Wrapf(err, "cannot update membership state before restore")
 	}
 	memState := GetMembershipState()
 
@@ -53,11 +54,11 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		Anonymous:    req.Anonymous,
 	}
 	if err := VerifyBackup(req.Location, req.BackupId, &creds, currentGroups); err != nil {
-		return errors.Wrapf(err, "failed to verify backup")
+		return 0, errors.Wrapf(err, "failed to verify backup")
 	}
 
 	if err := FillRestoreCredentials(req.Location, req); err != nil {
-		return errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
+		return 0, errors.Wrapf(err, "cannot fill restore proposal with the right credentials")
 	}
 	req.RestoreTs = State.GetTimestamp(false)
 
@@ -73,13 +74,24 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) error {
 		}()
 	}
 
-	for range currentGroups {
-		if err := <-errCh; err != nil {
-			return errors.Wrapf(err, "cannot complete restore proposal")
-		}
+	restoreId, err := rt.Add()
+	if err != nil {
+		return 0, errors.Wrapf(err, "cannot assign ID to restore operation")
 	}
+	go func(restoreId int) {
+		errs := make([]error, 0)
+		for range currentGroups {
+			if err := <-errCh; err != nil {
+				errs = append(errs, err)
+			}
+		}
+		if err := rt.Done(restoreId, errs); err != nil {
+			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
+				restoreId, err)
+		}
+	}(restoreId)
 
-	return nil
+	return restoreId, nil
 }
 
 func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
@@ -288,4 +300,8 @@ func writeBackup(ctx context.Context, req *pb.RestoreRequest) error {
 		return errors.Wrapf(res.Err, "cannot write backup")
 	}
 	return nil
+}
+
+func ProcessRestoreStatus(ctx context.Context, restoreId int) (*RestoreStatus, error) {
+	return rt.Status(restoreId), nil
 }
