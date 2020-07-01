@@ -173,7 +173,7 @@ func (rt *restoreTracker) Done(restoreId int, errs []error) error {
 	defer rt.Unlock()
 
 	if _, ok := rt.status[restoreId]; !ok {
-		return errors.Errorf("unknown restore operation with ID %s", restoreId)
+		return errors.Errorf("unknown restore operation with ID %d", restoreId)
 	}
 
 	validErrs := make([]error, 0)

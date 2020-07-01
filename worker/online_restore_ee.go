@@ -86,7 +86,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 			}
 		}
 		if err := rt.Done(restoreId, errs); err != nil {
-			glog.Warningf("Could not mark restore operation with ID %s as done. Error: %s",
+			glog.Warningf("Could not mark restore operation with ID %d as done. Error: %s",
 				restoreId, err)
 		}
 	}(restoreId)
