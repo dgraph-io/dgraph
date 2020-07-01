@@ -156,9 +156,7 @@ func (rt *restoreTracker) Add() (int, error) {
 	// Cleanup the restore operation with ID equal to this ID - 50. This is a simple
 	// way to prevent the map from growing without bound.
 	oldId := rt.counter - 50
-	if _, ok := rt.status[oldId]; ok {
-		delete(rt.status, oldId)
-	}
+	delete(rt.status, oldId)
 	
 	rt.status[rt.counter] = &RestoreStatus{Status: inProgressStatus, Errors: make([]error, 0)}
 	return rt.counter, nil
