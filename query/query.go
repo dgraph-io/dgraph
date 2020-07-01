@@ -2577,9 +2577,13 @@ func filterUidPredicates(ctx context.Context, preds []string) ([]string, error) 
 func UidsToHex(m map[string]uint64) map[string]string {
 	res := make(map[string]string)
 	for k, v := range m {
-		res[k] = fmt.Sprintf("%#x", v)
+		res[k] = UidToHex(v)
 	}
 	return res
+}
+
+func UidToHex(uid uint64) string {
+	return fmt.Sprintf("%#x", uid)
 }
 
 // Request wraps the state that is used when executing query.
