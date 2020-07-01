@@ -27,9 +27,6 @@ import (
 	"github.com/dgraph-io/dgraph/worker"
 
 	"github.com/dgraph-io/dgo/v200"
-	"github.com/dgraph-io/dgo/v200/protos/api"
-	"google.golang.org/grpc"
-
 	"github.com/dgraph-io/dgraph/graphql/e2e/common"
 	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
@@ -82,7 +79,7 @@ func TestSchemaSubscribe(t *testing.T) {
 	require.Nil(t, introspectionResult.Errors)
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 
-	// Now update schema on an alpha node for group 3 and see nodes in group 1 and 2 also get it.
+	// Now update schema on an alpha node for group 3 and see if nodes in group 1 and 2 also get it.
 	schema = `
 	type Author {
 		id: ID!
@@ -109,6 +106,12 @@ func TestSchemaSubscribe(t *testing.T) {
 	testutil.CompareJSON(t, expectedResult, string(introspectionResult.Data))
 }
 
+func TestOne(t *testing.T) {
+	for i := 0; i < 100; i++ {
+		ConcurrentSchemaUpdates(t)
+	}
+}
+
 // TestConcurrentSchemaUpdates checks that if there are too many concurrent requests to update the
 // GraphQL schema, then the system works as expected by either:
 // 	1. failing the schema update because there is another one in progress, OR
@@ -117,8 +120,9 @@ func TestSchemaSubscribe(t *testing.T) {
 //
 // It also makes sure that only one node exists for GraphQL schema in Dgraph after all the
 // concurrent requests have executed.
-func TestConcurrentSchemaUpdates(t *testing.T) {
-	dg := getNewDgraphClient(t)
+func ConcurrentSchemaUpdates(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
 	tcases := []struct {
@@ -174,8 +178,8 @@ func TestConcurrentSchemaUpdates(t *testing.T) {
 	var lastSuccessReqTimestamp int64 = -1
 	lastSuccessTcaseIdx := -1
 
-	var mux sync.Mutex
-	var wg sync.WaitGroup
+	mux := sync.Mutex{}
+	wg := sync.WaitGroup{}
 
 	// send too many concurrent schema update requests to different servers
 	for i := 0; i < numRequests; i++ {
@@ -287,10 +291,11 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 			}`, groupOneAdminServer)
 
 	// now do drop_all
-	dg := getNewDgraphClient(t)
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
-	// updating the now should work
+	// updating the schema now should work
 	schema := `
 			type A {
 				b: String! @id
@@ -351,13 +356,6 @@ func getGQLSchema(t *testing.T, url string) string {
 	require.NotEmpty(t, resp.GetGQLSchema.Id, "Got empty ID in getGQLSchema")
 
 	return resp.GetGQLSchema.Schema
-}
-
-func getNewDgraphClient(t *testing.T) *dgo.Dgraph {
-	cc, err := grpc.Dial(groupOnegRPC, grpc.WithInsecure())
-	require.NoError(t, err)
-
-	return dgo.NewDgraphClient(api.NewDgraphClient(cc))
 }
 
 func getDgraphSchema(t *testing.T, dg *dgo.Dgraph) string {

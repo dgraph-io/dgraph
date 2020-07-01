@@ -640,9 +640,9 @@ message BackupPostingList {
 }
 
 message UpdateGraphQLSchemaRequest {
-	uint64                startTs        = 1;
+	uint64                start_ts       = 1;
 	string                graphql_schema = 2;
-	repeated SchemaUpdate dgraph_schema  = 3;
+	repeated SchemaUpdate dgraph_preds   = 3;
 	repeated TypeUpdate   dgraph_types   = 4;
 }
 

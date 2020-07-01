@@ -127,6 +127,10 @@ func PeriodicallyPostTelemetry() {
 	}
 }
 
+// UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
+// It first validates and parses the dgraphSchema given in input. If that fails,
+// it returns an error. All this is done on the alpha on which the update request is received.
+// Then it sends an update request to the worker, which is executed only on Group-1 leader.
 func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	dgraphSchema string) (*pb.UpdateGraphQLSchemaResponse, error) {
 	var err error
@@ -146,11 +150,12 @@ func UpdateGQLSchema(ctx context.Context, gqlSchema,
 	return worker.UpdateGQLSchemaOverNetwork(ctx, &pb.UpdateGraphQLSchemaRequest{
 		StartTs:       worker.State.GetTimestamp(false),
 		GraphqlSchema: gqlSchema,
-		DgraphSchema:  parsedDgraphSchema.Preds,
+		DgraphPreds:   parsedDgraphSchema.Preds,
 		DgraphTypes:   parsedDgraphSchema.Types,
 	})
 }
 
+// validateAlterOperation validates the given operation for alter.
 func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	// The following code block checks if the operation should run or not.
 	if op.Schema == "" && op.DropAttr == "" && !op.DropAll && op.DropOp == api.Operation_NONE {
@@ -182,6 +187,8 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	return nil
 }
 
+// parseSchemaFromAlterOperation parses the string schema given in input operation to a Go
+// struct, and performs some checks to make sure that the schema is valid.
 func parseSchemaFromAlterOperation(op *api.Operation) (*schema.ParsedSchema, error) {
 	// If a background task is already running, we should reject all the new alter requests.
 	if schema.State().IndexingInProgress() {
@@ -350,7 +357,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 	// wait for indexing to complete or context to be canceled.
 	if err = worker.WaitForIndexingOrCtxError(ctx, !op.RunInBackground); err != nil {
-		return empty, ctx.Err()
+		return empty, err
 	}
 
 	return empty, nil

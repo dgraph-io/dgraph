@@ -28,8 +28,8 @@ import (
 )
 
 var (
-	schemaLock                                sync.Mutex
-	errUpdatingGraphQLSchemaOnNonGroup1Leader = errors.New(
+	schemaLock                                  sync.Mutex
+	errUpdatingGraphQLSchemaOnNonGroupOneLeader = errors.New(
 		"while updating GraphQL schema: this server isn't group-1 leader, please retry")
 	errGraphQLSchemaCommitFailed = "error occurred updating GraphQL schema, please retry"
 	ErrGraphQLSchemaAlterFailed  = "succeeded in saving GraphQL schema but failed to alter Dgraph" +
@@ -39,9 +39,10 @@ var (
 	ErrMultipleGraphQLSchemaNodes = errors.New("found multiple nodes for GraphQL schema")
 )
 
+// UpdateGQLSchemaOverNetwork sends the request to the group one leader for execution.
 func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchemaRequest) (*pb.
 	UpdateGraphQLSchemaResponse, error) {
-	if isGroup1Leader() {
+	if isGroupOneLeader() {
 		return (&grpcWorker{}).UpdateGraphQLSchema(ctx, req)
 	}
 
@@ -55,17 +56,18 @@ func UpdateGQLSchemaOverNetwork(ctx context.Context, req *pb.UpdateGraphQLSchema
 	return c.UpdateGraphQLSchema(ctx, req)
 }
 
+// UpdateGraphQLSchema updates the GraphQL schema node with the new GraphQL schema,
+// and then alters the dgraph schema. All this is done only on group one leader.
 func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	req *pb.UpdateGraphQLSchemaRequest) (*pb.UpdateGraphQLSchemaResponse, error) {
-	if !isGroup1Leader() {
-		return nil, errUpdatingGraphQLSchemaOnNonGroup1Leader
+	if !isGroupOneLeader() {
+		return nil, errUpdatingGraphQLSchemaOnNonGroupOneLeader
 	}
 
 	// lock here so that only one request is served at a time by group 1 leader
 	schemaLock.Lock()
 	defer schemaLock.Unlock()
 
-	var err error
 	// query the GraphQL schema node uid
 	res, err := ProcessTaskOverNetwork(ctx, &pb.Query{
 		Attr:    "dgraph.graphql.schema",
@@ -153,10 +155,10 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 
 	// perform dgraph schema alter, if required. As the schema could be empty if it only has custom
 	// types/queries/mutations.
-	if len(req.DgraphSchema) != 0 && len(req.DgraphTypes) != 0 {
+	if len(req.DgraphPreds) != 0 && len(req.DgraphTypes) != 0 {
 		if _, err = MutateOverNetwork(ctx, &pb.Mutations{
 			StartTs: State.GetTimestamp(false), // StartTs must be provided
-			Schema:  req.DgraphSchema,
+			Schema:  req.DgraphPreds,
 			Types:   req.DgraphTypes,
 		}); err != nil {
 			return nil, errors.Wrap(err, ErrGraphQLSchemaAlterFailed)
@@ -171,6 +173,9 @@ func (w *grpcWorker) UpdateGraphQLSchema(ctx context.Context,
 	return &pb.UpdateGraphQLSchemaResponse{Uid: schemaNodeUid}, nil
 }
 
+// WaitForIndexingOrCtxError does a busy wait for indexing to finish or the context to error out,
+// if the input flag shouldWait is true. Otherwise, it just returns nil straight away.
+// If the context errors, it returns that error.
 func WaitForIndexingOrCtxError(ctx context.Context, shouldWait bool) error {
 	for shouldWait {
 		if ctx.Err() != nil {
@@ -184,6 +189,8 @@ func WaitForIndexingOrCtxError(ctx context.Context, shouldWait bool) error {
 	return nil
 }
 
-func isGroup1Leader() bool {
+// isGroupOneLeader returns true if the current server is the leader of Group One,
+// it returns false otherwise.
+func isGroupOneLeader() bool {
 	return groups().ServesGroup(1) && groups().Node.AmLeader()
 }
