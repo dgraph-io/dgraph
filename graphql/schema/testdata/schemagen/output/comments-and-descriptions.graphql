@@ -151,6 +151,7 @@ type AddTPayload {
 }
 
 type DeleteTPayload {
+	t(filter: TFilter, order: TOrder, first: Int, offset: Int): [T]
 	msg: String
 	numUids: Int
 }

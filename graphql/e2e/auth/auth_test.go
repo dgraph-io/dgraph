@@ -76,8 +76,9 @@ type Issue struct {
 }
 
 type Log struct {
-	Id   string `json:"id,omitempty"`
-	Logs string `json:"logs,omitempty"`
+	Id     string `json:"id,omitempty"`
+	Logs   string `json:"logs,omitempty"`
+	Random string `json:"random,omitempty"`
 }
 
 type ComplexLog struct {
