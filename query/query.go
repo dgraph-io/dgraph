@@ -1868,7 +1868,7 @@ func expandSubgraph(ctx context.Context, sg *SubGraph) ([]*SubGraph, error) {
 			preds = getPredicatesFromTypes(typeNames)
 			// We check if enterprise is enabled and only
 			// restrict pred to allowed preds if ACL is turned on.
-			if worker.EnterpriseEnabled() {
+			if worker.EnterpriseEnabled() && len(sg.Params.AllowedPreds) != 0 {
 				// Take intersection of both the predicate lists
 				intersectPreds := make([]string, 0)
 				hashMap := make(map[string]bool)
