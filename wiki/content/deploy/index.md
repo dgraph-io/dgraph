@@ -1422,7 +1422,7 @@ These steps are necessary because Dgraph's underlying data format could have cha
 
 ### Post Installation
 
-Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec](/query-language). Also, have a look at [Frequently asked questions](/faq).
+Now that Dgraph is up and running, to understand how to add and query data to Dgraph, follow [Query Language Spec](https://dgraph.io/docs/v1.0.6/query-language). Also, have a look at [Frequently asked questions](/faq).
 
 ## Troubleshooting
 Here are some problems that you may encounter and some solutions to try.
