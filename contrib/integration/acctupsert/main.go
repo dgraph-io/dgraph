@@ -149,8 +149,13 @@ func tryUpsert(c *dgo.Dgraph, acc account) error {
 		}
 	`, acc.first, acc.last, acc.age)
 	resp, err := txn.Query(ctx, q)
+	if err != nil &&
+		(strings.Contains(err.Error(), "Transaction is too old") ||
+			strings.Contains(err.Error(), "less than minTs")) {
+		fmt.Printf("Error while running query: %v\n", err)
+		return err
+	}
 	x.Check(err)
-
 	decode := struct {
 		Get []struct {
 			Uid *string
