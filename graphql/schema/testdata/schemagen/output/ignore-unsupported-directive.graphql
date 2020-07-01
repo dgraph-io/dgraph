@@ -142,6 +142,7 @@ type AddProductPayload {
 }
 
 type DeleteProductPayload {
+	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	msg: String
 	numUids: Int
 }
