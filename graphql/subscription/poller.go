@@ -66,7 +66,10 @@ type Update struct {
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
 func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
-
+	if customClaims == nil {
+		customClaims = &authorization.CustomClaims{}
+		customClaims.ExpiresAt = (time.Time{}).Unix()
+	}
 	err := p.resolver.ValidateSubscription(req)
 	if err != nil {
 		return nil, err
@@ -74,9 +77,14 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 
 	buf, err := json.Marshal(req)
 	x.Check(err)
-	authvariables, err := json.Marshal(customClaims.AuthVariables)
-	x.Check(err)
-	bucketID := farm.Fingerprint64(append(buf, authvariables...))
+	var bucketID uint64
+	if customClaims.AuthVariables != nil {
+		authvariables, err := json.Marshal(customClaims.AuthVariables)
+		x.Check(err)
+		bucketID = farm.Fingerprint64(append(buf, authvariables...))
+	} else {
+		bucketID = farm.Fingerprint64(append(buf))
+	}
 	p.Lock()
 	defer p.Unlock()
 
@@ -98,6 +106,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 		subscriptions = make(map[uint64]Update)
 	}
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
+
 	subscriptions[subscriptionID] = Update{customClaims.StandardClaims.ExpiresAt, updateCh}
 	p.pollRegistry[bucketID] = subscriptions
 
@@ -170,7 +179,7 @@ func (p *Poller) poll(req *pollRequest) {
 				return
 			}
 			for _, Update := range subscribers {
-				if time.Now().Unix() >= Update.Expiry {
+				if time.Now().Unix() >= Update.Expiry && !time.Unix(Update.Expiry, 0).IsZero() {
 					p.terminateSubscription(req.bucketID, p.subscriptionID)
 				}
 			}
@@ -188,7 +197,7 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 		for _, Update := range subscribers {
-			if time.Now().Unix() >= Update.Expiry {
+			if time.Now().Unix() >= Update.Expiry && !time.Unix(Update.Expiry, 0).IsZero() {
 				p.terminateSubscription(req.bucketID, p.subscriptionID)
 			}
 		}

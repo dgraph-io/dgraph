@@ -126,6 +126,7 @@ func (gs *graphqlSubscription) Subscribe(
 		Query:         document,
 		Variables:     variableValues,
 	}
+
 	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaim)
 	if err != nil {
 		return nil, err
