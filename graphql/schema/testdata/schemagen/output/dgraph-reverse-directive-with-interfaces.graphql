@@ -154,16 +154,19 @@ type AddOscarMoviePayload {
 }
 
 type DeleteDirectorPayload {
+	director(filter: DirectorFilter, order: DirectorOrder, first: Int, offset: Int): [Director]
 	msg: String
 	numUids: Int
 }
 
 type DeleteMoviePayload {
+	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
 	msg: String
 	numUids: Int
 }
 
 type DeleteOscarMoviePayload {
+	oscarMovie(filter: OscarMovieFilter, order: OscarMovieOrder, first: Int, offset: Int): [OscarMovie]
 	msg: String
 	numUids: Int
 }

@@ -212,7 +212,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	percent := (float64(difference) / float64(calculatedSize)) * 100.0
 	t.Logf("calculated unit %s profied unit %s percent difference %.2f%%",
 		humanize.Bytes(uint64(calculatedSize)), humanize.Bytes(uint64(pprofSize)), percent)
-	if percent > 5 {
+	if percent > 10 {
 		require.Fail(t, "Expected size difference is less than 8 but got %f", percent)
 	}
 }
@@ -225,7 +225,7 @@ func filterUnit(line string) (string, error) {
 			return strings.TrimSpace(word), nil
 		}
 	}
-	return "", errors.New("Invalid line. Line does not contain GB or MB")
+	return "", errors.Errorf("Invalid line. Line %s does not contain GB or MB", line)
 }
 
 // convertToBytes converts the unit into bytes.

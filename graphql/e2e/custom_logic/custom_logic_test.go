@@ -1853,9 +1853,10 @@ func TestCustomGraphqlReturnTypeMismatchForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:13: Type Post"+
-		"; Field author: inside graphql in @custom directive, found return type mismatch for "+
-		"query `getPosts`, expected `[Author!]`, got `[Post!]`.\n", res.Errors[0].Error())
+	require.Contains(t, res.Errors[0].Error(),
+		"resolving updateGQLSchema failed because input:13: Type Post; Field author: inside "+
+			"graphql in @custom directive, found return type mismatch for query `getPosts`, "+
+			"expected `[Author!]`, got `[Post!]`.\n")
 }
 
 func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
@@ -1875,10 +1876,10 @@ func TestCustomGraphqlInvalidInputFormatForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: "+
-		"Type Post; Field comments: inside graphql in @custom directive, for BATCH mode, "+
-		"query `getPosts` can have only one argument whose value should be a variable.\n",
-		res.Errors[0].Error())
+	require.Contains(t, res.Errors[0].Error(),
+		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside "+
+			"graphql in @custom directive, for BATCH mode, query `getPosts` can have only one "+
+			"argument whose value should be a variable.\n")
 }
 
 func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
@@ -1898,9 +1899,10 @@ func TestCustomGraphqlMissingTypeForBatchedFieldInput(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
-		"; Field comments: inside graphql in @custom directive, remote schema doesn't have any "+
-		"type named PostFilterInput.\n", res.Errors[0].Error())
+	require.Contains(t, res.Errors[0].Error(),
+		"resolving updateGQLSchema failed because input:9: Type Post; Field comments: inside "+
+			"graphql in @custom directive, remote schema doesn't have any type named "+
+			"PostFilterInput.\n")
 }
 
 func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
@@ -1920,7 +1922,7 @@ func TestCustomGraphqlInvalidArgForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
+	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
 		"; Field comments: inside graphql in @custom directive, argument `name` is not present "+
 		"in remote query `getPosts`.\n", res.Errors[0].Error())
 }
@@ -1943,7 +1945,7 @@ func TestCustomGraphqlArgTypeMismatchForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:10: Type Post"+
+	require.Equal(t, "resolving updateGQLSchema failed because input:10: Type Post"+
 		"; Field comments: inside graphql in @custom directive, found type mismatch for variable"+
 		" `$likes` in query `getPosts`, expected `Int`, got `String!`.\n", res.Errors[0].Error())
 }
@@ -1981,7 +1983,7 @@ func TestCustomGraphqlMissingRequiredArgumentForBatchedField(t *testing.T) {
 	res := updateSchema(t, schema)
 	require.Equal(t, `{"updateGQLSchema":null}`, string(res.Data))
 	require.Len(t, res.Errors, 1)
-	require.Equal(t, "couldn't rewrite mutation updateGQLSchema because input:9: Type Post"+
+	require.Equal(t, "resolving updateGQLSchema failed because input:9: Type Post"+
 		"; Field comments: inside graphql in @custom directive, argument `text` in query "+
 		"`getPosts` is missing, it is required by remote query.\n", res.Errors[0].Error())
 }
