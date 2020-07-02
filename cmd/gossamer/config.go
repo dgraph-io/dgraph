@@ -323,10 +323,25 @@ func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
 		}
 	}
 
+	// to turn on BABE but not grandpa, cfg.Authority must be set to true
+	// and cfg.GrandpaAuthority must be set to false
+	if cfg.Authority && !cfg.BabeAuthority {
+		cfg.BabeAuthority = false
+	}
+
+	if cfg.Authority && !cfg.GrandpaAuthority {
+		cfg.GrandpaAuthority = false
+	}
+
+	if !cfg.Authority {
+		cfg.BabeAuthority = false
+		cfg.GrandpaAuthority = false
+	}
+
 	logger.Debug(
 		"core configuration",
-		"authority", cfg.Authority,
-		"roles", cfg.Roles,
+		"babe-authority", cfg.BabeAuthority,
+		"grandpa-authority", cfg.GrandpaAuthority,
 	)
 }
 

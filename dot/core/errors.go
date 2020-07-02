@@ -45,6 +45,9 @@ var ErrNilRuntime = errors.New("cannot have nil runtime")
 // ErrNilBlockProducer is returned when trying to instantiate a block producing Service without a block producer
 var ErrNilBlockProducer = errors.New("cannot have nil BlockProducer")
 
+// ErrNilFinalityGadget is returned when trying to instantiate a finalizing Service without a finality gadget
+var ErrNilFinalityGadget = errors.New("cannot have nil FinalityGadget")
+
 // ErrNilChannel is returned if a channel is nil
 func ErrNilChannel(s string) error {
 	return fmt.Errorf("cannot have nil channel %s", s)

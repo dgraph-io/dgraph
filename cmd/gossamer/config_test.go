@@ -20,6 +20,7 @@ import (
 	"io/ioutil"
 	"testing"
 
+	"github.com/ChainSafe/gossamer/chain/gssmr"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/lib/genesis"
@@ -45,6 +46,17 @@ func TestConfigFromChainFlag(t *testing.T) {
 	testApp := cli.NewApp()
 	testApp.Writer = ioutil.Discard
 
+	gssmrCfg := dot.GssmrConfig()
+	gssmrCfg.Log = dot.LogConfig{
+		CoreLvl:           gssmr.DefaultLvl,
+		NetworkLvl:        gssmr.DefaultLvl,
+		RPCLvl:            gssmr.DefaultLvl,
+		StateLvl:          gssmr.DefaultLvl,
+		RuntimeLvl:        gssmr.DefaultLvl,
+		BlockProducerLvl:  gssmr.DefaultLvl,
+		FinalityGadgetLvl: gssmr.DefaultLvl,
+	}
+
 	testcases := []struct {
 		description string
 		flags       []string
@@ -55,7 +67,7 @@ func TestConfigFromChainFlag(t *testing.T) {
 			"Test gossamer --chain gssmr",
 			[]string{"chain"},
 			[]interface{}{"gssmr"},
-			dot.GssmrConfig(),
+			gssmrCfg,
 		},
 		{
 			"Test gossamer --chain ksmcc",
@@ -111,7 +123,6 @@ func TestInitConfigFromFlags(t *testing.T) {
 			require.Nil(t, err)
 			cfg, err := createInitConfig(ctx)
 			require.Nil(t, err)
-
 			require.Equal(t, c.expected, cfg.Init)
 		})
 	}
@@ -275,8 +286,10 @@ func TestCoreConfigFromFlags(t *testing.T) {
 			[]string{"config", "roles"},
 			[]interface{}{testCfgFile.Name(), "4"},
 			dot.CoreConfig{
-				Authority: true,
-				Roles:     4,
+				Authority:        true,
+				Roles:            4,
+				BabeAuthority:    true,
+				GrandpaAuthority: true,
 			},
 		},
 		{
@@ -284,8 +297,10 @@ func TestCoreConfigFromFlags(t *testing.T) {
 			[]string{"config", "roles"},
 			[]interface{}{testCfgFile.Name(), "0"},
 			dot.CoreConfig{
-				Authority: false,
-				Roles:     0,
+				Authority:        false,
+				Roles:            0,
+				BabeAuthority:    false,
+				GrandpaAuthority: false,
 			},
 		},
 	}

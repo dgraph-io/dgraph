@@ -64,6 +64,8 @@ func TestCreateCoreService(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)
@@ -133,6 +135,8 @@ func TestCreateRPCService(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 	cfg.Init.Genesis = genFile.Name()
 
 	err := InitNode(cfg)

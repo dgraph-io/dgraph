@@ -254,6 +254,7 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 	handler := newTestDigestHandler(t, false, true)
 	handler.start()
 	defer handler.stop()
+	require.True(t, handler.isFinalityAuthority)
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)

@@ -86,8 +86,10 @@ type NetworkConfig struct {
 
 // CoreConfig is to marshal/unmarshal toml core config vars
 type CoreConfig struct {
-	Authority bool `toml:"authority"`
-	Roles     byte `toml:"roles"`
+	Authority        bool `toml:"authority"`
+	Roles            byte `toml:"roles"`
+	BabeAuthority    bool `toml:"babe-authority"`
+	GrandpaAuthority bool `toml:"grandpa-authority"`
 }
 
 // RPCConfig is to marshal/unmarshal toml RPC config vars
@@ -125,15 +127,6 @@ func GssmrConfig() *Config {
 			BasePath: gssmr.DefaultBasePath,
 			LogLevel: gssmr.DefaultLvl,
 		},
-		Log: LogConfig{
-			CoreLvl:           gssmr.DefaultLvl,
-			NetworkLvl:        gssmr.DefaultLvl,
-			RPCLvl:            gssmr.DefaultLvl,
-			StateLvl:          gssmr.DefaultLvl,
-			RuntimeLvl:        gssmr.DefaultLvl,
-			BlockProducerLvl:  gssmr.DefaultLvl,
-			FinalityGadgetLvl: gssmr.DefaultLvl,
-		},
 		Init: InitConfig{
 			Genesis: gssmr.DefaultGenesis,
 		},
@@ -142,8 +135,10 @@ func GssmrConfig() *Config {
 			Unlock: gssmr.DefaultUnlock,
 		},
 		Core: CoreConfig{
-			Authority: gssmr.DefaultAuthority,
-			Roles:     gssmr.DefaultRoles,
+			Authority:        gssmr.DefaultAuthority,
+			Roles:            gssmr.DefaultRoles,
+			BabeAuthority:    gssmr.DefaultBabeAuthority,
+			GrandpaAuthority: gssmr.DefaultGrandpaAuthority,
 		},
 		Network: NetworkConfig{
 			Port:        gssmr.DefaultNetworkPort,
@@ -172,15 +167,6 @@ func KsmccConfig() *Config {
 			Name:     ksmcc.DefaultName,
 			ID:       ksmcc.DefaultID,
 			BasePath: ksmcc.DefaultBasePath,
-		},
-		Log: LogConfig{
-			CoreLvl:           ksmcc.DefaultLvl,
-			NetworkLvl:        ksmcc.DefaultLvl,
-			RPCLvl:            ksmcc.DefaultLvl,
-			StateLvl:          ksmcc.DefaultLvl,
-			RuntimeLvl:        ksmcc.DefaultLvl,
-			BlockProducerLvl:  ksmcc.DefaultLvl,
-			FinalityGadgetLvl: ksmcc.DefaultLvl,
 		},
 		Init: InitConfig{
 			Genesis: ksmcc.DefaultGenesis,

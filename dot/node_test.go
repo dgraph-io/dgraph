@@ -99,6 +99,8 @@ func TestNewNode(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 
 	node, err := NewNode(cfg, ks)
 	require.Nil(t, err)
@@ -160,6 +162,8 @@ func TestStartNode(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 
 	node, err := NewNode(cfg, ks)
 	require.Nil(t, err)
@@ -257,6 +261,8 @@ func TestInitNode_LoadStorageRoot(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 	cfg.Init.Genesis = genPath
 
 	gen, err := genesis.NewGenesisFromJSON(genPath)
@@ -315,6 +321,8 @@ func TestInitNode_LoadBalances(t *testing.T) {
 	defer utils.RemoveTestDir(t)
 
 	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
 	cfg.Init.Genesis = genPath
 
 	err := InitNode(cfg)

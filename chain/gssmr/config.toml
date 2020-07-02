@@ -5,13 +5,13 @@ basepath = "~/.gossamer/gssmr"
 log = "info"
 
 [log]
-core = "info"
-network = "info"
-rpc = "info"
-state = "info"
-runtime = "info"
-babe = "info"
-grandpa = "info"
+core = ""
+network = ""
+rpc = ""
+state = ""
+runtime = ""
+babe = ""
+grandpa = ""
 
 [init]
 genesis = "./chain/gssmr/genesis.json"
@@ -23,6 +23,8 @@ unlock = ""
 [core]
 authority = true
 roles = 4
+babe-authority = true
+grandpa-authority = true
 
 [network]
 port = 7001

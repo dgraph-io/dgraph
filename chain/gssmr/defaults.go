@@ -45,10 +45,14 @@ var (
 
 	// CoreConfig
 
-	// DefaultAuthority true if BABE block producer
+	// DefaultAuthority is true if the node is a block producer and a grandpa authority
 	DefaultAuthority = true
 	// DefaultRoles Default node roles
 	DefaultRoles = byte(4) // authority node (see Table D.2)
+	// DefaultBabeAuthority is true if the node is a block producer (overwrites previous settings)
+	DefaultBabeAuthority = true
+	// DefaultGrandpaAuthority is true if the node is a grandpa authority (overwrites previous settings)
+	DefaultGrandpaAuthority = true
 
 	// NetworkConfig
 

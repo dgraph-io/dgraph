@@ -170,18 +170,19 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 
 	// set core configuration
 	coreConfig := &core.Config{
-		LogLvl:           lvl,
-		BlockState:       stateSrvc.Block,
-		StorageState:     stateSrvc.Storage,
-		TransactionQueue: stateSrvc.TransactionQueue,
-		BlockProducer:    bp,
-		FinalityGadget:   fg,
-		Keystore:         ks,
-		Runtime:          rt,
-		MsgRec:           networkMsgs, // message channel from network service to core service
-		MsgSend:          coreMsgs,    // message channel from core service to network service
-		IsBlockProducer:  cfg.Core.Authority,
-		SyncChan:         syncChan,
+		LogLvl:              lvl,
+		BlockState:          stateSrvc.Block,
+		StorageState:        stateSrvc.Storage,
+		TransactionQueue:    stateSrvc.TransactionQueue,
+		BlockProducer:       bp,
+		FinalityGadget:      fg,
+		Keystore:            ks,
+		Runtime:             rt,
+		MsgRec:              networkMsgs, // message channel from network service to core service
+		MsgSend:             coreMsgs,    // message channel from core service to network service
+		IsBlockProducer:     cfg.Core.BabeAuthority,
+		IsFinalityAuthority: cfg.Core.GrandpaAuthority,
+		SyncChan:            syncChan,
 	}
 
 	// create new core service
