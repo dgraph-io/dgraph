@@ -95,7 +95,7 @@ type request struct {
 	conflicts []uint64
 }
 
-type ferr struct {
+type fileError struct {
 	file string
 	err  error
 }
@@ -484,11 +484,11 @@ func run() error {
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
-	errCh := make(chan ferr, totalFiles)
+	errCh := make(chan fileError, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- ferr{file, l.processFile(ctx, file, opt.key)}
+			errCh <- fileError{file, l.processFile(ctx, file, opt.key)}
 		}(file)
 	}
 
@@ -498,9 +498,9 @@ func run() error {
 	}
 
 	for i := 0; i < totalFiles; i++ {
-		if err := <-errCh; err.err != nil {
-			fmt.Printf("Error while processing data file %q: %s\n", err.file, err.err)
-			return err.err
+		if ferr := <-errCh; ferr.err != nil {
+			fmt.Printf("Error while processing data file %q: %s\n", ferr.file, ferr.err)
+			return ferr.err
 		}
 	}
 
