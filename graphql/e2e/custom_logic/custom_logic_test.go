@@ -205,6 +205,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 				 method: "GET",
 				 forwardHeaders: ["X-App-Token:App", "X-User-Id"],
 				 secretHeaders: ["Authorization:Github-Api-Token"]
+				 introspectionHeaders: ["API:Github-Api-Token"]
 		 })
 	 }
 

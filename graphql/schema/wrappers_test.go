@@ -882,29 +882,6 @@ func TestCustomLogicHeaders(t *testing.T) {
 			errors.New("input:14: Type Query; Field user; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers, found: `Authorization`." + "\n"),
 		},
 		{
-			"check that header values can be shared across different types of headers",
-			`
-			type User @remote {
- 				description: String
-			}
-
-			type Query {
-			user(name: String!): User
-				@custom(
-				http: {
-					url: "http://mock:8888/verifyHeaders"
-					method: "POST"
-					forwardHeaders: ["Token:API-Token"]
-					secretHeaders: ["Authorization:API-Token"]
-					graphql: "query($name: String!) { getUser(name: $name) }"
-				}
-   	 			)
-				}
-				# Dgraph.Secret API-Token "random-fake-token"
-			`,
-			errors.New("input:14: Type Query; Field user: inside graphql in @custom directive, remote schema doesn't have any queries." + "\n"),
-		},
-		{
 			"check for header structure",
 			`
 			type User @remote {
@@ -930,11 +907,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 	for _, test := range tcases {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := NewHandler(test.schemaStr)
-			if test.err != nil || err != nil {
-				require.EqualError(t, err, test.err.Error())
-				return
-			}
-			// require.NoError(t, err)
+			require.EqualError(t, err, test.err.Error())
 		})
 	}
 }
