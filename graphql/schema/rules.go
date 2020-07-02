@@ -1600,6 +1600,7 @@ func customDirectiveValidation(sch *ast.Schema,
 	// 12. Finally validate the given graphql operation on remote server, when all locally doable
 	// validations have finished
 	var skip bool
+	iHeaders := make(map[string]string)
 	if body != nil || graphql != nil {
 		var errPos *ast.Position
 		switch {
@@ -1625,6 +1626,7 @@ func customDirectiveValidation(sch *ast.Schema,
 		}
 
 		forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
+		fHeaders := make(map[string]bool)
 		if forwardHeaders != nil {
 			for _, h := range forwardHeaders.Children {
 				key := strings.Split(h.Value.Raw, ":")
@@ -1634,6 +1636,7 @@ func customDirectiveValidation(sch *ast.Schema,
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
+				fHeaders[key[0]] = true
 			}
 		}
 
@@ -1641,27 +1644,18 @@ func customDirectiveValidation(sch *ast.Schema,
 		if secretHeaders != nil {
 			for _, h := range secretHeaders.Children {
 				secretKey := strings.Split(h.Value.Raw, ":")
-				if len(secretKey) == 1 {
-					secretKey = []string{h.Value.Raw, h.Value.Raw}
-				}
 				if len(secretKey) > 2 {
 					return append(errs, gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
-				if forwardHeaders != nil {
-					for _, fh := range forwardHeaders.Children {
-						fhKey := strings.Split(fh.Value.Raw, ":")
-						if len(fhKey) == 1 {
-							fhKey = []string{fh.Value.Raw, fh.Value.Raw}
-						}
-						if fhKey[0] == secretKey[0] {
-							return append(errs, gqlerror.ErrorPosf(errPos,
-								"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
-									", found: `%s`.",
-								typ.Name, field.Name, fh.Value.Raw))
-						}
+				if fHeaders != nil {
+					if fHeaders[secretKey[0]] {
+						return append(errs, gqlerror.ErrorPosf(errPos,
+							"Type %s; Field %s; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers"+
+								", found: `%s`.",
+							typ.Name, field.Name, h.Value.Raw))
 					}
 				}
 			}
@@ -1671,12 +1665,16 @@ func customDirectiveValidation(sch *ast.Schema,
 		if introspectionHeaders != nil {
 			for _, h := range introspectionHeaders.Children {
 				key := strings.Split(h.Value.Raw, ":")
+				if len(key) == 1 {
+					key = []string{h.Value.Raw, h.Value.Raw}
+				}
 				if len(key) > 2 {
 					return append(errs, gqlerror.ErrorPosf(errPos,
 						"Type %s; Field %s; introspectionHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername'"+
 							", found: `%s`.",
 						typ.Name, field.Name, h.Value.Raw))
 				}
+				iHeaders[key[0]] = key[1]
 			}
 		}
 	}
@@ -1686,24 +1684,16 @@ func customDirectiveValidation(sch *ast.Schema,
 	}
 
 	if graphql != nil && !skip && graphqlOpDef != nil {
-		introspectionHeaders := httpArg.Value.Children.ForName("introspectionHeaders")
 		headers := http.Header{}
-		if introspectionHeaders != nil {
-			for _, h := range introspectionHeaders.Children {
-				key := strings.Split(h.Value.Raw, ":")
-				if len(key) == 1 {
-					key = []string{h.Value.Raw, h.Value.Raw}
-				}
-				// We try and fetch the value from the stored secrets.
-				val, ok := secrets[key[1]]
-				if !ok {
-					return append(errs, gqlerror.ErrorPosf(graphql.Position,
-						"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file"+
-							", found: `%s`.",
-						typ.Name, field.Name, key[1], h.Value.Raw))
-				}
-				headers.Add(key[0], string(val))
+		for k, v := range iHeaders {
+			// We try and fetch the value from the stored secrets.
+			val, ok := secrets[v]
+			if !ok {
+				return append(errs, gqlerror.ErrorPosf(graphql.Position,
+					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
+					typ.Name, field.Name, v,))
 			}
+			headers.Add(k, string(val))
 		}
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
