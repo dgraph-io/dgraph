@@ -153,6 +153,10 @@ var (
 		"Don't run any more tests after a failure.")
 )
 
+const (
+	maxRetries = 5
+)
+
 func command(cmd ...string) *exec.Cmd {
 	return commandContext(ctxb, cmd...)
 }
@@ -428,8 +432,9 @@ func main() {
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
+			tries := 0
 		retryLoop:
-			for i := 0; i < 3; i++ {
+			for {
 				if *refreshCluster {
 					jepsenDown(*jepsenRoot)
 					jepsenUp(*jepsenRoot)
@@ -437,7 +442,7 @@ func main() {
 						log.Fatal(err)
 					}
 					// Sleep for 10 seconds to let the cluster start before running the test.
-					time.Sleep(10*time.Second)
+					time.Sleep(10 * time.Second)
 				}
 
 				err := runJepsenTest(&jepsenTest{
@@ -469,7 +474,13 @@ func main() {
 					break retryLoop
 				case errTestIncomplete:
 					// Retry incomplete tests. Sometimes tests fail due to temporary errors.
-					continue
+					tries++
+					if tries == maxRetries {
+						defer os.Exit(1)
+						break retryLoop
+					} else {
+						continue
+					}
 				}
 			}
 		}
