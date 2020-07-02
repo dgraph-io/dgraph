@@ -356,27 +356,20 @@ func missingRemoteTypeError(typName string) error {
 
 func matchDeepTypes(remoteType *gqlType, remoteTypes map[string]*types,
 	localSchema *ast.Schema) error {
-	expandedTypes, err := expandType(remoteType, remoteTypes)
+	_, err := expandType(remoteType, remoteTypes)
 	if err != nil {
 		return err
 	}
-	if len(expandedTypes) == 0 {
-		return nil
-	}
-	var kind string = remoteType.Kind
-	if (remoteType.OfType != nil) {
-		kind = remoteType.OfType.Kind
-	}
-	return matchRemoteTypes(expandedTypes, localSchema,  kind)
+	return matchRemoteTypes(localSchema, remoteTypes)
 }
 
-func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema, kind string) error {
+func matchRemoteTypes(schema *ast.Schema, remoteTypes map[string]*types) error {
 	for typeName, def := range schema.Types {
 		origTyp := schema.Types[typeName]
 		remoteDir := origTyp.Directives.ForName(remoteDirective)
 		if remoteDir != nil {
-			if kind == string(def.Kind) || ((kind == nonNull || kind == list) && string(def.Kind) == object){
-				remoteType, ok := expandedTypes[def.Name]
+			{
+				remoteType, ok := remoteTypes[def.Name]
 				fields := def.Fields
 				if !ok {
 					return errors.Errorf(
@@ -384,9 +377,13 @@ func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema, 
 						typeName,
 					)
 				}
+				remoteFields := remoteType.Fields
+				if remoteFields == nil {
+					remoteFields = remoteType.InputFields
+				}
 				for _, field := range fields {
 					var remoteField *gqlField = nil
-					for _, rf := range remoteType {
+					for _, rf := range remoteFields {
 						if rf.Name == field.Name {
 							remoteField = rf
 						}
@@ -394,7 +391,7 @@ func matchRemoteTypes(expandedTypes map[string][]*gqlField, schema *ast.Schema, 
 					if remoteField == nil {
 						return errors.Errorf(
 							"%s field for the local type %s is not present in the remote type %s",
-							field.Name, typeName, remoteField.Name,
+							field.Name, typeName, remoteType.Name,
 						)
 					}
 					if remoteField.Type.String() != field.Type.String() {

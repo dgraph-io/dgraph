@@ -1042,20 +1042,19 @@ func TestCustomFieldsShouldBeResolved(t *testing.T) {
 		verifyData(t, users, teachers, schools)
 	})
 
-	// TODO when Introspection is fixed for multiple endpoints uncomment this
-	// t.Run("graphql single operation mode", func(t *testing.T) {
-	// 	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	// 	schema := readFile(t, "schemas/single-mode-graphql.graphql")
-	// 	updateSchemaRequireNoGQLErrors(t, schema)
-	// 	verifyData(t, users, teachers, schools)
-	// })
+	t.Run("graphql single operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/single-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 
-	// t.Run("graphql batch operation mode", func(t *testing.T) {
-	// 	// update schema to single mode where fields are resolved using GraphQL endpoints.
-	// 	schema := readFile(t, "schemas/batch-mode-graphql.graphql")
-	// 	updateSchemaRequireNoGQLErrors(t, schema)
-	// 	verifyData(t, users, teachers, schools)
-	// })
+	t.Run("graphql batch operation mode", func(t *testing.T) {
+		// update schema to single mode where fields are resolved using GraphQL endpoints.
+		schema := readFile(t, "schemas/batch-mode-graphql.graphql")
+		updateSchemaRequireNoGQLErrors(t, schema)
+		verifyData(t, users, teachers, schools)
+	})
 
 	// Fields are fetched through a combination of REST/GraphQL and single/batch mode.
 	t.Run("mixed mode", func(t *testing.T) {
@@ -1081,6 +1080,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			  method: "POST"
 			  mode: SINGLE
 			  graphql: "query($id: ID!) { userName(id: $id) }"
+			  skipIntrospection: true
 			}
 		  )
 		age: Int! @search
@@ -1092,6 +1092,7 @@ func TestCustomFieldResolutionShouldPropagateGraphQLErrors(t *testing.T) {
 			  mode: BATCH
 			  graphql: "query($input: [UserInput]) { cars(input: $input) }"
 			  body: "{ id: $id, age: $age}"
+			  skipIntrospection: true
 			}
 		  )
 	}`
