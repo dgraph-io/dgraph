@@ -380,6 +380,7 @@ func getGQLSchema(t *testing.T, url string) gqlSchema {
 func getGQLSchemaRequireId(t *testing.T, url string) string {
 	schema := getGQLSchema(t, url)
 	require.NotEmpty(t, schema.Id, "Got empty ID in getGQLSchema")
+	return schema.Schema
 }
 
 func getDgraphSchema(t *testing.T, dg *dgo.Dgraph) string {
