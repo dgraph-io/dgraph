@@ -352,6 +352,9 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 			}
 		}
 
+		// If Dgraph is running in ludicrous mode we shuold wait for currently running mutations
+		// to finish, for predicates whose schema is being updated. Also new mutations will be
+		// paused until new schema is succesfully applied.
 		shouldPause := x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetSchema()) > 0
 		if shouldPause {
 			if err := n.ex.pausePredicates(proposal.Mutations.Schema...); err != nil {
@@ -360,6 +363,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 		}
 
 		err := runSchemaMutation(ctx, proposal.Mutations.Schema, startTs)
+		// Resume mutations for predicates paused above.
 		if shouldPause {
 			if err := n.ex.resumePredicates(proposal.Mutations.Schema...); err != nil {
 				return err
@@ -959,7 +963,7 @@ func (n *node) checkpointAndClose(done chan struct{}) {
 			}
 			n.Raft().Stop()
 			if x.WorkerConfig.LudicrousMode {
-				n.ex.waitForClosers()
+				n.ex.close()
 			}
 			close(done)
 			return

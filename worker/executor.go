@@ -37,33 +37,37 @@ type subMutation struct {
 	index   uint64
 }
 
+// predMeta stores processing channel and closer for single predicate.
+type predMeta struct {
+	ch     chan *subMutation
+	closer *y.Closer
+}
+
 type executor struct {
 	pendingSize int64
 
 	sync.RWMutex
-	predChan  map[string]chan *subMutation
-	closerMap map[string]*y.Closer
-	closer    *y.Closer
-	applied   *y.WaterMark
-	paused    int32
+	predMap map[string]*predMeta
+	closer  *y.Closer
+	applied *y.WaterMark
+	paused  int32
+	closed  bool
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
-		predChan:  make(map[string]chan *subMutation),
-		closerMap: make(map[string]*y.Closer),
-		closer:    y.NewCloser(0),
-		applied:   applied,
+		predMap: make(map[string]*predMeta),
+		closer:  y.NewCloser(0),
+		applied: applied,
 	}
-	go ex.shutdown()
 	return ex
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation, closer *y.Closer) {
-	defer closer.Done()
+func (e *executor) processMutationCh(pmeta *predMeta) {
+	defer pmeta.closer.Done()
 
 	writer := posting.NewTxnWriter(pstore)
-	for payload := range ch {
+	for payload := range pmeta.ch {
 		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
@@ -92,35 +96,30 @@ func (e *executor) processMutationCh(ch chan *subMutation, closer *y.Closer) {
 	}
 }
 
-func (e *executor) shutdown() {
-	<-e.closer.HasBeenClosed()
-	e.RLock()
-	defer e.RUnlock()
-	for _, ch := range e.predChan {
-		close(ch)
+func (e *executor) close() {
+	e.Lock()
+	defer e.Unlock()
+
+	e.closed = true
+	for _, pmeta := range e.predMap {
+		close(pmeta.ch)
+		pmeta.closer.Wait()
 	}
 }
 
-func (e *executor) waitForClosers() {
-	e.RLock()
-	defer e.RUnlock()
-
-	for _, closer := range e.closerMap {
-		closer.Wait()
-	}
-}
-
-// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
-	ch, ok := e.predChan[pred]
+// getChannel obtains the channel for the given pred. It must be called under e.Lock().
+func (e *executor) getChannel(pred string) (ch chan *subMutation) {
+	meta, ok := e.predMap[pred]
 	if ok {
-		return ch
+		return meta.ch
 	}
 
-	e.closerMap[pred] = y.NewCloser(1)
-	ch = make(chan *subMutation, 1000)
-	e.predChan[pred] = ch
-	go e.processMutationCh(ch, e.closerMap[pred])
+	meta = &predMeta{
+		ch:     make(chan *subMutation, 1000),
+		closer: y.NewCloser(1),
+	}
+	e.predMap[pred] = meta
+	go e.processMutationCh(meta)
 	return ch
 }
 
@@ -129,7 +128,31 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
+func uniqPredicates(schemas []*pb.SchemaUpdate) []string {
+	var upreds []string
+	if len(schemas) == 0 {
+		return upreds
+	}
+
+	umap := make(map[string]struct{})
+	for _, schema := range schemas {
+		umap[schema.Predicate] = struct{}{}
+	}
+
+	for pred := range umap {
+		upreds = append(upreds, pred)
+	}
+
+	return upreds
+}
+
 func (e *executor) pausePredicates(schemas ...*pb.SchemaUpdate) error {
+	preds := uniqPredicates(schemas)
+	if len(preds) == 0 {
+		return nil
+	}
+
+	// Only one indexing can be in progress at a time. Below blocks ensures it.
 	if !atomic.CompareAndSwapInt32(&e.paused, 0, 1) {
 		return errors.Errorf("Error pausing predicates, cannot pause more than once at a time")
 	}
@@ -137,18 +160,23 @@ func (e *executor) pausePredicates(schemas ...*pb.SchemaUpdate) error {
 	closers := make([]*y.Closer, 0, len(schemas))
 
 	e.Lock()
-	for _, schema := range schemas {
-		ch, ok := e.predChan[schema.Predicate]
+	for _, pred := range preds {
+		meta, ok := e.predMap[pred]
 		if ok {
 			// close current channel and get closer for waiting later.
-			close(ch)
-			closers = append(closers, e.closerMap[schema.Predicate])
+			close(meta.ch)
+			closers = append(closers, meta.closer)
 		}
 
-		// Create new channel and closer for predicates.
-		e.closerMap[schema.Predicate] = y.NewCloser(0)
-		newCh := make(chan *subMutation, 1000)
-		e.predChan[schema.Predicate] = newCh
+		// Create new channel and closer for predicates. We don't want to block new mutations.
+		// Hence all of new mutations will be buffered inside new channel. Once someone calls
+		// resumePredicates(), it will attach processing goroutines to predicate channels.
+		meta = &predMeta{
+			closer: y.NewCloser(0),
+			ch:     make(chan *subMutation, 1000),
+		}
+
+		e.predMap[pred] = meta
 	}
 	e.Unlock()
 
@@ -160,28 +188,28 @@ func (e *executor) pausePredicates(schemas ...*pb.SchemaUpdate) error {
 }
 
 func (e *executor) resumePredicates(schemas ...*pb.SchemaUpdate) error {
+	preds := uniqPredicates(schemas)
+	if len(preds) == 0 {
+		return nil
+	}
+
 	if atomic.LoadInt32(&e.paused) == 0 {
 		return errors.Errorf("Error resuming predicates, nothing to resume")
 	}
 
 	e.RLock()
 	defer e.RUnlock()
-	for _, schema := range schemas {
-		ch, ok := e.predChan[schema.Predicate]
+	for _, pred := range preds {
+		meta, ok := e.predMap[pred]
 		if !ok {
 			continue
 		}
 
-		closer := e.closerMap[schema.Predicate]
-		closer.AddRunning(1)
-		go e.processMutationCh(ch, closer)
+		meta.closer.AddRunning(1)
+		go e.processMutationCh(meta)
 	}
 	atomic.StoreInt32(&e.paused, 0)
 	return nil
-}
-
-func (e *executor) resumePredicate(pred string) {
-
 }
 
 func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
@@ -210,15 +238,14 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 	// Lock() in case the channel gets closed from underneath us.
 	e.Lock()
 	defer e.Unlock()
-	select {
-	case <-e.closer.HasBeenClosed():
+
+	if e.closed {
 		return
-	default:
-		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
-		for attr, payload := range payloadMap {
-			e.applied.Begin(index)
-			e.getChannelUnderLock(attr) <- payload
-		}
+	}
+
+	for attr, payload := range payloadMap {
+		e.applied.Begin(index)
+		e.getChannel(attr) <- payload
 	}
 
 	atomic.AddInt64(&e.pendingSize, esize)
