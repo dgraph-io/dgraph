@@ -5,8 +5,9 @@ import (
 	"encoding/json"
 	"io/ioutil"
 	"net/http"
-	"reflect"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestEnterpriseLicense(t *testing.T) {
@@ -30,47 +31,51 @@ func TestEnterpriseLicense(t *testing.T) {
 	=2lFm
 	-----END PGP MESSAGE-----
 	`)
-	enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
-	resp, _ := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(expiredKey))
-	data, _ := ioutil.ReadAll(resp.Body)
-	var finalData interface{}
-	json.Unmarshal(data, &finalData)
-	xx := finalData.(map[string]interface{})["errors"]
-	t.Log("++++ errors +++\n", xx)
-	t.Log("woohoo\n", (xx.([]interface{}))[0].(map[string]interface{})["message"])
-	t.Log(reflect.TypeOf(xx))
+	// enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
+	// resp, _ := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(expiredKey))
+	// data, _ := ioutil.ReadAll(resp.Body)
+	// var finalData interface{}
+	// json.Unmarshal(data, &finalData)
+	// xx := finalData.(map[string]interface{})["errors"]
+	// t.Log("string of data\n", string(data))
+	// t.Log("+++++ errors +++\n", xx)
+	// t.Log("woohoo\n", (xx.([]interface{}))[0].(map[string]interface{})["message"])
+	// t.Log(reflect.TypeOf(xx))
 	// for i := range finalData {
 	// 	t.Log("testsetet\n", i, finalData[i])
 	// }
 	// vall := RetrieveDeepMap([]string{"errors", "message"}, finalData)
 	// t.Log("finalvalue", vall)
 
-	// enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
+	enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
 
-	// var tests = []struct {
-	// 	name           string
-	// 	licenseKey     []byte
-	// 	expectError    bool
-	// 	expectedOutput string
-	// }{
-	// 	{
-	// 		"Using expired entrerprised license key should return an error",
-	// 		expiredKey,
-	// 		false,
-	// 		`{"errors":[{"message":"while extracting enterprise details from the license: while decoding license file: EOF","extensions":{"code":"ErrorInvalidRequest"}}]}`,
-	// 	},
-	// }
-	// for _, tt := range tests {
-	// 	t.Logf("Running: %s\n", tt.name)
-	// 	response, err := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(expiredKey))
-	// 	returnedOutput, err := ioutil.ReadAll(response.Body)
-	// 	if tt.expectError {
-	// 		require.Error(t, err)
-	// 		continue
-	// 	}
+	var tests = []struct {
+		name           string
+		licenseKey     []byte
+		expectError    bool
+		expectedOutput string
+	}{
+		{
+			"Using expired entrerprised license key should return an error",
+			expiredKey,
+			false,
+			`while extracting enterprise details from the license: while decoding license file: EOF`,
+		},
+	}
+	for _, tt := range tests {
+		t.Logf("Running: %s\n", tt.name)
+		response, err := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(expiredKey))
+		returnedOutput, err := ioutil.ReadAll(response.Body)
+		var finalData interface{}
+		json.Unmarshal(returnedOutput, &finalData)
+		errors := finalData.(map[string]interface{})["errors"].([]interface{})[0].(map[string]interface{})["message"]
+		if tt.expectError {
+			require.Error(t, err)
+			continue
+		}
 
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, tt.expectedOutput, string(returnedOutput))
-	// }
+		require.NoError(t, err)
+		require.Equal(t, tt.expectedOutput, errors)
+	}
 
 }
