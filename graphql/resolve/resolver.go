@@ -503,7 +503,7 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
 	if r.schema == nil {
-		glog.Errorf("Call to Resolve with no schema")
+		glog.Errorf("Call to ValidateSubscription with no schema")
 		return errors.New(errInternal)
 	}
 
