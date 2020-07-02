@@ -151,11 +151,13 @@ type AddUserPayload {
 }
 
 type DeleteTodoPayload {
+	todo(filter: TodoFilter, order: TodoOrder, first: Int, offset: Int): [Todo]
 	msg: String
 	numUids: Int
 }
 
 type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
 }
