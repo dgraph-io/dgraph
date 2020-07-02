@@ -55,6 +55,7 @@ func TestQuery(t *testing.T) {
 	t.Run("fuzzy matching", wrap(FuzzyMatch))
 	t.Run("regexp with toggled trigram index", wrap(RegexpToggleTrigramIndex))
 	t.Run("groupby uid that works", wrap(GroupByUidWorks))
+	t.Run("parameterized cascade", wrap(CascadeParams))
 	t.Run("cleanup", wrap(SchemaQueryCleanup))
 }
 
@@ -711,6 +712,457 @@ func FuzzyMatch(t *testing.T, c *dgo.Dgraph) {
 			require.Contains(t, err.Error(), tc.failure)
 			continue
 		}
+		require.NoError(t, err)
+		testutil.CompareJSON(t, tc.out, string(resp.Json))
+	}
+}
+
+func CascadeParams(t *testing.T, c *dgo.Dgraph) {
+
+	ctx := context.Background()
+
+	op := &api.Operation{Schema: `name: string @index(fulltext) .`}
+	require.NoError(t, c.Alter(ctx, op))
+
+	txn := c.NewTxn()
+	_, err := txn.Mutate(ctx, &api.Mutation{
+		SetNquads: []byte(`
+		_:alice1 <name> "Alice 1" .
+		_:alice1 <age> "23" . 
+		_:alice2 <name> "Alice 2" .
+		_:alice3 <name> "Alice 3" .
+		_:alice3 <age> "32" .
+		_:bob <name> "Bob" .
+		_:chris <name> "Chris" .
+		_:dave <name> "Dave" .
+		_:alice1 <friend> _:bob (close=true) .  
+		_:alice1 <friend> _:dave .    
+		_:alice2 <friend> _:chris (close=false) .	  
+		  _:bob <friend> _:chris .		
+	`),
+	})
+	require.NoError(t, err)
+	require.NoError(t, txn.Commit(ctx))
+
+	tests := []struct {
+		in, out string
+	}{
+		{
+			// value preds Parameterized at root.
+			in: `
+			{  
+				q(func: anyoftext(name, "Alice")) @cascade(name, age)   {	
+					name
+					age
+					friend {
+						name
+					}
+				}
+		  	}`,
+			out: `{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23",
+					"friend": [
+					  {
+						"name": "Bob"
+					  },
+					  {
+						"name": "Dave"
+					  }
+					]
+				  },
+				  {
+					"name": "Alice 3",
+					"age": "32"
+				  }
+				]
+			  }`,
+		},
+		// value and uid preds in root cascade params
+		{
+			in: `{
+				q(func: anyoftext(name, "Alice")) @cascade(name, age, friend)   {
+				  name
+				  age
+					  friend {
+					  name
+				  }
+				}
+			  }
+			  `,
+			out: `{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23",
+					"friend": [
+					  {
+						"name": "Bob"
+					  },
+					  {
+						"name": "Dave"
+					  }
+					]
+				  }
+				]
+			  }`,
+		},
+		{
+			// Plain cascade at root, implicit at lower level
+			in: `{
+				q(func: anyoftext(name, "Alice")) @cascade {
+				  name
+				  age  
+					friend {
+					  name
+				  	  age
+				  	}
+				}
+			}			  
+			  `,
+			out: `{
+				"q": []
+			}`,
+		},
+		{
+			// @cascade(__all__) is same as @cascade
+			in: `{
+				q(func: anyoftext(name, "Alice")) @cascade(__all__) {
+				  name
+				  age  
+					friend {
+					  name
+				  	  age
+				  	}
+				}
+			}			  
+			  `,
+			out: `{
+				"q": []
+			}`,
+		},
+		{
+			// Plain cascade at root, explicit at lower level
+			in: `{
+				q(func: anyoftext(name, "Alice")) @cascade {
+				  name
+				  age  
+					friend @cascade {
+					  name
+				  	  age
+				    }
+				}
+			}			  
+			  `,
+			out: `{
+				"q": []
+			}`,
+		},
+		{
+			// No cascade anywhere.
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) {
+				  name
+				  age
+				  friend {
+				    name
+				    age
+				  }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23",
+					"friend": [
+					  {
+						"name": "Bob"
+					  },
+					  {
+						"name": "Dave"
+					  }
+					]
+				  },
+				  {
+					"name": "Alice 2",
+					"friend": [
+					  {
+						"name": "Chris"
+					  }
+					]
+				  },
+				  {
+					"name": "Alice 3",
+					"age": "32"
+				  }
+				]
+			}
+			`,
+		},
+
+		// Parameterized at lower level.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) {
+				  name
+				  age
+				  friend @cascade(name, age) {
+					name
+				    age
+				  }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23"
+				  },
+				  {
+					"name": "Alice 2"
+				  },
+				  {
+					"name": "Alice 3",
+					"age": "32"
+				  }
+				]
+			}			
+			`,
+		},
+
+		// Parameterized at root and lower level.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(friend) {
+				  name
+				  age
+				  friend @cascade(name, age) {
+					name
+				    age
+				  }
+				}
+			}						
+			`,
+			out: `
+			{
+				"q": []
+			}			
+			`,
+		},
+
+		// cascade at root and parameterized at lower level.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade {
+				  name
+				  friend @cascade(name) {
+						  name
+						  age
+				  }
+				}
+			}				  
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"friend": [
+					  {
+						"name": "Bob"
+					  },
+					  {
+						"name": "Dave"
+					  }
+					]
+				  },
+				  {
+					"name": "Alice 2",
+					"friend": [
+					  {
+						"name": "Chris"
+					  }
+					]
+				  }
+				]
+			}			
+			`,
+		},
+
+		// Param Cascade at root, facet filtering at lower level. Contrast this with
+		// next query/response.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(friend) {
+				  name
+				  age
+				  friend @facets(eq(close, false)) {
+					name
+				  }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 2",
+					"friend": [
+					  {
+						"name": "Chris"
+					  }
+					]
+				  }
+				]
+			}			
+			`,
+		},
+
+		// @cascade at root, facet-filtering at lower level. This is why we implemented
+		// the Parameterized Cascade.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade {
+				  name
+				  age
+				  friend @facets(eq(close, false)) {
+					name
+				  }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": []
+			}			
+			`,
+		},
+
+		// Parameterized at root, facet-filtering at next level. Implicit cascade at inner-levels.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(friend) {
+				  name
+				  age
+				  friend @facets(eq(close, true)) {
+					name
+					friend {
+					  name
+					}
+				  }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23",
+					"friend": [
+					  {
+						"name": "Bob",
+						"friend": [
+						  {
+							"name": "Chris"
+						  }
+						]
+					  }
+					]
+				  }
+				]
+			}
+			`,
+		},
+
+		// Same idea as above with facets' OR operator.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(friend) {
+				  name
+					age
+				    friend @facets(eq(close, true) OR eq(close, false)) {
+				      name
+				    }
+				}
+			}	
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23",
+					"friend": [
+					  {
+						"name": "Bob"
+					  }
+					]
+				  },
+				  {
+					"name": "Alice 2",
+					"friend": [
+					  {
+						"name": "Chris"
+					  }
+					]
+				  }
+				]
+			}			
+			`,
+		},
+
+		// Non existent param in cascade - ignored.
+		{
+			in: `
+			{
+				q(func: anyoftext(name, "Alice")) @cascade(foo) {
+				  name
+					age
+         		    friend @facets(eq(close, true) OR eq(close, false)) {
+					  name
+					  age
+				    }
+				}
+			}			
+			`,
+			out: `
+			{
+				"q": [
+				  {
+					"name": "Alice 1",
+					"age": "23"
+				  },
+				  {
+					"name": "Alice 2"
+				  },
+				  {
+					"name": "Alice 3",
+					"age": "32"
+				  }
+				]
+			}
+			`,
+		},
+	}
+
+	for _, tc := range tests {
+		resp, err := c.NewTxn().Query(ctx, tc.in)
 		require.NoError(t, err)
 		testutil.CompareJSON(t, tc.out, string(resp.Json))
 	}
