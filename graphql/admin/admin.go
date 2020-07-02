@@ -297,11 +297,12 @@ var (
 		resolve.GuardianAuthMW4Mutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
-		"state":        {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
-		"config":       commonAdminQueryMWs,
-		"listBackups":  commonAdminQueryMWs,
-		"getGQLSchema": commonAdminQueryMWs,
+		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph checks Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"config":        commonAdminQueryMWs,
+		"listBackups":   commonAdminQueryMWs,
+		"restoreStatus": commonAdminQueryMWs,
+		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":     {resolve.IpWhitelistingMW4Query},
@@ -487,6 +488,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		}).
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
+		}).
+		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveRestoreStatus)
 		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(

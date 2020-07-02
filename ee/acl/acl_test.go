@@ -2141,10 +2141,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					mutation {
 					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						response {
-						  code
-						  message
-						}
+						code
 					  }
 					}`,
 			queryName:          "restore",
@@ -2154,7 +2151,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					" manifests: The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"restore": null}`,
+			guardianData: `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",
