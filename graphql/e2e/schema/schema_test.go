@@ -294,8 +294,8 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	// need to wait a bit, because the update notification takes time to reach the alpha
 	time.Sleep(time.Second)
 	// now retrieving the GraphQL schema should report no schema
-	gqlSchema := getGQLSchema(t, groupOneAdminServer)
-	require.Nil(t, gqlSchema)
+	gqlSchema := getGQLSchemaRequireId(t, groupOneAdminServer)
+	require.Empty(t, gqlSchema)
 
 	// updating the schema now should work
 	schema := `
