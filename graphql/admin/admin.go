@@ -19,6 +19,7 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"net/http"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -331,7 +332,25 @@ var (
 		"deleteUser":  {resolve.IpWhitelistingMW4Mutation},
 		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
 	}
+	// mainHealth tracks the health of the main GraphQL server.
+	// It is required for kubernetes probing.
+	mainHealth = &graphQLHealth{HttpStatusCode: http.StatusServiceUnavailable, StatusMsg: "init"}
 )
+
+type graphQLHealth struct {
+	HttpStatusCode int
+	StatusMsg      string
+}
+
+func (g *graphQLHealth) up() {
+	g.HttpStatusCode = http.StatusOK
+	g.StatusMsg = "up"
+}
+
+func (g *graphQLHealth) updatingSchema() {
+	g.HttpStatusCode = http.StatusOK
+	g.StatusMsg = "updating schema"
+}
 
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
@@ -361,7 +380,7 @@ type adminServer struct {
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
-	web.IServeGraphQL) {
+	web.IServeGraphQL, *graphQLHealth) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -380,7 +399,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	adminServer := web.NewServer(globalEpoch, adminResolvers)
 
-	return mainServer, adminServer
+	return mainServer, adminServer, mainHealth
 }
 
 // newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
@@ -450,13 +469,13 @@ func newAdminResolver(
 			return
 		}
 
-		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
-
 		server.mux.Lock()
 		defer server.mux.Unlock()
 
 		server.schema = newSchema
 		server.resetSchema(*gqlSchema)
+
+		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 	}, 1, closer)
 
 	go server.initServer()
@@ -599,6 +618,7 @@ func (as *adminServer) initServer() {
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
+		mainHealth.up()
 
 		if sch.Schema == "" {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
@@ -611,9 +631,9 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
-
 		as.resetSchema(*generatedSchema)
+
+		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
 		break
 	}
@@ -739,6 +759,8 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 }
 
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
+	// set status as updating schema
+	mainHealth.updatingSchema()
 
 	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound).
 		WithConventionResolvers(gqlSchema, as.fns)
@@ -750,6 +772,9 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// will match against global epoch to terminate the current subscriptions.
 	atomic.AddUint64(as.globalEpoch, 1)
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
+
+	// reset status to up, as now we are serving the new schema
+	mainHealth.up()
 }
 
 func response(code, msg string) map[string]interface{} {
