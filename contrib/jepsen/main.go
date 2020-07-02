@@ -428,30 +428,37 @@ func main() {
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
-			if *refreshCluster {
-				jepsenDown(*jepsenRoot)
-				jepsenUp(*jepsenRoot)
-				if err := jepsenServe(); err != nil {
-					log.Fatal(err)
+		retryLoop:
+			for i := 0; i < 3; i++ {
+				if *refreshCluster {
+					jepsenDown(*jepsenRoot)
+					jepsenUp(*jepsenRoot)
+					if err := jepsenServe(); err != nil {
+						log.Fatal(err)
+					}
+					// Sleep for 10 seconds to let the cluster start before running the test.
+					time.Sleep(10*time.Second)
 				}
-			}
 
-			err := runJepsenTest(&jepsenTest{
-				workload:          w,
-				nemesis:           n,
-				timeLimit:         *timeLimit,
-				concurrency:       *concurrency,
-				rebalanceInterval: *rebalanceInterval,
-				nemesisInterval:   *nemesisInterval,
-				localBinary:       *localBinary,
-				nodes:             *nodes,
-				replicas:          *replicas,
-				skew:              *skew,
-				testCount:         *testCount,
-				deferDbTeardown:   *deferDbTeardown,
-			})
-			if err != nil {
-				if err == errTestFail {
+				err := runJepsenTest(&jepsenTest{
+					workload:          w,
+					nemesis:           n,
+					timeLimit:         *timeLimit,
+					concurrency:       *concurrency,
+					rebalanceInterval: *rebalanceInterval,
+					nemesisInterval:   *nemesisInterval,
+					localBinary:       *localBinary,
+					nodes:             *nodes,
+					replicas:          *replicas,
+					skew:              *skew,
+					testCount:         *testCount,
+					deferDbTeardown:   *deferDbTeardown,
+				})
+
+				switch err {
+				case nil:
+					break retryLoop
+				case errTestFail:
 					if *jaegerSaveTraces {
 						saveJaegerTracesToJepsen(*jepsenRoot)
 					}
@@ -459,6 +466,10 @@ func main() {
 						os.Exit(1)
 					}
 					defer os.Exit(1)
+					break retryLoop
+				case errTestIncomplete:
+					// Retry incomplete tests. Sometimes tests fail due to temporary errors.
+					continue
 				}
 			}
 		}
