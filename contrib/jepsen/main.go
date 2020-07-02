@@ -136,6 +136,9 @@ var (
 	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
 	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
 
+	// Options
+	refreshCluster = pflag.Bool("refresh-cluster", false, "Down and up the cluster before each test.")
+
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
@@ -400,27 +403,39 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
-	if *doDown {
+	if *doDown && !*refreshCluster {
 		jepsenDown(*jepsenRoot)
 	}
-	if *doUp {
+	if *doUp && !*refreshCluster {
 		jepsenUp(*jepsenRoot)
 	}
-	if err := jepsenServe(); err != nil {
-		log.Fatal(err)
-	}
-	if shouldOpenPage {
-		url := jepsenURL()
-		browser.Open(url)
-		if *jaeger != "" {
-			browser.Open("http://localhost:16686")
+
+	if !*refreshCluster {
+		if err := jepsenServe(); err != nil {
+			log.Fatal(err)
+		}
+		if shouldOpenPage {
+			url := jepsenURL()
+			browser.Open(url)
+			if *jaeger != "" {
+				browser.Open("http://localhost:16686")
+			}
 		}
 	}
+
 	workloads := strings.Split(*workload, " ")
 	nemeses := strings.Split(*nemesis, " ")
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
+			if *refreshCluster {
+				jepsenDown(*jepsenRoot)
+				jepsenUp(*jepsenRoot)
+				if err := jepsenServe(); err != nil {
+					log.Fatal(err)
+				}
+			}
+
 			err := runJepsenTest(&jepsenTest{
 				workload:          w,
 				nemesis:           n,
