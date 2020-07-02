@@ -19,20 +19,19 @@ package admin
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/dgraph-io/dgraph/query"
+
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -50,9 +49,7 @@ const (
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
 
-	gqlSchemaXidKey = "dgraph.graphql.xid"
-	gqlSchemaXidVal = "dgraph.graphql.schema"
-	gqlSchemaPred   = "dgraph.graphql.schema"
+	gqlSchemaPred = "dgraph.graphql.schema"
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
@@ -300,10 +297,11 @@ var (
 		resolve.GuardianAuthMW4Mutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":      {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
-		"state":       {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
-		"config":      commonAdminQueryMWs,
-		"listBackups": commonAdminQueryMWs,
+		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
+		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
+		"config":        commonAdminQueryMWs,
+		"listBackups":   commonAdminQueryMWs,
+		"restoreStatus": commonAdminQueryMWs,
 		// not applying ip whitelisting to keep it in sync with /alter
 		"getGQLSchema": {resolve.GuardianAuthMW4Query},
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
@@ -442,7 +440,7 @@ func newAdminResolver(
 		}
 
 		newSchema := &gqlSchema{
-			ID:     fmt.Sprintf("%#x", pk.Uid),
+			ID:     query.UidToHex(pk.Uid),
 			Schema: string(pl.Postings[0].Value),
 		}
 
@@ -493,6 +491,9 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 		WithQueryResolver("listBackups", func(q schema.Query) resolve.QueryResolver {
 			return resolve.QueryResolverFunc(resolveListBackups)
 		}).
+		WithQueryResolver("restoreStatus", func(q schema.Query) resolve.QueryResolver {
+			return resolve.QueryResolverFunc(resolveRestoreStatus)
+		}).
 		WithMutationResolver("updateGQLSchema", func(m schema.Mutation) resolve.MutationResolver {
 			return resolve.MutationResolverFunc(
 				func(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -520,96 +521,40 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf.WithSchemaIntrospection()
 }
 
-func upsertEmptyGQLSchema() (*gqlSchema, error) {
-	existingSchemaVar := "ExistingGQLSchema"
-	xidInSchemaVar := "XidInSchema"
-	gqlType := "dgraph.graphql"
-
-	/*
-		query {
-		  ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
-		    uid
-		    dgraph.graphql.schema
-		    XidInSchema as dgraph.graphql.xid
-		  }
-		}
-	*/
-	qry := &gql.GraphQuery{
-		Attr: existingSchemaVar,
-		Var:  existingSchemaVar,
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: gqlType}},
-		},
-		Children: []*gql.GraphQuery{
-			{Attr: "uid"},
-			{Attr: gqlSchemaPred},
-			{Attr: gqlSchemaXidKey, Var: xidInSchemaVar},
-		},
-	}
-
-	/*
-		mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
-			set {
-				"uid": "uid(ExistingGQLSchema)",
-				"dgraph.graphql.xid": "dgraph.graphql.schema"
-			}
-		}
-		mutation @if(eq(len(ExistingGQLSchema),0) AND eq(len(XidInSchema),0))
-			set {
-				"uid": "_:XidInSchema",
-				"dgraph.type": ["dgraph.graphql"],
-				"dgraph.graphql.xid": "dgraph.graphql.schema",
-				"dgraph.graphql.schema": ""
-			}
-		}
-	*/
-	mutations := []*dgoapi.Mutation{
-		{
-			SetJson: []byte(fmt.Sprintf(`
-			{
-				"uid": "uid(%s)",
-				"%s": "%s"
-			}`, existingSchemaVar, gqlSchemaXidKey, gqlSchemaXidVal)),
-			Cond: fmt.Sprintf(`@if(eq(len(%s),1) AND eq(len(%s),0))`, existingSchemaVar,
-				xidInSchemaVar),
-		},
-		{
-			SetJson: []byte(fmt.Sprintf(`
-			{
-				"uid": "_:%s",
-				"dgraph.type": ["%s"],
-				"%s": "%s",
-				"%s": ""
-			}`, xidInSchemaVar, gqlType, gqlSchemaXidKey, gqlSchemaXidVal, gqlSchemaPred)),
-			Cond: fmt.Sprintf(`@if(eq(len(%s),0) AND eq(len(%s),0))`, existingSchemaVar,
-				xidInSchemaVar),
-		},
-	}
-
+func getCurrentGraphQLSchema() (*gqlSchema, error) {
 	resp, err := resolve.NewAdminExecutor().Execute(context.Background(),
-		&dgoapi.Request{Query: dgraph.AsString(qry), Mutations: mutations, CommitNow: true})
+		&dgoapi.Request{
+			Query: `
+			query {
+			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+				uid
+				dgraph.graphql.schema
+			  }
+			}`})
 	if err != nil {
 		return nil, err
 	}
 
-	// the Alpha which created a new gql schema node with xid will get the uid here
-	uid, ok := resp.GetUids()[xidInSchemaVar]
-	if ok {
-		return &gqlSchema{ID: uid}, nil
-	}
-
 	result := make(map[string]interface{})
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
+		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph query")
 	}
 
-	// the Alphas which didn't create a new gql schema node, will get the uid here.
-	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
-	return &gqlSchema{
-		ID:     gqlSchemaNode["uid"].(string),
-		Schema: gqlSchemaNode[gqlSchemaPred].(string),
-	}, nil
+	existingGQLSchema := result["ExistingGQLSchema"].([]interface{})
+	if len(existingGQLSchema) == 0 {
+		// no schema has been stored yet in Dgraph
+		return &gqlSchema{}, nil
+	} else if len(existingGQLSchema) == 1 {
+		// we found an existing GraphQL schema
+		gqlSchemaNode := existingGQLSchema[0].(map[string]interface{})
+		return &gqlSchema{
+			ID:     gqlSchemaNode["uid"].(string),
+			Schema: gqlSchemaNode[gqlSchemaPred].(string),
+		}, nil
+	}
+
+	// found multiple GraphQL schema nodes, this should never happen
+	return nil, worker.ErrMultipleGraphQLSchemaNodes
 }
 
 func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
@@ -617,9 +562,6 @@ func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Disable subscription.
-	schHandler.DisableSubscription()
-
 	sch.GeneratedSchema = schHandler.GQLSchema()
 	generatedSchema, err := schema.FromString(sch.GeneratedSchema)
 	if err != nil {
@@ -647,14 +589,15 @@ func (as *adminServer) initServer() {
 	for {
 		<-time.After(waitFor)
 
-		sch, err := upsertEmptyGQLSchema()
+		sch, err := getCurrentGraphQLSchema()
 		if err != nil {
 			glog.Infof("Error reading GraphQL schema: %s.", err)
 			continue
 		}
 
 		as.schema = sch
-		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has ID
+		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
+		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
 
 		if sch.Schema == "" {
@@ -680,21 +623,11 @@ func (as *adminServer) initServer() {
 func (as *adminServer) addConnectedAdminResolvers() {
 
 	qryRw := resolve.NewQueryRewriter()
-	updRw := resolve.NewUpdateRewriter()
 	dgEx := resolve.NewDgraphExecutor()
 
 	as.rf.WithMutationResolver("updateGQLSchema",
 		func(m schema.Mutation) resolve.MutationResolver {
-			updResolver := &updateSchemaResolver{
-				admin:                as,
-				baseMutationRewriter: updRw,
-				baseMutationExecutor: dgEx,
-			}
-
-			return resolve.NewDgraphResolver(
-				updResolver,
-				updResolver,
-				resolve.StdMutationCompletion(m.Name()))
+			return resolve.MutationResolverFunc(resolveUpdateGQLSchema)
 		}).
 		WithQueryResolver("getGQLSchema",
 			func(q schema.Query) resolve.QueryResolver {

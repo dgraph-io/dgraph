@@ -15,10 +15,10 @@ For a single server setup, recommended for new users, please see [Get Started]({
 ### Docker
 
 ```sh
-docker pull dgraph/dgraph:latest
+docker pull dgraph/dgraph:{{< version >}}
 
 # You can test that it worked fine, by running:
-docker run -it dgraph/dgraph:latest dgraph
+docker run -it dgraph/dgraph:{{< version >}} dgraph
 ```
 
 ### Automatic download
@@ -373,25 +373,25 @@ docker network create dgraph_default
 ```sh
 mkdir ~/zero # Or any other directory where data should be stored.
 
-docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
+docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:{{< version >}} dgraph zero --my=HOSTIPADDR:5080
 ```
 
 **Run dgraph alpha**
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 ```
 ```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:latest dgraph-ratel
+docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:{{< version >}} dgraph-ratel
 ```
 
 ### Run using Docker Compose (On single AWS instance)
@@ -426,8 +426,10 @@ To see how to connect your Docker Client to the Docker Engine running on this vi
 ```
 
 The command would provision a `t2-micro` instance with a security group called `docker-machine`
-(allowing inbound access on 2376 and 22). You can either edit the security group to allow inbound access to '5080`, `8080`, `9080` (default ports for Dgraph Zero & Alpha) or you can provide your own security
-group which allows inbound access on port 22, 2376 (required by Docker Machine), 5080, 8080 and 9080. Remember port *5080* is only required if you are running Dgraph Live Loader or Dgraph Bulk Loader from outside.
+(allowing inbound access on `2376` and `22`). You can either edit the security group to allow inbound access to `5080`, `8080`, `9080` (default ports for Dgraph Zero & Alpha) or you can provide your own security
+group which allows inbound access on port `22`, `2376` (required by Docker Machine), `5080`, `8080` and `9080`. Remember port *`5080`* is only required if you are running Dgraph Live Loader or Dgraph Bulk Loader from outside.
+
+{{% notice "note" %}}Dgraph recommended memory is 7-8Gb. A `t2-micro` (free-tier eligible) is only provisioned with 1Gb and will not support larger schemas or data sets. We recommend using a `t2-large` (not free-tier eligible) or larger for a production server.{{% /notice %}}
 
 [Here](https://docs.docker.com/machine/drivers/aws/#options) is a list of full options for the `amazonec2` driver which allows you choose the instance type, security group, AMI among many other things.
 
@@ -444,8 +446,8 @@ Run the command below to download the `docker-compose.yml` file on your machine.
 wget https://github.com/dgraph-io/dgraph/raw/master/contrib/config/docker/docker-compose.yml
 ```
 
-{{% notice "note" %}}The config mounts `/data`(you could mount something else) on the instance to `/dgraph` within the
-container for persistence.{{% /notice %}}
+{{% notice "note" %}}The config mounts `/tmp/data` on the instance to `/dgraph` within the
+container for persistence. You will need to change this to a different directory to persists data as the `tmp` directory is only for illustration purposes and will not persist in that directory.{{% /notice %}}
 
 * Connect to the Docker Engine running on the machine.
 
