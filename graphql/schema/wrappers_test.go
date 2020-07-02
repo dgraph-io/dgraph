@@ -892,7 +892,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 			user(name: String!): User
 				@custom(
 				http: {
-					url: "http://api:8888/graphql"
+					url: "http://mock:8888/verifyHeaders"
 					method: "POST"
 					forwardHeaders: ["Token:API-Token"]
 					secretHeaders: ["Authorization:API-Token"]
@@ -902,7 +902,7 @@ func TestCustomLogicHeaders(t *testing.T) {
 				}
 				# Dgraph.Secret API-Token "random-fake-token"
 			`,
-			errors.New("input:14: Type Query; Field user: inside graphql in @custom directive, Post \"http://api:8888/graphql\": dial tcp: lookup api: no such host" + "\n"),
+			errors.New("input:14: Type Query; Field user: inside graphql in @custom directive, remote schema doesn't have any queries." + "\n"),
 		},
 		{
 			"check for header structure",
