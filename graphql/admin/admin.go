@@ -333,21 +333,22 @@ var (
 		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
 	}
 	// mainHealth tracks the health of the main GraphQL server.
-	// It is required for kubernetes probing.
-	mainHealth = &graphQLHealth{HttpStatusCode: http.StatusServiceUnavailable, StatusMsg: "init"}
+	mainHealth = &GraphQLHealth{HttpStatusCode: http.StatusServiceUnavailable, StatusMsg: "init"}
 )
 
-type graphQLHealth struct {
+// GraphQLHealth is used to report the health status of a GraphQL server.
+// It is required for kubernetes probing.
+type GraphQLHealth struct {
 	HttpStatusCode int
 	StatusMsg      string
 }
 
-func (g *graphQLHealth) up() {
+func (g *GraphQLHealth) up() {
 	g.HttpStatusCode = http.StatusOK
 	g.StatusMsg = "up"
 }
 
-func (g *graphQLHealth) updatingSchema() {
+func (g *GraphQLHealth) updatingSchema() {
 	g.HttpStatusCode = http.StatusOK
 	g.StatusMsg = "updating schema"
 }
@@ -380,7 +381,7 @@ type adminServer struct {
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
-	web.IServeGraphQL, *graphQLHealth) {
+	web.IServeGraphQL, *GraphQLHealth) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
