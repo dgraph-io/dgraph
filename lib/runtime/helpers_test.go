@@ -206,7 +206,6 @@ func TestFinalizeBlock(t *testing.T) {
 
 // TODO: the following tests need to be updated to use NODE_RUNTIME.
 // this will likely result in some of them being removed (need to determine what extrinsic types are valid)
-
 func TestValidateTransaction_AuthoritiesChange(t *testing.T) {
 	// TODO: update AuthoritiesChange to need to be signed by an authority
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
@@ -430,6 +429,7 @@ func TestApplyExtrinsic_StorageChange_Delete(t *testing.T) {
 	require.Equal(t, []byte(nil), val)
 }
 
+// TODO, this test replaced by TestApplyExtrinsic_Transfer_NoBalance_UncheckedExt, should this be removed?
 func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
 
@@ -461,6 +461,7 @@ func TestApplyExtrinsic_Transfer_NoBalance(t *testing.T) {
 	require.Equal(t, []byte{1, 2, 0, 1}, res)
 }
 
+// TODO, this test replaced by TestApplyExtrinsic_Transfer_WithBalance_UncheckedExtrinsic, should this be removed?
 func TestApplyExtrinsic_Transfer_WithBalance(t *testing.T) {
 	rt := NewTestRuntime(t, SUBSTRATE_TEST_RUNTIME)
 

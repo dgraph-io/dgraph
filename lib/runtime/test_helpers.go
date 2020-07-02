@@ -30,9 +30,9 @@ import (
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/trie"
 	"github.com/ChainSafe/gossamer/lib/utils"
-	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
-
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
+	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
 // TestAuthorityDataKey is the location of authority data in the storage trie
@@ -59,7 +59,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 		Storage:  rs,
 		Keystore: keystore.NewKeystore(),
 		Imports:  importsFunc,
-		LogLvl:   3,
+		LogLvl:   log.LvlInfo,
 	}
 
 	r, err := NewRuntimeFromFile(fp, cfg)

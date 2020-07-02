@@ -651,7 +651,7 @@ func ext_sr25519_verify(context unsafe.Pointer, msgData, msgLen, sigData, pubkey
 
 	msg := memory[msgData : msgData+msgLen]
 	sig := memory[sigData : sigData+64]
-
+	logger.Trace("[ext_sr25519_verify]", "msg", msg)
 	pub, err := sr25519.NewPublicKey(memory[pubkeyData : pubkeyData+32])
 	if err != nil {
 		return 1
