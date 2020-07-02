@@ -520,6 +520,7 @@ func run() {
 		defer x.FlushSentry()
 		x.ConfigureSentryScope("alpha")
 		x.WrapPanics()
+		x.SentryOptOutNote()
 	}
 	bindall = Alpha.Conf.GetBool("bindall")
 

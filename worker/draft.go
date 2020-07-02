@@ -1193,8 +1193,26 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
+	updateSize := func(pred string, size int64) {
+		if pred == "" {
+			return
+		}
+
+		if tablet, ok := tablets[pred]; ok {
+			tablet.Space += size
+		} else {
+			tablets[pred] = &pb.Tablet{
+				GroupId:   n.gid,
+				Predicate: pred,
+				Space:     size,
+			}
+		}
+		total += size
+	}
 
 	tableInfos := pstore.Tables(false)
+	previousLeft := ""
+	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
@@ -1202,29 +1220,23 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
-		right, err := x.Parse(tinfo.Right)
-		if err != nil {
-			glog.V(3).Infof("Unable to parse key: %v", err)
-			continue
-		}
-		if left.Attr != right.Attr {
-			// Skip all tables not fully owned by one predicate.
+
+		if left.Attr == previousLeft {
+			// Dgraph cannot depend on the right end of the table to know if the table belongs
+			// to a single predicate because there might be Badger-specific keys.
+			// Instead, Dgraph only counts the previous table if the current one belongs to the
+			// same predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(2).Info("Skipping table not owned by one predicate")
-			continue
-		}
-		pred := left.Attr
-		if tablet, ok := tablets[pred]; ok {
-			tablet.Space += int64(tinfo.EstimatedSz)
+			updateSize(previousLeft, previousSize)
 		} else {
-			tablets[pred] = &pb.Tablet{
-				GroupId:   n.gid,
-				Predicate: pred,
-				Space:     int64(tinfo.EstimatedSz),
-			}
+			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		total += int64(tinfo.EstimatedSz)
+		previousLeft = left.Attr
+		previousSize = int64(tinfo.EstimatedSz)
 	}
+	// The last table has not been counted. Assign it to the predicate at the left of the table.
+	updateSize(previousLeft, previousSize)
+
 	if len(tablets) == 0 {
 		glog.V(2).Infof("No tablets found.")
 		return
