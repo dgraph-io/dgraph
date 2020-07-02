@@ -17,6 +17,8 @@ import (
 	"context"
 	"io"
 	"net/url"
+	"strings"
+	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
 	"github.com/dgraph-io/dgraph/ee/enc"
@@ -29,6 +31,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
+)
+
+const (
+	errRestoreProposal = "cannot propose restore request"
 )
 
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
@@ -70,7 +76,7 @@ func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, er
 		reqCopy.GroupId = gid
 
 		go func() {
-			errCh <- proposeRestoreOrSend(ctx, reqCopy)
+			errCh <- tryRestoreProposal(ctx, reqCopy)
 		}()
 	}
 
@@ -111,6 +117,40 @@ func proposeRestoreOrSend(ctx context.Context, req *pb.RestoreRequest) error {
 	return err
 }
 
+func retriableRestoreError(err error) bool {
+	switch {
+	case err == conn.ErrNoConnection:
+		// Try to recover from temporary connection issues.
+		return true
+	case strings.Contains(err.Error(), "Raft isn't initialized yet"):
+		// Try to recover if raft has not been initialized.
+		return true
+	case strings.Contains(err.Error(), errRestoreProposal):
+		// Do not try to recover from other errors when sending the proposal.
+		return false
+	default:
+		// Try to recover from other errors (e.g wrong group, waiting for timestamp, etc).
+		return true
+	}
+}
+
+func tryRestoreProposal(ctx context.Context, req *pb.RestoreRequest) error {
+	var err error
+	for i := 0; i < 10; i++ {
+		err = proposeRestoreOrSend(ctx, req)
+		if err == nil {
+			return nil
+		}
+
+		if retriableRestoreError(err) {
+			time.Sleep(time.Second)
+			continue
+		}
+		return err
+	}
+	return err
+}
+
 // Restore implements the Worker interface.
 func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.Status, error) {
 	var emptyRes pb.Status
@@ -126,7 +166,7 @@ func (w *grpcWorker) Restore(ctx context.Context, req *pb.RestoreRequest) (*pb.S
 
 	err := groups().Node.proposeAndWait(ctx, &pb.Proposal{Restore: req})
 	if err != nil {
-		return &emptyRes, errors.Wrapf(err, "cannot propose restore request")
+		return &emptyRes, errors.Wrapf(err, errRestoreProposal)
 	}
 
 	return &emptyRes, nil
