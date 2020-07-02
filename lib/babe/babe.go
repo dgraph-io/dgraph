@@ -240,9 +240,14 @@ func (b *Service) safeSend(msg types.Block) error {
 	return nil
 }
 
-// AuthorityData returns the data related to the authority
-func (b *Service) AuthorityData() []*types.BABEAuthorityData {
+// Authorities returns the current BABE authorities
+func (b *Service) Authorities() []*types.BABEAuthorityData {
 	return b.authorityData
+}
+
+// SetAuthorities sets the current BABE authorities
+func (b *Service) SetAuthorities(a []*types.BABEAuthorityData) {
+	b.authorityData = a
 }
 
 // SetEpochData will set the authorityData and randomness

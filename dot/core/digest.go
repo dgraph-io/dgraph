@@ -40,10 +40,11 @@ type digestHandler struct {
 	stopped bool
 
 	// BABE changes
-	babeScheduledChange *babeChange //nolint
-	babeForcedChange    *babeChange //nolint
-	babePause           *pause      //nolint
-	babeResume          *resume     //nolint
+	babeScheduledChange *babeChange
+	babeForcedChange    *babeChange
+	babePause           *pause
+	babeResume          *resume
+	babeAuths           []*types.BABEAuthorityData // saved in case of pause
 
 	// GRANDPA changes
 	grandpaScheduledChange *grandpaChange
@@ -53,9 +54,9 @@ type digestHandler struct {
 	grandpaAuths           []*types.GrandpaAuthorityData // saved in case of pause
 }
 
-type babeChange struct { //nolint
-	auths   []*types.BABEAuthorityData //nolint
-	atBlock *big.Int                   //nolint
+type babeChange struct {
+	auths   []*types.BABEAuthorityData
+	atBlock *big.Int
 }
 
 type grandpaChange struct {
@@ -117,6 +118,7 @@ func (h *digestHandler) handleBlockImport() {
 		}
 
 		h.handleGrandpaChangesOnImport(block.Header.Number)
+		h.handleBABEChangesOnImport(block.Header.Number)
 	}
 }
 
@@ -127,7 +129,41 @@ func (h *digestHandler) handleBlockFinalization() {
 		}
 
 		h.handleGrandpaChangesOnFinalization(header.Number)
+		h.handleBABEChangesOnFinalization(header.Number)
 	}
+}
+
+func (h *digestHandler) handleBABEChangesOnImport(num *big.Int) {
+	resume := h.babeResume
+	if resume != nil && num.Cmp(resume.atBlock) == 0 {
+		h.babe.SetAuthorities(h.babeAuths)
+		h.babeResume = nil
+	}
+
+	fc := h.babeForcedChange
+	if fc != nil && num.Cmp(fc.atBlock) == 0 {
+		h.babe.SetAuthorities(fc.auths)
+		h.babeForcedChange = nil
+	}
+}
+
+func (h *digestHandler) handleBABEChangesOnFinalization(num *big.Int) {
+	pause := h.babePause
+	if pause != nil && num.Cmp(pause.atBlock) == 0 {
+		// save authority data for Resume
+		h.babeAuths = h.babe.Authorities()
+		h.babe.SetAuthorities([]*types.BABEAuthorityData{})
+		h.babePause = nil
+	}
+
+	sc := h.babeScheduledChange
+	if sc != nil && num.Cmp(sc.atBlock) == 0 {
+		h.babe.SetAuthorities(sc.auths)
+		h.babeScheduledChange = nil
+	}
+
+	// if blocks get finalized before forced change takes place, disregard it
+	h.babeForcedChange = nil
 }
 
 func (h *digestHandler) handleGrandpaChangesOnImport(num *big.Int) {
@@ -190,7 +226,23 @@ func (h *digestHandler) handleScheduledChange(d *types.ConsensusDigest) error {
 	}
 
 	if d.ConsensusEngineID == types.BabeEngineID {
-		// TODO
+		if h.babeScheduledChange != nil {
+			return errors.New("already have scheduled change scheduled")
+		}
+
+		sc := &types.BABEScheduledChange{}
+		dec, err := scale.Decode(d.Data[1:], sc)
+		if err != nil {
+			return err
+		}
+		sc = dec.(*types.BABEScheduledChange)
+
+		c, err := newBABEChange(sc.Auths, sc.Delay, curr.Number)
+		if err != nil {
+			return err
+		}
+
+		h.babeScheduledChange = c
 	} else {
 		if h.grandpaScheduledChange != nil {
 			return errors.New("already have scheduled change scheduled")
@@ -221,7 +273,23 @@ func (h *digestHandler) handleForcedChange(d *types.ConsensusDigest) error {
 	}
 
 	if d.ConsensusEngineID == types.BabeEngineID {
-		// TODO
+		if h.babeForcedChange != nil {
+			return errors.New("already have forced change scheduled")
+		}
+
+		fc := &types.BABEForcedChange{}
+		dec, err := scale.Decode(d.Data[1:], fc)
+		if err != nil {
+			return err
+		}
+		fc = dec.(*types.BABEForcedChange)
+
+		c, err := newBABEChange(fc.Auths, fc.Delay, curr.Number)
+		if err != nil {
+			return err
+		}
+
+		h.babeForcedChange = c
 	} else {
 		if h.grandpaForcedChange != nil {
 			return errors.New("already have forced change scheduled")
@@ -254,7 +322,16 @@ func (h *digestHandler) handleOnDisabled(d *types.ConsensusDigest) error {
 	od = dec.(*types.OnDisabled)
 
 	if d.ConsensusEngineID == types.BabeEngineID {
-		// TODO
+		curr := h.babe.Authorities()
+		next := []*types.BABEAuthorityData{}
+
+		for i, auth := range curr {
+			if uint64(i) != od.ID {
+				next = append(next, auth)
+			}
+		}
+
+		h.babe.SetAuthorities(next)
 	} else {
 		curr := h.grandpa.Authorities()
 		next := []*types.GrandpaAuthorityData{}
@@ -287,7 +364,9 @@ func (h *digestHandler) handlePause(d *types.ConsensusDigest) error {
 	delay := big.NewInt(int64(p.Delay))
 
 	if d.ConsensusEngineID == types.BabeEngineID {
-		// TODO
+		h.babePause = &pause{
+			atBlock: big.NewInt(-1).Add(curr.Number, delay),
+		}
 	} else {
 		h.grandpaPause = &pause{
 			atBlock: big.NewInt(-1).Add(curr.Number, delay),
@@ -313,7 +392,9 @@ func (h *digestHandler) handleResume(d *types.ConsensusDigest) error {
 	delay := big.NewInt(int64(p.Delay))
 
 	if d.ConsensusEngineID == types.BabeEngineID {
-		// TODO
+		h.babeResume = &resume{
+			atBlock: big.NewInt(-1).Add(curr.Number, delay),
+		}
 	} else {
 		h.grandpaResume = &resume{
 			atBlock: big.NewInt(-1).Add(curr.Number, delay),
@@ -332,6 +413,20 @@ func newGrandpaChange(raw []*types.GrandpaAuthorityDataRaw, delay uint32, currBl
 	d := big.NewInt(int64(delay))
 
 	return &grandpaChange{
+		auths:   auths,
+		atBlock: big.NewInt(-1).Add(currBlock, d),
+	}, nil
+}
+
+func newBABEChange(raw []*types.BABEAuthorityDataRaw, delay uint32, currBlock *big.Int) (*babeChange, error) {
+	auths, err := types.BABEAuthorityDataRawToAuthorityData(raw)
+	if err != nil {
+		return nil, err
+	}
+
+	d := big.NewInt(int64(delay))
+
+	return &babeChange{
 		auths:   auths,
 		atBlock: big.NewInt(-1).Add(currBlock, d),
 	}, nil

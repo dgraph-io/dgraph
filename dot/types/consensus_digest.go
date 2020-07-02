@@ -19,6 +19,38 @@ var PauseType = byte(4)
 // ResumeType identifies a Resume consensus digest
 var ResumeType = byte(5)
 
+// BABEScheduledChange represents a BABE scheduled authority change
+type BABEScheduledChange struct {
+	Auths []*BABEAuthorityDataRaw
+	Delay uint32
+}
+
+// Encode returns a SCALE encoded BABEScheduledChange with first type byte
+func (sc *BABEScheduledChange) Encode() ([]byte, error) {
+	d, err := scale.Encode(sc)
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]byte{ScheduledChangeType}, d...), nil
+}
+
+// BABEForcedChange represents a BABE forced authority change
+type BABEForcedChange struct {
+	Auths []*BABEAuthorityDataRaw
+	Delay uint32
+}
+
+// Encode returns a SCALE encoded BABEForcedChange with first type byte
+func (fc *BABEForcedChange) Encode() ([]byte, error) {
+	d, err := scale.Encode(fc)
+	if err != nil {
+		return nil, err
+	}
+
+	return append([]byte{ForcedChangeType}, d...), nil
+}
+
 // GrandpaScheduledChange represents a GRANDPA scheduled authority change
 type GrandpaScheduledChange struct {
 	Auths []*GrandpaAuthorityDataRaw

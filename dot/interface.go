@@ -14,4 +14,6 @@ type BlockProducer interface {
 	SetRuntime(*runtime.Runtime) error
 	Pause() error
 	Resume() error
+	Authorities() []*types.BABEAuthorityData
+	SetAuthorities(a []*types.BABEAuthorityData)
 }

@@ -66,7 +66,9 @@ func (v *mockVerifier) EpochNumber() uint64 {
 }
 
 // mockBlockProducer implements the BlockProducer interface
-type mockBlockProducer struct{}
+type mockBlockProducer struct {
+	auths []*types.BABEAuthorityData
+}
 
 // Start mocks starting
 func (bp *mockBlockProducer) Start() error {
@@ -86,6 +88,14 @@ func (bp *mockBlockProducer) Pause() error {
 // Resume mocks resuming
 func (bp *mockBlockProducer) Resume() error {
 	return nil
+}
+
+func (bp *mockBlockProducer) Authorities() []*types.BABEAuthorityData {
+	return bp.auths
+}
+
+func (bp *mockBlockProducer) SetAuthorities(a []*types.BABEAuthorityData) {
+	bp.auths = a
 }
 
 // GetBlockChannel returns a new channel
