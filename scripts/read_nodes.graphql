@@ -1,0 +1,7 @@
+{
+  data(func: eq(name, "Alice")) {
+     name
+     mobile @facets
+     car @facets
+  }
+}

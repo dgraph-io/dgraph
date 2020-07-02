@@ -1,0 +1,13 @@
+{
+  set {
+    _:company1 <name> "alpha" .
+    _:company1 <dgraph.type> "Company" .
+    _:company2 <name> "beta" .
+    _:company2 <dgraph.type> "Company" .
+
+    _:company1 <industry> "Machinery" .
+
+    _:company2 <industry> "High Tech" .
+
+  }
+}
