@@ -1789,6 +1789,7 @@ L:
 				if err != nil {
 					return nil, err
 				}
+				//Check what we have here after parsing uid_in.
 				expectArg = false
 				continue
 			case itemRightSquare:
