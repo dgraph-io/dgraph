@@ -37,7 +37,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -59,9 +58,10 @@ func (s *Server) Login(ctx context.Context,
 
 	// record the client ip for this login request
 	var addr string
-	if peerInfo, ok := peer.FromContext(ctx); ok {
-		addr = peerInfo.Addr.String()
-		glog.Infof("Login request from: %s", addr)
+	if ipAddr, err := hasAdminAuth(ctx, "Login"); err != nil {
+		return nil, err
+	} else {
+		addr = ipAddr.String()
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")

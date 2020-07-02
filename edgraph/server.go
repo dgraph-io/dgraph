@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -173,7 +174,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
 	}
-	if err := isAlterAllowed(ctx); err != nil {
+	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err
 	}
@@ -909,10 +910,7 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 
 	// make sure that requests for schema query are authenticated similar to admin requests
 	if qc.gqlRes.Schema != nil {
-		if _, err := x.HasWhitelistedIP(ctx); err != nil {
-			return nil, err
-		}
-		if err := hasPoormansAuth(ctx); err != nil {
+		if _, err := hasAdminAuth(ctx, "schema query"); err != nil {
 			return nil, err
 		}
 	}
@@ -1212,13 +1210,16 @@ func isMutationAllowed(ctx context.Context) bool {
 
 var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
-func isAlterAllowed(ctx context.Context) error {
+func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
 	ipAddr, err := x.HasWhitelistedIP(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	glog.Infof("Got Alter request from %q\n", ipAddr)
-	return hasPoormansAuth(ctx)
+	glog.Infof("Got %s request from: %q\n", tag, ipAddr)
+	if err = hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
 }
 
 func hasPoormansAuth(ctx context.Context) error {
