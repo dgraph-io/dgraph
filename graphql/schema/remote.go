@@ -85,7 +85,6 @@ func introspectRemoteSchema(url string, headers http.Header) (*introspectedSchem
 const (
 	list        = "LIST"
 	nonNull     = "NON_NULL"
-	object = string(ast.Object)
 	inputObject = string(ast.InputObject)
 )
 
@@ -379,6 +378,7 @@ func matchRemoteTypes(schema *ast.Schema, remoteTypes map[string]*types) error {
 				}
 				remoteFields := remoteType.Fields
 				if remoteFields == nil {
+					// Get fields for INPUT_OBJECT
 					remoteFields = remoteType.InputFields
 				}
 				for _, field := range fields {
