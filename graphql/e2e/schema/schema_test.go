@@ -291,6 +291,8 @@ func TestUpdateGQLSchemaAfterDropAll(t *testing.T) {
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
 
+	// need to wait a bit, because the update notification takes time to reach the alpha
+	time.Sleep(time.Second)
 	// now retrieving the GraphQL schema should report no schema
 	gqlSchema := getGQLSchema(t, groupOneAdminServer)
 	require.Nil(t, gqlSchema)
@@ -318,6 +320,9 @@ func TestGQLSchemaAfterDropData(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, dg.Alter(context.Background(), &api.Operation{DropOp: api.Operation_DATA}))
 
+	// lets wait a bit to be sure that the update notification has reached the alpha,
+	// otherwise we are anyways gonna get the previous schema from the in-memory schema
+	time.Sleep(time.Second)
 	// we should still get the schema we inserted earlier
 	require.Equal(t, schema, getGQLSchemaRequireId(t, groupOneAdminServer))
 
