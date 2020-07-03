@@ -20,9 +20,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=1 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=1 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   alpha2:
     image: dgraph/dgraph:latest
     container_name: alpha2
@@ -43,9 +43,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=2 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 102 --my=alpha2:7182 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=2 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   alpha3:
     image: dgraph/dgraph:latest
     container_name: alpha3
@@ -66,9 +66,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=3 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 103 --my=alpha3:7183 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=3 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   alpha4:
     image: dgraph/dgraph:latest
     container_name: alpha4
@@ -89,9 +89,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=4 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 104 --my=alpha4:7184 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=4 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   alpha5:
     image: dgraph/dgraph:latest
     container_name: alpha5
@@ -112,9 +112,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=5 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 105 --my=alpha5:7185 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=5 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   alpha6:
     image: dgraph/dgraph:latest
     container_name: alpha6
@@ -135,9 +135,9 @@ services:
       source: ../../ee/acl/hmac-secret
       target: /secret/hmac
       read_only: true
-    command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180
-      --logtostderr -v=2 --idx=6 --acl_secret_file=/secret/hmac --acl_access_ttl 300s
-      --acl_cache_ttl 500s
+    command: /gobin/dgraph alpha -o 106 --my=alpha6:7186 --lru_mb=1024 --zero=zero1:5180,zero2:5182,zero3:5183
+      --logtostderr -v=2 --idx=6 --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --acl_secret_file=/secret/hmac --acl_access_ttl 300s --acl_cache_ttl 500s
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1

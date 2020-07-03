@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -154,7 +154,7 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 	if !isMutationAllowed(ctx) {
 		return nil, errors.Errorf("No mutations allowed by server.")
 	}
-	if err := isAlterAllowed(ctx); err != nil {
+	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return nil, err
 	}
@@ -953,6 +953,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		if err = authorizeSchemaQuery(ctx, &er); err != nil {
+			return resp, err
+		}
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
 			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
@@ -1155,11 +1158,19 @@ func isMutationAllowed(ctx context.Context) bool {
 
 var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
-func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
+func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
+	ipAddr, err := x.HasWhitelistedIP(ctx)
+	if err != nil {
+		return nil, err
 	}
+	glog.Infof("Got %s request from: %q\n", tag, ipAddr)
+	if err = hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+}
+
+func hasPoormansAuth(ctx context.Context) error {
 	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}
