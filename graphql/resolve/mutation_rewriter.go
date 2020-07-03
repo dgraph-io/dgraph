@@ -647,7 +647,7 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
 
-	// if rbac == schema.Uncertain { }
+	// if rbac == schema.Uncertain {}
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
 
 	return dgQuery

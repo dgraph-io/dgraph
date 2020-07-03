@@ -53,7 +53,7 @@ func hasFieldAuthRules(field schema.Field, authRw *authRewriter) bool {
 	}
 
 	for _, childField := range field.SelectionSet() {
-		if authRules := hasFieldAuthRules(childField, authRw); authRules == true {
+		if authRules := hasFieldAuthRules(childField, authRw); authRules {
 			return true
 		}
 	}
@@ -67,7 +67,7 @@ func hasAuthRules(query schema.Query, authRw *authRewriter) bool {
 	}
 
 	for _, field := range query.SelectionSet() {
-		if authRules := hasFieldAuthRules(field, authRw); authRules == true {
+		if authRules := hasFieldAuthRules(field, authRw); authRules {
 			return true
 		}
 	}
@@ -252,7 +252,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
-	// if rbac == schema.Uncertain { }
+	// if rbac == schema.Uncertain {}
 	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
@@ -349,8 +349,7 @@ func rewriteAsGet(
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
 
-	if rbac == schema.Uncertain {
-	}
+	// if rbac == schema.Uncertain {}
 	dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
@@ -760,8 +759,7 @@ func addSelectionSetFrom(
 
 			addArgumentsToField(selectionQry, f)
 			selectionQry.Filter = child.Filter
-			authQueries = append(authQueries, parentQry)
-			authQueries = append(authQueries, selectionQry)
+			authQueries = append(authQueries, parentQry, selectionQry)
 			child.Filter = &gql.FilterTree{
 				Func: &gql.Function{
 					Name: "uid",
