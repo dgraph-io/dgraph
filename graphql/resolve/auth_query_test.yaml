@@ -301,7 +301,7 @@
     }
   role: "USER"
   dgquery: |-
-    query {``
+    query {
       queryProject(func: uid(ProjectRoot)) {
         name : Project.name
         dgraph.uid : uid
