@@ -136,8 +136,9 @@ var (
 	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
 	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
 
-	// Options
-	refreshCluster = pflag.Bool("refresh-cluster", false, "Down and up the cluster before each test.")
+	// Option to run each test with a new cluster. This appears to mitigate flakiness.
+	refreshCluster = pflag.Bool("refresh-cluster", false,
+		"Down and up the cluster before each test.")
 
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
