@@ -96,6 +96,16 @@ var (
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// graphQLSchemaNode represents the node which contains GraphQL schema
+type graphQLSchemaNode struct {
+	Uid    string `json:"uid"`
+	Schema string `json:"dgraph.graphql.schema"`
+}
+
+type existingGQLSchemaQryResp struct {
+	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -143,29 +153,18 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 		return "", "", err
 	}
 
-	result := make(map[string]interface{})
+	var result existingGQLSchemaQryResp
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
 		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
 	}
 
-	existingGQLSchema := result["ExistingGQLSchema"].([]interface{})
-	if len(existingGQLSchema) == 0 {
+	if len(result.ExistingGQLSchema) == 0 {
 		// no schema has been stored yet in Dgraph
 		return "", "", nil
-	} else if len(existingGQLSchema) == 1 {
+	} else if len(result.ExistingGQLSchema) == 1 {
 		// we found an existing GraphQL schema
-		gqlSchemaNode := existingGQLSchema[0].(map[string]interface{})
-		uid, ok := gqlSchemaNode["uid"].(string)
-		if !ok {
-			// this should never happen
-			return "", "", errors.New("didn't find uid in ExistingGQLSchema node")
-		}
-		graphQLSchema, ok := gqlSchemaNode[worker.GqlSchemaPred].(string)
-		if !ok {
-			// this should never happen
-			return "", "", errors.New("didn't find dgraph.graphql.schema in ExistingGQLSchema node")
-		}
-		return uid, graphQLSchema, nil
+		gqlSchemaNode := result.ExistingGQLSchema[0]
+		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
@@ -320,7 +319,8 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, err
 		}
 
-		// insert empty GraphQL schema, so all alphas get notified to reset their in-memory schema
+		// insert empty GraphQL schema, so all alphas get notified to
+		// reset their in-memory GraphQL schema
 		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl()
