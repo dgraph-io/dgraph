@@ -38,6 +38,7 @@ type subMutation struct {
 
 type executor struct {
 	pendingSize int64
+	smCount     int64 // Stores count for active sub mutations.
 
 	sync.RWMutex
 	predChan map[string]chan *subMutation
@@ -85,6 +86,7 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 
 		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
+		atomic.AddInt64(&e.smCount, -1)
 	}
 }
 
@@ -97,8 +99,8 @@ func (e *executor) shutdown() {
 	}
 }
 
-// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
+// getChannel obtains the channel for the given pred. It must be called under e.Lock().
+func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
 	if ok {
 		return ch
@@ -148,9 +150,16 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
 		for attr, payload := range payloadMap {
 			e.applied.Begin(index)
-			e.getChannelUnderLock(attr) <- payload
+			atomic.AddInt64(&e.smCount, 1)
+			e.getChannel(attr) <- payload
 		}
 	}
 
 	atomic.AddInt64(&e.pendingSize, esize)
+}
+
+// waitForActiveMutations waits for all the mutations (currently active) to finish. This function
+// should be called before running any schema mutation.
+func (e *executor) waitForActiveMutations() {
+	rampMeter(&e.smCount, 0, "waiting on active mutations to finish")
 }
