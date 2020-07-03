@@ -252,8 +252,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
-	// if rbac == schema.Uncertain {}
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -349,8 +348,7 @@ func rewriteAsGet(
 	addTypeFilter(dgQuery, field.Type())
 	addCascadeDirective(dgQuery, field)
 
-	// if rbac == schema.Uncertain {}
-	dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
+	dgQuery = auth.addAuthQueries(field.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -388,8 +386,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
-	// if rbac == schema.Uncertain { }
-	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
+	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery, rbac)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -404,7 +401,8 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 // original query and the auth.
 func (authRw *authRewriter) addAuthQueries(
 	typ schema.Type,
-	dgQuery *gql.GraphQuery) *gql.GraphQuery {
+	dgQuery *gql.GraphQuery,
+	rbacEval schema.RuleResult) *gql.GraphQuery {
 
 	// There's no need to recursively inject auth queries into other auth queries, so if
 	// we are already generating an auth query, there's nothing to add.
@@ -419,8 +417,7 @@ func (authRw *authRewriter) addAuthQueries(
 		return dgQuery
 	}
 
-	rbac := authRw.evaluateStaticRules(typ)
-	if rbac != schema.Uncertain {
+	if rbacEval != schema.Uncertain {
 		fldAuthQueries = nil
 		filter = nil
 	}

@@ -129,6 +129,38 @@ type uidResult struct {
 	}
 }
 
+func (r *Region) add(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+		mutation addRegion($region: AddRegionInput!) {
+		  addRegion(input: [$region]) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"region": r},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (r *Region) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+		mutation deleteRegion($name: String) {
+		  deleteRegion(filter:{name: { eq: $name}}) {
+			msg
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"name": r.Name},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
 func getJWT(t *testing.T, user, role string) http.Header {
 	metaInfo.AuthVars = map[string]interface{}{}
 	if user != "" {
@@ -145,6 +177,53 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func TestOptimizedNestedAuthQuery(t *testing.T) {
+	query := `
+	query {
+	  queryMovie {
+		content
+		 regionsAvailable {
+		  name
+		  global
+		}
+	  }
+	}
+	`
+	user := "user1"
+	role := "ADMIN"
+
+	getUserParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query:   query,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	beforeTouchUids, _ := gqlResponse.Extensions["touched_uids"]
+	beforeResult := gqlResponse.Data
+
+	var regions []Region
+	for i := 0; i < 100; i++ {
+		r := Region{
+			Name:   fmt.Sprintf("Test_Region_%d", i),
+			Global: true,
+		}
+		r.add(t, user, role)
+		regions = append(regions, r)
+	}
+
+	for _, region := range regions {
+		region.delete(t, user, role)
+	}
+
+	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	afterTouchUids, _ := gqlResponse.Extensions["touched_uids"]
+	require.Equal(t, beforeTouchUids, afterTouchUids)
+	require.Equal(t, beforeResult, gqlResponse.Data)
 }
 
 func TestAuthRulesWithMissingJWT(t *testing.T) {

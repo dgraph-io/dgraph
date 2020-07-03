@@ -483,7 +483,7 @@
 - name: "Auth deep query - 1 level"
   gqlquery: |
     query {
-      queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10)  {
+      queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10) @cascade  {
         content
         regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) {
           name
@@ -493,7 +493,7 @@
     }
   dgquery: |-
     query {
-      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
+      queryMovie(func: uid(MovieRoot), orderasc: Movie.content) @cascade {
         content : Movie.content
         regionsAvailable : Movie.regionsAvailable @filter(uid(Region2)) (orderasc: Region.name) {
           name : Region.name
@@ -527,7 +527,7 @@
     query {
       queryMovie(filter: { content: { eq: "MovieXYZ" } },  order: { asc: content }, first: 10, offset: 10)  {
         content
-        regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) {
+        regionsAvailable(filter: { name: { eq: "Region123" } },  order: { asc: name }, first: 10, offset: 10) @cascade {
           name
           global
           users(filter: { username: { eq: "User321" } },  order: { asc: username }, first: 10, offset: 10)  {
@@ -546,7 +546,7 @@
     query {
       queryMovie(func: uid(MovieRoot), orderasc: Movie.content) {
         content : Movie.content
-        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name) {
+        regionsAvailable : Movie.regionsAvailable @filter(uid(Region7)) (orderasc: Region.name) @cascade {
           name : Region.name
           global : Region.global
           users : Region.users @filter(uid(User6)) (orderasc: User.username) {
