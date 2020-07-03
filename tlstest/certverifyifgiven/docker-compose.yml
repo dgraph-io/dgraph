@@ -18,7 +18,9 @@ services:
       source: ../tls
       target: /dgraph-tls
       read_only: true
-    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180 --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth VERIFYIFGIVEN
+    command: /gobin/dgraph alpha -o 100 --my=alpha1:7180 --lru_mb=1024 --zero=zero1:5180
+      --logtostderr -v=2 --tls_dir /dgraph-tls --tls_client_auth VERIFYIFGIVEN
+      --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
