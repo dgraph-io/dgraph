@@ -155,7 +155,17 @@ func GetGQLSchema() (uid, graphQLSchema string, err error) {
 	} else if len(existingGQLSchema) == 1 {
 		// we found an existing GraphQL schema
 		gqlSchemaNode := existingGQLSchema[0].(map[string]interface{})
-		return gqlSchemaNode["uid"].(string), gqlSchemaNode[worker.GqlSchemaPred].(string), nil
+		uid, ok := gqlSchemaNode["uid"].(string)
+		if !ok {
+			// this should never happen
+			return "", "", errors.New("didn't find uid in ExistingGQLSchema node")
+		}
+		graphQLSchema, ok := gqlSchemaNode[worker.GqlSchemaPred].(string)
+		if !ok {
+			// this should never happen
+			return "", "", errors.New("didn't find dgraph.graphql.schema in ExistingGQLSchema node")
+		}
+		return uid, graphQLSchema, nil
 	}
 
 	// found multiple GraphQL schema nodes, this should never happen
