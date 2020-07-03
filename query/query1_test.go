@@ -1058,12 +1058,12 @@ func TestUidInFunction3(t *testing.T) {
 		{
 			description: "query at top level with nested UID variable",
 			query: `{
-				uidVar as q(func: uid(5001, 5000))
+				uidVar as var(func: uid(5001, 5000))
 				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
 					name
 				}
 			}`,
-			expected:    `{"data":{"q":[],"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expected:    `{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
 			expectedErr: nil,
 		},
 		{
@@ -1089,12 +1089,12 @@ func TestUidInFunction3(t *testing.T) {
 		{
 			description: "query at top level with with UID variables not present in predicate",
 			query: `{
-				uidVar as q(func: uid(500, 501))
+				uidVar as var(func: uid(500, 501))
 				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
 					name
 				}
 			}`,
-			expected:    `{"data":{"q":[],"me":[]}}`,
+			expected:    `{"data":{"me":[]}}`,
 			expectedErr: nil,
 		},
 	}
@@ -1141,7 +1141,7 @@ func TestUidInFunction4(t *testing.T) {
 		{
 			description: "query inside root with nested uid variable uid variable which resolves to two uids",
 			query: `{
-				q(func: uid( 31, 25)){
+				var(func: uid( 31, 25)){
 					schoolsVar as school
 				}
 				me(func: uid(1, 23, 24 )){
@@ -1150,13 +1150,13 @@ func TestUidInFunction4(t *testing.T) {
 					}
 				}
 			}`,
-			expected:    `{"data":{"q":[],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
 			expectedErr: nil,
 		},
 		{
 			description: "query inside root with nested uid variable which resolves to one uids",
 			query: `{
-				q(func: uid(31)){
+				var(func: uid(31)){
 					schoolsVar as school
 				}
 				me(func: uid(1, 23, 24 )){
@@ -1165,7 +1165,7 @@ func TestUidInFunction4(t *testing.T) {
 					}
 				}
 			}`,
-			expected:    `{"data":{"q":[],"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
 			expectedErr: nil,
 		},
 	}
@@ -1211,7 +1211,7 @@ func TestUidInFunctionAtRoot(t *testing.T) {
 		{
 			description: "query with uid variable and uidIn at the root",
 			query: `{
-				uidVar as q(func: uid(5000))
+				uidVar as var(func: uid(5000))
 				me(func: uid_in(school, uid(uidVar))) {
 						name
 				}
