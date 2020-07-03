@@ -53,7 +53,7 @@ _This standalone image is meant for quickstart purposes only.
 It is not recommended for production environments._
 
 ```sh
-docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:v20.03.0
+docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:{{< version >}}
 ```
 
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.

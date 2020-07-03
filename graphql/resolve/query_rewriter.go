@@ -544,7 +544,7 @@ func (authRw *authRewriter) rewriteRuleNode(
 		r1 := rewriteAsQuery(qry, authRw)
 		r1.Var = varName
 		r1.Attr = "var"
-		r1.Cascade = true
+		r1.Cascade = append(r1.Cascade, "__all__")
 
 		return []*gql.GraphQuery{r1}, &gql.FilterTree{
 			Func: &gql.Function{
@@ -563,13 +563,16 @@ func addTypeFilter(q *gql.GraphQuery, typ schema.Type) {
 			Args: []gql.Arg{{Value: typ.DgraphName()}},
 		},
 	}
+	addToFilterTree(q, thisFilter)
+}
 
+func addToFilterTree(q *gql.GraphQuery, filter *gql.FilterTree) {
 	if q.Filter == nil {
-		q.Filter = thisFilter
+		q.Filter = filter
 	} else {
 		q.Filter = &gql.FilterTree{
 			Op:    "and",
-			Child: []*gql.FilterTree{q.Filter, thisFilter},
+			Child: []*gql.FilterTree{q.Filter, filter},
 		}
 	}
 }
