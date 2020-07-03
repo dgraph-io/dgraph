@@ -374,9 +374,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
-	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = worker.State.GetTimestamp(false)
-	}
 
 	start := time.Now()
 	defer func() {
