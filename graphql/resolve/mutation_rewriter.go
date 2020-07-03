@@ -382,7 +382,10 @@ func (mrw *AddRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
+		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasFieldAuthRules(mutation.QueryField(), authRw)
+
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
@@ -434,6 +437,7 @@ func (urw *UpdateRewriter) Rewrite(
 		selector:      updateAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasFieldAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
 	srcUID := MutationQueryVarUID
@@ -547,6 +551,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasFieldAuthRules(mutation.QueryField(), authRw)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
@@ -642,9 +647,8 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
 
-	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
-	}
+	// if rbac == schema.Uncertain { }
+	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
 
 	return dgQuery
 }
@@ -672,6 +676,7 @@ func (drw *deleteRewriter) Rewrite(
 		selector:      deleteAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasFieldAuthRules(m.QueryField(), authRw)
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
 	qry := dgQry
@@ -1382,6 +1387,10 @@ func addDelete(
 		varGen:        varGen,
 		varName:       targetVar,
 		selector:      updateAuthSelector,
+		parentVarName: qryFld.Type().Name() + "Root",
+	}
+	if rn := newRw.selector(qryFld.Type()); rn != nil {
+		newRw.hasAuthRules = true
 	}
 
 	authQueries, authFilter := newRw.rewriteAuthQueries(qryFld.Type())

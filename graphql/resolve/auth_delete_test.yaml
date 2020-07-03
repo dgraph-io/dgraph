@@ -46,13 +46,14 @@
         ]
   dgquery: |-
     query {
-      x as deleteTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
+      x as deleteTicket(func: uid(TicketRoot)) {
         uid
         Column3 as Ticket.onColumn
         User4 as Ticket.assignedTo
       }
+      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
       Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
-      Ticket2 as var(func: uid(Ticket1)) @cascade {
+      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
@@ -147,13 +148,14 @@
         ]
   dgquery: |-
     query {
-      x as deleteUser(func: uid(User1)) @filter((uid(User2) AND uid(User3))) {
+      x as deleteUser(func: uid(UserRoot)) {
         uid
         Ticket4 as User.tickets
       }
+      UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
-      User2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
-      User3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
+      UserAuth2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
+      UserAuth3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
 - name: "Filtering by ID"
@@ -176,11 +178,12 @@
         ]
   dgquery: |-
     query {
-      x as deleteRegion(func: uid(Region1)) @filter(uid(Region2)) {
+      x as deleteRegion(func: uid(RegionRoot)) {
         uid
       }
+      RegionRoot as var(func: uid(Region1)) @filter(uid(RegionAuth2))
       Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
-      Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
+      RegionAuth2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
     }
 
 - name: "Delete with top level RBAC false."
@@ -250,9 +253,11 @@
         [{ "uid": "uid(x)" }]
   dgquery: |-
     query {
-      x as deleteComplexLog(func: uid(0x1, 0x2)) @filter(type(ComplexLog)) {
+      x as deleteComplexLog(func: uid(ComplexLogRoot)) {
         uid
       }
+      ComplexLogRoot as var(func: uid(ComplexLog1))
+      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
     }
 
 - name: "Delete with top level OR RBAC false."
@@ -271,11 +276,12 @@
         [{ "uid": "uid(x)" }]
   dgquery: |-
     query {
-      x as deleteComplexLog(func: uid(ComplexLog1)) @filter(uid(ComplexLog2)) {
+      x as deleteComplexLog(func: uid(ComplexLogRoot)) {
         uid
       }
+      ComplexLogRoot as var(func: uid(ComplexLog1)) @filter(uid(ComplexLogAuth2))
       ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
-      ComplexLog2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
+      ComplexLogAuth2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
     }
 
 - name: "Delete with top level AND RBAC true."
@@ -299,11 +305,12 @@
          }]
   dgquery: |-
     query {
-      x as deleteIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
+      x as deleteIssue(func: uid(IssueRoot)) {
         uid
       }
+      IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
       Issue1 as var(func: type(Issue))
-      Issue2 as var(func: uid(Issue1)) @cascade {
+      IssueAuth2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }

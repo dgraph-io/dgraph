@@ -252,9 +252,8 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
-	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
-	}
+	// if rbac == schema.Uncertain { }
+	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -351,8 +350,8 @@ func rewriteAsGet(
 	addCascadeDirective(dgQuery, field)
 
 	if rbac == schema.Uncertain {
-		dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 	}
+	dgQuery = auth.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -390,9 +389,8 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 	addUID(dgQuery)
 	addCascadeDirective(dgQuery, field)
 
-	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
-	}
+	// if rbac == schema.Uncertain { }
+	dgQuery = authRw.addAuthQueries(field.Type(), dgQuery)
 
 	if len(selectionAuth) > 0 {
 		dgQuery = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQuery}, selectionAuth...)}
@@ -420,6 +418,12 @@ func (authRw *authRewriter) addAuthQueries(
 	fldAuthQueries, filter := authRw.rewriteAuthQueries(typ)
 	if len(fldAuthQueries) == 0 && !authRw.hasAuthRules {
 		return dgQuery
+	}
+
+	rbac := authRw.evaluateStaticRules(typ)
+	if rbac != schema.Uncertain {
+		fldAuthQueries = nil
+		filter = nil
 	}
 
 	// build a query like
@@ -501,6 +505,7 @@ func (authRw *authRewriter) rewriteAuthQueries(typ schema.Type) ([]*gql.GraphQue
 		varName:       authRw.varName,
 		selector:      authRw.selector,
 		parentVarName: authRw.parentVarName,
+		hasAuthRules:  authRw.hasAuthRules,
 	}).rewriteRuleNode(typ, authRw.selector(typ))
 }
 
@@ -693,10 +698,16 @@ func addSelectionSetFrom(
 			parentVarName = auth.parentVarName
 			parentQryName = auth.varGen.Next(f.Type(), "", "", auth.isWritingAuth)
 			auth.parentVarName = parentQryName
+			auth.varName = parentQryName
 		}
 
 		selectionAuth := addSelectionSetFrom(child, f, auth)
 		addedFields[f.Name()] = true
+
+		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
+			// Restore the state after processing is done.
+			auth.parentVarName = parentVarName
+		}
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {
 			q.Children = append(q.Children, child)
@@ -719,10 +730,6 @@ func addSelectionSetFrom(
 		}
 
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
-			// Restore the state after processing is done.
-			auth.parentVarName = parentVarName
-			parentVarName := auth.parentVarName
-
 			// This adds the following query.
 			//	var(func: uid(Ticket)) {
 			//		User as Ticket.assignedTo
@@ -732,7 +739,7 @@ func addSelectionSetFrom(
 			parentQry := &gql.GraphQuery{
 				Func: &gql.Function{
 					Name: "uid",
-					Args: []gql.Arg{{Value: parentVarName}},
+					Args: []gql.Arg{{Value: auth.parentVarName}},
 				},
 				Attr:     "var",
 				Children: []*gql.GraphQuery{{Attr: f.DgraphPredicate(), Var: parentQryName}},

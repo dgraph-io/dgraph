@@ -341,6 +341,7 @@ func authorizeNewNodes(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      addAuthSelector,
+		hasAuthRules:  true,
 	}
 
 	// Collect all the newly created nodes in type groups
@@ -376,6 +377,7 @@ func authorizeNewNodes(
 		typ := namesToType[typeName]
 		varName := newRw.varGen.Next(typ, "", "", false)
 		newRw.varName = varName
+		newRw.parentVarName = typ.Name() + "Root"
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
 
 		rn := newRw.selector(typ)
