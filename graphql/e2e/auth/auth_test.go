@@ -201,7 +201,7 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 
 	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
-	beforeTouchUids, _ := gqlResponse.Extensions["touched_uids"]
+	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
 	beforeResult := gqlResponse.Data
 
 	var regions []Region
@@ -221,7 +221,7 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
-	afterTouchUids, _ := gqlResponse.Extensions["touched_uids"]
+	afterTouchUids := gqlResponse.Extensions["touched_uids"]
 	require.Equal(t, beforeTouchUids, afterTouchUids)
 	require.Equal(t, beforeResult, gqlResponse.Data)
 }
