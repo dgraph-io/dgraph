@@ -333,24 +333,37 @@ var (
 		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
 	}
 	// mainHealth tracks the health of the main GraphQL server.
-	mainHealth = &GraphQLHealth{HttpStatusCode: http.StatusServiceUnavailable, StatusMsg: "init"}
+	mainHealth = &GraphQLHealth{httpStatusCode: http.StatusServiceUnavailable, statusMsg: "init"}
 )
 
 // GraphQLHealth is used to report the health status of a GraphQL server.
 // It is required for kubernetes probing.
 type GraphQLHealth struct {
-	HttpStatusCode int
-	StatusMsg      string
+	httpStatusCode int
+	statusMsg      string
+	// mux protects GraphQLHealth from simultaneous read/write, as an instance of this type could be
+	// used by multiple Go-routines
+	mux sync.RWMutex
+}
+
+func (g *GraphQLHealth) Status() (int, string) {
+	g.mux.RLock()
+	defer g.mux.RUnlock()
+	return g.httpStatusCode, g.statusMsg
 }
 
 func (g *GraphQLHealth) up() {
-	g.HttpStatusCode = http.StatusOK
-	g.StatusMsg = "up"
+	g.mux.Lock()
+	defer g.mux.Unlock()
+	g.httpStatusCode = http.StatusOK
+	g.statusMsg = "up"
 }
 
 func (g *GraphQLHealth) updatingSchema() {
-	g.HttpStatusCode = http.StatusOK
-	g.StatusMsg = "updating schema"
+	g.mux.Lock()
+	defer g.mux.Unlock()
+	g.httpStatusCode = http.StatusOK
+	g.statusMsg = "updating schema"
 }
 
 type gqlSchema struct {

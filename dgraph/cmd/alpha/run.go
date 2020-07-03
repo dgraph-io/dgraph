@@ -473,9 +473,10 @@ func setupServer(closer *y.Closer) {
 	mainServer, adminServer, mainHealth := admin.NewServers(introspection, &globalEpoch, closer)
 	http.Handle("/graphql", mainServer.HTTPHandler())
 	http.HandleFunc("/probe/graphql", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(mainHealth.HttpStatusCode)
+		statusCode, StatusMsg := mainHealth.Status()
+		w.WriteHeader(statusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status": "%s"}`, mainHealth.StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, StatusMsg))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
