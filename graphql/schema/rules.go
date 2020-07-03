@@ -1685,15 +1685,15 @@ func customDirectiveValidation(sch *ast.Schema,
 
 	if graphql != nil && !skip && graphqlOpDef != nil {
 		headers := http.Header{}
-		for k, v := range iHeaders {
+		for key, val := range iHeaders {
 			// We try and fetch the value from the stored secrets.
-			val, ok := secrets[v]
+			value, ok := secrets[val]
 			if !ok {
 				return append(errs, gqlerror.ErrorPosf(graphql.Position,
 					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
-					typ.Name, field.Name, v,))
+					typ.Name, field.Name, val,))
 			}
-			headers.Add(k, string(val))
+			headers.Add(key, string(value))
 		}
 		if err := validateRemoteGraphql(&remoteGraphqlMetadata{
 			parentType:   typ,
