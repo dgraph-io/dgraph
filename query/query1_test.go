@@ -1139,7 +1139,7 @@ func TestUidInFunction4(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			description: "query inside root with nested uid variable uid variable which resolves to two uids",
+			description: "query inside root with nested uid variable which resolves to two uids",
 			query: `{
 				var(func: uid( 31, 25)){
 					schoolsVar as school
