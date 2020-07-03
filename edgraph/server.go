@@ -908,13 +908,6 @@ func (s *Server) doQuery(ctx context.Context, req *api.Request, doAuth AuthMode)
 		return
 	}
 
-	// make sure that requests for schema query are authenticated similar to admin requests
-	if qc.gqlRes.Schema != nil {
-		if _, err := hasAdminAuth(ctx, "schema query"); err != nil {
-			return nil, err
-		}
-	}
-
 	if doAuth == NeedAuthorize {
 		if rerr = authorizeRequest(ctx, qc); rerr != nil {
 			return
