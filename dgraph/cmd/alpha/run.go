@@ -476,7 +476,8 @@ func setupServer(closer *y.Closer) {
 		statusCode, StatusMsg := mainHealth.Status()
 		w.WriteHeader(statusCode)
 		w.Header().Set("Content-Type", "application/json")
-		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":"%s"}`, StatusMsg))))
+		x.Check2(w.Write([]byte(fmt.Sprintf(`{"status":
+"%s"}`, StatusMsg))))
 	})
 	http.Handle("/admin", allowedMethodsHandler(allowedMethods{
 		http.MethodGet:     true,
