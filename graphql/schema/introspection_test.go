@@ -143,7 +143,7 @@ func TestIntrospectionQueryMissingNameArg(t *testing.T) {
 		schema {
 			query: TestType
 		}
-	
+
 		type TestType {
 			testField: String
 		}

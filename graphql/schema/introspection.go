@@ -164,7 +164,6 @@ func (ec *executionContext) handleQuery(sel ast.Selection) []byte {
 		}
 		ec.writeKey(field.Alias)
 		switch field.Name {
-		// TODO - Add tests for __typename.
 		case Typename:
 			x.Check2(ec.b.WriteString(`"Query"`))
 		case "__type":
@@ -327,7 +326,7 @@ func (ec *executionContext) handleType(sel ast.SelectionSet, obj *introspection.
 		ec.writeKey(field.Alias)
 		switch field.Name {
 		case Typename:
-			x.Check2(ec.b.WriteString(`"__Type`))
+			x.Check2(ec.b.WriteString(`"__Type"`))
 		case "kind":
 			ec.writeStringValue(obj.Kind())
 		case "name":

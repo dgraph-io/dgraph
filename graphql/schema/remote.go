@@ -89,69 +89,65 @@ const (
 )
 
 const introspectionQuery = `
-  query {
-	__schema {
-	  queryType {
-		name
-	  }
-	  mutationType {
-		name
-	  }
-	  subscriptionType {
-		name
-	  }
-	  types {
-		...FullType
-	  }
-	  directives {
-		name
-		locations
-		args {
-		  ...InputValue
+	query {
+	  __schema {
+		queryType { name __typename }
+		mutationType { name __typename }
+		subscriptionType { name __typename }
+		types {
+		  ...FullType
+		}
+		directives {
+		  name
+		  locations
+		  args {
+			...InputValue
+		  }
 		}
 	  }
 	}
-  }
-  fragment FullType on __Type {
-	kind
-	name
-	fields(includeDeprecated: true) {
+	fragment FullType on __Type {
+	  kind
 	  name
-	  args {
+	  fields(includeDeprecated: true) {
+		name
+		args {
+		  ...InputValue
+		  __typename
+		}
+		type {
+		  ...TypeRef
+		  __typename
+		}
+		isDeprecated
+		deprecationReason
+	  }
+	  inputFields {
 		...InputValue
+		__typename
 	  }
-	  type {
+	  interfaces {
 		...TypeRef
+		__typename
 	  }
-	  isDeprecated
-	  deprecationReason
+	  enumValues(includeDeprecated: true) {
+		name
+		isDeprecated
+		deprecationReason
+		__typename
+	  }
+	  possibleTypes {
+		...TypeRef
+		__typename
+	  }
+	  __typename
 	}
-	inputFields {
-	  ...InputValue
-	}
-	interfaces {
-	  ...TypeRef
-	}
-	enumValues(includeDeprecated: true) {
+	fragment InputValue on __InputValue {
 	  name
-	  isDeprecated
-	  deprecationReason
+	  type { ...TypeRef }
+	  defaultValue
 	}
-	possibleTypes {
-	  ...TypeRef
-	}
-  }
-  fragment InputValue on __InputValue {
-	name
-	type {
-	  ...TypeRef
-	}
-	defaultValue
-  }
-  fragment TypeRef on __Type {
-	kind
-	name
-	ofType {
+	fragment TypeRef on __Type {
 	  kind
 	  name
 	  ofType {
@@ -172,14 +168,26 @@ const introspectionQuery = `
 				ofType {
 				  kind
 				  name
+				  ofType {
+					kind
+					name
+					__typename
+				  }
+				  __typename
 				}
+				__typename
 			  }
+			  __typename
 			}
+			__typename
 		  }
+		  __typename
 		}
+		__typename
 	  }
+	  __typename
 	}
-  }`
+  `
 
 // remoteGraphqlMetadata represents the minimal set of data that is required to validate the graphql
 // given in @custom->http->graphql with the remote server
