@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dgraph-io/dgraph/conn"
@@ -37,8 +38,13 @@ const (
 	errRestoreProposal = "cannot propose restore request"
 )
 
+var restoreMutex sync.Mutex
+
 // ProcessRestoreRequest verifies the backup data and sends a restore proposal to each group.
 func ProcessRestoreRequest(ctx context.Context, req *pb.RestoreRequest) (int, error) {
+	restoreMutex.Lock()
+	defer restoreMutex.Unlock()
+
 	if req == nil {
 		return 0, errors.Errorf("restore request cannot be nil")
 	}
