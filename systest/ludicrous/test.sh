@@ -6,7 +6,7 @@ readonly SRCDIR=$(dirname $0)
 
 SCHEMA_C_FILE="1predicate.schema"
 SCHEMA_FILE="1predicate-c.schema"
-DATA_FILE="1predicate.rdf"
+DATA_FILE="1predicate.rdf.gz"
 
 function Info {
     echo -e "INFO: $*"
@@ -87,8 +87,8 @@ DockerCompose logs -f alpha1 | grep -q -m1 "Server is ready"
 Info "sleeping for 10 seconds for the server to be ready"
 sleep 10
 
-for i in {1..10}; do sleep 1; curl 'http://localhost:8180/alter' --data-binary $'@1predicate-c.schema'; echo; done & 
-for i in {1..10}; do sleep 1; curl 'http://localhost:8180/alter' --data-binary $'@1predicate.schema'; echo; done & 
+for i in {1..10}; do sleep 1; curl 'http://localhost:8180/alter' --data-binary $'@1predicate-c.schema'; echo "schema-c"$i; done & 
+for i in {1..10}; do sleep 1; curl 'http://localhost:8180/alter' --data-binary $'@1predicate.schema'; echo "schema"$i; done & 
 
 Info "live loading data set"
 DgraphLive --schema=$SCHEMA_FILE --files=$DATA_FILE --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --batch=1 &
