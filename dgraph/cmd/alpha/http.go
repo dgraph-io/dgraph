@@ -196,7 +196,6 @@ func queryHandler(w http.ResponseWriter, r *http.Request) {
 
 	ctx := context.WithValue(r.Context(), query.DebugKey, isDebugMode)
 	ctx = x.AttachAccessJwt(ctx, r)
-	ctx = x.AttachRemoteIP(ctx, r)
 
 	if queryTimeout != 0 {
 		var cancel context.CancelFunc
