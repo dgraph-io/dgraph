@@ -29,6 +29,63 @@
     }
 
 -
+  name: "Delete with deep query in result"
+  gqlmutation: |
+    mutation deleteAuthor($filter: AuthorFilter!) {
+      deleteAuthor(filter: $filter) {
+        msg
+        numUids
+        author (filter: { name: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
+          id
+          name
+          country {
+            name
+            states (filter: { code: { eq: "GraphQL" } }, order: { asc: name }, first: 10, offset: 10) {
+              code
+              name
+              capital
+            }
+          }
+        }
+      }
+    }
+  gqlvariables: |
+    { "filter":
+      { "id": ["0x1", "0x2"] }
+    }
+  explanation: "The correct mutation and query should be built using variable and filters."
+  dgmutations:
+    - deletejson: |
+        [
+          { "uid": "uid(x)" },
+          {
+            "uid": "uid(Post2)",
+            "Post.author": { "uid": "uid(x)" }
+          }
+        ]
+  dgquery: |-
+    query {
+      x as deleteAuthor(func: uid(0x1, 0x2)) @filter(type(Author)) {
+        uid
+        Post2 as Author.posts
+      }
+      author(func: uid(x), orderasc: Author.name, first: 10, offset: 10) @filter(eq(Author.name, "GraphQL")) {
+        id : uid
+        name : Author.name
+        country : Author.country {
+          name : Country.name
+          states : Country.states @filter(eq(State.code, "GraphQL")) (orderasc: State.name, first: 10, offset: 10) {
+            code : State.code
+            name : State.name
+            capital : State.capital
+            dgraph.uid : uid
+          }
+          dgraph.uid : uid
+        }
+      }
+    }
+
+-
   name: "Multiple filters including id"
   gqlmutation: |
     mutation deleteAuthor($filter: AuthorFilter!) {
