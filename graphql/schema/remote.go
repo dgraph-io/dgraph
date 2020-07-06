@@ -91,9 +91,9 @@ const (
 const introspectionQuery = `
 	query {
 	  __schema {
-		queryType { name __typename }
-		mutationType { name __typename }
-		subscriptionType { name __typename }
+		queryType { name }
+		mutationType { name }
+		subscriptionType { name }
 		types {
 		  ...FullType
 		}
@@ -113,34 +113,27 @@ const introspectionQuery = `
 		name
 		args {
 		  ...InputValue
-		  __typename
 		}
 		type {
 		  ...TypeRef
-		  __typename
 		}
 		isDeprecated
 		deprecationReason
 	  }
 	  inputFields {
 		...InputValue
-		__typename
 	  }
 	  interfaces {
 		...TypeRef
-		__typename
 	  }
 	  enumValues(includeDeprecated: true) {
 		name
 		isDeprecated
 		deprecationReason
-		__typename
 	  }
 	  possibleTypes {
 		...TypeRef
-		__typename
 	  }
-	  __typename
 	}
 	fragment InputValue on __InputValue {
 	  name
@@ -171,21 +164,13 @@ const introspectionQuery = `
 				  ofType {
 					kind
 					name
-					__typename
 				  }
-				  __typename
 				}
-				__typename
 			  }
-			  __typename
 			}
-			__typename
 		  }
-		  __typename
 		}
-		__typename
 	  }
-	  __typename
 	}
   `
 
