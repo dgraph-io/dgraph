@@ -1107,7 +1107,7 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case name == "__schema" || name == "__type":
+	case name == "__schema" || name == "__type" || name == "__typename":
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery

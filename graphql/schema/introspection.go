@@ -25,7 +25,7 @@ import (
 // Introspect performs an introspection query given a query that's expected to be either
 // __schema or __type.
 func Introspect(q Query) (json.RawMessage, error) {
-	if q.Name() != "__schema" && q.Name() != "__type" {
+	if q.Name() != "__schema" && q.Name() != "__type" && q.Name() != Typename {
 		return nil, errors.New("call to introspect for field that isn't an introspection query " +
 			"this indicates bug (Please let us know : https://github.com/dgraph-io/dgraph/issues)")
 	}

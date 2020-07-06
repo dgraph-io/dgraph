@@ -235,6 +235,10 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		WithQueryResolver("__type",
 			func(q schema.Query) QueryResolver {
 				return QueryResolverFunc(resolveIntrospection)
+			}).
+		WithQueryResolver("__typename",
+			func(q schema.Query) QueryResolver {
+				return QueryResolverFunc(resolveIntrospection)
 			})
 }
 
