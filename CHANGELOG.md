@@ -44,7 +44,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 
 - GraphQL
   - Add Graphql-TouchedUids header in HTTP response. ([#5572][])
-  - Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5179][])	
+  - Introduce `@cascade` in GraphQL. Fixes [#4789][]. ([#5511][])	
   - Add authentication feature and http admin endpoints. Fixes [#4758][]. ([#5162][])	
   - Support existing gqlschema nodes without xid. ([#5457][])
   - Add custom logic feature. ([#5004][])
@@ -129,7 +129,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5682]: https://github.com/dgraph-io/dgraph/issues/5682
 [#5572]: https://github.com/dgraph-io/dgraph/issues/5572
 [#4789]: https://github.com/dgraph-io/dgraph/issues/4789
-[#5179]: https://github.com/dgraph-io/dgraph/issues/5179
+[#5511]: https://github.com/dgraph-io/dgraph/issues/5511
 [#4758]: https://github.com/dgraph-io/dgraph/issues/4758
 [#5162]: https://github.com/dgraph-io/dgraph/issues/5162
 [#5457]: https://github.com/dgraph-io/dgraph/issues/5457
