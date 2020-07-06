@@ -189,8 +189,8 @@
         column {
           name
            inProject {
-                 projID
-                 name
+              projID
+              name
            }
         }
       }
@@ -205,7 +205,14 @@
         }
       }
     }
+  length: "2"
   dgquery: |-
+    query {
+      User5 as User5(func: eq(User.username, "user6")) @filter(type(User)) {
+        uid
+      }
+    }
+  dgquerysec: |-
     query {
       User5 as User5(func: eq(User.username, "user6")) @filter(type(User)) {
         uid

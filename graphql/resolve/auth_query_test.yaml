@@ -8,12 +8,13 @@
   role: "ADMIN"
   dgquery: |-
     query {
-      queryStudent(func: uid(Student1)) @filter(uid(Student2)) {
+      queryStudent(func: uid(StudentRoot)) {
         email : IOw80vnV
         dgraph.uid : uid
       }
+      StudentRoot as var(func: uid(Student1)) @filter(uid(StudentAuth2))
       Student1 as var(func: type(is7sowSm))
-      Student2 as var(func: uid(Student1)) @filter(eq(IOw80vnV, "user1")) @cascade
+      StudentAuth2 as var(func: uid(Student1)) @filter(eq(IOw80vnV, "user1")) @cascade
     }
 
 - name: "Auth query with @dgraph pred (Test RBAC)."

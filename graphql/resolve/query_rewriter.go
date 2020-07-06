@@ -34,6 +34,7 @@ type queryRewriter struct{}
 type authRewriter struct {
 	authVariables map[string]interface{}
 	isWritingAuth bool
+	filterByUid   bool
 	selector      func(t schema.Type) *schema.RuleNode
 	varGen        *VariableGenerator
 	varName       string
@@ -368,13 +369,20 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 		return dgQuery
 	}
 
-	if authRw != nil && authRw.isWritingAuth && (authRw.varName != "" || authRw.parentVarName != "") {
+	if authRw != nil && (authRw.isWritingAuth || authRw.filterByUid) && (authRw.varName != "" || authRw.parentVarName != "") {
 		// When rewriting auth rules, they always start like
 		//   Todo2 as var(func: uid(Todo1)) @cascade {
 		// Where Todo1 is the variable generated from the filter of the field
 		// we are adding auth to.
 
 		authRw.addVariableUIDFunc(dgQuery)
+		// This is executed when querying while performing delete mutation request since
+		// in case of delete mutation we already have variable `MutationQueryVar` at root level.
+		if authRw.filterByUid {
+			// Since the variable is only added at the top level we reset the `authRW` variables.
+			authRw.varName = ""
+			authRw.filterByUid = false
+		}
 	} else if ids := idFilter(field, field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
@@ -667,7 +675,6 @@ func addSelectionSetFrom(
 				Alias: "dgraph.uid",
 			})
 		}
-
 	}
 
 	// These fields might not have been requested by the user directly as part of the query but
@@ -725,6 +732,7 @@ func addSelectionSetFrom(
 		if len(f.SelectionSet()) > 0 && !auth.isWritingAuth && auth.hasAuthRules {
 			// Restore the state after processing is done.
 			auth.parentVarName = parentVarName
+			auth.varName = parentQryName
 		}
 
 		if rbac == schema.Positive || rbac == schema.Uncertain {

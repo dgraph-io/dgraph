@@ -780,14 +780,15 @@ func (drw *deleteRewriter) Rewrite(
 			authVariables: authVariables,
 			varGen:        varGen,
 			selector:      queryAuthSelector,
+			filterByUid:   true,
 		}
+		queryAuthRw.parentVarName = queryAuthRw.varGen.Next(queryField.Type(), "", "",
+			queryAuthRw.isWritingAuth)
+		queryAuthRw.varName = MutationQueryVar
+		queryAuthRw.hasAuthRules = hasFieldAuthRules(queryField, authRw)
+
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
-		uidFunc := &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{Value: MutationQueryVar}},
-		}
-		addUidFuncToQuery(queryDel, uidFunc, queryField.Name())
 		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
 	} else {
 		finalQry = dgQry
