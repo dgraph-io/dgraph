@@ -477,6 +477,8 @@ func main() {
 					// Retry incomplete tests. Sometimes tests fail due to temporary errors.
 					tries++
 					if tries == maxRetries {
+						fmt.Fprintf(os.Stderr, "Test with workload %s and nemesis %s could not "+
+							"start after maximum number of retries", w, n)
 						defer os.Exit(1)
 						break retryLoop
 					} else {
