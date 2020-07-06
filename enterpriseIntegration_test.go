@@ -1,4 +1,4 @@
-package acl
+package zero
 
 import (
 	"bytes"
@@ -67,6 +67,8 @@ func TestEnterpriseLicense(t *testing.T) {
 		response, err := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(expiredKey))
 		returnedOutput, err := ioutil.ReadAll(response.Body)
 		var finalData interface{}
+		t.Log(response)
+		t.Log("\nstatus\n", response)
 		json.Unmarshal(returnedOutput, &finalData)
 		errors := finalData.(map[string]interface{})["errors"].([]interface{})[0].(map[string]interface{})["message"]
 		if tt.expectError {

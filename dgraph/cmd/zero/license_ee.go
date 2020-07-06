@@ -147,3 +147,17 @@ func (s *Server) applyLicenseFile(path string) {
 		glog.Infof("Unable to apply license at %v due to error %v", path, err)
 	}
 }
+
+func (s *Server) applyLicenseFileReturnError(path string) error {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		glog.Infof("Unable to apply license at %v due to error %v", path, err)
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err = s.applyLicense(ctx, bytes.NewReader(content)); err != nil {
+		glog.Infof("Unable to apply license at %v due to error %v", path, err)
+	}
+	return err
+}
