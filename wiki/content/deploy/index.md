@@ -2360,7 +2360,7 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
 
 Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.
 
-Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 1 to trace 100% of queries.
+Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 0.01 to trace 1% of queries.
 
 ### Examining Traces with zPages
 
