@@ -377,7 +377,7 @@ query status() {
 ```
 
 The status can be one of "OK", "ERR", "UNKNOWN", or "IN_PROGRESS". The errors
-field contains the errors if the operatoin failed and it will be empty
+field contains the errors if the operation failed and it will be empty
 otherwise. Also note that the information used to track a restore operation is
 local to each alpha. In practical terms, this means that you should send this
 request to the same alpha to which the original restore request was sent.
