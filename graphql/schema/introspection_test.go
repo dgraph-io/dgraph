@@ -359,7 +359,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	require.NotNil(t, op)
 	oper := &operation{op: op,
 		vars:     map[string]interface{}{},
-		query:    string(introspectionQuery),
+		query:    string(testIntrospectionQuery),
 		doc:      doc,
 		inSchema: &schema{schema: sch},
 	}
