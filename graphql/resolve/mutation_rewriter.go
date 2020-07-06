@@ -667,40 +667,6 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
-// addUidFuncToQuery adds the uid func to the query with name `queryName`. This is useful when we
-// have auth queries since the top level query might be present in the children. We pass
-// `queryName` of top level query and it finds the appropriate query and adds `uidFunc` to it.
-func addUidFuncToQuery(q *gql.GraphQuery, uidFunc *gql.Function, queryName string) {
-	// This handles the case when root auth query is a dummy query due to RBAC evaluation to false.
-	// In such case since the query doesn't return anything, we don't need to add uid func.
-	if q.Attr == queryName+"()" {
-		return
-	}
-
-	if q.Attr != "" {
-		q.Func = uidFunc
-		return
-	}
-
-	var query *gql.GraphQuery
-	for _, cq := range q.Children {
-		if cq.Attr == queryName {
-			query = cq
-			break
-		}
-		for _, ccq := range cq.Children {
-			if ccq.Attr == queryName {
-				query = ccq
-				break
-			}
-		}
-	}
-
-	if query != nil {
-		query.Func = uidFunc
-	}
-}
-
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation) ([]*UpsertMutation, error) {
