@@ -89,58 +89,69 @@ const (
 )
 
 const introspectionQuery = `
-	query {
-	  __schema {
-		queryType { name }
-		mutationType { name }
-		subscriptionType { name }
-		types {
-		  ...FullType
-		}
-		directives {
-		  name
-		  locations
-		  args {
-			...InputValue
-		  }
-		}
-	  }
-	}
-	fragment FullType on __Type {
-	  kind
-	  name
-	  fields(includeDeprecated: true) {
+  query {
+	__schema {
+	  queryType {
 		name
+	  }
+	  mutationType {
+		name
+	  }
+	  subscriptionType {
+		name
+	  }
+	  types {
+		...FullType
+	  }
+	  directives {
+		name
+		locations
 		args {
 		  ...InputValue
 		}
-		type {
-		  ...TypeRef
-		}
-		isDeprecated
-		deprecationReason
 	  }
-	  inputFields {
+	}
+  }
+  fragment FullType on __Type {
+	kind
+	name
+	fields(includeDeprecated: true) {
+	  name
+	  args {
 		...InputValue
 	  }
-	  interfaces {
+	  type {
 		...TypeRef
 	  }
-	  enumValues(includeDeprecated: true) {
-		name
-		isDeprecated
-		deprecationReason
-	  }
-	  possibleTypes {
-		...TypeRef
-	  }
+	  isDeprecated
+	  deprecationReason
 	}
-	fragment InputValue on __InputValue {
+	inputFields {
+	  ...InputValue
+	}
+	interfaces {
+	  ...TypeRef
+	}
+	enumValues(includeDeprecated: true) {
 	  name
-	  type { ...TypeRef }
-	  defaultValue
+	  isDeprecated
+	  deprecationReason
 	}
-	fragment TypeRef on __Type {
+	possibleTypes {
+	  ...TypeRef
+	}
+  }
+  fragment InputValue on __InputValue {
+	name
+	type {
+	  ...TypeRef
+	}
+	defaultValue
+  }
+  fragment TypeRef on __Type {
+	kind
+	name
+	ofType {
 	  kind
 	  name
 	  ofType {
@@ -161,10 +172,6 @@ const introspectionQuery = `
 				ofType {
 				  kind
 				  name
-				  ofType {
-					kind
-					name
-				  }
 				}
 			  }
 			}
@@ -172,7 +179,7 @@ const introspectionQuery = `
 		}
 	  }
 	}
-  `
+  }`
 
 // remoteGraphqlMetadata represents the minimal set of data that is required to validate the graphql
 // given in @custom->http->graphql with the remote server
