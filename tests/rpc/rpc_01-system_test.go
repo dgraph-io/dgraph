@@ -108,7 +108,7 @@ func TestSystemRPC(t *testing.T) {
 	}
 
 	t.Log("starting gossamer...")
-	nodes, err := utils.InitializeAndStartNodes(t, 3, utils.GenesisDefault)
+	nodes, err := utils.InitializeAndStartNodes(t, 3, utils.GenesisDefault, utils.ConfigDefault)
 
 	//use only first server for tests
 	require.Nil(t, err)

@@ -19,7 +19,7 @@ type Framework struct {
 // InitFramework creates given quanity of nodes
 func InitFramework(qtyNodes int) (*Framework, error) {
 	f := &Framework{}
-	nodes, err := InitNodes(qtyNodes)
+	nodes, err := InitNodes(qtyNodes, ConfigDefault)
 	if err != nil {
 		return nil, err
 	}

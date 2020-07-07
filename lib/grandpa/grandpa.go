@@ -18,6 +18,7 @@ package grandpa
 
 import (
 	"bytes"
+	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -46,8 +47,7 @@ type Service struct {
 	state            *State                             // current state
 	prevotes         map[ed25519.PublicKeyBytes]*Vote   // pre-votes for the current round
 	precommits       map[ed25519.PublicKeyBytes]*Vote   // pre-commits for the current round
-	pvJustifications []*Justification                   // pre-vote justifications for the current round TODO: is this used anywhere?
-	pcJustifications []*Justification                   // pre-commit justifications for the current round
+	pcJustifications map[common.Hash][]*Justification   // pre-commit justifications for the current round
 	pvEquivocations  map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-vote stage
 	pcEquivocations  map[ed25519.PublicKeyBytes][]*Vote // equivocatory votes for current pre-commit stage
 	tracker          *tracker                           // tracker of vote messages we may need in the future
@@ -106,8 +106,7 @@ func NewService(cfg *Config) (*Service, error) {
 		keypair:            cfg.Keypair,
 		prevotes:           make(map[ed25519.PublicKeyBytes]*Vote),
 		precommits:         make(map[ed25519.PublicKeyBytes]*Vote),
-		pvJustifications:   []*Justification{},
-		pcJustifications:   []*Justification{},
+		pcJustifications:   make(map[common.Hash][]*Justification),
 		pvEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
 		pcEquivocations:    make(map[ed25519.PublicKeyBytes][]*Vote),
 		preVotedBlock:      make(map[uint64]*Vote),
@@ -208,8 +207,7 @@ func (s *Service) initiate() error {
 	var err error
 	s.prevotes = make(map[ed25519.PublicKeyBytes]*Vote)
 	s.precommits = make(map[ed25519.PublicKeyBytes]*Vote)
-	s.pvJustifications = []*Justification{}
-	s.pcJustifications = []*Justification{}
+	s.pcJustifications = make(map[common.Hash][]*Justification)
 	s.pvEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.pcEquivocations = make(map[ed25519.PublicKeyBytes][]*Vote)
 	s.justification = make(map[uint64][]*Justification)
@@ -219,6 +217,17 @@ func (s *Service) initiate() error {
 	}
 	s.tracker.start()
 	log.Trace("[grandpa] started message tracker")
+
+	// don't begin grandpa until we are at block 1
+	for {
+		h, err := s.blockState.BestBlockHeader()
+		if err != nil {
+			break
+		}
+		if h.Number.Cmp(big.NewInt(0)) == 1 {
+			break
+		}
+	}
 
 	for {
 		err := s.playGrandpaRound()
@@ -281,15 +290,27 @@ func (s *Service) playGrandpaRound() error {
 
 	s.mapLock.Lock()
 	s.prevotes[s.publicKeyBytes()] = pv
-	s.logger.Debug("sending pre-vote message...", "vote", pv, "votes", s.prevotes)
+	s.logger.Debug("sending pre-vote message...", "vote", pv, "prevotes", s.prevotes)
 	s.mapLock.Unlock()
 
-	go func() {
-		err = s.sendMessage(pv, prevote)
-		if err != nil {
-			s.logger.Error("could not send prevote message", "error", err)
+	finalized := false
+
+	// continue to send prevote messages until round is done
+	go func(finalized *bool) {
+		for {
+			if *finalized {
+				return
+			}
+
+			err = s.sendMessage(pv, prevote)
+			if err != nil {
+				s.logger.Error("could not send prevote message", "error", err)
+			}
+
+			time.Sleep(time.Second * 5)
+			s.logger.Trace("sent pre-vote message...", "vote", pv, "prevotes", s.prevotes)
 		}
-	}()
+	}(&finalized)
 
 	s.logger.Debug("receiving pre-vote messages...")
 
@@ -318,10 +339,8 @@ func (s *Service) playGrandpaRound() error {
 
 	s.mapLock.Lock()
 	s.precommits[s.publicKeyBytes()] = pc
-	s.logger.Debug("sending pre-commit message...", "vote", pc, "votes", s.precommits)
+	s.logger.Debug("sending pre-commit message...", "vote", pc, "precommits", s.precommits)
 	s.mapLock.Unlock()
-
-	finalized := false
 
 	// continue to send precommit messages until round is done
 	go func(finalized *bool) {
@@ -335,9 +354,9 @@ func (s *Service) playGrandpaRound() error {
 				s.logger.Error("could not send precommit message", "error", err)
 			}
 
-			time.Sleep(time.Second)
+			time.Sleep(time.Second * 5)
+			s.logger.Trace("sent pre-commit message...", "vote", pc, "precommits", s.precommits)
 		}
-
 	}(&finalized)
 
 	go func() {
@@ -408,7 +427,7 @@ func (s *Service) attemptToFinalize() error {
 		return nil
 	}
 
-	time.Sleep(time.Millisecond * 100)
+	time.Sleep(time.Millisecond * 10)
 	return s.attemptToFinalize()
 }
 
@@ -513,7 +532,7 @@ func (s *Service) finalize() error {
 	s.bestFinalCandidate[s.state.round] = bfc
 
 	// set justification
-	s.justification[s.state.round] = s.pcJustifications
+	s.justification[s.state.round] = s.pcJustifications[bfc.hash]
 	s.mapLock.Unlock()
 
 	s.head, err = s.blockState.GetHeader(bfc.hash)
@@ -599,15 +618,8 @@ func (s *Service) getBestFinalCandidate() (*Vote, error) {
 		}
 	}
 
-	// TODO: this returns the first block in the map of blocks w/ >=2/3 precommits, should
-	// the prevoted block be returned instead?
 	if [32]byte(bfc.hash) == [32]byte{} {
-		for h, n := range blocks {
-			return &Vote{
-				hash:   h,
-				number: n,
-			}, nil
-		}
+		return &prevoted, nil
 	}
 
 	return bfc, nil

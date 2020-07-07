@@ -29,7 +29,7 @@ import (
 
 var (
 	currentPort = strconv.Itoa(utils.BaseRPCPort)
-	rpcSuite    = "rpc_suite"
+	rpcSuite    = "rpc"
 )
 
 func TestMain(m *testing.M) {

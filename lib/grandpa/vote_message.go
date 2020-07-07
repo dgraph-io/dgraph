@@ -175,10 +175,9 @@ func (s *Service) validateMessage(m *VoteMessage) (*Vote, error) {
 
 	if m.Stage == prevote {
 		s.prevotes[pk.AsBytes()] = vote
-		s.pvJustifications = append(s.pvJustifications, just)
 	} else if m.Stage == precommit {
 		s.precommits[pk.AsBytes()] = vote
-		s.pcJustifications = append(s.pcJustifications, just)
+		s.pcJustifications[m.Message.Hash] = append(s.pcJustifications[m.Message.Hash], just)
 	}
 
 	return vote, nil

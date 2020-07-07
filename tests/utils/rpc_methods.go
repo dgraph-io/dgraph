@@ -23,6 +23,7 @@ var (
 	ChainGetHeader               = "chain_getHeader"
 	ChainGetFinalizedHead        = "chain_getFinalizedHead"
 	ChainGetFinalizedHeadByRound = "chain_getFinalizedHeadByRound"
+	ChainGetBlockHash            = "chain_getBlockHash"
 
 	// AUTHOR METHODS
 	AuthorSubmitExtrinsic = "author_submitExtrinsic"

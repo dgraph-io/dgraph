@@ -44,15 +44,15 @@ it-stable:
 ## it-stress: Runs Integration Tests stress mode
 it-stress: build
 	@echo "  >  \033[32mRunning Integration Tests stress mode...\033[0m "
-	HOSTNAME=0.0.0.0 MODE=stress go test ./tests/stress/... -timeout=5m -p 1 -short -v
+	HOSTNAME=0.0.0.0 MODE=stress go test ./tests/stress/... -timeout=10m -v -short
 
 it-rpc: build
 	@echo "  >  \033[32mRunning Integration Tests RPC Specs mode...\033[0m "
-	HOSTNAME=0.0.0.0 MODE=rpc_suite go test ./tests/rpc/... -timeout=5m -p 1 -short -v
+	HOSTNAME=0.0.0.0 MODE=rpc go test ./tests/rpc/... -timeout=5m -v
 
 it-sync: build
 	@echo "  >  \033[32mRunning Integration Tests sync mode...\033[0m "
-	HOSTNAME=0.0.0.0 MODE=sync go test ./tests/sync/... -timeout=5m -p 1 -short -v
+	HOSTNAME=0.0.0.0 MODE=sync go test ./tests/sync/... -timeout=5m -v
 
 ## test: Runs `go test -race` on project test files.
 test-state-race:
