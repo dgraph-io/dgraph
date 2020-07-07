@@ -117,7 +117,7 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 	}
 
 	if cfg.BlockProducer == nil {
-		cfg.BlockProducer = new(mockBlockProducer)
+		cfg.BlockProducer = newMockBlockProducer()
 	}
 
 	return &Syncer{
@@ -171,7 +171,7 @@ func (s *Syncer) watchForBlocks() {
 		}
 
 		if blockNum != nil && s.highestSeenBlock.Cmp(blockNum) == -1 {
-
+			// need to sync
 			if s.synced {
 				s.requestStart = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
 				s.synced = false
@@ -238,7 +238,7 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 			s.logger.Trace("Retrying block request", "start", s.requestStart)
 			go s.sendBlockRequest()
 		} else {
-			s.logger.Error("[sync]", "error", err)
+			s.logger.Error("failed to process block response", "error", err)
 		}
 
 	} else {
@@ -246,12 +246,12 @@ func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
 
 		bestNum, err := s.blockState.BestBlockNumber()
 		if err != nil {
-			s.logger.Crit("Failed to get best block number", "error", err)
+			s.logger.Crit("failed to get best block number", "error", err)
 		} else {
 
 			// check if we are synced or not
 			if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
-				s.logger.Debug("All synced up!", "number", bestNum)
+				s.logger.Debug("all synced up!", "number", bestNum)
 
 				if !s.synced {
 					err = s.blockProducer.Resume()
@@ -289,11 +289,11 @@ func (s *Syncer) sendBlockRequest() {
 
 	start, err := variadic.NewUint64OrHash(uint64(s.requestStart))
 	if err != nil {
-		s.logger.Error("Failed to create StartingBlock", "error", err)
+		s.logger.Error("failed to create block request start block", "error", err)
 		return
 	}
 
-	s.logger.Trace("Block request", "start", start)
+	s.logger.Trace("sending block request", "start", start)
 
 	blockRequest := &network.BlockRequestMessage{
 		ID:            randomID, // random

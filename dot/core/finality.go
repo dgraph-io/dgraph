@@ -22,23 +22,13 @@ import (
 
 // processConsensusMessage routes a consensus message from the network to the finality gadget
 func (s *Service) processConsensusMessage(msg *network.ConsensusMessage) error {
-	in := s.finalityGadget.GetVoteInChannel()
-	fm, err := s.finalityGadget.DecodeMessage(msg)
-	if err != nil {
-		return err
-	}
-
-	// TODO: safety
-	s.logger.Debug("sending VoteMessage to FinalityGadget", "msg", msg)
-	in <- fm
-	return nil
+	return s.consensusMessageHandler.HandleMessage(msg)
 }
 
 // sendVoteMessages routes a VoteMessage from the finality gadget to the network
 func (s *Service) sendVoteMessages() {
 	out := s.finalityGadget.GetVoteOutChannel()
 	for v := range out {
-		// TODO: safety
 		msg, err := v.ToConsensusMessage()
 		if err != nil {
 			s.logger.Error("failed to convert VoteMessage to ConsensusMessage", "msg", msg)
@@ -46,7 +36,10 @@ func (s *Service) sendVoteMessages() {
 		}
 
 		s.logger.Debug("sending VoteMessage to network", "msg", msg)
-		s.msgSend <- msg
+		err = s.safeMsgSend(msg)
+		if err != nil {
+			s.logger.Error("failed to send grandpa vote message to network", "error", err)
+		}
 	}
 }
 
@@ -59,21 +52,6 @@ func (s *Service) sendFinalizationMessages() {
 		if err != nil {
 			s.logger.Error("failed to convert FinalizationMessage to ConsensusMessage", "msg", msg)
 			continue
-		}
-
-		// update finalized hash for this round in database
-		// TODO: this also happens in grandpa.finalize(); decide which is preferred
-		hash, err := v.GetFinalizedHash()
-		if err == nil {
-			err = s.blockState.SetFinalizedHash(hash, v.GetRound())
-			if err != nil {
-				s.logger.Error("could not set finalized block hash", "hash", hash, "error", err)
-			}
-
-			err = s.blockState.SetFinalizedHash(hash, 0)
-			if err != nil {
-				s.logger.Error("could not set finalized block hash", "hash", hash, "error", err)
-			}
 		}
 
 		s.logger.Debug("sending FinalityMessage to network", "msg", v)

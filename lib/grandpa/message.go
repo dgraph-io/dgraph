@@ -39,28 +39,6 @@ var (
 	finalizationType byte = 1
 )
 
-// DecodeMessage decodes a network-level consensus message into a GRANDPA VoteMessage or FinalizationMessage
-func (s *Service) DecodeMessage(msg *ConsensusMessage) (m FinalityMessage, err error) {
-	var mi interface{}
-
-	switch msg.Data[0] {
-	case voteType:
-		mi, err = scale.Decode(msg.Data[1:], &VoteMessage{Message: new(SignedMessage)})
-		m = mi.(*VoteMessage)
-	case finalizationType:
-		mi, err = scale.Decode(msg.Data[1:], &FinalizationMessage{})
-		m = mi.(*FinalizationMessage)
-	default:
-		return nil, ErrInvalidMessageType
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return m, nil
-}
-
 // FullVote represents a vote with additional information about the state
 // this is encoded and signed and the signature is included in SignedMessage
 type FullVote struct {
@@ -103,16 +81,6 @@ func (v *VoteMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 		ConsensusEngineID: types.GrandpaEngineID,
 		Data:              append([]byte{voteType}, enc...),
 	}, nil
-}
-
-// GetFinalizedHash returns ErrNotFinalizationMessage
-func (v *VoteMessage) GetFinalizedHash() (common.Hash, error) {
-	return common.Hash{}, ErrNotFinalizationMessage
-}
-
-// GetRound returns the round associated with the VoteMessage
-func (v *VoteMessage) GetRound() uint64 {
-	return v.Round
 }
 
 // Justification represents a justification for a finalized block
@@ -159,16 +127,6 @@ func (f *FinalizationMessage) ToConsensusMessage() (*ConsensusMessage, error) {
 		ConsensusEngineID: types.GrandpaEngineID,
 		Data:              append([]byte{finalizationType}, enc...),
 	}, nil
-}
-
-// GetFinalizedHash returns the hash of the block that's being finalized
-func (f *FinalizationMessage) GetFinalizedHash() (common.Hash, error) {
-	return f.Vote.hash, nil
-}
-
-// GetRound returns the round associated with the FinalizationMessage
-func (f *FinalizationMessage) GetRound() uint64 {
-	return f.Round
 }
 
 func (s *Service) newFinalizationMessage(header *types.Header, round uint64) *FinalizationMessage {

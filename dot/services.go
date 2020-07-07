@@ -168,21 +168,29 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		return nil, err
 	}
 
+	var handler core.ConsensusMessageHandler
+	if gs, ok := fg.(*grandpa.Service); ok {
+		handler = grandpa.NewMessageHandler(gs, stateSrvc.Block)
+	} else {
+		handler = grandpa.NewMessageHandler(nil, stateSrvc.Block)
+	}
+
 	// set core configuration
 	coreConfig := &core.Config{
-		LogLvl:              lvl,
-		BlockState:          stateSrvc.Block,
-		StorageState:        stateSrvc.Storage,
-		TransactionQueue:    stateSrvc.TransactionQueue,
-		BlockProducer:       bp,
-		FinalityGadget:      fg,
-		Keystore:            ks,
-		Runtime:             rt,
-		MsgRec:              networkMsgs, // message channel from network service to core service
-		MsgSend:             coreMsgs,    // message channel from core service to network service
-		IsBlockProducer:     cfg.Core.BabeAuthority,
-		IsFinalityAuthority: cfg.Core.GrandpaAuthority,
-		SyncChan:            syncChan,
+		LogLvl:                  lvl,
+		BlockState:              stateSrvc.Block,
+		StorageState:            stateSrvc.Storage,
+		TransactionQueue:        stateSrvc.TransactionQueue,
+		BlockProducer:           bp,
+		FinalityGadget:          fg,
+		ConsensusMessageHandler: handler,
+		Keystore:                ks,
+		Runtime:                 rt,
+		MsgRec:                  networkMsgs, // message channel from network service to core service
+		MsgSend:                 coreMsgs,    // message channel from core service to network service
+		IsBlockProducer:         cfg.Core.BabeAuthority,
+		IsFinalityAuthority:     cfg.Core.GrandpaAuthority,
+		SyncChan:                syncChan,
 	}
 
 	// create new core service

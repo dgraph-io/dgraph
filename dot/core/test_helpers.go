@@ -25,7 +25,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
-	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -68,6 +67,12 @@ func (v *mockVerifier) EpochNumber() uint64 {
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
 	auths []*types.BABEAuthorityData
+}
+
+func newMockBlockProducer() *mockBlockProducer {
+	return &mockBlockProducer{
+		auths: []*types.BABEAuthorityData{},
+	}
 }
 
 // Start mocks starting
@@ -159,8 +164,6 @@ var testConsensusMessage = &network.ConsensusMessage{
 	Data:              []byte("nootwashere"),
 }
 
-var testFinalizedHash = common.NewHash([]byte("finalized"))
-
 type mockFinalityMessage struct{}
 
 // ToConsensusMessage returns a testConsensusMessage
@@ -168,13 +171,10 @@ func (fm *mockFinalityMessage) ToConsensusMessage() (*network.ConsensusMessage, 
 	return testConsensusMessage, nil
 }
 
-// GetFinalizedHash returns testFinalizedHash
-func (fm *mockFinalityMessage) GetFinalizedHash() (common.Hash, error) {
-	return testFinalizedHash, nil
-}
+type mockConsensusMessageHandler struct{}
 
-func (fm *mockFinalityMessage) GetRound() uint64 {
-	return 1
+func (h *mockConsensusMessageHandler) HandleMessage(msg *network.ConsensusMessage) error {
+	return nil
 }
 
 // NewTestService creates a new test core service
@@ -234,6 +234,10 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 
 	if cfg.StorageState == nil {
 		cfg.StorageState = stateSrvc.Storage
+	}
+
+	if cfg.ConsensusMessageHandler == nil {
+		cfg.ConsensusMessageHandler = &mockConsensusMessageHandler{}
 	}
 
 	s, err := NewService(cfg)

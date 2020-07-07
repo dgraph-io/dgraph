@@ -60,8 +60,9 @@ type Service struct {
 	isBlockProducer bool
 
 	// Finality gadget variables
-	finalityGadget      FinalityGadget
-	isFinalityAuthority bool
+	finalityGadget          FinalityGadget
+	isFinalityAuthority     bool
+	consensusMessageHandler ConsensusMessageHandler
 
 	// Keystore
 	keys *keystore.Keystore
@@ -84,16 +85,17 @@ type Service struct {
 
 // Config holds the configuration for the core Service.
 type Config struct {
-	LogLvl              log.Lvl
-	BlockState          BlockState
-	StorageState        StorageState
-	TransactionQueue    TransactionQueue
-	Keystore            *keystore.Keystore
-	Runtime             *runtime.Runtime
-	BlockProducer       BlockProducer
-	IsBlockProducer     bool
-	FinalityGadget      FinalityGadget
-	IsFinalityAuthority bool
+	LogLvl                  log.Lvl
+	BlockState              BlockState
+	StorageState            StorageState
+	TransactionQueue        TransactionQueue
+	Keystore                *keystore.Keystore
+	Runtime                 *runtime.Runtime
+	BlockProducer           BlockProducer
+	IsBlockProducer         bool
+	FinalityGadget          FinalityGadget
+	IsFinalityAuthority     bool
+	ConsensusMessageHandler ConsensusMessageHandler
 
 	NewBlocks chan types.Block // only used for testing purposes
 	Verifier  Verifier         // only used for testing purposes
@@ -130,6 +132,10 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, ErrNilFinalityGadget
 	}
 
+	if cfg.ConsensusMessageHandler == nil {
+		return nil, ErrNilConsensusMessageHandler
+	}
+
 	logger := log.New("pkg", "core")
 	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
@@ -146,23 +152,25 @@ func NewService(cfg *Config) (*Service, error) {
 	var srv = &Service{}
 
 	srv = &Service{
-		logger:              logger,
-		rt:                  cfg.Runtime,
-		codeHash:            codeHash,
-		keys:                cfg.Keystore,
-		msgRec:              cfg.MsgRec,
-		msgSend:             cfg.MsgSend,
-		blockState:          cfg.BlockState,
-		storageState:        cfg.StorageState,
-		transactionQueue:    cfg.TransactionQueue,
-		isBlockProducer:     cfg.IsBlockProducer,
-		blockProducer:       cfg.BlockProducer,
-		finalityGadget:      cfg.FinalityGadget,
-		isFinalityAuthority: cfg.IsFinalityAuthority,
-		lock:                chanLock,
-		syncLock:            syncerLock,
-		blockNumOut:         cfg.SyncChan,
-		respOut:             respChan,
+		logger:                  logger,
+		rt:                      cfg.Runtime,
+		codeHash:                codeHash,
+		keys:                    cfg.Keystore,
+		msgRec:                  cfg.MsgRec,
+		msgSend:                 cfg.MsgSend,
+		blkRec:                  cfg.NewBlocks,
+		blockState:              cfg.BlockState,
+		storageState:            cfg.StorageState,
+		transactionQueue:        cfg.TransactionQueue,
+		isBlockProducer:         cfg.IsBlockProducer,
+		blockProducer:           cfg.BlockProducer,
+		finalityGadget:          cfg.FinalityGadget,
+		consensusMessageHandler: cfg.ConsensusMessageHandler,
+		isFinalityAuthority:     cfg.IsFinalityAuthority,
+		lock:                    chanLock,
+		syncLock:                syncerLock,
+		blockNumOut:             cfg.SyncChan,
+		respOut:                 respChan,
 	}
 
 	if cfg.NewBlocks != nil {
@@ -209,6 +217,7 @@ func NewService(cfg *Config) (*Service, error) {
 	syncerCfg := &SyncerConfig{
 		logger:           logger,
 		BlockState:       cfg.BlockState,
+		BlockProducer:    cfg.BlockProducer,
 		BlockNumIn:       cfg.SyncChan,
 		RespIn:           respChan,
 		MsgOut:           cfg.MsgSend,
@@ -247,7 +256,7 @@ func (s *Service) Start() error {
 		return err
 	}
 
-	if s.finalityGadget != nil {
+	if s.isFinalityAuthority && s.finalityGadget != nil {
 		s.logger.Debug("routing finality gadget messages")
 		go s.sendVoteMessages()
 		go s.sendFinalizationMessages()
