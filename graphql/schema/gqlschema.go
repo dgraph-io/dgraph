@@ -105,6 +105,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
