@@ -450,7 +450,7 @@ type graphQLSchemaNode struct {
 	Schema string `json:"dgraph.graphql.schema"`
 }
 
-type existingGQLSchemaQryResp struct {
+type gqlSchemaQryResp struct {
 	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
 }
 
@@ -517,7 +517,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		return &gqlSchema{ID: uid}, nil
 	}
 
-	var result existingGQLSchemaQryResp
+	var result gqlSchemaQryResp
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
 		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 	}
