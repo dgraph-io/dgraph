@@ -66,7 +66,7 @@ services:
     labels:
       cluster: test
     command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5180 -o 100
-    --logtostderr --mutations=disallow --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --logtostderr --mutations=disallow --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   dg2:
     image: dgraph/dgraph:latest
@@ -85,7 +85,7 @@ services:
     labels:
       cluster: test
     command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5180 -o 102
-    --logtostderr --mutations=strict --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --logtostderr --mutations=strict --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 
   dg3:
     image: dgraph/dgraph:latest
@@ -104,4 +104,4 @@ services:
     labels:
       cluster: test
     command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5180 -o 103
-    --logtostderr --mutations=strict --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
+      --logtostderr --mutations=strict --whitelist=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
