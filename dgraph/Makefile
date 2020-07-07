@@ -18,7 +18,8 @@ BIN            = dgraph
 BUILD         ?= $(shell git rev-parse --short HEAD)
 BUILD_DATE    ?= $(shell git log -1 --format=%ci)
 BUILD_BRANCH  ?= $(shell git rev-parse --abbrev-ref HEAD)
-BUILD_VERSION ?= $(shell git describe --always --tags)
+# Set latest tag as BUILD_VERSION
+BUILD_VERSION ?= $(shell git for-each-ref refs/tags --sort=-taggerdate --format='%(refname:short)' --count=1)
 BUILD_TAGS    ?=
 GOPATH        ?= $(shell go env GOPATH)
 

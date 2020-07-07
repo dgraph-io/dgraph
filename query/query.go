@@ -2629,7 +2629,7 @@ func (req *Request) ProcessQuery(ctx context.Context) (err error) {
 	stop := x.SpanTimer(span, "query.ProcessQuery")
 	defer stop()
 
-	// doneVars stores the processed variables.
+	// Vars stores the processed variables.
 	req.Vars = make(map[string]varValue)
 	loopStart := time.Now()
 	queries := req.GqlQuery.Query
