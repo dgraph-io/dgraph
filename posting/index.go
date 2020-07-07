@@ -211,8 +211,29 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-
 	x.AssertTrue(plist != nil)
+
+	pred, ok := schema.State().Get(ctx, t.Attr)
+	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
+		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
+	if isSingleUidUpdate {
+		dataKey := x.DataKey(t.Attr, t.Entity)
+		dataList, err := getFn(dataKey)
+		if err != nil {
+			return errors.Wrapf(err, "cannot find single uid list to update with key %s",
+				hex.Dump(dataKey))
+		}
+		err = dataList.Iterate(txn.StartTs, 0, func(p *pb.Posting) error {
+			delEdge := &pb.DirectedEdge{
+				Entity:  t.Entity,
+				ValueId: p.Uid,
+				Attr:    t.Attr,
+				Op:      pb.DirectedEdge_DEL,
+			}
+			return txn.addReverseAndCountMutation(ctx, delEdge)
+		})
+	}
+
 	// We must create a copy here.
 	edge := &pb.DirectedEdge{
 		Entity:  t.ValueId,
@@ -233,6 +254,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			return err
 		}
 	}
+
 	return nil
 }
 
