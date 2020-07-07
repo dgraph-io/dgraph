@@ -69,13 +69,6 @@ func (cache *aclCache) update(groups []acl.Group) {
 	for _, group := range groups {
 		acls := group.Rules
 		users := group.Users
-		for _, user := range users {
-			userPredPerms[user.UserID] = make(map[string]int32)
-			//TODO (Anurag) Can we make this cleaner?
-			for _, acl := range acls {
-				userPredPerms[user.UserID][acl.Predicate] = acl.Perm
-			}
-		}
 
 		for _, acl := range acls {
 			if len(acl.Predicate) > 0 {
@@ -85,6 +78,22 @@ func (cache *aclCache) update(groups []acl.Group) {
 					groupPerms := make(map[string]int32)
 					groupPerms[group.GroupID] = acl.Perm
 					predPerms[acl.Predicate] = groupPerms
+				}
+			}
+		}
+
+		for _, user := range users {
+			if _, found := userPredPerms[user.UserID]; !found {
+				userPredPerms[user.UserID] = make(map[string]int32)
+			}
+			// For each user we store all the permissions availbale to that user
+			// via different groups. Therefore we take XOR is the user already has
+			// a permission for a predicate
+			for _, acl := range acls {
+				if _, found := userPredPerms[user.UserID][acl.Predicate]; found {
+					userPredPerms[user.UserID][acl.Predicate] ^= acl.Perm
+				} else {
+					userPredPerms[user.UserID][acl.Predicate] = acl.Perm
 				}
 			}
 		}

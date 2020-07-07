@@ -76,7 +76,7 @@ type GraphQuery struct {
 	FacetsOrder      []*FacetOrder
 
 	// Used for ACL enabled queries to curtail results to only accessible params
-	AllowedPreds []string
+	AllowedPreds nil
 
 	// Internal fields below.
 	// If gq.fragment is nonempty, then it is a fragment reference / spread.

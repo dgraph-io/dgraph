@@ -476,8 +476,12 @@ func authorizePreds(userId string, groupIds, preds []string,
 	}
 	aclCachePtr.RLock()
 	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
-	for predicate := range aclCachePtr.userPredPerms[userId] {
-		allowedPreds = append(allowedPreds, predicate)
+	// User can have multiple permission for same predicate, add predicate
+	// only if the acl.Op is covered in the set of permissions for the user
+	for predicate, perm := range aclCachePtr.userPredPerms[userId] {
+		if (perm & aclOp.Code) > 0 {
+			allowedPreds = append(allowedPreds, predicate)
+		}
 	}
 	aclCachePtr.RUnlock()
 	return blockedPreds, allowedPreds
