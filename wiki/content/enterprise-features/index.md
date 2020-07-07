@@ -345,7 +345,10 @@ Some things to note about online restores are:
   cluster has been taken offline for maintenance.
 - The cluster needs to have the same number of groups as the cluster where the
   backup was created.
-
+- The predicates will be forcibly moved around groups to ensure the state of the
+  cluster after restore matches what is indicated by the backup manifest. The
+  process does not require existing data to be moved around since it will be
+  deleted anyways.
 
 ### Basic operation
 
