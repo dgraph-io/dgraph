@@ -213,6 +213,8 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	}
 	x.AssertTrue(plist != nil)
 
+	// For single uid predicates, updating the reverse index requires that the existing
+	// entries for this key in the index are removed.
 	pred, ok := schema.State().Get(ctx, t.Attr)
 	isSingleUidUpdate := ok && !pred.GetList() && pred.GetValueType() == pb.Posting_UID &&
 		t.Op == pb.DirectedEdge_SET && t.ValueId != 0
@@ -232,6 +234,10 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 			}
 			return txn.addReverseAndCountMutation(ctx, delEdge)
 		})
+		if err != nil {
+			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
+				hex.Dump(dataKey))
+		}
 	}
 
 	// We must create a copy here.
