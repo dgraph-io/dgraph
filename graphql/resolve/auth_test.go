@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"io/ioutil"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -47,8 +48,12 @@ type AuthQueryRewritingCase struct {
 	Variables string
 
 	// Dgraph upsert query and mutations built from the GQL
-	DGQuery     string
-	DGMutations []*dgraphMutation
+	DGQuery        string
+	DGQuerySec     string
+	DGMutations    []*dgraphMutation
+	DGMutationsSec []*dgraphMutation
+
+	Length string
 
 	// UIDS and json from the Dgraph result
 	Uids string
@@ -66,11 +71,12 @@ type AuthQueryRewritingCase struct {
 }
 
 type authExecutor struct {
-	t     *testing.T
-	state int
+	t      *testing.T
+	state  int
+	length int
 
 	// initial mutation
-	upsertQuery string
+	upsertQuery []string
 	json        string
 	uids        string
 
@@ -86,9 +92,10 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 	switch ex.state {
 	case 1:
 		// initial mutation
+		ex.length -= 1
 
 		// check that the upsert has built in auth, if required
-		require.Equal(ex.t, ex.upsertQuery, req.Query)
+		require.Equal(ex.t, ex.upsertQuery[ex.length], req.Query)
 
 		var assigned map[string]string
 		if ex.uids != "" {
@@ -104,6 +111,10 @@ func (ex *authExecutor) Execute(ctx context.Context, req *dgoapi.Request) (*dgoa
 		// For rules that don't require auth, it should directly go to step 3.
 		if ex.skipAuth {
 			ex.state++
+		}
+
+		if ex.length != 0 {
+			ex.state = 0
 		}
 
 		return &dgoapi.Response{
@@ -341,6 +352,19 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 	err = yaml.Unmarshal(b, &tests)
 	require.NoError(t, err, "Unable to unmarshal tests to yaml.")
 
+	compareMutations := func(t *testing.T, test []*dgraphMutation, generated []*dgoapi.Mutation) {
+		require.Len(t, generated, len(test))
+		for i, expected := range test {
+			require.Equal(t, expected.Cond, generated[i].Cond)
+			if len(generated[i].SetJson) > 0 || expected.SetJSON != "" {
+				require.JSONEq(t, expected.SetJSON, string(generated[i].SetJson))
+			}
+			if len(generated[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
+				require.JSONEq(t, expected.DeleteJSON, string(generated[i].DeleteJson))
+			}
+		}
+	}
+
 	gqlSchema := test.LoadSchemaFromString(t, sch)
 
 	for _, tcase := range tests {
@@ -373,24 +397,21 @@ func deleteQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta)
 
 			// -- Act --
 			upsert, err := rewriterToTest.Rewrite(ctx, mut)
-			q := upsert.Query
-			muts := upsert.Mutations
 
 			// -- Assert --
 			if tcase.Error != nil || err != nil {
+				require.NotNil(t, err)
+				require.NotNil(t, tcase.Error)
 				require.Equal(t, tcase.Error.Error(), err.Error())
-			} else {
-				require.Equal(t, tcase.DGQuery, dgraph.AsString(q))
-				require.Len(t, muts, len(tcase.DGMutations))
-				for i, expected := range tcase.DGMutations {
-					require.Equal(t, expected.Cond, muts[i].Cond)
-					if len(muts[i].SetJson) > 0 || expected.SetJSON != "" {
-						require.JSONEq(t, expected.SetJSON, string(muts[i].SetJson))
-					}
-					if len(muts[i].DeleteJson) > 0 || expected.DeleteJSON != "" {
-						require.JSONEq(t, expected.DeleteJSON, string(muts[i].DeleteJson))
-					}
-				}
+				return
+			}
+
+			require.Equal(t, tcase.DGQuery, dgraph.AsString(upsert[0].Query))
+			compareMutations(t, tcase.DGMutations, upsert[0].Mutations)
+
+			if len(upsert) > 1 {
+				require.Equal(t, tcase.DGQuerySec, dgraph.AsString(upsert[1].Query))
+				compareMutations(t, tcase.DGMutationsSec, upsert[1].Mutations)
 			}
 		})
 	}
@@ -483,14 +504,26 @@ func checkAddUpdateCase(
 	ctx, err := authMeta.AddClaimsToContext(context.Background())
 	require.NoError(t, err)
 
+	length := 1
+	upsertQuery := []string{tcase.DGQuery}
+
+	if tcase.Length != "" {
+		length, _ = strconv.Atoi(tcase.Length)
+	}
+
+	if length == 2 {
+		upsertQuery = []string{tcase.DGQuerySec, tcase.DGQuery}
+	}
+
 	ex := &authExecutor{
 		t:           t,
-		upsertQuery: tcase.DGQuery,
+		upsertQuery: upsertQuery,
 		json:        tcase.Json,
 		uids:        tcase.Uids,
 		authQuery:   tcase.AuthQuery,
 		authJson:    tcase.AuthJson,
 		skipAuth:    tcase.SkipAuth,
+		length:      length,
 	}
 	resolver := NewDgraphResolver(rewriter(), ex, StdMutationCompletion(mut.ResponseName()))
 
