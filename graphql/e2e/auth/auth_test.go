@@ -210,6 +210,9 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
 	beforeResult := gqlResponse.Data
 
+	// Previously, Auth queries would have touched all the new `Regions`. But after the optimization
+	// we should only touch necessary `Regions` which are assigned to some `Movie`. Hence, adding
+	// these extra `Regions` would not increase the `touched_uids`.
 	var regions []Region
 	for i := 0; i < 100; i++ {
 		r := Region{
@@ -220,16 +223,17 @@ func TestOptimizedNestedAuthQuery(t *testing.T) {
 		regions = append(regions, r)
 	}
 
-	for _, region := range regions {
-		region.delete(t, user, role)
-	}
-
 	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
 	require.Nil(t, gqlResponse.Errors)
 
 	afterTouchUids := gqlResponse.Extensions["touched_uids"]
 	require.Equal(t, beforeTouchUids, afterTouchUids)
 	require.Equal(t, beforeResult, gqlResponse.Data)
+
+	// Clean up
+	for _, region := range regions {
+		region.delete(t, user, role)
+	}
 }
 
 func (s Student) deleteByEmail(t *testing.T) {

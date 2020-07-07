@@ -187,41 +187,28 @@
     mutation addColumn($col: AddColumnInput!) {
       addColumn(input: [$col]) {
         column {
-          name
-           inProject {
-              projID
-              name
-           }
+          colID
         }
       }
     }
   variables: |
     { "col":
       {
-        "name": "column_add_3",
-        "inProject": {
-          "name": "project_add_4",
-          "roles": [{"permission" : "ADMIN", "assignedTo" : [{ "username" : "user6" }] }, {"permission" : "VIEW", "assignedTo" : [{ "username" : "user6" }] }]
-        }
+        "inProject": { "projID": "0x123" },
+        "name": "a column",
+        "tickets": [ { "title": "a ticket" } ]
       }
     }
-  length: "2"
   dgquery: |-
     query {
-      User5 as User5(func: eq(User.username, "user6")) @filter(type(User)) {
-        uid
-      }
-    }
-  dgquerysec: |-
-    query {
-      User5 as User5(func: eq(User.username, "user6")) @filter(type(User)) {
+      Project2 as Project2(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
   json: |
-    { "User5": [ { "uid": "0x123" } ] }
+    { "Project2": [ { "uid": "0x123" } ] }
   uids: |
-    { "Column1": "0x456", "Project2": "0x410", "Role3": "0x510", "Role4": "0x511"}
+    { "Column1": "0x456", "Ticket3": "0x789" }
   authquery: |-
     query {
       Column(func: uid(Column1)) @filter(uid(ColumnAuth2)) {
@@ -238,24 +225,28 @@
         }
         dgraph.uid : uid
       }
-      Project(func: uid(Project3)) @filter(uid(ProjectAuth4)) {
+      Ticket(func: uid(Ticket3)) @filter(uid(TicketAuth4)) {
         uid
       }
-      Project3 as var(func: uid(0x410))
-      ProjectAuth4 as var(func: uid(Project3)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+      Ticket3 as var(func: uid(0x789))
+      TicketAuth4 as var(func: uid(Ticket3)) @cascade {
+        onColumn : Ticket.onColumn {
+          inProject : Column.inProject {
+            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
+              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
+              dgraph.uid : uid
+            }
+            dgraph.uid : uid
+          }
           dgraph.uid : uid
         }
         dgraph.uid : uid
       }
     }
   authjson: |
-    { 
-      "Column": [ { "uid": "0x456" } ],
-      "Project": [ { "uid": "0x410" } ],
-      "Role": [ { "uid": "0x510" }, { "uid": "0x511" } ]
-    }
+    { "Ticket": [ { "uid": "0x789" } ]}
+  error:
+    { "message": "mutation failed because authorization failed" }
 
 - name: "Add multiples of multiple nodes of different types"
   gqlquery: |
