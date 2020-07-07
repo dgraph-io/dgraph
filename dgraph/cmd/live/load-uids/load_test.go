@@ -130,7 +130,7 @@ func TestLiveLoadJsonUidKeep(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
@@ -144,7 +144,7 @@ func TestLiveLoadJsonUidDiscard(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.json",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
@@ -158,7 +158,7 @@ func TestLiveLoadRdfUidKeep(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, false)
@@ -172,7 +172,7 @@ func TestLiveLoadRdfUidDiscard(t *testing.T) {
 			"--schema", testDataDir + "/family.schema", "--files", testDataDir + "/family.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
 	checkLoadedData(t, true)
@@ -211,7 +211,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
-	err := testutil.Pipeline(pipeline)
+	_, err := testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading exported schema exited with error")
 
 	// cleanup copied export files
