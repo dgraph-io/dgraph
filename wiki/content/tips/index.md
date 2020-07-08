@@ -1,5 +1,9 @@
 +++
 title = "GraphQL+-: Tips and Tricks"
+[menu.main]
+  url = "/tips/"
+  identifier = "tips"
+  weight = 5
 +++
 
 ## Get Sample Data
@@ -58,9 +62,9 @@ Use the `has` function among the value variables to search on non-indexed predic
 
 ## Sort edge by nested node values
 
-Dgraph [sorting]({{< relref "query-language/index.md#sorting" >}}) is based on a single
+Dgraph [sorting]({{< relref "query-language/sorting.md" >}}) is based on a single
 level of the subgraph. To sort a level by the values of a deeper level, use
-[query variables]({{< relref "query-language/index.md#query-variables" >}}) to bring
+[query variables]({{< relref "query-language/query-variables.md" >}}) to bring
 nested values up to the level of the edge to be sorted.
 
 Example: Get all actors from a Steven Spielberg movie sorted alphabetically.

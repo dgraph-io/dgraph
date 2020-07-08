@@ -1,5 +1,10 @@
 +++
 title = "Tutorials - Get Started with Dgraph series"
+[menu.main]
+  url = "/tutorials"
+  name = "Tutorials"
+  identifier = "tutorials"
+  weight = 3
 +++
 
 {{% notice "note" %}}
@@ -114,11 +119,11 @@ single page quickstart guide [here]({{< relref "get-started/index.md" >}}).
 
 ## Where to go from here
 
-- Go to [Clients]({{< relref "clients/index.md" >}}) to see how to communicate
+- Go to [Clients]({{< relref "clients/_index.md" >}}) to see how to communicate
 with Dgraph from your application.
 - Take the [Tour](https://dgraph.io/tour/) for a guided tour of how to write queries in Dgraph.
-- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/index.md" >}}) reference.
-- See [Deploy]({{< relref "deploy/index.md" >}}) if you wish to run Dgraph
+- A wider range of queries can also be found in the [Query Language]({{< relref "query-language/_index.md" >}}) reference.
+- See [Deploy]({{< relref "deploy/_index.md" >}}) if you wish to run Dgraph
   in a cluster.
 
 ## Need Help
