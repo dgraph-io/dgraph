@@ -178,6 +178,8 @@ func TestWatchForBlocks_NotHighestSeen(t *testing.T) {
 		if cmp == 0 {
 			break
 		}
+
+		time.Sleep(time.Millisecond * 10)
 	}
 
 	if cmp != 0 {
@@ -191,6 +193,8 @@ func TestWatchForBlocks_NotHighestSeen(t *testing.T) {
 		if cmp == 0 {
 			break
 		}
+
+		time.Sleep(time.Millisecond * 10)
 	}
 
 	if cmp != 0 {
@@ -224,6 +228,8 @@ func TestWatchForBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
 		if cmp == 0 {
 			break
 		}
+
+		time.Sleep(time.Millisecond * 10)
 	}
 
 	if cmp != 0 {
@@ -644,6 +650,7 @@ func TestExecuteBlock(t *testing.T) {
 		TransactionQueue: syncer.transactionQueue,
 		Keypair:          kp,
 		BlockState:       syncer.blockState,
+		EpochThreshold:   babe.MaxThreshold,
 	}
 
 	builder := newBlockBuilder(t, bcfg)
@@ -688,6 +695,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 		TransactionQueue: syncer.transactionQueue,
 		Keypair:          kp,
 		BlockState:       syncer.blockState,
+		EpochThreshold:   babe.MaxThreshold,
 	}
 
 	key := []byte("noot")

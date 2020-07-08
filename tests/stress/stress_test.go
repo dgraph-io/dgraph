@@ -98,7 +98,7 @@ func TestSync_SingleBlockProducer(t *testing.T) {
 	// only log info from 1 node
 	tmpdir, err := ioutil.TempDir("", "gossamer-stress-sync")
 	require.NoError(t, err)
-	node, err := utils.RunGossamer(t, numNodes-1, tmpdir, utils.GenesisDefault, utils.ConfigBABE)
+	node, err := utils.RunGossamer(t, numNodes-1, tmpdir, utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
 	require.NoError(t, err)
 
 	// wait and start rest of nodes - if they all start at the same time the first round usually doesn't complete since

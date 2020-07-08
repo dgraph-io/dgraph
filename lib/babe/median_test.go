@@ -87,7 +87,7 @@ func addBlocksToState(t *testing.T, babeService *Service, depth int, blockState 
 	for i := 1; i <= depth; i++ {
 
 		// create proof that we can authorize this block
-		babeService.epochThreshold = big.NewInt(0)
+		babeService.epochThreshold = maxThreshold
 		babeService.authorityIndex = 0
 		slotNumber := uint64(i)
 
@@ -153,7 +153,7 @@ func TestSlotTime(t *testing.T) {
 func TestEstimateCurrentSlot(t *testing.T) {
 	babeService := createTestService(t, nil)
 	// create proof that we can authorize this block
-	babeService.epochThreshold = big.NewInt(0)
+	babeService.epochThreshold = maxThreshold
 	babeService.authorityIndex = 0
 	slotNumber := uint64(17)
 

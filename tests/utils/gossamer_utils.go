@@ -69,6 +69,8 @@ var (
 	ConfigBABE string = filepath.Join(currentDir, "../utils/config_babe.toml")
 	// ConfigNoBABE is a config file with BABE disabled
 	ConfigNoBABE string = filepath.Join(currentDir, "../utils/config_nobabe.toml")
+	// ConfigBABEMaxThreshold is a config file with BABE threshold set to maximum (node can produce block every slot)
+	ConfigBABEMaxThreshold string = filepath.Join(currentDir, "../utils/config_babe_max_threshold.toml")
 )
 
 // Node represents a gossamer process

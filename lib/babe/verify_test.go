@@ -170,7 +170,9 @@ func TestCheckForConsensusDigest(t *testing.T) {
 }
 
 func TestVerificationManager_VerifyBlock(t *testing.T) {
-	babeService := createTestService(t, nil)
+	babeService := createTestService(t, &ServiceConfig{
+		EpochThreshold: maxThreshold,
+	})
 	descriptor := babeService.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
@@ -186,7 +188,9 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 }
 
 func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
-	babeService := createTestService(t, nil)
+	babeService := createTestService(t, &ServiceConfig{
+		EpochThreshold: maxThreshold,
+	})
 	descriptor := babeService.Descriptor()
 
 	vm := newTestVerificationManager(t, false, descriptor)
@@ -264,7 +268,7 @@ func TestVerifySlotWinner(t *testing.T) {
 	babeService := createTestService(t, cfg)
 
 	// create proof that we can authorize this block
-	babeService.epochThreshold = big.NewInt(0)
+	babeService.epochThreshold = maxThreshold
 	babeService.authorityIndex = 0
 	var slotNumber uint64 = 1
 

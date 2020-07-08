@@ -1,0 +1,33 @@
+[global]
+name = "gssmr"
+id = "gssmr"
+log = "crit"
+
+[log]
+babe = "info"
+
+[init]
+genesis = "./chain/gssmr/genesis.json"
+
+[account]
+key = ""
+unlock = ""
+
+[core]
+authority = true
+roles = 4
+babe-authority = true
+grandpa-authority = true
+babe-threshold = "max"
+
+[network]
+bootnodes = []
+protocol = "/gossamer/gssmr/0"
+nobootstrap = false
+nomdns = false
+
+[rpc]
+enabled = false
+host = "localhost"
+modules = ["system", "author", "chain", "state"]
+ws-enabled = false
