@@ -91,7 +91,7 @@ func (cache *aclCache) update(groups []acl.Group) {
 			// a permission for a predicate
 			for _, acl := range acls {
 				if _, found := userPredPerms[user.UserID][acl.Predicate]; found {
-					userPredPerms[user.UserID][acl.Predicate] ^= acl.Perm
+					userPredPerms[user.UserID][acl.Predicate] |= acl.Perm
 				} else {
 					userPredPerms[user.UserID][acl.Predicate] = acl.Perm
 				}
