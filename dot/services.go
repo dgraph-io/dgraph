@@ -134,6 +134,11 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 		return nil, err
 	}
 
+	threshold, ok := cfg.Core.BabeThreshold.(*big.Int)
+	if !ok && threshold != nil {
+		return nil, errors.New("invalid BabeThreshold in configuration")
+	}
+
 	bcfg := &babe.ServiceConfig{
 		LogLvl:           lvl,
 		Keypair:          kps[0].(*sr25519.Keypair),
@@ -142,6 +147,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 		StorageState:     st.Storage,
 		TransactionQueue: st.TransactionQueue,
 		StartSlot:        bestSlot + 1,
+		EpochThreshold:   threshold,
 	}
 
 	// create new BABE service

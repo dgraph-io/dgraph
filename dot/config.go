@@ -86,10 +86,11 @@ type NetworkConfig struct {
 
 // CoreConfig is to marshal/unmarshal toml core config vars
 type CoreConfig struct {
-	Authority        bool `toml:"authority"`
-	Roles            byte `toml:"roles"`
-	BabeAuthority    bool `toml:"babe-authority"`
-	GrandpaAuthority bool `toml:"grandpa-authority"`
+	Authority        bool        `toml:"authority"`
+	Roles            byte        `toml:"roles"`
+	BabeAuthority    bool        `toml:"babe-authority"`
+	GrandpaAuthority bool        `toml:"grandpa-authority"`
+	BabeThreshold    interface{} `toml:"babe-threshold"`
 }
 
 // RPCConfig is to marshal/unmarshal toml RPC config vars

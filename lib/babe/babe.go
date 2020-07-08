@@ -38,6 +38,13 @@ import (
 // RandomnessLength is the length of the epoch randomness (32 bytes)
 const RandomnessLength = 32
 
+var (
+	// MaxThreshold is the maximum BABE threshold (node authorized to produce a block every slot)
+	MaxThreshold = big.NewInt(0).SetBytes([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff})
+	// MinThreshold is the minimum BABE threshold (node never authorized to produce a block)
+	MinThreshold = big.NewInt(0)
+)
+
 // Service contains the VRF keys for the validator, as well as BABE configuation data
 type Service struct {
 	logger log.Logger

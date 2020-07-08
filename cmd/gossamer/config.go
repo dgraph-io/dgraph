@@ -24,6 +24,7 @@ import (
 	database "github.com/ChainSafe/chaindb"
 	"github.com/ChainSafe/gossamer/dot"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 
@@ -165,6 +166,10 @@ func createExportConfig(ctx *cli.Context) (*dot.Config, error) {
 	setDotCoreConfig(ctx, &cfg.Core)
 	setDotNetworkConfig(ctx, &cfg.Network)
 	setDotRPCConfig(ctx, &cfg.RPC)
+
+	if cfg.Core.BabeThreshold == nil {
+		cfg.Core.BabeThreshold = ""
+	}
 
 	// set system info
 	setSystemInfoConfig(ctx, cfg)
@@ -338,10 +343,24 @@ func setDotCoreConfig(ctx *cli.Context, cfg *dot.CoreConfig) {
 		cfg.GrandpaAuthority = false
 	}
 
+	if thresholdStr, ok := cfg.BabeThreshold.(string); ok {
+		switch thresholdStr {
+		case "max":
+			cfg.BabeThreshold = babe.MaxThreshold
+		case "min":
+			cfg.BabeThreshold = babe.MinThreshold
+		default:
+			cfg.BabeThreshold = nil
+		}
+	} else {
+		cfg.BabeThreshold = nil
+	}
+
 	logger.Debug(
 		"core configuration",
 		"babe-authority", cfg.BabeAuthority,
 		"grandpa-authority", cfg.GrandpaAuthority,
+		"babe-threshold", cfg.BabeThreshold,
 	)
 }
 

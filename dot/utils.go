@@ -55,7 +55,7 @@ func NewTestConfig(t *testing.T) *Config {
 
 	// TODO: use default config instead of gssmr config for test config #776
 
-	return &Config{
+	cfg := &Config{
 		Global: GlobalConfig{
 			Name:     GssmrConfig().Global.Name,
 			ID:       GssmrConfig().Global.ID,
@@ -78,6 +78,9 @@ func NewTestConfig(t *testing.T) *Config {
 		RPC:     GssmrConfig().RPC,
 		System:  GssmrConfig().System,
 	}
+
+	cfg.Core.BabeThreshold = ""
+	return cfg
 }
 
 // NewTestConfigWithFile returns a new test configuration and a temporary configuration file
@@ -87,7 +90,7 @@ func NewTestConfigWithFile(t *testing.T) (*Config, *os.File) {
 	file, err := ioutil.TempFile(cfg.Global.BasePath, "config-")
 	if err != nil {
 		fmt.Println(fmt.Errorf("failed to create temporary file: %s", err))
-		require.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	cfgFile := ExportConfig(cfg, file.Name())

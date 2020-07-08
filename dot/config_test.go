@@ -112,6 +112,7 @@ func TestExportConfigGssmr(t *testing.T) {
 
 	cfg.Init.Genesis = gssmrGenesis
 	cfg.Global.BasePath = gssmrBasePath
+	cfg.Core.BabeThreshold = ""
 
 	file := ExportConfig(cfg, GssmrConfigPath)
 
@@ -157,6 +158,7 @@ func TestExportConfigKsmcc(t *testing.T) {
 
 	cfg.Init.Genesis = ksmccGenesis
 	cfg.Global.BasePath = ksmccBasePath
+	cfg.Core.BabeThreshold = ""
 
 	file := ExportConfig(cfg, KsmccConfigPath)
 
