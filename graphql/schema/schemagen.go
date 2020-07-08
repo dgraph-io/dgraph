@@ -416,7 +416,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object,ast.Interface:
+				case ast.Object, ast.Interface:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					if parentInt == nil {
