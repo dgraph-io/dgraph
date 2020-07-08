@@ -17,10 +17,10 @@
 package testutil
 
 import (
+	"bytes"
 	"fmt"
 	"go/build"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 
@@ -54,21 +54,20 @@ func ExecWithOpts(argv []string, opts CmdOpts) error {
 // Pipeline runs several commands such that the output of one command becomes the input of the next.
 // The first argument should be an two-dimensional array containing the commands.
 // TODO: allow capturing output, sending to terminal, etc
-func Pipeline(cmds [][]string) ([]byte, error) {
+func Pipeline(cmds [][]string) (string, error) {
 	return pipelineInternal(cmds, nil)
 }
 
 // piplineInternal takes a list of commands and a list of options (one for each).
 // If opts is nil, all commands should be run with the default options.
-func pipelineInternal(cmds [][]string, opts []CmdOpts) ([]byte, error) {
+func pipelineInternal(cmds [][]string, opts []CmdOpts) (string, error) {
 	x.AssertTrue(opts == nil || len(cmds) == len(opts))
 
 	var p io.ReadCloser
 	var numCmds = len(cmds)
 
 	cmd := make([]*exec.Cmd, numCmds)
-	outFD, _ := os.Create("./out")
-	defer outFD.Close()
+	var stdout bytes.Buffer
 
 	// Run all commands in parallel, connecting stdin of each to the stdout of the previous.
 	for i, c := range cmds {
@@ -86,9 +85,8 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) ([]byte, error) {
 
 		if !lastCmd {
 			p, _ = cmd[i].StdoutPipe()
-		}
-		if lastCmd {
-			cmd[i].Stdout = outFD
+		} else {
+			cmd[i].Stdout = &stdout
 		}
 
 		if ShowOutput {
@@ -119,12 +117,12 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) ([]byte, error) {
 		}
 	}
 
-	stdOut, _ := ioutil.ReadFile("./out")
+	outStr := string(stdout.Bytes())
 	if ShowOutput {
-		fmt.Printf(string(stdOut))
+		fmt.Println(outStr)
 	}
 
-	return stdOut, err
+	return outStr, err
 }
 
 func DgraphBinaryPath() string {

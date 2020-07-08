@@ -23,6 +23,7 @@ import (
 	"os"
 	"path"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -228,6 +229,27 @@ func copyExportToLocalFs(t *testing.T) string {
 	require.True(t, len(childDirs) > 0, "Local export copy directory is empty!!!")
 
 	return childDirs[0].Name()
+}
+
+func extractFileName(output string) string {
+	errLine := strings.Split(output, "\n")[7]
+	filename := strings.Split(strings.Split(errLine, testDataDir)[1], ":")[0]
+	return filename[1 : len(filename)-1]
+}
+
+func TestLiveLoadFileName(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/a.rdf," + testDataDir + "/b.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	name := extractFileName(out)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	require.Equal(t, name, "b.rdf", "incorrect name for file, expected b.rdf, got a.rdf")
 }
 
 func TestMain(m *testing.M) {
