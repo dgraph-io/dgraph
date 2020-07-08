@@ -13,7 +13,7 @@ RDF N-Quad allows specifying a language for string values and an RDF type.  Lang
 <0x01> <name> "Adélaïde"@fr .
 <0x01> <dgraph.type> "Person" .
 ```
-See also [how language strings are handled in queries]({{< relref "query-language/fundamentals.md#language-support" >}}).
+See also [how language strings are handled in queries]({{< relref "query-language/graphql-fundamentals.md#language-support" >}}).
 
 RDF types are attached to literals with the standard `^^` separator.  For example
 ```
