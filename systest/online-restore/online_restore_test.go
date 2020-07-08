@@ -81,6 +81,7 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
 
+	restoreDone := false
 	for i := 0; i < 15; i++ {
 		resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 		require.NoError(t, err)
@@ -88,24 +89,37 @@ func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
 		require.NoError(t, err)
 		sbuf := string(buf)
 		if strings.Contains(sbuf, "OK") {
-			return
+			restoreDone = true
+			break
 		}
 		time.Sleep(time.Second)
 	}
-	require.True(t, false, "restore operation did not complete after max number of retries")
+	require.True(t, restoreDone)
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
-	for i := 0; i < 10; i++ {
+	// Waiting for three consecutive successful queries is done to prevent a situation in
+	// which the query succeeds at the first attempt because the follower is behind and
+	// has not started to apply the restore proposal.
+	numSuccess := 0
+	for {
 		// This is a dummy query that returns no results.
 		_, err = dg.NewTxn().Query(context.Background(), `{
 		q(func: has(invalid_pred)) {
 			invalid_pred
 		}}`)
+
 		if err == nil {
+			numSuccess += 1
+		} else {
+			require.Contains(t, err.Error(), "the server is in draining mode")
+			numSuccess = 0
+		}
+
+		if numSuccess == 3 {
+			// The server has been responsive three times in a row.
 			break
 		}
-		require.Contains(t, err.Error(), "the server is in draining mode")
 		time.Sleep(1 * time.Second)
 	}
 }
