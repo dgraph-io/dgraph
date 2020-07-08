@@ -32,3 +32,7 @@ These third-party clients are contributed by the community and are not officiall
 
 - https://github.com/Swoorup/dgraph-rs
 - https://github.com/selmeci/dgraph-tonic
+
+## Apache Spark Connector
+
+- https://github.com/G-Research/spark-dgraph-connector

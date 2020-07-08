@@ -173,6 +173,25 @@ mutation {
 }
 ```
 
+Here we assigned a permission rule for the friend predicate to the group. In case you have [reverse edges]({{< relref "query-language/index.md#reverse-edges" >}}), they have to be given the permission to the group as well
+```graphql
+mutation {
+  updateGroup(input: {filter: {name: {eq: "dev"}}, set: {rules: [{predicate: "~friend", permission: 7}]}}) {
+    group {
+      name
+      rules {
+        permission
+        predicate
+      }
+    }
+  }
+}
+```
+You can also resolve this by using the `dgraph acl` tool
+```
+dgraph acl -a <ALPHA_ADDRESS:PORT> -w <GROOT_USER> -x <GROOT_PASSWORD>  mod --group dev --pred ~friend --perm 7
+```
+
 The command above grants the `dev` group the `READ`+`WRITE`+`MODIFY` permission on the
 `friend` predicate. Permissions are represented by a number following the UNIX file
 permission convention. That is, 4 (binary 100) represents `READ`, 2 (binary 010)
@@ -197,7 +216,7 @@ mutation {
 }
 ```
 
-## Retrieve Users and Groups Information 
+## Retrieve Users and Groups Information
 {{% notice "note" %}}
 All these queries require passing an `X-Dgraph-AccessToken` header, value for which can be obtained after logging in.
 {{% /notice %}}
@@ -428,3 +447,30 @@ mutation {
   }
 }
 ```
+
+## Reset Groot Password
+
+If you've forgotten the password to your groot user, then you may reset the groot password (or
+the password for any user) by following these steps.
+
+1. Stop Dgraph Alpha.
+2. Turn off ACLs by removing the `--acl_hmac_secret` config flag in the Alpha config. This leaves
+   the Alpha open with no ACL rules, so be sure to restrict access, including stopping request
+   traffic to this Alpha.
+3. Start Dgraph Alpha.
+4. Connect to Dgraph Alpha using Ratel and run the following upsert mutation to update the groot password
+   to `newpassword` (choose your own secure password):
+   ```text
+   upsert {
+     query {
+       groot as var(func: eq(dgraph.xid, "groot"))
+     }
+     mutation {
+       set {
+         uid(groot) <dgraph.password> "newpassword" .
+       }
+     }
+   }
+   ```
+5. Restart Dgraph Alpha with ACLs turned on by setting the `--acl_hmac_secret` config flag.
+6. Login as groot with your new password.

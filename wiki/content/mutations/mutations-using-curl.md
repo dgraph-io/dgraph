@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Mutations using cURL"
 [menu.main]
     parent = "mutations"
-    weight = 8
+    weight = 9
 +++
 
 Mutations can be done over HTTP by making a `POST` request to an Alpha's `/mutate` endpoint. On the command line this can be done with curl. To commit the mutation, pass the parameter `commitNow=true` in the URL.

@@ -10,7 +10,7 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 
 `dgraph live` takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
 
-```
+```sh
 dgraph live --help
 ```
 See also [Fast Data Loading](/deploy#fast-data-loading).

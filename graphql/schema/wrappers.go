@@ -122,7 +122,7 @@ type Field interface {
 	SetArgTo(arg string, val interface{})
 	Skip() bool
 	Include() bool
-	Cascade() bool
+	Cascade() []string
 	HasCustomDirective() (bool, map[string]bool)
 	Type() Type
 	SelectionSet() []Field
@@ -659,8 +659,12 @@ func (f *field) Include() bool {
 	return dir.ArgumentMap(f.op.vars)["if"].(bool)
 }
 
-func (f *field) Cascade() bool {
-	return f.field.Directives.ForName(cascadeDirective) != nil
+func (f *field) Cascade() []string {
+
+	if f.field.Directives.ForName(cascadeDirective) == nil {
+		return nil
+	}
+	return []string{"__all__"}
 }
 
 func (f *field) HasCustomDirective() (bool, map[string]bool) {
@@ -860,7 +864,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		for _, h := range forwardHeaders.Children {
-			// We would override the header if it was also specified as part of secretHeaders.
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
@@ -1049,7 +1052,7 @@ func (q *query) Include() bool {
 	return true
 }
 
-func (q *query) Cascade() bool {
+func (q *query) Cascade() []string {
 	return (*field)(q).Cascade()
 }
 
@@ -1162,7 +1165,7 @@ func (m *mutation) Include() bool {
 	return true
 }
 
-func (m *mutation) Cascade() bool {
+func (m *mutation) Cascade() []string {
 	return (*field)(m).Cascade()
 }
 
@@ -1192,12 +1195,12 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which
 		// gets executed to fetch the results of that mutation, so propagating it to the QueryField.
-		if m.Cascade() && !f.Cascade() {
+		if len(m.Cascade()) != 0 && len(f.Cascade()) == 0 {
 			field := f.(*field).field
 			field.Directives = append(field.Directives, &ast.Directive{Name: cascadeDirective})
 		}
@@ -1285,7 +1288,7 @@ func (m *mutation) IsAuthQuery() bool {
 }
 
 func (t *astType) AuthRules() *TypeAuth {
-	return t.inSchema.authRules[t.Name()]
+	return t.inSchema.authRules[t.DgraphName()]
 }
 
 func (t *astType) Field(name string) FieldDefinition {
