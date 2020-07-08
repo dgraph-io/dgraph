@@ -201,7 +201,7 @@ type params struct {
 	Shortest bool
 	// AllowedPreds is a list of predicates accessible to query in context of ACL.
 	// For OSS this should remain nil.
-	AllowedPreds nil
+	AllowedPreds []string
 }
 
 type pathMetadata struct {
