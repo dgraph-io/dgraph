@@ -161,5 +161,6 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 // waitForActiveMutations waits for all the mutations (currently active) to finish. This function
 // should be called before running any schema mutation.
 func (e *executor) waitForActiveMutations() {
+	glog.Infoln("executor: wait for active mutation to finish")
 	rampMeter(&e.smCount, 0, "waiting on active mutations to finish")
 }
