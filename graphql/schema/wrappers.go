@@ -569,6 +569,8 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 
+	// vektah/gqlparser library doesn't validate subscriptions properly if s.Subscription == nil.
+	//s.Subscription is nil when there is no type with @withSubscription true, so we are handling that case.
 	if s.Subscription == nil {
 		s.Subscription = &ast.Definition{Name: "subscription"}
 	}
