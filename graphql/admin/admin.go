@@ -18,14 +18,13 @@ package admin
 
 import (
 	"context"
-	"encoding/json"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/query"
+	"github.com/dgraph-io/dgraph/edgraph"
 
-	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/dgraph-io/dgraph/query"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -48,8 +47,6 @@ const (
 	errResolverNotFound = "%s was not executed because no suitable resolver could be found - " +
 		"this indicates a resolver or validation bug " +
 		"(Please let us know : https://github.com/dgraph-io/dgraph/issues)"
-
-	gqlSchemaPred = "dgraph.graphql.schema"
 
 	// GraphQL schema for /admin endpoint.
 	graphqlAdminSchema = `
@@ -297,13 +294,12 @@ var (
 		resolve.GuardianAuthMW4Mutation,
 	}
 	adminQueryMWConfig = map[string]resolve.QueryMiddlewares{
-		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for health
+		"health":        {resolve.IpWhitelistingMW4Query}, // dgraph checks Guardian auth for health
 		"state":         {resolve.IpWhitelistingMW4Query}, // dgraph handles Guardian auth for state
 		"config":        commonAdminQueryMWs,
 		"listBackups":   commonAdminQueryMWs,
 		"restoreStatus": commonAdminQueryMWs,
-		// not applying ip whitelisting to keep it in sync with /alter
-		"getGQLSchema": {resolve.GuardianAuthMW4Query},
+		"getGQLSchema":  commonAdminQueryMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"queryGroup":     {resolve.IpWhitelistingMW4Query},
@@ -313,15 +309,14 @@ var (
 		"getUser":        {resolve.IpWhitelistingMW4Query},
 	}
 	adminMutationMWConfig = map[string]resolve.MutationMiddlewares{
-		"backup":   commonAdminMutationMWs,
-		"config":   commonAdminMutationMWs,
-		"draining": commonAdminMutationMWs,
-		"export":   commonAdminMutationMWs,
-		"login":    {resolve.IpWhitelistingMW4Mutation},
-		"restore":  commonAdminMutationMWs,
-		"shutdown": commonAdminMutationMWs,
-		// not applying ip whitelisting to keep it in sync with /alter
-		"updateGQLSchema": {resolve.GuardianAuthMW4Mutation},
+		"backup":          commonAdminMutationMWs,
+		"config":          commonAdminMutationMWs,
+		"draining":        commonAdminMutationMWs,
+		"export":          commonAdminMutationMWs,
+		"login":           {resolve.IpWhitelistingMW4Mutation},
+		"restore":         commonAdminMutationMWs,
+		"shutdown":        commonAdminMutationMWs,
+		"updateGQLSchema": commonAdminMutationMWs,
 		// for queries and mutations related to User/Group, dgraph handles Guardian auth,
 		// so no need to apply GuardianAuth Middleware
 		"addUser":     {resolve.IpWhitelistingMW4Mutation},
@@ -407,7 +402,7 @@ func newAdminResolver(
 		globalEpoch:       epoch,
 	}
 
-	prefix := x.DataKey(gqlSchemaPred, 0)
+	prefix := x.DataKey(worker.GqlSchemaPred, 0)
 	// Remove uid from the key, to get the correct prefix
 	prefix = prefix[:len(prefix)-8]
 	// Listen for graphql schema changes in group 1.
@@ -444,10 +439,14 @@ func newAdminResolver(
 			Schema: string(pl.Postings[0].Value),
 		}
 
-		gqlSchema, err := generateGQLSchema(newSchema)
-		if err != nil {
-			glog.Errorf("Error processing GraphQL schema: %s.  ", err)
-			return
+		var gqlSchema schema.Schema
+		// on drop_all, we will receive an empty string as the schema update
+		if newSchema.Schema != "" {
+			gqlSchema, err = generateGQLSchema(newSchema)
+			if err != nil {
+				glog.Errorf("Error processing GraphQL schema: %s.  ", err)
+				return
+			}
 		}
 
 		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
@@ -456,7 +455,7 @@ func newAdminResolver(
 		defer server.mux.Unlock()
 
 		server.schema = newSchema
-		server.resetSchema(*gqlSchema)
+		server.resetSchema(gqlSchema)
 	}, 1, closer)
 
 	go server.initServer()
@@ -522,42 +521,15 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 }
 
 func getCurrentGraphQLSchema() (*gqlSchema, error) {
-	resp, err := resolve.NewAdminExecutor().Execute(context.Background(),
-		&dgoapi.Request{
-			Query: `
-			query {
-			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
-				uid
-				dgraph.graphql.schema
-			  }
-			}`})
+	uid, graphQLSchema, err := edgraph.GetGQLSchema()
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]interface{})
-	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
-		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph query")
-	}
-
-	existingGQLSchema := result["ExistingGQLSchema"].([]interface{})
-	if len(existingGQLSchema) == 0 {
-		// no schema has been stored yet in Dgraph
-		return &gqlSchema{}, nil
-	} else if len(existingGQLSchema) == 1 {
-		// we found an existing GraphQL schema
-		gqlSchemaNode := existingGQLSchema[0].(map[string]interface{})
-		return &gqlSchema{
-			ID:     gqlSchemaNode["uid"].(string),
-			Schema: gqlSchemaNode[gqlSchemaPred].(string),
-		}, nil
-	}
-
-	// found multiple GraphQL schema nodes, this should never happen
-	return nil, worker.ErrMultipleGraphQLSchemaNodes
+	return &gqlSchema{ID: uid, Schema: graphQLSchema}, nil
 }
 
-func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
+func generateGQLSchema(sch *gqlSchema) (schema.Schema, error) {
 	schHandler, err := schema.NewHandler(sch.Schema)
 	if err != nil {
 		return nil, err
@@ -568,7 +540,7 @@ func generateGQLSchema(sch *gqlSchema) (*schema.Schema, error) {
 		return nil, err
 	}
 
-	return &generatedSchema, nil
+	return generatedSchema, nil
 }
 
 func (as *adminServer) initServer() {
@@ -613,7 +585,7 @@ func (as *adminServer) initServer() {
 
 		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
-		as.resetSchema(*generatedSchema)
+		as.resetSchema(generatedSchema)
 
 		break
 	}
@@ -739,9 +711,12 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 }
 
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
+	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
 
-	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound).
-		WithConventionResolvers(gqlSchema, as.fns)
+	// it is nil after drop_all
+	if gqlSchema != nil {
+		resolverFactory = resolverFactory.WithConventionResolvers(gqlSchema, as.fns)
+	}
 	if as.withIntrospection {
 		resolverFactory.WithSchemaIntrospection()
 	}
