@@ -365,7 +365,8 @@ func TestSchema_Normal(t *testing.T) {
 			}, {
 				"name": "Student.taughtBy"
 			}],
-             {
+             "name": "People"
+         },{
 			"fields": [{
 				"name": "Person.xid"
 			}, {
