@@ -1431,9 +1431,9 @@ Connections between client and server can be secured with TLS. Password protecte
 
 {{% notice "tip" %}}If you're generating encrypted private keys with `openssl`, be sure to specify encryption algorithm explicitly (like `-aes256`). This will force `openssl` to include `DEK-Info` header in private key, which is required to decrypt the key by Dgraph. When default encryption is used, `openssl` doesn't write that header and key can't be decrypted.{{% /notice %}}
 
-### Self-signed certificates
+### Dgraph Certificate Management Tool
 
-The `dgraph cert` program creates and manages self-signed certificates using a generated Dgraph Root CA. The _cert_ command simplifies certificate management for you.
+The `dgraph cert` program creates and manages CA-signed certificates and private keys using a generated Dgraph Root CA. The `dgraph cert` command simplifies certificate management for you.
 
 ```sh
 # To see the available flags.
@@ -1442,20 +1442,20 @@ $ dgraph cert --help
 # Create Dgraph Root CA, used to sign all other certificates.
 $ dgraph cert
 
-# Create node certificate (needed for Dgraph Live Loader using TLS)
-$ dgraph cert -n live
+# Create node certificate and private key
+$ dgraph cert -n localhost
 
-# Create client certificate
+# Create client certificate and private key for mTLS (mutual TLS)
 $ dgraph cert -c dgraphuser
 
 # Combine all in one command
-$ dgraph cert -n live -c dgraphuser
+$ dgraph cert -n localhost -c dgraphuser
 
 # List all your certificates and keys
 $ dgraph cert ls
 ```
 
-### File naming conventions
+#### File naming conventions
 
 To enable TLS you must specify the directory path to find certificates and keys. The default location where the _cert_ command stores certificates (and keys) is `tls` under the Dgraph working directory; where the data files are found. The default dir path can be overridden using the `--dir` option.
 
@@ -1488,7 +1488,7 @@ $ dgraph cert -n localhost,104.25.165.23,dgraph.io,2400:cb00:2048:1::6819:a417
 
 {{% notice "note" %}}When using host names for node certificates, including _localhost_, your clients must connect to the matching host name -- such as _localhost_ not 127.0.0.1. If you need to use IP addresses, then add them to the node certificate.{{% /notice %}}
 
-### Certificate inspection
+#### Certificate inspection
 
 The command `dgraph cert ls` lists all certificates and keys in the `--dir` directory (default 'tls'), along with details to inspect and validate cert/key pairs.
 
@@ -1537,43 +1537,75 @@ Important points:
 * Node certificates are only valid for the hosts listed.
 * Client certificates are only valid for the named client/user.
 
-### TLS options
+### TLS Options
 
 The following configuration options are available for Alpha:
 
 * `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
 * `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client authentication](#client-authentication) for details.
+* `--tls_client_auth string` - TLS client authentication used to validate client connection. See [Client Authentication Options](#client-authentication-options) for details.
+
+Dgraph Live Loader can be configured with the following options:
+
+* `--tls_cacert string` - Dgraph Root CA, such as `./tls/ca.crt`
+* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
+* `--tls_cert` - User cert file provided by the client to Alpha
+* `--tls_key` - User private key file provided by the client to Alpha
+* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+
+
+#### Using TLS without Client Authentication
+
+For TLS without client authentication, you can configure certificates and run Alpha server using the following:
 
 ```sh
-# Default use for enabling TLS server (after generating certificates)
+# First, create rootca and node certificates and private keys
+$ dgraph cert -n localhost
+# Default use for enabling TLS server (after generating certificates and private keys)
 $ dgraph alpha --tls_dir tls
 ```
 
-Dgraph Live Loader can be configured with following options:
-
-* `--tls_dir string` - TLS dir path; this enables TLS connections (usually 'tls').
-* `--tls_use_system_ca` - Include System CA with Dgraph Root CA.
-* `--tls_server_name string` - Server name, used for validating the server's TLS host name.
+You can then run Dgraph live loader using the following:
 
 ```sh
-# First, create a client certificate for live loader. This will create 'tls/client.live.crt'
-$ dgraph cert -c live
-
 # Now, connect to server using TLS
-$ dgraph live --tls_dir tls -s 21million.schema -f 21million.rdf.gz
+$ dgraph live --tls_cacert ./tls/ca.crt --tls_server_name "localhost" -s 21million.schema -f 21million.rdf.gz
 ```
 
-### Client authentication
+#### Using TLS with Client Authentication
 
-The server option `--tls_client_auth` accepts different values that change the security policty of client certificate verification.
+If you do require Client Authentication (Mutual TLS), you can configure certificates and run Alpha server using the following:
 
-| Value | Description |
-|-------|-------------|
-| REQUEST | Server accepts any certificate, invalid and unverified (least secure) |
-| REQUIREANY | Server expects any certificate, valid and unverified |
-| VERIFYIFGIVEN | Client certificate is verified if provided (default) |
-| REQUIREANDVERIFY | Always require a valid certificate (most secure) |
+```sh
+# First, create a rootca, node, and client certificates and private keys
+$ dgraph cert -n localhost -c dgraphuser
+# Default use for enabling TLS server with client authentication (after generating certificates and private keys)
+$ dgraph alpha --tls_dir tls --tls_client_auth="REQUIREANDVERIFY"
+```
+
+You can then run Dgraph live loader using the following:
+
+```sh
+# Now, connect to server using mTLS (mutual TLS)
+$ dgraph live \
+   --tls_cacert ./tls/ca.crt \
+   --tls_cert ./tls/client.dgraphuser.crt \
+   --tls_key ./tls/client.dgraphuser.key \
+   --tls_server_name "localhost" \
+   -s 21million.schema \
+   -f 21million.rdf.gz
+```
+
+#### Client Authentication Options
+
+The server will always **request** Client Authentication.  There are four different values for the `--tls_client_auth` option that change the security policy of the client certificate.
+
+| Value              | Client Cert/Key | Client Certificate Verified |
+|--------------------|-----------------|--------------------|
+| `REQUEST`          | optional        | Client certificate is not VERIFIED if provided. (least secure) |
+| `REQUIREANY`       | required        | Client certificate is never VERIFIED |
+| `VERIFYIFGIVEN`    | optional        | Client certificate is VERIFIED if provided (default) |
+| `REQUIREANDVERIFY` | required        | Client certificate is always VERIFIED (most secure) |
 
 {{% notice "note" %}}REQUIREANDVERIFY is the most secure but also the most difficult to configure for remote clients. When using this value, the value of `--tls_server_name` is matched against the certificate SANs values and the connection host.{{% /notice %}}
 
@@ -1602,6 +1634,31 @@ also need to install client certificate on your OS / browser:
 enabled the browser will prompt you for a client certificate to use. Select the
 certificate you've just installed in the step above and queries/mutations will
 succeed.
+
+### Using Curl with Client authentication
+
+When TLS is enabled, `curl` requests to Dgraph will need some specific options to work.  For instance (for an export request):
+
+```
+curl --silent --cacert ./tls/ca.crt https://localhost:8080/admin/export
+```
+
+If you are using `curl` with [Client Authentication](#client-authentication-options) set to `REQUIREANY` or `REQUIREANDVERIFY`, you will need to provide the client certificate and private key.  For instance (for an export request):
+
+```
+curl --silent --cacert ./tls/ca.crt --cert ./tls/client.dgraphuser.crt --key ./tls/client.dgraphuser.key https://localhost:8080/admin/export
+```
+
+Refer to the `curl` documentation for further information on its TLS options.
+
+### Access Data Using a Client
+
+Some examples of connecting via a [Client](/clients) when TLS is in use can be found below:
+
+- [dgraph4j](https://github.com/dgraph-io/dgraph4j#creating-a-secure-client-using-tls)
+- [dgraph-js](https://github.com/dgraph-io/dgraph-js/tree/master/examples/tls)
+- [dgo](https://github.com/dgraph-io/dgraph/blob/master/tlstest/acl/acl_over_tls_test.go)
+- [pydgraph](https://github.com/dgraph-io/pydgraph/tree/master/examples/tls)
 
 ### Troubleshooting Ratel's Client authentication
 
