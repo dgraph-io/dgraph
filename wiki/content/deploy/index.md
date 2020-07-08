@@ -2417,8 +2417,8 @@ Each Dgraph Alpha exposes various administrative endpoints both over HTTP and Gr
  example endpoints to export data and to perform a clean shutdown. All such admin endpoints are
   protected by three layers of auth:
 
-1. IP White-listing, if `--whitelist` flag is passed to alpha.
-2. Poor-man's auth, if `--auth_token` flag is passed to alpha (means you will need to pass the `auth_token` as `X-Dgraph-AuthToken` header while making the HTTP request).
+1. IP White-listing (use `--whitelist` flag in alpha to whitelist IPs other than localhost).
+2. Poor-man's auth, if alpha is started with the `--auth_token` flag (means you will need to pass the `auth_token` as `X-Dgraph-AuthToken` header while making the HTTP request).
 3. Guardian only access, if ACL is enabled (means you need to pass the ACL-JWT of a Guardian user as `X-Dgraph-AccessToken` header while making the HTTP request).
 
 Admin endpoint means any http endpoint which provides admin functionalities. Normally, the path starts with `/admin` for such endpoints, except a few. So, currently this list includes:
@@ -2435,7 +2435,7 @@ Admin endpoint means any http endpoint which provides admin functionalities. Nor
 
 There are a few exceptions to the general rule described above:
 
-1. `/login`: This endpoint logs-in an ACL user, and provides them with a JWT. Only IP Whitelisting and Poor-man's auth checks are performed for this. As one won't be able to login using ACL if we mandate Guardian only access on this.
+1. `/login`: This endpoint logs-in an ACL user, and provides them with a JWT. Only IP Whitelisting and Poor-man's auth checks are performed for this.
 2. `/admin`: This endpoint provides GraphQL queries/mutations corresponding to the HTTP admin endpoints. All the queries/mutations on `/admin` have all the 3 auth checks, except for the following one:
    * `login (mutation)`: The same behavior as the above HTTP `login` endpoint.
 
