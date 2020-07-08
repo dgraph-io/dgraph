@@ -864,7 +864,6 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		for _, h := range forwardHeaders.Children {
-			// We would override the header if it was also specified as part of secretHeaders.
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
