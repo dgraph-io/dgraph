@@ -86,8 +86,8 @@ func (cache *aclCache) update(groups []acl.Group) {
 			if _, found := userPredPerms[user.UserID]; !found {
 				userPredPerms[user.UserID] = make(map[string]int32)
 			}
-			// For each user we store all the permissions availbale to that user
-			// via different groups. Therefore we take XOR is the user already has
+			// For each user we store all the permissions available to that user
+			// via different groups. Therefore we take OR if the user already has
 			// a permission for a predicate
 			for _, acl := range acls {
 				if _, found := userPredPerms[user.UserID][acl.Predicate]; found {
