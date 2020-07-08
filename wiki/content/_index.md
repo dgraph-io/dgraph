@@ -168,11 +168,11 @@ Dgraph is an open-source, scalable, distributed, highly available and fast graph
         <div class="section-item">
           <div class="section-name">
             <a href="https://discuss.dgraph.io">
-              Forum
+              Community
             </a>
           </div>
           <p class="section-desc">
-            Discuss Dgraph on the official forum.
+            Discuss Dgraph on the official community.
           </p>
         </div>
       </div>
