@@ -165,7 +165,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 				 url: "http://mock:8888/verifyHeaders",
 				 method: "GET",
 				 forwardHeaders: ["X-App-Token", "X-User-Id"],
-				 secretHeaders: ["Github-Api-Token", "X-App-Token"]
+				 secretHeaders: ["Github-Api-Token"]
 		 })
 	 }
 	 
@@ -204,12 +204,12 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 				 url: "http://mock:8888/verifyCustomNameHeaders",
 				 method: "GET",
 				 forwardHeaders: ["X-App-Token:App", "X-User-Id"],
-				 secretHeaders: ["Authorization:Github-Api-Token", "X-App-Token"]
+				 secretHeaders: ["Authorization:Github-Api-Token"]
+				 introspectionHeaders: ["API:Github-Api-Token"]
 		 })
 	 }
 
 		 # Dgraph.Secret Github-Api-Token "random-fake-token"
-		 # Dgraph.Secret X-App-Token "should-be-overriden"
 	 `
 	updateSchemaRequireNoGQLErrors(t, schema)
 	time.Sleep(2 * time.Second)
@@ -254,8 +254,9 @@ func TestSchemaIntrospectionForCustomQueryShouldForwardHeaders(t *testing.T) {
 				http: {
 				  url: "http://mock:8888/validatesecrettoken"
 				  method: "POST"
-				  secretHeaders: ["GITHUB-API-TOKEN"]
-				  graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
+				  forwardHeaders: ["Content-Type"]
+				  introspectionHeaders: ["GITHUB-API-TOKEN"]
+          graphql: "query($yo: CountryInput!) {countries(filter: $yo)}"
 				}
 			  )
 		  }
@@ -308,9 +309,8 @@ func TestServerShouldAllowForwardHeaders(t *testing.T) {
 }
 
 func TestCustomFieldsInSubscription(t *testing.T) {
-	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
-	type Teacher {
+	type Teacher @withSubscription {
 		tid: ID!
 		age: Int!
 		name: String
@@ -338,7 +338,6 @@ func TestCustomFieldsInSubscription(t *testing.T) {
 }
 
 func TestSubscriptionInNestedCustomField(t *testing.T) {
-	t.Skip()
 	updateSchemaRequireNoGQLErrors(t, `
 	type Episode {
 		name: String! @id
@@ -350,7 +349,7 @@ func TestSubscriptionInNestedCustomField(t *testing.T) {
 				})
 	}
 
-	type Character {
+	type Character @withSubscription {
 		name: String! @id
 		lastName: String @custom(http: {
 						url: "http://mock:8888/userNames",

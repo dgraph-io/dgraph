@@ -568,6 +568,7 @@ func alterHandler(w http.ResponseWriter, r *http.Request) {
 	md.Append("auth-token", r.Header.Get("X-Dgraph-AuthToken"))
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 	ctx = x.AttachAccessJwt(ctx, r)
+	ctx = x.AttachRemoteIP(ctx, r)
 	if _, err := (&edgraph.Server{}).Alter(ctx, op); err != nil {
 		x.SetStatus(w, x.Error, err.Error())
 		return

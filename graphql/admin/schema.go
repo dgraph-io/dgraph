@@ -53,8 +53,6 @@ func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Re
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
-	// Disable subscription.
-	schHandler.DisableSubscription()
 
 	if _, err = schema.FromString(schHandler.GQLSchema()); err != nil {
 		return resolve.EmptyResult(m, err), false

@@ -263,6 +263,9 @@ func RunAll(t *testing.T) {
 	t.Run("query typename", queryTypename)
 	t.Run("query nested typename", queryNestedTypename)
 	t.Run("typename for interface", typenameForInterface)
+	t.Run("query only typename", queryOnlyTypename)
+	t.Run("query nested only typename", querynestedOnlyTypename)
+	t.Run("test onlytypename for interface types", onlytypenameForInterface)
 
 	t.Run("get state by xid", getStateByXid)
 	t.Run("get state without args", getStateWithoutArgs)
@@ -309,6 +312,7 @@ func RunAll(t *testing.T) {
 	t.Run("ensure alias in mutation payload", ensureAliasInMutationPayload)
 	t.Run("mutations have extensions", mutationsHaveExtensions)
 	t.Run("alias works for mutations", mutationsWithAlias)
+	t.Run("three level deep", threeLevelDeepMutation)
 
 	// error tests
 	t.Run("graphql completion on", graphQLCompletionOn)
