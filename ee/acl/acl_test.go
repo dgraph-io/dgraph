@@ -223,14 +223,22 @@ func resetUser(t *testing.T) {
 	glog.Infof("created user")
 }
 
-func TestReservedPredicates(t *testing.T) {
-	// This test uses the groot account to ensure that reserved predicates
+func TestPreDefinedPredicates(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined predicates
 	// cannot be altered even if the permissions allow it.
 	dg1, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
-	if err != nil {
-		t.Fatalf("Error while getting a dgraph client: %v", err)
-	}
-	alterReservedPredicates(t, dg1)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedPredicates(t, dg1)
+}
+
+func TestPreDefinedTypes(t *testing.T) {
+	// This test uses the groot account to ensure that pre-defined types
+	// cannot be altered even if the permissions allow it.
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err, "Error while getting a dgraph client")
+
+	alterPreDefinedTypes(t, dg)
 }
 
 func TestAuthorization(t *testing.T) {
@@ -310,11 +318,11 @@ var query = fmt.Sprintf(`
 	}`, predicateToRead, queryAttr)
 var schemaQuery = "schema {}"
 
-func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
+func alterPreDefinedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	ctx := context.Background()
 
 	// Test that alter requests are allowed if the new update is the same as
-	// the initial update for a reserved predicate.
+	// the initial update for a pre-defined predicate.
 	err := dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.xid: string @index(exact) @upsert .",
 	})
@@ -325,22 +333,57 @@ func alterReservedPredicates(t *testing.T, dg *dgo.Dgraph) {
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be modified")
+		"predicate dgraph.xid is pre-defined and is not allowed to be modified")
 
 	err = dg.Alter(ctx, &api.Operation{
 		DropAttr: "dgraph.xid",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.xid is reserved and is not allowed to be dropped")
+		"predicate dgraph.xid is pre-defined and is not allowed to be dropped")
 
-	// Test that reserved predicates act as case-insensitive.
+	// Test that pre-defined predicates act as case-insensitive.
 	err = dg.Alter(ctx, &api.Operation{
 		Schema: "dgraph.XID: int .",
 	})
 	require.Error(t, err)
 	require.Contains(t, err.Error(),
-		"predicate dgraph.XID is reserved and is not allowed to be modified")
+		"predicate dgraph.XID is pre-defined and is not allowed to be modified")
+}
+
+func alterPreDefinedTypes(t *testing.T, dg *dgo.Dgraph) {
+	ctx := context.Background()
+
+	// Test that alter requests are allowed if the new update is the same as
+	// the initial update for a pre-defined type.
+	err := dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+				dgraph.acl.rule
+			}
+		`,
+	})
+	require.NoError(t, err)
+
+	err = dg.Alter(ctx, &api.Operation{
+		Schema: `
+			type dgraph.type.Group {
+				dgraph.xid
+			}
+		`,
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be modified")
+
+	err = dg.Alter(ctx, &api.Operation{
+		DropOp:    api.Operation_TYPE,
+		DropValue: "dgraph.type.Group",
+	})
+	require.Error(t, err)
+	require.Contains(t, err.Error(),
+		"type dgraph.type.Group is pre-defined and is not allowed to be dropped")
 }
 
 func queryPredicateWithUserAccount(t *testing.T, dg *dgo.Dgraph, shouldFail bool) {
@@ -1539,6 +1582,174 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(resp.Data))
 }
 
+func TestSchemaQueryWithACL(t *testing.T) {
+	schemaQuery := "schema{}"
+	grootSchema := `{
+  "schema": [
+    {
+      "predicate": "dgraph.acl.rule",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "dgraph.graphql.schema",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.password",
+      "type": "password"
+    },
+    {
+      "predicate": "dgraph.rule.permission",
+      "type": "int"
+    },
+    {
+      "predicate": "dgraph.rule.predicate",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.type",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "dgraph.user.group",
+      "type": "uid",
+      "reverse": true,
+      "list": true
+    },
+    {
+      "predicate": "dgraph.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    }
+  ],
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.schema"
+        },
+        {
+          "name": "dgraph.graphql.xid"
+        }
+      ],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.acl.rule"
+        }
+      ],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.rule.predicate"
+        },
+        {
+          "name": "dgraph.rule.permission"
+        }
+      ],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.password"
+        },
+        {
+          "name": "dgraph.user.group"
+        }
+      ],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+	aliceSchema := `{
+  "schema": [
+    {
+      "predicate": "name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "fields": [],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+
+	// guardian user should be able to view full schema
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+
+	// add another user and some data for that user with permissions on predicates
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	addDataAndRules(ctx, t, dg)
+	time.Sleep(6 * time.Second) // wait for ACL cache to refresh, otherwise it will be flaky test
+
+	// the other user should be able to view only the part of schema for which it has read access
+	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	require.NoError(t, dg.Login(context.Background(), userid, userpassword))
+	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+}
+
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	resetUser(t)
 
@@ -1930,10 +2141,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					mutation {
 					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						response {
-						  code
-						  message
-						}
+						code
 					  }
 					}`,
 			queryName:          "restore",
@@ -1943,7 +2151,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					" manifests: The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"restore": null}`,
+			guardianData: `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",

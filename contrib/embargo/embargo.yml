@@ -61,7 +61,7 @@ containers:
     expose:
       - 8180
       - 9180
-    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080 -o 100 --expose_trace  --trace 1.0 --logtostderr -v=3
+    command: /gobin/dgraph alpha --my=dg1:7180 --lru_mb=1024 --zero=zero1:5080,zero2:5082,zero3:5083 -o 100 --expose_trace  --trace 1.0 --logtostderr -v=3
     volumes:
       "${GOPATH}/bin": "/gobin"
 
@@ -76,7 +76,7 @@ containers:
       - 8182
       - 9182
     start_delay: 8
-    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080 -o 102 --expose_trace  --trace 1.0 --logtostderr -v=3
+    command: /gobin/dgraph alpha --my=dg2:7182 --lru_mb=1024 --zero=zero1:5080,zero2:5082,zero3:5083 -o 102 --expose_trace  --trace 1.0 --logtostderr -v=3
     volumes:
       "${GOPATH}/bin": "/gobin"
 
@@ -91,7 +91,7 @@ containers:
       - 8183
       - 9183
     start_delay: 16
-    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080 -o 103 --expose_trace  --trace 1.0 --logtostderr -v=3
+    command: /gobin/dgraph alpha --my=dg3:7183 --lru_mb=1024 --zero=zero1:5080,zero2:5082,zero3:5083 -o 103 --expose_trace  --trace 1.0 --logtostderr -v=3
     volumes:
       "${GOPATH}/bin": "/gobin"
 

@@ -408,7 +408,7 @@ func (n *node) applyMutations(ctx context.Context, proposal *pb.Proposal) (rerr 
 	for attr, storageType := range schemaMap {
 		if _, err := schema.State().TypeOf(attr); err != nil {
 			hint := pb.Metadata_DEFAULT
-			if mutHint, ok := proposal.Mutations.Metadata.PredHints[attr]; ok {
+			if mutHint, ok := proposal.GetMutations().GetMetadata().GetPredHints()[attr]; ok {
 				hint = mutHint
 			}
 			if err := createSchema(attr, storageType, hint); err != nil {
@@ -1150,8 +1150,9 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error while proposing.
+						if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetEdges()) > 0 {
+							// Assuming that there will be no error while applying. But this
+							// assumption is only made for data mutations and not schema mutations.
 							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
@@ -1233,8 +1234,26 @@ func (n *node) calculateTabletSizes() {
 	}
 	var total int64
 	tablets := make(map[string]*pb.Tablet)
+	updateSize := func(pred string, size int64) {
+		if pred == "" {
+			return
+		}
+
+		if tablet, ok := tablets[pred]; ok {
+			tablet.Space += size
+		} else {
+			tablets[pred] = &pb.Tablet{
+				GroupId:   n.gid,
+				Predicate: pred,
+				Space:     size,
+			}
+		}
+		total += size
+	}
 
 	tableInfos := pstore.Tables(false)
+	previousLeft := ""
+	var previousSize int64
 	glog.V(2).Infof("Calculating tablet sizes. Found %d tables\n", len(tableInfos))
 	for _, tinfo := range tableInfos {
 		left, err := x.Parse(tinfo.Left)
@@ -1242,29 +1261,23 @@ func (n *node) calculateTabletSizes() {
 			glog.V(3).Infof("Unable to parse key: %v", err)
 			continue
 		}
-		right, err := x.Parse(tinfo.Right)
-		if err != nil {
-			glog.V(3).Infof("Unable to parse key: %v", err)
-			continue
-		}
-		if left.Attr != right.Attr {
-			// Skip all tables not fully owned by one predicate.
+
+		if left.Attr == previousLeft {
+			// Dgraph cannot depend on the right end of the table to know if the table belongs
+			// to a single predicate because there might be Badger-specific keys.
+			// Instead, Dgraph only counts the previous table if the current one belongs to the
+			// same predicate.
 			// We could later specifically iterate over these tables to get their estimated sizes.
-			glog.V(3).Info("Skipping table not owned by one predicate")
-			continue
-		}
-		pred := left.Attr
-		if tablet, ok := tablets[pred]; ok {
-			tablet.Space += int64(tinfo.EstimatedSz)
+			updateSize(previousLeft, previousSize)
 		} else {
-			tablets[pred] = &pb.Tablet{
-				GroupId:   n.gid,
-				Predicate: pred,
-				Space:     int64(tinfo.EstimatedSz),
-			}
+			glog.V(3).Info("Skipping table not owned by one predicate")
 		}
-		total += int64(tinfo.EstimatedSz)
+		previousLeft = left.Attr
+		previousSize = int64(tinfo.EstimatedSz)
 	}
+	// The last table has not been counted. Assign it to the predicate at the left of the table.
+	updateSize(previousLeft, previousSize)
+
 	if len(tablets) == 0 {
 		glog.V(2).Infof("No tablets found.")
 		return

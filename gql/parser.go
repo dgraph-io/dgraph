@@ -67,7 +67,7 @@ type GraphQuery struct {
 	Recurse          bool
 	RecurseArgs      RecurseArgs
 	ShortestPathArgs ShortestPathArgs
-	Cascade          bool
+	Cascade          []string
 	IgnoreReflex     bool
 	Facets           *pb.FacetParams
 	FacetsFilter     *FilterTree
@@ -961,7 +961,9 @@ L:
 			case "normalize":
 				gq.Normalize = true
 			case "cascade":
-				gq.Cascade = true
+				if err := parseCascade(it, gq); err != nil {
+					return nil, err
+				}
 			case "groupby":
 				gq.IsGroupby = true
 				if err := parseGroupby(it, gq); err != nil {
@@ -2094,6 +2096,69 @@ func tryParseFacetList(it *lex.ItemIterator) (res facetRes, parseOk bool, err er
 	}
 }
 
+// parseCascade parses the cascade directive.
+// Two formats:
+// 	1. @cascade
+//  2. @cascade(pred1, pred2, ...)
+func parseCascade(it *lex.ItemIterator, gq *GraphQuery) error {
+	item := it.Item()
+	items, err := it.Peek(1)
+	if err != nil {
+		return item.Errorf("Unable to peek lexer after cascade")
+	}
+
+	// check if it is without any args:
+	// 1. @cascade {
+	// 2. @cascade }
+	// 3. @cascade @
+	// 4. @cascade\n someOtherPred
+	if items[0].Typ == itemLeftCurl || items[0].Typ == itemRightCurl || items[0].
+		Typ == itemAt || items[0].Typ == itemName {
+		// __all__ implies @cascade i.e.  implies values for all the children are mandatory.
+		gq.Cascade = append(gq.Cascade, "__all__")
+		return nil
+	}
+
+	count := 0
+	expectArg := true
+	it.Next()
+	item = it.Item()
+	if item.Typ != itemLeftRound {
+		return item.Errorf("Expected a left round after cascade, got: %s", item.String())
+	}
+
+loop:
+	for it.Next() {
+		item := it.Item()
+		switch item.Typ {
+		case itemRightRound:
+			break loop
+		case itemComma:
+			if expectArg {
+				return item.Errorf("Expected a predicate but got comma")
+			}
+			expectArg = true
+		case itemName:
+			if !expectArg {
+				return item.Errorf("Expected a comma or right round but got: %v", item.Val)
+			}
+			gq.Cascade = append(gq.Cascade, collectName(it, item.Val))
+			count++
+			expectArg = false
+		default:
+			return item.Errorf("Unexpected item while parsing: %v", item.Val)
+		}
+	}
+	if expectArg {
+		// use the initial item to report error line and column numbers
+		return item.Errorf("Unnecessary comma in cascade()")
+	}
+	if count == 0 {
+		return item.Errorf("At least one predicate required in parameterized cascade()")
+	}
+	return nil
+}
+
 // parseGroupby parses the groupby directive.
 func parseGroupby(it *lex.ItemIterator, gq *GraphQuery) error {
 	count := 0
@@ -2430,7 +2495,9 @@ func parseDirective(it *lex.ItemIterator, curp *GraphQuery) error {
 			return item.Errorf("Facets parsing failed.")
 		}
 	case item.Val == "cascade":
-		curp.Cascade = true
+		if err := parseCascade(it, curp); err != nil {
+			return err
+		}
 	case item.Val == "normalize":
 		curp.Normalize = true
 	case peek[0].Typ == itemLeftRound:

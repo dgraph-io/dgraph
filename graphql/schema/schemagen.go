@@ -37,7 +37,6 @@ import (
 type Handler interface {
 	DGSchema() string
 	GQLSchema() string
-	DisableSubscription()
 }
 
 type handler struct {
@@ -71,10 +70,6 @@ func (s *handler) GQLSchema() string {
 
 func (s *handler) DGSchema() string {
 	return s.dgraphSchema
-}
-
-func (s *handler) DisableSubscription() {
-	s.completeSchema.Subscription = nil
 }
 
 func parseSecrets(sch string) (map[string]string, error) {
@@ -259,7 +254,11 @@ func getAllowedHeaders(sch *ast.Schema, definitions []string) string {
 			return
 		}
 		for _, h := range forwardHeaders.Children {
-			headers[h.Value.Raw] = struct{}{}
+			key := strings.Split(h.Value.Raw, ":")
+			if len(key) == 1 {
+				key = []string{h.Value.Raw, h.Value.Raw}
+			}
+			headers[key[1]] = struct{}{}
 		}
 	}
 
@@ -417,7 +416,7 @@ func genDgSchema(gqlSch *ast.Schema, definitions []string) string {
 
 				var typStr string
 				switch gqlSch.Types[f.Type.Name()].Kind {
-				case ast.Object:
+				case ast.Object,ast.Interface:
 					typStr = fmt.Sprintf("%suid%s", prefix, suffix)
 
 					if parentInt == nil {

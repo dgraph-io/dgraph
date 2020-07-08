@@ -1,0 +1,253 @@
+#######################
+# Input Schema
+#######################
+
+type Post {
+	id: ID!
+	author(filter: AuthorFilter): Author! @hasInverse(field: "posts")
+}
+
+type Author @withSubscription {
+	id: ID!
+	posts(filter: PostFilter, first: Int, offset: Int): [Post!]! @hasInverse(field: "author")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddAuthorPayload {
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type AddPostPayload {
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
+}
+
+type DeleteAuthorPayload {
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	msg: String
+	numUids: Int
+}
+
+type DeletePostPayload {
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	msg: String
+	numUids: Int
+}
+
+type UpdateAuthorPayload {
+	author(filter: AuthorFilter, first: Int, offset: Int): [Author]
+	numUids: Int
+}
+
+type UpdatePostPayload {
+	post(filter: PostFilter, first: Int, offset: Int): [Post]
+	numUids: Int
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddAuthorInput {
+	posts: [PostRef!]!
+}
+
+input AddPostInput {
+	author: AuthorRef!
+}
+
+input AuthorFilter {
+	id: [ID!]
+	not: AuthorFilter
+}
+
+input AuthorPatch {
+	posts: [PostRef!]
+}
+
+input AuthorRef {
+	id: ID
+	posts: [PostRef!]
+}
+
+input PostFilter {
+	id: [ID!]
+	not: PostFilter
+}
+
+input PostPatch {
+	author: AuthorRef
+}
+
+input PostRef {
+	id: ID
+	author: AuthorRef
+}
+
+input UpdateAuthorInput {
+	filter: AuthorFilter!
+	set: AuthorPatch
+	remove: AuthorPatch
+}
+
+input UpdatePostInput {
+	filter: PostFilter!
+	set: PostPatch
+	remove: PostPatch
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getPost(id: ID!): Post
+	queryPost(filter: PostFilter, first: Int, offset: Int): [Post]
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addPost(input: [AddPostInput!]!): AddPostPayload
+	updatePost(input: UpdatePostInput!): UpdatePostPayload
+	deletePost(filter: PostFilter!): DeletePostPayload
+	addAuthor(input: [AddAuthorInput!]!): AddAuthorPayload
+	updateAuthor(input: UpdateAuthorInput!): UpdateAuthorPayload
+	deleteAuthor(filter: AuthorFilter!): DeleteAuthorPayload
+}
+
+#######################
+# Generated Subscriptions
+#######################
+
+type Subscription {
+	getAuthor(id: ID!): Author
+	queryAuthor(filter: AuthorFilter, first: Int, offset: Int): [Author]
+}
