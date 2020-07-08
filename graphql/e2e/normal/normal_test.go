@@ -365,7 +365,13 @@ func TestSchema_Normal(t *testing.T) {
 			}, {
 				"name": "Student.taughtBy"
 			}],
-			"name": "Student"
+             {
+			"fields": [{
+				"name": "Person.xid"
+			}, {
+				"name": "Person.name"
+			}],
+			"name": "Person"
 		}, {
 			"fields": [{
 				"name": "dgraph.graphql.schema"
