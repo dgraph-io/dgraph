@@ -24,16 +24,16 @@
       "locations": [ { "line": 2, "column": 26 } ] } ]
 
 -
-  name: "Undefined variable"
+  name: "subscription on type without @withSubscription directive"
   gqlrequest: |
-    Subscription {
-      getAuthor(id: $theID) { name }
+    subscription {
+      getAuthor(id: "0x1") { name }
     }
   gqlvariables: 
     { }
   errors:
-    [ { "message": "Variable \"$theID\" is not defined.",
-      "locations": [ { "line": 2, "column": 17 } ] } ]
+    [ { "message": "Cannot query field \"getAuthor\" on type \"subscription\".",
+      "locations": [ { "line": 2, "column": 3 } ] } ]
 
 -
   name: "input of wrong type"

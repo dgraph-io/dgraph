@@ -572,7 +572,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	if s.Subscription == nil {
 		s.Subscription = &ast.Definition{Name: "subscription"}
 	}
-	// Auth rules can't be effectively validated as part of the normal rules -
+	 //Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
 	if err != nil {
