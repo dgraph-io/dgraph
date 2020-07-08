@@ -24,14 +24,12 @@ import (
 	"time"
 
 	dgoapi "github.com/dgraph-io/dgo/v2/protos/api"
-	"github.com/dgraph-io/dgraph/gql"
 
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
-	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
@@ -446,32 +444,28 @@ func newAdminResolverFactory() resolve.ResolverFactory {
 	return rf.WithSchemaIntrospection()
 }
 
+// graphQLSchemaNode represents the node which contains GraphQL schema
+type graphQLSchemaNode struct {
+	Uid    string `json:"uid"`
+	Schema string `json:"dgraph.graphql.schema"`
+}
+
+type gqlSchemaQryResp struct {
+	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
+}
+
 func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	existingSchemaVar := "ExistingGQLSchema"
 	xidInSchemaVar := "XidInSchema"
 	gqlType := "dgraph.graphql"
-	/*
-	   query {
-	     ExistingGQLSchema as ExistingGQLSchema(func: type(dgraph.graphql)) {
+
+	qry := `query {
+	     ExistingGQLSchema as ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
 	       uid
 	       dgraph.graphql.schema
 	       XidInSchema as dgraph.graphql.xid
 	     }
-	   }
-	*/
-	qry := &gql.GraphQuery{
-		Attr: existingSchemaVar,
-		Var:  existingSchemaVar,
-		Func: &gql.Function{
-			Name: "type",
-			Args: []gql.Arg{{Value: gqlType}},
-		},
-		Children: []*gql.GraphQuery{
-			{Attr: "uid"},
-			{Attr: gqlSchemaPred},
-			{Attr: gqlSchemaXidKey, Var: xidInSchemaVar},
-		},
-	}
+	   }`
 	/*
 	   mutation @if(eq(len(ExistingGQLSchema),1) AND eq(len(XidInSchema),0)) {
 	      set {
@@ -512,7 +506,7 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 	}
 
 	resp, err := resolve.NewAdminExecutor().Execute(context.Background(),
-		&dgoapi.Request{Query: dgraph.AsString(qry), Mutations: mutations, CommitNow: true})
+		&dgoapi.Request{Query: qry, Mutations: mutations, CommitNow: true})
 	if err != nil {
 		return nil, err
 	}
@@ -523,16 +517,16 @@ func upsertEmptyGQLSchema() (*gqlSchema, error) {
 		return &gqlSchema{ID: uid}, nil
 	}
 
-	result := make(map[string]interface{})
+	var result gqlSchemaQryResp
 	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
 		return nil, schema.GQLWrapf(err, "Couldn't unmarshal response from Dgraph mutation")
 	}
 
 	// the Alphas which didn't create the gql schema node, will get the uid here.
-	gqlSchemaNode := result[existingSchemaVar].([]interface{})[0].(map[string]interface{})
+	gqlSchemaNode := result.ExistingGQLSchema[0]
 	return &gqlSchema{
-		ID:     gqlSchemaNode["uid"].(string),
-		Schema: gqlSchemaNode[gqlSchemaPred].(string),
+		ID:     gqlSchemaNode.Uid,
+		Schema: gqlSchemaNode.Schema,
 	}, nil
 }
 
