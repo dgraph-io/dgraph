@@ -117,7 +117,7 @@ func pipelineInternal(cmds [][]string, opts []CmdOpts) (string, error) {
 		}
 	}
 
-	outStr := string(stdout.Bytes())
+	outStr := stdout.String()
 	if ShowOutput {
 		fmt.Println(outStr)
 	}
