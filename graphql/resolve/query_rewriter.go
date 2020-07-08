@@ -34,12 +34,18 @@ type queryRewriter struct{}
 type authRewriter struct {
 	authVariables map[string]interface{}
 	isWritingAuth bool
-	filterByUid   bool
-	selector      func(t schema.Type) *schema.RuleNode
-	varGen        *VariableGenerator
-	varName       string
+	// `filterByUid` is used to when we have to rewrite top level query with uid function. The
+	// variable name is passed in `varName`. If true it will rewrite as following:
+	// queryType(uid(varName)) {
+	// Once such case is when we perform query in delete mutation.
+	filterByUid bool
+	selector    func(t schema.Type) *schema.RuleNode
+	varGen      *VariableGenerator
+	varName     string
+	// `parentVarName` is used to link a query with it's previous level.
 	parentVarName string
-	hasAuthRules  bool
+	// `hasAuthRules` indicates if any of fields in the complete query hierarchy has auth rules.
+	hasAuthRules bool
 }
 
 // NewQueryRewriter returns a new QueryRewriter.
@@ -47,28 +53,14 @@ func NewQueryRewriter() QueryRewriter {
 	return &queryRewriter{}
 }
 
-func hasFieldAuthRules(field schema.Field, authRw *authRewriter) bool {
+func hasAuthRules(field schema.Field, authRw *authRewriter) bool {
 	rn := authRw.selector(field.Type())
 	if rn != nil {
 		return true
 	}
 
 	for _, childField := range field.SelectionSet() {
-		if authRules := hasFieldAuthRules(childField, authRw); authRules {
-			return true
-		}
-	}
-	return false
-}
-
-func hasAuthRules(query schema.Query, authRw *authRewriter) bool {
-	rn := authRw.selector(query.Type())
-	if rn != nil {
-		return true
-	}
-
-	for _, field := range query.SelectionSet() {
-		if authRules := hasFieldAuthRules(field, authRw); authRules {
+		if authRules := hasAuthRules(childField, authRw); authRules {
 			return true
 		}
 	}
@@ -481,12 +473,11 @@ func (authRw *authRewriter) addAuthQueries(
 }
 
 func (authRw *authRewriter) addVariableUIDFunc(q *gql.GraphQuery) {
-	var varName string
+	varName := authRw.parentVarName
 	if authRw.varName != "" {
 		varName = authRw.varName
-	} else {
-		varName = authRw.parentVarName
 	}
+
 	q.Func = &gql.Function{
 		Name: "uid",
 		Args: []gql.Arg{{Value: varName}},

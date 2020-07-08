@@ -367,7 +367,7 @@ func (mrw *AddRewriter) FromMutationResult(
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasFieldAuthRules(mutation.QueryField(), authRw)
+	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
@@ -420,7 +420,7 @@ func (urw *UpdateRewriter) Rewrite(
 		selector:      updateAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasFieldAuthRules(m.QueryField(), authRw)
+	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
 	srcUID := MutationQueryVarUID
@@ -566,7 +566,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasFieldAuthRules(mutation.QueryField(), authRw)
+	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
@@ -690,7 +690,7 @@ func (drw *deleteRewriter) Rewrite(
 		selector:      deleteAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasFieldAuthRules(m.QueryField(), authRw)
+	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
 	qry := dgQry
@@ -751,7 +751,7 @@ func (drw *deleteRewriter) Rewrite(
 		queryAuthRw.parentVarName = queryAuthRw.varGen.Next(queryField.Type(), "", "",
 			queryAuthRw.isWritingAuth)
 		queryAuthRw.varName = MutationQueryVar
-		queryAuthRw.hasAuthRules = hasFieldAuthRules(queryField, authRw)
+		queryAuthRw.hasAuthRules = hasAuthRules(queryField, authRw)
 
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
