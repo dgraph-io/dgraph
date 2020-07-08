@@ -97,6 +97,6 @@
   gqlvariables:
     { }
   errors:
-    [ { "message": "Cannot query field \"getAuthor\" on type \"subscription\".",
+    [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
         "locations": [ { "line": 2, "column": 3 } ] } ]
 

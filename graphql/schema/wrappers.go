@@ -572,7 +572,7 @@ func AsSchema(s *ast.Schema) (Schema, error) {
 	// vektah/gqlparser library doesn't validate subscriptions properly if s.Subscription == nil.
 	//s.Subscription is nil when there is no type with @withSubscription true, so we are handling that case.
 	if s.Subscription == nil {
-		s.Subscription = &ast.Definition{Name: "subscription"}
+		s.Subscription = &ast.Definition{Name: "Subscription"}
 	}
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
