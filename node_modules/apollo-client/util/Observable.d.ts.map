@@ -1,0 +1,1 @@
+{"version":3,"file":"Observable.d.ts","sourceRoot":"","sources":["../src/util/Observable.ts"],"names":[],"mappings":";AAEA,OAAO,EAAE,UAAU,IAAI,cAAc,EAAE,MAAM,aAAa,CAAC;AAE3D,oBAAY,YAAY,GAAG,aAAa,CAAC,YAAY,CAAC;AACtD,oBAAY,QAAQ,CAAC,CAAC,IAAI,aAAa,CAAC,QAAQ,CAAC,CAAC,CAAC,CAAC;AAKpD,qBAAa,UAAU,CAAC,CAAC,CAAE,SAAQ,cAAc,CAAC,CAAC,CAAC;CAQnD"}

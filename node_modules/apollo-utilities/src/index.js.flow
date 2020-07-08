@@ -1,0 +1,220 @@
+// @flow
+import type {
+  DirectiveNode,
+  StringValueNode,
+  BooleanValueNode,
+  IntValueNode,
+  FloatValueNode,
+  EnumValueNode,
+  VariableNode,
+  FieldNode,
+  FragmentDefinitionNode,
+  OperationDefinitionNode,
+  SelectionNode,
+  DocumentNode,
+  DefinitionNode,
+  ValueNode,
+  NameNode,
+} from 'graphql';
+
+declare module 'apollo-utilities' {
+  // storeUtils
+  declare export interface IdValue {
+    type: 'id';
+    id: string;
+    generated: boolean;
+    typename: string | void;
+  }
+
+  declare export interface JsonValue {
+    type: 'json';
+    json: any;
+  }
+
+  declare export type ListValue = Array<?IdValue>;
+
+  declare export type StoreValue =
+    | number
+    | string
+    | Array<string>
+    | IdValue
+    | ListValue
+    | JsonValue
+    | null
+    | void
+    | Object;
+
+  declare export type ScalarValue =
+    | StringValueNode
+    | BooleanValueNode
+    | EnumValueNode;
+
+  declare export type NumberValue = IntValueNode | FloatValueNode;
+
+  declare type isValueFn = (value: ValueNode) => boolean;
+
+  declare export type isScalarValue = isValueFn;
+  declare export type isNumberValue = isValueFn;
+  declare export type isStringValue = isValueFn;
+  declare export type isBooleanValue = isValueFn;
+  declare export type isIntValue = isValueFn;
+  declare export type isFloatValue = isValueFn;
+  declare export type isVariable = isValueFn;
+  declare export type isObjectValue = isValueFn;
+  declare export type isListValue = isValueFn;
+  declare export type isEnumValue = isValueFn;
+
+  declare export function valueToObjectRepresentation(
+    argObj: any,
+    name: NameNode,
+    value: ValueNode,
+    variables?: Object,
+  ): any;
+
+  declare export function storeKeyNameFromField(
+    field: FieldNode,
+    variables?: Object,
+  ): string;
+
+  declare export type Directives = {
+    [directiveName: string]: {
+      [argName: string]: any,
+    },
+  };
+
+  declare export function getStoreKeyName(
+    fieldName: string,
+    args?: Object,
+    directives?: Directives,
+  ): string;
+
+  declare export function argumentsObjectFromField(
+    field: FieldNode | DirectiveNode,
+    variables: Object,
+  ): ?Object;
+
+  declare export function resultKeyNameFromField(field: FieldNode): string;
+
+  declare export function isField(selection: SelectionNode): boolean;
+
+  declare export function isInlineFragment(selection: SelectionNode): boolean;
+
+  declare export function isIdValue(idObject: StoreValue): boolean;
+
+  declare export type IdConfig = {
+    id: string,
+    typename: string | void,
+  };
+
+  declare export function toIdValue(
+    id: string | IdConfig,
+    generated?: boolean,
+  ): IdValue;
+
+  declare export function isJsonValue(jsonObject: StoreValue): boolean;
+
+  declare export type VariableValue = (node: VariableNode) => any;
+
+  declare export function valueFromNode(
+    node: ValueNode,
+    onVariable: VariableValue,
+  ): any;
+
+  // getFromAST
+  declare export function getMutationDefinition(
+    doc: DocumentNode,
+  ): OperationDefinitionNode;
+
+  declare export function checkDocument(doc: DocumentNode): void;
+
+  declare export function getOperationDefinition(
+    doc: DocumentNode,
+  ): ?OperationDefinitionNode;
+
+  declare export function getOperationDefinitionOrDie(
+    document: DocumentNode,
+  ): OperationDefinitionNode;
+
+  declare export function getOperationName(doc: DocumentNode): ?string;
+
+  declare export function getFragmentDefinitions(
+    doc: DocumentNode,
+  ): Array<FragmentDefinitionNode>;
+
+  declare export function getQueryDefinition(
+    doc: DocumentNode,
+  ): OperationDefinitionNode;
+
+  declare export function getFragmentDefinition(
+    doc: DocumentNode,
+  ): FragmentDefinitionNode;
+
+  declare export function getMainDefinition(
+    queryDoc: DocumentNode,
+  ): OperationDefinitionNode | FragmentDefinitionNode;
+
+  declare export interface FragmentMap {
+    [fragmentName: string]: FragmentDefinitionNode;
+  }
+
+  declare export function createFragmentMap(
+    fragments: Array<FragmentDefinitionNode>,
+  ): FragmentMap;
+
+  declare export function getDefaultValues(
+    definition: ?OperationDefinitionNode,
+  ): { [key: string]: JsonValue };
+
+  // fragments
+  declare export function getFragmentQueryDocument(
+    document: DocumentNode,
+    fragmentName?: string,
+  ): DocumentNode;
+
+  declare export function variablesInOperation(
+    operation: OperationDefinitionNode,
+  ): Set<string>;
+
+  // directives
+  declare type DirectiveInfo = {
+    [fieldName: string]: { [argName: string]: any },
+  };
+
+  declare export function getDirectiveInfoFromField(
+    field: FieldNode,
+    object: Object,
+  ): ?DirectiveInfo;
+
+  declare export function shouldInclude(
+    selection: SelectionNode,
+    variables: { [name: string]: any },
+  ): boolean;
+
+  declare export function flattenSelections(
+    selection: SelectionNode,
+  ): Array<SelectionNode>;
+
+  declare export function getDirectiveNames(doc: DocumentNode): Array<string>;
+
+  declare export function hasDirectives(
+    names: Array<string>,
+    doc: DocumentNode,
+  ): boolean;
+
+  // transform
+  declare export type RemoveDirectiveConfig = {
+    name?: string,
+    test?: (directive: DirectiveNode) => boolean,
+  };
+
+  declare export function removeDirectivesFromDocument(
+    directives: Array<RemoveDirectiveConfig>,
+    doc: DocumentNode,
+  ): DocumentNode;
+
+  declare export function addTypenameToDocument(doc: DocumentNode): void;
+
+  declare export function removeConnectionDirectiveFromDocument(
+    doc: DocumentNode,
+  ): DocumentNode;
+}

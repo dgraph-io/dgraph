@@ -1,0 +1,1 @@
+{"version":3,"file":"bundle.cjs.js","sources":["bundle.esm.js"],"sourcesContent":["import zenObservable from 'zen-observable';\n\nvar Observable = zenObservable;\n\nexport default Observable;\nexport { Observable };\n//# sourceMappingURL=bundle.esm.js.map\n"],"names":[],"mappings":";;;;;;;;AAEG,IAAC,UAAU,GAAG;;;;;"}

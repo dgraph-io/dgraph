@@ -1,0 +1,1 @@
+{"version":3,"file":"useApolloClient.js","sourceRoot":"","sources":["../src/useApolloClient.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,MAAM,OAAO,CAAC;AAC1B,OAAO,EAAE,SAAS,EAAE,MAAM,cAAc,CAAC;AACzC,OAAO,EAAE,gBAAgB,EAAE,MAAM,sBAAsB,CAAC;AAGxD,MAAM,UAAU,eAAe;IACrB,IAAA,oDAAM,CAA0C;IACxD,SAAS,CACP,MAAM,EACN,iEAAiE;QAC/D,sDAAsD,CACzD,CAAC;IACF,OAAO,MAAO,CAAC;AACjB,CAAC"}

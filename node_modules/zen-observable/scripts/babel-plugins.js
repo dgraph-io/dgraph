@@ -1,0 +1,16 @@
+module.exports = [
+  '@babel/plugin-transform-arrow-functions',
+  '@babel/plugin-transform-block-scoped-functions',
+  '@babel/plugin-transform-block-scoping',
+  '@babel/plugin-transform-classes',
+  '@babel/plugin-transform-computed-properties',
+  '@babel/plugin-transform-destructuring',
+  '@babel/plugin-transform-duplicate-keys',
+  '@babel/plugin-transform-for-of',
+  '@babel/plugin-transform-literals',
+  '@babel/plugin-transform-modules-commonjs',
+  '@babel/plugin-transform-parameters',
+  '@babel/plugin-transform-shorthand-properties',
+  '@babel/plugin-transform-spread',
+  '@babel/plugin-transform-template-literals',
+];
