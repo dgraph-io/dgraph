@@ -867,6 +867,13 @@
         uid
       }
     }
+  dgquerysec: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  length: "2"
   json: |
     { "User3": [ { "uid": "0x123" } ] }
   uids: |
@@ -910,6 +917,13 @@
         uid
       }
     }
+  dgquerysec: |-
+    query {
+      User3 as User3(func: eq(User.username, "user1")) @filter(type(User)) {
+        uid
+      }
+    }
+  length: "2"
   json: |
     { "User3": [ { "uid": "0x123" } ] }
   uids: |
