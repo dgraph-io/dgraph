@@ -22,6 +22,7 @@ import (
 	"log"
 	"os"
 	"path"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/dgraph-io/dgraph/testutil"
@@ -232,9 +234,20 @@ func copyExportToLocalFs(t *testing.T) string {
 }
 
 func extractFileName(output string) string {
-	errLine := strings.Split(output, "\n")[7]
-	filename := strings.Split(strings.Split(errLine, testDataDir)[1], ":")[0]
-	return filename[1 : len(filename)-1]
+	lines := strings.Split(output, "\n")
+
+	var errLine string
+	for _, line := range lines {
+		matched, _ := regexp.MatchString("Error while processing(.)*", line)
+		if matched {
+			errLine = line
+			break
+		}
+	}
+	m := regexp.MustCompile(`[a-zA-Z0-9]+\.rdf`)
+	filename := m.FindString(errLine)
+
+	return filename
 }
 
 func TestLiveLoadFileName(t *testing.T) {
@@ -242,14 +255,44 @@ func TestLiveLoadFileName(t *testing.T) {
 
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live",
-			"--files", testDataDir + "/a.rdf," + testDataDir + "/b.rdf",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
 
 	out, err := testutil.Pipeline(pipeline)
-	name := extractFileName(out)
 	require.Error(t, err, "error expected: live loader exited with no error")
-	require.Equal(t, name, "b.rdf", "incorrect name for file, expected b.rdf, got a.rdf")
+	name := extractFileName(out)
+	require.Equal(t, "errored1.rdf", name, "incorrect name for errored file")
+}
+
+func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/errored1.rdf," + testDataDir + "/errored2.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	name := extractFileName(out)
+	assert.Contains(t, []string{"errored1.rdf", "errored2.rdf"}, name, "incorrect name for errored file")
+}
+
+func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--files", testDataDir + "/correct1.rdf," + testDataDir + "/correct2.rdf," + testDataDir + "/errored1.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
+	}
+
+	out, err := testutil.Pipeline(pipeline)
+	require.Error(t, err, "error expected: live loader exited with no error")
+	name := extractFileName(out)
+	require.Equal(t, "errored1.rdf", name, "incorrect name for errored file")
 }
 
 func TestMain(m *testing.M) {
