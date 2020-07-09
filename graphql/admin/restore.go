@@ -68,7 +68,7 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		worker.DeleteRestoreId(restoreId)
 		return &resolve.Resolved{
 			Data: map[string]interface{}{m.Name(): map[string]interface{}{
-				"code":      "Failure",
+				"code": "Failure",
 			}},
 			Field: m,
 			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),

@@ -643,6 +643,10 @@ func (n *node) processApplyCh() {
 			psz := proposal.Size()
 			totalSize += int64(psz)
 
+			if x.WorkerConfig.LudicrousMode && proposal.Mutations != nil && proposal.Mutations.StartTs == 0 {
+				proposal.Mutations.StartTs = State.GetTimestamp(false)
+			}
+
 			var perr error
 			p, ok := previous[proposal.Key]
 			if ok && p.err == nil && p.size == psz {
@@ -1157,8 +1161,9 @@ func (n *node) Run() {
 						if span := otrace.FromContext(pctx.Ctx); span != nil {
 							span.Annotate(nil, "Proposal found in CommittedEntries")
 						}
-						if x.WorkerConfig.LudicrousMode {
-							// Assuming that there will be no error while proposing.
+						if x.WorkerConfig.LudicrousMode && len(proposal.Mutations.GetEdges()) > 0 {
+							// Assuming that there will be no error while applying. But this
+							// assumption is only made for data mutations and not schema mutations.
 							n.Proposals.Done(proposal.Key, nil)
 						}
 					}
