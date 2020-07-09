@@ -1284,7 +1284,7 @@ func (m *mutation) IsAuthQuery() bool {
 }
 
 func (t *astType) AuthRules() *TypeAuth {
-	return t.inSchema.authRules[t.Name()]
+	return t.inSchema.authRules[t.DgraphName()]
 }
 
 func (t *astType) Field(name string) FieldDefinition {
