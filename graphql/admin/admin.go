@@ -22,19 +22,17 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/dgraph-io/dgraph/edgraph"
-
-	"github.com/dgraph-io/dgraph/query"
-
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 
 	badgerpb "github.com/dgraph-io/badger/v2/pb"
 	"github.com/dgraph-io/badger/v2/y"
+	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/web"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/dgraph-io/dgraph/x"
 )
@@ -326,7 +324,37 @@ var (
 		"deleteUser":  {resolve.IpWhitelistingMW4Mutation},
 		"deleteGroup": {resolve.IpWhitelistingMW4Mutation},
 	}
+	// mainHealthStore stores the health of the main GraphQL server.
+	mainHealthStore = &GraphQLHealthStore{}
 )
+
+// GraphQLHealth is used to report the health status of a GraphQL server.
+// It is required for kubernetes probing.
+type GraphQLHealth struct {
+	Healthy   bool
+	StatusMsg string
+}
+
+// GraphQLHealthStore stores GraphQLHealth in a thread-safe way.
+type GraphQLHealthStore struct {
+	v atomic.Value
+}
+
+func (g *GraphQLHealthStore) GetHealth() GraphQLHealth {
+	v := g.v.Load()
+	if v == nil {
+		return GraphQLHealth{Healthy: false, StatusMsg: "init"}
+	}
+	return v.(GraphQLHealth)
+}
+
+func (g *GraphQLHealthStore) up() {
+	g.v.Store(GraphQLHealth{Healthy: true, StatusMsg: "up"})
+}
+
+func (g *GraphQLHealthStore) updatingSchema() {
+	g.v.Store(GraphQLHealth{Healthy: true, StatusMsg: "updating schema"})
+}
 
 type gqlSchema struct {
 	ID              string `json:"id,omitempty"`
@@ -356,7 +384,7 @@ type adminServer struct {
 // NewServers initializes the GraphQL servers.  It sets up an empty server for the
 // main /graphql endpoint and an admin server.  The result is mainServer, adminServer.
 func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (web.IServeGraphQL,
-	web.IServeGraphQL) {
+	web.IServeGraphQL, *GraphQLHealthStore) {
 	gqlSchema, err := schema.FromString("")
 	if err != nil {
 		x.Panic(err)
@@ -375,7 +403,7 @@ func NewServers(withIntrospection bool, globalEpoch *uint64, closer *y.Closer) (
 	adminResolvers := newAdminResolver(mainServer, fns, withIntrospection, globalEpoch, closer)
 	adminServer := web.NewServer(globalEpoch, adminResolvers)
 
-	return mainServer, adminServer
+	return mainServer, adminServer, mainHealthStore
 }
 
 // newAdminResolver creates a GraphQL request resolver for the /admin endpoint.
@@ -449,13 +477,13 @@ func newAdminResolver(
 			}
 		}
 
-		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
-
 		server.mux.Lock()
 		defer server.mux.Unlock()
 
 		server.schema = newSchema
 		server.resetSchema(gqlSchema)
+
+		glog.Infof("Successfully updated GraphQL schema. Serving New GraphQL API.")
 	}, 1, closer)
 
 	go server.initServer()
@@ -571,6 +599,7 @@ func (as *adminServer) initServer() {
 		// adding the actual resolvers for updateGQLSchema and getGQLSchema only after server has
 		// current GraphQL schema, if there was any.
 		as.addConnectedAdminResolvers()
+		mainHealthStore.up()
 
 		if sch.Schema == "" {
 			glog.Infof("No GraphQL schema in Dgraph; serving empty GraphQL API")
@@ -583,9 +612,9 @@ func (as *adminServer) initServer() {
 			break
 		}
 
-		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
-
 		as.resetSchema(generatedSchema)
+
+		glog.Infof("Successfully loaded GraphQL schema.  Serving GraphQL API.")
 
 		break
 	}
@@ -711,8 +740,10 @@ func resolverFactoryWithErrorMsg(msg string) resolve.ResolverFactory {
 }
 
 func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
-	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
+	// set status as updating schema
+	mainHealthStore.updatingSchema()
 
+	resolverFactory := resolverFactoryWithErrorMsg(errResolverNotFound)
 	// it is nil after drop_all
 	if gqlSchema != nil {
 		resolverFactory = resolverFactory.WithConventionResolvers(gqlSchema, as.fns)
@@ -725,6 +756,9 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 	// will match against global epoch to terminate the current subscriptions.
 	atomic.AddUint64(as.globalEpoch, 1)
 	as.gqlServer.ServeGQL(resolve.New(gqlSchema, resolverFactory))
+
+	// reset status to up, as now we are serving the new schema
+	mainHealthStore.up()
 }
 
 func response(code, msg string) map[string]interface{} {
