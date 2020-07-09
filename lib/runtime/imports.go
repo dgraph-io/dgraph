@@ -73,8 +73,11 @@ package runtime
 import "C"
 
 import (
+	"encoding/binary"
+	"fmt"
 	"unsafe"
 
+	"github.com/OneOfOne/xxhash"
 	wasm "github.com/wasmerio/go-ext-wasm/wasmer"
 )
 
@@ -167,7 +170,52 @@ func ext_log(context unsafe.Pointer, a, b, c, d, e C.int32_t) {
 //export ext_twox_256
 func ext_twox_256(context unsafe.Pointer, data, len, out C.int32_t) {
 	logger.Trace("[ext_twox_256] executing...")
-	logger.Warn("[ext_twox_256] not yet implemented")
+	instanceContext := wasm.IntoInstanceContext(context)
+	memory := instanceContext.Memory().Data()
+	logger.Trace("[ext_twox_256] hashing...", "value", fmt.Sprintf("%s", memory[data:data+len]))
+
+	h0 := xxhash.NewS64(0)
+	_, err := h0.Write(memory[data : data+len])
+	if err != nil {
+		logger.Error("[ext_twox_256]", "error", err)
+		return
+	}
+	res0 := h0.Sum64()
+	hash0 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash0, res0)
+
+	h1 := xxhash.NewS64(1)
+	_, err = h1.Write(memory[data : data+len])
+	if err != nil {
+		logger.Error("[ext_twox_256]", "error", err)
+		return
+	}
+	res1 := h1.Sum64()
+	hash1 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash1, res1)
+
+	h2 := xxhash.NewS64(2)
+	_, err = h2.Write(memory[data : data+len])
+	if err != nil {
+		logger.Error("[ext_twox_256]", "error", err)
+		return
+	}
+	res2 := h2.Sum64()
+	hash2 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash2, res2)
+
+	h3 := xxhash.NewS64(3)
+	_, err = h3.Write(memory[data : data+len])
+	if err != nil {
+		logger.Error("[ext_twox_256]", "error", err)
+		return
+	}
+	res3 := h3.Sum64()
+	hash3 := make([]byte, 8)
+	binary.LittleEndian.PutUint64(hash3, res3)
+
+	fin := append(append(append(hash0, hash1...), hash2...), hash3...)
+	copy(memory[out:out+32], fin)
 }
 
 //export ext_exists_storage

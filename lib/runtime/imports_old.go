@@ -429,6 +429,7 @@ func ext_blake2_128(context unsafe.Pointer, data, length, out int32) {
 		return
 	}
 
+	logger.Trace("[ext_blake2_128]", "hash", fmt.Sprintf("0x%x", hash))
 	copy(memory[out:out+16], hash[:])
 }
 
@@ -438,6 +439,7 @@ func ext_keccak_256(context unsafe.Pointer, data, length, out int32) {
 	instanceContext := wasm.IntoInstanceContext(context)
 	memory := instanceContext.Memory().Data()
 	hash := common.Keccak256(memory[data : data+length])
+	logger.Trace("[ext_keccak_256]", "hash", hash)
 	copy(memory[out:out+32], hash[:])
 }
 

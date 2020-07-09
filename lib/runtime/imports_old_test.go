@@ -672,7 +672,7 @@ func TestExt_keccak_256(t *testing.T) {
 	require.Nil(t, err)
 
 	if !bytes.Equal(expected[:], mem[out:out+32]) {
-		t.Fatalf("fail: got %x expected %x", mem[out:out+32], expected)
+		t.Fatalf("fail: got %x expected %x", mem[out:out+32], expected[:])
 	}
 }
 

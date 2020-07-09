@@ -59,7 +59,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 		Storage:  rs,
 		Keystore: keystore.NewKeystore(),
 		Imports:  importsFunc,
-		LogLvl:   log.LvlInfo,
+		LogLvl:   log.LvlTrace,
 	}
 
 	r, err := NewRuntimeFromFile(fp, cfg)
