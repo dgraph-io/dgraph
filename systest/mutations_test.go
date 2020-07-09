@@ -2013,6 +2013,18 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 	testutil.CompareJSON(t, `{"me":[{"name":"Alice","best_friend": {"name": "Bob"}}]}`,
 		string(resp.GetJson()))
 
+	reverseQuery := `{
+		reverse(func: has(~best_friend)) {
+			name
+			~best_friend {
+				name
+			}
+		}}`
+	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
+	require.NoError(t, err)
+	testutil.CompareJSON(t, `{"reverse":[{"name":"Bob","~best_friend": [{"name": "Alice"}]}]}`,
+		string(resp.GetJson()))
+
 	upsertQuery := `query { alice as var(func: eq(name, Alice)) }`
 	upsertMutation := &api.Mutation{
 		SetNquads: []byte(`
@@ -2027,13 +2039,6 @@ func OverwriteUidPredicatesReverse(t *testing.T, c *dgo.Dgraph) {
 	_, err = c.NewTxn().Do(ctx, req)
 	require.NoError(t, err)
 
-	reverseQuery := `{
-		reverse(func: has(~best_friend)) {
-			name
-			~best_friend {
-				name
-			}
-		}}`
 	resp, err = c.NewReadOnlyTxn().Query(ctx, reverseQuery)
 	require.NoError(t, err)
 	testutil.CompareJSON(t, `{"reverse":[{"name":"Carol","~best_friend": [{"name": "Alice"}]}]}`,
