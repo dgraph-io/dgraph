@@ -217,11 +217,15 @@ func TestSchema_Normal(t *testing.T) {
 			"index": true,
 			"tokenizer": ["exact"],
 			"list": true
-		},
+		}, 
+        {
+             "predicate": "Person.id",
+			 "type": uid
+        },
         {
              "predicate": "Person.name",
 			 "type": "string"
-        },
+        }
      ],
 		"types": [{
 			"fields": [{
