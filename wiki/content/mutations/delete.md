@@ -9,7 +9,7 @@ title = "Delete"
 A delete mutation, signified with the `delete` keyword, removes triples from the store.
 
 For example, if the store contained
-```
+```RDF
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
 <0xf11168064b01135b> <dgraph.type> "Person" .
@@ -17,7 +17,7 @@ For example, if the store contained
 
 Then delete mutation
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> <died> "1998" .
@@ -29,7 +29,7 @@ Deletes the erroneous data and removes it from indexes if present.
 
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> <author.of> * .
@@ -44,7 +44,7 @@ derived from the type information for that node (the value of the `dgraph.type`
 edges on that node and their corresponding definitions in the schema). If that
 information is missing, this operation will be a no-op.
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> * * .
@@ -66,9 +66,9 @@ For language-tagged values, the following special syntax is supported:
 
 ```
 {
-	delete {
-		<0x12345> <name@es> * .
-	}
+  delete {
+    <0x12345> <name@es> * .
+  }
 }
 ```
 
