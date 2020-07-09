@@ -310,7 +310,14 @@ func (mr *dgraphResolver) rewriteAndExecute(ctx context.Context,
 	ext.TouchedUids += qryResp.GetMetrics().GetNumUids()[touchedUidsKey]
 	numUids := getNumUids(mutation, mutResp.Uids, result)
 
-	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResp.GetJson(), errs)
+	var qryResult []byte
+	if mutation.MutationType() == schema.DeleteMutation && mutation.QueryField().SelectionSet() != nil {
+		qryResult = mutResp.GetJson()
+	} else {
+		qryResult = qryResp.GetJson()
+	}
+
+	resolved := completeDgraphResult(ctx, mutation.QueryField(), qryResult, errs)
 	if resolved.Data == nil && resolved.Err != nil {
 		return &Resolved{
 			Data: map[string]interface{}{

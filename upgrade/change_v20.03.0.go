@@ -17,20 +17,16 @@
 package upgrade
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
-	"github.com/dgraph-io/dgo/v200"
 	"github.com/dgraph-io/dgo/v200/protos/api"
-	"google.golang.org/grpc"
 )
 
 const (
-	oldACLQuery = `
+	queryACLGroupsBefore_v20_03_0 = `
 		{
-			rules(func: type(dgraph.type.Group)) {
+			rules(func: type(Group)) @filter(has(dgraph.group.acl)) {
 				uid
 				dgraph.group.acl
 			}
@@ -51,48 +47,26 @@ type rule struct {
 type rules []rule
 
 func upgradeACLRules() error {
-	alpha := Upgrade.Conf.GetString("alpha")
-	userName := Upgrade.Conf.GetString("user")
-	password := Upgrade.Conf.GetString("password")
-	deleteOld := Upgrade.Conf.GetBool("deleteOld")
-
-	// TODO(Aman): add TLS configuration.
-	conn, err := grpc.Dial(alpha, grpc.WithInsecure())
+	dg, conn, err := getDgoClient(true)
 	if err != nil {
-		return fmt.Errorf("unable to connect to Dgraph cluster: %w", err)
+		return fmt.Errorf("error getting dgo client: %w", err)
 	}
 	defer conn.Close()
 
-	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-
-	// login to cluster
-	if err := dg.Login(ctx, userName, password); err != nil {
-		return fmt.Errorf("unable to login to Dgraph cluster: %w", err)
-	}
-
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	resp, err := dg.NewReadOnlyTxn().Query(ctx, oldACLQuery)
-	if err != nil {
-		return fmt.Errorf("unable to query old ACL rules: %w", err)
-	}
-
 	data := make(map[string][]group)
-	if err := json.Unmarshal(resp.Json, &data); err != nil {
-		return fmt.Errorf("unable to unmarshal old ACLs: %w", err)
+	if err = getQueryResult(dg, queryACLGroupsBefore_v20_03_0, &data); err != nil {
+		return fmt.Errorf("error querying old ACL rules: %w", err)
 	}
 
 	groups, ok := data["rules"]
 	if !ok {
-		return fmt.Errorf("unable to parse ACLs: %v", string(resp.Json))
+		return fmt.Errorf("unable to parse ACLs: %v", data)
 	}
 
 	counter := 1
 	var nquads []*api.NQuad
 	for _, group := range groups {
-		if len(group.ACL) == 0 {
+		if group.ACL == "" {
 			continue
 		}
 
@@ -104,11 +78,8 @@ func upgradeACLRules() error {
 		for _, r := range rs {
 			newRuleStr := fmt.Sprintf("_:newrule%d", counter)
 			nquads = append(nquads, []*api.NQuad{
-				{
-					Subject:   newRuleStr,
-					Predicate: "dgraph.type",
-					ObjectId:  "dgraph.type.Rule",
-				},
+				// the name of the type was Rule in v20.03.0
+				getTypeNquad(newRuleStr, "Rule"),
 				{
 					Subject:   newRuleStr,
 					Predicate: "dgraph.rule.predicate",
@@ -136,18 +107,18 @@ func upgradeACLRules() error {
 
 	// Nothing to do.
 	if len(nquads) == 0 {
-		return fmt.Errorf("no old rules found in the cluster")
+		fmt.Println("nothing to do: no old rules found in the cluster")
+		return nil
 	}
 
-	if err := mutateACL(dg, nquads); err != nil {
+	if err := mutateWithClient(dg, &api.Mutation{Set: nquads}); err != nil {
 		return fmt.Errorf("error upgrading ACL rules: %w", err)
 	}
 	fmt.Println("Successfully upgraded ACL rules.")
 
-	ctx, cancel = context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+	deleteOld := Upgrade.Conf.GetBool("deleteOld")
 	if deleteOld {
-		err = dg.Alter(ctx, &api.Operation{
+		err = alterWithClient(dg, &api.Operation{
 			DropOp:    api.Operation_ATTR,
 			DropValue: "dgraph.group.acl",
 		})
@@ -158,25 +129,4 @@ func upgradeACLRules() error {
 	}
 
 	return nil
-}
-
-func mutateACL(dg *dgo.Dgraph, nquads []*api.NQuad) error {
-	var err error
-	for i := 0; i < 3; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, err = dg.NewTxn().Mutate(ctx, &api.Mutation{
-			Set:       nquads,
-			CommitNow: true,
-		})
-		if err != nil {
-			fmt.Printf("error in running mutation, retrying: %v\n", err)
-			continue
-		}
-
-		return nil
-	}
-
-	return err
 }
