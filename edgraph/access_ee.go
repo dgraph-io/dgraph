@@ -19,6 +19,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dgraph-io/dgraph/protos/pb"
+
+	"github.com/dgraph-io/dgraph/query"
+
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -33,7 +37,6 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
 
@@ -55,9 +58,10 @@ func (s *Server) Login(ctx context.Context,
 
 	// record the client ip for this login request
 	var addr string
-	if peerInfo, ok := peer.FromContext(ctx); ok {
-		addr = peerInfo.Addr.String()
-		glog.Infof("Login request from: %s", addr)
+	if ipAddr, err := hasAdminAuth(ctx, "Login"); err != nil {
+		return nil, err
+	} else {
+		addr = ipAddr.String()
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")
@@ -789,6 +793,74 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			delete(blockedPreds, "~dgraph.user.group")
 		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+	}
+
+	return nil
+}
+
+func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error {
+	if len(worker.Config.HmacSecret) == 0 {
+		// the user has not turned on the acl feature
+		return nil
+	}
+
+	// find the predicates being sent in response
+	preds := make([]string, 0)
+	predsMap := make(map[string]struct{})
+	for _, predNode := range er.SchemaNode {
+		preds = append(preds, predNode.Predicate)
+		predsMap[predNode.Predicate] = struct{}{}
+	}
+	for _, typeNode := range er.Types {
+		for _, field := range typeNode.Fields {
+			if _, ok := predsMap[field.Predicate]; !ok {
+				preds = append(preds, field.Predicate)
+			}
+		}
+	}
+
+	doAuthorizeSchemaQuery := func() (map[string]struct{}, error) {
+		userData, err := extractUserAndGroups(ctx)
+		if err != nil {
+			return nil, status.Error(codes.Unauthenticated, err.Error())
+		}
+
+		userId := userData[0]
+		groupIds := userData[1:]
+
+		if x.IsGuardian(groupIds) {
+			// Members of guardian groups are allowed to query anything.
+			return nil, nil
+		}
+
+		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+	}
+
+	// find the predicates which are blocked for the schema query
+	blockedPreds, err := doAuthorizeSchemaQuery()
+	if err != nil {
+		return err
+	}
+
+	// remove those predicates from response
+	if len(blockedPreds) > 0 {
+		respPreds := make([]*pb.SchemaNode, 0)
+		for _, predNode := range er.SchemaNode {
+			if _, ok := blockedPreds[predNode.Predicate]; !ok {
+				respPreds = append(respPreds, predNode)
+			}
+		}
+		er.SchemaNode = respPreds
+
+		for _, typeNode := range er.Types {
+			respFields := make([]*pb.SchemaUpdate, 0)
+			for _, field := range typeNode.Fields {
+				if _, ok := blockedPreds[field.Predicate]; !ok {
+					respFields = append(respFields, field)
+				}
+			}
+			typeNode.Fields = respFields
+		}
 	}
 
 	return nil
