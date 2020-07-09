@@ -116,6 +116,10 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
+
+	header, _ := ctx.Value("Header").(json.RawMessage)
+	glog.Infof("%s", ctx.Value("Header").(json.RawMessage))
+	glog.Infof("%s", string(header))
 	customClaim, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
