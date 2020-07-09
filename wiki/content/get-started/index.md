@@ -300,4 +300,3 @@ communicate with Dgraph from your application.
 feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues)
 if you encounter bugs or have feature requests.
-* You can also join our [Slack channel](http://slack.dgraph.io).

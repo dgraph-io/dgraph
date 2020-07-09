@@ -42,7 +42,7 @@ import (
 
 const touchedUidsHeader = "Graphql-TouchedUids"
 
-// An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
+// An IServeGraphQL can serve a GraphQL endpoint (currently only on http)
 type IServeGraphQL interface {
 
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.

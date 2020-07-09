@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,7 +38,6 @@ import (
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 
 	"github.com/dgraph-io/dgo/v200"
@@ -96,6 +96,16 @@ var (
 // Server implements protos.DgraphServer
 type Server struct{}
 
+// graphQLSchemaNode represents the node which contains GraphQL schema
+type graphQLSchemaNode struct {
+	Uid    string `json:"uid"`
+	Schema string `json:"dgraph.graphql.schema"`
+}
+
+type existingGQLSchemaQryResp struct {
+	ExistingGQLSchema []graphQLSchemaNode `json:"ExistingGQLSchema"`
+}
+
 // PeriodicallyPostTelemetry periodically reports telemetry data for alpha.
 func PeriodicallyPostTelemetry() {
 	glog.V(2).Infof("Starting telemetry data collection for alpha...")
@@ -125,6 +135,40 @@ func PeriodicallyPostTelemetry() {
 			glog.V(2).Infof("Telemetry couldn't be posted. Error: %v", err)
 		}
 	}
+}
+
+// GetGQLSchema queries for the GraphQL schema node, and returns the uid and the GraphQL schema.
+// If multiple schema nodes were found, it returns an error.
+func GetGQLSchema() (uid, graphQLSchema string, err error) {
+	resp, err := (&Server{}).Query(context.WithValue(context.Background(), Authorize, false),
+		&api.Request{
+			Query: `
+			query {
+			  ExistingGQLSchema(func: has(dgraph.graphql.schema)) {
+				uid
+				dgraph.graphql.schema
+			  }
+			}`})
+	if err != nil {
+		return "", "", err
+	}
+
+	var result existingGQLSchemaQryResp
+	if err := json.Unmarshal(resp.GetJson(), &result); err != nil {
+		return "", "", errors.Wrap(err, "Couldn't unmarshal response from Dgraph query")
+	}
+
+	if len(result.ExistingGQLSchema) == 0 {
+		// no schema has been stored yet in Dgraph
+		return "", "", nil
+	} else if len(result.ExistingGQLSchema) == 1 {
+		// we found an existing GraphQL schema
+		gqlSchemaNode := result.ExistingGQLSchema[0]
+		return gqlSchemaNode.Uid, gqlSchemaNode.Schema, nil
+	}
+
+	// found multiple GraphQL schema nodes, this should never happen
+	return "", "", worker.ErrMultipleGraphQLSchemaNodes
 }
 
 // UpdateGQLSchema updates the GraphQL and Dgraph schemas using the given inputs.
@@ -174,7 +218,7 @@ func validateAlterOperation(ctx context.Context, op *api.Operation) error {
 	if !isMutationAllowed(ctx) {
 		return errors.Errorf("No mutations allowed by server.")
 	}
-	if err := isAlterAllowed(ctx); err != nil {
+	if _, err := hasAdminAuth(ctx, "Alter"); err != nil {
 		glog.Warningf("Alter denied with error: %v\n", err)
 		return err
 	}
@@ -271,7 +315,13 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 
 		m.DropOp = pb.Mutations_ALL
 		_, err := query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
 
+		// insert empty GraphQL schema, so all alphas get notified to
+		// reset their in-memory GraphQL schema
+		_, err = UpdateGQLSchema(ctx, "", "")
 		// recreate the admin account after a drop all operation
 		ResetAcl()
 		return empty, err
@@ -282,9 +332,20 @@ func (s *Server) Alter(ctx context.Context, op *api.Operation) (*api.Payload, er
 			return empty, errors.Errorf("If DropOp is set to DATA, DropValue must be empty")
 		}
 
-		m.DropOp = pb.Mutations_DATA
-		_, err := query.ApplyMutations(ctx, m)
+		// query the GraphQL schema and keep it in memory, so it can be inserted again
+		_, graphQLSchema, err := GetGQLSchema()
+		if err != nil {
+			return empty, err
+		}
 
+		m.DropOp = pb.Mutations_DATA
+		_, err = query.ApplyMutations(ctx, m)
+		if err != nil {
+			return empty, err
+		}
+
+		// just reinsert the GraphQL schema, no need to alter dgraph schema as this was drop_data
+		_, err = UpdateGQLSchema(ctx, graphQLSchema, "")
 		// recreate the admin account after a drop data operation
 		ResetAcl()
 		return empty, err
@@ -373,9 +434,6 @@ func (s *Server) doMutate(ctx context.Context, qc *queryContext, resp *api.Respo
 	}
 	if ctx.Err() != nil {
 		return ctx.Err()
-	}
-	if x.WorkerConfig.LudicrousMode {
-		qc.req.StartTs = worker.State.GetTimestamp(false)
 	}
 
 	start := time.Now()
@@ -998,6 +1056,9 @@ func processQuery(ctx context.Context, qc *queryContext) (*api.Response, error) 
 	}
 
 	if len(er.SchemaNode) > 0 || len(er.Types) > 0 {
+		if err = authorizeSchemaQuery(ctx, &er); err != nil {
+			return resp, err
+		}
 		sort.Slice(er.SchemaNode, func(i, j int) bool {
 			return er.SchemaNode[i].Predicate < er.SchemaNode[j].Predicate
 		})
@@ -1200,11 +1261,19 @@ func isMutationAllowed(ctx context.Context) bool {
 
 var errNoAuth = errors.Errorf("No Auth Token found. Token needed for Alter operations.")
 
-func isAlterAllowed(ctx context.Context) error {
-	p, ok := peer.FromContext(ctx)
-	if ok {
-		glog.Infof("Got Alter request from %q\n", p.Addr)
+func hasAdminAuth(ctx context.Context, tag string) (net.Addr, error) {
+	ipAddr, err := x.HasWhitelistedIP(ctx)
+	if err != nil {
+		return nil, err
 	}
+	glog.Infof("Got %s request from: %q\n", tag, ipAddr)
+	if err = hasPoormansAuth(ctx); err != nil {
+		return nil, err
+	}
+	return ipAddr, nil
+}
+
+func hasPoormansAuth(ctx context.Context) error {
 	if len(worker.Config.AuthToken) == 0 {
 		return nil
 	}
