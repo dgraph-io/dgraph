@@ -24,7 +24,6 @@ import (
 	"path"
 	"regexp"
 	"runtime"
-	"strings"
 	"testing"
 	"time"
 
@@ -234,19 +233,10 @@ func copyExportToLocalFs(t *testing.T) string {
 }
 
 func extractFileName(output string) string {
-	lines := strings.Split(output, "\n")
-
-	var errLine string
-	for _, line := range lines {
-		matched, _ := regexp.MatchString("Error while processing(.)*", line)
-		if matched {
-			errLine = line
-			break
-		}
-	}
-	m := regexp.MustCompile(`[a-zA-Z0-9]+\.rdf`)
+	m := regexp.MustCompile(`Error while processing(.)*\n`)
+	errLine := m.FindString(output)
+	m = regexp.MustCompile(`[a-zA-Z0-9]+\.rdf`)
 	filename := m.FindString(errLine)
-
 	return filename
 }
 
