@@ -2605,3 +2605,22 @@ valid_schemas:
           body: "{sid: $id}"
           })
       }
+
+  -
+    name: "dgraph directive with reverse edges should work with interfaces"
+    input: |
+      type Object {
+        id: ID!
+        name: String
+        ownedBy: Person @dgraph(pred: "Object.owner")
+      }
+
+      type BusinessMan implements Person {
+        companyName: String
+      }
+
+      interface Person {
+        id: ID!
+        name: String
+        owns: [Object] @dgraph(pred: "~Object.owner")
+      }

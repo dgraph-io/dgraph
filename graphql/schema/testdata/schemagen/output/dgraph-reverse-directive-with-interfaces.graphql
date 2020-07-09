@@ -215,7 +215,6 @@ input AddDirectorInput {
 
 input AddOscarMovieInput {
 	name: String!
-	director: [DirectorRef]
 	year: Int!
 }
 
@@ -279,7 +278,6 @@ input OscarMoviePatch {
 input OscarMovieRef {
 	id: ID
 	name: String
-	director: [DirectorRef]
 	year: Int
 }
 

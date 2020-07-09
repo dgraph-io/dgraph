@@ -1085,12 +1085,22 @@ func dgraphDirectiveValidation(sch *ast.Schema, typ *ast.Definition, field *ast.
 				continue
 			}
 			if predArg.Value.Raw == forwardEdgePred {
-				if fld.Type.Name() != typ.Name {
-					errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: should be of"+
-						" type %s to be compatible with @dgraph reverse directive but is of"+
-						" type %s.", invTypeName, fld.Name, typ.Name, fld.Type.Name()))
+				possibleTypes := append([]string{typ.Name}, typ.Interfaces...)
+				allowedType := false
+				for _, pt := range possibleTypes {
+					if fld.Type.Name() == pt {
+						allowedType = true
+						break
+					}
+				}
+				if !allowedType {
+					errs = append(errs, gqlerror.ErrorPosf(dir.Position, "Type %s; Field %s: "+
+						"should be of one of the types in %s to be compatible with @dgraph"+
+						" reverse directive but is of type %s.",
+						invTypeName, fld.Name, possibleTypes, fld.Type.Name()))
 					return errs
 				}
+
 				invDirective := fld.Directives.ForName(inverseDirective)
 				if invDirective != nil {
 					errs = append(errs, gqlerror.ErrorPosf(
@@ -1691,7 +1701,7 @@ func customDirectiveValidation(sch *ast.Schema,
 			if !ok {
 				return append(errs, gqlerror.ErrorPosf(graphql.Position,
 					"Type %s; Field %s; introspectionHeaders in @custom directive should use secrets to store the header value. To do that specify `%s` in this format '#Dgraph.Secret name value' at the bottom of your schema file.",
-					typ.Name, field.Name, val,))
+					typ.Name, field.Name, val))
 			}
 			headers.Add(key, string(value))
 		}
