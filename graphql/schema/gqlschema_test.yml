@@ -651,7 +651,7 @@ invalid_schemas:
         f1: [X] @dgraph(pred: "~f1")
       }
     errlist: [
-      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      {"message": "Type X; Field f1: should be of one of the types in [Y] to be compatible with @dgraph reverse
       directive but is of type Z.",
       "locations":[{"line":5, "column":12}]}
     ]
@@ -2451,9 +2451,13 @@ valid_schemas:
     name: "dgraph directive with correct reverse field works"
     input: |
       type X {
+        id: ID!
+        name: String
         f1: [Y] @dgraph(pred: "~f1")
       }
       type Y {
+        id: ID!
+        name: String
         f1: [X] @dgraph(pred: "f1")
       }
 
