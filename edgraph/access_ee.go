@@ -354,6 +354,9 @@ const queryAcls = `
 		dgraph.rule.predicate
 		dgraph.rule.permission
 	}
+	~dgraph.user.group{
+		dgraph.xid
+	}
   }
 }
 `
@@ -459,7 +462,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 }
 
 func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) map[string]struct{} {
+	aclOp *acl.Operation) (map[string]struct{}, []string) {
 
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
@@ -475,7 +478,17 @@ func authorizePreds(userId string, groupIds, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	return blockedPreds
+	aclCachePtr.RLock()
+	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
+	// User can have multiple permission for same predicate, add predicate
+	// only if the acl.Op is covered in the set of permissions for the user
+	for predicate, perm := range aclCachePtr.userPredPerms[userId] {
+		if (perm & aclOp.Code) > 0 {
+			allowedPreds = append(allowedPreds, predicate)
+		}
+	}
+	aclCachePtr.RUnlock()
+	return blockedPreds, allowedPreds
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -531,7 +544,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -639,7 +652,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -675,7 +688,7 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 && gq.Attr != "uid" {
+		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" {
 			predsMap[gq.Attr] = struct{}{}
 		}
 		for _, ord := range gq.Order {
@@ -744,10 +757,10 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	var groupIds []string
 	preds := parsePredsFromQuery(parsedReq.Query)
 
-	doAuthorizeQuery := func() (map[string]struct{}, error) {
+	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
 		userData, err := extractUserAndGroups(ctx)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, err.Error())
+			return nil, nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		userId = userData[0]
@@ -755,13 +768,14 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
-			return nil, nil
+			return nil, nil, nil
 		}
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Read)
+		return blockedPreds, allowedPreds, nil
 	}
 
-	blockedPreds, err := doAuthorizeQuery()
+	blockedPreds, allowedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -793,6 +807,9 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			delete(blockedPreds, "~dgraph.user.group")
 		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+	}
+	for i := range parsedReq.Query {
+		parsedReq.Query[i].AllowedPreds = allowedPreds
 	}
 
 	return nil
@@ -832,8 +849,9 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Read)
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		return blockedPreds, nil
 	}
 
 	// find the predicates which are blocked for the schema query
