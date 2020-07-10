@@ -385,17 +385,20 @@ func (writer *fileWriter) Close() error {
 	return writer.fd.Close()
 }
 
+type ExportedFiles []string
+
 // export creates a export of data by exporting it as an RDF gzip.
-func export(ctx context.Context, in *pb.ExportRequest) error {
+func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
+
 	if in.GroupId != groups().groupId() {
-		return errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
+		return nil, errors.Errorf("Export request group mismatch. Mine: %d. Requested: %d",
 			groups().groupId(), in.GroupId)
 	}
 	glog.Infof("Export requested at %d.", in.ReadTs)
 
 	// Let's wait for this server to catch up to all the updates until this ts.
 	if err := posting.Oracle().WaitForTs(ctx, in.ReadTs); err != nil {
-		return err
+		return nil, err
 	}
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
@@ -404,7 +407,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 		"dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 
 	if err := os.MkdirAll(bdir, 0700); err != nil {
-		return err
+		return nil, err
 	}
 
 	xfmt := exportFormats[in.Format]
@@ -415,35 +418,35 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 	// Open data file now.
 	dataPath, err := fpath(xfmt.ext + ".gz")
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	glog.Infof("Exporting data for group: %d at %s\n", in.GroupId, dataPath)
 	dataWriter := &fileWriter{}
 	if err := dataWriter.open(dataPath); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Open schema file now.
 	schemaPath, err := fpath(".schema.gz")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	glog.Infof("Exporting schema for group: %d at %s\n", in.GroupId, schemaPath)
 	schemaWriter := &fileWriter{}
 	if err := schemaWriter.open(schemaPath); err != nil {
-		return err
+		return nil, err
 	}
 
 	// Open graphql schema.
 	gqlSchemaPath, err := fpath(".gql_schema.gz")
 	if err != nil {
-		return errors.Wrapf(err, "cannot get path for the GraphQL schema file")
+		return nil, errors.Wrapf(err, "cannot get path for the GraphQL schema file")
 	}
 	glog.Infof("Exporting GraphQL schema at %s", gqlSchemaPath)
 	gqlSchemaWriter := &fileWriter{}
 	if err := gqlSchemaWriter.open(gqlSchemaPath); err != nil {
-		return errors.Wrapf(err, "cannot open export GraphQL schema file at %s", gqlSchemaPath)
+		return nil, errors.Wrapf(err, "cannot open export GraphQL schema file at %s", gqlSchemaPath)
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
@@ -642,25 +645,25 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 
 	// All prepwork done. Time to roll.
 	if _, err = dataWriter.gw.Write([]byte(xfmt.pre)); err != nil {
-		return err
+		return nil, err
 	}
 	if err := stream.Orchestrate(ctx); err != nil {
-		return err
+		return nil, err
 	}
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
-		return err
+		return nil, err
 	}
 	if err := dataWriter.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := schemaWriter.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	if err := gqlSchemaWriter.Close(); err != nil {
-		return err
+		return nil, err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return nil
+	return ExportedFiles{schemaPath, dataPath, gqlSchemaPath}, nil
 }
 
 // Export request is used to trigger exports for the request list of groups.
@@ -674,22 +677,23 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Exp
 	}
 
 	glog.Infof("Issuing export request...")
-	if err := export(ctx, req); err != nil {
+	files, err := export(ctx, req)
+	if err != nil {
 		glog.Errorf("While running export. Request: %+v. Error=%v\n", req, err)
 		return nil, err
 	}
 	glog.Infof("Export request: %+v OK.\n", req)
-	return &pb.ExportResponse{Msg: "SUCCESS"}, nil
+	return &pb.ExportResponse{Msg: "SUCCESS", Files: files}, nil
 }
 
-func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
+func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	if in.GroupId == groups().groupId() {
 		return export(ctx, in)
 	}
 
 	pl := groups().Leader(in.GroupId)
 	if pl == nil {
-		return errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
+		return nil, errors.Errorf("Unable to find leader of group: %d\n", in.GroupId)
 	}
 
 	glog.Infof("Sending export request to group: %d, addr: %s\n", in.GroupId, pl.Addr)
@@ -698,21 +702,21 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {
 	if err != nil {
 		glog.Errorf("Export error received from group: %d. Error: %v\n", in.GroupId, err)
 	}
-	return err
+	return nil, err
 }
 
 // ExportOverNetwork sends export requests to all the known groups.
-func ExportOverNetwork(ctx context.Context, format string) error {
+func ExportOverNetwork(ctx context.Context, format string) (ExportedFiles, error) {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
-		return err
+		return nil, err
 	}
 	// Get ReadTs from zero and wait for stream to catch up.
 	ts, err := Timestamps(ctx, &pb.Num{ReadOnly: true})
 	if err != nil {
 		glog.Errorf("Unable to retrieve readonly ts for export: %v\n", err)
-		return err
+		return nil, err
 	}
 	readTs := ts.ReadOnly
 	glog.Infof("Got readonly ts from Zero: %d\n", readTs)
@@ -721,7 +725,11 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 	gids := groups().KnownGroups()
 	glog.Infof("Requesting export for groups: %v\n", gids)
 
-	ch := make(chan error, len(gids))
+	type filesAndError struct {
+		ExportedFiles
+		error
+	}
+	ch := make(chan filesAndError, len(gids))
 	for _, gid := range gids {
 		go func(group uint32) {
 			req := &pb.ExportRequest{
@@ -730,21 +738,24 @@ func ExportOverNetwork(ctx context.Context, format string) error {
 				UnixTs:  time.Now().Unix(),
 				Format:  format,
 			}
-			ch <- handleExportOverNetwork(ctx, req)
+			files, err := handleExportOverNetwork(ctx, req)
+			ch <- filesAndError{files, err}
 		}(gid)
 	}
 
+	var allFiles ExportedFiles
 	for i := 0; i < len(gids); i++ {
-		err := <-ch
-		if err != nil {
+		pair := <-ch
+		if pair.error != nil {
 			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
-			return rerr
+			return nil, rerr
 		}
+		allFiles = append(allFiles, pair.ExportedFiles...)
 	}
 
 	glog.Infof("Export at readTs %d DONE", readTs)
-	return nil
+	return allFiles, nil
 }
 
 // NormalizeExportFormat returns the normalized string for the export format if it is valid, an

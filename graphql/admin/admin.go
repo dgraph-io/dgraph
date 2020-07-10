@@ -199,6 +199,7 @@ const (
 
 	type ExportPayload {
 		response: Response
+		exportedFiles: [String]
 	}
 
 	type DrainingPayload {

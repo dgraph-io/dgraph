@@ -48,13 +48,16 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	err = worker.ExportOverNetwork(context.Background(), format)
+	files, err := worker.ExportOverNetwork(context.Background(), format)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
+	responseData := response("Success", "Export completed.")
+	responseData["exportedFiles"] = files
+
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Export completed.")},
+		Data:  map[string]interface{}{m.Name(): responseData},
 		Field: m,
 	}, true
 }
