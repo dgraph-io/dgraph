@@ -22,6 +22,8 @@ import (
 	"encoding/json"
 	"strconv"
 
+	"google.golang.org/grpc/metadata"
+
 	"io"
 	"io/ioutil"
 	"mime"
@@ -120,6 +122,29 @@ func (gs *graphqlSubscription) Subscribe(
 	header, _ := ctx.Value("Header").(json.RawMessage)
 	glog.Infof("%s", ctx.Value("Header").(json.RawMessage))
 	glog.Infof("%s", string(header))
+
+	pairs := strings.Split(string(header)[1:len(string(header))-1], "\n")
+	glog.Infof("%s", pairs)
+	name := authorization.GetHeader()
+	var val string = ""
+	for _, pair := range pairs {
+		z := strings.Split(pair, ":")
+		glog.Infof("%s-%s", z[0][1:len(z[0])-1], name)
+		if z[0][1:len(z[0])-1] == name {
+			val = z[1][1 : len(z[1])-1]
+		}
+	}
+	if val == "" {
+		return nil, err
+	}
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	md.Append("authorizationJwt", val)
+	ctx = metadata.NewIncomingContext(ctx, md)
+
 	customClaim, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
