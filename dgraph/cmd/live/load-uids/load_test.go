@@ -25,6 +25,7 @@ import (
 	"path"
 	"regexp"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -204,13 +205,13 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// copy the export files from docker
-	exportId := copyExportToLocalFs(t)
+	exportId, groupId := copyExportToLocalFs(t)
 
 	// then loading the exported files should work
 	pipeline := [][]string{
 		{testutil.DgraphBinaryPath(), "live",
-			"--schema", localExportPath + "/" + exportId + "/g01.schema.gz",
-			"--files", localExportPath + "/" + exportId + "/g01.rdf.gz",
+			"--schema", localExportPath + "/" + exportId + "/" + groupId + ".schema.gz",
+			"--files", localExportPath + "/" + exportId + "/" + groupId + ".rdf.gz",
 			"--encryption_key_file", testDataDir + "/../../../../ee/enc/test-fixtures/enc-key",
 			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password"},
 	}
@@ -221,7 +222,7 @@ func TestLiveLoadExportedSchema(t *testing.T) {
 	require.NoError(t, os.RemoveAll(localExportPath), "Error removing export copy directory")
 }
 
-func copyExportToLocalFs(t *testing.T) string {
+func copyExportToLocalFs(t *testing.T) (string, string) {
 	require.NoError(t, os.RemoveAll(localExportPath), "Error removing directory")
 	require.NoError(t, testutil.DockerCp(alphaExportPath, localExportPath),
 		"Error copying files from docker container")
@@ -230,7 +231,13 @@ func copyExportToLocalFs(t *testing.T) string {
 	require.NoError(t, err, "Couldn't read local export copy directory")
 	require.True(t, len(childDirs) > 0, "Local export copy directory is empty!!!")
 
-	return childDirs[0].Name()
+	exportFiles, err := ioutil.ReadDir(localExportPath + "/" + childDirs[0].Name())
+	require.NoError(t, err, "Couldn't read child of local export copy directory")
+	require.True(t, len(exportFiles) > 0, "no exported files found!!!")
+
+	groupId := strings.Split(exportFiles[0].Name(), ".")[0]
+
+	return childDirs[0].Name(), groupId
 }
 
 func extractErrLine(output string) string {
