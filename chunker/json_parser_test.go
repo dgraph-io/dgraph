@@ -106,7 +106,6 @@ type Experiment struct {
 }
 
 func TestNquadsFromJson1(t *testing.T) {
-	fmt.Println("Checking why is this flaky?")
 	tn := time.Now().UTC()
 	m := true
 	p := Person{
