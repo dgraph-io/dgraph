@@ -666,7 +666,7 @@ func export(ctx context.Context, in *pb.ExportRequest) error {
 // Export request is used to trigger exports for the request list of groups.
 // If a server receives request to export a group that it doesn't handle, it would
 // automatically relay that request to the server that it thinks should handle the request.
-func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Status, error) {
+func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.ExportResponse, error) {
 	glog.Infof("Received export request via Grpc: %+v\n", req)
 	if ctx.Err() != nil {
 		glog.Errorf("Context error during export: %v\n", ctx.Err())
@@ -679,7 +679,7 @@ func (w *grpcWorker) Export(ctx context.Context, req *pb.ExportRequest) (*pb.Sta
 		return nil, err
 	}
 	glog.Infof("Export request: %+v OK.\n", req)
-	return &pb.Status{Msg: "SUCCESS"}, nil
+	return &pb.ExportResponse{Msg: "SUCCESS"}, nil
 }
 
 func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) error {

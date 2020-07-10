@@ -544,7 +544,7 @@ service Worker {
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Restore (RestoreRequest)            returns (Status) {}
-	rpc Export (ExportRequest)              returns (Status) {}
+	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
@@ -609,6 +609,22 @@ message ExportRequest {
 	uint64  read_ts  = 2;
 	int64   unix_ts  = 3;
 	string  format   = 4;
+
+	string destination = 5;
+
+	// These credentials are used to access the S3 or minio bucket.
+	string access_key = 6;
+	string secret_key = 7;
+	string session_token = 8;
+  bool anonymous = 9;
+}
+
+// Status describes a general status response.
+// code: 0 = success, 0 != failure.
+message ExportResponse {
+	int32 code = 1;
+	string msg = 2;
+	repeated string files = 3;
 }
 
 // A key stored in the format used for writing backups.
