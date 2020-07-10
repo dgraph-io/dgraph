@@ -1003,7 +1003,7 @@ func TestParseSecrets(t *testing.T) {
 				` https://dgraph.io/jwt/claims HS256 "key"`),
 		},
 		{
-			"should throw an error if required fields are missing in Authorizaiton Information",
+			"Should throw an error if required fields are missing in Authorizaiton Information",
 			`
 			type User {
 				id: ID!
@@ -1015,20 +1015,6 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 			"",
 			errors.New("Required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
-		},
-		{
-			"Valid Dgraph.Authorization with audience array field",
-			`
-			type User {
-				id: ID!
-				name: String!
-			}
-
-			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
-			`,
-			map[string]string{},
-			"X-Test-Auth",
-			nil,
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
