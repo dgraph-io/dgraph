@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -232,12 +233,10 @@ func copyExportToLocalFs(t *testing.T) string {
 	return childDirs[0].Name()
 }
 
-func extractFileName(output string) string {
-	m := regexp.MustCompile(`Error while processing(.)*\n`)
+func extractErrLine(output string) string {
+	m := regexp.MustCompile(`Error while processing(.)*`)
 	errLine := m.FindString(output)
-	m = regexp.MustCompile(`[a-zA-Z0-9]+\.rdf`)
-	filename := m.FindString(errLine)
-	return filename
+	return errLine
 }
 
 func TestLiveLoadFileName(t *testing.T) {
@@ -251,8 +250,9 @@ func TestLiveLoadFileName(t *testing.T) {
 
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
-	name := extractFileName(out)
-	require.Equal(t, "errored1.rdf", name, "incorrect name for errored file")
+	errLine := extractErrLine(out)
+	errLineExp := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf": During parsing chunk in processLoadFile: while parsing line "<b> <p> \"abc\"^^<http://www.w3.org/2001/XMLSchema#int>> .\n": while lexing <b> <p> "abc"^^<http://www.w3.org/2001/XMLSchema#int>> . at line 1 column 53: Invalid input: > at lexText`, testDataDir)
+	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
 }
 
 func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
@@ -266,8 +266,10 @@ func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
 
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
-	name := extractFileName(out)
-	assert.Contains(t, []string{"errored1.rdf", "errored2.rdf"}, name, "incorrect name for errored file")
+	errLine := extractErrLine(out)
+	errLineExp1 := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf": During parsing chunk in processLoadFile: while parsing line "<b> <p> \"abc\"^^<http://www.w3.org/2001/XMLSchema#int>> .\n": while lexing <b> <p> "abc"^^<http://www.w3.org/2001/XMLSchema#int>> . at line 1 column 53: Invalid input: > at lexText`, testDataDir)
+	errLineExp2 := fmt.Sprintf(`Error while processing data file "%s/errored2.rdf": During parsing chunk in processLoadFile: while parsing line "<b> <p> \"abc\"^^<http://www.w3.org/2001/XMLSchema#int>> .\n": while lexing <b> <p> "abc"^^<http://www.w3.org/2001/XMLSchema#int>> . at line 1 column 53: Invalid input: > at lexText`, testDataDir)
+	assert.Contains(t, []string{errLineExp1, errLineExp2}, errLine, "incorrect name for errored file")
 }
 
 func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
@@ -281,8 +283,9 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
-	name := extractFileName(out)
-	require.Equal(t, "errored1.rdf", name, "incorrect name for errored file")
+	errLine := extractErrLine(out)
+	errLineExp := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf": During parsing chunk in processLoadFile: while parsing line "<b> <p> \"abc\"^^<http://www.w3.org/2001/XMLSchema#int>> .\n": while lexing <b> <p> "abc"^^<http://www.w3.org/2001/XMLSchema#int>> . at line 1 column 53: Invalid input: > at lexText`, testDataDir)
+	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
 }
 
 func TestMain(m *testing.M) {
