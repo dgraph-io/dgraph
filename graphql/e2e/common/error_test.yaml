@@ -88,3 +88,15 @@
   errors:
     [ { "message": "must be defined",
       "path": [ "variable", "filter"] } ]
+-
+  name: "subscription on type without @withSubscription directive should retur error"
+  gqlrequest: |
+    subscription {
+      getAuthor(id: "0x1") { name }
+    }
+  gqlvariables:
+    { }
+  errors:
+    [ { "message": "Cannot query field \"getAuthor\" on type \"Subscription\".",
+        "locations": [ { "line": 2, "column": 3 } ] } ]
+
