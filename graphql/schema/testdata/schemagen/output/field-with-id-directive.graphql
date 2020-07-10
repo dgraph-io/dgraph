@@ -70,6 +70,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -77,6 +78,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -157,16 +159,19 @@ type AddPostPayload {
 }
 
 type DeleteAuthorPayload {
+	author(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
 	msg: String
 	numUids: Int
 }
 
 type DeleteGenrePayload {
+	genre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
 	msg: String
 	numUids: Int
 }
 
 type DeletePostPayload {
+	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }
@@ -330,15 +335,3 @@ type Mutation {
 	deleteGenre(filter: GenreFilter!): DeleteGenrePayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getPost(postID: ID!): Post
-	queryPost(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
-	getAuthor(id: ID, name: String): Author
-	queryAuthor(filter: AuthorFilter, order: AuthorOrder, first: Int, offset: Int): [Author]
-	getGenre(name: String!): Genre
-	queryGenre(filter: GenreFilter, order: GenreOrder, first: Int, offset: Int): [Genre]
-}

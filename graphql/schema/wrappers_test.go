@@ -796,7 +796,6 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 }
 
 func TestAllowedHeadersList(t *testing.T) {
-	// TODO Add Custom logic forward headers tests
 	tcases := []struct {
 		name      string
 		schemaStr string
@@ -829,6 +828,86 @@ func TestAllowedHeadersList(t *testing.T) {
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
 			require.True(t, strings.Contains(hc.allowed, test.expected))
+		})
+	}
+}
+
+func TestCustomLogicHeaders(t *testing.T) {
+	tcases := []struct {
+		name      string
+		schemaStr string
+		err       error
+	}{
+		{
+			"check for introspection header to always use value from secrets",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					introspectionHeaders: ["Authorization:Api-Token"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:13: Type Query; Field user; introspectionHeaders in @custom directive should use secrets to store the header value. " + "To do that specify `Api-Token` in this format '#Dgraph.Secret name value' at the bottom of your schema file." + "\n"),
+		},
+		{
+			"check for secret and forward headers overlapping",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					forwardHeaders: ["API-Token", "Authorization"]
+					secretHeaders: ["Authorization"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:14: Type Query; Field user; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers, found: `Authorization`." + "\n"),
+		},
+		{
+			"check for header structure",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					forwardHeaders: ["API-Token",  "Content-Type"]
+					secretHeaders: ["Authorization:Auth:random"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:14: Type Query; Field user; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername', found: `Authorization:Auth:random`." + "\n"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewHandler(test.schemaStr)
+			require.EqualError(t, err, test.err.Error())
 		})
 	}
 }

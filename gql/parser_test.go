@@ -5275,3 +5275,86 @@ func TestFilterWithEmpty(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, gq.Query[0].Filter.Func.Args[0].Value, "")
 }
+
+func TestCascade(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade {
+		  name
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "__all__")
+}
+
+func TestCascadeParameterized(t *testing.T) {
+	query := `{
+		names(func: has(name)) @cascade(name, age) {
+		  name
+		  age
+		  dob
+		}
+	  }`
+	gq, err := Parse(Request{
+		Str: query,
+	})
+	require.NoError(t, err)
+	require.Equal(t, gq.Query[0].Cascade[0], "name")
+	require.Equal(t, gq.Query[0].Cascade[1], "age")
+}
+
+func TestBadCascadeParameterized(t *testing.T) {
+	badQueries := []string{
+		`{
+			names(func: has(name)) @cascade( {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade) {
+			  name
+			  age
+			  dob
+			}
+		 }`,
+		`{
+			names(func: has(name)) @cascade() {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(name,) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+		`{
+			names(func: has(name)) @cascade(,name) {
+			  name
+			  age
+			  dob
+			}
+		  }`,
+	}
+
+	for _, query := range badQueries {
+		_, err := Parse(Request{
+			Str: query,
+		})
+		require.Error(t, err)
+	}
+}
