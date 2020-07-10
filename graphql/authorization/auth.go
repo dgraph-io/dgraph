@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -34,9 +35,10 @@ import (
 type ctxKey string
 
 const (
-	AuthJwtCtxKey = ctxKey("authorizationJwt")
-	RSA256        = "RS256"
-	HMAC256       = "HS256"
+	AuthJwtCtxKey  = ctxKey("authorizationJwt")
+	RSA256         = "RS256"
+	HMAC256        = "HS256"
+	AuthMetaHeader = "# Dgraph.Authorization "
 )
 
 var (
@@ -45,19 +47,54 @@ var (
 
 type AuthMeta struct {
 	PublicKey    string
-	RSAPublicKey *rsa.PublicKey
+	RSAPublicKey *rsa.PublicKey `json:"-"` // Ignoring this field
 	Header       string
 	Namespace    string
 	Algo         string
+	Audience     []string
+}
+
+// Validate required fields.
+func (a *AuthMeta) validate() error {
+	var fields string
+	if len(a.PublicKey) == 0 {
+		fields = " `Verification key`"
+	}
+
+	if len(a.Header) == 0 {
+		fields += " `Header`"
+	}
+
+	if len(a.Namespace) == 0 {
+		fields += " `Namespace`"
+	}
+
+	if len(a.Algo) == 0 {
+		fields += " `Algo`"
+	}
+
+	if len(fields) > 0 {
+		return fmt.Errorf("Required field missing in Dgraph.Authorization:%s", fields)
+	}
+	return nil
 }
 
 func Parse(schema string) (AuthMeta, error) {
 	var meta AuthMeta
-	authInfoIdx := strings.LastIndex(schema, "# Dgraph.Authorization")
+	authInfoIdx := strings.LastIndex(schema, AuthMetaHeader)
 	if authInfoIdx == -1 {
 		return meta, nil
 	}
 	authInfo := schema[authInfoIdx:]
+
+	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
+	if err == nil {
+		return meta, meta.validate()
+	}
+
+	fmt.Println("Falling back to parsing authorization information in old format.")
+	// Note: This is the old format for passing authorization information and this code
+	// is there to maintain backward compatibility. It may be remove in future release.
 
 	// This regex matches authorization information present in the last line of the schema.
 	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
@@ -115,6 +152,10 @@ func ParseAuthMeta(schema string) error {
 
 func GetHeader() string {
 	return metainfo.Header
+}
+
+func GetAuthMeta() AuthMeta {
+	return metainfo
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -179,6 +220,32 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	return validateToken(jwtToken[0])
 }
 
+func (c *CustomClaims) validateAudience() error {
+	// If there's no audience claim, ignore
+	if c.Audience == nil || len(c.Audience) == 0 {
+		return nil
+	}
+
+	// If there is an audience claim, but no value provided, fail
+	if metainfo.Audience == nil {
+		return fmt.Errorf("audience value was expected but not provided")
+	}
+
+	var match = false
+	for _, audStr := range c.Audience {
+		for _, expectedAudStr := range metainfo.Audience {
+			if subtle.ConstantTimeCompare([]byte(audStr), []byte(expectedAudStr)) == 1 {
+				match = true
+				break
+			}
+		}
+	}
+	if !match {
+		return fmt.Errorf("JWT `aud` value doesn't match with the audience")
+	}
+	return nil
+}
+
 func validateToken(jwtStr string) (map[string]interface{}, error) {
 	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
@@ -202,7 +269,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 				}
 			}
 			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		})
+		}, jwt.WithoutClaimsValidation())
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -211,6 +278,10 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 	claims, ok := token.Claims.(*CustomClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
+	}
+
+	if err := claims.validateAudience(); err != nil {
+		return nil, err
 	}
 
 	return claims.AuthVariables, nil
