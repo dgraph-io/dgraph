@@ -93,8 +93,8 @@ func Parse(schema string) (AuthMeta, error) {
 	}
 
 	fmt.Println("Falling back to parsing authorization information in old format.")
-	// Note: This is the old format for passing authorization information and this code
-	// is there to maintain backward compatibility. It may be remove in future release.
+	// Note: This is the old format for passing authorization information and is kept to
+	// maintain backward compatibility. It may be removed in future releases.
 
 	// This regex matches authorization information present in the last line of the schema.
 	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
@@ -228,7 +228,7 @@ func (c *CustomClaims) validateAudience() error {
 
 	// If there is an audience claim, but no value provided, fail
 	if metainfo.Audience == nil {
-		return fmt.Errorf("audience value was expected but not provided")
+		return fmt.Errorf("Audience value was expected but not provided")
 	}
 
 	var match = false
