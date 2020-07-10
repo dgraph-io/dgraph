@@ -1371,7 +1371,7 @@ func (out *rollupOutput) splitUpList() {
 	var lists []*pb.PostingList
 
 	// If list is not split yet, insert the main list.
-	if len(out.plist.Splits) == 0 {
+	if len(out.parts) == 0 {
 		lists = append(lists, out.plist)
 	}
 
@@ -1384,7 +1384,7 @@ func (out *rollupOutput) splitUpList() {
 	for i, list := range lists {
 		startUid := uint64(1)
 		// If the list is split, select the right startUid for this list.
-		if len(out.plist.Splits) > 0 {
+		if len(out.parts) > 0 {
 			startUid = out.plist.Splits[i]
 		}
 
@@ -1451,7 +1451,7 @@ func (out *rollupOutput) removeEmptySplits() {
 	}
 	out.updateSplits()
 
-	if len(out.plist.Splits) == 1 && isPlistEmpty(out.parts[1]) {
+	if len(out.parts) == 1 && isPlistEmpty(out.parts[1]) {
 		// Only the first split remains. If it's also empty, remove it as well.
 		// This should mark the entire list for deletion. Please note that the
 		// startUid of the first part is always one because a node can never have
