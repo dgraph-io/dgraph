@@ -1436,12 +1436,10 @@ func binSplit(lowUid uint64, plist *pb.PostingList) ([]uint64, []*pb.PostingList
 
 // removeEmptySplits updates the split list by removing empty posting lists' startUids.
 func (out *rollupOutput) removeEmptySplits() {
-	var splits []uint64
 	for startUid, plist := range out.parts {
 		// Do not remove the first split for now, as every multi-part list should always
 		// have a split starting with UID 1.
 		if startUid == 1 {
-			splits = append(splits, startUid)
 			continue
 		}
 
