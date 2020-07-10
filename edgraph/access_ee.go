@@ -849,8 +849,9 @@ func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error 
 			// Members of guardian groups are allowed to query anything.
 			return nil, nil
 		}
+		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Read)
 
-		return authorizePreds(userId, groupIds, preds, acl.Read), nil
+		return blockedPreds, nil
 	}
 
 	// find the predicates which are blocked for the schema query
