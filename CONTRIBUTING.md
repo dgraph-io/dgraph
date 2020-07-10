@@ -93,7 +93,6 @@ Go version       : go1.13.5
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-To say hi to the community       , visit https://dgraph.slack.com.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
 Copyright 2015-2018 Dgraph Labs, Inc.
@@ -128,7 +127,6 @@ Go version       : go1.13.5
 
 For Dgraph official documentation, visit https://dgraph.io/docs/.
 For discussions about Dgraph     , visit https://discuss.dgraph.io.
-To say hi to the community       , visit https://dgraph.slack.com.
 
 Licensed variously under the Apache Public License 2.0 and Dgraph Community License.
 Copyright 2015-2018 Dgraph Labs, Inc.
