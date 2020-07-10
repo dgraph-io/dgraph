@@ -57,24 +57,24 @@ type AuthMeta struct {
 // Validate required fields.
 func (a *AuthMeta) validate() error {
 	var fields string
-	if len(a.PublicKey) == 0 {
+	if a.PublicKey == "" {
 		fields = " `Verification key`"
 	}
 
-	if len(a.Header) == 0 {
+	if a.Header == "" {
 		fields += " `Header`"
 	}
 
-	if len(a.Namespace) == 0 {
+	if a.Namespace == "" {
 		fields += " `Namespace`"
 	}
 
-	if len(a.Algo) == 0 {
+	if a.Algo == "" {
 		fields += " `Algo`"
 	}
 
 	if len(fields) > 0 {
-		return fmt.Errorf("Required field missing in Dgraph.Authorization:%s", fields)
+		return fmt.Errorf("required field missing in Dgraph.Authorization:%s", fields)
 	}
 	return nil
 }
@@ -228,7 +228,7 @@ func (c *CustomClaims) validateAudience() error {
 
 	// If there is an audience claim, but no value provided, fail
 	if metainfo.Audience == nil {
-		return fmt.Errorf("Audience value was expected but not provided")
+		return fmt.Errorf("audience value was expected but not provided")
 	}
 
 	var match = false
