@@ -604,7 +604,7 @@ func checkResult(frags []*mutationFragment, result map[string]interface{}) error
 	return err
 }
 
-func extractFilter(m schema.Mutation) map[string]interface{} {
+func extractMutationFilter(m schema.Mutation) map[string]interface{} {
 	var filter map[string]interface{}
 	mutationType := m.MutationType()
 	if mutationType == schema.UpdateMutation {
@@ -641,13 +641,13 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	})
 
 	// TODO - Cache this instead of this being a loop to find the IDField.
-	if ids := idFilter(m, m.MutatedType().IDField()); ids != nil {
+	filter := extractMutationFilter(m)
+	if ids := idFilter(filter, m.MutatedType().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
-	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
 
 	if rbac == schema.Uncertain {

@@ -18,7 +18,7 @@
       x as updateUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
         uid
       }
-      UserSecret1 as var(func: type(UserSecret)) @filter(uid(0x123))
+      UserSecret1 as var(func: uid(0x123)) @filter(type(UserSecret))
       UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
   uids: |
@@ -48,7 +48,7 @@
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
       Column2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
@@ -114,7 +114,7 @@
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
       Column2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
@@ -183,7 +183,7 @@
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
       Column2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
@@ -249,7 +249,7 @@
       x as updateColumn(func: uid(Column1)) @filter(uid(Column2)) {
         uid
       }
-      Column1 as var(func: type(Column)) @filter(uid(0x123))
+      Column1 as var(func: uid(0x123)) @filter(type(Column))
       Column2 as var(func: uid(Column1)) @cascade {
         inProject : Column.inProject {
           roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
@@ -316,7 +316,7 @@
       x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
         uid
       }
-      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
+      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
       Ticket2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
@@ -384,7 +384,7 @@
       x as updateTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
         uid
       }
-      Ticket1 as var(func: type(Ticket)) @filter(uid(0x123))
+      Ticket1 as var(func: uid(0x123)) @filter(type(Ticket))
       Ticket2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
@@ -476,7 +476,7 @@
     }
   dgquery: |-
     query {
-      x as updateLog(func: type(Log)) @filter(uid(0x123)) {
+      x as updateLog(func: uid(0x123)) @filter(type(Log)) {
         uid
       }
     }
@@ -505,7 +505,7 @@
       x as updateProject(func: uid(Project1)) @filter(uid(Project2)) {
         uid
       }
-      Project1 as var(func: type(Project)) @filter(uid(0x123))
+      Project1 as var(func: uid(0x123)) @filter(type(Project))
       Project2 as var(func: uid(Project1)) @cascade {
         roles : Project.roles @filter(eq(Role.permission, "ADMIN")) {
           assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -536,7 +536,7 @@
     }
   dgquery: |-
     query {
-      x as updateProject(func: type(Project)) @filter(uid(0x123)) {
+      x as updateProject(func: uid(0x123)) @filter(type(Project)) {
         uid
       }
     }
@@ -565,7 +565,7 @@
       x as updateIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
         uid
       }
-      Issue1 as var(func: type(Issue)) @filter(uid(0x123))
+      Issue1 as var(func: uid(0x123)) @filter(type(Issue))
       Issue2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
@@ -617,7 +617,7 @@
     }
   dgquery: |-
     query {
-      x as updateComplexLog(func: type(ComplexLog)) @filter(uid(0x123)) {
+      x as updateComplexLog(func: uid(0x123)) @filter(type(ComplexLog)) {
         uid
       }
     }

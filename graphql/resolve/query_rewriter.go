@@ -211,7 +211,7 @@ func rewriteAsQueryByIds(field schema.Field, uids []uint64, authRw *authRewriter
 		UID:  uids,
 	}
 
-	if ids := idFilter(field, field.Type().IDField()); ids != nil {
+	if ids := idFilter(extractQueryFilter(field), field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, intersection(ids, uids))
 	}
 
@@ -354,7 +354,7 @@ func rewriteAsQuery(field schema.Field, authRw *authRewriter) *gql.GraphQuery {
 		// that the internal auth queries start from exactly the possible nodes that the
 		// internal field is considering.
 		authRw.addVariableUIDFunc(dgQuery)
-	} else if ids := idFilter(field, field.Type().IDField()); ids != nil {
+	} else if ids := idFilter(extractQueryFilter(field), field.Type().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, field.Type().DgraphName())
@@ -768,9 +768,13 @@ func convertIDs(idsSlice []interface{}) []uint64 {
 	return ids
 }
 
-func idFilter(field schema.Field, idField schema.FieldDefinition) []uint64 {
-	filter, ok := field.ArgValue("filter").(map[string]interface{})
-	if !ok || idField == nil {
+func extractQueryFilter(f schema.Field) map[string]interface{} {
+	filter, _ := f.ArgValue("filter").(map[string]interface{})
+	return filter
+}
+
+func idFilter(filter map[string]interface{}, idField schema.FieldDefinition) []uint64 {
+	if filter == nil || idField == nil {
 		return nil
 	}
 
