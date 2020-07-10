@@ -55,6 +55,12 @@ func (s *schema) Operation(req *Request) (Operation, error) {
 		return nil, listErr
 	}
 
+	if len(doc.Operations) == 1 && doc.Operations[0].Operation == ast.Subscription &&
+		s.schema.Subscription == nil {
+		return nil, errors.Errorf("Not resolving subscription because schema doesn't have any " +
+			"fields defined for subscription operation.")
+	}
+
 	if len(doc.Operations) > 1 && req.OperationName == "" {
 		return nil, errors.Errorf("Operation name must by supplied when query has more " +
 			"than 1 operation.")

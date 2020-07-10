@@ -568,7 +568,6 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
-
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
