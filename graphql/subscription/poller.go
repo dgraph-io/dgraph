@@ -90,7 +90,8 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	p.Lock()
 	defer p.Unlock()
 
-	res := p.resolver.Resolve(context.TODO(), req)
+	ctx := context.WithValue(context.Background(), "authVariables", customClaims.AuthVariables)
+	res := p.resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
 	}
@@ -126,10 +127,11 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	// There is no goroutine running to check updates for this query. So, run one to publish
 	// the updates.
 	pollR := &pollRequest{
-		bucketID:   bucketID,
-		prevHash:   prevHash,
-		graphqlReq: req,
-		localEpoch: localEpoch,
+		bucketID:      bucketID,
+		prevHash:      prevHash,
+		graphqlReq:    req,
+		authVariables: customClaims.AuthVariables,
+		localEpoch:    localEpoch,
 	}
 	go p.poll(pollR)
 
@@ -141,10 +143,11 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 }
 
 type pollRequest struct {
-	prevHash   uint64
-	graphqlReq *schema.Request
-	bucketID   uint64
-	localEpoch uint64
+	prevHash      uint64
+	graphqlReq    *schema.Request
+	bucketID      uint64
+	localEpoch    uint64
+	authVariables map[string]interface{}
 }
 
 func (p *Poller) poll(req *pollRequest) {
@@ -163,7 +166,8 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 
-		res := resolver.Resolve(context.TODO(), req.graphqlReq)
+		ctx := context.WithValue(context.Background(), "authVariables", req.authVariables)
+		res := resolver.Resolve(ctx, req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())
 

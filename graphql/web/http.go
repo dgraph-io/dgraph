@@ -20,6 +20,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 
 	"google.golang.org/grpc/metadata"
@@ -123,31 +124,28 @@ func (gs *graphqlSubscription) Subscribe(
 	glog.Infof("%s", ctx.Value("Header").(json.RawMessage))
 	glog.Infof("%s", string(header))
 
-	pairs := strings.Split(string(header)[1:len(string(header))-1], "\n")
-	glog.Infof("%s", pairs)
+	payload := make(map[string]interface{})
+	if err := json.Unmarshal(header, &payload); err != nil {
+		return nil, err
+	}
+
+	var customClaim *authorization.CustomClaims
+	fmt.Printf("payload: %+v\n", payload)
 	name := authorization.GetHeader()
-	var val string = ""
-	for _, pair := range pairs {
-		z := strings.Split(pair, ":")
-		glog.Infof("%s-%s", z[0][1:len(z[0])-1], name)
-		if z[0][1:len(z[0])-1] == name {
-			val = z[1][1 : len(z[1])-1]
+	val, ok := payload[name]
+	if ok {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
 		}
-	}
-	if val == "" {
-		return nil, err
-	}
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		md = metadata.New(nil)
-	}
 
-	md.Append("authorizationJwt", val)
-	ctx = metadata.NewIncomingContext(ctx, md)
+		md.Append("authorizationJwt", val.(string))
+		ctx = metadata.NewIncomingContext(ctx, md)
 
-	customClaim, err := authorization.ExtractCustomClaims(ctx)
-	if err != nil {
-		return nil, err
+		customClaim, err = authorization.ExtractCustomClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	req := &schema.Request{

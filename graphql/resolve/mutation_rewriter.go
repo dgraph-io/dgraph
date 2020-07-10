@@ -352,6 +352,8 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
+	// TODO - Remove this call from rewriter and instead fetch authVariables from context,
+	// here and elsewhere.
 	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err

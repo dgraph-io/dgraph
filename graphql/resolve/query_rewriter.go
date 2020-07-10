@@ -23,7 +23,6 @@ import (
 	"strconv"
 
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/pkg/errors"
@@ -49,10 +48,7 @@ func (qr *queryRewriter) Rewrite(
 	ctx context.Context,
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
-	if err != nil {
-		return nil, err
-	}
+	authVariables, _ := ctx.Value("authVariables").(map[string]interface{})
 
 	authRw := &authRewriter{
 		authVariables: authVariables,

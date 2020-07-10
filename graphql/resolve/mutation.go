@@ -182,6 +182,12 @@ func (mr *dgraphResolver) Resolve(ctx context.Context, m schema.Mutation) (*Reso
 	timer.Start()
 	defer timer.Stop()
 
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx = context.WithValue(context.Background(), "authVariables", req.authVariables)
+
 	resolved, success := mr.rewriteAndExecute(ctx, m)
 	mr.resultCompleter.Complete(ctx, resolved)
 	resolverTrace.Dgraph = resolved.Extensions.Tracing.Execution.Resolvers[0].Dgraph
