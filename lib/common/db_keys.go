@@ -27,4 +27,6 @@ var (
 	GenesisDataKey = []byte("genesis_data")
 	// BlockTreeKey is the db location of the encoded block tree structure.
 	BlockTreeKey = []byte("block_tree")
+	// LatestFinalizedRoundKey is the key where the last finalized grandpa round is stored
+	LatestFinalizedRoundKey = []byte("latest_finalized_round")
 )

@@ -45,6 +45,18 @@ var (
 	MinThreshold = big.NewInt(0)
 )
 
+// AuthorityData is an alias for []*types.BABEAuthorityData
+type AuthorityData []*types.BABEAuthorityData
+
+// String returns the AuthorityData as a formatted string
+func (d AuthorityData) String() string {
+	str := ""
+	for _, di := range []*types.BABEAuthorityData(d) {
+		str = str + fmt.Sprintf("[key=0x%x idx=%d] ", di.ID.Encode(), di.Weight)
+	}
+	return str
+}
+
 // Service contains the VRF keys for the validator, as well as BABE configuation data
 type Service struct {
 	logger log.Logger
@@ -142,7 +154,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 	}
 
 	// TODO: format this
-	logger.Info("created BABE service", "authorities", babeService.authorityData)
+	logger.Info("created BABE service", "authorities", AuthorityData(babeService.authorityData))
 
 	babeService.randomness = babeService.config.Randomness
 
@@ -267,7 +279,7 @@ func (b *Service) SetEpochData(data *NextEpochDescriptor) error {
 func (b *Service) setAuthorityIndex() error {
 	pub := b.keypair.Public()
 
-	b.logger.Debug("set authority index", "authority key", pub.Hex(), "authorities", b.authorityData)
+	b.logger.Debug("set authority index", "authority key", pub.Hex(), "authorities", AuthorityData(b.authorityData))
 
 	for i, auth := range b.authorityData {
 		if bytes.Equal(pub.Encode(), auth.ID.Encode()) {
