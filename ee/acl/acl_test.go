@@ -1725,6 +1725,174 @@ func TestQueriesForNonGuardianUserWithoutGroup(t *testing.T) {
 	testutil.CompareJSON(t, `{"queryUser": [{ "groups": [], "name": "alice"}]}`, string(resp.Data))
 }
 
+func TestSchemaQueryWithACL(t *testing.T) {
+	schemaQuery := "schema{}"
+	grootSchema := `{
+  "schema": [
+    {
+      "predicate": "dgraph.acl.rule",
+      "type": "uid",
+      "list": true
+    },
+    {
+      "predicate": "dgraph.graphql.schema",
+      "type": "string"
+    },
+    {
+      "predicate": "dgraph.graphql.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.password",
+      "type": "password"
+    },
+    {
+      "predicate": "dgraph.rule.permission",
+      "type": "int"
+    },
+    {
+      "predicate": "dgraph.rule.predicate",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    },
+    {
+      "predicate": "dgraph.type",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "list": true
+    },
+    {
+      "predicate": "dgraph.user.group",
+      "type": "uid",
+      "reverse": true,
+      "list": true
+    },
+    {
+      "predicate": "dgraph.xid",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ],
+      "upsert": true
+    }
+  ],
+  "types": [
+    {
+      "fields": [
+        {
+          "name": "dgraph.graphql.schema"
+        },
+        {
+          "name": "dgraph.graphql.xid"
+        }
+      ],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.acl.rule"
+        }
+      ],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.rule.predicate"
+        },
+        {
+          "name": "dgraph.rule.permission"
+        }
+      ],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [
+        {
+          "name": "dgraph.xid"
+        },
+        {
+          "name": "dgraph.password"
+        },
+        {
+          "name": "dgraph.user.group"
+        }
+      ],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+	aliceSchema := `{
+  "schema": [
+    {
+      "predicate": "name",
+      "type": "string",
+      "index": true,
+      "tokenizer": [
+        "exact"
+      ]
+    }
+  ],
+  "types": [
+    {
+      "fields": [],
+      "name": "dgraph.graphql"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Group"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.Rule"
+    },
+    {
+      "fields": [],
+      "name": "dgraph.type.User"
+    }
+  ]
+}`
+
+	// guardian user should be able to view full schema
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+	resp, err := dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, grootSchema, string(resp.GetJson()))
+
+	// add another user and some data for that user with permissions on predicates
+	resetUser(t)
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+	addDataAndRules(ctx, t, dg)
+	time.Sleep(6 * time.Second) // wait for ACL cache to refresh, otherwise it will be flaky test
+
+	// the other user should be able to view only the part of schema for which it has read access
+	dg, err = testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	require.NoError(t, dg.Login(context.Background(), userid, userpassword))
+	resp, err = dg.NewReadOnlyTxn().Query(context.Background(), schemaQuery)
+	require.NoError(t, err)
+	require.JSONEq(t, aliceSchema, string(resp.GetJson()))
+}
+
 func TestDeleteUserShouldDeleteUserFromGroup(t *testing.T) {
 	resetUser(t)
 
@@ -2116,10 +2284,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 			query: `
 					mutation {
 					  restore(input: {location: "", backupId: "", encryptionKeyFile: ""}) {
-						response {
-						  code
-						  message
-						}
+						code
 					  }
 					}`,
 			queryName:          "restore",
@@ -2129,7 +2294,7 @@ func TestGuardianOnlyAccessForAdminEndpoints(t *testing.T) {
 					" manifests: The path \"\" does not exist or it is inaccessible.",
 				Locations: []x.Location{{Line: 3, Column: 8}},
 			}},
-			guardianData: `{"restore": null}`,
+			guardianData: `{"restore": {"code": "Failure"}}`,
 		},
 		{
 			name: "getGQLSchema has guardian auth",

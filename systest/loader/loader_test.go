@@ -79,24 +79,23 @@ func TestLoaderXidmap(t *testing.T) {
 	}
 	b, err := json.Marshal(params)
 	require.NoError(t, err)
-
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	defer resp.Body.Close()
-
 	b, err = ioutil.ReadAll(resp.Body)
 	require.NoError(t, err)
 	expected := `{
-		"data": {
 		  "export": {
 			"response": {
 			  "code": "Success",
 			  "message": "Export completed."
 			}
 		  }
-		}
-	  }`
-	require.JSONEq(t, expected, string(b))
+		}`
+	res1 := &testutil.GraphQLResponse{}
+	err = json.Unmarshal(b, res1)
+	require.NoError(t, err)
+	require.JSONEq(t, expected, string(res1.Data))
 
 	require.NoError(t, copyExportFiles(tmpDir))
 
@@ -107,11 +106,11 @@ func TestLoaderXidmap(t *testing.T) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	require.NoError(t, err)
 
-	expected = `<0x2712> <name> "Bob" .
-<0x2> <age> "13" .
-<0x2> <friend> <0x2712> .
-<0x2> <location> "Wonderland" .
-<0x2> <name> "Alice" .
+	expected = `<0x1> <age> "13" .
+<0x1> <friend> <0x2711> .
+<0x1> <location> "Wonderland" .
+<0x1> <name> "Alice" .
+<0x2711> <name> "Bob" .
 `
 	require.Equal(t, expected, string(out))
 }

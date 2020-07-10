@@ -61,6 +61,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -68,6 +69,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -138,6 +140,7 @@ type AddUserPayload {
 }
 
 type DeleteUserPayload {
+	user(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
 	msg: String
 	numUids: Int
 }
@@ -209,11 +212,3 @@ type Mutation {
 	deleteUser(filter: UserFilter!): DeleteUserPayload
 }
 
-#######################
-# Generated Subscriptions
-#######################
-
-type Subscription {
-	getUser(id: ID!): User
-	queryUser(filter: UserFilter, order: UserOrder, first: Int, offset: Int): [User]
-}

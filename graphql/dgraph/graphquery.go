@@ -69,8 +69,10 @@ func writeQuery(b *strings.Builder, query *gql.GraphQuery, prefix string) {
 		x.Check2(b.WriteRune(')'))
 	}
 
-	if query.Cascade {
-		x.Check2(b.WriteString(" @cascade"))
+	if len(query.Cascade) != 0 {
+		if query.Cascade[0] == "__all__" {
+			x.Check2(b.WriteString(" @cascade"))
+		}
 	}
 
 	switch {
