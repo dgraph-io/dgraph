@@ -179,11 +179,11 @@ func TestAddDeepFilter(t *testing.T) {
 		mutation addColumn($column: AddColumnInput!) {
 			addColumn(input: [$column]) {
 				column {
-			             name
-				     inProject {
-				           projID
-				           name
-				     }
+					name
+					 inProject {
+						   projID
+						   name
+					 }
 				}
 			}
 		}

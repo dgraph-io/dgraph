@@ -136,6 +136,10 @@ var (
 	doDownOnly = pflag.BoolP("down-only", "D", false, "Do --down and exit. Does not run tests.")
 	web        = pflag.Bool("web", true, "Open the test results page in the browser.")
 
+	// Option to run each test with a new cluster. This appears to mitigate flakiness.
+	refreshCluster = pflag.Bool("refresh-cluster", false,
+		"Down and up the cluster before each test.")
+
 	// Script flags
 	dryRun = pflag.BoolP("dry-run", "y", false,
 		"Echo commands that would run, but don't execute them.")
@@ -148,6 +152,10 @@ var (
 			fmt.Sprintf("Workloads:%v, Nemeses:%v", testAllWorkloads, testAllNemeses))
 	exitOnFailure = pflag.BoolP("exit-on-failure", "e", false,
 		"Don't run any more tests after a failure.")
+)
+
+const (
+	maxRetries = 5
 )
 
 func command(cmd ...string) *exec.Cmd {
@@ -400,43 +408,63 @@ func main() {
 		log.Fatal("skew-clock nemesis specified but --jepsen.skew wasn't set.")
 	}
 
-	if *doDown {
+	if *doDown && !*refreshCluster {
 		jepsenDown(*jepsenRoot)
 	}
-	if *doUp {
+	if *doUp && !*refreshCluster {
 		jepsenUp(*jepsenRoot)
 	}
-	if err := jepsenServe(); err != nil {
-		log.Fatal(err)
-	}
-	if shouldOpenPage {
-		url := jepsenURL()
-		browser.Open(url)
-		if *jaeger != "" {
-			browser.Open("http://localhost:16686")
+
+	if !*refreshCluster {
+		if err := jepsenServe(); err != nil {
+			log.Fatal(err)
+		}
+		if shouldOpenPage {
+			url := jepsenURL()
+			browser.Open(url)
+			if *jaeger != "" {
+				browser.Open("http://localhost:16686")
+			}
 		}
 	}
+
 	workloads := strings.Split(*workload, " ")
 	nemeses := strings.Split(*nemesis, " ")
 	fmt.Printf("Num tests: %v\n", len(workloads)*len(nemeses))
 	for _, n := range nemeses {
 		for _, w := range workloads {
-			err := runJepsenTest(&jepsenTest{
-				workload:          w,
-				nemesis:           n,
-				timeLimit:         *timeLimit,
-				concurrency:       *concurrency,
-				rebalanceInterval: *rebalanceInterval,
-				nemesisInterval:   *nemesisInterval,
-				localBinary:       *localBinary,
-				nodes:             *nodes,
-				replicas:          *replicas,
-				skew:              *skew,
-				testCount:         *testCount,
-				deferDbTeardown:   *deferDbTeardown,
-			})
-			if err != nil {
-				if err == errTestFail {
+			tries := 0
+		retryLoop:
+			for {
+				if *refreshCluster {
+					jepsenDown(*jepsenRoot)
+					jepsenUp(*jepsenRoot)
+					if err := jepsenServe(); err != nil {
+						log.Fatal(err)
+					}
+					// Sleep for 10 seconds to let the cluster start before running the test.
+					time.Sleep(10 * time.Second)
+				}
+
+				err := runJepsenTest(&jepsenTest{
+					workload:          w,
+					nemesis:           n,
+					timeLimit:         *timeLimit,
+					concurrency:       *concurrency,
+					rebalanceInterval: *rebalanceInterval,
+					nemesisInterval:   *nemesisInterval,
+					localBinary:       *localBinary,
+					nodes:             *nodes,
+					replicas:          *replicas,
+					skew:              *skew,
+					testCount:         *testCount,
+					deferDbTeardown:   *deferDbTeardown,
+				})
+
+				switch err {
+				case nil:
+					break retryLoop
+				case errTestFail:
 					if *jaegerSaveTraces {
 						saveJaegerTracesToJepsen(*jepsenRoot)
 					}
@@ -444,6 +472,18 @@ func main() {
 						os.Exit(1)
 					}
 					defer os.Exit(1)
+					break retryLoop
+				case errTestIncomplete:
+					// Retry incomplete tests. Sometimes tests fail due to temporary errors.
+					tries++
+					if tries == maxRetries {
+						fmt.Fprintf(os.Stderr, "Test with workload %s and nemesis %s could not "+
+							"start after maximum number of retries", w, n)
+						defer os.Exit(1)
+						break retryLoop
+					} else {
+						continue
+					}
 				}
 			}
 		}
