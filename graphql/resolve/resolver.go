@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgraph/edgraph"
+	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/types"
 
@@ -417,6 +418,12 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 				gqlReq.Query, string(b))
 		}
 	}
+
+	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ctx = context.WithValue(context.Background(), "authVariables", req.authVariables)
 
 	// resolveQueries will resolve user's queries.
 	resolveQueries := func() {

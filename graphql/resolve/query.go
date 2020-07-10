@@ -25,7 +25,6 @@ import (
 
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/gql"
-	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/dgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/x"
@@ -79,12 +78,6 @@ func (qr *queryResolver) Resolve(ctx context.Context, query schema.Query) *Resol
 	timer := newtimer(ctx, &resolverTrace.OffsetDuration)
 	timer.Start()
 	defer timer.Stop()
-
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
-	if err != nil {
-		return nil, err
-	}
-	ctx = context.WithValue(context.Background(), "authVariables", req.authVariables)
 
 	resolved := qr.rewriteAndExecute(ctx, query)
 	if resolved.Data == nil {
