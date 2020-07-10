@@ -1014,7 +1014,7 @@ func TestParseSecrets(t *testing.T) {
 			`,
 			nil,
 			"",
-			errors.New("Required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+			errors.New("required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
 		},
 		{
 			"Valid Dgraph.Authorization with audience field",
