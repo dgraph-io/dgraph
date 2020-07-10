@@ -48,7 +48,7 @@ func TestEnterpriseLicense(t *testing.T) {
 	e := license{}
 	t.Log(buf)
 	_ = verifySignature(buf, publicKeyLocal, &e)
-	t.Log(buf)
+	buf = signAndWriteMessage(t, correctEntity, correctJSON)
 	response, _ := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(buf.Bytes()))
 	returnedOutput1, _ := ioutil.ReadAll(response.Body)
 	t.Log(string(returnedOutput1))
