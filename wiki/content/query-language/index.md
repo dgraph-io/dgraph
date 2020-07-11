@@ -2531,6 +2531,10 @@ schema {}
 by curly braces. Also, schema queries and regular queries cannot be combined.
 {{% /notice %}}
 
+{{% notice "note" %}} If ACL is enabled, then the schema query returns only the predicates for
+ which the logged-in ACL user has read access.
+{{% /notice %}}
+
 You can query for particular schema fields in the query body.
 
 ```
