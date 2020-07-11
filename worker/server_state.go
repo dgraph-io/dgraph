@@ -168,6 +168,9 @@ func (s *ServerState) initStorage() {
 		glog.Infof("Opening postings BadgerDB with options: %+v\n", opt)
 		opt.EncryptionKey = key
 
+		// Disable conflict detection in badger since dgraph performs its own conflict detection.
+		opt.DetectConflicts = false
+
 		s.Pstore, err = badger.OpenManaged(opt)
 		x.Checkf(err, "Error while creating badger KV posting store")
 
