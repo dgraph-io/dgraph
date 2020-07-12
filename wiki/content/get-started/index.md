@@ -10,8 +10,8 @@ You can find the getting started tutorial series [here]({{< relref "tutorials/in
 
 ## Dgraph
 
-**Dgraph** is an open-source, scalable, distributed, highly available and fast graph database,
-designed from the ground up to be run in production.
+Designed from the ground up to be run in production, **Dgraph** is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
+
 
 Dgraph cluster consists of different nodes (Zero, Alpha & Ratel), and each node serves a
 different purpose.
