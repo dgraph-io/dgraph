@@ -40,6 +40,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type predsAndvars struct {
+	preds []string
+	vars  []string
+}
+
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
@@ -682,14 +687,19 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return err
 }
 
-func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
+func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	predsMap := make(map[string]struct{})
+	varsMap := make(map[string]struct{})
 	for _, gq := range gqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" {
+		if len(gq.Var) > 0 {
+			varsMap[gq.Var] = struct{}{}
+		}
+		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" && gq.Attr != "val" {
 			predsMap[gq.Attr] = struct{}{}
+
 		}
 		for _, ord := range gq.Order {
 			predsMap[ord.Attr] = struct{}{}
@@ -700,15 +710,26 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
 			predsMap[pred] = struct{}{}
 		}
-		for _, childPred := range parsePredsFromQuery(gq.Children) {
+		childPredandVars := parsePredsFromQuery(gq.Children)
+		for _, childPred := range childPredandVars.preds {
 			predsMap[childPred] = struct{}{}
+		}
+		for _, childVar := range childPredandVars.vars {
+			varsMap[childVar] = struct{}{}
 		}
 	}
 	preds := make([]string, 0, len(predsMap))
+	vars := make([]string, 0, len(varsMap))
 	for pred := range predsMap {
-		preds = append(preds, pred)
+		if _, found := varsMap[pred]; !found {
+			preds = append(preds, pred)
+		}
 	}
-	return preds
+	for variable := range varsMap {
+		vars = append(vars, variable)
+	}
+	pv := predsAndvars{preds: preds, vars: vars}
+	return pv
 }
 
 func parsePredsFromFilter(f *gql.FilterTree) []string {
@@ -755,8 +776,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
-	preds := parsePredsFromQuery(parsedReq.Query)
-
+	preds := parsePredsFromQuery(parsedReq.Query).preds
 	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
 		userData, err := extractUserAndGroups(ctx)
 		if err != nil {
