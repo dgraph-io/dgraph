@@ -349,9 +349,10 @@ func fieldToString(update *pb.SchemaUpdate) string {
 }
 
 type fileWriter struct {
-	fd *os.File
-	bw *bufio.Writer
-	gw *gzip.Writer
+	fd           *os.File
+	bw           *bufio.Writer
+	gw           *gzip.Writer
+	relativePath string
 }
 
 func (writer *fileWriter) open(fpath string) error {
@@ -385,7 +386,71 @@ func (writer *fileWriter) Close() error {
 	return writer.fd.Close()
 }
 
+// ExportedFiles has the relative path of files that were written during export
 type ExportedFiles []string
+
+type exportFileStorage interface {
+	openFile(relativePath string) (*fileWriter, error)
+	finishWriting(fs ...*fileWriter) (ExportedFiles, error)
+}
+
+type localExportFileStorage struct {
+	destination  string
+	relativePath string
+}
+
+func newLocalExportFileStorage(destination, backupName string) (exportFileStorage, error) {
+	bdir, err := filepath.Abs(path.Join(destination, backupName))
+	if err != nil {
+		return nil, err
+	}
+
+	if err = os.MkdirAll(bdir, 0700); err != nil {
+		return nil, err
+	}
+
+	return &localExportFileStorage{destination, backupName}, nil
+}
+
+func (l *localExportFileStorage) openFile(fileName string) (*fileWriter, error) {
+	fw := &fileWriter{relativePath: path.Join(l.relativePath, fileName)}
+
+	filePath, err := filepath.Abs(path.Join(l.destination, fw.relativePath))
+	if err != nil {
+		return nil, err
+	}
+
+	glog.Infof("Exporting to file at %s\n", filePath)
+
+	if err := fw.open(filePath); err != nil {
+		return nil, err
+	}
+
+	return fw, nil
+}
+
+func (l *localExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+	var files ExportedFiles
+
+	for _, file := range fs {
+		err := file.Close()
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, file.relativePath)
+	}
+
+	return files, nil
+}
+
+func newExportFileStorage(in *pb.ExportRequest, backupName string) (exportFileStorage, error) {
+	switch {
+	case strings.HasPrefix(in.Destination, "/"):
+		return newLocalExportFileStorage(in.Destination, backupName)
+	default:
+		return newLocalExportFileStorage(x.WorkerConfig.ExportPath, backupName)
+	}
+}
 
 // export creates a export of data by exporting it as an RDF gzip.
 func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
@@ -403,50 +468,23 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
 	uts := time.Unix(in.UnixTs, 0)
-	bdir := path.Join(x.WorkerConfig.ExportPath, fmt.Sprintf(
-		"dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
-
-	if err := os.MkdirAll(bdir, 0700); err != nil {
-		return nil, err
-	}
+	exportFileStorage, err := newExportFileStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 
 	xfmt := exportFormats[in.Format]
-	fpath := func(suffix string) (string, error) {
-		return filepath.Abs(path.Join(bdir, fmt.Sprintf("g%02d%s", in.GroupId, suffix)))
-	}
 
-	// Open data file now.
-	dataPath, err := fpath(xfmt.ext + ".gz")
+	dataWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
 	if err != nil {
 		return nil, err
 	}
 
-	glog.Infof("Exporting data for group: %d at %s\n", in.GroupId, dataPath)
-	dataWriter := &fileWriter{}
-	if err := dataWriter.open(dataPath); err != nil {
-		return nil, err
-	}
-
-	// Open schema file now.
-	schemaPath, err := fpath(".schema.gz")
+	schemaWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
 	if err != nil {
 		return nil, err
 	}
-	glog.Infof("Exporting schema for group: %d at %s\n", in.GroupId, schemaPath)
-	schemaWriter := &fileWriter{}
-	if err := schemaWriter.open(schemaPath); err != nil {
-		return nil, err
-	}
 
-	// Open graphql schema.
-	gqlSchemaPath, err := fpath(".gql_schema.gz")
+	gqlSchemaWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
 	if err != nil {
-		return nil, errors.Wrapf(err, "cannot get path for the GraphQL schema file")
-	}
-	glog.Infof("Exporting GraphQL schema at %s", gqlSchemaPath)
-	gqlSchemaWriter := &fileWriter{}
-	if err := gqlSchemaWriter.open(gqlSchemaPath); err != nil {
-		return nil, errors.Wrapf(err, "cannot open export GraphQL schema file at %s", gqlSchemaPath)
+		return nil, err
 	}
 
 	stream := pstore.NewStreamAt(in.ReadTs)
@@ -653,17 +691,8 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	if _, err = dataWriter.gw.Write([]byte(xfmt.post)); err != nil {
 		return nil, err
 	}
-	if err := dataWriter.Close(); err != nil {
-		return nil, err
-	}
-	if err := schemaWriter.Close(); err != nil {
-		return nil, err
-	}
-	if err := gqlSchemaWriter.Close(); err != nil {
-		return nil, err
-	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return ExportedFiles{schemaPath, dataPath, gqlSchemaPath}, nil
+	return exportFileStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
 }
 
 // Export request is used to trigger exports for the request list of groups.
@@ -706,7 +735,7 @@ func handleExportOverNetwork(ctx context.Context, in *pb.ExportRequest) (Exporte
 }
 
 // ExportOverNetwork sends export requests to all the known groups.
-func ExportOverNetwork(ctx context.Context, format string) (ExportedFiles, error) {
+func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFiles, error) {
 	// If we haven't even had a single membership update, don't run export.
 	if err := x.HealthCheck(); err != nil {
 		glog.Errorf("Rejecting export request due to health check error: %v\n", err)
@@ -736,7 +765,13 @@ func ExportOverNetwork(ctx context.Context, format string) (ExportedFiles, error
 				GroupId: group,
 				ReadTs:  readTs,
 				UnixTs:  time.Now().Unix(),
-				Format:  format,
+				Format:  input.Format,
+
+				Destination:  input.Destination,
+				AccessKey:    input.AccessKey,
+				SecretKey:    input.SecretKey,
+				SessionToken: input.SessionToken,
+				Anonymous:    input.Anonymous,
 			}
 			files, err := handleExportOverNetwork(ctx, req)
 			ch <- filesAndError{files, err}

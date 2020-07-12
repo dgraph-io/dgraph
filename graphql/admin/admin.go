@@ -190,6 +190,31 @@ const (
 
 	input ExportInput {
 		format: String
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket or /absolute/path
+		"""
+		destination: String
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""
+		anonymous: Boolean
 	}
 
 	type Response {

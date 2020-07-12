@@ -22,14 +22,11 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
 )
-
-type exportInput struct {
-	Format string
-}
 
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 
@@ -48,7 +45,9 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	files, err := worker.ExportOverNetwork(context.Background(), format)
+	input.Format = format
+
+	files, err := worker.ExportOverNetwork(context.Background(), input)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -70,14 +69,14 @@ func toGraphQLArray(s []string) []interface{} {
 	return outputFiles
 }
 
-func getExportInput(m schema.Mutation) (*exportInput, error) {
+func getExportInput(m schema.Mutation) (*pb.ExportRequest, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
 	inputByts, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
 
-	var input exportInput
+	var input pb.ExportRequest
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }
