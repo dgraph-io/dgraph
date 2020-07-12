@@ -24,6 +24,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -31,6 +33,7 @@ import (
 	"time"
 
 	"github.com/golang/glog"
+	"github.com/minio/minio-go/v6"
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v2"
@@ -399,7 +402,15 @@ type localExportFileStorage struct {
 	relativePath string
 }
 
-func newLocalExportFileStorage(destination, backupName string) (exportFileStorage, error) {
+// remoteExportFileStorage uses localExportFileStorage to write files, then uploads to minio
+type remoteExportFileStorage struct {
+	mc     *minio.Client
+	bucket string
+	prefix string
+	l      *localExportFileStorage
+}
+
+func newLocalExportFileStorage(destination, backupName string) (*localExportFileStorage, error) {
 	bdir, err := filepath.Abs(path.Join(destination, backupName))
 	if err != nil {
 		return nil, err
@@ -443,10 +454,66 @@ func (l *localExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles
 	return files, nil
 }
 
+func newRemoteExportFileStorage(in *pb.ExportRequest, backupName string) (*remoteExportFileStorage, error) {
+	tmpDir, err := ioutil.TempDir("", "export")
+	if err != nil {
+		return nil, err
+	}
+	localStorage, err := newLocalExportFileStorage(tmpDir, backupName)
+	if err != nil {
+		return nil, err
+	}
+
+	uri, err := url.Parse(in.Destination)
+	if err != nil {
+		return nil, err
+	}
+
+	mc, err := newMinioClient(uri, &Credentials{})
+	if err != nil {
+		return nil, err
+	}
+
+	bucket, prefix, err := validateBucket(mc, uri)
+	if err != nil {
+		return nil, err
+	}
+
+	return &remoteExportFileStorage{mc, bucket, prefix, localStorage}, nil
+}
+
+func (r *remoteExportFileStorage) openFile(fileName string) (*fileWriter, error) {
+	return r.l.openFile(fileName)
+}
+
+func (r *remoteExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+	files, err := r.l.finishWriting(fs...)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, f := range files {
+		d := r.prefix + "/" + f
+		filePath := path.Join(r.l.destination, f)
+		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
+		glog.Infof("Exporting to file at %s\n", filePath)
+		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{
+			ContentType: "application/gzip",
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return files, nil
+}
+
 func newExportFileStorage(in *pb.ExportRequest, backupName string) (exportFileStorage, error) {
 	switch {
 	case strings.HasPrefix(in.Destination, "/"):
 		return newLocalExportFileStorage(in.Destination, backupName)
+	case strings.HasPrefix(in.Destination, "minio://") || strings.HasPrefix(in.Destination, "s3://"):
+		return newRemoteExportFileStorage(in, backupName)
 	default:
 		return newLocalExportFileStorage(x.WorkerConfig.ExportPath, backupName)
 	}
@@ -469,6 +536,9 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 
 	uts := time.Unix(in.UnixTs, 0)
 	exportFileStorage, err := newExportFileStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	if err != nil {
+		return nil, err
+	}
 
 	xfmt := exportFormats[in.Format]
 
