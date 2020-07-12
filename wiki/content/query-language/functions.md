@@ -3,7 +3,7 @@ date = "2017-03-20T22:25:17+11:00"
 title = "Functions"
 [menu.main]
     parent = "query-language"
-    weight = 2
+    weight = 2 
 +++
 
 Functions allow filtering based on properties of nodes or [variables]({{<relref "#value-variables">}}).  Functions can be applied in the query root or in filters.
