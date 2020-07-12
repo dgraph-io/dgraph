@@ -1255,6 +1255,122 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 }
+
+func TestValQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+	// createGroup(t, accessJwt, sreGroup)
+
+	// addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	query := `{q1(func: has(name)){
+		v as name
+		a as age
+    }
+    q2(func: eq(val(v), "RandomGuy")) {
+		val(v)
+		val(a)
+    }}`
+
+	// Test that groot has access to all the predicates
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+	// 	string(resp.GetJson()))
+	fmt.Println(string(resp.GetJson()))
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Query via user when user has no permissions
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
+	fmt.Println(string(resp.GetJson()))
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name>, write access of <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	time.Sleep(6 * time.Second)
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+	// string(resp.GetJson()))
+	fmt.Println(string(resp.GetJson()))
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> and <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
+	time.Sleep(6 * time.Second)
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	// testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+	// string(resp.GetJson()))
+	fmt.Println(string(resp.GetJson()))
+
+}
 func TestNewACLPredicates(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
