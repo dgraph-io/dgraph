@@ -469,7 +469,12 @@ func newRemoteExportFileStorage(in *pb.ExportRequest, backupName string) (*remot
 		return nil, err
 	}
 
-	mc, err := newMinioClient(uri, &Credentials{})
+	mc, err := newMinioClient(uri, &Credentials{
+		AccessKey:    in.AccessKey,
+		SecretKey:    in.SecretKey,
+		SessionToken: in.SessionToken,
+		Anonymous:    in.Anonymous,
+	})
 	if err != nil {
 		return nil, err
 	}

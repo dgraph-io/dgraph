@@ -791,3 +791,12 @@ func response(code, msg string) map[string]interface{} {
 	return map[string]interface{}{
 		"response": map[string]interface{}{"code": code, "message": msg}}
 }
+
+// DestinationFields is used by both export and backup to specify destination
+type DestinationFields struct {
+	Destination  string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Anonymous    bool
+}

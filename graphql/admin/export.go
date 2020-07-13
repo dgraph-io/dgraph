@@ -28,6 +28,11 @@ import (
 	"github.com/pkg/errors"
 )
 
+type exportInput struct {
+	Format string
+	*DestinationFields
+}
+
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 
 	glog.Info("Got export request through GraphQL admin API")
@@ -45,9 +50,14 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	input.Format = format
-
-	files, err := worker.ExportOverNetwork(context.Background(), input)
+	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
+		Format:       format,
+		Destination:  input.Destination,
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	})
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
@@ -69,14 +79,14 @@ func toGraphQLArray(s []string) []interface{} {
 	return outputFiles
 }
 
-func getExportInput(m schema.Mutation) (*pb.ExportRequest, error) {
+func getExportInput(m schema.Mutation) (*exportInput, error) {
 	inputArg := m.ArgValue(schema.InputArgName)
 	inputByts, err := json.Marshal(inputArg)
 	if err != nil {
 		return nil, schema.GQLWrapf(err, "couldn't get input argument")
 	}
 
-	var input pb.ExportRequest
+	var input exportInput
 	err = json.Unmarshal(inputByts, &input)
 	return &input, schema.GQLWrapf(err, "couldn't get input argument")
 }

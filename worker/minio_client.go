@@ -127,6 +127,7 @@ func validateBucket(mc *minio.Client, uri *url.URL) (string, string, error) {
 	bucketName := parts[0] // bucket
 	objectPrefix := ""
 
+	glog.Info("Verifying Bucket Exists: ", bucketName)
 	// verify the requested bucket exists.
 	found, err := mc.BucketExists(bucketName)
 	if err != nil {
