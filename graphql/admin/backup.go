@@ -28,7 +28,7 @@ import (
 )
 
 type backupInput struct {
-	*DestinationFields
+	DestinationFields
 	ForceFull bool
 }
 

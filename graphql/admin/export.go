@@ -30,7 +30,7 @@ import (
 
 type exportInput struct {
 	Format string
-	*DestinationFields
+	DestinationFields
 }
 
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
