@@ -498,10 +498,15 @@ func (r *remoteExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFile
 	}
 
 	for _, f := range files {
-		d := r.prefix + "/" + f
+		var d string
+		if r.prefix == "" {
+			d = f
+		} else {
+			d = r.prefix + "/" + f
+		}
 		filePath := path.Join(r.l.destination, f)
 		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
-		glog.Infof("Exporting to file at %s\n", filePath)
+		glog.Infof("Uploading from %s to %s\n", filePath, d)
 		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{
 			ContentType: "application/gzip",
 		})
@@ -857,7 +862,7 @@ func ExportOverNetwork(ctx context.Context, input *pb.ExportRequest) (ExportedFi
 	for i := 0; i < len(gids); i++ {
 		pair := <-ch
 		if pair.error != nil {
-			rerr := errors.Wrapf(err, "Export failed at readTs %d", readTs)
+			rerr := errors.Wrapf(pair.error, "Export failed at readTs %d", readTs)
 			glog.Errorln(rerr)
 			return nil, rerr
 		}
