@@ -189,6 +189,31 @@ const (
 
 	input ExportInput {
 		format: String
+
+		"""
+		Destination for the backup: e.g. Minio or S3 bucket or /absolute/path
+		"""
+		destination: String
+
+		"""
+		Access key credential for the destination.
+		"""
+		accessKey: String
+
+		"""
+		Secret key credential for the destination.
+		"""
+		secretKey: String
+
+		"""
+		AWS session token, if required.
+		"""
+		sessionToken: String
+
+		"""
+		Set to true to allow backing up to S3 or Minio bucket that requires no credentials.
+		"""
+		anonymous: Boolean
 	}
 
 	type Response {
@@ -198,6 +223,7 @@ const (
 
 	type ExportPayload {
 		response: Response
+		exportedFiles: [String]
 	}
 
 	type DrainingPayload {
@@ -763,4 +789,13 @@ func (as *adminServer) resetSchema(gqlSchema schema.Schema) {
 func response(code, msg string) map[string]interface{} {
 	return map[string]interface{}{
 		"response": map[string]interface{}{"code": code, "message": msg}}
+}
+
+// DestinationFields is used by both export and backup to specify destination
+type DestinationFields struct {
+	Destination  string
+	AccessKey    string
+	SecretKey    string
+	SessionToken string
+	Anonymous    bool
 }

@@ -22,6 +22,7 @@ import (
 
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/protos/pb"
 	"github.com/dgraph-io/dgraph/worker"
 	"github.com/golang/glog"
 	"github.com/pkg/errors"
@@ -29,6 +30,7 @@ import (
 
 type exportInput struct {
 	Format string
+	DestinationFields
 }
 
 func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
@@ -48,15 +50,33 @@ func resolveExport(ctx context.Context, m schema.Mutation) (*resolve.Resolved, b
 		}
 	}
 
-	err = worker.ExportOverNetwork(context.Background(), format)
+	files, err := worker.ExportOverNetwork(context.Background(), &pb.ExportRequest{
+		Format:       format,
+		Destination:  input.Destination,
+		AccessKey:    input.AccessKey,
+		SecretKey:    input.SecretKey,
+		SessionToken: input.SessionToken,
+		Anonymous:    input.Anonymous,
+	})
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
 	}
 
+	responseData := response("Success", "Export completed.")
+	responseData["exportedFiles"] = toGraphQLArray(files)
+
 	return &resolve.Resolved{
-		Data:  map[string]interface{}{m.Name(): response("Success", "Export completed.")},
+		Data:  map[string]interface{}{m.Name(): responseData},
 		Field: m,
 	}, true
+}
+
+func toGraphQLArray(s []string) []interface{} {
+	outputFiles := make([]interface{}, 0, len(s))
+	for _, f := range s {
+		outputFiles = append(outputFiles, f)
+	}
+	return outputFiles
 }
 
 func getExportInput(m schema.Mutation) (*exportInput, error) {
