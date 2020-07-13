@@ -629,6 +629,13 @@ func (f *field) ArgValue(name string) interface{} {
 	if f.arguments == nil {
 		// Compute and cache the map first time this function is called for a field.
 		f.arguments = f.field.ArgumentMap(f.op.vars)
+		// use a deep-copy only if the request uses variables, as a variable could be shared by
+		// multiple queries in a single request and internally in our code we may overwrite field
+		// arguments which may result in the shared value being overwritten for all queries in a
+		// request.
+		if f.op.vars != nil {
+			f.arguments = x.DeepCopyJsonMap(f.arguments)
+		}
 	}
 	return f.arguments[name]
 }
