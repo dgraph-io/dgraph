@@ -383,6 +383,7 @@ func authorizeNewNodes(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      addAuthSelector,
+		hasAuthRules:  true,
 	}
 
 	// Collect all the newly created nodes in type groups
@@ -416,8 +417,9 @@ func authorizeNewNodes(
 	authQrys := make(map[string][]*gql.GraphQuery)
 	for _, typeName := range createdTypes {
 		typ := namesToType[typeName]
-		varName := newRw.varGen.Next(typ, "", "")
+		varName := newRw.varGen.Next(typ, "", "", false)
 		newRw.varName = varName
+		newRw.parentVarName = typ.Name() + "Root"
 		authQueries, authFilter := newRw.rewriteAuthQueries(typ)
 
 		rn := newRw.selector(typ)

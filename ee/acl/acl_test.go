@@ -309,6 +309,7 @@ var queryAttr = "name"
 var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
+var sreGroup = "sre"
 var unusedGroup = "unusedGroup"
 var query = fmt.Sprintf(`
 	{
@@ -997,6 +998,10 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		type TypeName {
+			name: string
+			age: int
+		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -1016,9 +1021,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
 		`),
 		CommitNow: true,
 	}
@@ -1101,6 +1108,17 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 			`filter won't work because <nickname> is unauthorized`,
 		},
+		{
+			`
+			{
+				me(func: has(name)) {
+					expand(_all_)
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`expand(_all_) expands to only <name> because other predicates are unauthorized`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1113,6 +1131,130 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
+func TestExpandQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+	createGroup(t, accessJwt, sreGroup)
+
+	addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	query := "{me(func: has(name)){expand(_all_)}}"
+
+	// Test that groot has access to all the predicates
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		string(resp.GetJson()))
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Query via user when user has no permissions
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{}`, string(resp.GetJson()))
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name>, write access of <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}})
+	time.Sleep(6 * time.Second)
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+		string(resp.GetJson()))
+
+	// Login to groot to modify accesses (2)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+	// Add alice to sre group which has read access to <age> and write access to <name>
+	addToGroup(t, accessJwt, userid, sreGroup)
+	time.Sleep(6 * time.Second)
+
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.Nil(t, err)
+
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}]}`,
+		string(resp.GetJson()))
+
+	// Login to groot to modify accesses (3)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> and <nickname>, write access of <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"age", Write.Code}, {"name", Read.Code}, {"nickname", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	resp, err = userClient.NewReadOnlyTxn().Query(ctx, query)
+	require.Nil(t, err)
+
+	testutil.CompareJSON(t, `{"me":[{"name":"RandomGuy","age":23, "nickname":"RG"},{"name":"RandomGuy2","age":25, "nickname":"RG2"}]}`,
+		string(resp.GetJson()))
+
+}
 func TestNewACLPredicates(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 
