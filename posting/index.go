@@ -144,21 +144,21 @@ type countParams struct {
 func (txn *Txn) addReverseMutationHelper(ctx context.Context, plist *List,
 	hasCountIndex bool, edge *pb.DirectedEdge) (countParams, error) {
 	countBefore, countAfter := 0, 0
+	found := false
 
+	plist.Lock()
+	defer plist.Unlock()
 	if hasCountIndex {
-		countBefore = plist.Length(txn.StartTs, 0)
+		countBefore, found, _ = plist.getPostingAndLength(txn.StartTs, 0, edge.ValueId)
 		if countBefore == -1 {
 			return emptyCountParams, ErrTsTooOld
 		}
 	}
-	if err := plist.addMutation(ctx, txn, edge); err != nil {
+	if err := plist.addMutationInternal(ctx, txn, edge); err != nil {
 		return emptyCountParams, err
 	}
 	if hasCountIndex {
-		countAfter = plist.Length(txn.StartTs, 0)
-		if countAfter == -1 {
-			return emptyCountParams, ErrTsTooOld
-		}
+		countAfter = countAfterMutation(countBefore, found, edge.Op)
 		return countParams{
 			attr:        edge.Attr,
 			countBefore: countBefore,
@@ -329,11 +329,20 @@ func (txn *Txn) updateCount(ctx context.Context, params countParams) error {
 	return nil
 }
 
+func countAfterMutation(countBefore int, found bool, op pb.DirectedEdge_Op) int {
+	if !found && op == pb.DirectedEdge_SET {
+		return countBefore + 1
+	} else if found && op == pb.DirectedEdge_DEL {
+		return countBefore - 1
+	}
+
+	// Only conditions remaining are below, for which countAfter will be same as countBefore.
+	// (found && op == pb.DirectedEdge_SET) || (!found && op == pb.DirectedEdge_DEL)
+	return countBefore
+}
+
 func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bool,
 	hasCountIndex bool, t *pb.DirectedEdge) (types.Val, bool, countParams, error) {
-	var val types.Val
-	var found bool
-	var err error
 
 	t1 := time.Now()
 	l.Lock()
@@ -345,9 +354,33 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 			"Acquired lock %v %v %v", dur, t.Attr, t.Entity)
 	}
 
-	if doUpdateIndex {
-		// Check original value BEFORE any mutation actually happens.
-		val, found, err = l.findValue(txn.StartTs, fingerprintEdge(t))
+	getUID := func(t *pb.DirectedEdge) uint64 {
+		if t.ValueType == pb.Posting_UID {
+			return t.ValueId
+		}
+		return fingerprintEdge(t)
+	}
+
+	// For countIndex we need to check if some posting already exists for uid and length of posting
+	// list, hence will are calling l.getPostingAndLength(). If doUpdateIndex or delNonListPredicate
+	// is true, we just need to get the posting for uid, hence calling l.findPosting().
+	countBefore, countAfter := 0, 0
+	var currPost *pb.Posting
+	var val types.Val
+	var found bool
+	var err error
+
+	delNonListPredicate := !schema.State().IsList(t.Attr) &&
+		t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star
+
+	switch {
+	case hasCountIndex:
+		countBefore, found, currPost = l.getPostingAndLength(txn.StartTs, 0, getUID(t))
+		if countBefore == -1 {
+			return val, false, emptyCountParams, ErrTsTooOld
+		}
+	case doUpdateIndex || delNonListPredicate:
+		found, currPost, err = l.findPosting(txn.StartTs, fingerprintEdge(t))
 		if err != nil {
 			return val, found, emptyCountParams, err
 		}
@@ -355,12 +388,8 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 
 	// If the predicate schema is not a list, ignore delete triples whose object is not a star or
 	// a value that does not match the existing value.
-	if !schema.State().IsList(t.Attr) && t.Op == pb.DirectedEdge_DEL && string(t.Value) != x.Star {
+	if delNonListPredicate {
 		newPost := NewPosting(t)
-		pFound, currPost, err := l.findPosting(txn.StartTs, fingerprintEdge(t))
-		if err != nil {
-			return val, found, emptyCountParams, err
-		}
 
 		// This is a scalar value of non-list type and a delete edge mutation, so if the value
 		// given by the user doesn't match the value we have, we return found to be false, to avoid
@@ -368,27 +397,22 @@ func (txn *Txn) addMutationHelper(ctx context.Context, l *List, doUpdateIndex bo
 		// This second check is required because we fingerprint the scalar values as math.MaxUint64,
 		// so even though they might be different the check in the doUpdateIndex block above would
 		// return found to be true.
-		if pFound && !(bytes.Equal(currPost.Value, newPost.Value) &&
+		if found && !(bytes.Equal(currPost.Value, newPost.Value) &&
 			types.TypeID(currPost.ValType) == types.TypeID(newPost.ValType)) {
 			return val, false, emptyCountParams, nil
 		}
 	}
 
-	countBefore, countAfter := 0, 0
-	if hasCountIndex {
-		countBefore = l.length(txn.StartTs, 0)
-		if countBefore == -1 {
-			return val, found, emptyCountParams, ErrTsTooOld
-		}
-	}
 	if err = l.addMutationInternal(ctx, txn, t); err != nil {
 		return val, found, emptyCountParams, err
 	}
+
+	if found && doUpdateIndex {
+		val = valueToTypesVal(currPost)
+	}
+
 	if hasCountIndex {
-		countAfter = l.length(txn.StartTs, 0)
-		if countAfter == -1 {
-			return val, found, emptyCountParams, ErrTsTooOld
-		}
+		countAfter = countAfterMutation(countBefore, found, t.Op)
 		return val, found, countParams{
 			attr:        t.Attr,
 			countBefore: countBefore,

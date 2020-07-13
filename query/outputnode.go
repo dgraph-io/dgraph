@@ -86,13 +86,14 @@ type encoder struct {
 	// Bytes 4-1 contains offset(uint32) for Arena.
 	// Bytes 7-6 contains attr.
 	// Bit MSB(first bit in Byte-8) contains list field value.
+	// Bit SecondMSB(second bit in Byte-8) contains facetsParent field value.
 	// Byte-5 is not getting used as of now.
 	// |-----------------------------------------------------------------------|
-	// |    8   |    7   |    6   |    5   |    4   |    3   |    2   |    1   |
+	// |    8        |    7   |    6   |    5   |    4   |    3   |    2   |    1   |
 	// |-----------------------------------------------------------------------|
-	// | MSB    |                 | Unused |                                   |
-	// | for    |     Attr ID     | For    |        Offset inside Arena        |
-	// | list   |                 | Now    |                                   |
+	// | MSB - list  |                 | Unused |                                   |
+	// | SecondMSB - |     Attr ID     | For    |        Offset inside Arena        |
+	// | facetsParent|                 | Now    |                                   |
 	// |-----------------------------------------------------------------------|
 	metaSlice []uint64
 	// childrenMap contains mapping of fastJsonNode to its children.
@@ -149,6 +150,8 @@ func (enc *encoder) makeScalarNode(attr uint16, val []byte, list bool) (fastJson
 const (
 	// Value with most significant bit set to 1.
 	msbBit = 0x8000000000000000
+	// Value with second most significant bit set to 1.
+	secondMsbBit = 0x4000000000000000
 	// Value with all bits set to 1 for bytes 7 and 6.
 	setBytes76 = uint64(0x00FFFF0000000000)
 	// Compliment value of setBytes76.
@@ -162,7 +165,17 @@ const (
 // 1. Attr => predicate associated with this node.
 // 2. ScalarVal => Any value associated with node, if it is a leaf node.
 // 3. List => Stores boolean value, true if this node is part of list.
-// 4. Children(Attrs) => List of all children.
+// 4. FacetsParent => Stores boolean value, true if this node is a facetsParent. facetsParent is
+//    node which is parent for facets values for a scalar list predicate. Eg: node "city|country"
+//    will have FacetsParent value as true.
+//    {
+//		"city": ["Bengaluru", "San Francisco"],
+//		"city|country": {
+//			"0": "india",
+//			"1": "US"
+//		}
+//	  }
+// 5. Children(Attrs) => List of all children.
 //
 // All of the data for fastJsonNode tree is stored in encoder to optimise memory usage. fastJsonNode
 // type only stores one uint32(can be thought of id for this node). A fastJsonNode is created in
@@ -217,6 +230,10 @@ func (enc *encoder) setList(fj fastJsonNode, list bool) {
 	}
 }
 
+func (enc *encoder) setFacetsParent(fj fastJsonNode) {
+	enc.metaSlice[fj] |= secondMsbBit
+}
+
 // appendAttrs appends attrs to existing fj's attrs.
 func (enc *encoder) appendAttrs(fj fastJsonNode, attrs ...fastJsonNode) {
 	cs, ok := enc.childrenMap[fj]
@@ -239,7 +256,11 @@ func (enc *encoder) getScalarVal(fj fastJsonNode) ([]byte, error) {
 }
 
 func (enc *encoder) getList(fj fastJsonNode) bool {
-	return ((enc.metaSlice[fj] & msbBit) > 0)
+	return (enc.metaSlice[fj] & msbBit) > 0
+}
+
+func (enc *encoder) getFacetsParent(fj fastJsonNode) bool {
+	return (enc.metaSlice[fj] & secondMsbBit) > 0
 }
 
 func (enc *encoder) getAttrs(fj fastJsonNode) []fastJsonNode {
@@ -522,6 +543,8 @@ func (enc *encoder) attachFacets(fj fastJsonNode, fieldName string, isList bool,
 			if err != nil {
 				return err
 			}
+			// Mark this node as facetsParent.
+			enc.setFacetsParent(facetNode)
 			enc.AddMapChild(fj, facetNode)
 		}
 	}
@@ -636,13 +659,9 @@ func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 	for _, a := range fjAttrs {
 		// Here we are counting all non-scalar attributes of fj. If there are any such
 		// attributes, we will flatten it, otherwise we will return all attributes.
-
-		// When we call addMapChild it tries to find whether there is already an attribute
-		// with attr field same as attribute argument of addMapChild. If it doesn't find any
-		// such attribute, it creates an attribute with isChild = false. In those cases
-		// sometimes cnt remains zero  and normalize returns attributes without flattening.
-		// So we are using len(a.attrs) > 0 instead of a.isChild
-		if len(enc.getAttrs(a)) > 0 {
+		// We should only consider those nodes for flattening which have children and are not
+		// facetsParent.
+		if len(enc.getAttrs(a)) > 0 && !enc.getFacetsParent(a) {
 			cnt++
 		}
 	}
@@ -658,8 +677,8 @@ func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 	// merged with children later.
 	attrs := make([]fastJsonNode, 0, len(fjAttrs)-cnt)
 	for _, a := range fjAttrs {
-		// Check comment at previous occurrence of len(a.attrs) > 0
-		if len(enc.getAttrs(a)) == 0 {
+		// Here, add all nodes which have either no children or they are facetsParent.
+		if len(enc.getAttrs(a)) == 0 || enc.getFacetsParent(a) {
 			attrs = append(attrs, a)
 		}
 	}
@@ -667,8 +686,8 @@ func (enc *encoder) normalize(fj fastJsonNode) ([][]fastJsonNode, error) {
 
 	for ci := 0; ci < len(fjAttrs); {
 		childNode := fjAttrs[ci]
-		// Check comment at previous occurrence of len(a.attrs) > 0
-		if len(enc.getAttrs(childNode)) == 0 {
+		// Here, exclude all nodes which have either no children or they are facetsParent.
+		if len(enc.getAttrs(childNode)) == 0 || enc.getFacetsParent(childNode) {
 			ci++
 			continue
 		}

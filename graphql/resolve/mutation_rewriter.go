@@ -657,6 +657,40 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	return dgQuery
 }
 
+// addUidFuncToQuery adds the uid func to the query with name `queryName`. This is useful when we
+// have auth queries since the top level query might be present in the children. We pass
+// `queryName` of top level query and it finds the appropriate query and adds `uidFunc` to it.
+func addUidFuncToQuery(q *gql.GraphQuery, uidFunc *gql.Function, queryName string) {
+	// This handles the case when root auth query is a dummy query due to RBAC evaluation to false.
+	// In such case since the query doesn't return anything, we don't need to add uid func.
+	if q.Attr == queryName+"()" {
+		return
+	}
+
+	if q.Attr != "" {
+		q.Func = uidFunc
+		return
+	}
+
+	var query *gql.GraphQuery
+	for _, cq := range q.Children {
+		if cq.Attr == queryName {
+			query = cq
+			break
+		}
+		for _, ccq := range cq.Children {
+			if ccq.Attr == queryName {
+				query = ccq
+				break
+			}
+		}
+	}
+
+	if query != nil {
+		query.Func = uidFunc
+	}
+}
+
 func (drw *deleteRewriter) Rewrite(
 	ctx context.Context,
 	m schema.Mutation) ([]*UpsertMutation, error) {
@@ -726,8 +760,29 @@ func (drw *deleteRewriter) Rewrite(
 
 	b, err := json.Marshal(deletes)
 
+	var finalQry *gql.GraphQuery
+	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
+	// is later added to delete mutation result.
+	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
+		queryAuthRw := &authRewriter{
+			authVariables: authVariables,
+			varGen:        varGen,
+			selector:      queryAuthSelector,
+		}
+		queryDel := rewriteAsQuery(queryField, queryAuthRw)
+
+		uidFunc := &gql.Function{
+			Name: "uid",
+			Args: []gql.Arg{{Value: MutationQueryVar}},
+		}
+		addUidFuncToQuery(queryDel, uidFunc, queryField.Name())
+		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
+	} else {
+		finalQry = dgQry
+	}
+
 	upsert := &UpsertMutation{
-		Query:     dgQry,
+		Query:     finalQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
