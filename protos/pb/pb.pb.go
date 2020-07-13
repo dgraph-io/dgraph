@@ -4492,7 +4492,6 @@ type ExportRequest struct {
 	Format      string `protobuf:"bytes,4,opt,name=format,proto3" json:"format,omitempty"`
 	Destination string `protobuf:"bytes,5,opt,name=destination,proto3" json:"destination,omitempty"`
 	// These credentials are used to access the S3 or minio bucket.
-	// FIXME: WIP: Actually Use these
 	AccessKey            string   `protobuf:"bytes,6,opt,name=access_key,json=accessKey,proto3" json:"access_key,omitempty"`
 	SecretKey            string   `protobuf:"bytes,7,opt,name=secret_key,json=secretKey,proto3" json:"secret_key,omitempty"`
 	SessionToken         string   `protobuf:"bytes,8,opt,name=session_token,json=sessionToken,proto3" json:"session_token,omitempty"`

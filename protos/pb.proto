@@ -613,7 +613,6 @@ message ExportRequest {
 	string destination = 5;
 
 	// These credentials are used to access the S3 or minio bucket.
-	// FIXME: WIP: Actually Use these
 	string access_key = 6;
 	string secret_key = 7;
 	string session_token = 8;
