@@ -927,7 +927,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			 # Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
@@ -969,7 +969,7 @@ func TestParseSecrets(t *testing.T) {
 				"be `# Dgraph.Secret key value`"),
 		},
 		{
-			"should work along with authorization",
+			"Dgraph.Authorization old format",
 			`
 			type User {
 				id: ID!
@@ -980,10 +980,11 @@ func TestParseSecrets(t *testing.T) {
 			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
-			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
-				"STRIPE_API_KEY": "stripe-api-key-value"},
-			"X-Test-Dgraph",
 			nil,
+			"",
+			errors.New("Unable to parse Dgraph.Authorization. " +
+				" It may be that you are using the pre-release syntax. " +
+				"Please check at https://graphql.dgraph.io/authorization/"),
 		},
 		{
 			"should throw an error if multiple authorization values are specified",
@@ -993,14 +994,13 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Authorization random https://dgraph.io/jwt/claims HS256 "key"
-			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
 			`,
 			nil,
 			"",
 			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
-				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
-				` https://dgraph.io/jwt/claims HS256 "key"`),
+				`, found second mention: # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}`),
 		},
 		{
 			"Should throw an error if required fields are missing in Authorizaiton Information",
@@ -1024,7 +1024,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
 			`,
 			map[string]string{},
 			"X-Test-Auth",
@@ -1038,7 +1038,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Authorization {"PublicKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
 			`,
 			map[string]string{},
 			"X-Test-Auth",

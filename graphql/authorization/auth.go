@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
 
 	"github.com/dgrijalva/jwt-go/v4"
@@ -46,18 +45,18 @@ var (
 )
 
 type AuthMeta struct {
-	PublicKey    string
-	RSAPublicKey *rsa.PublicKey `json:"-"` // Ignoring this field
-	Header       string
-	Namespace    string
-	Algo         string
-	Audience     []string
+	VerificationKey string
+	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
+	Header          string
+	Namespace       string
+	Algo            string
+	Audience        []string
 }
 
 // Validate required fields.
 func (a *AuthMeta) validate() error {
 	var fields string
-	if a.PublicKey == "" {
+	if a.VerificationKey == "" {
 		fields = " `Verification key`"
 	}
 
@@ -88,46 +87,12 @@ func Parse(schema string) (AuthMeta, error) {
 	authInfo := schema[authInfoIdx:]
 
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
-	if err == nil {
-		return meta, meta.validate()
-	}
-
-	fmt.Println("Falling back to parsing authorization information in old format.")
-	// Note: This is the old format for passing authorization information and is kept to
-	// maintain backward compatibility. It may be removed in future releases.
-
-	// This regex matches authorization information present in the last line of the schema.
-	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
-	// Example: # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
-	// On successful regex match the index for the following strings will be returned.
-	// [0][0]:[0][1] : # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
-	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
-	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
-	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
-	authMetaRegex, err :=
-		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
 	if err != nil {
-		return meta, errors.Errorf("error while parsing jwt authorization info: %v", err)
+		return meta, fmt.Errorf("Unable to parse Dgraph.Authorization. " +
+			" It may be that you are using the pre-release syntax. " +
+			"Please check at https://graphql.dgraph.io/authorization/")
 	}
-	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
-	if len(idx) != 1 || len(idx[0]) != 12 ||
-		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
-		return meta, errors.Errorf("error while parsing jwt authorization info")
-	}
-
-	meta.Header = authInfo[idx[0][4]:idx[0][5]]
-	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
-	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
-	meta.PublicKey = authInfo[idx[0][10]:idx[0][11]]
-	if meta.Algo == HMAC256 {
-		return meta, nil
-	}
-
-	if meta.Algo != RSA256 {
-		return meta, errors.Errorf(
-			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", meta.Algo)
-	}
-	return meta, nil
+	return meta, meta.validate()
 }
 
 func ParseAuthMeta(schema string) error {
@@ -144,7 +109,7 @@ func ParseAuthMeta(schema string) error {
 	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
 	// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
 	// To fix this we replace "\n" with new line's ASCII value.
-	bytekey := bytes.ReplaceAll([]byte(metainfo.PublicKey), []byte{92, 110}, []byte{10})
+	bytekey := bytes.ReplaceAll([]byte(metainfo.VerificationKey), []byte{92, 110}, []byte{10})
 
 	metainfo.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
 	return err
@@ -252,6 +217,9 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
+	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we disable
+	// the `aud` claim verification at the library end using `WithoutClaimsValidation` and use
+	// our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			algo, _ := token.Header["alg"].(string)
@@ -261,7 +229,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 			}
 			if algo == HMAC256 {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(metainfo.PublicKey), nil
+					return []byte(metainfo.VerificationKey), nil
 				}
 			} else if algo == RSA256 {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {

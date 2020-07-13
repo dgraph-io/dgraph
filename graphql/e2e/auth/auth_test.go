@@ -1015,7 +1015,7 @@ func TestMain(m *testing.M) {
 		}
 
 		metaInfo = &testutil.AuthMeta{
-			PublicKey: authMeta.PublicKey,
+			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,
 			Algo:      authMeta.Algo,
 			Header:    authMeta.Header,
