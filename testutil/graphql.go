@@ -75,7 +75,7 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	var result *GraphQLResponse
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
-	require.Nil(t, result.Errors)
+	require.Nil(t, result.Errors, "Recieved GQL Errors: %+v", result.Errors)
 }
 
 func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
