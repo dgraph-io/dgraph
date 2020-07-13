@@ -1004,7 +1004,7 @@ func StoreSync(db DB, closer *y.Closer) {
 // any value in `m` at any nested level should be of an inbuilt go type.
 func DeepCopyJsonMap(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
-		return m
+		return nil
 	}
 
 	mCopy := make(map[string]interface{})
@@ -1026,7 +1026,7 @@ func DeepCopyJsonMap(m map[string]interface{}) map[string]interface{} {
 // i.e., any value in `a` at any nested level should be of an inbuilt go type.
 func DeepCopyJsonArray(a []interface{}) []interface{} {
 	if a == nil {
-		return a
+		return nil
 	}
 
 	aCopy := make([]interface{}, 0, len(a))
