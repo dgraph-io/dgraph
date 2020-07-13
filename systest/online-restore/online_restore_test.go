@@ -37,13 +37,14 @@ import (
 	"github.com/dgraph-io/dgraph/testutil"
 )
 
-func sendRestoreRequest(t *testing.T, backupId string) int {
+func sendRestoreRequest(t *testing.T, backupId string, dg *dgo.Dgraph) {
 	restoreRequest := fmt.Sprintf(`mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "%s",
 		 	encryptionKeyFile: "/data/keys/enc_key"}) {
-			code
-			message
-			restoreId
+			response {
+				code
+				message
+			}
 		}
 	}`, backupId)
 
@@ -57,69 +58,21 @@ func sendRestoreRequest(t *testing.T, backupId string) int {
 	resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
 	require.NoError(t, err)
 	buf, err := ioutil.ReadAll(resp.Body)
-	bufString := string(buf)
 	require.NoError(t, err)
-	require.Contains(t, bufString, "Success")
-	jsonMap := make(map[string]map[string]interface{})
-	require.NoError(t, json.Unmarshal([]byte(bufString), &jsonMap))
-	restoreId := int(jsonMap["data"]["restore"].(map[string]interface{})["restoreId"].(float64))
-	require.NotEqual(t, "", restoreId)
-	return restoreId
-}
-
-func waitForRestore(t *testing.T, restoreId int, dg *dgo.Dgraph) {
-	query := fmt.Sprintf(`query status() {
-		 restoreStatus(restoreId: %d) {
-			status
-			errors
-		}
-	}`, restoreId)
-	adminUrl := "http://localhost:8180/admin"
-	params := testutil.GraphQLParams{
-		Query: query,
-	}
-	b, err := json.Marshal(params)
-	require.NoError(t, err)
-
-	restoreDone := false
-	for i := 0; i < 15; i++ {
-		resp, err := http.Post(adminUrl, "application/json", bytes.NewBuffer(b))
-		require.NoError(t, err)
-		buf, err := ioutil.ReadAll(resp.Body)
-		require.NoError(t, err)
-		sbuf := string(buf)
-		if strings.Contains(sbuf, "OK") {
-			restoreDone = true
-			break
-		}
-		time.Sleep(time.Second)
-	}
-	require.True(t, restoreDone)
+	require.Contains(t, string(buf), "Restore completed.")
 
 	// Wait for the client to exit draining mode. This is needed because the client might
 	// be connected to a follower and might be behind the leader in applying the restore.
-	// Waiting for three consecutive successful queries is done to prevent a situation in
-	// which the query succeeds at the first attempt because the follower is behind and
-	// has not started to apply the restore proposal.
-	numSuccess := 0
-	for {
+	for i := 0; i < 10; i++ {
 		// This is a dummy query that returns no results.
 		_, err = dg.NewTxn().Query(context.Background(), `{
 		q(func: has(invalid_pred)) {
 			invalid_pred
 		}}`)
-
 		if err == nil {
-			numSuccess += 1
-		} else {
-			require.Contains(t, err.Error(), "the server is in draining mode")
-			numSuccess = 0
-		}
-
-		if numSuccess == 3 {
-			// The server has been responsive three times in a row.
 			break
 		}
+		require.Contains(t, err.Error(), "the server is in draining mode")
 		time.Sleep(1 * time.Second)
 	}
 }
@@ -226,8 +179,7 @@ func TestBasicRestore(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
-	waitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "youthful_rhodes3", dg)
 	runQueries(t, dg, false)
 	runMutations(t, dg)
 }
@@ -242,14 +194,12 @@ func TestMoveTablets(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, dg.Alter(ctx, &api.Operation{DropAll: true}))
 
-	restoreId := sendRestoreRequest(t, "youthful_rhodes3")
-	waitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "youthful_rhodes3", dg)
 	runQueries(t, dg, false)
 
 	// Send another restore request with a different backup. This backup has some of the
 	// same predicates as the previous one but they are stored in different groups.
-	restoreId = sendRestoreRequest(t, "blissful_hermann1")
-	waitForRestore(t, restoreId, dg)
+	sendRestoreRequest(t, "blissful_hermann1", dg)
 
 	resp, err := dg.NewTxn().Query(context.Background(), `{
 	  q(func: has(name), orderasc: name) {
@@ -276,9 +226,10 @@ func TestInvalidBackupId(t *testing.T) {
 	restoreRequest := `mutation restore() {
 		 restore(input: {location: "/data/backup", backupId: "bad-backup-id",
 			encryptionKeyFile: "/data/keys/enc_key"}) {
+			response {
 				code
 				message
-				restoreId
+			}
 		}
 	}`
 

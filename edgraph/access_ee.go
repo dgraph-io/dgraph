@@ -19,10 +19,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dgraph-io/dgraph/protos/pb"
-
-	"github.com/dgraph-io/dgraph/query"
-
 	"github.com/pkg/errors"
 
 	"github.com/dgraph-io/badger/v2/y"
@@ -37,13 +33,9 @@ import (
 	"github.com/golang/glog"
 	otrace "go.opencensus.io/trace"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/peer"
 	"google.golang.org/grpc/status"
 )
-
-type predsAndvars struct {
-	preds []string
-	vars  map[string]string
-}
 
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
@@ -63,10 +55,9 @@ func (s *Server) Login(ctx context.Context,
 
 	// record the client ip for this login request
 	var addr string
-	if ipAddr, err := hasAdminAuth(ctx, "Login"); err != nil {
-		return nil, err
-	} else {
-		addr = ipAddr.String()
+	if peerInfo, ok := peer.FromContext(ctx); ok {
+		addr = peerInfo.Addr.String()
+		glog.Infof("Login request from: %s", addr)
 		span.Annotate([]otrace.Attribute{
 			otrace.StringAttribute("client_ip", addr),
 		}, "client ip for login")
@@ -359,9 +350,6 @@ const queryAcls = `
 		dgraph.rule.predicate
 		dgraph.rule.permission
 	}
-	~dgraph.user.group{
-		dgraph.xid
-	}
   }
 }
 `
@@ -467,7 +455,7 @@ func extractUserAndGroups(ctx context.Context) ([]string, error) {
 }
 
 func authorizePreds(userId string, groupIds, preds []string,
-	aclOp *acl.Operation) (map[string]struct{}, []string) {
+	aclOp *acl.Operation) map[string]struct{} {
 
 	blockedPreds := make(map[string]struct{})
 	for _, pred := range preds {
@@ -483,17 +471,7 @@ func authorizePreds(userId string, groupIds, preds []string,
 			blockedPreds[pred] = struct{}{}
 		}
 	}
-	aclCachePtr.RLock()
-	allowedPreds := make([]string, len(aclCachePtr.userPredPerms[userId]))
-	// User can have multiple permission for same predicate, add predicate
-	// only if the acl.Op is covered in the set of permissions for the user
-	for predicate, perm := range aclCachePtr.userPredPerms[userId] {
-		if (perm & aclOp.Code) > 0 {
-			allowedPreds = append(allowedPreds, predicate)
-		}
-	}
-	aclCachePtr.RUnlock()
-	return blockedPreds, allowedPreds
+	return blockedPreds
 }
 
 // authorizeAlter parses the Schema in the operation and authorizes the operation
@@ -549,7 +527,7 @@ func authorizeAlter(ctx context.Context, op *api.Operation) error {
 				"only guardians are allowed to drop all data, but the current user is %s", userId)
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Modify)
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Modify)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -657,7 +635,7 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 			return nil
 		}
 
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Write)
+		blockedPreds := authorizePreds(userId, groupIds, preds, acl.Write)
 		if len(blockedPreds) > 0 {
 			var msg strings.Builder
 			for key := range blockedPreds {
@@ -687,19 +665,14 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return err
 }
 
-func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
+func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 	predsMap := make(map[string]struct{})
-	varsMap := make(map[string]string)
 	for _, gq := range gqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Var) > 0 {
-			varsMap[gq.Var] = gq.Attr
-		}
-		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" && gq.Attr != "val" {
+		if len(gq.Attr) > 0 && gq.Attr != "uid" {
 			predsMap[gq.Attr] = struct{}{}
-
 		}
 		for _, ord := range gq.Order {
 			predsMap[ord.Attr] = struct{}{}
@@ -710,23 +683,15 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
 			predsMap[pred] = struct{}{}
 		}
-		childPredandVars := parsePredsFromQuery(gq.Children)
-		for _, childPred := range childPredandVars.preds {
+		for _, childPred := range parsePredsFromQuery(gq.Children) {
 			predsMap[childPred] = struct{}{}
-		}
-		for childVar := range childPredandVars.vars {
-			varsMap[childVar] = childPredandVars.vars[childVar]
 		}
 	}
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
-		if _, found := varsMap[pred]; !found {
-			preds = append(preds, pred)
-		}
+		preds = append(preds, pred)
 	}
-
-	pv := predsAndvars{preds: preds, vars: varsMap}
-	return pv
+	return preds
 }
 
 func parsePredsFromFilter(f *gql.FilterTree) []string {
@@ -773,21 +738,12 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
-	predsAndvars := parsePredsFromQuery(parsedReq.Query)
-	preds := predsAndvars.preds
-	varsToPredMap := predsAndvars.vars
+	preds := parsePredsFromQuery(parsedReq.Query)
 
-	// Need this to efficiently identify blocked variables from the
-	// list of blocked predicates
-	predToVarsMap := make(map[string]string)
-	for k, v := range varsToPredMap {
-		predToVarsMap[v] = k
-	}
-
-	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
+	doAuthorizeQuery := func() (map[string]struct{}, error) {
 		userData, err := extractUserAndGroups(ctx)
 		if err != nil {
-			return nil, nil, status.Error(codes.Unauthenticated, err.Error())
+			return nil, status.Error(codes.Unauthenticated, err.Error())
 		}
 
 		userId = userData[0]
@@ -795,14 +751,13 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 		if x.IsGuardian(groupIds) {
 			// Members of guardian groups are allowed to query anything.
-			return nil, nil, nil
+			return nil, nil
 		}
 
-		blockedPreds, allowedPreds := authorizePreds(userId, groupIds, preds, acl.Read)
-		return blockedPreds, allowedPreds, nil
+		return authorizePreds(userId, groupIds, preds, acl.Read), nil
 	}
 
-	blockedPreds, allowedPreds, err := doAuthorizeQuery()
+	blockedPreds, err := doAuthorizeQuery()
 
 	if span := otrace.FromContext(ctx); span != nil {
 		span.Annotatef(nil, (&accessEntry{
@@ -833,90 +788,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// In query context ~predicate and predicate are considered different.
 			delete(blockedPreds, "~dgraph.user.group")
 		}
-
-		blockedVars := make(map[string]struct{})
-		for predicate := range blockedPreds {
-			if variable, found := predToVarsMap[predicate]; found {
-				// Add variables to blockedPreds to delete from Query
-				blockedPreds[variable] = struct{}{}
-				// Collect blocked Variables to remove from QueryVars
-				blockedVars[variable] = struct{}{}
-			}
-		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
-		parsedReq.QueryVars = removeVarsFromQueryVars(parsedReq.QueryVars, blockedVars)
-	}
-	for i := range parsedReq.Query {
-		parsedReq.Query[i].AllowedPreds = allowedPreds
-	}
-
-	return nil
-}
-
-func authorizeSchemaQuery(ctx context.Context, er *query.ExecutionResult) error {
-	if len(worker.Config.HmacSecret) == 0 {
-		// the user has not turned on the acl feature
-		return nil
-	}
-
-	// find the predicates being sent in response
-	preds := make([]string, 0)
-	predsMap := make(map[string]struct{})
-	for _, predNode := range er.SchemaNode {
-		preds = append(preds, predNode.Predicate)
-		predsMap[predNode.Predicate] = struct{}{}
-	}
-	for _, typeNode := range er.Types {
-		for _, field := range typeNode.Fields {
-			if _, ok := predsMap[field.Predicate]; !ok {
-				preds = append(preds, field.Predicate)
-			}
-		}
-	}
-
-	doAuthorizeSchemaQuery := func() (map[string]struct{}, error) {
-		userData, err := extractUserAndGroups(ctx)
-		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, err.Error())
-		}
-
-		userId := userData[0]
-		groupIds := userData[1:]
-
-		if x.IsGuardian(groupIds) {
-			// Members of guardian groups are allowed to query anything.
-			return nil, nil
-		}
-		blockedPreds, _ := authorizePreds(userId, groupIds, preds, acl.Read)
-
-		return blockedPreds, nil
-	}
-
-	// find the predicates which are blocked for the schema query
-	blockedPreds, err := doAuthorizeSchemaQuery()
-	if err != nil {
-		return err
-	}
-
-	// remove those predicates from response
-	if len(blockedPreds) > 0 {
-		respPreds := make([]*pb.SchemaNode, 0)
-		for _, predNode := range er.SchemaNode {
-			if _, ok := blockedPreds[predNode.Predicate]; !ok {
-				respPreds = append(respPreds, predNode)
-			}
-		}
-		er.SchemaNode = respPreds
-
-		for _, typeNode := range er.Types {
-			respFields := make([]*pb.SchemaUpdate, 0)
-			for _, field := range typeNode.Fields {
-				if _, ok := blockedPreds[field.Predicate]; !ok {
-					respFields = append(respFields, field)
-				}
-			}
-			typeNode.Fields = respFields
-		}
 	}
 
 	return nil
@@ -1095,7 +967,6 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
 	filteredGQs := gqs[:0]
-L:
 	for _, gq := range gqs {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
@@ -1105,15 +976,6 @@ L:
 		if len(gq.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Attr]; ok {
 				continue
-			}
-			if gq.Attr == "val" {
-				// TODO (Anurag): If val supports multiple variables, this would
-				// need an upgrade
-				for _, variable := range gq.NeedsVar {
-					if _, ok := blockedPreds[variable.Name]; ok {
-						continue L
-					}
-				}
 			}
 		}
 
@@ -1132,30 +994,6 @@ L:
 		filteredGQs = append(filteredGQs, gq)
 	}
 
-	return filteredGQs
-}
-
-func removeVarsFromQueryVars(gqs []*gql.Vars,
-	blockedVars map[string]struct{}) []*gql.Vars {
-
-	filteredGQs := gqs[:0]
-	for _, gq := range gqs {
-		var defines []string
-		var needs []string
-		for _, variable := range gq.Defines {
-			if _, ok := blockedVars[variable]; !ok {
-				defines = append(defines, variable)
-			}
-		}
-		for _, variable := range gq.Needs {
-			if _, ok := blockedVars[variable]; !ok {
-				needs = append(needs, variable)
-			}
-		}
-		gq.Defines = defines
-		gq.Needs = needs
-		filteredGQs = append(filteredGQs, gq)
-	}
 	return filteredGQs
 }
 

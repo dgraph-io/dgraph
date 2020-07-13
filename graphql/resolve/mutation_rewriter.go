@@ -103,7 +103,7 @@ func NewVariableGenerator() *VariableGenerator {
 // Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth bool) string {
+func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string {
 	// return previously allocated variable name for repeating xidVal
 	var key string
 	if xidName == "" || xidVal == "" {
@@ -118,12 +118,7 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth b
 
 	// create new variable name
 	v.counter++
-	var varName string
-	if auth {
-		varName = fmt.Sprintf("%sAuth%v", typ.Name(), v.counter)
-	} else {
-		varName = fmt.Sprintf("%s%v", typ.Name(), v.counter)
-	}
+	varName := fmt.Sprintf("%s%v", typ.Name(), v.counter)
 
 	// save it, if it was created for xidVal
 	if xidName != "" && xidVal != "" {
@@ -357,6 +352,8 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
+	// TODO - Remove this call from rewriter and instead fetch authVariables from context,
+	// here and elsewhere.
 	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
 		return nil, err
@@ -365,10 +362,7 @@ func (mrw *AddRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
-		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
-
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
@@ -418,9 +412,7 @@ func (urw *UpdateRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      updateAuthSelector,
-		parentVarName: m.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
 	srcUID := MutationQueryVarUID
@@ -564,9 +556,7 @@ func (urw *UpdateRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
-		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
@@ -662,7 +652,9 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
 
-	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
+	if rbac == schema.Uncertain {
+		dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
+	}
 
 	return dgQuery
 }
@@ -688,9 +680,7 @@ func (drw *deleteRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      deleteAuthSelector,
-		parentVarName: m.MutatedType().Name() + "Root",
 	}
-	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
 	qry := dgQry
@@ -713,7 +703,7 @@ func (drw *deleteRewriter) Rewrite(
 				continue
 			}
 		}
-		varName := varGen.Next(fld.Type(), "", "", false)
+		varName := varGen.Next(fld.Type(), "", "")
 
 		qry.Children = append(qry.Children,
 			&gql.GraphQuery{
@@ -738,30 +728,8 @@ func (drw *deleteRewriter) Rewrite(
 
 	b, err := json.Marshal(deletes)
 
-	var finalQry *gql.GraphQuery
-	// This rewrites the Upsert mutation so we can query the nodes before deletion. The query result
-	// is later added to delete mutation result.
-	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
-		queryAuthRw := &authRewriter{
-			authVariables: authVariables,
-			varGen:        varGen,
-			selector:      queryAuthSelector,
-			filterByUid:   true,
-		}
-		queryAuthRw.parentVarName = queryAuthRw.varGen.Next(queryField.Type(), "", "",
-			queryAuthRw.isWritingAuth)
-		queryAuthRw.varName = MutationQueryVar
-		queryAuthRw.hasAuthRules = hasAuthRules(queryField, authRw)
-
-		queryDel := rewriteAsQuery(queryField, queryAuthRw)
-
-		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
-	} else {
-		finalQry = dgQry
-	}
-
 	upsert := &UpsertMutation{
-		Query:     finalQry,
+		Query:     dgQry,
 		Mutations: []*dgoapi.Mutation{{DeleteJson: b}},
 	}
 
@@ -916,7 +884,7 @@ func rewriteObject(
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := varGen.Next(typ, "", "", false)
+	variable := varGen.Next(typ, "", "")
 
 	id := typ.IDField()
 	if id != nil {
@@ -944,7 +912,7 @@ func rewriteObject(
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
-			variable = varGen.Next(typ, xid.Name(), xidString, false)
+			variable = varGen.Next(typ, xid.Name(), xidString)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
@@ -1433,7 +1401,7 @@ func addDelete(
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.Next(qryFld.Type(), "", "", false)
+	targetVar := varGen.Next(qryFld.Type(), "", "")
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
@@ -1506,10 +1474,6 @@ func addDelete(
 		varGen:        varGen,
 		varName:       targetVar,
 		selector:      updateAuthSelector,
-		parentVarName: qryFld.Type().Name() + "Root",
-	}
-	if rn := newRw.selector(qryFld.Type()); rn != nil {
-		newRw.hasAuthRules = true
 	}
 
 	authQueries, authFilter := newRw.rewriteAuthQueries(qryFld.Type())

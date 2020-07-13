@@ -317,9 +317,7 @@ func ReadPostingList(key []byte, it *badger.Iterator) (*List, error) {
 		case BitDeltaPosting:
 			err := item.Value(func(val []byte) error {
 				pl := &pb.PostingList{}
-				if err := pl.Unmarshal(val); err != nil {
-					return err
-				}
+				x.Check(pl.Unmarshal(val))
 				pl.CommitTs = item.Version()
 				for _, mpost := range pl.Postings {
 					// commitTs, startTs are meant to be only in memory, not

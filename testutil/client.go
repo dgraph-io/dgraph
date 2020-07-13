@@ -165,8 +165,7 @@ func RetryQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 	for {
 		resp, err := dg.NewTxn().Query(context.Background(), q)
 		if err != nil && (strings.Contains(err.Error(), "Please retry") ||
-			strings.Contains(err.Error(), "connection closed") ||
-			strings.Contains(err.Error(), "broken pipe")) {
+			strings.Contains(err.Error(), "connection closed")) {
 			// Retry connection issues because some tests (e.g TestSnapshot) are stopping and
 			// starting alphas.
 			time.Sleep(10 * time.Millisecond)

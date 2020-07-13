@@ -1221,19 +1221,19 @@ func typenameForInterface(t *testing.T) {
 func queryOnlyTypename(t *testing.T) {
 
 	newCountry1 := addCountry(t, postExecutor)
-	newCountry2 := addCountry(t, postExecutor)
-	newCountry3 := addCountry(t, postExecutor)
+        newCountry2 := addCountry(t, postExecutor)
+        newCountry3 := addCountry(t, postExecutor)
 
 	getCountryParams := &GraphQLParams{
-		Query: `query {
+         Query: `query {
 			queryCountry(filter: { name: {eq: "Testland"}}) {
 				__typename
 			}
 		}`,
-	}
-
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
+           }
+	
+        gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+        RequireNoGQLErrors(t, gqlResponse)
 
 	expected := `{
 	"queryCountry": [
@@ -1249,20 +1249,20 @@ func queryOnlyTypename(t *testing.T) {
 
        ]
 }`
-
-	require.JSONEq(t, expected, string(gqlResponse.Data))
-	cleanUp(t, []*country{newCountry1, newCountry2, newCountry3}, []*author{}, []*post{})
+     
+      require.JSONEq(t, expected, string(gqlResponse.Data))
+      cleanUp(t, []*country{newCountry1,newCountry2,newCountry3}, []*author{}, []*post{})
 }
 
 func querynestedOnlyTypename(t *testing.T) {
 
 	newCountry := addCountry(t, postExecutor)
-	newAuthor := addAuthor(t, newCountry.ID, postExecutor)
-	newPost1 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-	newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-	newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
-
-	getCountryParams := &GraphQLParams{
+        newAuthor := addAuthor(t, newCountry.ID, postExecutor)
+        newPost1 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+        newPost2 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+        newPost3 := addPost(t, newAuthor.ID, newCountry.ID, postExecutor)
+     
+   getCountryParams := &GraphQLParams{
 		Query: `query {
 			queryAuthor(filter: { name: { eq: "Test Author" } }) {
 				posts {
@@ -1270,12 +1270,12 @@ func querynestedOnlyTypename(t *testing.T) {
 				}
 			}
 		}`,
-	}
+	}   
+         
+         gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
+         RequireNoGQLErrors(t, gqlResponse)
 
-	gqlResponse := getCountryParams.ExecuteAsPost(t, graphqlURL)
-	RequireNoGQLErrors(t, gqlResponse)
-
-	expected := `{
+      expected := `{
 	"queryAuthor": [
 	  {
 		"posts": [
@@ -1293,9 +1293,10 @@ func querynestedOnlyTypename(t *testing.T) {
 	  }
 	]
 }`
-	require.JSONEq(t, expected, string(gqlResponse.Data))
-	cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1, newPost2, newPost3})
+         require.JSONEq(t, expected, string(gqlResponse.Data))
+         cleanUp(t, []*country{newCountry}, []*author{newAuthor}, []*post{newPost1,newPost2,newPost3})
 }
+
 
 func onlytypenameForInterface(t *testing.T) {
 	newStarship := addStarship(t)
@@ -1341,6 +1342,7 @@ func onlytypenameForInterface(t *testing.T) {
 
 	cleanupStarwars(t, newStarship.ID, humanID, droidID)
 }
+
 
 func defaultEnumFilter(t *testing.T) {
 	newStarship := addStarship(t)

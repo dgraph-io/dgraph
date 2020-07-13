@@ -50,7 +50,7 @@ func (urw *updateGroupRewriter) Rewrite(
 		}
 		for _, ruleI := range rules {
 			rule := ruleI.(map[string]interface{})
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := varGen.Next(ruleType, "", "")
 			predicate := rule["predicate"]
 			permission := rule["permission"]
 
@@ -96,7 +96,7 @@ func (urw *updateGroupRewriter) Rewrite(
 				continue
 			}
 
-			variable := varGen.Next(ruleType, "", "", false)
+			variable := varGen.Next(ruleType, "", "")
 			addAclRuleQuery(upsertQuery, predicate.(string), variable)
 
 			deleteJson := []byte(fmt.Sprintf(`[

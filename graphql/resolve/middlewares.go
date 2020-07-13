@@ -18,6 +18,11 @@ package resolve
 
 import (
 	"context"
+	"net"
+
+	"github.com/pkg/errors"
+
+	"google.golang.org/grpc/peer"
 
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -117,8 +122,16 @@ func resolveGuardianAuth(ctx context.Context, f schema.Field) *Resolved {
 }
 
 func resolveIpWhitelisting(ctx context.Context, f schema.Field) *Resolved {
-	if _, err := x.HasWhitelistedIP(ctx); err != nil {
+	peerInfo, ok := peer.FromContext(ctx)
+	if !ok {
+		return EmptyResult(f, errors.New("unable to find source ip"))
+	}
+	ip, _, err := net.SplitHostPort(peerInfo.Addr.String())
+	if err != nil {
 		return EmptyResult(f, err)
+	}
+	if !x.IsIpWhitelisted(ip) {
+		return EmptyResult(f, errors.Errorf("unauthorized ip address: %s", ip))
 	}
 	return nil
 }

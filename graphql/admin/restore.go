@@ -43,6 +43,7 @@ type restoreInput struct {
 }
 
 func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
+
 	input, err := getRestoreInput(m)
 	if err != nil {
 		return resolve.EmptyResult(m, err), false
@@ -61,26 +62,15 @@ func resolveRestore(ctx context.Context, m schema.Mutation) (*resolve.Resolved, 
 		VaultSecretidFile: input.VaultSecretIDFile,
 		VaultPath:         input.VaultPath,
 		VaultField:        input.VaultField,
-		VaultFormat:       input.VaultFormat,
+		VaultFormat:	   input.VaultFormat,
 	}
-	restoreId, err := worker.ProcessRestoreRequest(context.Background(), &req)
+	err = worker.ProcessRestoreRequest(context.Background(), &req)
 	if err != nil {
-		worker.DeleteRestoreId(restoreId)
-		return &resolve.Resolved{
-			Data: map[string]interface{}{m.Name(): map[string]interface{}{
-				"code": "Failure",
-			}},
-			Field: m,
-			Err:   schema.GQLWrapLocationf(err, m.Location(), "resolving %s failed", m.Name()),
-		}, false
+		return resolve.EmptyResult(m, err), false
 	}
 
 	return &resolve.Resolved{
-		Data: map[string]interface{}{m.Name(): map[string]interface{}{
-			"code":      "Success",
-			"message":   "Restore operation started.",
-			"restoreId": restoreId,
-		}},
+		Data:  map[string]interface{}{m.Name(): response("Success", "Restore completed.")},
 		Field: m,
 	}, true
 }

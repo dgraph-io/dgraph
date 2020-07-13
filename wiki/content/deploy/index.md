@@ -15,10 +15,10 @@ For a single server setup, recommended for new users, please see [Get Started]({
 ### Docker
 
 ```sh
-docker pull dgraph/dgraph:{{< version >}}
+docker pull dgraph/dgraph:latest
 
 # You can test that it worked fine, by running:
-docker run -it dgraph/dgraph:{{< version >}} dgraph
+docker run -it dgraph/dgraph:latest dgraph
 ```
 
 ### Automatic download
@@ -373,25 +373,25 @@ docker network create dgraph_default
 ```sh
 mkdir ~/zero # Or any other directory where data should be stored.
 
-docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:{{< version >}} dgraph zero --my=HOSTIPADDR:5080
+docker run -it -p 5080:5080 --network dgraph_default -p 6080:6080 -v ~/zero:/dgraph dgraph/dgraph:latest dgraph zero --my=HOSTIPADDR:5080
 ```
 
 **Run dgraph alpha**
 ```sh
 mkdir ~/server1 # Or any other directory where data should be stored.
 
-docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
+docker run -it -p 7080:7080 --network dgraph_default -p 8080:8080 -p 9080:9080 -v ~/server1:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7080
 ```
 ```sh
 mkdir ~/server2 # Or any other directory where data should be stored.
 
-docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:{{< version >}} dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
+docker run -it -p 7081:7081 --network dgraph_default -p 8081:8081 -p 9081:9081 -v ~/server2:/dgraph dgraph/dgraph:latest dgraph alpha --lru_mb=<typically one-third the RAM> --zero=HOSTIPADDR:5080 --my=HOSTIPADDR:7081  -o=1
 ```
 Notice the use of -o for server2 to override the default ports for server2.
 
 **Run dgraph UI**
 ```sh
-docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:{{< version >}} dgraph-ratel
+docker run -it -p 8000:8000 --network dgraph_default dgraph/dgraph:latest dgraph-ratel
 ```
 
 ### Run using Docker Compose (On single AWS instance)
@@ -726,59 +726,44 @@ docker stack rm dgraph
 
 ## Using Kubernetes
 
-The following section covers running Dgraph with Kubernetes.  We have tested Dgraph with Kubernetes 1.14 to 1.15 on [GKE](https://cloud.google.com/kubernetes-engine) and [EKS](https://aws.amazon.com/eks/).
+The following section covers running Dgraph with Kubernetes v1.8.4.
 
-{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS configuration.
+{{% notice "note" %}}These instructions are for running Dgraph Alpha without TLS config.
 Instructions for running with TLS refer [TLS instructions](#tls-configuration).{{% /notice %}}
 
 * Install [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/) which is used to deploy
   and manage applications on kubernetes.
-* Get the Kubernetes cluster up and running on a cloud provider of your choice.
-  * For Amazon [EKS](https://aws.amazon.com/eks/), you can use [eksctl](https://eksctl.io/) to quickly provision a new cluster. If you are new to this, Amazon has an article [Getting started with eksctl](https://docs.aws.amazon.com/eks/latest/userguide/getting-started-eksctl.html).
-  * For Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you can use [Google Cloud SDK](https://cloud.google.com/sdk/install) and the `gcloud container clusters create` command to quickly provision a new cluster.
+* Get the kubernetes cluster up and running on a cloud provider of your choice. You can use [kops](https://github.com/kubernetes/kops/blob/master/docs/aws.md) to set it up on AWS. Kops does auto-scaling by default on AWS and creates the volumes and instances for you.
 
-Verify that you have your cluster up and running using `kubectl get nodes`. If you used `eksctl` or `gcloud container clusters create` with the default options, you should have 2-3 worker nodes ready.
-
-On Amazon [EKS](https://aws.amazon.com/eks/), you would see something like this:
+Verify that you have your cluster up and running using `kubectl get nodes`. If you used `kops` with
+the default options, you should have a master and two worker nodes ready.
 
 ```sh
 ➜  kubernetes git:(master) ✗ kubectl get nodes
-NAME                                          STATUS   ROLES    AGE   VERSION
-<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-```
-
-On Google Cloud [GKE](https://cloud.google.com/kubernetes-engine), you would see something like this:
-
-```sh
-➜  kubernetes git:(master) ✗ kubectl get nodes
-NAME                                       STATUS   ROLES    AGE   VERSION
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
+NAME                                          STATUS    ROLES     AGE       VERSION
+ip-172-20-42-118.us-west-2.compute.internal   Ready     node      1h        v1.8.4
+ip-172-20-61-179.us-west-2.compute.internal   Ready     master    2h        v1.8.4
+ip-172-20-61-73.us-west-2.compute.internal    Ready     node      2h        v1.8.4
 ```
 
 ### Single Server
 
-Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero, Alpha, and Ratel UI services.
+Once your Kubernetes cluster is up, you can use [dgraph-single.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml) to start a Zero and Alpha.
 
-#### Deploy Single Server
-
-From your machine, run the following command to start a StatefulSet that creates a single Pod with Zero, Alpha, and Ratel UI running in it.
+* From your machine, run the following command to start a StatefulSet that
+  creates a Pod with Zero and Alpha running in it.
 
 ```sh
-kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
 ```
 
 Output:
 ```
-service/dgraph-public created
-statefulset.apps/dgraph created
+service "dgraph-public" created
+statefulset "dgraph" created
 ```
 
-#### Verify Single Server
-
-Confirm that the pod was created successfully.
+* Confirm that the pod was created successfully.
 
 ```sh
 kubectl get pods
@@ -792,28 +777,36 @@ dgraph-0   3/3       Running   0          1m
 
 {{% notice "tip" %}}
 You can check the logs for the containers in the pod using
-`kubectl logs --follow dgraph-0 <container_name>`. For example, try
-`kubectl logs --follow dgraph-0 alpha` for server logs.
+`kubectl logs -f dgraph-0 <container_name>`. For example, try
+`kubectl logs -f dgraph-0 alpha` for server logs.
 {{% /notice %}}
 
-#### Test Single Server Setup
+* Test the setup
 
 Port forward from your local machine to the pod
 
 ```sh
-kubectl port-forward pod/dgraph-0 8080:8080
-kubectl port-forward pod/dgraph-0 8000:8000
+kubectl port-forward dgraph-0 8080
+kubectl port-forward dgraph-0 8000
 ```
 
 Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
-#### Remove Single Server Resources
+{{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
+
+
+* Stop the cluster
 
 Delete all the resources
 
 ```sh
-kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-single/dgraph-single.yaml
-kubectl delete persistentvolumeclaims --selector app=dgraph
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph
+```
+
+Stop the cluster. If you used `kops` you can run the following command.
+
+```sh
+kops delete cluster ${NAME} --yes
 ```
 
 ### HA Cluster Setup Using Kubernetes
@@ -822,61 +815,45 @@ This setup allows you to run 3 Dgraph Alphas and 3 Dgraph Zeros. We start Zero w
 3` flag, so all data would be replicated on 3 Alphas and form 1 alpha group.
 
 {{% notice "note" %}} Ideally you should have at least three worker nodes as part of your Kubernetes
-cluster so that each Dgraph Alpha runs on a separate worker node.{{% /notice %}}
+cluster so that each Dgraph Alpha runs on a separate node.{{% /notice %}}
 
-#### Validate Kubernetes Cluster for HA
-
-Check the nodes that are part of the Kubernetes cluster.
+* Check the nodes that are part of the Kubernetes cluster.
 
 ```sh
 kubectl get nodes
 ```
 
-Output for Amazon [EKS](https://aws.amazon.com/eks/):
-
+Output:
 ```sh
-NAME                                          STATUS   ROLES    AGE   VERSION
-<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-<aws-ip-hostname>.<region>.compute.internal   Ready    <none>   1m   v1.15.11-eks-af3caf
-```
-
-Output for Google Cloud [GKE](https://cloud.google.com/kubernetes-engine)
-
-```sh
-NAME                                       STATUS   ROLES    AGE   VERSION
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   40s   v1.14.10-gke.36
-gke-<cluster-name>-default-pool-<gce-id>   Ready    <none>   41s   v1.14.10-gke.36
+NAME                                          STATUS    ROLES     AGE       VERSION
+ip-172-20-34-90.us-west-2.compute.internal    Ready     master    6m        v1.8.4
+ip-172-20-51-1.us-west-2.compute.internal     Ready     node      4m        v1.8.4
+ip-172-20-59-116.us-west-2.compute.internal   Ready     node      4m        v1.8.4
+ip-172-20-61-88.us-west-2.compute.internal    Ready     node      5m        v1.8.4
 ```
 
 Once your Kubernetes cluster is up, you can use [dgraph-ha.yaml](https://github.com/dgraph-io/dgraph/blob/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml) to start the cluster.
 
-#### Deploy Dgraph HA Cluster
-
-From your machine, run the following command to start the cluster.
+* From your machine, run the following command to start the cluster.
 
 ```sh
-kubectl create --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
+kubectl create -f https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
 ```
 
 Output:
 ```sh
-service/dgraph-zero-public created
-service/dgraph-alpha-public created
-service/dgraph-ratel-public created
-service/dgraph-zero created
-service/dgraph-alpha created
-statefulset.apps/dgraph-zero created
-statefulset.apps/dgraph-alpha created
-deployment.apps/dgraph-ratel created
+service "dgraph-zero-public" created
+service "dgraph-alpha-public" created
+service "dgraph-alpha-0-http-public" created
+service "dgraph-ratel-public" created
+service "dgraph-zero" created
+service "dgraph-alpha" created
+statefulset "dgraph-zero" created
+statefulset "dgraph-alpha" created
+deployment "dgraph-ratel" created
 ```
 
-#### Verify Dgraph HA Cluster
-
-Confirm that the pods were created successfully.
-
-It may take a few minutes for the pods to come up.
+* Confirm that the pods were created successfully.
 
 ```sh
 kubectl get pods
@@ -884,40 +861,47 @@ kubectl get pods
 
 Output:
 ```sh
-NAME                  READY   STATUS    RESTARTS   AGE
-dgraph-alpha-0        1/1     Running   0          6m24s
-dgraph-alpha-1        1/1     Running   0          5m42s
-dgraph-alpha-2        1/1     Running   0          5m2s
-dgraph-ratel-<pod-id> 1/1     Running   0          6m23s
-dgraph-zero-0         1/1     Running   0          6m24s
-dgraph-zero-1         1/1     Running   0          5m41s
-dgraph-zero-2         1/1     Running   0          5m6s
+NAME                   READY     STATUS    RESTARTS   AGE
+dgraph-ratel-<pod-id>  1/1       Running   0          9s
+dgraph-alpha-0         1/1       Running   0          2m
+dgraph-alpha-1         1/1       Running   0          2m
+dgraph-alpha-2         1/1       Running   0          2m
+dgraph-zero-0          1/1       Running   0          2m
+dgraph-zero-1          1/1       Running   0          2m
+dgraph-zero-2          1/1       Running   0          2m
+
 ```
 
+{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs -f dgraph-alpha-0` and `kubectl logs -f dgraph-zero-0`.{{% /notice %}}
 
-{{% notice "tip" %}}You can check the logs for the containers in the pod using `kubectl logs --follow dgraph-alpha-0` and `kubectl logs --follow dgraph-zero-0`.{{% /notice %}}
-
-#### Test Dgraph HA Cluster Setup
+* Test the setup
 
 Port forward from your local machine to the pod
 
 ```sh
-kubectl port-forward service/dgraph-alpha-public 8080:8080
-kubectl port-forward service/dgraph-ratel-public 8000:8000
+kubectl port-forward dgraph-alpha-0 8080
+kubectl port-forward dgraph-ratel-<pod-id> 8000
 ```
 
 Go to `http://localhost:8000` and verify Dgraph is working as expected.
 
 {{% notice "note" %}} You can also access the service on its External IP address.{{% /notice %}}
 
-#### Delete Dgraph HA Cluster Resources
+
+* Stop the cluster
 
 Delete all the resources
 
 ```sh
-kubectl delete --filename https://raw.githubusercontent.com/dgraph-io/dgraph/master/contrib/config/kubernetes/dgraph-ha/dgraph-ha.yaml
-kubectl delete persistentvolumeclaims --selector app=dgraph-zero
-kubectl delete persistentvolumeclaims --selector app=dgraph-alpha
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-zero
+kubectl delete pods,statefulsets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-alpha
+kubectl delete pods,replicasets,services,persistentvolumeclaims,persistentvolumes -l app=dgraph-ratel
+```
+
+Stop the cluster. If you used `kops` you can run the following command.
+
+```sh
+kops delete cluster ${NAME} --yes
 ```
 
 ### Using Helm Chart
@@ -945,12 +929,12 @@ helm install my-release dgraph/dgraph
 The above command will install the latest available dgraph docker image. In order to install the older versions:
 
 ```sh
-helm install my-release dgraph/dgraph --set image.tag="latest"
+helm install my-release dgraph/dgraph --set image.tag="v1.1.0"
 ```
 
 By default zero and alpha services are exposed only within the kubernetes cluster as
-kubernetes service type `ClusterIP`. In order to expose the alpha service publicly
-you can use kubernetes service type `LoadBalancer`:
+kubernetes service type "ClusterIP". In order to expose the alpha service publicly
+you can use kubernetes service type "LoadBalancer":
 
 ```sh
 helm install my-release dgraph/dgraph --set alpha.service.type="LoadBalancer"
@@ -982,7 +966,7 @@ that the shard replication setting is more than 1. When `zero.shardReplicaCount`
 is not set to an HA configuration (3 or 5), follow the steps below:
 
 1. Set the shard replica flag on the Zero node group. For example: `zero.shardReplicaCount=3`.
-2. Next, run the Helm upgrade command to restart the Zero node group:
+2. Next, run the Helm upgrade command to restart the Zero node group: 
    ```sh
    helm upgrade my-release dgraph/dgraph [options]
    ```
@@ -2360,7 +2344,7 @@ Go's built-in metrics may also be useful to measure for memory usage and garbage
 
 Dgraph is integrated with [OpenCensus](https://opencensus.io/zpages/) to collect distributed traces from the Dgraph cluster.
 
-Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 0.01 to trace 1% of queries.
+Trace data is always collected within Dgraph. You can adjust the trace sampling rate for Dgraph queries with the `--trace` option for Dgraph Alphas. By default, `--trace` is set to 1 to trace 100% of queries.
 
 ### Examining Traces with zPages
 
@@ -2413,31 +2397,7 @@ This option is available in v20.03.1 and later.
 
 ## Dgraph Administration
 
-Each Dgraph Alpha exposes various administrative endpoints both over HTTP and GraphQL, for
- example endpoints to export data and to perform a clean shutdown. All such admin endpoints are
-  protected by three layers of auth:
-
-1. IP White-listing (use `--whitelist` flag in alpha to whitelist IPs other than localhost).
-2. Poor-man's auth, if alpha is started with the `--auth_token` flag (means you will need to pass the `auth_token` as `X-Dgraph-AuthToken` header while making the HTTP request).
-3. Guardian only access, if ACL is enabled (means you need to pass the ACL-JWT of a Guardian user as `X-Dgraph-AccessToken` header while making the HTTP request).
-
-Admin endpoint means any http endpoint which provides admin functionalities. Normally, the path starts with `/admin` for such endpoints, except a few. So, currently this list includes:
-
-* /admin
-* /admin/backup
-* /admin/config/lru_mb
-* /admin/draining
-* /admin/export
-* /admin/shutdown
-* /admin/schema
-* /alter
-* /login
-
-There are a few exceptions to the general rule described above:
-
-1. `/login`: This endpoint logs-in an ACL user, and provides them with a JWT. Only IP Whitelisting and Poor-man's auth checks are performed for this.
-2. `/admin`: This endpoint provides GraphQL queries/mutations corresponding to the HTTP admin endpoints. All the queries/mutations on `/admin` have all the 3 auth checks, except for the following one:
-   * `login (mutation)`: The same behavior as the above HTTP `login` endpoint.
+Each Dgraph Alpha exposes administrative operations over HTTP to export data and to perform a clean shutdown.
 
 ### Whitelisting Admin Operations
 

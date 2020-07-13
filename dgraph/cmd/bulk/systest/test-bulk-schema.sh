@@ -243,7 +243,6 @@ pushd dir2 >/dev/null
 StartZero
 BulkLoadExportedData
 StartAlpha "./out/0/p"
-sleep 5
 QuerySchema
 StopServers
 
@@ -259,7 +258,6 @@ pushd dir3 >/dev/null
 StartZero
 BulkLoadFixtureData
 StartAlpha "./out/0/p"
-sleep 5
 QuerySchema
 StopServers
 

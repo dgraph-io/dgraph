@@ -83,7 +83,6 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
-	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -162,7 +161,6 @@ type AddPostPayload {
 }
 
 type DeletePostPayload {
-	post(filter: PostFilter, order: PostOrder, first: Int, offset: Int): [Post]
 	msg: String
 	numUids: Int
 }

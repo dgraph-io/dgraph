@@ -33,24 +33,20 @@ type subMutation struct {
 	edges   []*pb.DirectedEdge
 	ctx     context.Context
 	startTs uint64
-	index   uint64
 }
 
 type executor struct {
 	pendingSize int64
-	smCount     int64 // Stores count for active sub mutations.
 
 	sync.RWMutex
 	predChan map[string]chan *subMutation
 	closer   *y.Closer
-	applied  *y.WaterMark
 }
 
-func newExecutor(applied *y.WaterMark) *executor {
+func newExecutor() *executor {
 	ex := &executor{
 		predChan: make(map[string]chan *subMutation),
 		closer:   y.NewCloser(0),
-		applied:  applied,
 	}
 	go ex.shutdown()
 	return ex
@@ -84,9 +80,7 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}
 
-		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
-		atomic.AddInt64(&e.smCount, -1)
 	}
 }
 
@@ -99,8 +93,8 @@ func (e *executor) shutdown() {
 	}
 }
 
-// getChannel obtains the channel for the given pred. It must be called under e.Lock().
-func (e *executor) getChannel(pred string) (ch chan *subMutation) {
+// getChannelUnderLock obtains the channel for the given pred. It must be called under e.Lock().
+func (e *executor) getChannelUnderLock(pred string) (ch chan *subMutation) {
 	ch, ok := e.predChan[pred]
 	if ok {
 		return ch
@@ -117,12 +111,8 @@ const (
 	executorAddEdges          = "executor.addEdges"
 )
 
-func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
+func (e *executor) addEdges(ctx context.Context, startTs uint64, edges []*pb.DirectedEdge) {
 	rampMeter(&e.pendingSize, maxPendingEdgesSize, executorAddEdges)
-
-	index := proposal.Index
-	startTs := proposal.Mutations.StartTs
-	edges := proposal.Mutations.Edges
 
 	payloadMap := make(map[string]*subMutation)
 	var esize int64
@@ -132,7 +122,6 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 			payloadMap[edge.Attr] = &subMutation{
 				ctx:     ctx,
 				startTs: startTs,
-				index:   index,
 			}
 			payload = payloadMap[edge.Attr]
 		}
@@ -149,18 +138,9 @@ func (e *executor) addEdges(ctx context.Context, proposal *pb.Proposal) {
 	default:
 		// Closer is not closed. And we have the Lock, so sending on channel should be safe.
 		for attr, payload := range payloadMap {
-			e.applied.Begin(index)
-			atomic.AddInt64(&e.smCount, 1)
-			e.getChannel(attr) <- payload
+			e.getChannelUnderLock(attr) <- payload
 		}
 	}
 
 	atomic.AddInt64(&e.pendingSize, esize)
-}
-
-// waitForActiveMutations waits for all the mutations (currently active) to finish. This function
-// should be called before running any schema mutation.
-func (e *executor) waitForActiveMutations() {
-	glog.Infoln("executor: wait for active mutation to finish")
-	rampMeter(&e.smCount, 0, "waiting on active mutations to finish")
 }

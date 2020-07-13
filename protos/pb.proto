@@ -548,7 +548,6 @@ service Worker {
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
-	rpc UpdateGraphQLSchema(UpdateGraphQLSchemaRequest) returns (UpdateGraphQLSchemaResponse) {}
 }
 
 message SubscriptionRequest {
@@ -638,17 +637,6 @@ message BackupPostingList {
 	repeated Posting postings = 2;
 	uint64 commit_ts = 3;
   repeated uint64 splits = 4;
-}
-
-message UpdateGraphQLSchemaRequest {
-	uint64                start_ts       = 1;
-	string                graphql_schema = 2;
-	repeated SchemaUpdate dgraph_preds   = 3;
-	repeated TypeUpdate   dgraph_types   = 4;
-}
-
-message UpdateGraphQLSchemaResponse {
-	uint64 uid = 1;
 }
 
 // vim: noexpandtab sw=2 ts=2

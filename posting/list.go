@@ -730,26 +730,6 @@ func (l *List) IsEmpty(readTs, afterUid uint64) (bool, error) {
 	return count == 0, nil
 }
 
-func (l *List) getPostingAndLength(readTs, afterUid, uid uint64) (int, bool, *pb.Posting) {
-	l.AssertRLock()
-	var count int
-	var found bool
-	var post *pb.Posting
-	err := l.iterate(readTs, afterUid, func(p *pb.Posting) error {
-		if p.Uid == uid {
-			post = p
-			found = true
-		}
-		count++
-		return nil
-	})
-	if err != nil {
-		return -1, false, nil
-	}
-
-	return count, found, post
-}
-
 func (l *List) length(readTs, afterUid uint64) int {
 	l.AssertRLock()
 	count := 0

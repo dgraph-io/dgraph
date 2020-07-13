@@ -64,7 +64,6 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
-	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -143,7 +142,6 @@ type AddProductPayload {
 }
 
 type DeleteProductPayload {
-	product(filter: ProductFilter, order: ProductOrder, first: Int, offset: Int): [Product]
 	msg: String
 	numUids: Int
 }

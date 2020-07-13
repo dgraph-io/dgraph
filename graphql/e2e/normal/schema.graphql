@@ -139,7 +139,3 @@ type Student implements People {
         taughtBy: [Teacher] @hasInverse(field: teaches)
 }
 
-type Person @withSubscription{
-    id: ID!
-    name: String!
-}

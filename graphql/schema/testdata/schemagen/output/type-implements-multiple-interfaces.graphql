@@ -72,7 +72,6 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
-	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -151,13 +150,11 @@ type AddHumanPayload {
 }
 
 type DeleteCharacterPayload {
-	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
 	numUids: Int
 }
 
 type DeleteHumanPayload {
-	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
 	numUids: Int
 }

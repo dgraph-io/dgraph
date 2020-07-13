@@ -131,9 +131,6 @@ func PopulateList(l *List, t *testing.T) {
 			continue
 		}
 		pl, err := ReadPostingList(item.Key(), itr)
-		if err == ErrInvalidKey {
-			continue
-		}
 		require.NoError(t, err)
 		l.mutationMap[i] = pl.plist
 		i++
@@ -212,7 +209,7 @@ func Test21MillionDataSetSize(t *testing.T) {
 	percent := (float64(difference) / float64(calculatedSize)) * 100.0
 	t.Logf("calculated unit %s profied unit %s percent difference %.2f%%",
 		humanize.Bytes(uint64(calculatedSize)), humanize.Bytes(uint64(pprofSize)), percent)
-	if percent > 10 {
+	if percent > 5 {
 		require.Fail(t, "Expected size difference is less than 8 but got %f", percent)
 	}
 }
@@ -221,23 +218,15 @@ func Test21MillionDataSetSize(t *testing.T) {
 func filterUnit(line string) (string, error) {
 	words := strings.Split(line, " ")
 	for _, word := range words {
-		if strings.Contains(word, "MB") || strings.Contains(word, "GB") ||
-			strings.Contains(word, "kB") {
+		if strings.Contains(word, "MB") || strings.Contains(word, "GB") {
 			return strings.TrimSpace(word), nil
 		}
 	}
-	return "", errors.Errorf("Invalid line. Line %s does not contain GB or MB", line)
+	return "", errors.New("Invalid line. Line does not contain GB or MB")
 }
 
 // convertToBytes converts the unit into bytes.
 func convertToBytes(unit string) (uint32, error) {
-	if strings.Contains(unit, "kB") {
-		kb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
-		if err != nil {
-			return 0, err
-		}
-		return uint32(kb * 1024.0), nil
-	}
 	if strings.Contains(unit, "MB") {
 		mb, err := strconv.ParseFloat(unit[0:len(unit)-2], 64)
 		if err != nil {

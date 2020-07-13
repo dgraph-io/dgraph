@@ -193,6 +193,7 @@ func queryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMeta) {
 
 	for _, tcase := range tests {
 		t.Run(tcase.Name, func(t *testing.T) {
+
 			op, err := gqlSchema.Operation(
 				&schema.Request{
 					Query: tcase.GQLQuery,
@@ -248,17 +249,16 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			rewriter: NewAddRewriter,
 			assigned: map[string]string{"Ticket1": "0x4"},
 			dgQuery: `query {
-  ticket(func: uid(TicketRoot)) {
+  ticket(func: uid(Ticket2)) @filter(uid(Ticket3)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column3)) {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
   }
-  TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
-  Ticket4 as var(func: uid(0x4))
-  TicketAuth5 as var(func: uid(Ticket4)) @cascade {
+  Ticket2 as var(func: uid(0x4))
+  Ticket3 as var(func: uid(Ticket2)) @cascade {
     onColumn : Ticket.onColumn {
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -271,11 +271,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     }
     dgraph.uid : uid
   }
-  var(func: uid(TicketRoot)) {
-    Column1 as Ticket.onColumn
-  }
-  Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-  ColumnAuth2 as var(func: uid(Column1)) @cascade {
+  Column1 as var(func: type(Column)) @cascade {
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
@@ -304,17 +300,16 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
 			result: map[string]interface{}{
 				"updateTicket": []interface{}{map[string]interface{}{"uid": "0x4"}}},
 			dgQuery: `query {
-  ticket(func: uid(TicketRoot)) {
+  ticket(func: uid(Ticket2)) @filter(uid(Ticket3)) {
     id : uid
     title : Ticket.title
-    onColumn : Ticket.onColumn @filter(uid(Column3)) {
+    onColumn : Ticket.onColumn @filter(uid(Column1)) {
       colID : uid
       name : Column.name
     }
   }
-  TicketRoot as var(func: uid(Ticket4)) @filter(uid(TicketAuth5))
-  Ticket4 as var(func: uid(0x4))
-  TicketAuth5 as var(func: uid(Ticket4)) @cascade {
+  Ticket2 as var(func: uid(0x4))
+  Ticket3 as var(func: uid(Ticket2)) @cascade {
     onColumn : Ticket.onColumn {
       inProject : Column.inProject {
         roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
@@ -327,11 +322,7 @@ func mutationQueryRewriting(t *testing.T, sch string, authMeta *testutil.AuthMet
     }
     dgraph.uid : uid
   }
-  var(func: uid(TicketRoot)) {
-    Column1 as Ticket.onColumn
-  }
-  Column3 as var(func: uid(Column1)) @filter(uid(ColumnAuth2))
-  ColumnAuth2 as var(func: uid(Column1)) @cascade {
+  Column1 as var(func: type(Column)) @cascade {
     inProject : Column.inProject {
       roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
         assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))

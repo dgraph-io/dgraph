@@ -66,7 +66,6 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
-	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -150,13 +149,11 @@ type AddLibraryPayload {
 }
 
 type DeleteBookPayload {
-	book(filter: BookFilter, order: BookOrder, first: Int, offset: Int): [Book]
 	msg: String
 	numUids: Int
 }
 
 type DeleteLibraryItemPayload {
-	libraryItem(filter: LibraryItemFilter, order: LibraryItemOrder, first: Int, offset: Int): [LibraryItem]
 	msg: String
 	numUids: Int
 }

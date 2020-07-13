@@ -21,12 +21,15 @@ package alpha
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
+	"strconv"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
+	"google.golang.org/grpc/peer"
 )
 
 func loginHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +37,18 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx := x.AttachRemoteIP(context.Background(), r)
+	ctx := context.Background()
+	if ip, port, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		// add remote addr as peer info so that the remote address can be logged inside Server.Login
+		if intPort, convErr := strconv.Atoi(port); convErr == nil {
+			ctx = peer.NewContext(ctx, &peer.Peer{
+				Addr: &net.TCPAddr{
+					IP:   net.ParseIP(ip),
+					Port: intPort,
+				},
+			})
+		}
+	}
 
 	body := readRequest(w, r)
 	loginReq := api.LoginRequest{}

@@ -568,6 +568,7 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
+
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
@@ -863,6 +864,7 @@ func getCustomHTTPConfig(f *field, isQueryOrMutation bool) (FieldHTTPConfig, err
 	forwardHeaders := httpArg.Value.Children.ForName("forwardHeaders")
 	if forwardHeaders != nil {
 		for _, h := range forwardHeaders.Children {
+			// We would override the header if it was also specified as part of secretHeaders.
 			key := strings.Split(h.Value.Raw, ":")
 			if len(key) == 1 {
 				key = []string{h.Value.Raw, h.Value.Raw}
@@ -1105,7 +1107,7 @@ func queryType(name string, custom *ast.Directive) QueryType {
 		return HTTPQuery
 	case strings.HasPrefix(name, "get"):
 		return GetQuery
-	case name == "__schema" || name == "__type" || name == "__typename":
+	case name == "__schema" || name == "__type":
 		return SchemaQuery
 	case strings.HasPrefix(name, "query"):
 		return FilterQuery
@@ -1194,7 +1196,7 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
+		if f.Name() == NumUid || f.Name() == Typename {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which

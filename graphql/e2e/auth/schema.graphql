@@ -68,7 +68,7 @@ type Region @auth(
     """}
 ){
   id: ID!
-  name: String @search(by: [hash])
+  name: String
   global: Boolean @search
   users: [User]
 }
@@ -192,7 +192,7 @@ type Movie @auth(
     ]}
 ) {
   id: ID!
-  content: String @search(by: [hash])
+  content: String
   hidden: Boolean @search
   regionsAvailable: [Region]
   reviews: [Review]

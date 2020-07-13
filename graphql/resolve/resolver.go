@@ -72,8 +72,6 @@ const (
 		"probably a mismatch between the GraphQL and Dgraph/remote schemas. " +
 		"The value was resolved as null (which may trigger GraphQL error propagation) " +
 		"and as much other data as possible returned."
-
-	errInternal = "Internal error"
 )
 
 // A ResolverFactory finds the right resolver for a query/mutation.
@@ -237,10 +235,6 @@ func (rf *resolverFactory) WithSchemaIntrospection() ResolverFactory {
 		WithQueryResolver("__type",
 			func(q schema.Query) QueryResolver {
 				return QueryResolverFunc(resolveIntrospection)
-			}).
-		WithQueryResolver("__typename",
-			func(q schema.Query) QueryResolver {
-				return QueryResolverFunc(resolveIntrospection)
 			})
 }
 
@@ -381,12 +375,12 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 	if r == nil {
 		glog.Errorf("Call to Resolve with nil RequestResolver")
-		return schema.ErrorResponse(errors.New(errInternal))
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	if r.schema == nil {
 		glog.Errorf("Call to Resolve with no schema")
-		return schema.ErrorResponse(errors.New(errInternal))
+		return schema.ErrorResponse(errors.New("Internal error"))
 	}
 
 	startTime := time.Now()
@@ -506,11 +500,6 @@ func (r *RequestResolver) Resolve(ctx context.Context, gqlReq *schema.Request) *
 
 // ValidateSubscription will check the given subscription query is valid or not.
 func (r *RequestResolver) ValidateSubscription(req *schema.Request) error {
-	if r.schema == nil {
-		glog.Errorf("Call to ValidateSubscription with no schema")
-		return errors.New(errInternal)
-	}
-
 	op, err := r.schema.Operation(req)
 	if err != nil {
 		return err

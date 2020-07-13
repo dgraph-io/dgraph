@@ -14,12 +14,11 @@
         ]
   dgquery: |-
     query {
-      x as deleteUserSecret(func: uid(UserSecretRoot)) {
+      x as deleteUserSecret(func: uid(UserSecret1)) @filter(uid(UserSecret2)) {
         uid
       }
-      UserSecretRoot as var(func: uid(UserSecret1)) @filter(uid(UserSecretAuth2))
       UserSecret1 as var(func: type(UserSecret)) @filter(anyofterms(UserSecret.aSecret, "auth is applied"))
-      UserSecretAuth2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
+      UserSecret2 as var(func: uid(UserSecret1)) @filter(eq(UserSecret.ownedBy, "user1")) @cascade
     }
 
 - name: "Delete with deep auth"
@@ -46,147 +45,19 @@
         ]
   dgquery: |-
     query {
-      x as deleteTicket(func: uid(TicketRoot)) {
+      x as deleteTicket(func: uid(Ticket1)) @filter(uid(Ticket2)) {
         uid
         Column3 as Ticket.onColumn
         User4 as Ticket.assignedTo
       }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
       Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
+      Ticket2 as var(func: uid(Ticket1)) @cascade {
         onColumn : Ticket.onColumn {
           inProject : Column.inProject {
             roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
               assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
               dgraph.uid : uid
             }
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-    }
-
-
-- name: "Delete with deep query"
-  gqlquery: |
-    mutation deleteTicket($filter: TicketFilter!) {
-      deleteTicket(filter: $filter) {
-        msg
-        numUids
-        ticket {
-          title
-          onColumn {
-            inProject {
-              roles {
-                assignedTo {
-                  username
-                  age
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  variables: |
-    { "filter": { "title": { "anyofterms": "auth is applied" } } }
-  dgmutations:
-    - deletejson: |
-        [
-          { "uid": "uid(x)" },
-          {
-            "uid":"uid(Column3)",
-            "Column.tickets": [ { "uid":"uid(x)" } ]
-          },
-          {
-            "uid":"uid(User4)",
-            "User.tickets": [ { "uid":"uid(x)" } ]
-          }
-        ]
-  dgquery: |-
-    query {
-      x as deleteTicket(func: uid(TicketRoot)) {
-        uid
-        Column3 as Ticket.onColumn
-        User4 as Ticket.assignedTo
-      }
-      TicketRoot as var(func: uid(Ticket1)) @filter(uid(TicketAuth2))
-      Ticket1 as var(func: type(Ticket)) @filter(anyofterms(Ticket.title, "auth is applied"))
-      TicketAuth2 as var(func: uid(Ticket1)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "EDIT")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
-            }
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      ticket(func: uid(Ticket5)) {
-        title : Ticket.title
-        onColumn : Ticket.onColumn @filter(uid(Column15)) {
-          inProject : Column.inProject @filter(uid(Project13)) {
-            roles : Project.roles @filter(uid(Role11)) {
-              assignedTo : Role.assignedTo @filter(uid(User10)) {
-                username : User.username
-                age : User.age
-                dgraph.uid : uid
-              }
-              dgraph.uid : uid
-            }
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      Ticket5 as var(func: uid(Ticket16)) @filter(uid(TicketAuth17))
-      Ticket16 as var(func: uid(x))
-      TicketAuth17 as var(func: uid(Ticket16)) @cascade {
-        onColumn : Ticket.onColumn {
-          inProject : Column.inProject {
-            roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-              assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-              dgraph.uid : uid
-            }
-            dgraph.uid : uid
-          }
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      var(func: uid(Ticket5)) {
-        Column6 as Ticket.onColumn
-      }
-      Column15 as var(func: uid(Column6)) @filter(uid(ColumnAuth14))
-      var(func: uid(Column6)) {
-        Project7 as Column.inProject
-      }
-      Project13 as var(func: uid(Project7)) @filter(uid(ProjectAuth12))
-      var(func: uid(Project7)) {
-        Role8 as Project.roles
-      }
-      Role11 as var(func: uid(Role8))
-      var(func: uid(Role8)) {
-        User9 as Role.assignedTo
-      }
-      User10 as var(func: uid(User9))
-      ProjectAuth12 as var(func: uid(Project7)) @cascade {
-        roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-          assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
-          dgraph.uid : uid
-        }
-        dgraph.uid : uid
-      }
-      ColumnAuth14 as var(func: uid(Column6)) @cascade {
-        inProject : Column.inProject {
-          roles : Project.roles @filter(eq(Role.permission, "VIEW")) {
-            assignedTo : Role.assignedTo @filter(eq(User.username, "user1"))
             dgraph.uid : uid
           }
           dgraph.uid : uid
@@ -232,10 +103,6 @@
     mutation deleteLog($filter: LogFilter!) {
       deleteLog(filter: $filter) {
         msg
-        log {
-          logs
-          random
-        }
       }
     }
   variables: |
@@ -253,7 +120,6 @@
   dgquery: |-
     query {
       x as deleteLog()
-      log()
     }
 
 - name: "multiple rule in delete mutation"
@@ -280,14 +146,13 @@
         ]
   dgquery: |-
     query {
-      x as deleteUser(func: uid(UserRoot)) {
+      x as deleteUser(func: uid(User1)) @filter((uid(User2) AND uid(User3))) {
         uid
         Ticket4 as User.tickets
       }
-      UserRoot as var(func: uid(User1)) @filter((uid(UserAuth2) AND uid(UserAuth3)))
       User1 as var(func: type(User)) @filter(eq(User.username, "userxyz"))
-      UserAuth2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
-      UserAuth3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
+      User2 as var(func: uid(User1)) @filter(eq(User.username, "user1")) @cascade
+      User3 as var(func: uid(User1)) @filter(eq(User.isPublic, true)) @cascade
     }
 
 - name: "Filtering by ID"
@@ -310,12 +175,11 @@
         ]
   dgquery: |-
     query {
-      x as deleteRegion(func: uid(RegionRoot)) {
+      x as deleteRegion(func: uid(Region1)) @filter(uid(Region2)) {
         uid
       }
-      RegionRoot as var(func: uid(Region1)) @filter(uid(RegionAuth2))
       Region1 as var(func: uid(0x1, 0x2)) @filter(type(Region))
-      RegionAuth2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
+      Region2 as var(func: uid(Region1)) @filter(eq(Region.global, true)) @cascade
     }
 
 - name: "Delete with top level RBAC false."
@@ -347,10 +211,6 @@
     mutation deleteLog($filter: LogFilter!) {
       deleteLog(filter: $filter) {
         msg
-        log (order: { asc: logs }) {
-          logs
-          random
-        }
       }
     }
   variables: |
@@ -367,18 +227,9 @@
          }]
   dgquery: |-
     query {
-      x as deleteLog(func: uid(LogRoot)) {
+      x as deleteLog(func: uid(0x1, 0x2)) @filter(type(Log)) {
         uid
       }
-      LogRoot as var(func: uid(Log1))
-      Log1 as var(func: uid(0x1, 0x2)) @filter(type(Log))
-      log(func: uid(Log2), orderasc: Log.logs) {
-        logs : Log.logs
-        random : Log.random
-        dgraph.uid : uid
-      }
-      Log2 as var(func: uid(Log3), orderasc: Log.logs)
-      Log3 as var(func: uid(x))
     }
 
 - name: "Delete with top level OR RBAC true."
@@ -398,11 +249,9 @@
         [{ "uid": "uid(x)" }]
   dgquery: |-
     query {
-      x as deleteComplexLog(func: uid(ComplexLogRoot)) {
+      x as deleteComplexLog(func: uid(0x1, 0x2)) @filter(type(ComplexLog)) {
         uid
       }
-      ComplexLogRoot as var(func: uid(ComplexLog1))
-      ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
     }
 
 - name: "Delete with top level OR RBAC false."
@@ -421,12 +270,11 @@
         [{ "uid": "uid(x)" }]
   dgquery: |-
     query {
-      x as deleteComplexLog(func: uid(ComplexLogRoot)) {
+      x as deleteComplexLog(func: uid(ComplexLog1)) @filter(uid(ComplexLog2)) {
         uid
       }
-      ComplexLogRoot as var(func: uid(ComplexLog1)) @filter(uid(ComplexLogAuth2))
       ComplexLog1 as var(func: uid(0x1, 0x2)) @filter(type(ComplexLog))
-      ComplexLogAuth2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
+      ComplexLog2 as var(func: uid(ComplexLog1)) @filter(eq(ComplexLog.visible, true)) @cascade
     }
 
 - name: "Delete with top level AND RBAC true."
@@ -450,12 +298,11 @@
          }]
   dgquery: |-
     query {
-      x as deleteIssue(func: uid(IssueRoot)) {
+      x as deleteIssue(func: uid(Issue1)) @filter(uid(Issue2)) {
         uid
       }
-      IssueRoot as var(func: uid(Issue1)) @filter(uid(IssueAuth2))
       Issue1 as var(func: type(Issue))
-      IssueAuth2 as var(func: uid(Issue1)) @cascade {
+      Issue2 as var(func: uid(Issue1)) @cascade {
         owner : Issue.owner @filter(eq(User.username, "user1"))
         dgraph.uid : uid
       }

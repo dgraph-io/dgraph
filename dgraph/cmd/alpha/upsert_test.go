@@ -1611,7 +1611,7 @@ upsert {
 func TestUpsertWithValueVar(t *testing.T) {
 	require.NoError(t, dropAll())
 	require.NoError(t, alterSchema(`amount: int .`))
-	_, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
+	res, err := mutationWithTs(`{ set { _:p <amount> "0" . } }`, "application/rdf", false, true, 0)
 	require.NoError(t, err)
 
 	const (
@@ -1640,10 +1640,10 @@ upsert {
 	)
 
 	for count := 1; count < 3; count++ {
-		_, err = mutationWithTs(m, "application/rdf", false, true, 0)
+		res, err = mutationWithTs(m, "application/rdf", false, true, 0)
 		require.NoError(t, err)
 
-		got, _, err := queryWithTs(q, "application/graphql+-", "", 0)
+		got, _, err := queryWithTs(q, "application/graphql+-", "", res.startTs)
 		require.NoError(t, err)
 
 		require.JSONEq(t, fmt.Sprintf(`{"data":{"q":[{"amount":%d}]}}`, count), got)
