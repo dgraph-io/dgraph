@@ -192,7 +192,6 @@ input AddMovieDirectorInput {
 
 input AddMovieInput {
 	name: String!
-	director: [MovieDirectorRef]
 }
 
 input MovieDirectorFilter {
@@ -235,7 +234,6 @@ input MoviePatch {
 input MovieRef {
 	id: ID
 	name: String
-	director: [MovieDirectorRef]
 }
 
 input UpdateMovieDirectorInput {
