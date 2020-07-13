@@ -1256,6 +1256,209 @@ func TestExpandQueryWithACLPermissions(t *testing.T) {
 		string(resp.GetJson()))
 
 }
+
+func TestValQueryWithACLPermissions(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	defer cancel()
+	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
+	require.NoError(t, err)
+
+	testutil.DropAll(t, dg)
+
+	op := api.Operation{Schema: `
+		name	 : string @index(exact) .
+		nickname : string @index(exact) .
+		age 	 : int .
+		type TypeName {
+			name: string
+			nickname: string
+			age: int
+		}
+	`}
+	require.NoError(t, dg.Alter(ctx, &op))
+
+	resetUser(t)
+
+	accessJwt, _, err := testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	createGroup(t, accessJwt, devGroup)
+	// createGroup(t, accessJwt, sreGroup)
+
+	// addRulesToGroup(t, accessJwt, sreGroup, []rule{{"age", Read.Code}, {"name", Write.Code}})
+	addToGroup(t, accessJwt, userid, devGroup)
+
+	txn := dg.NewTxn()
+	mutation := &api.Mutation{
+		SetNquads: []byte(`
+			_:a <name> "RandomGuy" .
+			_:a <age> "23" .
+			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
+			_:b <name> "RandomGuy2" .
+			_:b <age> "25" .
+			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
+		`),
+		CommitNow: true,
+	}
+	_, err = txn.Mutate(ctx, mutation)
+	require.NoError(t, err)
+
+	query := `{q1(func: has(name)){
+		v as name
+		a as age
+    }
+    q2(func: eq(val(v), "RandomGuy")) {
+		val(v)
+		val(a)
+	}}`
+
+	// Test that groot has access to all the predicates
+	resp, err := dg.NewReadOnlyTxn().Query(ctx, query)
+	require.NoError(t, err, "Error while querying data")
+	testutil.CompareJSON(t, `{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
+		string(resp.GetJson()))
+
+	// All test cases
+	tests := []struct {
+		input                  string
+		descriptionNoPerm      string
+		outputNoPerm           string
+		descriptionNamePerm    string
+		outputNamePerm         string
+		descriptionNameAgePerm string
+		outputNameAgePerm      string
+	}{
+		{
+			`
+			{
+				q1(func: has(name)) {
+					v as name
+					a as age
+				}
+				q2(func: eq(val(v), "RandomGuy")) {
+					val(v)
+					val(a)
+				}
+			}
+			`,
+			"alice doesn't have access to name or age",
+			`{}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],"q2":[{"val(v)":"RandomGuy"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],"q2":[{"val(v)":"RandomGuy","val(a)":23}]}`,
+		},
+		{
+			`{
+				q1(func: has(name) ) {
+					a as age
+				}
+				q2(func: has(name) ) {
+					val(a)
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{}`,
+
+			`alice has access to name`,
+			`{"q1":[],"q2":[]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"age":23},{"age":25}],"q2":[{"val(a)":23},{"val(a)":25}]}`,
+		},
+		{
+			`{
+				f as q1(func: has(name) ) {
+					n as name
+					a as age
+				}
+				q2(func: uid(f), orderdesc: val(a) ) {
+					name
+					val(n)
+					val(a)
+				}
+			}`,
+			"alice doesn't have access to name or age",
+			`{"q2":[]}`,
+
+			`alice has access to name`,
+			`{"q1":[{"name":"RandomGuy"},{"name":"RandomGuy2"}],
+			"q2":[{"name":"RandomGuy","val(n)":"RandomGuy"},{"name":"RandomGuy2","val(n)":"RandomGuy2"}]}`,
+
+			"alice has access to name and age",
+			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
+			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+		},
+	}
+
+	userClient, err := testutil.DgraphClient(testutil.SockAddr)
+	require.NoError(t, err)
+	time.Sleep(6 * time.Second)
+
+	err = userClient.Login(ctx, userid, userpassword)
+	require.NoError(t, err)
+
+	// Query via user when user has no permissions
+	for _, tc := range tests {
+		desc := tc.descriptionNoPerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNoPerm, string(resp.Json))
+		})
+	}
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	for _, tc := range tests {
+		desc := tc.descriptionNamePerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNamePerm, string(resp.Json))
+		})
+	}
+
+	// Login to groot to modify accesses (1)
+	accessJwt, _, err = testutil.HttpLogin(&testutil.LoginParams{
+		Endpoint: adminEndpoint,
+		UserID:   "groot",
+		Passwd:   "password",
+	})
+	require.NoError(t, err, "login failed")
+
+	// Give read access of <name> and <age> to dev
+	addRulesToGroup(t, accessJwt, devGroup, []rule{{"name", Read.Code}, {"age", Read.Code}})
+	time.Sleep(6 * time.Second)
+
+	for _, tc := range tests {
+		desc := tc.descriptionNameAgePerm
+		t.Run(desc, func(t *testing.T) {
+			resp, err := userClient.NewTxn().Query(ctx, tc.input)
+			require.NoError(t, err)
+			testutil.CompareJSON(t, tc.outputNameAgePerm, string(resp.Json))
+		})
+	}
+
+}
 func TestNewACLPredicates(t *testing.T) {
 	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
 

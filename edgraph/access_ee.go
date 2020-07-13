@@ -40,6 +40,11 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+type predsAndvars struct {
+	preds []string
+	vars  map[string]string
+}
+
 // Login handles login requests from clients.
 func (s *Server) Login(ctx context.Context,
 	request *api.LoginRequest) (*api.Response, error) {
@@ -683,14 +688,19 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 	return err
 }
 
-func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
+func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	predsMap := make(map[string]struct{})
+	varsMap := make(map[string]string)
 	for _, gq := range gqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
-		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" {
+		if len(gq.Var) > 0 {
+			varsMap[gq.Var] = gq.Attr
+		}
+		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" && gq.Attr != "val" {
 			predsMap[gq.Attr] = struct{}{}
+
 		}
 		for _, ord := range gq.Order {
 			predsMap[ord.Attr] = struct{}{}
@@ -701,15 +711,23 @@ func parsePredsFromQuery(gqls []*gql.GraphQuery) []string {
 		for _, pred := range parsePredsFromFilter(gq.Filter) {
 			predsMap[pred] = struct{}{}
 		}
-		for _, childPred := range parsePredsFromQuery(gq.Children) {
+		childPredandVars := parsePredsFromQuery(gq.Children)
+		for _, childPred := range childPredandVars.preds {
 			predsMap[childPred] = struct{}{}
+		}
+		for childVar := range childPredandVars.vars {
+			varsMap[childVar] = childPredandVars.vars[childVar]
 		}
 	}
 	preds := make([]string, 0, len(predsMap))
 	for pred := range predsMap {
-		preds = append(preds, pred)
+		if _, found := varsMap[pred]; !found {
+			preds = append(preds, pred)
+		}
 	}
-	return preds
+
+	pv := predsAndvars{preds: preds, vars: varsMap}
+	return pv
 }
 
 func parsePredsFromFilter(f *gql.FilterTree) []string {
@@ -756,7 +774,16 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 
 	var userId string
 	var groupIds []string
-	preds := parsePredsFromQuery(parsedReq.Query)
+	predsAndvars := parsePredsFromQuery(parsedReq.Query)
+	preds := predsAndvars.preds
+	varsToPredMap := predsAndvars.vars
+
+	// Need this to efficiently identify blocked variables from the
+	// list of blocked predicates
+	predToVarsMap := make(map[string]string)
+	for k, v := range varsToPredMap {
+		predToVarsMap[v] = k
+	}
 
 	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
 		userData, err := extractUserAndGroups(ctx)
@@ -807,7 +834,18 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 			// In query context ~predicate and predicate are considered different.
 			delete(blockedPreds, "~dgraph.user.group")
 		}
+
+		blockedVars := make(map[string]struct{})
+		for predicate := range blockedPreds {
+			if variable, found := predToVarsMap[predicate]; found {
+				// Add variables to blockedPreds to delete from Query
+				blockedPreds[variable] = struct{}{}
+				// Collect blocked Variables to remove from QueryVars
+				blockedVars[variable] = struct{}{}
+			}
+		}
 		parsedReq.Query = removePredsFromQuery(parsedReq.Query, blockedPreds)
+		parsedReq.QueryVars = removeVarsFromQueryVars(parsedReq.QueryVars, blockedVars)
 	}
 	for i := range parsedReq.Query {
 		parsedReq.Query[i].AllowedPreds = allowedPreds
@@ -1058,6 +1096,7 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 	blockedPreds map[string]struct{}) []*gql.GraphQuery {
 
 	filteredGQs := gqs[:0]
+L:
 	for _, gq := range gqs {
 		if gq.Func != nil && len(gq.Func.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Func.Attr]; ok {
@@ -1067,6 +1106,15 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 		if len(gq.Attr) > 0 {
 			if _, ok := blockedPreds[gq.Attr]; ok {
 				continue
+			}
+			if gq.Attr == "val" {
+				// TODO (Anurag): If val supports multiple variables, this would
+				// need an upgrade
+				for _, variable := range gq.NeedsVar {
+					if _, ok := blockedPreds[variable.Name]; ok {
+						continue L
+					}
+				}
 			}
 		}
 
@@ -1085,6 +1133,30 @@ func removePredsFromQuery(gqs []*gql.GraphQuery,
 		filteredGQs = append(filteredGQs, gq)
 	}
 
+	return filteredGQs
+}
+
+func removeVarsFromQueryVars(gqs []*gql.Vars,
+	blockedVars map[string]struct{}) []*gql.Vars {
+
+	filteredGQs := gqs[:0]
+	for _, gq := range gqs {
+		var defines []string
+		var needs []string
+		for _, variable := range gq.Defines {
+			if _, ok := blockedVars[variable]; !ok {
+				defines = append(defines, variable)
+			}
+		}
+		for _, variable := range gq.Needs {
+			if _, ok := blockedVars[variable]; !ok {
+				needs = append(needs, variable)
+			}
+		}
+		gq.Defines = defines
+		gq.Needs = needs
+		filteredGQs = append(filteredGQs, gq)
+	}
 	return filteredGQs
 }
 
