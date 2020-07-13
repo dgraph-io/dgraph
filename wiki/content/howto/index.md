@@ -291,7 +291,7 @@ We have defined 4 environments:
 
 **dev-oss / dev-enterprise**: These are events seen on non-released / local developer builds.
 
-**prod-oss/prod-enterprise**: These are events on released version such as v20.03.0.
+**prod-oss/prod-enterprise**: These are events on released version such as v20.03.0. Events in this category are also sent on a slack channel private to Dgraph
 
 **Tags:**
 
