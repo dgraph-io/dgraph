@@ -50,6 +50,8 @@ type Processor struct {
 	plList []*pb.PostingList
 	// bplList is an array of pre-allocated pb.BackupPostingList objects.
 	bplList []*pb.BackupPostingList
+	// kvPool
+	kvPool *sync.Pool
 }
 
 func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *Processor {
@@ -58,6 +60,11 @@ func NewBackupProcessor(db *badger.DB, req *pb.BackupRequest) *Processor {
 		Request: req,
 		plList:  make([]*pb.PostingList, backupNumGo),
 		bplList: make([]*pb.BackupPostingList, backupNumGo),
+		kvPool: &sync.Pool{
+			New: func() interface{} {
+				return &bpb.KV{}
+			},
+		},
 	}
 
 	for i := range bp.plList {
@@ -193,7 +200,12 @@ func (pr *Processor) WriteBackup(ctx context.Context) (*pb.Status, error) {
 				maxVersion = kv.Version
 			}
 		}
-		return writeKVList(list, gzWriter)
+		err := writeKVList(list, gzWriter)
+
+		for _, kv := range list.Kv {
+			pr.kvPool.Put(kv)
+		}
+		return err
 	}
 
 	if err := stream.Orchestrate(context.Background()); err != nil {
@@ -270,31 +282,33 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 		return list, nil
 	}
 
+	kv := pr.kvPool.Get().(*bpb.KV)
+	kv.Reset()
+
 	switch item.UserMeta() {
 	case posting.BitEmptyPosting, posting.BitCompletePosting, posting.BitDeltaPosting:
 		l, err := posting.ReadPostingList(key, itr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "while reading posting list")
 		}
-		kvs, err := l.Rollup()
+
+		err = l.SingleListRollup(kv)
 		if err != nil {
 			return nil, errors.Wrapf(err, "while rolling up list")
 		}
 
-		for _, kv := range kvs {
-			backupKey, err := toBackupKey(kv.Key)
-			if err != nil {
-				return nil, err
-			}
-			kv.Key = backupKey
-
-			backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
-			if err != nil {
-				return nil, err
-			}
-			kv.Value = backupPl
+		backupKey, err := toBackupKey(kv.Key)
+		if err != nil {
+			return nil, err
 		}
-		list.Kv = append(list.Kv, kvs...)
+		kv.Key = backupKey
+
+		backupPl, err := pr.toBackupPostingList(kv.Value, itr.ThreadId)
+		if err != nil {
+			return nil, err
+		}
+		kv.Value = backupPl
+		list.Kv = append(list.Kv, kv)
 	case posting.BitSchemaPosting:
 		valCopy, err := item.ValueCopy(nil)
 		if err != nil {
@@ -306,13 +320,11 @@ func (pr *Processor) toBackupList(key []byte, itr *badger.Iterator) (*bpb.KVList
 			return nil, err
 		}
 
-		kv := &bpb.KV{
-			Key:       backupKey,
-			Value:     valCopy,
-			UserMeta:  []byte{item.UserMeta()},
-			Version:   item.Version(),
-			ExpiresAt: item.ExpiresAt(),
-		}
+		kv.Key = backupKey
+		kv.Value = valCopy
+		kv.UserMeta = []byte{item.UserMeta()}
+		kv.Version = item.Version()
+		kv.ExpiresAt = item.ExpiresAt()
 		list.Kv = append(list.Kv, kv)
 	default:
 		return nil, errors.Errorf(

@@ -1237,6 +1237,88 @@ func TestMultiPartListDeleteAndAdd(t *testing.T) {
 	}
 }
 
+func TestSingleListRollup(t *testing.T) {
+	// Generate a split posting list.
+	size := int(1e5)
+	ol, commits := createMultiPartList(t, size, true)
+
+	// Roll list into a single list.
+	kv := &bpb.KV{}
+	err := ol.SingleListRollup(kv)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(kv.UserMeta))
+	require.Equal(t, BitCompletePosting, kv.UserMeta[0])
+
+	plist := pb.PostingList{}
+	err = plist.Unmarshal(kv.Value)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(plist.Splits))
+
+	var labels []string
+	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
+		if len(p.Label) > 0 {
+			labels = append(labels, p.Label)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, commits, len(labels))
+	for i, label := range labels {
+		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	}
+}
+
+func TestRecursiveSplits(t *testing.T) {
+	// For testing, set the max list size to a lower threshold.
+	maxListSize = mb / 2
+	defer func() {
+		maxListSize = math.MaxInt32
+	}()
+
+	// Create a list that should be split recursively.
+	size := int(1e5)
+	key := x.DataKey("recursive", 1331)
+	ol, err := getNew(key, ps)
+	require.NoError(t, err)
+	commits := 0
+	for i := 1; i <= size; i++ {
+		commits++
+		edge := &pb.DirectedEdge{
+			ValueId: uint64(i),
+		}
+		edge.Label = strconv.Itoa(i)
+
+		txn := Txn{StartTs: uint64(i)}
+		addMutationHelper(t, ol, edge, Set, &txn)
+		require.NoError(t, ol.commitMutation(uint64(i), uint64(i)+1))
+
+		// Do not roll-up the list here to ensure the final list should
+		// be split more than once.
+	}
+
+	// Rollup the list. The final output should have more than two parts.
+	kvs, err := ol.Rollup()
+	require.NoError(t, err)
+	require.NoError(t, writePostingListToDisk(kvs))
+	ol, err = getNew(key, ps)
+	require.NoError(t, err)
+	require.True(t, len(ol.plist.Splits) > 2)
+
+	// Read back the list and verify the data is correct.
+	var labels []string
+	err = ol.Iterate(uint64(size)+1, 0, func(p *pb.Posting) error {
+		if len(p.Label) > 0 {
+			labels = append(labels, p.Label)
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, commits, len(labels))
+	for i, label := range labels {
+		require.Equal(t, label, strconv.Itoa(int(i+1)))
+	}
+}
+
 var ps *badger.DB
 
 func TestMain(m *testing.M) {
