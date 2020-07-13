@@ -26,7 +26,7 @@ import (
 	"golang.org/x/crypto/openpgp/armor"
 )
 
-var publicKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----
+const publicKey = `-----BEGIN PGP PUBLIC KEY BLOCK-----
 
 mQINBF1bQAwBEACe+uIPgsfTmgLVDlJhdfzUH+ff774fn/Lqf0kLactHR8I6yI3h
 JO6i47IhM45VJLY0ZzXntCaItavm35NGdVuA3yPJv7YkSLTPkg5D2VHyZknb52lD
