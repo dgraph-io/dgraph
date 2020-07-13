@@ -95,11 +95,6 @@ type request struct {
 	conflicts []uint64
 }
 
-type fileError struct {
-	file string
-	err  error
-}
-
 func (l *schema) init() {
 	l.preds = make(map[string]*predicate)
 	for _, i := range l.Predicates {
@@ -484,11 +479,11 @@ func run() error {
 	fmt.Printf("Found %d data file(s) to process\n", totalFiles)
 
 	//	x.Check(dgraphClient.NewSyncMarks(filesList))
-	errCh := make(chan fileError, totalFiles)
+	errCh := make(chan error, totalFiles)
 	for _, file := range filesList {
 		file = strings.Trim(file, " \t")
 		go func(file string) {
-			errCh <- fileError{file, l.processFile(ctx, file, opt.key)}
+			errCh <- errors.Wrapf(l.processFile(ctx, file, opt.key), file)
 		}(file)
 	}
 
@@ -498,9 +493,9 @@ func run() error {
 	}
 
 	for i := 0; i < totalFiles; i++ {
-		if ferr := <-errCh; ferr.err != nil {
-			fmt.Printf("Error while processing data file %q: %s\n", ferr.file, ferr.err)
-			return ferr.err
+		if err := <-errCh; err != nil {
+			fmt.Printf("Error while processing data file %s\n", err)
+			return err
 		}
 	}
 

@@ -241,7 +241,7 @@ func copyExportToLocalFs(t *testing.T) (string, string) {
 }
 
 func extractErrLine(output string) string {
-	m := regexp.MustCompile(`Error while processing(.)*(rdf|json)\":`)
+	m := regexp.MustCompile(`Error while processing(.)*(rdf|json):`)
 	errLine := m.FindString(output)
 	return errLine
 }
@@ -258,7 +258,7 @@ func TestLiveLoadFileName(t *testing.T) {
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
 	errLine := extractErrLine(out)
-	errLineExp := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf":`, testDataDir)
+	errLineExp := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
 	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
 }
 
@@ -274,8 +274,8 @@ func TestLiveLoadFileNameMultipleErrored(t *testing.T) {
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
 	errLine := extractErrLine(out)
-	errLineExp1 := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf":`, testDataDir)
-	errLineExp2 := fmt.Sprintf(`Error while processing data file "%s/errored2.rdf":`, testDataDir)
+	errLineExp1 := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
+	errLineExp2 := fmt.Sprintf(`Error while processing data file %s/errored2.rdf:`, testDataDir)
 	assert.Contains(t, []string{errLineExp1, errLineExp2}, errLine, "incorrect name for errored file")
 }
 
@@ -291,7 +291,7 @@ func TestLiveLoadFileNameMultipleCorrect(t *testing.T) {
 	out, err := testutil.Pipeline(pipeline)
 	require.Error(t, err, "error expected: live loader exited with no error")
 	errLine := extractErrLine(out)
-	errLineExp := fmt.Sprintf(`Error while processing data file "%s/errored1.rdf":`, testDataDir)
+	errLineExp := fmt.Sprintf(`Error while processing data file %s/errored1.rdf:`, testDataDir)
 	require.Equal(t, errLineExp, errLine, "incorrect name for errored file")
 }
 
