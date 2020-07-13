@@ -173,13 +173,18 @@ func TestDeleteRootFilter(t *testing.T) {
 
 func TestDeleteRBACFilter(t *testing.T) {
 	testCases := []TestCase{
-		{role: "USER", result: `{"deleteLog": {"numUids": 0}}`},
-		{role: "ADMIN", result: `{"deleteLog": {"numUids": 2}}`}}
+		{role: "USER", result: `{"deleteLog":{"numUids":0, "msg":"No nodes were deleted", "log":[]}}`},
+		{role: "ADMIN", result: `{"deleteLog":{"numUids":2, "msg":"Deleted", "log":[{"logs":"Log1","random":"test"}, {"logs":"Log2","random":"test"}]}}`}}
 
 	query := `
 		mutation ($logs: [ID!]) {
 			deleteLog(filter: {id: $logs}) {
           		numUids
+				msg
+				log (order: { asc: logs }) {
+					logs
+					random
+				}
 		    }
 	    }
 	`
@@ -308,17 +313,24 @@ func TestDeleteNestedFilter(t *testing.T) {
 	testCases := []TestCase{{
 		user:   "user1",
 		role:   "USER",
-		result: `{"deleteMovie": {"numUids": 3}}`,
+		result: `{"deleteMovie":{"numUids":3,"movie":[{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
 	}, {
 		user:   "user2",
 		role:   "USER",
-		result: `{"deleteMovie": {"numUids": 4}}`,
+		result: `{"deleteMovie":{"numUids":4,"movie":[{"content":"Movie1","regionsAvailable":[{"name":"Region2","global":null},{"name":"Region3","global":null}]},{"content":"Movie2","regionsAvailable":[{"name":"Region1","global":null}]},{"content":"Movie3","regionsAvailable":[{"name":"Region1","global":null},{"name":"Region4","global":null}]},{"content":"Movie4","regionsAvailable":[{"name":"Region5","global":true}]}]}}`,
 	}}
 
 	query := `
 	    mutation ($ids: [ID!]) {
 		    deleteMovie(filter: {id: $ids}) {
 				numUids
+				movie (order: {asc: content}) {
+					content
+					regionsAvailable (order: {asc: name}) {
+						name
+						global
+					}
+				}
 		    }
 	    }
 	`

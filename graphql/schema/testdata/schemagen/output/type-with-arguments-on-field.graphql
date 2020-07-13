@@ -144,11 +144,13 @@ type AddMessagePayload {
 }
 
 type DeleteAbstractPayload {
+	abstract(filter: AbstractFilter, order: AbstractOrder, first: Int, offset: Int): [Abstract]
 	msg: String
 	numUids: Int
 }
 
 type DeleteMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	msg: String
 	numUids: Int
 }
