@@ -10,19 +10,19 @@ spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: zero-grpc
+    name: grpc-zero
   - port: 6080
     targetPort: 6080
-    name: zero-http
+    name: http-zero
   - port: 8080
     targetPort: 8080
-    name: alpha-http
+    name: http-alpha
   - port: 9080
     targetPort: 9080
-    name: alpha-grpc
+    name: grpc-alpha
   - port: 8000
     targetPort: 8000
-    name: ratel-http
+    name: http-ratel
   selector:
     app: dgraph
 ---
@@ -48,7 +48,7 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
-          name: ratel-http
+          name: http-ratel
         command:
           - dgraph-ratel
       - name: zero
@@ -56,9 +56,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
-          name: zero-grpc
+          name: grpc-zero
         - containerPort: 6080
-          name: zero-http
+          name: http-zero
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -73,9 +73,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
-          name: alpha-http
+          name: http-alpha
         - containerPort: 9080
-          name: alpha-grpc
+          name: grpc-alpha
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
