@@ -72,6 +72,7 @@ func TestExportSchemaToMinio(t *testing.T) {
 	defer reader.Close()
 
 	bytes, err := ioutil.ReadAll(reader)
+	require.NoError(t, err)
 	require.Equal(t, expectedSchema, string(bytes))
 }
 
