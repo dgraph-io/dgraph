@@ -217,9 +217,9 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
-	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we disable
-	// the `aud` claim verification at the library end using `WithoutClaimsValidation` and use
-	// our custom validation function `validateAudience`.
+	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
+	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
+	// use our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			algo, _ := token.Header["alg"].(string)
