@@ -569,6 +569,11 @@ func customMappings(s *ast.Schema) map[string]map[string]*ast.Directive {
 // AsSchema wraps a github.com/vektah/gqlparser/ast.Schema.
 func AsSchema(s *ast.Schema) (Schema, error) {
 
+	// vektah/gqlparser library doesn't validate subscriptions properly if s.Subscription == nil.
+	//s.Subscription is nil when there is no type with @withSubscription true, so we are handling that case.
+	if s.Subscription == nil {
+		s.Subscription = &ast.Definition{Name: "Subscription"}
+	}
 	// Auth rules can't be effectively validated as part of the normal rules -
 	// because they need the fully generated schema to be checked against.
 	authRules, err := authRules(s)
@@ -1191,7 +1196,7 @@ func (m *mutation) SelectionSet() []Field {
 
 func (m *mutation) QueryField() Field {
 	for _, f := range m.SelectionSet() {
-		if f.Name() == NumUid || f.Name() == Typename {
+		if f.Name() == NumUid || f.Name() == Typename || f.Name() == Msg {
 			continue
 		}
 		// if @cascade was given on mutation itself, then it should get applied for the query which

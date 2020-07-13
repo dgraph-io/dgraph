@@ -315,6 +315,99 @@ Specify the Zero address and port for the new cluster with `--zero`/`-z` to upda
 ```sh
 $ dgraph restore -p /var/db/dgraph -l /var/backups/dgraph -z localhost:5080
 ```
+
+### Online Restore
+
+Starting in version 20.07, restoring to a live cluster is supported. Instead of
+running the command line tool and copying the `p` directories around, users can
+now point the cluster to the backup location and the cluster will read the backup,
+write the data, and set the cluster so that it can read the data.
+
+Some things to note about online restores are:
+
+- Existing data is dropped. This is the equivalent of sending a DropAll
+  operation to the cluster.
+- Draining mode is enabled during the duration of the restore. This means
+  queries and mutations are disabled. Draining mode is turned off when the
+  restore completes.
+- The operation is asynchronous and the request responds immediately after
+  scheduling the restore. The response includes a unique restore ID that can be
+  used to query the status of the operation.
+- This operation should only be done when the cluster is new or when an existing
+  cluster has been taken offline for maintenance.
+- The cluster needs to have the same number of groups as the cluster where the
+  backup was created.
+- The predicates will be forcibly moved around groups to ensure the state of the
+  cluster after restore matches what is indicated by the backup manifest. The
+  process does not require existing data to be moved around since it will be
+  deleted anyways.
+
+### Basic operation
+
+A restore can be started via the GraphQL admin endpoint (i.e. `/admin`) of any
+alpha in the cluster. This is the same endpoint to which backup requests are
+sent. The basic call looks like this.
+
+```graphql
+mutation restore() {
+	restore(input: {location: "your-backup-location", backupId: "your-backup-id") {
+		code
+		message
+		restoreId
+	}
+}
+```
+
+If the restore was successfully scheduled, the response will include the restore ID that
+can be used to query for the status of the restore via the admin endpoint. Below is an
+example.
+
+```graphql
+query status() {
+	restoreStatus(restoreId: 1) {
+		status
+		errors
+	}
+}
+```
+
+The status can be one of "OK", "ERR", "UNKNOWN", or "IN_PROGRESS". The errors
+field contains the errors if the operation failed and it will be empty
+otherwise. Also note that the information used to track a restore operation is
+local to each alpha. In practical terms, this means that you should send this
+request to the same alpha to which the original restore request was sent.
+
+### Online Restore Options
+
+The input parameter can include the fields shown below. Of those, only
+`location` is required. Like backups, the authentication info (e.g access key)
+is only required if you need to override the defaults that are set via
+environment variables (see section on backups for reference).
+The fields related to Vault are also only needed if you need to override the
+defaults.
+
+- location: Destination for the backup: e.g. Minio or S3 bucket.
+- backupId: Backup ID of the backup series to restore. This ID is included in
+  the manifest.json file. If missing, it defaults to the latest series.
+- encryptionKeyFile: Path to the key file needed to decrypt the backup. This
+  file should be accessible by all alphas in the group. The backup will be
+  written using the encryption key with which the cluster was started, which
+  might be different than this key.
+- accessKey: Access key credential for the S3 or minio destination.
+- secretKey: Secret key credential for the S3 or minio destination .
+- sessionToken: AWS session token, if required.
+- anonymous: Set to true to allow backing up to S3 or Minio bucket that requires
+  no credentials.
+- vaultAddr: Vault server address where the key is stored. This server must be
+  accessible by all alphas in the group. Default "http://localhost:8200".
+- vaultRoleIDFile: Path to the Vault RoleID file.
+- vaultSecretIDFile: Path to the Vault SecretID file.
+- vaultPath: Vault kv store path where the key lives. Default
+  "secret/data/dgraph".
+- vaultField: Vault kv store field whose value is the key. Default "enc_key".
+- vaultFormat: Vault kv store field's format. Must be "base64" or "raw". Default
+  "base64".
+
 ## Access Control Lists
 
 {{% notice "note" %}}
