@@ -129,7 +129,21 @@ const adminTypes = `
 	}
 
 	type RestorePayload {
-		response: Response
+		"""
+		A short string indicating whether the restore operation was successfully scheduled.
+		The status of the operation can be queried using the restoreStatus endpoint.
+		"""
+		code: String
+
+		"""
+		Includes the error message if the operation failed.
+		"""
+		message: String
+
+		"""
+		The unique ID that can be used to query the status of the restore operation.
+		"""
+		restoreId: Int
 	}
 
 	input ListBackupsInput {
@@ -208,6 +222,18 @@ const adminTypes = `
 		The type of backup, either full or incremental.
 		"""
 		type: String
+	}
+
+	type RestoreStatus {
+		"""
+		The status of the restore operation. One of UNKNOWN, IN_PROGRESS, OK, or ERR.
+		"""
+		status: String!
+
+		"""
+		A list of error messages if the restore operation failed.
+		"""
+		errors: [String]
 	}
 	
 	type LoginResponse {
@@ -465,4 +491,9 @@ const adminQueries = `
 	"""
 	Get the information about the backups at a given location.
 	"""
-	listBackups(input: ListBackupsInput!) : [Manifest]`
+	listBackups(input: ListBackupsInput!) : [Manifest]
+
+	"""
+	Get information about a restore operation.
+	"""
+	restoreStatus(restoreId: Int!) : RestoreStatus`

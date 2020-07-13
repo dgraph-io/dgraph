@@ -62,6 +62,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -140,6 +141,7 @@ type AddCarPayload {
 }
 
 type DeleteCarPayload {
+	car(filter: CarFilter, order: CarOrder, first: Int, offset: Int): [Car]
 	msg: String
 	numUids: Int
 }

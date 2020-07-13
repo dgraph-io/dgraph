@@ -139,7 +139,7 @@ type Student implements People {
         taughtBy: [Teacher] @hasInverse(field: "teaches")
 }
 
-type Message {
+type Message @withSubscription {
     content: String! @dgraph(pred: "post")
     author: String @dgraph(pred: "<职业>")
 }

@@ -59,6 +59,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -137,6 +138,7 @@ type AddMessagePayload {
 }
 
 type DeleteMessagePayload {
+	message(filter: MessageFilter, order: MessageOrder, first: Int, offset: Int): [Message]
 	msg: String
 	numUids: Int
 }

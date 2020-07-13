@@ -10,8 +10,8 @@ You can find the getting started tutorial series [here]({{< relref "tutorials/in
 
 ## Dgraph
 
-**Dgraph** is an open-source, scalable, distributed, highly available and fast graph database,
-designed from the ground up to be run in production.
+Designed from the ground up to be run in production, **Dgraph** is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
+
 
 Dgraph cluster consists of different nodes (Zero, Alpha & Ratel), and each node serves a
 different purpose.
@@ -53,7 +53,7 @@ _This standalone image is meant for quickstart purposes only.
 It is not recommended for production environments._
 
 ```sh
-docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:v20.03.0
+docker run --rm -it -p 8080:8080 -p 9080:9080 -p 8000:8000 -v ~/dgraph:/dgraph dgraph/standalone:{{< version >}}
 ```
 
 This would start a single container with **Dgraph Alpha**, **Dgraph Zero** and **Ratel** running in it.
@@ -300,4 +300,3 @@ communicate with Dgraph from your application.
 feature requests and discussions.
 * Please use [Github Issues](https://github.com/dgraph-io/dgraph/issues)
 if you encounter bugs or have feature requests.
-* You can also join our [Slack channel](http://slack.dgraph.io).

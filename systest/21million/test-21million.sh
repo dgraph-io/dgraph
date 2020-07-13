@@ -18,10 +18,13 @@ function Info {
 function DockerCompose {
     docker-compose -p dgraph "$@"
 }
+function DgraphLive {
+    dgraph live "$@"
+}
 
-HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET=
+HELP= LOADER=bulk CLEANUP= SAVEDIR= LOAD_ONLY= QUIET= MODE=
 
-ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet" -- "$@") || exit 1
+ARGS=$(/usr/bin/getopt -n$ME -o"h" -l"help,loader:,cleanup:,savedir:,load-only,quiet,mode:" -- "$@") || exit 1
 eval set -- "$ARGS"
 while true; do
     case "$1" in
@@ -31,6 +34,7 @@ while true; do
         --savedir)      SAVEDIR=${2,,}; shift  ;;
         --load-only)    LOAD_ONLY=yes          ;;
         --quiet)        QUIET=yes              ;;
+        --mode)         MODE=${2,,}; shift  ;;
         --)             shift; break           ;;
     esac
     shift
@@ -38,7 +42,7 @@ done
 
 if [[ $HELP ]]; then
     cat <<EOF
-usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path]
+usage: $ME [-h|--help] [--loader=<bulk|live|none>] [--cleanup=<all|none|servers>] [--savedir=path] [--mode=<normal|ludicrous|none>]
 
 options:
 
@@ -52,6 +56,13 @@ options:
                     for easier post-test review
     --load-only     load data but do not run tests
     --quiet         just report which queries differ, without a diff
+    --mode          normal = run dgraph in normal mode
+                    none = run dgraph in normal mode
+<<<<<<< HEAD
+		    ludicrous = run dgraph in ludicrous mode
+=======
+                    ludicrous = run dgraph in ludicrous mode
+>>>>>>> origin/master
 EOF
     exit 0
 fi
@@ -65,6 +76,17 @@ fi
 # if already re-using it from a previous run
 if [[ $LOADER == none && -z $CLEANUP ]]; then
     CLEANUP=servers
+fi
+
+if [[ $MODE == ludicrous ]]; then
+    Info "removing old data (if any)"
+    DockerCompose down -v --remove-orphans
+    function DockerCompose {
+        docker-compose -f docker-compose-ludicrous.yml -p dgraph "$@"
+    }
+    function DgraphLive {
+        dgraph live --ludicrous_mode "$@"
+    }
 fi
 
 # default to cleaning up both services and volume
@@ -123,9 +145,13 @@ sleep 10
 
 if [[ $LOADER == live ]]; then
     Info "live loading data set"
-    dgraph live --schema=$SCHEMA_FILE --files=$DATA_FILE \
-                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr
+    DgraphLive --schema=$SCHEMA_FILE --files=$DATA_FILE \
+                --format=rdf --zero=:5180 --alpha=:9180 --logtostderr --ludicrous_mode
+    if [[ $MODE == ludicrous ]]; then
+        sleep 300
+    fi
 fi
+
 
 if [[ $LOAD_ONLY ]]; then
     Info "exiting after data load"

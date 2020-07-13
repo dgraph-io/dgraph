@@ -64,6 +64,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -147,11 +148,13 @@ type AddMoviePayload {
 }
 
 type DeleteMovieDirectorPayload {
+	movieDirector(filter: MovieDirectorFilter, order: MovieDirectorOrder, first: Int, offset: Int): [MovieDirector]
 	msg: String
 	numUids: Int
 }
 
 type DeleteMoviePayload {
+	movie(filter: MovieFilter, order: MovieOrder, first: Int, offset: Int): [Movie]
 	msg: String
 	numUids: Int
 }

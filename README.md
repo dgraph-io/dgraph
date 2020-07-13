@@ -1,21 +1,23 @@
 ![](/logo.png)
 
-**Fast, Transactional, Distributed Graph Database.**
+**The Only Native GraphQL Database With A Graph Backend.**
 
 [![Wiki](https://img.shields.io/badge/res-wiki-blue.svg)](https://dgraph.io/docs/)
 [![Build Status](https://teamcity.dgraph.io/guestAuth/app/rest/builds/buildType:(id:Dgraph_Ci)/statusIcon.svg)](https://teamcity.dgraph.io/viewLog.html?buildTypeId=Dgraph_Ci&buildId=lastFinished&guest=1)
 [![Coverage Status](https://coveralls.io/repos/github/dgraph-io/dgraph/badge.svg?branch=master)](https://coveralls.io/github/dgraph-io/dgraph?branch=master)
 [![Go Report Card](https://goreportcard.com/badge/github.com/dgraph-io/dgraph)](https://goreportcard.com/report/github.com/dgraph-io/dgraph)
 
-Dgraph is a horizontally scalable and distributed graph database, providing ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
-a rich set of queries. Being a native graph database, it tightly controls how the
+Dgraph is a horizontally scalable and distributed GraphQL database with a graph backend. It provides ACID transactions, consistent replication and linearizable reads. It's built from ground up to perform for
+a rich set of queries. Being a native GraphQL database, it tightly controls how the
 data is arranged on disk to optimize for query performance and throughput,
 reducing disk seeks and network calls in a cluster.
 
 
 Dgraph's goal is to provide [Google](https://www.google.com) production level scale and throughput,
 with low enough latency to be serving real time user queries, over terabytes of structured data.
-Dgraph supports [GraphQL-like query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
+Dgraph supports [GraphQL query syntax](https://dgraph.io/docs/master/query-language/), and responds in [JSON](http://www.json.org/) and [Protocol Buffers](https://developers.google.com/protocol-buffers/) over [GRPC](http://www.grpc.io/) and HTTP.
+
+**Use [Discuss Issues](https://discuss.dgraph.io/c/issues/dgraph/38) for reporting issues about this repository.**
 
 ## Status
 

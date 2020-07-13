@@ -52,6 +52,7 @@ const (
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
+	Msg                 = "msg"
 
 	Typename = "__typename"
 
@@ -105,6 +106,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -1020,18 +1022,26 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	qry := &ast.FieldDefinition{
+		Name: camelCase(defn.Name),
+		Type: ast.ListType(&ast.Type{
+			NamedType: defn.Name,
+		}, nil),
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
+	msg := &ast.FieldDefinition{
+		Name: "msg",
+		Type: &ast.Type{NamedType: "String"},
+	}
+
 	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "Delete" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: "msg",
-				Type: &ast.Type{
-					NamedType: "String",
-				},
-			},
-			numUids,
-		},
+		Kind:   ast.Object,
+		Name:   "Delete" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{qry, msg, numUids},
 	}
 }
 

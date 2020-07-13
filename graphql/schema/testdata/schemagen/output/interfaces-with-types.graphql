@@ -88,6 +88,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -176,21 +177,25 @@ type AddStarshipPayload {
 }
 
 type DeleteCharacterPayload {
+	character(filter: CharacterFilter, order: CharacterOrder, first: Int, offset: Int): [Character]
 	msg: String
 	numUids: Int
 }
 
 type DeleteDroidPayload {
+	droid(filter: DroidFilter, order: DroidOrder, first: Int, offset: Int): [Droid]
 	msg: String
 	numUids: Int
 }
 
 type DeleteHumanPayload {
+	human(filter: HumanFilter, order: HumanOrder, first: Int, offset: Int): [Human]
 	msg: String
 	numUids: Int
 }
 
 type DeleteStarshipPayload {
+	starship(filter: StarshipFilter, order: StarshipOrder, first: Int, offset: Int): [Starship]
 	msg: String
 	numUids: Int
 }
