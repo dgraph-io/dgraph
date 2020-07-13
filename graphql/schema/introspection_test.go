@@ -1,7 +1,6 @@
 package schema
 
 import (
-	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -366,7 +365,6 @@ func TestFullIntrospectionQuery(t *testing.T) {
 
 	queries := oper.Queries()
 	resp, err := Introspect(queries[0])
-	fmt.Println(string(resp))
 	require.NoError(t, err)
 
 	expectedBuf, err := ioutil.ReadFile("testdata/introspection/output/full_query.json")

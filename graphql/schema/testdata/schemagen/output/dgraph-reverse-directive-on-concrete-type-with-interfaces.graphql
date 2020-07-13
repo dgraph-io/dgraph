@@ -210,7 +210,6 @@ enum OscarMovieOrderable {
 
 input AddDirectorInput {
 	name: String!
-	directed: [OscarMovieRef]
 }
 
 input AddOscarMovieInput {
@@ -237,7 +236,6 @@ input DirectorPatch {
 input DirectorRef {
 	id: ID
 	name: String
-	directed: [OscarMovieRef]
 }
 
 input MovieFilter {
