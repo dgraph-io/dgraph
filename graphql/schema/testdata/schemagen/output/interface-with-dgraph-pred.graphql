@@ -1,0 +1,329 @@
+#######################
+# Input Schema
+#######################
+
+type Object {
+	id: ID!
+	name: String
+	ownedBy(filter: PersonFilter): Person @dgraph(pred: "Object.owner")
+}
+
+type BusinessMan implements Person {
+	id: ID!
+	name: String
+	owns(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object] @dgraph(pred: "~Object.owner")
+	companyName: String
+}
+
+interface Person {
+	id: ID!
+	name: String
+	owns(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object] @dgraph(pred: "~Object.owner")
+}
+
+#######################
+# Extended Definitions
+#######################
+
+scalar DateTime
+
+enum DgraphIndex {
+	int
+	float
+	bool
+	hash
+	exact
+	term
+	fulltext
+	trigram
+	regexp
+	year
+	month
+	day
+	hour
+}
+
+input AuthRule {
+	and: [AuthRule]
+	or: [AuthRule]
+	not: AuthRule
+	rule: String
+}
+
+enum HTTPMethod {
+	GET
+	POST
+	PUT
+	PATCH
+	DELETE
+}
+
+enum Mode {
+	BATCH
+	SINGLE
+}
+
+input CustomHTTP {
+	url: String!
+	method: HTTPMethod!
+	body: String
+	graphql: String
+	mode: Mode
+	forwardHeaders: [String!]
+	secretHeaders: [String!]
+	introspectionHeaders: [String!]
+	skipIntrospection: Boolean
+}
+
+directive @hasInverse(field: String!) on FIELD_DEFINITION
+directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
+directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
+directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
+directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
+directive @auth(
+	query: AuthRule,
+	add: AuthRule,
+	update: AuthRule,
+	delete:AuthRule) on OBJECT
+directive @custom(http: CustomHTTP) on FIELD_DEFINITION
+directive @remote on OBJECT | INTERFACE
+directive @cascade on FIELD
+
+input IntFilter {
+	eq: Int
+	le: Int
+	lt: Int
+	ge: Int
+	gt: Int
+}
+
+input FloatFilter {
+	eq: Float
+	le: Float
+	lt: Float
+	ge: Float
+	gt: Float
+}
+
+input DateTimeFilter {
+	eq: DateTime
+	le: DateTime
+	lt: DateTime
+	ge: DateTime
+	gt: DateTime
+}
+
+input StringTermFilter {
+	allofterms: String
+	anyofterms: String
+}
+
+input StringRegExpFilter {
+	regexp: String
+}
+
+input StringFullTextFilter {
+	alloftext: String
+	anyoftext: String
+}
+
+input StringExactFilter {
+	eq: String
+	le: String
+	lt: String
+	ge: String
+	gt: String
+}
+
+input StringHashFilter {
+	eq: String
+}
+
+#######################
+# Generated Types
+#######################
+
+type AddBusinessManPayload {
+	businessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
+	numUids: Int
+}
+
+type AddObjectPayload {
+	object(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object]
+	numUids: Int
+}
+
+type DeleteBusinessManPayload {
+	businessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
+	msg: String
+	numUids: Int
+}
+
+type DeleteObjectPayload {
+	object(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object]
+	msg: String
+	numUids: Int
+}
+
+type DeletePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	msg: String
+	numUids: Int
+}
+
+type UpdateBusinessManPayload {
+	businessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
+	numUids: Int
+}
+
+type UpdateObjectPayload {
+	object(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object]
+	numUids: Int
+}
+
+type UpdatePersonPayload {
+	person(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+	numUids: Int
+}
+
+#######################
+# Generated Enums
+#######################
+
+enum BusinessManOrderable {
+	name
+	companyName
+}
+
+enum ObjectOrderable {
+	name
+}
+
+enum PersonOrderable {
+	name
+}
+
+#######################
+# Generated Inputs
+#######################
+
+input AddBusinessManInput {
+	name: String
+	companyName: String
+}
+
+input AddObjectInput {
+	name: String
+	ownedBy: PersonRef
+}
+
+input BusinessManFilter {
+	id: [ID!]
+	not: BusinessManFilter
+}
+
+input BusinessManOrder {
+	asc: BusinessManOrderable
+	desc: BusinessManOrderable
+	then: BusinessManOrder
+}
+
+input BusinessManPatch {
+	name: String
+	companyName: String
+}
+
+input BusinessManRef {
+	id: ID
+	name: String
+	companyName: String
+}
+
+input ObjectFilter {
+	id: [ID!]
+	not: ObjectFilter
+}
+
+input ObjectOrder {
+	asc: ObjectOrderable
+	desc: ObjectOrderable
+	then: ObjectOrder
+}
+
+input ObjectPatch {
+	name: String
+	ownedBy: PersonRef
+}
+
+input ObjectRef {
+	id: ID
+	name: String
+	ownedBy: PersonRef
+}
+
+input PersonFilter {
+	id: [ID!]
+	not: PersonFilter
+}
+
+input PersonOrder {
+	asc: PersonOrderable
+	desc: PersonOrderable
+	then: PersonOrder
+}
+
+input PersonPatch {
+	name: String
+}
+
+input PersonRef {
+	id: ID!
+}
+
+input UpdateBusinessManInput {
+	filter: BusinessManFilter!
+	set: BusinessManPatch
+	remove: BusinessManPatch
+}
+
+input UpdateObjectInput {
+	filter: ObjectFilter!
+	set: ObjectPatch
+	remove: ObjectPatch
+}
+
+input UpdatePersonInput {
+	filter: PersonFilter!
+	set: PersonPatch
+	remove: PersonPatch
+}
+
+#######################
+# Generated Query
+#######################
+
+type Query {
+	getObject(id: ID!): Object
+	queryObject(filter: ObjectFilter, order: ObjectOrder, first: Int, offset: Int): [Object]
+	getBusinessMan(id: ID!): BusinessMan
+	queryBusinessMan(filter: BusinessManFilter, order: BusinessManOrder, first: Int, offset: Int): [BusinessMan]
+	getPerson(id: ID!): Person
+	queryPerson(filter: PersonFilter, order: PersonOrder, first: Int, offset: Int): [Person]
+}
+
+#######################
+# Generated Mutations
+#######################
+
+type Mutation {
+	addObject(input: [AddObjectInput!]!): AddObjectPayload
+	updateObject(input: UpdateObjectInput!): UpdateObjectPayload
+	deleteObject(filter: ObjectFilter!): DeleteObjectPayload
+	addBusinessMan(input: [AddBusinessManInput!]!): AddBusinessManPayload
+	updateBusinessMan(input: UpdateBusinessManInput!): UpdateBusinessManPayload
+	deleteBusinessMan(filter: BusinessManFilter!): DeleteBusinessManPayload
+	updatePerson(input: UpdatePersonInput!): UpdatePersonPayload
+	deletePerson(filter: PersonFilter!): DeletePersonPayload
+}
+
