@@ -185,7 +185,6 @@ func (p *Poller) poll(req *pollRequest) {
 				return
 			}
 			for _, subscriber := range subscribers {
-				glog.Infof("inside polling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 					p.terminateSubscription(req.bucketID, p.subscriptionID)
 				}
@@ -204,7 +203,6 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 		for _, subscriber := range subscribers {
-			glog.Infof("inside polling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 				p.terminateSubscription(req.bucketID, p.subscriptionID)
 			}
