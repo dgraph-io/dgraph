@@ -22,6 +22,8 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/dgraph-io/dgraph/graphql/authorization"
+
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/protos/pb"
@@ -49,6 +51,14 @@ func (qr *queryRewriter) Rewrite(
 	gqlQuery schema.Query) (*gql.GraphQuery, error) {
 
 	authVariables, _ := ctx.Value("authVariables").(map[string]interface{})
+
+	if authVariables == nil {
+		authVariables1, err := authorization.ExtractAuthVariables(ctx)
+		authVariables = authVariables1
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	authRw := &authRewriter{
 		authVariables: authVariables,
