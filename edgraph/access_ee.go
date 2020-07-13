@@ -42,7 +42,7 @@ import (
 
 type predsAndvars struct {
 	preds []string
-	vars  map[string]struct{ predicate string }
+	vars  map[string]string
 }
 
 // Login handles login requests from clients.
@@ -689,13 +689,13 @@ func authorizeMutation(ctx context.Context, gmu *gql.Mutation) error {
 
 func parsePredsFromQuery(gqls []*gql.GraphQuery) predsAndvars {
 	predsMap := make(map[string]struct{})
-	varsMap := make(map[string]struct{ predicate string })
+	varsMap := make(map[string]string)
 	for _, gq := range gqls {
 		if gq.Func != nil {
 			predsMap[gq.Func.Attr] = struct{}{}
 		}
 		if len(gq.Var) > 0 {
-			varsMap[gq.Var] = struct{ predicate string }{predicate: gq.Attr}
+			varsMap[gq.Var] = gq.Attr
 		}
 		if len(gq.Attr) > 0 && gq.Attr != "uid" && gq.Attr != "expand" && gq.Attr != "val" {
 			predsMap[gq.Attr] = struct{}{}
@@ -781,7 +781,7 @@ func authorizeQuery(ctx context.Context, parsedReq *gql.Result, graphql bool) er
 	// list of blocked predicates
 	predToVarsMap := make(map[string]string)
 	for k, v := range varsToPredMap {
-		predToVarsMap[v.predicate] = k
+		predToVarsMap[v] = k
 	}
 
 	doAuthorizeQuery := func() (map[string]struct{}, []string, error) {
