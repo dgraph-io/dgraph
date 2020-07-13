@@ -651,7 +651,57 @@ invalid_schemas:
         f1: [X] @dgraph(pred: "~f1")
       }
     errlist: [
-      {"message": "Type X; Field f1: should be of one of the types in [Y] to be compatible with @dgraph reverse
+      {"message": "Type X; Field f1: should be of type Y to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing an interface produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      type Y implements Person {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y or Person to be compatible with @dgraph reverse
+      directive but is of type Z.",
+      "locations":[{"line":5, "column":12}]}
+    ]
+
+  -
+    name: "Dgraph directive with reverse pred argument matching with wrong type implementing multiple interfaces produces an error"
+    input: |
+      type Z {
+        f1: String!
+      }
+      type X {
+        f1: [Z] @dgraph(pred: "f1")
+      }
+
+      interface Person {
+        id: ID!
+      }
+
+      interface Student {
+        ids: String! @id
+      }
+
+      type Y implements Person & Student {
+        f1: [X] @dgraph(pred: "~f1")
+      }
+    errlist: [
+      {"message": "Type X; Field f1: should be any of types Y, Person or Student to be compatible with @dgraph reverse
       directive but is of type Z.",
       "locations":[{"line":5, "column":12}]}
     ]
