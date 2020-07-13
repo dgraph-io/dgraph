@@ -193,7 +193,7 @@ func TestAudienceClaim(t *testing.T) {
 	require.Equal(t, metainfo.Algo, authorization.HMAC256)
 	require.Equal(t, metainfo.Header, "X-Test-Auth")
 	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
-	require.Equal(t, metainfo.PublicKey, "secretkey")
+	require.Equal(t, metainfo.VerificationKey, "secretkey")
 	require.Equal(t, metainfo.Audience, []string{"aud1", "63do0q16n6ebjgkumu05kkeian", "aud5"})
 
 	testCases := []struct {
@@ -640,7 +640,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 		authMeta, err := authorization.Parse(strSchema)
 		metaInfo := &testutil.AuthMeta{
-			PublicKey: authMeta.PublicKey,
+			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,
 			Algo:      authMeta.Algo,
 		}
