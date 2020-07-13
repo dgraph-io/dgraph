@@ -998,3 +998,47 @@ func StoreSync(db DB, closer *y.Closer) {
 		}
 	}
 }
+
+// DeepCopyJsonMap returns a deep copy of the input map `m`.
+// `m` is supposed to be a map similar to the ones produced as a result of json unmarshalling. i.e.,
+// any value in `m` at any nested level should be of an inbuilt go type.
+func DeepCopyJsonMap(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return m
+	}
+
+	mCopy := make(map[string]interface{})
+	for k, v := range m {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			mCopy[k] = DeepCopyJsonMap(val)
+		case []interface{}:
+			mCopy[k] = DeepCopyJsonArray(val)
+		default:
+			mCopy[k] = val
+		}
+	}
+	return mCopy
+}
+
+// DeepCopyJsonArray returns a deep copy of the input array `a`.
+// `a` is supposed to be an array similar to the ones produced as a result of json unmarshalling.
+// i.e., any value in `a` at any nested level should be of an inbuilt go type.
+func DeepCopyJsonArray(a []interface{}) []interface{} {
+	if a == nil {
+		return a
+	}
+
+	aCopy := make([]interface{}, 0, len(a))
+	for _, v := range a {
+		switch val := v.(type) {
+		case map[string]interface{}:
+			aCopy = append(aCopy, DeepCopyJsonMap(val))
+		case []interface{}:
+			aCopy = append(aCopy, DeepCopyJsonArray(val))
+		default:
+			aCopy = append(aCopy, val)
+		}
+	}
+	return aCopy
+}
