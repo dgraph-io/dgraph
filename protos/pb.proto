@@ -619,9 +619,8 @@ message ExportRequest {
 	bool anonymous = 9;
 }
 
-// Status describes a general status response.
-// code: 0 = success, 0 != failure.
 message ExportResponse {
+	// 0 indicates a success, and a non-zero code indicates failure
 	int32 code = 1;
 	string msg = 2;
 	repeated string files = 3;

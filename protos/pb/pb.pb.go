@@ -4597,9 +4597,8 @@ func (m *ExportRequest) GetAnonymous() bool {
 	return false
 }
 
-// Status describes a general status response.
-// code: 0 = success, 0 != failure.
 type ExportResponse struct {
+	// 0 indicates a success, and a non-zero code indicates failure
 	Code                 int32    `protobuf:"varint,1,opt,name=code,proto3" json:"code,omitempty"`
 	Msg                  string   `protobuf:"bytes,2,opt,name=msg,proto3" json:"msg,omitempty"`
 	Files                []string `protobuf:"bytes,3,rep,name=files,proto3" json:"files,omitempty"`
