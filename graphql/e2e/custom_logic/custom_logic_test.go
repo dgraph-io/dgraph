@@ -200,7 +200,7 @@ func TestCustomQueryShouldForwardHeaders(t *testing.T) {
 func TestCustomNameForwardHeaders(t *testing.T) {
 	schema := customTypes + `
 	 type Query {
-		 verifyHeaders(id: ID!): [Movie] @custom(http: {
+		 verifyCustomNameHeaders(id: ID!): [Movie] @custom(http: {
 				 url: "http://mock:8888/verifyCustomNameHeaders",
 				 method: "GET",
 				 forwardHeaders: ["X-App-Token:App", "X-User-Id"],
@@ -216,7 +216,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 
 	query := `
 	 query {
-		 verifyHeaders(id: "0x123") {
+		 verifyCustomNameHeaders(id: "0x321") {
 			 id
 			 name
 		 }
@@ -232,7 +232,7 @@ func TestCustomNameForwardHeaders(t *testing.T) {
 
 	result := params.ExecuteAsPost(t, alphaURL)
 	require.Nil(t, result.Errors)
-	expected := `{"verifyHeaders":[{"id":"0x3","name":"Star Wars"}]}`
+	expected := `{"verifyCustomNameHeaders":[{"id":"0x2","name":"Star Wars II"}]}`
 	require.Equal(t, expected, string(result.Data))
 }
 

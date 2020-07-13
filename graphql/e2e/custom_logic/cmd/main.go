@@ -312,7 +312,7 @@ func verifyCustomNameHeadersHandler(w http.ResponseWriter, r *http.Request) {
 		check2(w.Write([]byte(err.Error())))
 		return
 	}
-	check2(w.Write([]byte(`[{"id":"0x3","name":"Star Wars"}]`)))
+	check2(w.Write([]byte(`[{"id":"0x2","name":"Star Wars II"}]`)))
 }
 
 func twitterFollwerHandler(w http.ResponseWriter, r *http.Request) {
