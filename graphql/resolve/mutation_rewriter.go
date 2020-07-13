@@ -103,7 +103,7 @@ func NewVariableGenerator() *VariableGenerator {
 // Next gets the Next variable name for the given type and xid.
 // So, if two objects of the same type have same value for xid field,
 // then they will get same variable name.
-func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string {
+func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string, auth bool) string {
 	// return previously allocated variable name for repeating xidVal
 	var key string
 	if xidName == "" || xidVal == "" {
@@ -118,7 +118,12 @@ func (v *VariableGenerator) Next(typ schema.Type, xidName, xidVal string) string
 
 	// create new variable name
 	v.counter++
-	varName := fmt.Sprintf("%s%v", typ.Name(), v.counter)
+	var varName string
+	if auth {
+		varName = fmt.Sprintf("%sAuth%v", typ.Name(), v.counter)
+	} else {
+		varName = fmt.Sprintf("%s%v", typ.Name(), v.counter)
+	}
 
 	// save it, if it was created for xidVal
 	if xidName != "" && xidVal != "" {
@@ -360,7 +365,10 @@ func (mrw *AddRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
+		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
+
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), errs
 }
 
@@ -410,7 +418,9 @@ func (urw *UpdateRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      updateAuthSelector,
+		parentVarName: m.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	upsertQuery := RewriteUpsertQueryFromMutation(m, authRw)
 	srcUID := MutationQueryVarUID
@@ -554,7 +564,9 @@ func (urw *UpdateRewriter) FromMutationResult(
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
+		parentVarName: mutation.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasAuthRules(mutation.QueryField(), authRw)
 	return rewriteAsQueryByIds(mutation.QueryField(), uids, authRw), nil
 }
 
@@ -650,45 +662,9 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 
 	addFilter(dgQuery, m.MutatedType(), filter)
 
-	if rbac == schema.Uncertain {
-		dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery)
-	}
+	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
 
 	return dgQuery
-}
-
-// addUidFuncToQuery adds the uid func to the query with name `queryName`. This is useful when we
-// have auth queries since the top level query might be present in the children. We pass
-// `queryName` of top level query and it finds the appropriate query and adds `uidFunc` to it.
-func addUidFuncToQuery(q *gql.GraphQuery, uidFunc *gql.Function, queryName string) {
-	// This handles the case when root auth query is a dummy query due to RBAC evaluation to false.
-	// In such case since the query doesn't return anything, we don't need to add uid func.
-	if q.Attr == queryName+"()" {
-		return
-	}
-
-	if q.Attr != "" {
-		q.Func = uidFunc
-		return
-	}
-
-	var query *gql.GraphQuery
-	for _, cq := range q.Children {
-		if cq.Attr == queryName {
-			query = cq
-			break
-		}
-		for _, ccq := range cq.Children {
-			if ccq.Attr == queryName {
-				query = ccq
-				break
-			}
-		}
-	}
-
-	if query != nil {
-		query.Func = uidFunc
-	}
 }
 
 func (drw *deleteRewriter) Rewrite(
@@ -712,7 +688,9 @@ func (drw *deleteRewriter) Rewrite(
 		authVariables: authVariables,
 		varGen:        varGen,
 		selector:      deleteAuthSelector,
+		parentVarName: m.MutatedType().Name() + "Root",
 	}
+	authRw.hasAuthRules = hasAuthRules(m.QueryField(), authRw)
 
 	dgQry := RewriteUpsertQueryFromMutation(m, authRw)
 	qry := dgQry
@@ -735,7 +713,7 @@ func (drw *deleteRewriter) Rewrite(
 				continue
 			}
 		}
-		varName := varGen.Next(fld.Type(), "", "")
+		varName := varGen.Next(fld.Type(), "", "", false)
 
 		qry.Children = append(qry.Children,
 			&gql.GraphQuery{
@@ -768,14 +746,15 @@ func (drw *deleteRewriter) Rewrite(
 			authVariables: authVariables,
 			varGen:        varGen,
 			selector:      queryAuthSelector,
+			filterByUid:   true,
 		}
+		queryAuthRw.parentVarName = queryAuthRw.varGen.Next(queryField.Type(), "", "",
+			queryAuthRw.isWritingAuth)
+		queryAuthRw.varName = MutationQueryVar
+		queryAuthRw.hasAuthRules = hasAuthRules(queryField, authRw)
+
 		queryDel := rewriteAsQuery(queryField, queryAuthRw)
 
-		uidFunc := &gql.Function{
-			Name: "uid",
-			Args: []gql.Arg{{Value: MutationQueryVar}},
-		}
-		addUidFuncToQuery(queryDel, uidFunc, queryField.Name())
 		finalQry = &gql.GraphQuery{Children: append([]*gql.GraphQuery{dgQry}, queryDel)}
 	} else {
 		finalQry = dgQry
@@ -937,7 +916,7 @@ func rewriteObject(
 	atTopLevel := srcField == nil
 	topLevelAdd := srcUID == ""
 
-	variable := varGen.Next(typ, "", "")
+	variable := varGen.Next(typ, "", "", false)
 
 	id := typ.IDField()
 	if id != nil {
@@ -965,7 +944,7 @@ func rewriteObject(
 			}
 			// if the object has an xid, the variable name will be formed from the xidValue in order
 			// to handle duplicate object addition/updation
-			variable = varGen.Next(typ, xid.Name(), xidString)
+			variable = varGen.Next(typ, xid.Name(), xidString, false)
 			// check if an object with same xid has been encountered earlier
 			if xidObj := xidMetadata.variableObjMap[variable]; xidObj != nil {
 				// if we already encountered an object with same xid earlier, then we give error if:
@@ -1454,7 +1433,7 @@ func addDelete(
 		qryVar = qryVar[4 : len(qryVar)-1]
 	}
 
-	targetVar := varGen.Next(qryFld.Type(), "", "")
+	targetVar := varGen.Next(qryFld.Type(), "", "", false)
 	delFldName := qryFld.Type().DgraphPredicate(delFld.Name())
 
 	qry := &gql.GraphQuery{
@@ -1527,6 +1506,10 @@ func addDelete(
 		varGen:        varGen,
 		varName:       targetVar,
 		selector:      updateAuthSelector,
+		parentVarName: qryFld.Type().Name() + "Root",
+	}
+	if rn := newRw.selector(qryFld.Type()); rn != nil {
+		newRw.hasAuthRules = true
 	}
 
 	authQueries, authFilter := newRw.rewriteAuthQueries(qryFld.Type())
