@@ -392,25 +392,25 @@ func (writer *fileWriter) Close() error {
 // ExportedFiles has the relative path of files that were written during export
 type ExportedFiles []string
 
-type exportFileStorage interface {
+type exportStorage interface {
 	openFile(relativePath string) (*fileWriter, error)
 	finishWriting(fs ...*fileWriter) (ExportedFiles, error)
 }
 
-type localExportFileStorage struct {
+type localExportStorage struct {
 	destination  string
 	relativePath string
 }
 
-// remoteExportFileStorage uses localExportFileStorage to write files, then uploads to minio
-type remoteExportFileStorage struct {
+// remoteExportStorage uses localExportStorage to write files, then uploads to minio
+type remoteExportStorage struct {
 	mc     *minio.Client
 	bucket string
-	prefix string
-	l      *localExportFileStorage
+	prefix string // stores the path within the bucket.
+	les    *localExportStorage
 }
 
-func newLocalExportFileStorage(destination, backupName string) (*localExportFileStorage, error) {
+func newLocalExportStorage(destination, backupName string) (*localExportStorage, error) {
 	bdir, err := filepath.Abs(path.Join(destination, backupName))
 	if err != nil {
 		return nil, err
@@ -420,10 +420,10 @@ func newLocalExportFileStorage(destination, backupName string) (*localExportFile
 		return nil, err
 	}
 
-	return &localExportFileStorage{destination, backupName}, nil
+	return &localExportStorage{destination, backupName}, nil
 }
 
-func (l *localExportFileStorage) openFile(fileName string) (*fileWriter, error) {
+func (l *localExportStorage) openFile(fileName string) (*fileWriter, error) {
 	fw := &fileWriter{relativePath: path.Join(l.relativePath, fileName)}
 
 	filePath, err := filepath.Abs(path.Join(l.destination, fw.relativePath))
@@ -440,7 +440,7 @@ func (l *localExportFileStorage) openFile(fileName string) (*fileWriter, error) 
 	return fw, nil
 }
 
-func (l *localExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+func (l *localExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
 	var files ExportedFiles
 
 	for _, file := range fs {
@@ -454,12 +454,12 @@ func (l *localExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles
 	return files, nil
 }
 
-func newRemoteExportFileStorage(in *pb.ExportRequest, backupName string) (*remoteExportFileStorage, error) {
+func newRemoteExportStorage(in *pb.ExportRequest, backupName string) (*remoteExportStorage, error) {
 	tmpDir, err := ioutil.TempDir("", "export")
 	if err != nil {
 		return nil, err
 	}
-	localStorage, err := newLocalExportFileStorage(tmpDir, backupName)
+	localStorage, err := newLocalExportStorage(tmpDir, backupName)
 	if err != nil {
 		return nil, err
 	}
@@ -484,15 +484,15 @@ func newRemoteExportFileStorage(in *pb.ExportRequest, backupName string) (*remot
 		return nil, err
 	}
 
-	return &remoteExportFileStorage{mc, bucket, prefix, localStorage}, nil
+	return &remoteExportStorage{mc, bucket, prefix, localStorage}, nil
 }
 
-func (r *remoteExportFileStorage) openFile(fileName string) (*fileWriter, error) {
-	return r.l.openFile(fileName)
+func (r *remoteExportStorage) openFile(fileName string) (*fileWriter, error) {
+	return r.les.openFile(fileName)
 }
 
-func (r *remoteExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
-	files, err := r.l.finishWriting(fs...)
+func (r *remoteExportStorage) finishWriting(fs ...*fileWriter) (ExportedFiles, error) {
+	files, err := r.les.finishWriting(fs...)
 	if err != nil {
 		return nil, err
 	}
@@ -504,7 +504,7 @@ func (r *remoteExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFile
 		} else {
 			d = r.prefix + "/" + f
 		}
-		filePath := path.Join(r.l.destination, f)
+		filePath := path.Join(r.les.destination, f)
 		// FIXME: tejas [06/2020] - We could probably stream these results, but it's easier to copy for now
 		glog.Infof("Uploading from %s to %s\n", filePath, d)
 		_, err := r.mc.FPutObject(r.bucket, d, filePath, minio.PutObjectOptions{
@@ -518,14 +518,14 @@ func (r *remoteExportFileStorage) finishWriting(fs ...*fileWriter) (ExportedFile
 	return files, nil
 }
 
-func newExportFileStorage(in *pb.ExportRequest, backupName string) (exportFileStorage, error) {
+func newExportStorage(in *pb.ExportRequest, backupName string) (exportStorage, error) {
 	switch {
 	case strings.HasPrefix(in.Destination, "/"):
-		return newLocalExportFileStorage(in.Destination, backupName)
+		return newLocalExportStorage(in.Destination, backupName)
 	case strings.HasPrefix(in.Destination, "minio://") || strings.HasPrefix(in.Destination, "s3://"):
-		return newRemoteExportFileStorage(in, backupName)
+		return newRemoteExportStorage(in, backupName)
 	default:
-		return newLocalExportFileStorage(x.WorkerConfig.ExportPath, backupName)
+		return newLocalExportStorage(x.WorkerConfig.ExportPath, backupName)
 	}
 }
 
@@ -545,24 +545,24 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 	glog.Infof("Running export for group %d at timestamp %d.", in.GroupId, in.ReadTs)
 
 	uts := time.Unix(in.UnixTs, 0)
-	exportFileStorage, err := newExportFileStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
+	exportStorage, err := newExportStorage(in, fmt.Sprintf("dgraph.r%d.u%s", in.ReadTs, uts.UTC().Format("0102.1504")))
 	if err != nil {
 		return nil, err
 	}
 
 	xfmt := exportFormats[in.Format]
 
-	dataWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
+	dataWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, xfmt.ext+".gz"))
 	if err != nil {
 		return nil, err
 	}
 
-	schemaWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
+	schemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".schema.gz"))
 	if err != nil {
 		return nil, err
 	}
 
-	gqlSchemaWriter, err := exportFileStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
+	gqlSchemaWriter, err := exportStorage.openFile(fmt.Sprintf("g%02d%s", in.GroupId, ".gql_schema.gz"))
 	if err != nil {
 		return nil, err
 	}
@@ -772,7 +772,7 @@ func export(ctx context.Context, in *pb.ExportRequest) (ExportedFiles, error) {
 		return nil, err
 	}
 	glog.Infof("Export DONE for group %d at timestamp %d.", in.GroupId, in.ReadTs)
-	return exportFileStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
+	return exportStorage.finishWriting(dataWriter, schemaWriter, gqlSchemaWriter)
 }
 
 // Export request is used to trigger exports for the request list of groups.
