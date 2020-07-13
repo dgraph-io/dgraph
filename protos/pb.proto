@@ -544,7 +544,7 @@ service Worker {
 	rpc Schema (SchemaRequest)              returns (SchemaResult) {}
 	rpc Backup (BackupRequest)              returns (Status) {}
 	rpc Restore (RestoreRequest)            returns (Status) {}
-	rpc Export (ExportRequest)              returns (Status) {}
+	rpc Export (ExportRequest)              returns (ExportResponse) {}
 	rpc ReceivePredicate(stream KVS)        returns (api.Payload) {}
 	rpc MovePredicate(MovePredicatePayload) returns (api.Payload) {}
 	rpc Subscribe(SubscriptionRequest) returns (stream badgerpb2.KVList) {}
@@ -595,13 +595,13 @@ message BackupRequest {
 	string secret_key = 7;
 	string session_token = 8;
 
-  // True if no credentials should be used to access the S3 or minio bucket.
-  // For example, when using a bucket with a public policy.
-  bool anonymous = 9;
+	// True if no credentials should be used to access the S3 or minio bucket.
+	// For example, when using a bucket with a public policy.
+	bool anonymous = 9;
 
-  // The predicates to backup. All other predicates present in the group (e.g
-  // stale data from a predicate move) will be ignored.
-  repeated string predicates = 10;
+	// The predicates to backup. All other predicates present in the group (e.g
+	// stale data from a predicate move) will be ignored.
+	repeated string predicates = 10;
 }
 
 message ExportRequest {
@@ -609,6 +609,21 @@ message ExportRequest {
 	uint64  read_ts  = 2;
 	int64   unix_ts  = 3;
 	string  format   = 4;
+
+	string destination = 5;
+
+	// These credentials are used to access the S3 or minio bucket.
+	string access_key = 6;
+	string secret_key = 7;
+	string session_token = 8;
+	bool anonymous = 9;
+}
+
+message ExportResponse {
+	// 0 indicates a success, and a non-zero code indicates failure
+	int32 code = 1;
+	string msg = 2;
+	repeated string files = 3;
 }
 
 // A key stored in the format used for writing backups.
