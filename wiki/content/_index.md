@@ -1,4 +1,4 @@
-+++
+  +++
 date = "2017-03-20T19:35:35+11:00"
 title = "Dgraph Documentation"
 +++
@@ -125,24 +125,12 @@ Dgraph is a liberally licensed, scalable, distributed, highly available and fast
       <div class="col-12 col-sm-6">
         <div class="section-item">
           <div class="section-name">
-            <a href="https://slack.dgraph.io">
-              Slack
-            </a>
-          </div>
-          <p class="section-desc">
-            Chat instantly to the Dgraph community and engineers.
-          </p>
-        </div>
-      </div>
-      <div class="col-12 col-sm-6">
-        <div class="section-item">
-          <div class="section-name">
             <a href="https://discuss.dgraph.io">
-              Forum
+              Community
             </a>
           </div>
           <p class="section-desc">
-            Discuss Dgraph on the official forum.
+            Discuss Dgraph on the official community.
           </p>
         </div>
       </div>
