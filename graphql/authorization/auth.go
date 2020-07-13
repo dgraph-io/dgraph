@@ -89,8 +89,8 @@ func Parse(schema string) (AuthMeta, error) {
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
 	if err != nil {
 		return meta, fmt.Errorf("Unable to parse Dgraph.Authorization. " +
-			" It may be that you are using the pre-release syntax. " +
-			"Please check at https://graphql.dgraph.io/authorization/")
+			"It may be that you are using the pre-release syntax. " +
+			"Please check the correct syntax at https://graphql.dgraph.io/authorization/")
 	}
 	return meta, meta.validate()
 }
