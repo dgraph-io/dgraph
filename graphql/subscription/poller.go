@@ -185,8 +185,10 @@ func (p *Poller) poll(req *pollRequest) {
 				return
 			}
 			for _, subscriber := range subscribers {
+				glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 					p.terminateSubscription(req.bucketID, p.subscriptionID)
+					glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				}
 			}
 			p.Unlock()
@@ -203,8 +205,10 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 		for _, subscriber := range subscribers {
+			glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 				p.terminateSubscription(req.bucketID, p.subscriptionID)
+				glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			}
 		}
 
@@ -244,14 +248,17 @@ func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 }
 
 func (p *Poller) terminateSubscription(bucketID, subscriptionID uint64) {
+	glog.Infof("in terminate subscription %d ", subscriptionID)
 	subscriptions, ok := p.pollRegistry[bucketID]
 	if !ok {
 		return
 	}
+	glog.Infof("terminate subscription %d ", subscriptionID)
 	subscriber, ok := subscriptions[subscriptionID]
 	if ok {
 		glog.Infof("Terminating subscription for the subscription ID %d", subscriptionID)
 		close(subscriber.updateCh)
+
 	}
 	delete(subscriptions, subscriptionID)
 	p.pollRegistry[bucketID] = subscriptions
