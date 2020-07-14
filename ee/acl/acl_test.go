@@ -1340,7 +1340,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 					n as name
 					a as age
 				}
-				q2(func: eq(val(n), "RandomGuy"), orderdesc: val(n)) {
+				q2(func: eq(val(n), "RandomGuy")) {
 					val(n)
 					val(a)
 				}
@@ -1360,7 +1360,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 				q1(func: has(name), orderasc: age) {
 					a as age
 				}
-				q2(func: has(name), orderasc: val(a)) {
+				q2(func: has(name)) {
 					val(a)
 				}
 			}`,
@@ -1379,7 +1379,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 					n as name
 					a as age
 				}
-				q2(func: uid(f), orderasc: val(n)) {
+				q2(func: uid(f), orderasc: name) {
 					name
 					val(n)
 					val(a)
@@ -1394,7 +1394,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 			"alice has access to name and age",
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
-			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
+			"q2":[{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23},{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25}]}`,
 		},
 	}
 
