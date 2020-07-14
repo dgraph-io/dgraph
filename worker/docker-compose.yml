@@ -118,6 +118,8 @@ services:
     ports:
     - 16686:16686
     command: --memory.max-traces=1000000
+    labels:
+      cluster: test
   zero1:
     image: dgraph/dgraph:latest
     container_name: zero1
