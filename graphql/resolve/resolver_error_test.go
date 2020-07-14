@@ -399,6 +399,13 @@ func TestManyMutationsWithError(t *testing.T) {
 	}
 }
 
+func TestSubscriptionErrorWhenNoneDefined(t *testing.T) {
+	gqlSchema := test.LoadSchemaFromString(t, testGQLSchema)
+	resp := resolveWithClient(gqlSchema, `subscription { foo }`, nil, nil)
+	test.RequireJSONEq(t, x.GqlErrorList{{Message: "Not resolving subscription because schema" +
+		" doesn't have any fields defined for subscription operation."}}, resp.Errors)
+}
+
 func resolve(gqlSchema schema.Schema, gqlQuery string, dgResponse string) *schema.Response {
 	return resolveWithClient(gqlSchema, gqlQuery, nil, &executor{resp: dgResponse})
 }
