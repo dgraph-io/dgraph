@@ -55,6 +55,8 @@ var (
 	GenesisOneAuth string = filepath.Join(currentDir, "../utils/genesis_oneauth.json")
 	// GenesisThreeAuths is the genesis file that has 3 authorities
 	GenesisThreeAuths string = filepath.Join(currentDir, "../utils/genesis_threeauths.json")
+	// GenesisSixAuths is the genesis file that has 6 authorities
+	GenesisSixAuths string = filepath.Join(currentDir, "../utils/genesis_sixauths.json")
 	// GenesisDefault is the default gssmr genesis file
 	GenesisDefault string = filepath.Join(currentDir, "../..", "chain/gssmr/genesis.json")
 

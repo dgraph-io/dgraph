@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
 
@@ -37,7 +38,7 @@ import (
 
 var (
 	numNodes   = 3
-	maxRetries = 24
+	maxRetries = 32
 	logger     = log.New("pkg", "tests/stress")
 )
 
@@ -84,16 +85,36 @@ func compareChainHeadsWithRetry(t *testing.T, nodes []*utils.Node) error {
 // it returns a map of block hashes to node key names, and an error if the hashes don't all match
 func compareBlocksByNumber(t *testing.T, nodes []*utils.Node, num string) (map[common.Hash][]string, error) {
 	hashes := make(map[common.Hash][]string)
+	errs := []error{}
+
+	var mapMu sync.Mutex
+	var wg sync.WaitGroup
+	wg.Add(len(nodes))
+
 	for _, node := range nodes {
-		hash, err := utils.GetBlockHash(t, node, num)
-		if err != nil {
-			return hashes, err
-		}
-		logger.Info("getting hash from node", "hash", hash, "node", node.Key)
-		hashes[hash] = append(hashes[hash], node.Key)
+		go func(node *utils.Node) {
+			hash, err := utils.GetBlockHash(t, node, num)
+			if err != nil {
+				logger.Error("failed to get block hash for number", "node", node.Key, "error", err)
+				errs = append(errs, err)
+				wg.Done()
+				return
+			}
+			logger.Debug("getting hash from node", "hash", hash, "node", node.Key)
+
+			mapMu.Lock()
+			hashes[hash] = append(hashes[hash], node.Key)
+			mapMu.Unlock()
+			wg.Done()
+		}(node)
 	}
+	wg.Wait()
 
 	var err error
+	if len(errs) != 0 {
+		err = errBlocksAtNumberMismatch
+	}
+
 	if len(hashes) == 0 {
 		err = errNoBlockAtNumber
 	}

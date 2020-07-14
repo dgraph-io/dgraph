@@ -13,7 +13,7 @@ unlock = ""
 [core]
 authority = true
 roles = 4
-babe-authority = false
+babe-authority = true
 grandpa-authority = true
 
 [network]
