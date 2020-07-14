@@ -36,6 +36,7 @@ const (
 	typFunc   = "type"
 	lenFunc   = "len"
 	countFunc = "count"
+	uidInFunc = "uid_in"
 )
 
 var (
@@ -1859,6 +1860,9 @@ L:
 				if strings.ContainsRune(itemInFunc.Val, '"') {
 					return nil, itemInFunc.Errorf("Attribute in function"+
 						" must not be quoted with \": %s", itemInFunc.Val)
+				}
+				if function.Name == uidInFunc && item.Typ == itemRightRound {
+					return nil, itemInFunc.Errorf("uid_in function expects an argument, got none")
 				}
 				function.Attr = val
 				attrItemsAgo = 0
