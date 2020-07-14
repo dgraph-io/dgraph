@@ -79,7 +79,6 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	buf, err := json.Marshal(req)
 	x.Check(err)
 	var bucketID uint64
-	var subscriptionID uint64
 	if customClaims.AuthVariables != nil {
 
 		//ToDo-Add custom marshal function that marhsal's the json in sorted order.
@@ -103,7 +102,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	updateCh := make(chan interface{}, 10)
 	updateCh <- res.Output()
 
-	subscriptionID = p.subscriptionID
+	subscriptionID := p.subscriptionID
 	// Increment ID for next subscription.
 	p.subscriptionID++
 	subscriptions, ok := p.pollRegistry[bucketID]
@@ -129,12 +128,11 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	// There is no goroutine running to check updates for this query. So, run one to publish
 	// the updates.
 	pollR := &pollRequest{
-		bucketID:       bucketID,
-		subscriptionID: subscriptionID,
-		prevHash:       prevHash,
-		graphqlReq:     req,
-		authVariables:  customClaims.AuthVariables,
-		localEpoch:     localEpoch,
+		bucketID:      bucketID,
+		prevHash:      prevHash,
+		graphqlReq:    req,
+		authVariables: customClaims.AuthVariables,
+		localEpoch:    localEpoch,
 	}
 	go p.poll(pollR)
 
@@ -146,12 +144,11 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 }
 
 type pollRequest struct {
-	prevHash       uint64
-	graphqlReq     *schema.Request
-	bucketID       uint64
-	subscriptionID uint64
-	localEpoch     uint64
-	authVariables  map[string]interface{}
+	prevHash      uint64
+	graphqlReq    *schema.Request
+	bucketID      uint64
+	localEpoch    uint64
+	authVariables map[string]interface{}
 }
 
 func (p *Poller) poll(req *pollRequest) {
@@ -189,10 +186,8 @@ func (p *Poller) poll(req *pollRequest) {
 				return
 			}
 			for _, subscriber := range subscribers {
-				glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
-					glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				}
 			}
 			p.Unlock()
@@ -209,10 +204,8 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 		for _, subscriber := range subscribers {
-			glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
 				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
-				glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			}
 		}
 
@@ -252,12 +245,10 @@ func (p *Poller) TerminateSubscription(bucketID, subscriptionID uint64) {
 }
 
 func (p *Poller) terminateSubscription(bucketID, subscriptionID uint64) {
-	glog.Infof("in terminate subscription %d ", subscriptionID)
 	subscriptions, ok := p.pollRegistry[bucketID]
 	if !ok {
 		return
 	}
-	glog.Infof("terminate subscription %d ", subscriptionID)
 	subscriber, ok := subscriptions[subscriptionID]
 	if ok {
 		glog.Infof("Terminating subscription for the subscription ID %d", subscriptionID)

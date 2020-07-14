@@ -121,9 +121,6 @@ func (gs *graphqlSubscription) Subscribe(
 	err error) {
 
 	header, _ := ctx.Value("Header").(json.RawMessage)
-	glog.Infof("%s", ctx.Value("Header").(json.RawMessage))
-	glog.Infof("%s", string(header))
-
 	payload := make(map[string]interface{})
 	if err := json.Unmarshal(header, &payload); err != nil {
 		return nil, err
