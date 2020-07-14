@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strings"
-	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc/metadata"
 )
@@ -35,9 +34,10 @@ import (
 type ctxKey string
 
 const (
-	AuthJwtCtxKey = ctxKey("authorizationJwt")
-	RSA256        = "RS256"
-	HMAC256       = "HS256"
+	AuthJwtCtxKey  = ctxKey("authorizationJwt")
+	RSA256         = "RS256"
+	HMAC256        = "HS256"
+	AuthMetaHeader = "# Dgraph.Authorization "
 )
 
 var (
@@ -45,53 +45,54 @@ var (
 )
 
 type AuthMeta struct {
-	PublicKey    string
-	RSAPublicKey *rsa.PublicKey
-	Header       string
-	Namespace    string
-	Algo         string
+	VerificationKey string
+	RSAPublicKey    *rsa.PublicKey `json:"-"` // Ignoring this field
+	Header          string
+	Namespace       string
+	Algo            string
+	Audience        []string
+}
+
+// Validate required fields.
+func (a *AuthMeta) validate() error {
+	var fields string
+	if a.VerificationKey == "" {
+		fields = " `Verification key`"
+	}
+
+	if a.Header == "" {
+		fields += " `Header`"
+	}
+
+	if a.Namespace == "" {
+		fields += " `Namespace`"
+	}
+
+	if a.Algo == "" {
+		fields += " `Algo`"
+	}
+
+	if len(fields) > 0 {
+		return fmt.Errorf("required field missing in Dgraph.Authorization:%s", fields)
+	}
+	return nil
 }
 
 func Parse(schema string) (AuthMeta, error) {
 	var meta AuthMeta
-	authInfoIdx := strings.LastIndex(schema, "# Dgraph.Authorization")
+	authInfoIdx := strings.LastIndex(schema, AuthMetaHeader)
 	if authInfoIdx == -1 {
 		return meta, nil
 	}
 	authInfo := schema[authInfoIdx:]
 
-	// This regex matches authorization information present in the last line of the schema.
-	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
-	// Example: # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
-	// On successful regex match the index for the following strings will be returned.
-	// [0][0]:[0][1] : # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
-	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
-	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
-	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
-	authMetaRegex, err :=
-		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
+	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
 	if err != nil {
-		return meta, errors.Errorf("error while parsing jwt authorization info: %v", err)
+		return meta, fmt.Errorf("Unable to parse Dgraph.Authorization. " +
+			"It may be that you are using the pre-release syntax. " +
+			"Please check the correct syntax at https://graphql.dgraph.io/authorization/")
 	}
-	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
-	if len(idx) != 1 || len(idx[0]) != 12 ||
-		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
-		return meta, errors.Errorf("error while parsing jwt authorization info")
-	}
-
-	meta.Header = authInfo[idx[0][4]:idx[0][5]]
-	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
-	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
-	meta.PublicKey = authInfo[idx[0][10]:idx[0][11]]
-	if meta.Algo == HMAC256 {
-		return meta, nil
-	}
-
-	if meta.Algo != RSA256 {
-		return meta, errors.Errorf(
-			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", meta.Algo)
-	}
-	return meta, nil
+	return meta, meta.validate()
 }
 
 func ParseAuthMeta(schema string) error {
@@ -108,7 +109,7 @@ func ParseAuthMeta(schema string) error {
 	// The jwt library internally uses `bytes.IndexByte(data, '\n')` to fetch new line and fails
 	// if we have newline "\n" as ASCII value {92,110} instead of the actual ASCII value of 10.
 	// To fix this we replace "\n" with new line's ASCII value.
-	bytekey := bytes.ReplaceAll([]byte(metainfo.PublicKey), []byte{92, 110}, []byte{10})
+	bytekey := bytes.ReplaceAll([]byte(metainfo.VerificationKey), []byte{92, 110}, []byte{10})
 
 	metainfo.RSAPublicKey, err = jwt.ParseRSAPublicKeyFromPEM(bytekey)
 	return err
@@ -116,6 +117,10 @@ func ParseAuthMeta(schema string) error {
 
 func GetHeader() string {
 	return metainfo.Header
+}
+
+func GetAuthMeta() AuthMeta {
+	return metainfo
 }
 
 // AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
@@ -180,12 +185,41 @@ func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
 	return validateToken(jwtToken[0])
 }
 
+func (c *CustomClaims) validateAudience() error {
+	// If there's no audience claim, ignore
+	if c.Audience == nil || len(c.Audience) == 0 {
+		return nil
+	}
+
+	// If there is an audience claim, but no value provided, fail
+	if metainfo.Audience == nil {
+		return fmt.Errorf("audience value was expected but not provided")
+	}
+
+	var match = false
+	for _, audStr := range c.Audience {
+		for _, expectedAudStr := range metainfo.Audience {
+			if subtle.ConstantTimeCompare([]byte(audStr), []byte(expectedAudStr)) == 1 {
+				match = true
+				break
+			}
+		}
+	}
+	if !match {
+		return fmt.Errorf("JWT `aud` value doesn't match with the audience")
+	}
+	return nil
+}
+
 func validateToken(jwtStr string) (map[string]interface{}, error) {
 	if metainfo.Algo == "" {
 		return nil, fmt.Errorf(
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
+	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
+	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
+	// use our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			algo, _ := token.Header["alg"].(string)
@@ -195,7 +229,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 			}
 			if algo == HMAC256 {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(metainfo.PublicKey), nil
+					return []byte(metainfo.VerificationKey), nil
 				}
 			} else if algo == RSA256 {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
@@ -203,7 +237,7 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 				}
 			}
 			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		})
+		}, jwt.WithoutClaimsValidation())
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -214,11 +248,8 @@ func validateToken(jwtStr string) (map[string]interface{}, error) {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
 
-	// by default, the MapClaims.Valid will return true if the exp field is not set
-	// here we enforce the checking to make sure that the refresh token has not expired
-	now := time.Now().Unix()
-	if !claims.VerifyExpiresAt(now, true) {
-		return nil, errors.Errorf("Token is expired") // the same error msg that's used inside jwt-go
+	if err := claims.validateAudience(); err != nil {
+		return nil, err
 	}
 
 	return claims.AuthVariables, nil

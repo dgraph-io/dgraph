@@ -172,6 +172,7 @@ func validateToken(jwtStr string) ([]string, error) {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
 	}
 
+	// TODO(arijit): Upgrade the jwt library to v4.0
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
