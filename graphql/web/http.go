@@ -20,7 +20,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
+
+	"google.golang.org/grpc/metadata"
 
 	"io"
 	"io/ioutil"
@@ -42,7 +45,7 @@ import (
 
 const touchedUidsHeader = "Graphql-TouchedUids"
 
-// An IServeGraphQL can serve a GraphQL endpoint (currently only on http)
+// An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
 
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
@@ -116,12 +119,39 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
+
+	header, _ := ctx.Value("Header").(json.RawMessage)
+	payload := make(map[string]interface{})
+	if err := json.Unmarshal(header, &payload); err != nil {
+		return nil, err
+	}
+
+	var customClaim *authorization.CustomClaims
+	fmt.Printf("payload: %+v\n", payload)
+	name := authorization.GetHeader()
+	val, ok := payload[name]
+	if ok {
+		md, ok := metadata.FromIncomingContext(ctx)
+		if !ok {
+			md = metadata.New(nil)
+		}
+
+		md.Append("authorizationJwt", val.(string))
+		ctx = metadata.NewIncomingContext(ctx, md)
+
+		customClaim, err = authorization.ExtractCustomClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
 	}
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
+
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaim)
 	if err != nil {
 		return nil, err
 	}
