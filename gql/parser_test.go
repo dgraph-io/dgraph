@@ -4914,6 +4914,28 @@ func TestUidInWithParseErrors(t *testing.T) {
 		expectedErr error
 	}{
 		{
+			description: "uid_in query with without argument",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("Empty Argument"),
+		},
+		{
+			description: "uid_in query with without argument (2)",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school )) {
+						name
+					}
+				}
+			}`,
+			expectedErr: errors.New("uid_in function expects an argument, got none"),
+		},
+		{
 			description: "query with nested uid without variable",
 			query: `{
 				me(func: uid(1, 23, 24 )) {

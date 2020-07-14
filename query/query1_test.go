@@ -1038,6 +1038,22 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
+func TestUidInFunctionWithError(t *testing.T) {
+
+	query := `
+	{
+		me(func: uid(1, 23, 24)) {
+			friend @filter(uid_in(school, foo)) {
+				name
+			}
+		}
+	}`
+	expectedErr := errors.New(`Value "foo" in uid_in is not a number`)
+	_, err := processQuery(context.Background(), t, query)
+	require.Contains(t, err.Error(), expectedErr.Error())
+
+}
+
 func TestUidInFunction3(t *testing.T) {
 	tcases := []struct {
 		description string
