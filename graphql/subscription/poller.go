@@ -24,6 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/dgrijalva/jwt-go/v4"
+
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
@@ -69,7 +71,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
 	if customClaims == nil {
 		customClaims = &authorization.CustomClaims{}
-		customClaims.ExpiresAt = (time.Time{}).Unix()
+		customClaims.ExpiresAt = jwt.NewTime(float64(time.Time{}.Unix()))
 	}
 	err := p.resolver.ValidateSubscription(req)
 	if err != nil {
@@ -111,7 +113,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	}
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 
-	subscriptions[subscriptionID] = subscriber{customClaims.StandardClaims.ExpiresAt, updateCh, subscriptionID}
+	subscriptions[subscriptionID] = subscriber{(customClaims.StandardClaims.ExpiresAt.Unix()), updateCh, subscriptionID}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if len(subscriptions) != 1 {

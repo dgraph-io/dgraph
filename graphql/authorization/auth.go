@@ -286,7 +286,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 			}
 			if algo == HMAC256 {
 				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(metainfo.PublicKey), nil
+					return []byte(metainfo.VerificationKey), nil
 				}
 			} else if algo == RSA256 {
 				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {

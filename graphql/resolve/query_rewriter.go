@@ -78,6 +78,7 @@ func (qr *queryRewriter) Rewrite(
 
 	authVariables, err := authorization.ExtractAuthVariables(ctx)
 	if err != nil {
+
 		return nil, err
 	}
 
