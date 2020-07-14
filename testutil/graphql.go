@@ -27,7 +27,7 @@ import (
 
 	"github.com/pkg/errors"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/dgraph-io/dgraph/x"
@@ -75,7 +75,7 @@ func RequireNoGraphQLErrors(t *testing.T, resp *http.Response) {
 	var result *GraphQLResponse
 	err = json.Unmarshal(b, &result)
 	require.NoError(t, err)
-	require.Nil(t, result.Errors)
+	require.Nil(t, result.Errors, "Recieved GQL Errors: %+v", result.Errors)
 }
 
 func MakeGQLRequest(t *testing.T, params *GraphQLParams) *GraphQLResponse {
@@ -157,7 +157,7 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
 		a.Namespace,
 		a.AuthVars,
 		jwt.StandardClaims{
-			ExpiresAt: time.Now().Add(time.Minute).Unix(),
+			ExpiresAt: jwt.At(time.Now().Add(time.Minute * 5)),
 			Issuer:    "test",
 		},
 	}
@@ -200,7 +200,7 @@ func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, err
 
 func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	if algo == "HS256" {
-		authInfo := `# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"`
+		authInfo := `# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
 		return append(schema, []byte(authInfo)...), nil
 	}
 
@@ -216,7 +216,6 @@ func AppendAuthInfo(schema []byte, algo, publicKeyFile string) ([]byte, error) {
 	// Replacing ASCII newline with "\n" as the authorization information in the schema should be
 	// present in a single line.
 	keyData = bytes.ReplaceAll(keyData, []byte{10}, []byte{92, 110})
-	authInfo := "# Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims RS256 \"" +
-		string(keyData) + "\""
+	authInfo := `# Dgraph.Authorization {"VerificationKey":"` + string(keyData) + `","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"RS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}`
 	return append(schema, []byte(authInfo)...), nil
 }

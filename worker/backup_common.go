@@ -75,22 +75,6 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 	return predSet
 }
 
-// Credentials holds the credentials needed to perform a backup operation.
-// If these credentials are missing the default credentials will be used.
-type Credentials struct {
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-}
-
-func (creds *Credentials) isAnonymous() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.Anonymous
-}
-
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{
@@ -157,7 +141,7 @@ func (rt *restoreTracker) Add() (int, error) {
 	// way to prevent the map from growing without bound.
 	oldId := rt.counter - 50
 	delete(rt.status, oldId)
-	
+
 	rt.status[rt.counter] = &RestoreStatus{Status: inProgressStatus, Errors: make([]error, 0)}
 	return rt.counter, nil
 }

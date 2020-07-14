@@ -5,7 +5,7 @@ title = "Dgraph Documentation"
 
 **Welcome to the official Dgraph documentation.**
 
-Dgraph is an open-source, scalable, distributed, highly available and fast graph database, designed from the ground up to be run in production.
+Designed from the ground up to be run in production, Dgraph is the native GraphQL database with a graph backend. It is open-source, scalable, distributed, highly available and lightning fast.
 
 ## Using Dgraph
 
