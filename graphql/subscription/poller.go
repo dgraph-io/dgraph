@@ -58,8 +58,9 @@ type SubscriberResponse struct {
 }
 
 type subscriber struct {
-	expiry   int64
-	updateCh chan interface{}
+	expiry         int64
+	updateCh       chan interface{}
+	subscriptionID uint64
 }
 
 // AddSubscriber tries to add subscription into the existing polling goroutine if it exists.
@@ -111,7 +112,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	}
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 
-	subscriptions[subscriptionID] = subscriber{customClaims.StandardClaims.ExpiresAt, updateCh}
+	subscriptions[subscriptionID] = subscriber{customClaims.StandardClaims.ExpiresAt, updateCh, subscriptionID}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if len(subscriptions) != 1 {
@@ -190,7 +191,7 @@ func (p *Poller) poll(req *pollRequest) {
 			for _, subscriber := range subscribers {
 				glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-					p.terminateSubscription(req.bucketID, req.subscriptionID)
+					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 					glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 				}
 			}
@@ -210,7 +211,7 @@ func (p *Poller) poll(req *pollRequest) {
 		for _, subscriber := range subscribers {
 			glog.Infof("current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-				p.terminateSubscription(req.bucketID, req.subscriptionID)
+				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 				glog.Infof("after cancelling, current time %d , expiry %d", time.Now().Unix(), subscriber.expiry)
 			}
 		}
