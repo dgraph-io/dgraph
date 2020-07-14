@@ -169,22 +169,6 @@ func (c *CustomClaims) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func ExtractAuthVariables(ctx context.Context) (map[string]interface{}, error) {
-	// Extract the jwt and unmarshal the jwt to get the auth variables.
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return nil, nil
-	}
-
-	jwtToken := md.Get(string(AuthJwtCtxKey))
-	if len(jwtToken) == 0 {
-		return nil, nil
-	} else if len(jwtToken) > 1 {
-		return nil, fmt.Errorf("invalid jwt auth token")
-	}
-	return validateToken(jwtToken[0])
-}
-
 func (c *CustomClaims) validateAudience() error {
 	// If there's no audience claim, ignore
 	if c.Audience == nil || len(c.Audience) == 0 {
@@ -209,50 +193,6 @@ func (c *CustomClaims) validateAudience() error {
 		return fmt.Errorf("JWT `aud` value doesn't match with the audience")
 	}
 	return nil
-}
-
-func validateToken(jwtStr string) (map[string]interface{}, error) {
-	if metainfo.Algo == "" {
-		return nil, fmt.Errorf(
-			"jwt token cannot be validated because verification algorithm is not set")
-	}
-
-	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
-	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
-	// use our custom validation function `validateAudience`.
-	token, err :=
-		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
-			algo, _ := token.Header["alg"].(string)
-			if algo != metainfo.Algo {
-				return nil, errors.Errorf("unexpected signing method: Expected %s Found %s",
-					metainfo.Algo, algo)
-			}
-			if algo == HMAC256 {
-				if _, ok := token.Method.(*jwt.SigningMethodHMAC); ok {
-					return []byte(metainfo.VerificationKey), nil
-				}
-			} else if algo == RSA256 {
-				if _, ok := token.Method.(*jwt.SigningMethodRSA); ok {
-					return metainfo.RSAPublicKey, nil
-				}
-			}
-			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		}, jwt.WithoutClaimsValidation())
-
-	if err != nil {
-		return nil, errors.Errorf("unable to parse jwt token:%v", err)
-	}
-
-	claims, ok := token.Claims.(*CustomClaims)
-	if !ok || !token.Valid {
-		return nil, errors.Errorf("claims in jwt token is not map claims")
-	}
-
-	if err := claims.validateAudience(); err != nil {
-		return nil, err
-	}
-
-	return claims.AuthVariables, nil
 }
 
 func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {

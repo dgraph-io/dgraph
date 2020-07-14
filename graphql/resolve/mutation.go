@@ -375,7 +375,8 @@ func authorizeNewNodes(
 	queryExecutor DgraphExecutor,
 	txn *dgoapi.TxnContext) error {
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}

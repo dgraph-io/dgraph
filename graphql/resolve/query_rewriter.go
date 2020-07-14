@@ -79,7 +79,8 @@ func (qr *queryRewriter) Rewrite(
 	authVariables, _ := ctx.Value("authVariables").(map[string]interface{})
 
 	if authVariables == nil {
-		authVariables1, err := authorization.ExtractAuthVariables(ctx)
+		customClaims, err := authorization.ExtractCustomClaims(ctx)
+		authVariables1 := customClaims.AuthVariables
 		authVariables = authVariables1
 		if err != nil {
 			return nil, err

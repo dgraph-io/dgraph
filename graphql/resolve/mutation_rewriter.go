@@ -357,7 +357,8 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
@@ -410,7 +411,8 @@ func (urw *UpdateRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
@@ -556,7 +558,8 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
@@ -679,7 +682,8 @@ func (drw *deleteRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
@@ -1495,7 +1499,8 @@ func addDelete(
 	// then we need update permission on Author1
 
 	// grab the auth for Author1
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVariables := customClaims.AuthVariables
 	if err != nil {
 		frag.check =
 			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))
