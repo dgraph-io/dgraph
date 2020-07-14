@@ -7,7 +7,7 @@ Dgraph enterprise features are proprietary licensed under the [Dgraph Community
 License][dcl]. All Dgraph releases contain proprietary code for enterprise features.
 Enabling these features requires an enterprise contract from
 [contact@dgraph.io](mailto:contact@dgraph.io) or the [discuss
-forum](https://discuss.dgraph.io).
+community](https://discuss.dgraph.io).
 
 **Dgraph enterprise features are enabled by default for 30 days in a new cluster**.
 After the trial period of thirty (30) days, the cluster must obtain a license from Dgraph to
@@ -439,7 +439,7 @@ The ACL Feature can be turned on by following these steps
 1. Since ACL is an enterprise feature, make sure your use case is covered under
 a contract with Dgraph Labs Inc. You can contact us by sending an email to
 [contact@dgraph.io](mailto:contact@dgraph.io) or post your request at [our discuss
-forum](https://discuss.dgraph.io) to get an enterprise license.
+community](https://discuss.dgraph.io) to get an enterprise license.
 
 2. Create a plain text file, and store a randomly generated secret key in it. The secret
 key is used by Alpha servers to sign JSON Web Tokens (JWT). As you’ve probably guessed,
