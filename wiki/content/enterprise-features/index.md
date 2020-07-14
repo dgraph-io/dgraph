@@ -20,7 +20,7 @@ enterprise features.
 {{% /notice %}}
 
 When you have an enterprise license key, the license can be applied to the cluster by including it
-as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on any Zero server.
+as the body of a POST request and calling `/enterpriseLicense` HTTP endpoint on the leader Zero server.
 
 ```sh
 curl -X POST localhost:6080/enterpriseLicense --upload-file ./licensekey.txt
