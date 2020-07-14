@@ -2,12 +2,19 @@ package zero
 
 import (
 	"bytes"
+	"context"
+	"flag"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"strings"
 	"testing"
 
+	"github.com/dgraph-io/dgo"
+	"github.com/dgraph-io/dgo/protos/api"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 var expiredKey = []byte(`-----BEGIN PGP MESSAGE-----
@@ -35,6 +42,32 @@ type responseStruct struct {
 }
 
 func TestEnterpriseLicense(t *testing.T) {
+
+	var (
+		dgraph = flag.String("d", "127.0.0.1:9080", "Dgraph Alpha address")
+	)
+
+	conn, err := grpc.Dial(*dgraph, grpc.WithInsecure())
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	dg := dgo.NewDgraphClient(api.NewDgraphClient(conn))
+
+	resp, err := dg.NewTxn().Query(context.Background(), `{
+		getUser(name: "alice") {
+			name
+			groups {
+			  name
+			}
+		  }
+	}`)
+
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Response: %s\n", resp.Json)
 
 	enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
 
