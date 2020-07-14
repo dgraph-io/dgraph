@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 
 	"google.golang.org/grpc/metadata"
@@ -127,7 +126,6 @@ func (gs *graphqlSubscription) Subscribe(
 	}
 
 	var customClaim *authorization.CustomClaims
-	fmt.Printf("payload: %+v\n", payload)
 	name := authorization.GetHeader()
 	val, ok := payload[name]
 	if ok {
