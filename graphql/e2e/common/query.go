@@ -1187,10 +1187,10 @@ func typenameForInterface(t *testing.T) {
 					__typename
 					... on Human {
 						totalCredits
-			                }
+			        }
 					... on Droid {
 						primaryFunction
-			                }
+			        }
 				}
 			}`,
 		}
@@ -1284,9 +1284,9 @@ func querynestedOnlyTypename(t *testing.T) {
 		  },
                   {
 			"__typename": "Post"
-		  },  
+		  },
 		  {
-			
+
 			"__typename": "Post"
 		  }
 		]
@@ -1311,14 +1311,12 @@ func onlytypenameForInterface(t *testing.T) {
 						eq: [EMPIRE]
 					}
 				}) {
-					
-					
 					... on Human {
 						__typename
-			                }
+			        }
 					... on Droid {
 						__typename
-			                }
+			        }
 				}
 			}`,
 		}
@@ -1326,10 +1324,10 @@ func onlytypenameForInterface(t *testing.T) {
 		expected := `{
 		"queryCharacter": [
 		  {
-                      "__typename": "Human"			
+                "__typename": "Human"
 		  },
 		  {
-	             "__typename": "Droid"
+	            "__typename": "Droid"
 		  }
 		]
 	  }`

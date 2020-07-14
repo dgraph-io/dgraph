@@ -485,3 +485,90 @@ func TestResponseOrder(t *testing.T) {
 		})
 	}
 }
+
+func TestFragmentsOnInterface(t *testing.T) {
+	sch := `type User {
+		id: ID!
+		name: String!
+		collaborator: [Collaborator!]
+	}
+
+	interface Collaborator {
+		id: ID!
+		name: String!
+	}
+
+	type Person implements Collaborator {
+		foo: String!
+	}
+
+	type Organization implements Collaborator {
+		bar: String!
+	}`
+	gqlSchema := test.LoadSchemaFromString(t, sch)
+
+	query := `query {
+		queryUser {
+		  id
+		  name
+		  collaborator {
+			id
+			... on Organization {
+			  name
+			  __typename
+			}
+		  }
+		}
+	  }`
+
+	// We expect two collaborators, one of type Person and another of type Organization.
+	// name and __typename should only be returned for the collaborator of type Organization.
+	dgResponse := `{
+		"queryUser": [
+		  {
+			"id": "0x4",
+			"name": "u1",
+			"collaborator": [
+			  {
+				"dgraph.type": [
+				  "Collaborator",
+				  "Person"
+				],
+				"id": "0x2",
+				"name": "p1"
+			  },
+			  {
+				"dgraph.type": [
+				  "Collaborator",
+				  "Organization"
+				],
+				"id": "0x3",
+				"name": "o1"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	expected := `{
+		"queryUser": [
+		  {
+			"id": "0x4",
+			"name": "u1",
+			"collaborator": [
+			  {
+				"id": "0x2"
+			  },
+			  {
+				"id": "0x3",
+				"name": "o1",
+				"__typename": "Organization"
+			  }
+			]
+		  }
+		]
+	  }`
+
+	resp := resolve(gqlSchema, query, dgResponse)
+	require.JSONEq(t, expected, resp.Data.String())
+}

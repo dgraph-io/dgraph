@@ -1001,7 +1001,10 @@ func (f *field) IncludeInterfaceField(dgraphTypes []interface{}) bool {
 				// If the field doesn't exist in the map corresponding to the object type, then we
 				// don't need to include it.
 				_, ok := f.op.inSchema.dgraphPredicate[origTyp.Name][f.Name()]
-				return ok || f.Name() == Typename
+				if ok || f.Name() == Typename {
+					return f.field.ObjectDefinition != nil && f.field.ObjectDefinition.Name == styp
+				}
+				return false
 			}
 		}
 
