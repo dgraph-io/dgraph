@@ -1168,6 +1168,21 @@ func TestUidInFunction4(t *testing.T) {
 			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
 			expectedErr: nil,
 		},
+		{
+			description: "query inside root with nested uid variable which resolves to zero uids",
+			query: `{
+				var(func: uid(40)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
 	}
 	for _, test := range tcases {
 		t.Run(test.description, func(t *testing.T) {
@@ -1177,22 +1192,6 @@ func TestUidInFunction4(t *testing.T) {
 	}
 }
 
-func TestUidInFunctionWithError(t *testing.T) {
-	//query inside root with nested uid variable which resolves to zero uids
-	query := `{
-		q(func: uid(40)){
-			schoolsVar as school
-		}
-		me(func: uid(1, 23, 24 )){
-			friend @filter(uid_in(school, uid(schoolsVar))) {
-				name
-			}
-		}
-	}`
-	expectedErr := errors.New("rpc error: code = Unknown desc = : Function 'uid_in' requires atleast 1 argument, but got 0 ([])")
-	_, err := processQuery(context.Background(), t, query)
-	require.EqualError(t, err, expectedErr.Error())
-}
 func TestUidInFunctionAtRoot(t *testing.T) {
 	tcases := []struct {
 		description string
