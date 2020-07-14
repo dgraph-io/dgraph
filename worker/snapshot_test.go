@@ -76,6 +76,8 @@ func TestSnapshot(t *testing.T) {
 	err = testutil.DockerStart("alpha2")
 	require.NoError(t, err)
 
+	// Wait for the container to start.
+	time.Sleep(time.Second * 2)
 	dg2, err := testutil.DgraphClient("localhost:9182")
 	if err != nil {
 		t.Fatalf("Error while getting a dgraph client: %v", err)
