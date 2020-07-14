@@ -290,11 +290,11 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
-        # dgraph versions earlier than 1.2.3 can only support one zero:
+        # dgraph versions earlier than v1.2.3 and v20.03.0 can only support one zero:
         #  `dgraph alpha --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080`
-        # dgraph-alpha versions greater than or equal to 1.2.3 or 20.03.1 can support
-        #  a comma seperated list of zeros.  The value below has supports 3 zeros
-        #  (set acording to number of replicas)
+        # dgraph-alpha versions greater than or equal to v1.2.3 or v20.03.1 can support
+        #  a comma separated list of zeros.  The value below has supports 3 zeros
+        #  (set according to number of replicas)
         command:
           - bash
           - "-c"
