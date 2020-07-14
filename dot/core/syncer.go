@@ -92,7 +92,7 @@ type SyncerConfig struct {
 	DigestHandler    *digestHandler
 }
 
-var responseTimeout = 3 * time.Second
+var responseTimeout = 6 * time.Second
 
 // NewSyncer returns a new Syncer
 func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {

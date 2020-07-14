@@ -387,7 +387,7 @@ func (b *Service) handleSlot(slotNum uint64) {
 
 	block, err := b.buildBlock(parent, currentSlot)
 	if err != nil {
-		b.logger.Error("block authoring", "error", err)
+		b.logger.Debug("block authoring", "error", err)
 	} else {
 		// TODO: loop until slot is done, attempt to produce multiple blocks
 
@@ -455,7 +455,7 @@ func (b *Service) setEpochThreshold() error {
 		return err
 	}
 
-	b.logger.Info("set epoch threshold", "threshold", b.epochThreshold.Bytes())
+	b.logger.Debug("set epoch threshold", "threshold", b.epochThreshold.Bytes())
 	return nil
 }
 

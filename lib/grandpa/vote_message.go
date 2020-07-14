@@ -31,21 +31,21 @@ func (s *Service) receiveMessages(cond func() bool) {
 	go func(done *bool) {
 		for msg := range s.in {
 			if *done {
-				s.logger.Debug("returning from receiveMessages")
+				s.logger.Trace("returning from receiveMessages")
 				return
 			}
 
-			s.logger.Debug("received vote message", "msg", msg)
+			s.logger.Trace("received vote message", "msg", msg)
 
 			vm, ok := msg.(*VoteMessage)
 			if !ok {
-				s.logger.Warn("failed to cast message to VoteMessage")
+				s.logger.Trace("failed to cast message to VoteMessage")
 				continue
 			}
 
 			v, err := s.validateMessage(vm)
 			if err != nil {
-				s.logger.Debug("failed to validate vote message", "message", vm, "error", err)
+				s.logger.Trace("failed to validate vote message", "message", vm, "error", err)
 				continue
 			}
 
@@ -76,7 +76,7 @@ func (s *Service) sendMessage(vote *Vote, stage subround) error {
 	}
 
 	s.out <- msg
-	s.logger.Debug("sent VoteMessage", "msg", msg)
+	s.logger.Trace("sent VoteMessage", "msg", msg)
 
 	return nil
 }
