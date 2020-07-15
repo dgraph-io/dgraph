@@ -75,7 +75,7 @@ func TestExportConfig(t *testing.T) {
 
 // Gssmr Node
 
-// TestLoadConfigGssmr tests loading the toml configuration file for ksmcc
+// TestLoadConfigGssmr tests loading the toml configuration file for gssmr
 func TestLoadConfigGssmr(t *testing.T) {
 	cfg := GssmrConfig()
 	require.NotNil(t, cfg)
@@ -93,31 +93,6 @@ func TestLoadConfigGssmr(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	require.NotNil(t, cfg)
-}
-
-// TestExportConfigGssmr tests exporting the toml configuration file
-func TestExportConfigGssmr(t *testing.T) {
-	cfg := GssmrConfig()
-	require.NotNil(t, cfg)
-
-	gssmrGenesis := cfg.Init.Genesis
-	gssmrBasePath := cfg.Global.BasePath
-	cfg.Global.BasePath = utils.NewTestDir(t)
-	cfg.Init.Genesis = GssmrGenesisPath
-
-	defer utils.RemoveTestDir(t)
-
-	err := InitNode(cfg)
-	require.Nil(t, err)
-
-	cfg.Init.Genesis = gssmrGenesis
-	cfg.Global.BasePath = gssmrBasePath
-	cfg.Core.BabeThreshold = ""
-
-	file := ExportConfig(cfg, GssmrConfigPath)
-
-	// TODO: improve dot tests #687
-	require.NotNil(t, file)
 }
 
 // Ksmcc Node
@@ -139,29 +114,4 @@ func TestLoadConfigKsmcc(t *testing.T) {
 
 	// TODO: improve dot tests #687
 	require.Nil(t, err)
-}
-
-// TestExportConfigKsmcc tests exporting the toml configuration file
-func TestExportConfigKsmcc(t *testing.T) {
-	cfg := KsmccConfig()
-	require.NotNil(t, cfg)
-
-	ksmccGenesis := cfg.Init.Genesis
-	ksmccBasePath := cfg.Global.BasePath
-	cfg.Global.BasePath = utils.NewTestDir(t)
-	cfg.Init.Genesis = KsmccGenesisPath
-
-	defer utils.RemoveTestDir(t)
-
-	err := InitNode(cfg)
-	require.Nil(t, err)
-
-	cfg.Init.Genesis = ksmccGenesis
-	cfg.Global.BasePath = ksmccBasePath
-	cfg.Core.BabeThreshold = ""
-
-	file := ExportConfig(cfg, KsmccConfigPath)
-
-	// TODO: improve dot tests #687
-	require.NotNil(t, file)
 }
