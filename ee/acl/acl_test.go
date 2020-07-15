@@ -1379,7 +1379,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 					n as name
 					a as age
 				}
-				q2(func: uid(f), orderasc: name) {
+				q2(func: uid(f), orderdesc: val(a), orderasc: name) {
 					name
 					val(n)
 					val(a)
@@ -1394,7 +1394,7 @@ func TestValQueryWithACLPermissions(t *testing.T) {
 
 			"alice has access to name and age",
 			`{"q1":[{"name":"RandomGuy","age":23},{"name":"RandomGuy2","age":25}],
-			"q2":[{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23},{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25}]}`,
+			"q2":[{"name":"RandomGuy2","val(n)":"RandomGuy2","val(a)":25},{"name":"RandomGuy","val(n)":"RandomGuy","val(a)":23}]}`,
 		},
 	}
 
