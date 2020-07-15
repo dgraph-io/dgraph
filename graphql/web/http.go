@@ -46,7 +46,6 @@ type Headerkey string
 
 const (
 	touchedUidsHeader = "Graphql-TouchedUids"
-	Header            = Headerkey("authVariable")
 )
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
@@ -124,27 +123,29 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
-	header, _ := ctx.Value(Header).(json.RawMessage)
-	payload := make(map[string]interface{})
-	if err := json.Unmarshal(header, &payload); err != nil {
-		return nil, err
-	}
-
+	header, _ := ctx.Value("Header").(json.RawMessage)
 	var customClaim *authorization.CustomClaims
-	name := authorization.GetHeader()
-	val, ok := payload[name]
-	if ok {
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			md = metadata.New(nil)
+	if header != nil {
+		payload := make(map[string]interface{})
+		if err := json.Unmarshal(header, &payload); err != nil {
+			return nil, err
 		}
 
-		md.Append("authorizationJwt", val.(string))
-		ctx = metadata.NewIncomingContext(ctx, md)
+		name := authorization.GetHeader()
+		val, ok := payload[name]
+		if ok {
+			md, ok := metadata.FromIncomingContext(ctx)
+			if !ok {
+				md = metadata.New(nil)
+			}
 
-		customClaim, err = authorization.ExtractCustomClaims(ctx)
-		if err != nil {
-			return nil, err
+			md.Append("authorizationJwt", val.(string))
+			ctx = metadata.NewIncomingContext(ctx, md)
+
+			customClaim, err = authorization.ExtractCustomClaims(ctx)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
