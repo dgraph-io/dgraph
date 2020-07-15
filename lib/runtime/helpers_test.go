@@ -16,6 +16,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/transaction"
 	"github.com/ChainSafe/gossamer/lib/trie"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +39,7 @@ func TestGrandpaAuthorities(t *testing.T) {
 	err = tt.Put(TestAuthorityDataKey, value)
 	require.NoError(t, err)
 
-	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt)
+	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
 
 	auths, err := rt.GrandpaAuthorities()
 	require.NoError(t, err)
@@ -116,7 +117,7 @@ func TestConfigurationFromRuntime_withAuthorities(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt)
+	rt := NewTestRuntimeWithTrie(t, NODE_RUNTIME, tt, log.LvlTrace)
 
 	cfg, err := rt.BabeConfiguration()
 	if err != nil {

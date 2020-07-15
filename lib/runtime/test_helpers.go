@@ -40,11 +40,11 @@ var TestAuthorityDataKey, _ = common.HexToBytes("0x3a6772616e6470615f617574686f7
 
 // NewTestRuntime will create a new runtime (polkadot/test)
 func NewTestRuntime(t *testing.T, targetRuntime string) *Runtime {
-	return NewTestRuntimeWithTrie(t, targetRuntime, nil)
+	return NewTestRuntimeWithTrie(t, targetRuntime, nil, log.LvlInfo)
 }
 
 // NewTestRuntimeWithTrie will create a new runtime (polkadot/test) with the supplied trie as the storage
-func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *Runtime {
+func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie, lvl log.Lvl) *Runtime {
 	testRuntimeFilePath, testRuntimeURL, importsFunc := GetRuntimeVars(targetRuntime)
 
 	_, err := GetRuntimeBlob(testRuntimeFilePath, testRuntimeURL)
@@ -59,7 +59,7 @@ func NewTestRuntimeWithTrie(t *testing.T, targetRuntime string, tt *trie.Trie) *
 		Storage:  rs,
 		Keystore: keystore.NewKeystore(),
 		Imports:  importsFunc,
-		LogLvl:   log.LvlTrace,
+		LogLvl:   lvl,
 	}
 
 	r, err := NewRuntimeFromFile(fp, cfg)

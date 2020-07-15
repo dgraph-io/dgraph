@@ -629,7 +629,7 @@ func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service {
 
 func TestExecuteBlock(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()
@@ -674,7 +674,7 @@ func TestExecuteBlock(t *testing.T) {
 
 func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 
 	// load authority into runtime
 	kp, err := sr25519.GenerateKeypair()

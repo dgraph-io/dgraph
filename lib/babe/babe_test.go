@@ -48,7 +48,7 @@ var emptyHeader = &types.Header{
 
 func createTestService(t *testing.T, cfg *ServiceConfig) *Service {
 	tt := trie.NewEmptyTrie()
-	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt)
+	rt := runtime.NewTestRuntimeWithTrie(t, runtime.NODE_RUNTIME, tt, log.LvlCrit)
 
 	babeCfg, err := rt.BabeConfiguration()
 	require.NoError(t, err)

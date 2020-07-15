@@ -191,14 +191,15 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
-	currentDescriptor := &babe.NextEpochDescriptor{
-		Authorities: ad,
-		Randomness:  babeCfg.Randomness,
+	descriptor := &babe.EpochDescriptor{
+		AuthorityData: ad,
+		Randomness:    babeCfg.Randomness,
+		Threshold:     babe.MaxThreshold, // TODO: calculate threshold from config, however also need to have dev options for setting max and min
 	}
 
 	if cfg.Verifier == nil {
 		// TODO: load current epoch from database chain head
-		cfg.Verifier, err = babe.NewVerificationManager(cfg.BlockState, 0, currentDescriptor)
+		cfg.Verifier, err = babe.NewVerificationManager(cfg.BlockState, 1, descriptor)
 		if err != nil {
 			return nil, err
 		}

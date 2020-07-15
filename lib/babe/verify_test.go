@@ -33,9 +33,7 @@ import (
 	log "github.com/ChainSafe/log15"
 )
 
-var testEpoch = uint64(2)
-
-func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEpochDescriptor) *VerificationManager {
+func newTestVerificationManager(t *testing.T, withBlock bool, epoch uint64, descriptor *EpochDescriptor) *VerificationManager {
 	dbSrv := state.NewService("", log.LvlInfo)
 	dbSrv.UseMemDB()
 
@@ -52,11 +50,10 @@ func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEp
 	}
 
 	if descriptor == nil {
-		descriptor = &NextEpochDescriptor{}
+		descriptor = &EpochDescriptor{}
 	}
 
-	// currentEpoch = 2
-	vm, err := NewVerificationManager(dbSrv.Block, testEpoch, descriptor)
+	vm, err := NewVerificationManager(dbSrv.Block, epoch, descriptor)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,9 +93,8 @@ func newTestVerificationManager(t *testing.T, withBlock bool, descriptor *NextEp
 	return vm
 }
 
-// test getBlockEpoch
 func TestGetBlockEpoch(t *testing.T) {
-	vm := newTestVerificationManager(t, true, nil)
+	vm := newTestVerificationManager(t, true, 2, nil)
 
 	header, err := vm.blockState.BestBlockHeader()
 	require.Nil(t, err)
@@ -107,22 +103,6 @@ func TestGetBlockEpoch(t *testing.T) {
 	require.Nil(t, err)
 
 	require.Equal(t, vm.currentEpoch, epoch)
-}
-
-// test isBlockFromEpoch
-func TestIsBlockFromEpoch(t *testing.T) {
-	vm := newTestVerificationManager(t, true, nil)
-
-	header, err := vm.blockState.BestBlockHeader()
-	require.Nil(t, err)
-
-	ok, err := vm.isBlockFromEpoch(header, testEpoch)
-	require.Nil(t, err)
-	require.Equal(t, true, ok)
-
-	ok, err = vm.isBlockFromEpoch(header, 1)
-	require.Nil(t, err)
-	require.Equal(t, false, ok)
 }
 
 func TestCheckForConsensusDigest_NoDigest(t *testing.T) {
@@ -136,7 +116,7 @@ func TestCheckForConsensusDigest_NoDigest(t *testing.T) {
 }
 
 func TestCheckForConsensusDigest_NoConsensusDigest(t *testing.T) {
-	vm := newTestVerificationManager(t, true, nil)
+	vm := newTestVerificationManager(t, true, 2, nil)
 
 	header, err := vm.blockState.BestBlockHeader()
 	require.Nil(t, err)
@@ -149,7 +129,7 @@ func TestCheckForConsensusDigest_NoConsensusDigest(t *testing.T) {
 }
 
 func TestCheckForConsensusDigest(t *testing.T) {
-	vm := newTestVerificationManager(t, true, nil)
+	vm := newTestVerificationManager(t, true, 2, nil)
 
 	header, err := vm.blockState.BestBlockHeader()
 	require.Nil(t, err)
@@ -175,7 +155,7 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 	})
 	descriptor := babeService.Descriptor()
 
-	vm := newTestVerificationManager(t, false, descriptor)
+	vm := newTestVerificationManager(t, false, 0, descriptor)
 
 	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 	err := vm.blockState.AddBlock(block)
@@ -184,75 +164,6 @@ func TestVerificationManager_VerifyBlock(t *testing.T) {
 	ok, err := vm.VerifyBlock(block.Header)
 	require.Nil(t, err)
 	require.Equal(t, true, ok)
-	require.Equal(t, (*types.Header)(nil), vm.firstBlock)
-}
-
-func TestVerificationManager_VerifyBlock_WithDigest(t *testing.T) {
-	babeService := createTestService(t, &ServiceConfig{
-		EpochThreshold: maxThreshold,
-	})
-	descriptor := babeService.Descriptor()
-
-	vm := newTestVerificationManager(t, false, descriptor)
-	vm.currentEpoch = 0
-
-	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
-
-	consensusDigest := &types.ConsensusDigest{
-		ConsensusEngineID: types.BabeEngineID,
-		Data:              descriptor.Encode(),
-	}
-
-	conDigest := consensusDigest.Encode()
-	block.Header.Digest = [][]byte{block.Header.Digest[0], conDigest}
-	block.Header.Number = big.NewInt(2)
-
-	// re-sign block
-	seal, err := babeService.buildBlockSeal(block.Header)
-	require.Nil(t, err)
-
-	encSeal := seal.Encode()
-	block.Header.Digest = append(block.Header.Digest, encSeal)
-
-	err = vm.blockState.AddBlock(block)
-	require.Nil(t, err)
-
-	ok, err := vm.VerifyBlock(block.Header)
-	require.Nil(t, err)
-	require.Equal(t, true, ok)
-	require.Equal(t, block.Header, vm.firstBlock)
-
-	// create block with lower number, check that it's chosen as first block of epoch
-	block.Header.Number = big.NewInt(1)
-
-	seal, err = babeService.buildBlockSeal(block.Header)
-	require.Nil(t, err)
-
-	encSeal = seal.Encode()
-	block.Header.Digest = append(block.Header.Digest, encSeal)
-
-	ok, err = vm.VerifyBlock(block.Header)
-	require.Nil(t, err)
-	require.Equal(t, true, ok)
-	require.Equal(t, block.Header, vm.firstBlock)
-
-	// create block with higher number, check that it's not chosen as first block of epoch
-	expected := block.Header.DeepCopy()
-	newBlock := &types.Block{
-		Header: block.Header.DeepCopy(),
-	}
-
-	newBlock.Header.Number = big.NewInt(99)
-	seal, err = babeService.buildBlockSeal(newBlock.Header)
-	require.Nil(t, err)
-
-	encSeal = seal.Encode()
-	newBlock.Header.Digest = append(newBlock.Header.Digest, encSeal)
-
-	ok, err = vm.VerifyBlock(newBlock.Header)
-	require.Nil(t, err)
-	require.Equal(t, true, ok)
-	require.Equal(t, expected, vm.firstBlock)
 }
 
 func TestVerifySlotWinner(t *testing.T) {
@@ -292,10 +203,7 @@ func TestVerifySlotWinner(t *testing.T) {
 	}
 	babeService.authorityData = authorityData
 
-	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
-		Authorities: babeService.authorityData,
-		Randomness:  babeService.config.Randomness,
-	})
+	verifier, err := newEpochVerifier(babeService.blockState, babeService.Descriptor())
 
 	if err != nil {
 		t.Fatal(err)
@@ -315,10 +223,7 @@ func TestVerifyAuthorshipRight(t *testing.T) {
 	babeService := createTestService(t, nil)
 	block, _ := createTestBlock(t, babeService, genesisHeader, [][]byte{})
 
-	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
-		Authorities: babeService.authorityData,
-		Randomness:  babeService.config.Randomness,
-	})
+	verifier, err := newEpochVerifier(babeService.blockState, babeService.Descriptor())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,10 +264,7 @@ func TestVerifyAuthorshipRight_Equivocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	verifier, err := newEpochVerifier(babeService.blockState, &NextEpochDescriptor{
-		Authorities: babeService.authorityData,
-		Randomness:  babeService.config.Randomness,
-	})
+	verifier, err := newEpochVerifier(babeService.blockState, babeService.Descriptor())
 	if err != nil {
 		t.Fatal(err)
 	}

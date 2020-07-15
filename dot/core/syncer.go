@@ -26,7 +26,6 @@ import (
 
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/blocktree"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/common/optional"
@@ -37,14 +36,9 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// Verifier deals with block verification, as well as NextEpochDescriptors.
+// Verifier deals with block verification
 type Verifier interface {
 	VerifyBlock(header *types.Header) (bool, error)
-
-	// IncrementEpoch is called when we have received all the blocks for an epoch.
-	IncrementEpoch() (*babe.NextEpochDescriptor, error)
-
-	EpochNumber() uint64
 }
 
 // Syncer deals with chain syncing by sending block request messages and watching for responses.
