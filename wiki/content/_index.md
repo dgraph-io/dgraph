@@ -156,11 +156,11 @@ Designed from the ground up to be run in production, Dgraph is the native GraphQ
         <div class="section-item">
           <div class="section-name">
             <a href="https://discuss.dgraph.io">
-              Forum
+              Community
             </a>
           </div>
           <p class="section-desc">
-            Discuss Dgraph on the official forum.
+            Discuss Dgraph on the official community.
           </p>
         </div>
       </div>

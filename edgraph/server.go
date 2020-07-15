@@ -881,7 +881,7 @@ func (s *Server) State(ctx context.Context) (*api.Response, error) {
 		return nil, errors.Errorf("No membership state found")
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	var jsonState bytes.Buffer
 	if err := m.Marshal(&jsonState, ms); err != nil {
 		return nil, errors.Errorf("Error marshalling state information to JSON")
