@@ -32,9 +32,11 @@ import (
 )
 
 type ctxKey string
+type authVariablekey string
 
 const (
 	AuthJwtCtxKey  = ctxKey("authorizationJwt")
+	AuthVariables  = authVariablekey("authVariable")
 	RSA256         = "RS256"
 	HMAC256        = "HS256"
 	AuthMetaHeader = "# Dgraph.Authorization "
@@ -244,8 +246,5 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
 	}
-
-	// by default, the MapClaims.Valid will return true if the exp field is not set
-	// here we enforce the checking to make sure that the refresh token has not expired
 	return claims, nil
 }

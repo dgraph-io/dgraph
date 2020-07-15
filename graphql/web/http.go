@@ -42,7 +42,12 @@ import (
 	"go.opencensus.io/trace"
 )
 
-const touchedUidsHeader = "Graphql-TouchedUids"
+type Headerkey string
+
+const (
+	touchedUidsHeader = "Graphql-TouchedUids"
+	Header            = Headerkey("authVariable")
+)
 
 // An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
 type IServeGraphQL interface {
@@ -119,7 +124,7 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
-	header, _ := ctx.Value("Header").(json.RawMessage)
+	header, _ := ctx.Value(Header).(json.RawMessage)
 	payload := make(map[string]interface{})
 	if err := json.Unmarshal(header, &payload); err != nil {
 		return nil, err

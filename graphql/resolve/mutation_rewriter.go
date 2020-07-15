@@ -358,10 +358,11 @@ func (mrw *AddRewriter) FromMutationResult(
 	}
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
+	authVariables := customClaims.AuthVariables
+
 	authRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
@@ -412,10 +413,11 @@ func (urw *UpdateRewriter) Rewrite(
 	varGen := NewVariableGenerator()
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
+	authVariables := customClaims.AuthVariables
+
 	authRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        varGen,
@@ -559,10 +561,11 @@ func (urw *UpdateRewriter) FromMutationResult(
 	}
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
+	authVariables := customClaims.AuthVariables
+
 	authRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
@@ -683,10 +686,10 @@ func (drw *deleteRewriter) Rewrite(
 	varGen := NewVariableGenerator()
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return nil, err
 	}
+	authVariables := customClaims.AuthVariables
 
 	authRw := &authRewriter{
 		authVariables: authVariables,
@@ -1500,12 +1503,13 @@ func addDelete(
 
 	// grab the auth for Author1
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		frag.check =
 			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))
 		return
 	}
+	authVariables := customClaims.AuthVariables
+
 	newRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        varGen,

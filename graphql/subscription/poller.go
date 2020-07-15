@@ -67,7 +67,9 @@ type subscriber struct {
 
 // AddSubscriber tries to add subscription into the existing polling goroutine if it exists.
 // If it doesn't exist, then it creates a new polling goroutine for the given request.
-func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
+func (p *Poller) AddSubscriber(
+	req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
+
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
 	if customClaims == nil {
 		customClaims = &authorization.CustomClaims{}
@@ -83,7 +85,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	var bucketID uint64
 	if customClaims.AuthVariables != nil {
 
-		//ToDo-Add custom marshal function that marhsal's the json in sorted order.
+		//ToDo-Add custom marshal function that marshal's the json in sorted order.
 		authvariables, err := json.Marshal(customClaims.AuthVariables)
 		x.Check(err)
 		bucketID = farm.Fingerprint64(append(buf, authvariables...))
@@ -93,7 +95,7 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	p.Lock()
 	defer p.Unlock()
 
-	ctx := context.WithValue(context.Background(), "authVariables", customClaims.AuthVariables)
+	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
 	res := p.resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors
@@ -113,7 +115,8 @@ func (p *Poller) AddSubscriber(req *schema.Request, customClaims *authorization.
 	}
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 
-	subscriptions[subscriptionID] = subscriber{(customClaims.StandardClaims.ExpiresAt.Unix()), updateCh, subscriptionID}
+	subscriptions[subscriptionID] = subscriber{
+		(customClaims.StandardClaims.ExpiresAt.Unix()), updateCh, subscriptionID}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if len(subscriptions) != 1 {
@@ -169,7 +172,7 @@ func (p *Poller) poll(req *pollRequest) {
 			return
 		}
 
-		ctx := context.WithValue(context.Background(), "authVariables", req.authVariables)
+		ctx := context.WithValue(context.Background(), authorization.AuthVariables, req.authVariables)
 		res := resolver.Resolve(ctx, req.graphqlReq)
 
 		currentHash := farm.Fingerprint64(res.Data.Bytes())

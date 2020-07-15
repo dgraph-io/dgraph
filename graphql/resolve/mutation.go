@@ -376,10 +376,10 @@ func authorizeNewNodes(
 	txn *dgoapi.TxnContext) error {
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
-	authVariables := customClaims.AuthVariables
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}
+	authVariables := customClaims.AuthVariables
 	newRw := &authRewriter{
 		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
