@@ -237,7 +237,7 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 				Attr:    t.Attr,
 				Op:      pb.DirectedEdge_DEL,
 			}
-			return txn.addReverseAndCountMutation(delEdge)
+			return txn.addReverseAndCountMutation(ctx, delEdge)
 		})
 		if err != nil {
 			return errors.Wrapf(err, "cannot remove existing reverse index entries for key %s",
