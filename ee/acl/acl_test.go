@@ -1131,16 +1131,9 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
-<<<<<<< HEAD
-
 func TestValQueryWithACLPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
-=======
-func TestExpandQueryWithACLPermissions(t *testing.T) {
-	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
-
->>>>>>> release/v20.07
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
