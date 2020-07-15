@@ -59,7 +59,6 @@ func TestEnterpriseLicense(t *testing.T) {
 		responseBody, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
 		correctError := strings.Contains(string(responseBody), tt.expectedOutput)
-		// errors := unmarshaledBody.(map[string]interface{})["errors"].([]interface{})[0].(map[string]interface{})["message"]
 		if tt.expectError {
 			require.Error(t, err)
 			continue
