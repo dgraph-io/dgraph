@@ -211,7 +211,9 @@ func (txn *Txn) addReverseAndCountMutation(ctx context.Context, t *pb.DirectedEd
 	if err != nil {
 		return err
 	}
-	x.AssertTrue(plist != nil)
+	if plist == nil {
+		return errors.Errorf("nil posting list for reverse key %s", hex.Dump(key))
+	}
 
 	// For single uid predicates, updating the reverse index requires that the existing
 	// entries for this key in the index are removed.
