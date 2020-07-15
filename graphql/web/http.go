@@ -36,8 +36,8 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
 	"github.com/golang/glog"
-	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
