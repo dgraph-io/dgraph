@@ -628,6 +628,9 @@ func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service {
 }
 
 func TestExecuteBlock(t *testing.T) {
+	t.Skip()
+	// skip until block builder is separate from BABE
+
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 
@@ -673,6 +676,9 @@ func TestExecuteBlock(t *testing.T) {
 }
 
 func TestExecuteBlock_WithExtrinsic(t *testing.T) {
+	t.Skip()
+	// skip until block builder is separate from BABE
+
 	tt := trie.NewEmptyTrie()
 	rt := runtime.NewTestRuntimeWithTrie(t, runtime.SUBSTRATE_TEST_RUNTIME, tt, log.LvlTrace)
 

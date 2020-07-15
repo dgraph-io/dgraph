@@ -26,3 +26,6 @@ var ErrProducerEquivocated = errors.New("block producer equivocated")
 
 // ErrNilBlockState is returned when the BlockState is nil
 var ErrNilBlockState = errors.New("cannot have nil BlockState")
+
+// ErrNotAuthorized is returned when the node is not authorized to produce a block
+var ErrNotAuthorized = errors.New("not authorized to produce block")
