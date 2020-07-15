@@ -1,6 +1,9 @@
 +++
 date = "2017-03-20T22:25:17+11:00"
 title = "Production Checklist"
+[menu.main]
+    parent = "deploy"
+    weight = 20
 +++
 
 This guide describes important setup recommendations for a production-ready Dgraph cluster.

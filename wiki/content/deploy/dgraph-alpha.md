@@ -70,7 +70,7 @@ Here’s an example of JSON returned from the above query:
   }
 }
 ```
-<!-- TODO: Redirects -->
+
 - `instance`: Name of the instance. Either `alpha` or `zero`.
 - `status`: Health status of the instance. Either `healthy` or `unhealthy`.
 - `version`: Version of Dgraph running the Alpha or Zero server.
