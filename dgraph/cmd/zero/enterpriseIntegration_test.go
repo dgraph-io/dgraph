@@ -30,10 +30,6 @@ I8mUd/jcj3NZtGWFoxKq4laK/ruoeoHnWMznJyMm75nzcU5QZU9yEEI=
 -----END PGP MESSAGE-----
 `)
 
-type responseStruct struct {
-	errors map[string]interface{} `json:"errors"`
-}
-
 func TestEnterpriseLicense(t *testing.T) {
 
 	enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
