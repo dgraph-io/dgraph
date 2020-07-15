@@ -924,6 +924,7 @@ func (g *groupi) processOracleDeltaStream() {
 
 		for {
 			var delta *pb.OracleDelta
+			delta.GroupChecksums = make(map[uint32]uint64)
 			var batch int
 			select {
 			case delta = <-deltaCh:
@@ -955,9 +956,6 @@ func (g *groupi) processOracleDeltaStream() {
 					batch++
 					delta.Txns = append(delta.Txns, more.Txns...)
 					delta.MaxAssigned = x.Max(delta.MaxAssigned, more.MaxAssigned)
-					if delta.GroupChecksums == nil {
-						delta.GroupChecksums = make(map[uint32]uint64)
-					}
 					for gid, checksum := range more.GroupChecksums {
 						delta.GroupChecksums[gid] = checksum
 					}
