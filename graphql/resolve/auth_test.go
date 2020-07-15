@@ -227,12 +227,11 @@ func TestAudienceClaim(t *testing.T) {
 
 			customClaims, err := authorization.ExtractCustomClaims(ctx)
 			require.Equal(t, tcase.err, err)
-			authVar := customClaims.AuthVariables
-
 			if err != nil {
 				return
 			}
 
+			authVar := customClaims.AuthVariables
 			result := map[string]interface{}{
 				"ROLE": "ADMIN",
 				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",

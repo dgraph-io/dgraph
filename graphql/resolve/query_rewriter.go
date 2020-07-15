@@ -84,7 +84,6 @@ func (qr *queryRewriter) Rewrite(
 			return nil, err
 		}
 		authVariables = customClaims.AuthVariables
-
 	}
 
 	authRw := &authRewriter{

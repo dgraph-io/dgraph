@@ -201,12 +201,12 @@ func ExtractCustomClaims(ctx context.Context) (*CustomClaims, error) {
 	// return CustomClaims containing jwt and authvariables.
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, nil
+		return &CustomClaims{}, nil
 	}
 
 	jwtToken := md.Get(string(AuthJwtCtxKey))
 	if len(jwtToken) == 0 {
-		return nil, nil
+		return &CustomClaims{}, nil
 	} else if len(jwtToken) > 1 {
 		return nil, fmt.Errorf("invalid jwt auth token")
 	}
@@ -219,6 +219,9 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 			"jwt token cannot be validated because verification algorithm is not set")
 	}
 
+	// The JWT library supports comparison of `aud` in JWT against a single string. Hence, we
+	// disable the `aud` claim verification at the library end using `WithoutClaimsValidation` and
+	// use our custom validation function `validateAudience`.
 	token, err :=
 		jwt.ParseWithClaims(jwtStr, &CustomClaims{}, func(token *jwt.Token) (interface{}, error) {
 			algo, _ := token.Header["alg"].(string)
@@ -236,7 +239,7 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 				}
 			}
 			return nil, errors.Errorf("couldn't parse signing method from token header: %s", algo)
-		})
+		}, jwt.WithoutClaimsValidation())
 
 	if err != nil {
 		return nil, errors.Errorf("unable to parse jwt token:%v", err)
@@ -245,6 +248,10 @@ func validateJWTCustomClaims(jwtStr string) (*CustomClaims, error) {
 	claims, ok := token.Claims.(*CustomClaims)
 	if !ok || !token.Valid {
 		return nil, errors.Errorf("claims in jwt token is not map claims")
+	}
+
+	if err := claims.validateAudience(); err != nil {
+		return nil, err
 	}
 	return claims, nil
 }
