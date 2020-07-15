@@ -54,17 +54,17 @@ const (
 	`
 	schauth = `
 	type Todo @withSubscription @auth(
-    query: { rule: """
-    query ($USER: String!) {
-    queryTodo(filter: { owner: { eq: $USER } } ) {
-    __typename
-    }
-   }"""
-     }
+    	query: { rule: """
+    		query ($USER: String!) {
+    			queryTodo(filter: { owner: { eq: $USER } } ) {
+    				__typename
+    			}
+   			}"""
+     	}
    ){
-     id: ID!
-    text: String! @search(by: [term])
-     owner: String! @search(by: [hash])
+     	id: ID!
+    	text: String! @search(by: [term])
+     	owner: String! @search(by: [hash])
    }
    # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
 	`
@@ -102,6 +102,7 @@ func TestSubscription(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
 			getProduct(productID: "0x2"){
@@ -176,6 +177,7 @@ func TestSubscription(t *testing.T) {
 
 	require.Nil(t, res)
 }
+
 func TestSubscriptionAuth(t *testing.T) {
 	add := &common.GraphQLParams{
 		Query: `mutation updateGQLSchema($sch: String!) {
@@ -202,7 +204,7 @@ func TestSubscriptionAuth(t *testing.T) {
               addTodo(input: [
                  {text : "GraphQL is exciting!!",
                   owner : "jatin"}
-               ]) 
+               ])
              {
                todo{
                     id
