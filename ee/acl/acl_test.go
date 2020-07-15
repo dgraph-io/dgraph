@@ -309,6 +309,7 @@ var queryAttr = "name"
 var predicateToWrite = "predicate_to_write"
 var predicateToAlter = "predicate_to_alter"
 var devGroup = "dev"
+var sreGroup = "sre"
 var unusedGroup = "unusedGroup"
 var query = fmt.Sprintf(`
 	{
@@ -997,6 +998,10 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 		name	 : string @index(exact) .
 		nickname : string @index(exact) .
 		age 	 : int .
+		type TypeName {
+			name: string
+			age: int
+		}
 	`}
 	require.NoError(t, dg.Alter(ctx, &op))
 
@@ -1016,9 +1021,11 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			_:a <name> "RandomGuy" .
 			_:a <age> "23" .
 			_:a <nickname> "RG" .
+			_:a <dgraph.type> "TypeName" .
 			_:b <name> "RandomGuy2" .
 			_:b <age> "25" .
 			_:b <nickname> "RG2" .
+			_:b <dgraph.type> "TypeName" .
 		`),
 		CommitNow: true,
 	}
@@ -1101,6 +1108,17 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
 			`filter won't work because <nickname> is unauthorized`,
 		},
+		{
+			`
+			{
+				me(func: has(name)) {
+					expand(_all_)
+				}
+			}
+			`,
+			`{"me":[{"name":"RandomGuy"},{"name":"RandomGuy2"}]}`,
+			`expand(_all_) expands to only <name> because other predicates are unauthorized`,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1113,10 +1131,16 @@ func TestQueryRemoveUnauthorizedPred(t *testing.T) {
 	}
 }
 
+<<<<<<< HEAD
 
 func TestValQueryWithACLPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
 	defer cancel()
+=======
+func TestExpandQueryWithACLPermissions(t *testing.T) {
+	ctx, _ := context.WithTimeout(context.Background(), 100*time.Second)
+
+>>>>>>> release/v20.07
 	dg, err := testutil.DgraphClientWithGroot(testutil.SockAddr)
 	require.NoError(t, err)
 
