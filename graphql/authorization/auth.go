@@ -97,7 +97,7 @@ func Parse(schema string) (AuthMeta, error) {
 	fmt.Println("Falling back to parsing `Dgraph.Authorization` in old format." +
 		"Please check the updated syntax at https://graphql.dgraph.io/authorization/")
 	// Note: This is the old format for passing authorization information and this code
-	// is there to maintain backward compatibility. It may be remove in future release.
+	// is there to maintain backward compatibility. It may be removed in future release.
 
 	// This regex matches authorization information present in the last line of the schema.
 	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
