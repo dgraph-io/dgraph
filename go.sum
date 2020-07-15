@@ -62,10 +62,8 @@ github.com/d4l3k/messagediff v1.2.1/go.mod h1:Oozbb1TVXFac9FtSIxHBMnBCq2qeH/2KkE
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200711090415-0dfb8b45d4a4 h1:M85aROJxDOXmp8mZQN6x04EraKDGOF2RL3ox/6LZdjo=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200711090415-0dfb8b45d4a4/go.mod h1:26P/7fbL4kUZVEVKLAKXkBXKOydDmM2p1e+NhhnBCAE=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200715005050-3ffaf3cd1d4a h1:k8A4B5IEFzH33Px1N7K0FpMszEFTZGQb7HCRBslMB+s=
-github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200715005050-3ffaf3cd1d4a/go.mod h1:26P/7fbL4kUZVEVKLAKXkBXKOydDmM2p1e+NhhnBCAE=
+github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200715005018-21bda509bf2b h1:6ENAer/LrJ5UoQ3hWQ4s2nu/D7gwhPHojkg/p2fCuJw=
+github.com/dgraph-io/badger/v2 v2.0.1-rc1.0.20200715005018-21bda509bf2b/go.mod h1:26P/7fbL4kUZVEVKLAKXkBXKOydDmM2p1e+NhhnBCAE=
 github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6 h1:5leDFqGys055YO3TbghBhk/QdRPEwyLPdgsSJfiR20I=
 github.com/dgraph-io/dgo/v2 v2.1.1-0.20191127085444-c7a02678e8a6/go.mod h1:LJCkLxm5fUMcU+yb8gHFjHt7ChgNuz3YnQQ6MQkmscI=
 github.com/dgraph-io/ristretto v0.0.3-0.20200630154024-f66de99634de h1:t0UHb5vdojIDUqktM6+xJAfScFBsVpXZmqC9dsgJmeA=
