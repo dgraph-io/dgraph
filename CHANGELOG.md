@@ -218,11 +218,16 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5684]: https://github.com/dgraph-io/dgraph/issues/5684
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
 
-## [20.03.4] - Unreleased
+## [20.03.4] - 2020-07-16
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
-- Update badger 06/09/2020 ([#5616][])
+- Update Badger 06/09/2020. ([#5616][])
+- Update Badger 07/13/2020. ([#5941][])
+
+### Added
+- Sentry opt out banner. ([#5729][]) 
+- Tag sentry events with additional version details. ([#5728][])
 
 ### Fixed
 - GraphQL
@@ -230,6 +235,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
   - Make updateGQLSchema always return the new schema. ([#5582][])
   - Fix mutation on predicate with special characters in the `@dgraph` directive. ([#5577][])
   - Updated mutation rewriting to fix OOM issue. ([#5536][])
+  - Fix case where Dgraph type was not generated for GraphQL interface. Fixes [#5311][]. ([#5844][])
+  - Fix interface conversion panic in v20.03 ([#5857][]) .
 - Dont set n.ops map entries to nil. Instead just delete them. ([#5557][])
 - Alpha: Enable bloom filter caching. ([#5555][])
 - Alpha: Gracefully shutdown ludicrous mode. ([#5584][])
@@ -243,10 +250,29 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix snapshot calculation in ludicrous mode. ([#5636][])
 - Update badger: Avoid panic in fillTables(). Fix assert in background compression and encryption. ([#5680][])
 - Avoid panic in handleValuePostings. ([#5678][])
+- Fix facets response with normalize. Fixes [#5241][]. ([#5691][])
+- Badger iterator key copy in count index query. ([#5916][])
+- Ludicrous mode mutation error. ([#5914][]) 
+- Return error instead of panic. ([#5907][])
+- Fix segmentation fault in draft.go. ([#5860][])
+- Optimize count index. ([#5971][])
 - Enterprise features
   - Backup: Change groupId from int to uint32. ([#5614][])
   - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
 
+[#5241]: https://github.com/dgraph-io/dgraph/issues/5241
+[#5691]: https://github.com/dgraph-io/dgraph/issues/5691
+[#5916]: https://github.com/dgraph-io/dgraph/issues/5916
+[#5914]: https://github.com/dgraph-io/dgraph/issues/5914
+[#5907]: https://github.com/dgraph-io/dgraph/issues/5907
+[#5860]: https://github.com/dgraph-io/dgraph/issues/5860
+[#5971]: https://github.com/dgraph-io/dgraph/issues/5971
+[#5311]: https://github.com/dgraph-io/dgraph/issues/5311
+[#5844]: https://github.com/dgraph-io/dgraph/issues/5844
+[#5857]: https://github.com/dgraph-io/dgraph/issues/5857
+[#5941]: https://github.com/dgraph-io/dgraph/issues/5941
+[#5729]: https://github.com/dgraph-io/dgraph/issues/5729
+[#5728]: https://github.com/dgraph-io/dgraph/issues/5728
 [#5616]: https://github.com/dgraph-io/dgraph/issues/5616
 [#5564]: https://github.com/dgraph-io/dgraph/issues/5564
 [#5582]: https://github.com/dgraph-io/dgraph/issues/5582
