@@ -18,6 +18,7 @@ package subscription_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"testing"
 	"time"
@@ -109,7 +110,7 @@ func TestSubscription(t *testing.T) {
 			  name
 			}
 		  }`,
-	})
+	}, "")
 	require.Nil(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
@@ -207,7 +208,6 @@ func TestSubscriptionAuth(t *testing.T) {
                ])
              {
                todo{
-                    id
                     text
                     owner
                }
@@ -217,13 +217,17 @@ func TestSubscriptionAuth(t *testing.T) {
 
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
+	metaInfo.AuthVars["exp"] = time.Now().Unix() + 200
+	jwtTokens, err := metaInfo.GetSignedToken("./sample_private_key.pem")
+	payload := fmt.Sprintf("{\"Authorization\": \"%s\"}", jwtTokens)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
-			getProduct(productID: "0x2"){
-			  name
+			    queryTodo{
+                  owner
+                  text
 			}
 		  }`,
-	})
+	}, payload)
 	require.Nil(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
@@ -235,59 +239,68 @@ func TestSubscriptionAuth(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, subscriptionResp.Errors)
 
-	require.JSONEq(t, `{"getProduct":{"name":"sanitizer"}}`, string(subscriptionResp.Data))
+	require.JSONEq(t, `"queryTodo": [
+      {
+        "owner": "jatin",
+        "text": "GraphQL is exciting!!"
+      }`, string(subscriptionResp.Data))
 	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
 	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
 
 	// Background indexing is happening so wait till it get indexed.
-	time.Sleep(time.Second * 2)
+	time.Sleep(time.Second * 200)
 
 	// Update the product to get the latest update.
 	add = &common.GraphQLParams{
 		Query: `mutation{
-			updateProduct(input:{filter:{name:{allofterms:"sanitizer"}}, set:{name:"mask"}},){
-			  product{
-				name
-			  }
-			}
-		  }
+              addTodo(input: [
+                 {text : "Dgraph is awesome!!",
+                  owner : "jatin"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }
 		  `,
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
+	require.Error(t, err)
 
-	// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
-	// from the previous unmarshal
-	subscriptionResp = common.GraphQLResponse{}
-	err = json.Unmarshal(res, &subscriptionResp)
-	require.NoError(t, err)
-	require.Nil(t, subscriptionResp.Errors)
-
-	// Check the latest update.
-	require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
-	require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
-	require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
-
-	time.Sleep(2 * time.Second)
-	// Change schema to terminate subscription..
-	add = &common.GraphQLParams{
-		Query: `mutation updateGQLSchema($sch: String!) {
-			updateGQLSchema(input: { set: { schema: $sch }}) {
-				gqlSchema {
-					schema
-				}
-			}
-		}`,
-		Variables: map[string]interface{}{"sch": sch},
-	}
-	addResult = add.ExecuteAsPost(t, adminEndpoint)
-	require.Nil(t, addResult.Errors)
-
-	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
-
-	require.Nil(t, res)
+	//// makes sure that the we have a fresh instance to unmarshal to, otherwise there may be things
+	//// from the previous unmarshal
+	//subscriptionResp = common.GraphQLResponse{}
+	//err = json.Unmarshal(res, &subscriptionResp)
+	//require.NoError(t, err)
+	//require.Nil(t, subscriptionResp.Errors)
+	//
+	//// Check the latest update.
+	//require.JSONEq(t, `{"getProduct":{"name":"mask"}}`, string(subscriptionResp.Data))
+	//require.Contains(t, subscriptionResp.Extensions, touchedUidskey)
+	//require.Greater(t, int(subscriptionResp.Extensions[touchedUidskey].(float64)), 0)
+	//
+	//time.Sleep(2 * time.Second)
+	//// Change schema to terminate subscription..
+	//add = &common.GraphQLParams{
+	//	Query: `mutation updateGQLSchema($sch: String!) {
+	//		updateGQLSchema(input: { set: { schema: $sch }}) {
+	//			gqlSchema {
+	//				schema
+	//			}
+	//		}
+	//	}`,
+	//	Variables: map[string]interface{}{"sch": sch},
+	//}
+	//addResult = add.ExecuteAsPost(t, adminEndpoint)
+	//require.Nil(t, addResult.Errors)
+	//
+	//res, err = subscriptionClient.RecvMsg()
+	//require.NoError(t, err)
+	//
+	//require.Nil(t, res)
 }
