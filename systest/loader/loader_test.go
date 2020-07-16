@@ -34,6 +34,7 @@ import (
 )
 
 func TestLoaderXidmap(t *testing.T) {
+	t.Log("TestLoaderXidmap\n")
 	tmpDir, err := ioutil.TempDir("", "loader_test")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
