@@ -1825,11 +1825,6 @@ func parseSrcFn(ctx context.Context, q *pb.Query) (*functionContext, error) {
 		}
 		checkRoot(q, fc)
 	case uidInFn:
-		if len(q.SrcFunc.Args) == 0 {
-			err := errors.Errorf("Function '%s' requires atleast 1 argument, but got %d (%v)",
-				q.SrcFunc.Name, len(q.SrcFunc.Args), q.SrcFunc.Args)
-			return nil, err
-		}
 		for _, arg := range q.SrcFunc.Args {
 			uidParsed, err := strconv.ParseUint(arg, 0, 64)
 			if err != nil {
@@ -2182,7 +2177,8 @@ func (qs *queryState) evaluate(cp countParams, out *pb.Result) error {
 
 	for itr.Seek(countKey); itr.Valid(); itr.Next() {
 		item := itr.Item()
-		pl, err := qs.cache.Get(item.Key())
+		var key []byte
+		pl, err := qs.cache.Get(item.KeyCopy(key))
 		if err != nil {
 			return err
 		}

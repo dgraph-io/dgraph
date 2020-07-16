@@ -90,7 +90,7 @@ func (st *state) assign(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, ids); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return
@@ -225,7 +225,7 @@ func (st *state) getState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	m := jsonpb.Marshaler{}
+	m := jsonpb.Marshaler{EmitDefaults: true}
 	if err := m.Marshal(w, mstate); err != nil {
 		x.SetStatus(w, x.ErrorNoData, err.Error())
 		return

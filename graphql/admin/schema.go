@@ -21,35 +21,15 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/golang/glog"
-
 	dgoapi "github.com/dgraph-io/dgo/v200/protos/api"
 	"github.com/dgraph-io/dgraph/edgraph"
 	"github.com/dgraph-io/dgraph/gql"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
 	"github.com/dgraph-io/dgraph/graphql/schema"
+	"github.com/dgraph-io/dgraph/query"
 	"github.com/dgraph-io/dgraph/x"
+	"github.com/golang/glog"
 )
-
-// A updateSchemaResolver serves as the mutation rewriter and executor in handling
-// the updateGQLSchema mutation.
-type updateSchemaResolver struct {
-	admin *adminServer
-
-	mutation schema.Mutation
-
-	// new GraphQL schema that is given as mutation input
-	newSchema string
-	// GraphQL schema that is generated from that input
-	generatedSchema string
-	// dgraph schema that is generated from the mutation input
-	newDgraphSchema string
-
-	// The underlying executor and rewriter that persist the schema into Dgraph as
-	// GraphQL metadata
-	baseMutationRewriter resolve.MutationRewriter
-	baseMutationExecutor resolve.DgraphExecutor
-}
 
 type getSchemaResolver struct {
 	admin *adminServer
@@ -61,89 +41,41 @@ type updateGQLSchemaInput struct {
 	Set gqlSchema `json:"set,omitempty"`
 }
 
-func (asr *updateSchemaResolver) Rewrite(
-	ctx context.Context,
-	m schema.Mutation) ([]*resolve.UpsertMutation, error) {
-
+func resolveUpdateGQLSchema(ctx context.Context, m schema.Mutation) (*resolve.Resolved, bool) {
 	glog.Info("Got updateGQLSchema request")
 
 	input, err := getSchemaInput(m)
 	if err != nil {
-		return nil, err
+		return resolve.EmptyResult(m, err), false
 	}
 
 	schHandler, err := schema.NewHandler(input.Set.Schema)
 	if err != nil {
-		return nil, err
+		return resolve.EmptyResult(m, err), false
 	}
-	// Disable subscription.
-	schHandler.DisableSubscription()
 
-	asr.generatedSchema = schHandler.GQLSchema()
-	_, err = schema.FromString(asr.generatedSchema)
+	if _, err = schema.FromString(schHandler.GQLSchema()); err != nil {
+		return resolve.EmptyResult(m, err), false
+	}
+	newGQLSchema := input.Set.Schema
+	newDgraphSchema := schHandler.DGSchema()
+
+	resp, err := edgraph.UpdateGQLSchema(ctx, newGQLSchema, newDgraphSchema)
 	if err != nil {
-		return nil, err
-	}
-	asr.newSchema = input.Set.Schema
-	asr.newDgraphSchema = schHandler.DGSchema()
-
-	// There will always be a graphql schema node present in Dgraph cluster. So, we just need to
-	// update that node. We will always have its ID present in adminServer, so just need to write a
-	// filter for that ID.
-	m.SetArgTo(schema.InputArgName,
-		map[string]interface{}{
-			"filter": map[string]interface{}{"ids": []interface{}{asr.admin.schema.ID}},
-			"set":    map[string]interface{}{"schema": input.Set.Schema},
-		})
-	return asr.baseMutationRewriter.Rewrite(ctx, m)
-}
-
-func (asr *updateSchemaResolver) FromMutationResult(
-	ctx context.Context,
-	mutation schema.Mutation,
-	assigned map[string]string,
-	result map[string]interface{}) (*gql.GraphQuery, error) {
-
-	asr.mutation = mutation
-	return nil, nil
-}
-
-func (asr *updateSchemaResolver) Execute(
-	ctx context.Context,
-	req *dgoapi.Request) (*dgoapi.Response, error) {
-
-	if req == nil || (req.Query == "" && len(req.Mutations) == 0) {
-		// For schema updates, Execute will get called twice.  Once for the
-		// mutation and once for the following query.  This is the query case.
-		b, err := doQuery(&gqlSchema{
-			ID:              asr.admin.schema.ID,
-			Schema:          asr.newSchema,
-			GeneratedSchema: asr.generatedSchema,
-		}, asr.mutation.QueryField())
-		return &dgoapi.Response{Json: b}, err
+		return resolve.EmptyResult(m, err), false
 	}
 
-	req.CommitNow = true
-	resp, err := asr.baseMutationExecutor.Execute(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-
-	if asr.newDgraphSchema != "" {
-		// The schema could be empty if it only has custom types/queries/mutations.
-		_, err = (&edgraph.Server{}).Alter(ctx, &dgoapi.Operation{Schema: asr.newDgraphSchema,
-			RunInBackground: false})
-		if err != nil {
-			return nil, schema.GQLWrapf(err,
-				"succeeded in saving GraphQL schema but failed to alter Dgraph schema ")
-		}
-	}
-
-	return resp, nil
-}
-
-func (asr *updateSchemaResolver) CommitOrAbort(ctx context.Context, tc *dgoapi.TxnContext) error {
-	return asr.baseMutationExecutor.CommitOrAbort(ctx, tc)
+	return &resolve.Resolved{
+		Data: map[string]interface{}{
+			m.Name(): map[string]interface{}{
+				"gqlSchema": map[string]interface{}{
+					"id":              query.UidToHex(resp.Uid),
+					"schema":          newGQLSchema,
+					"generatedSchema": newDgraphSchema,
+				}}},
+		Field: m,
+		Err:   nil,
+	}, true
 }
 
 func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
@@ -155,7 +87,6 @@ func (gsr *getSchemaResolver) Rewrite(ctx context.Context,
 func (gsr *getSchemaResolver) Execute(
 	ctx context.Context,
 	req *dgoapi.Request) (*dgoapi.Response, error) {
-
 	b, err := doQuery(gsr.admin.schema, gsr.gqlQuery)
 	return &dgoapi.Response{Json: b}, err
 }
@@ -169,6 +100,12 @@ func doQuery(gql *gqlSchema, field schema.Field) ([]byte, error) {
 	var buf bytes.Buffer
 	x.Check2(buf.WriteString(`{ "`))
 	x.Check2(buf.WriteString(field.Name()))
+
+	if gql.ID == "" {
+		x.Check2(buf.WriteString(`": null }`))
+		return buf.Bytes(), nil
+	}
+
 	x.Check2(buf.WriteString(`": [{`))
 
 	for i, sel := range field.SelectionSet() {

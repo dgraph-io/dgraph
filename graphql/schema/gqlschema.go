@@ -34,15 +34,16 @@ const (
 	searchDirective = "search"
 	searchArgs      = "by"
 
-	dgraphDirective  = "dgraph"
-	dgraphTypeArg    = "type"
-	dgraphPredArg    = "pred"
-	idDirective      = "id"
-	secretDirective  = "secret"
-	authDirective    = "auth"
-	customDirective  = "custom"
-	remoteDirective  = "remote" // types with this directive are not stored in Dgraph.
-	cascadeDirective = "cascade"
+	dgraphDirective       = "dgraph"
+	dgraphTypeArg         = "type"
+	dgraphPredArg         = "pred"
+	idDirective           = "id"
+	secretDirective       = "secret"
+	authDirective         = "auth"
+	customDirective       = "custom"
+	remoteDirective       = "remote" // types with this directive are not stored in Dgraph.
+	cascadeDirective      = "cascade"
+	SubscriptionDirective = "withSubscription"
 
 	// custom directive args and fields
 	mode   = "mode"
@@ -51,6 +52,7 @@ const (
 
 	deprecatedDirective = "deprecated"
 	NumUid              = "numUids"
+	Msg                 = "msg"
 
 	Typename = "__typename"
 
@@ -104,6 +106,7 @@ input CustomHTTP {
 	mode: Mode
 	forwardHeaders: [String!]
 	secretHeaders: [String!]
+	introspectionHeaders: [String!]
 	skipIntrospection: Boolean
 }
 
@@ -111,6 +114,7 @@ directive @hasInverse(field: String!) on FIELD_DEFINITION
 directive @search(by: [DgraphIndex!]) on FIELD_DEFINITION
 directive @dgraph(type: String, pred: String) on OBJECT | INTERFACE | FIELD_DEFINITION
 directive @id on FIELD_DEFINITION
+directive @withSubscription on OBJECT | INTERFACE
 directive @secret(field: String!, pred: String) on OBJECT | INTERFACE
 directive @auth(
 	query: AuthRule,
@@ -299,14 +303,15 @@ func ValidatorNoOp(
 }
 
 var directiveValidators = map[string]directiveValidator{
-	inverseDirective:    hasInverseValidation,
-	searchDirective:     searchValidation,
-	dgraphDirective:     dgraphDirectiveValidation,
-	idDirective:         idValidation,
-	secretDirective:     passwordValidation,
-	customDirective:     customDirectiveValidation,
-	remoteDirective:     ValidatorNoOp,
-	deprecatedDirective: ValidatorNoOp,
+	inverseDirective:      hasInverseValidation,
+	searchDirective:       searchValidation,
+	dgraphDirective:       dgraphDirectiveValidation,
+	idDirective:           idValidation,
+	secretDirective:       passwordValidation,
+	customDirective:       customDirectiveValidation,
+	remoteDirective:       ValidatorNoOp,
+	deprecatedDirective:   ValidatorNoOp,
+	SubscriptionDirective: ValidatorNoOp,
 	// Just go get it printed into generated schema
 	authDirective: ValidatorNoOp,
 }
@@ -1017,18 +1022,26 @@ func addDeletePayloadType(schema *ast.Schema, defn *ast.Definition) {
 		return
 	}
 
+	qry := &ast.FieldDefinition{
+		Name: camelCase(defn.Name),
+		Type: ast.ListType(&ast.Type{
+			NamedType: defn.Name,
+		}, nil),
+	}
+
+	addFilterArgument(schema, qry)
+	addOrderArgument(schema, qry)
+	addPaginationArguments(qry)
+
+	msg := &ast.FieldDefinition{
+		Name: "msg",
+		Type: &ast.Type{NamedType: "String"},
+	}
+
 	schema.Types["Delete"+defn.Name+"Payload"] = &ast.Definition{
-		Kind: ast.Object,
-		Name: "Delete" + defn.Name + "Payload",
-		Fields: []*ast.FieldDefinition{
-			{
-				Name: "msg",
-				Type: &ast.Type{
-					NamedType: "String",
-				},
-			},
-			numUids,
-		},
+		Kind:   ast.Object,
+		Name:   "Delete" + defn.Name + "Payload",
+		Fields: []*ast.FieldDefinition{qry, msg, numUids},
 	}
 }
 
@@ -1069,7 +1082,10 @@ func addGetQuery(schema *ast.Schema, defn *ast.Definition) {
 		})
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
 }
 
 func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1086,7 +1102,11 @@ func addFilterQuery(schema *ast.Schema, defn *ast.Definition) {
 	addPaginationArguments(qry)
 
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	subs := defn.Directives.ForName(SubscriptionDirective)
+	if subs != nil {
+		schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
+	}
+
 }
 
 func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
@@ -1125,7 +1145,6 @@ func addPasswordQuery(schema *ast.Schema, defn *ast.Definition) {
 		},
 	}
 	schema.Query.Fields = append(schema.Query.Fields, qry)
-	schema.Subscription.Fields = append(schema.Subscription.Fields, qry)
 }
 
 func addQueries(schema *ast.Schema, defn *ast.Definition) {
@@ -1286,6 +1305,13 @@ func getFieldsWithoutIDType(schema *ast.Schema, defn *ast.Definition) ast.FieldL
 		custom := fld.Directives.ForName(customDirective)
 		// Fields with @custom directive should not be part of mutation input, hence we skip them.
 		if custom != nil {
+			continue
+		}
+
+		// Remove edges which have a reverse predicate as they should only be updated through their
+		// forward edge.
+		fname := fieldName(fld, defn.Name)
+		if strings.HasPrefix(fname, "~") || strings.HasPrefix(fname, "<~") {
 			continue
 		}
 

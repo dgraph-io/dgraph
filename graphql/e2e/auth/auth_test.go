@@ -76,8 +76,9 @@ type Issue struct {
 }
 
 type Log struct {
-	Id   string `json:"id,omitempty"`
-	Logs string `json:"logs,omitempty"`
+	Id     string `json:"id,omitempty"`
+	Logs   string `json:"logs,omitempty"`
+	Random string `json:"random,omitempty"`
 }
 
 type ComplexLog struct {
@@ -113,6 +114,11 @@ type Project struct {
 	Columns []*Column `json:"columns,omitempty"`
 }
 
+type Student struct {
+	Id    string `json:"id,omitempty"`
+	Email string `json:"email,omitempty"`
+}
+
 type TestCase struct {
 	user      string
 	role      string
@@ -127,6 +133,38 @@ type uidResult struct {
 	Query []struct {
 		UID string
 	}
+}
+
+func (r *Region) add(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+		mutation addRegion($region: AddRegionInput!) {
+		  addRegion(input: [$region]) {
+			numUids
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"region": r},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (r *Region) delete(t *testing.T, user, role string) {
+	getParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query: `
+		mutation deleteRegion($name: String) {
+		  deleteRegion(filter:{name: { eq: $name}}) {
+			msg
+		  }
+		}
+		`,
+		Variables: map[string]interface{}{"name": r.Name},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
 }
 
 func getJWT(t *testing.T, user, role string) http.Header {
@@ -145,6 +183,138 @@ func getJWT(t *testing.T, user, role string) http.Header {
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	return h
+}
+
+func TestOptimizedNestedAuthQuery(t *testing.T) {
+	query := `
+	query {
+	  queryMovie {
+		content
+		 regionsAvailable {
+		  name
+		  global
+		}
+	  }
+	}
+	`
+	user := "user1"
+	role := "ADMIN"
+
+	getUserParams := &common.GraphQLParams{
+		Headers: getJWT(t, user, role),
+		Query:   query,
+	}
+
+	gqlResponse := getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+	beforeTouchUids := gqlResponse.Extensions["touched_uids"]
+	beforeResult := gqlResponse.Data
+
+	// Previously, Auth queries would have touched all the new `Regions`. But after the optimization
+	// we should only touch necessary `Regions` which are assigned to some `Movie`. Hence, adding
+	// these extra `Regions` would not increase the `touched_uids`.
+	var regions []Region
+	for i := 0; i < 100; i++ {
+		r := Region{
+			Name:   fmt.Sprintf("Test_Region_%d", i),
+			Global: true,
+		}
+		r.add(t, user, role)
+		regions = append(regions, r)
+	}
+
+	gqlResponse = getUserParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+
+	afterTouchUids := gqlResponse.Extensions["touched_uids"]
+	require.Equal(t, beforeTouchUids, afterTouchUids)
+	require.Equal(t, beforeResult, gqlResponse.Data)
+
+	// Clean up
+	for _, region := range regions {
+		region.delete(t, user, role)
+	}
+}
+
+func (s Student) deleteByEmail(t *testing.T) {
+	getParams := &common.GraphQLParams{
+		Query: `
+			mutation delStudent ($filter : StudentFilter!){
+			  	deleteStudent (filter: $filter) {
+					numUids
+			  	}
+			}
+		`,
+		Variables: map[string]interface{}{"filter": map[string]interface{}{
+			"email": map[string]interface{}{"eq": s.Email},
+		}},
+	}
+	gqlResponse := getParams.ExecuteAsPost(t, graphqlURL)
+	require.Nil(t, gqlResponse.Errors)
+}
+
+func (s Student) add(t *testing.T) {
+	mutation := &common.GraphQLParams{
+		Query: `
+		mutation addStudent($student : AddStudentInput!) {
+			addStudent(input: [$student]) {
+				numUids
+			}
+		}`,
+		Variables: map[string]interface{}{"student": s},
+	}
+	result := `{"addStudent":{"numUids": 1}}`
+	gqlResponse := mutation.ExecuteAsPost(t, graphqlURL)
+	common.RequireNoGQLErrors(t, gqlResponse)
+	require.JSONEq(t, result, string(gqlResponse.Data))
+}
+
+func TestAuthWithDgraphDirective(t *testing.T) {
+	students := []Student{
+		{
+			Email: "user1@gmail.com",
+		},
+		{
+			Email: "user2@gmail.com",
+		},
+	}
+	for _, student := range students {
+		student.add(t)
+	}
+
+	testCases := []TestCase{{
+		user:   students[0].Email,
+		role:   "ADMIN",
+		result: `{"queryStudent":[{"email":"` + students[0].Email + `"}]}`,
+	}, {
+		user:   students[0].Email,
+		role:   "USER",
+		result: `{"queryStudent" : []}`,
+	}}
+
+	queryStudent := `
+	query {
+		queryStudent {
+			email
+		}
+	}`
+
+	for _, tcase := range testCases {
+		t.Run(tcase.role+"_"+tcase.user, func(t *testing.T) {
+			queryParams := &common.GraphQLParams{
+				Query:   queryStudent,
+				Headers: getJWT(t, tcase.user, tcase.role),
+			}
+			gqlResponse := queryParams.ExecuteAsPost(t, graphqlURL)
+			common.RequireNoGQLErrors(t, gqlResponse)
+			require.JSONEq(t, tcase.result, string(gqlResponse.Data))
+		})
+	}
+
+	// Clean up
+	for _, student := range students {
+		student.deleteByEmail(t)
+	}
 }
 
 func TestAuthRulesWithMissingJWT(t *testing.T) {
@@ -538,14 +708,14 @@ func TestDeepRBACValue(t *testing.T) {
 	}
 
 	query := `
-{
-  queryUser (filter:{username:{eq:"user1"}}) {
-    username
-    issues {
-      msg
-    }
-  }
-}
+	query {
+	  queryUser (filter:{username:{eq:"user1"}}) {
+		username
+		issues {
+		  msg
+		}
+	  }
+	}
 	`
 
 	for _, tcase := range testCases {
@@ -571,7 +741,7 @@ func TestRBACFilter(t *testing.T) {
 
 	query := `
 		query {
-                    queryLog (order: {asc: logs}) {
+			queryLog (order: {asc: logs}) {
 		    	logs
 		    }
 		}
@@ -716,8 +886,8 @@ func TestNestedFilter(t *testing.T) {
 	}}
 
 	query := `
-		query {
-                    queryMovie (order: {asc: content}) {
+		query {	
+			queryMovie (order: {asc: content}) {
 		           content
 		           regionsAvailable (order: {asc: name}) {
 		           	name
@@ -928,7 +1098,7 @@ func TestMain(m *testing.M) {
 		}
 
 		metaInfo = &testutil.AuthMeta{
-			PublicKey: authMeta.PublicKey,
+			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,
 			Algo:      authMeta.Algo,
 			Header:    authMeta.Header,

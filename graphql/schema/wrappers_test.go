@@ -796,7 +796,6 @@ func TestGraphQLQueryInCustomHTTPConfig(t *testing.T) {
 }
 
 func TestAllowedHeadersList(t *testing.T) {
-	// TODO Add Custom logic forward headers tests
 	tcases := []struct {
 		name      string
 		schemaStr string
@@ -817,7 +816,7 @@ func TestAllowedHeadersList(t *testing.T) {
         username: String! @id
         userRole: String @search(by: [hash])
 	  }
-	  # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims RS256 "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----"
+	  # Dgraph.Authorization  {"VerificationKey":"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256"}
 	`,
 			"X-Test-Dgraph",
 		},
@@ -829,6 +828,86 @@ func TestAllowedHeadersList(t *testing.T) {
 			_, err := FromString(schHandler.GQLSchema())
 			require.NoError(t, err)
 			require.True(t, strings.Contains(hc.allowed, test.expected))
+		})
+	}
+}
+
+func TestCustomLogicHeaders(t *testing.T) {
+	tcases := []struct {
+		name      string
+		schemaStr string
+		err       error
+	}{
+		{
+			"check for introspection header to always use value from secrets",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					introspectionHeaders: ["Authorization:Api-Token"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:13: Type Query; Field user; introspectionHeaders in @custom directive should use secrets to store the header value. " + "To do that specify `Api-Token` in this format '#Dgraph.Secret name value' at the bottom of your schema file." + "\n"),
+		},
+		{
+			"check for secret and forward headers overlapping",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					forwardHeaders: ["API-Token", "Authorization"]
+					secretHeaders: ["Authorization"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:14: Type Query; Field user; secretHeaders and forwardHeaders in @custom directive cannot have overlapping headers, found: `Authorization`." + "\n"),
+		},
+		{
+			"check for header structure",
+			`
+			type User @remote {
+ 				description: String
+			}
+
+			type Query {
+			user(name: String!): User
+				@custom(
+				http: {
+					url: "http://api:8888/graphql"
+					method: "POST"
+					forwardHeaders: ["API-Token",  "Content-Type"]
+					secretHeaders: ["Authorization:Auth:random"]
+					graphql: "query($name: String!) { getUser(name: $name) }"
+				}
+   	 			)
+				}
+			`,
+			errors.New("input:14: Type Query; Field user; secretHeaders in @custom directive should be of the form 'remote_headername:local_headername' or just 'headername', found: `Authorization:Auth:random`." + "\n"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := NewHandler(test.schemaStr)
+			require.EqualError(t, err, test.err.Error())
 		})
 	}
 }
@@ -848,7 +927,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			 # Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
@@ -890,7 +969,7 @@ func TestParseSecrets(t *testing.T) {
 				"be `# Dgraph.Secret key value`"),
 		},
 		{
-			"should work along with authorization",
+			"Dgraph.Authorization old format",
 			`
 			type User {
 				id: ID!
@@ -901,10 +980,11 @@ func TestParseSecrets(t *testing.T) {
 			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
-			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
-				"STRIPE_API_KEY": "stripe-api-key-value"},
-			"X-Test-Dgraph",
 			nil,
+			"",
+			errors.New("Unable to parse Dgraph.Authorization. " +
+				"It may be that you are using the pre-release syntax. " +
+				"Please check the correct syntax at https://graphql.dgraph.io/authorization/"),
 		},
 		{
 			"should throw an error if multiple authorization values are specified",
@@ -914,14 +994,55 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Authorization random https://dgraph.io/jwt/claims HS256 "key"
-			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
 			`,
 			nil,
 			"",
 			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
-				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
-				` https://dgraph.io/jwt/claims HS256 "key"`),
+				`, found second mention: # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}`),
+		},
+		{
+			"Should throw an error if required fields are missing in Authorizaiton Information",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {}
+			`,
+			nil,
+			"",
+			errors.New("required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+		},
+		{
+			"Valid Dgraph.Authorization with audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+		},
+		{
+			"Valid Dgraph.Authorization without audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
 		},
 	}
 	for _, test := range tcases {

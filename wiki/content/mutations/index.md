@@ -301,9 +301,7 @@ The supported [RDF datatypes](https://www.w3.org/TR/rdf11-concepts/#section-Data
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#double&#62;           | `float`          |
 | &#60;http&#58;//www.w3.org/2001/XMLSchema#float&#62;            | `float`          |
 
-
 See the section on [RDF schema types]({{< relref "#rdf-types" >}}) to understand how RDF types affect mutations and storage.
-
 
 ## Batch mutations
 
@@ -311,9 +309,10 @@ Each mutation may contain multiple RDF triples. For large data uploads many such
 
 `dgraph live` takes as input gzipped N-Quad files (that is triple lists without `{ set {`) and batches mutations for all triples in the input.  The tool has documentation of options.
 
-```
+```sh
 dgraph live --help
 ```
+
 See also [Fast Data Loading](/deploy#fast-data-loading).
 
 ## Delete
@@ -321,7 +320,8 @@ See also [Fast Data Loading](/deploy#fast-data-loading).
 A delete mutation, signified with the `delete` keyword, removes triples from the store.
 
 For example, if the store contained
-```
+
+```RDF
 <0xf11168064b01135b> <name> "Lewis Carrol"
 <0xf11168064b01135b> <died> "1998"
 <0xf11168064b01135b> <dgraph.type> "Person" .
@@ -329,7 +329,7 @@ For example, if the store contained
 
 Then delete mutation
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> <died> "1998" .
@@ -341,7 +341,7 @@ Deletes the erroneous data and removes it from indexes if present.
 
 For a particular node `N`, all data for predicate `P` (and corresponding indexing) is removed with the pattern `S P *`.
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> <author.of> * .
@@ -356,14 +356,13 @@ derived from the type information for that node (the value of the `dgraph.type`
 edges on that node and their corresponding definitions in the schema). If that
 information is missing, this operation will be a no-op.
 
-```
+```sh
 {
   delete {
      <0xf11168064b01135b> * * .
   }
 }
 ```
-
 
 {{% notice "note" %}} The patterns `* P O` and `* * O` are not supported since its expensive to store/find all the incoming edges. {{% /notice %}}
 
@@ -376,16 +375,71 @@ Deleting the value of a non-list predicate (i.e a 1-to-1 relation) can be done i
 
 For language-tagged values, the following special syntax is supported:
 
-```
+```sh
 {
-	delete {
-		<0x12345> <name@es> * .
-	}
+ delete {
+  <0x12345> <name@es> * .
+ }
 }
 ```
 
 In this example, the value of name tagged with language tag `es` will be deleted.
 Other tagged values are left untouched.
+
+## Facets in List-type with RDF
+
+Schema:
+
+```sh
+<name>: string @index(exact).
+<nickname>: [string] .
+```
+
+Creating a list with facets in RDF is straightforward.
+
+```sh
+{
+  set {
+    _:Julian <name> "Julian" .
+    _:Julian <nickname> "Jay-Jay" (kind="first") .
+    _:Julian <nickname> "Jules" (kind="official") .
+    _:Julian <nickname> "JB" (kind="CS-GO") .
+  }
+}
+```
+
+```graphql
+{
+  q(func: eq(name,"Julian")){
+    name
+    nickname @facets
+  }
+}
+```
+
+Result:
+
+```JSON
+{
+  "data": {
+    "q": [
+      {
+        "name": "Julian",
+        "nickname|kind": {
+          "0": "first",
+          "1": "official",
+          "2": "CS-GO"
+        },
+        "nickname": [
+          "Jay-Jay",
+          "Jules",
+          "JB"
+        ]
+      }
+    ]
+  }
+}
+```
 
 ## Mutations using cURL
 
@@ -446,6 +500,7 @@ Literal values can be set by adding a key/value to the JSON object. The key
 represents the predicate, and the value represents the object.
 
 For example:
+
 ```json
 {
   "name": "diggy",
@@ -453,8 +508,10 @@ For example:
   "dgraph.type": "Mascot"
 }
 ```
+
 Will be converted into the RDFs:
-```
+
+```RDF
 _:blank-0 <name> "diggy" .
 _:blank-0 <food> "pizza" .
 _:blank-0 <dgraph.type> "Mascot" .
@@ -481,7 +538,8 @@ An important difference between RDF and JSON mutations is in regards to specifyi
 language. In JSON, the language tag is appended to the edge _name_, not the value like in RDF.
 
 For example, the JSON mutation
-```json
+
+```JSON
 {
   "food": "taco",
   "rating@en": "tastes good",
@@ -493,7 +551,8 @@ For example, the JSON mutation
 ```
 
 is equivalent to the following RDF:
-```
+
+```RDF
 _:blank-0 <food> "taco" .
 _:blank-0 <dgraph.type> "Food" .
 _:blank-0 <rating> "tastes good"@en .
@@ -509,7 +568,7 @@ as a JSON object with keys "type" and "coordinates". Keep in mind we only
 support indexing on the Point, Polygon, and MultiPolygon types, but we can store
 other types of geolocation data. Below is an example:
 
-```
+```JSON
 {
   "food": "taco",
   "location": {
@@ -526,6 +585,7 @@ as the UID of an existing node in the graph. This mechanism allows you to
 reference existing nodes.
 
 For example:
+
 ```json
 {
   "uid": "0x467ba0",
@@ -534,8 +594,10 @@ For example:
   "dgraph.type": "Food"
 }
 ```
+
 Will be converted into the RDFs:
-```
+
+```RDF
 <0x467ba0> <food> "taco" .
 <0x467ba0> <rating> "tastes good" .
 <0x467ba0> <dgraph.type> "Food" .
@@ -547,7 +609,8 @@ Edges between nodes are represented in a similar way to literal values, except
 that the object is a JSON object.
 
 For example:
-```json
+
+```JSON
 {
   "name": "Alice",
   "friend": {
@@ -555,8 +618,10 @@ For example:
   }
 }
 ```
+
 Will be converted into the RDFs:
-```
+
+```RDF
 _:blank-0 <name> "Alice" .
 _:blank-0 <friend> _:blank-1 .
 _:blank-1 <name> "Betty" .
@@ -566,7 +631,7 @@ The result of the mutation would contain the uids assigned to `blank-0` and `bla
 wanted to return these uids under a different key, you could specify the `uid` field as a blank
 node.
 
-```json
+```JSON
 {
   "uid": "_:alice",
   "name": "Alice",
@@ -579,7 +644,7 @@ node.
 
 Will be converted to:
 
-```
+```RDF
 _:alice <name> "Alice" .
 _:alice <friend> _:bob .
 _:bob <name> "Betty" .
@@ -587,7 +652,8 @@ _:bob <name> "Betty" .
 
 Existing nodes can be referenced in the same way as when adding literal values.
 E.g. to link two existing nodes:
-```json
+
+```JSON
 {
   "uid": "0x123",
   "link": {
@@ -598,7 +664,7 @@ E.g. to link two existing nodes:
 
 Will be converted to:
 
-```JSON
+```RDF
 <0x123> <link> <0x456> .
 ```
 
@@ -621,7 +687,8 @@ the `"uid"` field for each JSON object must be present. Predicates that should
 be deleted should be set to the JSON value `null`.
 
 For example, to remove a food rating:
-```json
+
+```JSON
 {
   "uid": "0x467ba0",
   "rating": null
@@ -632,7 +699,8 @@ For example, to remove a food rating:
 
 Deleting a single edge requires the same JSON object that would create that
 edge. E.g. to delete the predicate `link` from `"0x123"` to `"0x456"`:
-```json
+
+```JSON
 {
   "uid": "0x123",
   "link": {
@@ -643,7 +711,8 @@ edge. E.g. to delete the predicate `link` from `"0x123"` to `"0x456"`:
 
 All edges for a predicate emanating from a single node can be deleted at once
 (corresponding to deleting `S P *`):
-```json
+
+```JSON
 {
   "uid": "0x123",
   "link": null
@@ -657,7 +726,7 @@ other nodes and to literal values) are deleted (corresponding to deleting `S *
 [type system]({{< relref "query-language/index.md#type-system" >}}) for more
 information:
 
-```json
+```JSON
 {
   "uid": "0x123"
 }
@@ -668,7 +737,8 @@ information:
 Facets can be created by using the `|` character to separate the predicate
 and facet key in a JSON object field name. This is the same encoding schema
 used to show facets in query results. E.g.
-```json
+
+```JSON
 {
   "name": "Carol",
   "name|initial": "C",
@@ -680,8 +750,10 @@ used to show facets in query results. E.g.
   }
 }
 ```
+
 Produces the following RDFs:
-```
+
+```RDF
 _:blank-0 <name> "Carol" (initial=C) .
 _:blank-0 <dgraph.type> "Person" .
 _:blank-0 <friend> _:blank-1 (close=yes) .
@@ -737,7 +809,7 @@ upsert {
 
 Schema:
 
-```JSON
+```sh
 testList: [string] .
 ```
 
@@ -755,22 +827,131 @@ testList: [string] .
 
 Let’s then remove "Apple" from this list (Remember, it’s case sensitive):
 
+```graphql
+{
+  q(func: has(testList)) {
+    uid
+    testList
+  }
+}
+```
+
 ```JSON
 {
-   "uid": "0xd", #UID of the list.
-   "testList": "Apple"
+  "delete": {
+    "uid": "0x6", #UID of the list.
+    "testList": "Apple"
+  }
+}
+```
+
+Also you can delete multiple values
+
+```JSON
+{
+  "delete": {
+    "uid": "0x6",
+    "testList": [
+          "Strawberry",
+          "Banana",
+          "watermelon"
+        ]
+  }
 }
 ```
 
 {{% notice "note" %}} Check the [JSON Syntax using Raw HTTP or Ratel UI]({{< relref "#json-syntax-using-raw-http-or-ratel-ui">}}) section if you're using the dgraph-js-http client or Ratel UI. {{% /notice %}}
 
-
 Add another fruit:
 
 ```JSON
 {
-   "uid": "0xd", #UID of the list.
+   "uid": "0x6", #UID of the list.
    "testList": "Pineapple"
+}
+```
+
+### Facets in List-type with JSON
+
+Schema:
+
+```sh
+<name>: string @index(exact).
+<nickname>: [string] .
+```
+
+To create a List-type predicate you need to specify all value in a single list. Facets for all
+predicate values should be specified together. It is done in map format with index of predicate
+values inside list being map key and their respective facets value as map values. Predicate values
+which does not have facets values will be missing from facets map. E.g.
+
+```JSON
+{
+  "set": [
+    {
+      "uid": "_:Julian",
+      "name": "Julian",
+      "nickname": ["Jay-Jay", "Jules", "JB"],
+      "nickname|kind": {
+        "0": "first",
+        "1": "official",
+        "2": "CS-GO"
+      }
+    }
+  ]
+}
+```
+
+Above you see that we have three values ​​to enter the list with their respective facets.
+
+You can run this query to check the list with facets:
+
+```graphql
+{
+   q(func: eq(name,"Julian")) {
+    uid
+    nickname @facets
+   }
+}
+```
+
+Later, if you want to add more values ​​with facets, just do the same procedure, but this time instead of using Blank-node you must use the actual node's UID.
+
+```JSON
+{
+  "set": [
+    {
+      "uid": "0x3",
+      "nickname|kind": "Internet",
+      "nickname": "@JJ"
+    }
+  ]
+}
+```
+
+And the final result is:
+
+```JSON
+{
+  "data": {
+    "q": [
+      {
+        "uid": "0x3",
+        "nickname|kind": {
+          "0": "first",
+          "1": "Internet",
+          "2": "official",
+          "3": "CS-GO"
+        },
+        "nickname": [
+          "Jay-Jay",
+          "@JJ",
+          "Jules",
+          "JB"
+        ]
+      }
+    ]
+  }
 }
 ```
 
@@ -800,6 +981,7 @@ This syntax can be used in the most current version of Ratel, in the [dgraph-js-
 You can also [download the Ratel UI for Linux, macOS, or Windows](https://discuss.dgraph.io/t/ratel-installer-for-linux-macos-and-windows-preview-version-ratel-update-from-v1-0-6/2884/).
 
 Mutate:
+
 ```JSON
 {
   "set": [

@@ -143,7 +143,7 @@ func TestIntrospectionQueryMissingNameArg(t *testing.T) {
 		schema {
 			query: TestType
 		}
-	
+
 		type TestType {
 			testField: String
 		}
@@ -220,6 +220,122 @@ func TestIntrospectionQueryWithVars(t *testing.T) {
 	testutil.CompareJSON(t, string(expectedBuf), string(resp))
 }
 
+const (
+	testIntrospectionQuery = `query {
+		__schema {
+		  __typename
+		  queryType {
+			name
+			__typename
+		  }
+		  mutationType {
+			name
+			__typename
+		  }
+		  subscriptionType {
+			name
+			__typename
+		  }
+		  types {
+			...FullType
+		  }
+		  directives {
+			__typename
+			name
+			locations
+			args {
+			  ...InputValue
+			}
+		  }
+		}
+	  }
+	  fragment FullType on __Type {
+		kind
+		name
+		fields(includeDeprecated: true) {
+		  __typename
+		  name
+		  args {
+			...InputValue
+			__typename
+		  }
+		  type {
+			...TypeRef
+			__typename
+		  }
+		  isDeprecated
+		  deprecationReason
+		}
+		inputFields {
+		  ...InputValue
+		  __typename
+		}
+		interfaces {
+		  ...TypeRef
+		  __typename
+		}
+		enumValues(includeDeprecated: true) {
+		  name
+		  isDeprecated
+		  deprecationReason
+		  __typename
+		}
+		possibleTypes {
+		  ...TypeRef
+		  __typename
+		}
+		__typename
+	  }
+	  fragment InputValue on __InputValue {
+		__typename
+		name
+		type {
+		  ...TypeRef
+		}
+		defaultValue
+	  }
+	  fragment TypeRef on __Type {
+		kind
+		name
+		ofType {
+		  kind
+		  name
+		  ofType {
+			kind
+			name
+			ofType {
+			  kind
+			  name
+			  ofType {
+				kind
+				name
+				ofType {
+				  kind
+				  name
+				  ofType {
+					kind
+					name
+					ofType {
+					  kind
+					  name
+					  __typename
+					}
+					__typename
+				  }
+				  __typename
+				}
+				__typename
+			  }
+			  __typename
+			}
+			__typename
+		  }
+		  __typename
+		}
+		__typename
+	  }`
+)
+
 func TestFullIntrospectionQuery(t *testing.T) {
 	sch := gqlparser.MustLoadSchema(
 		&ast.Source{Name: "schema.graphql", Input: `
@@ -232,7 +348,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	}
 `})
 
-	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: introspectionQuery})
+	doc, gqlErr := parser.ParseQuery(&ast.Source{Input: testIntrospectionQuery})
 	require.Nil(t, gqlErr)
 
 	listErr := validator.Validate(sch, doc)
@@ -242,7 +358,7 @@ func TestFullIntrospectionQuery(t *testing.T) {
 	require.NotNil(t, op)
 	oper := &operation{op: op,
 		vars:     map[string]interface{}{},
-		query:    string(introspectionQuery),
+		query:    string(testIntrospectionQuery),
 		doc:      doc,
 		inSchema: &schema{schema: sch},
 	}
