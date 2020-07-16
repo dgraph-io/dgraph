@@ -74,6 +74,7 @@ type responseStruct struct {
 }
 
 func TestEnterpriseLicense(t *testing.T) {
+	t.Log("Running TestEnterpriseLicense\n")
 
 	stateURL := "http://localhost:6281/state"
 	enterpriseLicenseURL := "http://localhost:6281/enterpriseLicense"
