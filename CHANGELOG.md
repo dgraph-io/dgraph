@@ -218,12 +218,11 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5684]: https://github.com/dgraph-io/dgraph/issues/5684
 [e7b6e76f96e8]: https://github.com/dgraph-io/badger/commit/e7b6e76f96e8
 
-## [20.03.4] - 2020-07-16
+## [20.03.4] - Unreleased
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
 
 ### Changed
-- Update Badger 06/09/2020. ([#5616][])
-- Update Badger 07/13/2020. ([#5941][])
+- Update Badger 07/13/2020. ([#5941][],[#5616][])
 
 ### Added
 - Sentry opt out banner. ([#5729][]) 
