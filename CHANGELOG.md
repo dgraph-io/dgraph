@@ -255,6 +255,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Return error instead of panic. ([#5907][])
 - Fix segmentation fault in draft.go. ([#5860][])
 - Optimize count index. ([#5971][])
+- Handle schema updates correctly in ludicrous mode. ([#5969][])
+- Fix Panic because of nil map in groups.go. ([#6007][])
+- Return error if server is not ready. ([#6021][])
 - Enterprise features
   - Backup: Change groupId from int to uint32. ([#5614][])
   - Backup: Use a sync.Pool to allocate KVs. ([#5579][])
@@ -294,6 +297,9 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#5614]: https://github.com/dgraph-io/dgraph/issues/5614
 [#5579]: https://github.com/dgraph-io/dgraph/issues/5579
 [#5678]: https://github.com/dgraph-io/dgraph/issues/5678
+[#5969]: https://github.com/dgraph-io/dgraph/issues/5969
+[#6007]: https://github.com/dgraph-io/dgraph/issues/6007
+[#6021]: https://github.com/dgraph-io/dgraph/issues/6021
 
 ## [1.2.6] - Unreleased
 [1.2.6]: https://github.com/dgraph-io/dgraph/compare/v1.2.5...v1.2.6
