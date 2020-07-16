@@ -65,7 +65,6 @@ func TestEnterpriseLicense(t *testing.T) {
 	stateURL := "http://" + testutil.SockAddrZeroHttp + "/state"
 	enterpriseLicenseURL := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
 
-	t.Log()
 	var tests = []struct {
 		name           string
 		licenseKey     []byte
