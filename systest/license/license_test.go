@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -53,8 +52,22 @@ I8jcj3NZtGWFoxKq4laK/ruoeoHnWMznJyMm7mUd/5nzcU5QZU9yEEI=
 -----END PGP MESSAGE-----
 `)
 
+type Location struct {
+	Line   int `json:"line,omitempty"`
+	Column int `json:"column,omitempty"`
+}
+
+type GqlError struct {
+	Message    string                 `json:"message"`
+	Locations  []Location             `json:"locations,omitempty"`
+	Path       []interface{}          `json:"path,omitempty"`
+	Extensions map[string]interface{} `json:"extensions,omitempty"`
+}
+
+type GqlErrorList []*GqlError
+
 type responseStruct struct {
-	Errors  json.RawMessage        `json:"errors"`
+	Errors  GqlErrorList           `json:"errors"`
 	Code    string                 `json:"code"`
 	Message string                 `json:"message"`
 	License map[string]interface{} `json:"license"`
@@ -66,36 +79,32 @@ func TestEnterpriseLicense(t *testing.T) {
 	enterpriseLicenseURL := "http://localhost:6281/enterpriseLicense"
 
 	var tests = []struct {
-		name           string
-		licenseKey     []byte
-		expectError    bool
-		code           string
-		user           string
-		licenseEnabled interface{}
+		name       string
+		licenseKey []byte
+		code       string
+		user       string
+		message    string
 	}{
 		{
 			"Using expired entrerprise license key, should be able to extract user information",
 			expiredKey,
-			false,
 			`Success`,
 			`Dgraph Test Key`,
-			nil,
+			``,
 		},
 		{
 			"Using invalid entrerprise license key should return an error",
 			invalidKey,
-			false,
 			``,
 			``,
-			nil,
+			`while extracting enterprise details from the license: while reading PGP message from license file: openpgp: unsupported feature: public key version`,
 		},
 		{
 			"Using empty entrerprise license key should return an error",
 			[]byte(``),
-			false,
 			``,
 			``,
-			nil,
+			`while extracting enterprise details from the license: while decoding license file: EOF`,
 		},
 	}
 	for _, tt := range tests {
@@ -107,13 +116,16 @@ func TestEnterpriseLicense(t *testing.T) {
 		var enterpriseResponse responseStruct
 		responseBody, err := ioutil.ReadAll(response.Body)
 		require.NoError(t, err)
-		json.Unmarshal(responseBody, &enterpriseResponse)
+		err = json.Unmarshal(responseBody, &enterpriseResponse)
+		require.NoError(t, err)
 
 		// Check if the license is applied
 		require.Equal(t, enterpriseResponse.Code, tt.code)
 
-		// Expired license should not be enabled even after it is applied
 		if enterpriseResponse.Code == `Success` {
+
+			// check the user information in case the license is applied
+			// Expired license should not be enabled even after it is applied
 
 			response, err := http.Get(stateURL)
 			require.NoError(t, err)
@@ -121,10 +133,14 @@ func TestEnterpriseLicense(t *testing.T) {
 			var stateResponse responseStruct
 			responseBody, err := ioutil.ReadAll(response.Body)
 			require.NoError(t, err)
-			json.Unmarshal(responseBody, &stateResponse)
+			err = json.Unmarshal(responseBody, &stateResponse)
+			require.NoError(t, err)
 
 			require.Equal(t, stateResponse.License["user"], tt.user)
-			require.Equal(t, stateResponse.License["enabled"], tt.licenseEnabled)
+			require.Equal(t, stateResponse.License["enabled"], nil)
+		} else {
+			// check the error message in case the license is not applied
+			require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
 		}
 	}
 }
