@@ -62,8 +62,8 @@ type responseStruct struct {
 
 func TestEnterpriseLicense(t *testing.T) {
 
-	stateURL := testutil.SockAddrZeroHttp + "/state"
-	enterpriseLicenseURL := testutil.SockAddrZeroHttp + "/enterpriseLicense"
+	stateURL := "http://" + testutil.SockAddrZeroHttp + "/state"
+	enterpriseLicenseURL := "http://" + testutil.SockAddrZeroHttp + "/enterpriseLicense"
 
 	t.Log()
 	var tests = []struct {
