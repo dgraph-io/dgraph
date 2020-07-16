@@ -24,7 +24,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
+
+	"github.com/golang/glog"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/dgrijalva/jwt-go/v4"
 	"github.com/pkg/errors"
@@ -87,12 +91,47 @@ func Parse(schema string) (AuthMeta, error) {
 	authInfo := schema[authInfoIdx:]
 
 	err := json.Unmarshal([]byte(authInfo[len(AuthMetaHeader):]), &meta)
-	if err != nil {
-		return meta, fmt.Errorf("Unable to parse Dgraph.Authorization. " +
-			"It may be that you are using the pre-release syntax. " +
-			"Please check the correct syntax at https://graphql.dgraph.io/authorization/")
+	if err == nil {
+		return meta, meta.validate()
 	}
-	return meta, meta.validate()
+
+	glog.Warningln("Falling back to parsing `Dgraph.Authorization` in old format." +
+		" Please check the updated syntax at https://graphql.dgraph.io/authorization/")
+	// Note: This is the old format for passing authorization information and this code
+	// is there to maintain backward compatibility. It may be removed in future release.
+
+	// This regex matches authorization information present in the last line of the schema.
+	// Format: # Dgraph.Authorization <HTTP header> <Claim namespace> <Algorithm> "<verification key>"
+	// Example: # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// On successful regex match the index for the following strings will be returned.
+	// [0][0]:[0][1] : # Dgraph.Authorization X-Test-Auth https://xyz.io/jwt/claims HS256 "secretkey"
+	// [0][2]:[0][3] : Authorization, [0][4]:[0][5] : X-Test-Auth,
+	// [0][6]:[0][7] : https://xyz.io/jwt/claims,
+	// [0][8]:[0][9] : HS256, [0][10]:[0][11] : secretkey
+	authMetaRegex, err :=
+		regexp.Compile(`^#[\s]([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+([^\s]+)[\s]+"([^\"]+)"`)
+	if err != nil {
+		return meta, gqlerror.Errorf("JWT parsing failed: %v", err)
+	}
+
+	idx := authMetaRegex.FindAllStringSubmatchIndex(authInfo, -1)
+	if len(idx) != 1 || len(idx[0]) != 12 ||
+		!strings.HasPrefix(authInfo, authInfo[idx[0][0]:idx[0][1]]) {
+		return meta, gqlerror.Errorf("Invalid `Dgraph.Authorization` format: %s", authInfo)
+	}
+
+	meta.Header = authInfo[idx[0][4]:idx[0][5]]
+	meta.Namespace = authInfo[idx[0][6]:idx[0][7]]
+	meta.Algo = authInfo[idx[0][8]:idx[0][9]]
+	meta.VerificationKey = authInfo[idx[0][10]:idx[0][11]]
+	if meta.Algo == HMAC256 {
+		return meta, nil
+	}
+	if meta.Algo != RSA256 {
+		return meta, errors.Errorf(
+			"invalid jwt algorithm: found %s, but supported options are HS256 or RS256", meta.Algo)
+	}
+	return meta, nil
 }
 
 func ParseAuthMeta(schema string) error {
