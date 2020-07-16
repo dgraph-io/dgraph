@@ -181,6 +181,11 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		handler = grandpa.NewMessageHandler(nil, stateSrvc.Block)
 	}
 
+	threshold, ok := cfg.Core.BabeThreshold.(*big.Int)
+	if !ok && threshold != nil {
+		return nil, errors.New("invalid BabeThreshold in configuration")
+	}
+
 	// set core configuration
 	coreConfig := &core.Config{
 		LogLvl:                  lvl,
@@ -197,6 +202,7 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		IsBlockProducer:         cfg.Core.BabeAuthority,
 		IsFinalityAuthority:     cfg.Core.GrandpaAuthority,
 		SyncChan:                syncChan,
+		BabeThreshold:           threshold,
 	}
 
 	// create new core service

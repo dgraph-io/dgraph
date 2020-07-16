@@ -97,8 +97,9 @@ type Config struct {
 	IsFinalityAuthority     bool
 	ConsensusMessageHandler ConsensusMessageHandler
 
-	NewBlocks chan types.Block // only used for testing purposes
-	Verifier  Verifier         // only used for testing purposes
+	NewBlocks     chan types.Block // only used for testing purposes
+	Verifier      Verifier         // only used for testing purposes
+	BabeThreshold *big.Int         // used by Verifier, for development purposes
 
 	MsgRec   <-chan network.Message
 	MsgSend  chan<- network.Message
@@ -191,10 +192,20 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, err
 	}
 
+	var threshold *big.Int
+	if cfg.BabeThreshold != nil {
+		threshold = cfg.BabeThreshold
+	} else {
+		threshold, err = babe.CalculateThreshold(babeCfg.C1, babeCfg.C2, len(babeCfg.GenesisAuthorities))
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	descriptor := &babe.EpochDescriptor{
 		AuthorityData: ad,
 		Randomness:    babeCfg.Randomness,
-		Threshold:     babe.MaxThreshold, // TODO: calculate threshold from config, however also need to have dev options for setting max and min
+		Threshold:     threshold,
 	}
 
 	if cfg.Verifier == nil {
@@ -204,6 +215,8 @@ func NewService(cfg *Config) (*Service, error) {
 			return nil, err
 		}
 	}
+
+	log.Info("verifier", "threshold", threshold)
 
 	srv.started.Store(false)
 

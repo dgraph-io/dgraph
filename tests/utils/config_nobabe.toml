@@ -18,6 +18,7 @@ authority = true
 roles = 4
 babe-authority = false
 grandpa-authority = true
+babe-threshold = "max"
 
 [network]
 bootnodes = []

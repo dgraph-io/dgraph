@@ -349,7 +349,7 @@ func (bs *BlockState) GetFinalizedHash(round uint64) (common.Hash, error) {
 
 	// round that is being queried for has not yet finalized
 	if round > r {
-		return common.Hash{}, nil
+		return common.Hash{}, fmt.Errorf("round not yet finalized")
 	}
 
 	h, err := bs.db.Get(finalizedHashKey(round))

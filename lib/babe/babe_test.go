@@ -126,7 +126,7 @@ func TestCalculateThreshold(t *testing.T) {
 
 	expected := new(big.Int).Lsh(big.NewInt(1), 256)
 
-	threshold, err := calculateThreshold(C1, C2, 3)
+	threshold, err := CalculateThreshold(C1, C2, 3)
 	require.NoError(t, err)
 
 	if threshold.Cmp(expected) != 0 {
@@ -145,7 +145,7 @@ func TestCalculateThreshold(t *testing.T) {
 	q := new(big.Int).Lsh(big.NewInt(1), 256)
 	expected = q.Mul(q, p_rat.Num()).Div(q, p_rat.Denom())
 
-	threshold, err = calculateThreshold(C1, C2, 3)
+	threshold, err = CalculateThreshold(C1, C2, 3)
 	require.NoError(t, err)
 
 	if threshold.Cmp(expected) != 0 {
@@ -157,7 +157,7 @@ func TestCalculateThreshold_Failing(t *testing.T) {
 	var C1 uint64 = 5
 	var C2 uint64 = 4
 
-	_, err := calculateThreshold(C1, C2, 3)
+	_, err := CalculateThreshold(C1, C2, 3)
 	if err == nil {
 		t.Fatal("Fail: did not err for c>1")
 	}
