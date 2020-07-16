@@ -20,14 +20,13 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/ChainSafe/gossamer/dot/rpc/modules"
-	"github.com/ChainSafe/gossamer/dot/types"
+	log "github.com/ChainSafe/log15"
 	"github.com/gorilla/mux"
 	"github.com/gorilla/rpc/v2"
 	"github.com/gorilla/websocket"
-
-	log "github.com/ChainSafe/log15"
 )
 
 // HTTPServer gateway for RPC server
@@ -35,8 +34,7 @@ type HTTPServer struct {
 	logger       log.Logger
 	rpcServer    *rpc.Server // Actual RPC call handler
 	serverConfig *HTTPServerConfig
-	blockChan    chan *types.Block
-	chanID       byte // channel ID
+	wsConns      []*WSConn
 }
 
 // HTTPServerConfig configures the HTTPServer
@@ -56,18 +54,25 @@ type HTTPServerConfig struct {
 	WSEnabled           bool
 	WSPort              uint32
 	Modules             []string
-	WSSubscriptions     map[uint32]*WebSocketSubscription
 }
 
-// WebSocketSubscription holds subscription details
-type WebSocketSubscription struct {
-	WSConnection     *websocket.Conn
-	SubscriptionType int
+// WSConn struct to hold WebSocket Connection references
+type WSConn struct {
+	wsconn             *websocket.Conn
+	mu                 sync.Mutex
+	blockSubChannels   map[int]byte
+	storageSubChannels map[int]byte
+	qtyListeners       int
+	subscriptions      map[int]Listener
+	storageAPI         modules.StorageAPI
+	blockAPI           modules.BlockAPI
 }
+
+var logger log.Logger
 
 // NewHTTPServer creates a new http server and registers an associated rpc server
 func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
-	logger := log.New("pkg", "rpc")
+	logger = log.New("pkg", "rpc")
 	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
 	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
 
@@ -75,10 +80,6 @@ func NewHTTPServer(cfg *HTTPServerConfig) *HTTPServer {
 		logger:       logger,
 		rpcServer:    rpc.NewServer(),
 		serverConfig: cfg,
-	}
-
-	if cfg.WSSubscriptions == nil {
-		cfg.WSSubscriptions = make(map[uint32]*WebSocketSubscription)
 	}
 
 	server.RegisterModules(cfg.Modules)
@@ -151,25 +152,30 @@ func (h *HTTPServer) Start() error {
 		}
 	}()
 
-	// init and start block received listener routine
-	if h.serverConfig.BlockAPI != nil {
-		var err error
-		h.blockChan = make(chan *types.Block)
-		h.chanID, err = h.serverConfig.BlockAPI.RegisterImportedChannel(h.blockChan)
-		if err != nil {
-			return err
-		}
-		go h.blockReceivedListener()
-	}
-
 	return nil
 }
 
 // Stop stops the server
 func (h *HTTPServer) Stop() error {
 	if h.serverConfig.WSEnabled {
-		h.serverConfig.BlockAPI.UnregisterImportedChannel(h.chanID)
-		close(h.blockChan)
+		// close all channels and websocket connections
+		for _, conn := range h.wsConns {
+			for _, sub := range conn.subscriptions {
+				switch v := sub.(type) {
+				case *StorageChangeListener:
+					h.serverConfig.StorageAPI.UnregisterStorageChangeChannel(v.chanID)
+					close(v.channel)
+				case *BlockListener:
+					h.serverConfig.BlockAPI.UnregisterImportedChannel(v.chanID)
+					close(v.channel)
+				}
+			}
+
+			err := conn.wsconn.Close()
+			if err != nil {
+				h.logger.Error("error closing websocket connection", "error", err)
+			}
+		}
 	}
 	return nil
 }

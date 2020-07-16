@@ -17,12 +17,16 @@
 package dot
 
 import (
+	"flag"
 	"math/big"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 	"github.com/ChainSafe/gossamer/lib/utils"
+	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
 
@@ -228,4 +232,76 @@ func TestCreateGrandpaService(t *testing.T) {
 	gs, err := createGRANDPAService(cfg, rt, stateSrvc, ks)
 	require.NoError(t, err)
 	require.NotNil(t, gs)
+}
+
+var addr = flag.String("addr", "localhost:8546", "http service address")
+var testCalls = []struct {
+	call     []byte
+	expected []byte
+}{
+	{[]byte(`{"jsonrpc":"2.0","method":"system_name","params":[],"id":1}`), []byte(`{"id":1,"jsonrpc":"2.0","result":"gossamer"}` + "\n")},                                                            // working request
+	{[]byte(`{"jsonrpc":"2.0","method":"unknown","params":[],"id":2}`), []byte(`{"error":{"code":-32000,"data":null,"message":"rpc error method unknown not found"},"id":2,"jsonrpc":"2.0"}` + "\n")}, // unknown method
+	{[]byte{}, []byte(`{"jsonrpc":"2.0","error":{"code":-32600,"message":"Invalid request"},"id":0}` + "\n")},                                                                                         // empty request
+	{[]byte(`{"jsonrpc":"2.0","method":"chain_subscribeNewHeads","params":[],"id":3}`), []byte(`{"jsonrpc":"2.0","result":1,"id":3}` + "\n")},
+	{[]byte(`{"jsonrpc":"2.0","method":"state_subscribeStorage","params":[],"id":4}`), []byte(`{"jsonrpc":"2.0","result":2,"id":4}` + "\n")},
+}
+
+func TestNewWebSocketServer(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Core.Authority = false
+	cfg.Core.BabeAuthority = false
+	cfg.Core.GrandpaAuthority = false
+	cfg.Init.Genesis = genFile.Name()
+	cfg.RPC.WSEnabled = true
+	cfg.System.SystemName = "gossamer"
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	stateSrvc, err := createStateService(cfg)
+	require.Nil(t, err)
+
+	coreMsgs := make(chan network.Message)
+	networkMsgs := make(chan network.Message)
+
+	ks := keystore.NewKeystore()
+	rt, err := createRuntime(cfg, stateSrvc, ks)
+	require.NoError(t, err)
+
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
+	require.Nil(t, err)
+
+	networkSrvc := &network.Service{}
+
+	sysSrvc := createSystemService(&cfg.System)
+
+	rpcSrvc, err := createRPCService(cfg, stateSrvc, coreSrvc, networkSrvc, nil, rt, sysSrvc)
+	require.Nil(t, err)
+
+	err = rpcSrvc.Start()
+	require.Nil(t, err)
+
+	time.Sleep(time.Second) // give server a second to start
+
+	u := url.URL{Scheme: "ws", Host: *addr, Path: "/"}
+
+	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	require.NoError(t, err)
+	defer c.Close()
+
+	for _, item := range testCalls {
+		err = c.WriteMessage(websocket.TextMessage, item.call)
+		require.Nil(t, err)
+
+		_, message, err := c.ReadMessage()
+		require.Nil(t, err)
+		require.Equal(t, item.expected, message)
+	}
 }

@@ -3,6 +3,7 @@ package modules
 import (
 	"math/big"
 
+	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 	"github.com/ChainSafe/gossamer/lib/crypto"
@@ -14,6 +15,8 @@ import (
 type StorageAPI interface {
 	GetStorage(key []byte) ([]byte, error)
 	Entries() map[string][]byte
+	RegisterStorageChangeChannel(ch chan<- *state.KeyValue) (byte, error)
+	UnregisterStorageChangeChannel(id byte)
 }
 
 // BlockAPI is the interface for the block state
