@@ -64,8 +64,7 @@ GOVERSION="1.14.4"
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
 # The initial slash is taken from the repository name dgraph/dgraph:tag
-DTAG=$(echo "$TAG" | tr '/' '-')
-
+DOCKER_TAG=${DOCKER_TAG:-$(echo "$TAG" | tr '/' '-')}
 
 (
     cd "$repodir"
@@ -215,9 +214,14 @@ createSum linux
 # Create Docker image.
 cp $basedir/dgraph/contrib/Dockerfile $TMP
 pushd $TMP
-  docker build -t dgraph/dgraph:$DTAG .
+  docker build -t dgraph/dgraph:$DOCKER_TAG .
 popd
 rm $TMP/Dockerfile
+
+# TODO Create Docker standalone image
+pushd $basedir/dgraph/contrib/standalone
+  make DGRAPH_VERSION=$DOCKER_TAG
+popd
 
 # Create the tar and delete the binaries.
 createTar () {
@@ -244,7 +248,7 @@ createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
-docker run -it dgraph/dgraph:$DTAG dgraph
+docker run -it dgraph/dgraph:$DOCKER_TAG dgraph
 ls -alh $TMP
 
 set +o xtrace
@@ -256,9 +260,9 @@ if git show-ref -q --verify "refs/tags/$TAG"; then
 fi
 echo
 echo "Push the Docker tag:"
-echo "  docker push dgraph/dgraph:$DTAG"
+echo "  docker push dgraph/dgraph:$DOCKER_TAG"
 echo
 echo "If this should be the latest release, then tag"
 echo "the image as latest too."
-echo "  docker tag dgraph/dgraph:$DTAG dgraph/dgraph:latest"
+echo "  docker tag dgraph/dgraph:$DOCKER_TAG dgraph/dgraph:latest"
 echo "  docker push dgraph/dgraph:latest"
