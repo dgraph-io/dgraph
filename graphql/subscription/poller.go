@@ -191,8 +191,12 @@ func (p *Poller) poll(req *pollRequest) {
 				return
 			}
 			for _, subscriber := range subscribers {
-				if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
+				expiry, err := jwt.ParseTime(subscriber.expiry)
+				if err != nil {
+
+					if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+						p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
+					}
 				}
 			}
 			p.Unlock()
@@ -208,12 +212,15 @@ func (p *Poller) poll(req *pollRequest) {
 			p.Unlock()
 			return
 		}
+
 		for _, subscriber := range subscribers {
-			if !time.Unix(subscriber.expiry, 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
+			expiry, err := jwt.ParseTime(subscriber.expiry)
+			if err != nil {
+				if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
+				}
 			}
 		}
-
 		for _, subscriber := range subscribers {
 			subscriber.updateCh <- res.Output()
 		}
