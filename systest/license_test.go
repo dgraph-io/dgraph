@@ -1,4 +1,4 @@
-package zero
+package main
 
 import (
 	"bytes"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/dgraph-io/dgraph/testutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -61,9 +62,10 @@ type responseStruct struct {
 
 func TestEnterpriseLicense(t *testing.T) {
 
-	stateURL := "http://localhost:6080/state"
-	enterpriseLicenseURL := "http://localhost:6080/enterpriseLicense"
+	stateURL := testutil.SockAddrZeroHttp + "/state"
+	enterpriseLicenseURL := testutil.SockAddrZeroHttp + "/enterpriseLicense"
 
+	t.Log()
 	var tests = []struct {
 		name           string
 		licenseKey     []byte
@@ -100,7 +102,6 @@ func TestEnterpriseLicense(t *testing.T) {
 	for _, tt := range tests {
 
 		// Apply the license
-		t.Logf("Running: %s\n", tt.name)
 		response, err := http.Post(enterpriseLicenseURL, "application/text", bytes.NewBuffer(tt.licenseKey))
 		require.NoError(t, err)
 
