@@ -27,6 +27,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/golang/glog"
 	"github.com/vektah/gqlparser/v2/gqlerror"
 
 	"github.com/dgrijalva/jwt-go/v4"
@@ -94,7 +95,7 @@ func Parse(schema string) (AuthMeta, error) {
 		return meta, meta.validate()
 	}
 
-	fmt.Println("Falling back to parsing `Dgraph.Authorization` in old format." +
+	glog.Warningln("Falling back to parsing `Dgraph.Authorization` in old format." +
 		" Please check the updated syntax at https://graphql.dgraph.io/authorization/")
 	// Note: This is the old format for passing authorization information and this code
 	// is there to maintain backward compatibility. It may be removed in future release.
