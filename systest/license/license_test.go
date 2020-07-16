@@ -90,10 +90,9 @@ type responseStruct struct {
 }
 
 func TestEnterpriseLicense(t *testing.T) {
-	t.Log("Running TestEnterpriseLicense\n")
 
-	stateURL := "http://localhost:6281/state"
-	enterpriseLicenseURL := "http://localhost:6281/enterpriseLicense"
+	stateURL := "http://localhost:6180/state"
+	enterpriseLicenseURL := "http://localhost:6180/enterpriseLicense"
 
 	var tests = []struct {
 		name       string
@@ -154,7 +153,7 @@ func TestEnterpriseLicense(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Equal(t, stateResponse.License["user"], tt.user)
-			require.Equal(t, stateResponse.License["enabled"], nil)
+			require.Equal(t, stateResponse.License["enabled"], false)
 		} else {
 			// check the error message in case the license is not applied
 			require.Equal(t, enterpriseResponse.Errors[0].Message, tt.message)
