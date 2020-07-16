@@ -98,7 +98,7 @@ func TestEnterpriseLicense(t *testing.T) {
 			invalidKey,
 			``,
 			``,
-			`while extracting enterprise details from the license: while reading PGP message from license file: openpgp: unsupported feature: public key version`,
+			`while extracting enterprise detls from the license: while reading PGP message from license file: openpgp: unsupported feature: public key version`,
 		},
 		{
 			"Using empty entrerprise license key should return an error",
