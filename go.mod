@@ -68,5 +68,5 @@ require (
 	gopkg.in/DataDog/dd-trace-go.v1 v1.13.1 // indirect
 	gopkg.in/ini.v1 v1.48.0 // indirect
 	gopkg.in/yaml.v2 v2.2.4
-	src.techknowlogick.com/xgo v0.0.0-20200714173810-96de19c19b14 // indirect
+	src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14 // indirect
 )

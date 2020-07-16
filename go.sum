@@ -581,3 +581,5 @@ src.techknowlogick.com/xgo v0.0.0-20200602060627-a09175ea9056 h1:9XYMVs36yGHbSNs
 src.techknowlogick.com/xgo v0.0.0-20200602060627-a09175ea9056/go.mod h1:31CE1YKtDOrKTk9PSnjTpe6YbO6W/0LTYZ1VskL09oU=
 src.techknowlogick.com/xgo v0.0.0-20200714173810-96de19c19b14 h1:xtoylAc6hVBtbENQrtVXO95FPCGXewwtCQBZbVUM8EQ=
 src.techknowlogick.com/xgo v0.0.0-20200714173810-96de19c19b14/go.mod h1:31CE1YKtDOrKTk9PSnjTpe6YbO6W/0LTYZ1VskL09oU=
+src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14 h1:e8P02bjvCTmi33s1MoinoTwMwrCq7+omCS3/3+GZWXA=
+src.techknowlogick.com/xgo v1.0.1-0.20200714173810-96de19c19b14/go.mod h1:31CE1YKtDOrKTk9PSnjTpe6YbO6W/0LTYZ1VskL09oU=
