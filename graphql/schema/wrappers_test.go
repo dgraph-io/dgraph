@@ -980,11 +980,26 @@ func TestParseSecrets(t *testing.T) {
 			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
+			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
+				"STRIPE_API_KEY": "stripe-api-key-value"},
+			"X-Test-Dgraph",
+			nil,
+		},
+		{
+			"Dgraph.Authorization old format error",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Secret  "GITHUB_API_TOKEN"   "some-super-secret-token"
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims "key"
+			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+			`,
 			nil,
 			"",
-			errors.New("Unable to parse Dgraph.Authorization. " +
-				"It may be that you are using the pre-release syntax. " +
-				"Please check the correct syntax at https://graphql.dgraph.io/authorization/"),
+			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
 		},
 		{
 			"should throw an error if multiple authorization values are specified",
