@@ -1,0 +1,36 @@
+# Auto-generated with: [compose -a 1 -z 1 -w]
+#
+version: "3.5"
+services:
+  alpha1:
+    image: dgraph/dgraph:latest
+    container_name: alpha1
+    working_dir: /data/alpha1
+    labels:
+      cluster: test
+    ports:
+    - 8281:8281
+    - 9281:9281
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph alpha -o 201 --my=alpha1:7281 --lru_mb=1024 --zero=zero1:5281
+  zero1:
+    image: dgraph/dgraph:latest
+    container_name: zero1
+    working_dir: /data/zero1
+    labels:
+      cluster: test
+    ports:
+    - 5281:5281
+    - 6281:6281
+    volumes:
+    - type: bind
+      source: $GOPATH/bin
+      target: /gobin
+      read_only: true
+    command: /gobin/dgraph zero -o 201 --idx=1 --my=zero1:5281 --logtostderr -v=2
+      --bindall
+volumes: {}
