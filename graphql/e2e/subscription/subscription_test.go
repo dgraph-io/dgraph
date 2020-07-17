@@ -480,6 +480,7 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	//first subscription
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	fmt.Printf("expires new %+v\n", jwtToken)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
 			queryTodo{
@@ -504,6 +505,7 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	//2nd subscription
 	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
 	require.NoError(t, err)
+	fmt.Printf("expires new %+v\n", jwtToken)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
@@ -602,6 +604,221 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	 },
 	{
 	   "owner" : "jatin",
+	   "text" : "Dgraph is awesome!!"
+	}]}`, string(resp.Data))
+
+}
+
+func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
+	dg, err := testutil.DgraphClient(groupOnegRPC)
+	require.NoError(t, err)
+	testutil.DropAll(t, dg)
+
+	add := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schAuth},
+	}
+	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second * 2)
+
+	metaInfo := &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io",
+		Algo:      "HS256",
+		Header:    "Authorization",
+	}
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": "jatin",
+		"ROLE": "USER",
+	}
+	// for user jatin
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "GraphQL is exciting!!",
+                  owner : "jatin"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	require.NoError(t, err)
+
+	//first subscription
+	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{
+			queryTodo{
+                owner
+                text
+			}
+		}`,
+	}, payload)
+	require.Nil(t, err)
+
+	res, err := subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	var resp common.GraphQLResponse
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Errors)
+	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
+
+	// for user pawan
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "GraphQL is exciting!!",
+                  owner : "pawan"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	//2nd subscription
+	metaInfo.AuthVars["USER"] = "pawan"
+	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
+	require.NoError(t, err)
+	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
+		Query: `subscription{
+			queryTodo{
+                owner
+                text
+			}
+		}`,
+	}, payload)
+	require.Nil(t, err)
+
+	res, err = subscriptionClient1.RecvMsg()
+	require.NoError(t, err)
+
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Errors)
+	require.JSONEq(t, `{"queryTodo":[{"owner":"pawan","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
+
+	//add delay for 1st subscription to timeout
+	// Wait for JWT to expire.
+	time.Sleep(10 * time.Second)
+
+	// Add another TODO for jatin which we should get in the latest update.
+	add = &common.GraphQLParams{
+		Query: `mutation{
+	         addTodo(input: [
+	            {text : "Dgraph is awesome!!",
+	             owner : "jatin"}
+	          ])
+	        {
+	          todo {
+	               text
+	               owner
+	          }
+	      }
+	    }`,
+	}
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	res, err = subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+	require.Nil(t, resp.Errors)
+	//1st subscription should not get the update
+	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
+
+	// Add another TODO for pawan which we should get in the latest update.
+	add = &common.GraphQLParams{
+		Query: `mutation{
+	         addTodo(input: [
+	            {text : "Dgraph is awesome!!",
+	             owner : "pawan"}
+	          ])
+	        {
+	          todo {
+	               text
+	               owner
+	          }
+	      }
+	    }`,
+	}
+	res, err = subscriptionClient1.RecvMsg()
+	require.NoError(t, err)
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+	//2nd one still running and should get the  update
+	require.JSONEq(t, `{"queryTodo": [
+	 {
+	   "owner": "pawan",
+	   "text": "GraphQL is exciting!!"
+	 },
+	{
+	   "owner" : "pawan",
+	   "text" : "Dgraph is awesome!!"
+	}]}`, string(resp.Data))
+
+	//add delay for 2nd subscription  to timeout
+	// Wait for JWT to expire.
+	time.Sleep(10 * time.Second)
+	// Add another TODO for pawan which we should get in the latest update.
+	add = &common.GraphQLParams{
+		Query: `mutation{
+	         addTodo(input: [
+	            {text : "Graph Database is the future!!",
+	             owner : "pawan"}
+	          ])
+	        {
+	          todo {
+	               text
+	               owner
+	          }
+	      }
+	    }`,
+	}
+
+	res, err = subscriptionClient1.RecvMsg()
+	require.NoError(t, err)
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+	//2nd one shouldn't get the  update because it has ended
+	require.JSONEq(t, `{"queryTodo": [
+	 {
+	   "owner": "pawan",
+	   "text": "GraphQL is exciting!!"
+	 },
+	{
+	   "owner" : "pawan",
 	   "text" : "Dgraph is awesome!!"
 	}]}`, string(resp.Data))
 
