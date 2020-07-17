@@ -434,7 +434,7 @@ func getQueryEmptyVariable(t *testing.T) {
 
 // Execute takes a HTTP request from either ExecuteAsPost or ExecuteAsGet
 // and executes the request
-func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLResponse {
+func (params *GraphQLParams) Execute(t require.TestingT, req *http.Request) *GraphQLResponse {
 	for h := range params.Headers {
 		req.Header.Set(h, params.Headers.Get(h))
 	}
@@ -455,7 +455,7 @@ func (params *GraphQLParams) Execute(t *testing.T, req *http.Request) *GraphQLRe
 
 // ExecuteAsPost builds a HTTP POST request from the GraphQL input structure
 // and executes the request to url.
-func (params *GraphQLParams) ExecuteAsPost(t *testing.T, url string) *GraphQLResponse {
+func (params *GraphQLParams) ExecuteAsPost(t require.TestingT, url string) *GraphQLResponse {
 	req, err := params.createGQLPost(url)
 	require.NoError(t, err)
 
