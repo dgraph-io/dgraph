@@ -19,6 +19,7 @@ roles = 4
 babe-authority = true
 grandpa-authority = true
 babe-threshold = "max"
+slot-duration = 500
 
 [network]
 bootnodes = []

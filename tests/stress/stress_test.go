@@ -122,3 +122,38 @@ func TestSync_SingleBlockProducer(t *testing.T) {
 		time.Sleep(time.Second)
 	}
 }
+
+func TestSync_SingleSyncingNode(t *testing.T) {
+	numNodes = 2
+	utils.SetLogLevel(log.LvlInfo)
+
+	// start block producing node
+	tmpdir, err := ioutil.TempDir("", "gossamer-stress-alice")
+	require.NoError(t, err)
+	defer os.Remove(tmpdir)
+	alice, err := utils.RunGossamer(t, 0, tmpdir, utils.GenesisDefault, utils.ConfigBABEMaxThreshold)
+	require.NoError(t, err)
+
+	time.Sleep(time.Second * 15)
+
+	// start syncing node
+	tmpdir, err = ioutil.TempDir("", "gossamer-stress-bob")
+	require.NoError(t, err)
+	defer os.Remove(tmpdir)
+	bob, err := utils.RunGossamer(t, 1, tmpdir, utils.GenesisDefault, utils.ConfigNoBABE)
+	require.NoError(t, err)
+
+	nodes := []*utils.Node{alice, bob}
+	defer func() {
+		errList := utils.TearDown(t, nodes)
+		require.Len(t, errList, 0)
+	}()
+
+	numCmps := 30
+	for i := 0; i < numCmps; i++ {
+		t.Log("comparing...", i)
+		err = compareBlocksByNumberWithRetry(t, nodes, strconv.Itoa(i))
+		require.NoError(t, err, i)
+		time.Sleep(time.Second)
+	}
+}

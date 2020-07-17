@@ -38,7 +38,7 @@ import (
 
 var _ services.Service = &Service{}
 
-var maxResponseSize int64 = 8 // maximum number of block datas to reply with in a BlockResponse message.
+var maxResponseSize int64 = 12 // maximum number of block datas to reply with in a BlockResponse message.
 
 // Service is an overhead layer that allows communication between the runtime,
 // BABE session, and network service. It deals with the validation of transactions
