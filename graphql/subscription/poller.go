@@ -19,12 +19,11 @@ package subscription
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/dgrijalva/jwt-go/v4"
 
 	"github.com/dgraph-io/dgraph/graphql/authorization"
 	"github.com/dgraph-io/dgraph/graphql/resolve"
@@ -60,7 +59,7 @@ type SubscriberResponse struct {
 }
 
 type subscriber struct {
-	expiry         int64
+	expiry         time.Time
 	updateCh       chan interface{}
 	subscriptionID uint64
 }
@@ -114,7 +113,7 @@ func (p *Poller) AddSubscriber(
 	glog.Infof("Subscription polling is started for the ID %d", subscriptionID)
 
 	subscriptions[subscriptionID] = subscriber{
-		(customClaims.StandardClaims.ExpiresAt.Unix()), updateCh, subscriptionID}
+		expiry: customClaims.StandardClaims.ExpiresAt.Time, updateCh: updateCh, subscriptionID: subscriptionID}
 	p.pollRegistry[bucketID] = subscriptions
 
 	if len(subscriptions) != 1 {
@@ -189,11 +188,8 @@ func (p *Poller) poll(req *pollRequest) error {
 				return nil
 			}
 			for _, subscriber := range subscribers {
-				expiry, err := jwt.ParseTime(subscriber.expiry)
-				if err != nil {
-					return err
-				}
-				if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+				fmt.Printf("%+v,%+v\n", subscriber.expiry, subscriber.expiry.IsZero())
+				if !subscriber.expiry.IsZero() && time.Now().After(subscriber.expiry) {
 					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 				}
 
@@ -213,13 +209,11 @@ func (p *Poller) poll(req *pollRequest) error {
 		}
 
 		for _, subscriber := range subscribers {
-			expiry, err := jwt.ParseTime(subscriber.expiry)
-			if err != nil {
-				return err
-			}
-			if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+			fmt.Printf("%+v,%+v\n", subscriber.expiry, subscriber.expiry.IsZero())
+			if !subscriber.expiry.IsZero() && time.Now().After(subscriber.expiry) {
 				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 			}
+
 		}
 		for _, subscriber := range subscribers {
 			subscriber.updateCh <- res.Output()
