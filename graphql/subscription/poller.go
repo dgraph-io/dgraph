@@ -71,10 +71,6 @@ func (p *Poller) AddSubscriber(
 	req *schema.Request, customClaims *authorization.CustomClaims) (*SubscriberResponse, error) {
 
 	localEpoch := atomic.LoadUint64(p.globalEpoch)
-	if customClaims == nil {
-		customClaims = &authorization.CustomClaims{}
-		customClaims.ExpiresAt = jwt.NewTime(float64(time.Time{}.Unix()))
-	}
 	err := p.resolver.ValidateSubscription(req)
 	if err != nil {
 		return nil, err
@@ -85,9 +81,11 @@ func (p *Poller) AddSubscriber(
 	var bucketID uint64
 	if customClaims.AuthVariables != nil {
 
-		//ToDo-Add custom marshal function that marshal's the json in sorted order.
+		// TODO - Add custom marshal function that marshal's the json in sorted order.
 		authvariables, err := json.Marshal(customClaims.AuthVariables)
-		x.Check(err)
+		if err != nil {
+			return nil, err
+		}
 		bucketID = farm.Fingerprint64(append(buf, authvariables...))
 	} else {
 		bucketID = farm.Fingerprint64(buf)
@@ -156,7 +154,7 @@ type pollRequest struct {
 	authVariables map[string]interface{}
 }
 
-func (p *Poller) poll(req *pollRequest) {
+func (p *Poller) poll(req *pollRequest) error {
 	resolver := p.resolver
 	pollID := uint64(0)
 	for {
@@ -169,7 +167,7 @@ func (p *Poller) poll(req *pollRequest) {
 			// We'll terminate all the subscription for this bucket. So, that all client can
 			// reconnect and listen for new schema.
 			p.terminateSubscriptions(req.bucketID)
-			return
+			return nil
 		}
 
 		ctx := context.WithValue(context.Background(), authorization.AuthVariables, req.authVariables)
@@ -188,16 +186,17 @@ func (p *Poller) poll(req *pollRequest) {
 			subscribers, ok := p.pollRegistry[req.bucketID]
 			if !ok || len(subscribers) == 0 {
 				p.Unlock()
-				return
+				return nil
 			}
 			for _, subscriber := range subscribers {
 				expiry, err := jwt.ParseTime(subscriber.expiry)
 				if err != nil {
-
-					if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-						p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
-					}
+					return err
 				}
+				if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
+				}
+
 			}
 			p.Unlock()
 			continue
@@ -210,15 +209,16 @@ func (p *Poller) poll(req *pollRequest) {
 			// There is no subscribers to push the update. So, kill the current polling
 			// go routine.
 			p.Unlock()
-			return
+			return nil
 		}
 
 		for _, subscriber := range subscribers {
 			expiry, err := jwt.ParseTime(subscriber.expiry)
 			if err != nil {
-				if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
-					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
-				}
+				return err
+			}
+			if !time.Unix(expiry.Unix(), 0).IsZero() && time.Now().Unix() >= subscriber.expiry {
+				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 			}
 		}
 		for _, subscriber := range subscribers {

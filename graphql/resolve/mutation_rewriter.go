@@ -361,10 +361,9 @@ func (mrw *AddRewriter) FromMutationResult(
 	if err != nil {
 		return nil, err
 	}
-	authVariables := customClaims.AuthVariables
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
@@ -416,10 +415,9 @@ func (urw *UpdateRewriter) Rewrite(
 	if err != nil {
 		return nil, err
 	}
-	authVariables := customClaims.AuthVariables
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		selector:      updateAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
@@ -564,10 +562,9 @@ func (urw *UpdateRewriter) FromMutationResult(
 	if err != nil {
 		return nil, err
 	}
-	authVariables := customClaims.AuthVariables
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
@@ -689,10 +686,9 @@ func (drw *deleteRewriter) Rewrite(
 	if err != nil {
 		return nil, err
 	}
-	authVariables := customClaims.AuthVariables
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		selector:      deleteAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
@@ -750,7 +746,7 @@ func (drw *deleteRewriter) Rewrite(
 	// is later added to delete mutation result.
 	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
 		queryAuthRw := &authRewriter{
-			authVariables: authVariables,
+			authVariables: customClaims.AuthVariables,
 			varGen:        varGen,
 			selector:      queryAuthSelector,
 			filterByUid:   true,
@@ -1508,10 +1504,9 @@ func addDelete(
 			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))
 		return
 	}
-	authVariables := customClaims.AuthVariables
 
 	newRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		varName:       targetVar,
 		selector:      updateAuthSelector,

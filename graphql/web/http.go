@@ -20,9 +20,10 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"strconv"
-
+	"github.com/dgrijalva/jwt-go/v4"
 	"google.golang.org/grpc/metadata"
+	"strconv"
+	"time"
 
 	"io"
 	"io/ioutil"
@@ -123,29 +124,35 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
+	//library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
+	//And we are extracting the Auth JWT from those and passing them along.
+
 	header, _ := ctx.Value("Header").(json.RawMessage)
-	var customClaim *authorization.CustomClaims
-	if header != nil {
+	var customClaims *authorization.CustomClaims
+	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
 			return nil, err
 		}
 
 		name := authorization.GetHeader()
-		val, ok := payload[name]
+		val, ok := payload[name].(string)
 		if ok {
-			md, ok := metadata.FromIncomingContext(ctx)
-			if !ok {
-				md = metadata.New(nil)
-			}
 
-			md.Append("authorizationJwt", val.(string))
+			md := metadata.New(map[string]string{
+				"authorizationJwt": val,
+			})
 			ctx = metadata.NewIncomingContext(ctx, md)
 
-			customClaim, err = authorization.ExtractCustomClaims(ctx)
+			customClaims, err = authorization.ExtractCustomClaims(ctx)
 			if err != nil {
 				return nil, err
 			}
+		}
+	}
+	if customClaims == nil {
+		customClaims = &authorization.CustomClaims{
+			StandardClaims: jwt.StandardClaims{ExpiresAt: jwt.NewTime(float64(time.Time{}.Unix()))},
 		}
 	}
 
@@ -155,7 +162,7 @@ func (gs *graphqlSubscription) Subscribe(
 		Variables:     variableValues,
 	}
 
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaim)
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaims)
 	if err != nil {
 		return nil, err
 	}

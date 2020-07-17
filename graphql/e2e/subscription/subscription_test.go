@@ -53,7 +53,7 @@ const (
 		rating: Int @search
 	}
 	`
-	schauth = `
+	schAuth = `
 	type Todo @withSubscription @auth(
     	query: { rule: """
     		query ($USER: String!) {
@@ -63,16 +63,12 @@ const (
    			}"""
      	}
    ){
-     	id: ID!
+        id: ID!
     	text: String! @search(by: [term])
      	owner: String! @search(by: [hash])
    }
-   # Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
-	`
-)
-
-var (
-	metaInfo *testutil.AuthMeta
+# Dgraph.Authorization {"VerificationKey":"secret","Header":"Authorization","Namespace":"https://dgraph.io","Algo":"HS256"}
+`
 )
 
 func TestSubscription(t *testing.T) {
@@ -110,7 +106,7 @@ func TestSubscription(t *testing.T) {
 			  name
 			}
 		  }`,
-	}, "")
+	}, `{}`)
 	require.Nil(t, err)
 
 	res, err := subscriptionClient.RecvMsg()
@@ -188,15 +184,20 @@ func TestSubscriptionAuth(t *testing.T) {
 				}
 			}
 		}`,
-		Variables: map[string]interface{}{"$sch": schauth},
+		Variables: map[string]interface{}{"sch": schAuth},
 	}
 	addResult := add.ExecuteAsPost(t, adminEndpoint)
 	require.Nil(t, addResult.Errors)
-	metaInfo.AuthVars = map[string]interface{}{}
-	metaInfo.AuthVars["USER"] = "jatin"
-	metaInfo.AuthVars["ROLE"] = "USER"
-	metaInfo.AuthVars["exp"] = time.Now().Unix() + 600
-	jwtToken, err := metaInfo.GetSignedToken("./sample_private_key.pem")
+
+	metaInfo := &testutil.AuthMeta{}
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": "jatin",
+		"ROLE": "USER",
+		"var":  time.Now().Unix() + 600,
+	}
+	jwtToken, err := metaInfo.GetSignedToken("secret")
+	require.NoError(t, err)
+
 	h := make(http.Header)
 	h.Add(metaInfo.Header, jwtToken)
 	add = &common.GraphQLParams{
