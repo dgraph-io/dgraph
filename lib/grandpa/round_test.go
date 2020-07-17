@@ -28,6 +28,7 @@ import (
 	"github.com/ChainSafe/gossamer/lib/crypto/ed25519"
 	"github.com/ChainSafe/gossamer/lib/keystore"
 
+	log "github.com/ChainSafe/log15"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,10 +58,12 @@ func setupGrandpa(t *testing.T, kp *ed25519.Keypair) (*Service, chan FinalityMes
 		BlockState: st.Block,
 		Voters:     voters,
 		Keypair:    kp,
+		LogLvl:     log.LvlTrace,
 	}
 
 	gs, err := NewService(cfg)
 	require.NoError(t, err)
+	gs.stopped = false
 
 	return gs, gs.in, gs.out, gs.finalized
 }
@@ -238,6 +241,7 @@ func TestPlayGrandpaRound_BaseCase(t *testing.T) {
 	wg.Wait()
 
 	for _, fb := range finalized {
+		require.NotNil(t, fb)
 		require.GreaterOrEqual(t, len(fb.Justification), len(kr.Keys)/2)
 		finalized[0].Justification = []*Justification{}
 		fb.Justification = []*Justification{}
@@ -432,6 +436,7 @@ func TestPlayGrandpaRound_OneThirdEquivocating(t *testing.T) {
 	wg.Wait()
 
 	for _, fb := range finalized {
+		require.NotNil(t, fb)
 		require.GreaterOrEqual(t, len(fb.Justification), len(kr.Keys)/2)
 		finalized[0].Justification = []*Justification{}
 		fb.Justification = []*Justification{}

@@ -203,6 +203,14 @@ func (bt *BlockTree) deepestLeaf() *node { //nolint
 // DeepestBlockHash returns the hash of the deepest block in the blocktree
 // If there is multiple deepest blocks, it returns the one with the earliest arrival time.
 func (bt *BlockTree) DeepestBlockHash() Hash {
+	if bt.leaves == nil {
+		return Hash{}
+	}
+
+	if bt.leaves.deepestLeaf() == nil {
+		return Hash{}
+	}
+
 	return bt.leaves.deepestLeaf().hash
 }
 

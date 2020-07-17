@@ -32,7 +32,7 @@ type tracker struct {
 	in         chan *types.Block      // receive imported block from BlockState
 	chanID     byte                   // BlockState channel ID
 	out        chan<- FinalityMessage // send a VoteMessage back to grandpa. corresponds to grandpa's in channel
-	stopped    bool
+	stopped    chan struct{}
 }
 
 func newTracker(bs BlockState, out chan<- FinalityMessage) (*tracker, error) {
@@ -49,19 +49,18 @@ func newTracker(bs BlockState, out chan<- FinalityMessage) (*tracker, error) {
 		in:         in,
 		chanID:     id,
 		out:        out,
-		stopped:    true,
+		stopped:    make(chan struct{}),
 	}, nil
 }
 
 func (t *tracker) start() {
-	t.stopped = false
 	go t.handleBlocks()
 }
 
 func (t *tracker) stop() {
+	close(t.stopped)
 	t.blockState.UnregisterImportedChannel(t.chanID)
 	close(t.in)
-	t.stopped = true
 }
 
 func (t *tracker) add(v *VoteMessage) {
@@ -71,20 +70,25 @@ func (t *tracker) add(v *VoteMessage) {
 }
 
 func (t *tracker) handleBlocks() {
-	for b := range t.in {
-		if t.stopped {
+	for {
+		select {
+		case b := <-t.in:
+			if b == nil {
+				continue
+			}
+
+			t.mapLock.Lock()
+
+			h := b.Header.Hash()
+			if t.messages[h] != nil {
+				for _, v := range t.messages[h] {
+					t.out <- v
+				}
+			}
+
+			t.mapLock.Unlock()
+		case <-t.stopped:
 			return
 		}
-
-		t.mapLock.Lock()
-
-		h := b.Header.Hash()
-		if t.messages[h] != nil {
-			for _, v := range t.messages[h] {
-				t.out <- v
-			}
-		}
-
-		t.mapLock.Unlock()
 	}
 }

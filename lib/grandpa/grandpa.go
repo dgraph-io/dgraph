@@ -18,7 +18,6 @@ package grandpa
 
 import (
 	"bytes"
-	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -124,6 +123,8 @@ func NewService(cfg *Config) (*Service, error) {
 
 // Start begins the GRANDPA finality service
 func (s *Service) Start() error {
+	s.stopped = false
+
 	go func() {
 		err := s.initiate()
 		if err != nil {
@@ -187,16 +188,16 @@ func (s *Service) publicKeyBytes() ed25519.PublicKeyBytes {
 
 // initiate initates a GRANDPA round
 func (s *Service) initiate() error {
-	s.stopped = false
-
 	// if there is an authority change, execute it
 	s.updateAuthorities()
 
 	if s.state.round == 0 {
+		s.chanLock.Lock()
 		s.mapLock.Lock()
 		s.preVotedBlock[0] = NewVoteFromHeader(s.head)
 		s.bestFinalCandidate[0] = NewVoteFromHeader(s.head)
 		s.mapLock.Unlock()
+		s.chanLock.Unlock()
 	}
 
 	s.state.round++
@@ -216,15 +217,20 @@ func (s *Service) initiate() error {
 		return err
 	}
 	s.tracker.start()
-	log.Trace("[grandpa] started message tracker")
+	s.logger.Trace("[grandpa] started message tracker")
 
 	// don't begin grandpa until we are at block 1
 	for {
+		if s.stopped {
+			return nil
+		}
+
 		h, err := s.blockState.BestBlockHeader()
 		if err != nil {
-			break
+			continue
 		}
-		if h.Number.Cmp(big.NewInt(0)) == 1 {
+
+		if h != nil && h.Number.Int64() > 0 {
 			break
 		}
 	}

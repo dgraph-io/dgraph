@@ -25,6 +25,7 @@ import (
 
 // BlockState is the interface required by GRANDPA into the block state
 type BlockState interface {
+	GenesisHash() common.Hash
 	HasHeader(hash common.Hash) (bool, error)
 	GetHeader(hash common.Hash) (*types.Header, error)
 	GetHeaderByNumber(num *big.Int) (*types.Header, error)
@@ -33,6 +34,7 @@ type BlockState interface {
 	GetFinalizedHeader(uint64) (*types.Header, error)
 	SetFinalizedHash(common.Hash, uint64) error
 	BestBlockHeader() (*types.Header, error)
+	BestBlockHash() common.Hash
 	Leaves() []common.Hash
 	BlocktreeAsString() string
 	RegisterImportedChannel(ch chan<- *types.Block) (byte, error)

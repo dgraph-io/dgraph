@@ -209,6 +209,10 @@ func (bs *BlockState) HasHeader(hash common.Hash) (bool, error) {
 func (bs *BlockState) GetHeader(hash common.Hash) (*types.Header, error) {
 	result := new(types.Header)
 
+	if bs.db == nil {
+		return nil, fmt.Errorf("database is nil")
+	}
+
 	data, err := bs.db.Get(headerKey(hash))
 	if err != nil {
 		return nil, err
@@ -546,6 +550,10 @@ func (bs *BlockState) HighestBlockNumber() *big.Int {
 
 // BestBlockHash returns the hash of the head of the current chain
 func (bs *BlockState) BestBlockHash() common.Hash {
+	if bs.bt == nil {
+		return common.Hash{}
+	}
+
 	return bs.bt.DeepestBlockHash()
 }
 
