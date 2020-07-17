@@ -20,6 +20,7 @@ package worker
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -42,9 +43,10 @@ type executor struct {
 	smCount     int64 // Stores count for active sub mutations.
 
 	sync.RWMutex
-	predChan map[string]chan *subMutation
-	closer   *y.Closer
-	applied  *y.WaterMark
+	predChan   map[string]chan *subMutation
+	workerChan chan *mutation
+	closer     *y.Closer
+	applied    *y.WaterMark
 }
 
 func newExecutor(applied *y.WaterMark) *executor {
@@ -53,6 +55,11 @@ func newExecutor(applied *y.WaterMark) *executor {
 		closer:   y.NewCloser(0),
 		applied:  applied,
 	}
+
+	for i := 0; i < 10; i++ {
+		go ex.worker()
+	}
+
 	go ex.shutdown()
 	return ex
 }
@@ -73,11 +80,30 @@ func generateConflictKeys(p *subMutation) []uint64 {
 	return keys
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
-	defer e.closer.Done()
+type mutation struct {
+	m     *subMutation
+	keys  []uint64
+	inDeg int
 
+	outEdges []*mutation
+
+	graph *graph
+}
+
+type graph struct {
+	sync.RWMutex
+	conflicts map[uint64][]*mutation
+}
+
+func newGraph() *graph {
+	return &graph{conflicts: make(map[uint64][]*mutation)}
+}
+
+func (e *executor) worker() {
 	writer := posting.NewTxnWriter(pstore)
-	for payload := range ch {
+	for mutation := range e.workerChan {
+		payload := mutation.m
+
 		var esize int64
 		ptxn := posting.NewTxn(payload.startTs)
 		for _, edge := range payload.edges {
@@ -104,6 +130,64 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		e.applied.Done(payload.index)
 		atomic.AddInt64(&e.pendingSize, -esize)
 		atomic.AddInt64(&e.smCount, -1)
+
+		mutation.graph.Lock()
+		for _, c := range mutation.keys {
+			i := 0
+			arr := mutation.graph.conflicts[c]
+
+			for _, x := range arr {
+				if x != mutation {
+					arr[i] = x
+					i++
+				}
+			}
+
+			mutation.graph.conflicts[c] = arr[:i]
+		}
+		mutation.graph.Unlock()
+
+		for _, dependent := range mutation.outEdges {
+			dependent.inDeg -= 1
+			if dependent.inDeg == 0 {
+				e.workerChan <- dependent
+			}
+		}
+	}
+}
+
+func (e *executor) processMutationCh(ch chan *subMutation) {
+	defer e.closer.Done()
+
+	g := newGraph()
+
+	for payload := range ch {
+		fmt.Println("here")
+
+		conflicts := generateConflictKeys(payload)
+		m := mutation{m: payload, keys: conflicts, outEdges: make([]*mutation, 0), graph: g}
+
+		g.Lock()
+		fmt.Println("here1")
+		for _, c := range conflicts {
+			l, ok := g.conflicts[c]
+			if !ok {
+				continue
+			}
+
+			m.inDeg += len(l)
+			for _, dependent := range l {
+				dependent.outEdges = append(dependent.outEdges, &m)
+			}
+		}
+		g.Unlock()
+
+		fmt.Println("here3")
+		fmt.Println(m.inDeg)
+
+		if m.inDeg == 0 {
+			e.workerChan <- &m
+		}
 	}
 }
 
