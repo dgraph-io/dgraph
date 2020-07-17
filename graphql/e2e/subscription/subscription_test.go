@@ -287,15 +287,15 @@ func TestSubscriptionAuth(t *testing.T) {
 	      }
 	    }`,
 	}
+
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
+
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
 	require.Nil(t, resp.Errors)
-
 	require.JSONEq(t, `{"queryTodo": [
 	 {
 	   "owner": "jatin",
@@ -480,7 +480,6 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	//first subscription
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
-	fmt.Printf("expires new %+v\n", jwtToken)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
 			queryTodo{
@@ -527,11 +526,10 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	//add delay for 1st subscription to timeout
-	// Wait for JWT to expire.
+	// Wait for JWT to expire for first subscription.
 	time.Sleep(10 * time.Second)
 
-	// Add another TODO for jatin which we should get in the latest update.
+	// Add another TODO for jatin which 1st subscription shouldn't get.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -573,10 +571,9 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	   "text" : "Dgraph is awesome!!"
 	}]}`, string(resp.Data))
 
-	//add delay for 2nd subscription  to timeout
-	// Wait for JWT to expire.
+	//add extra delay for 2nd subscription to timeout
 	time.Sleep(10 * time.Second)
-	// Add another TODO for jatin which we should get in the latest update.
+	// Add another TODO for jatin which 2nd subscription shouldn't get.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -727,11 +724,10 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	require.JSONEq(t, `{"queryTodo":[{"owner":"pawan","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	//add delay for 1st subscription to timeout
-	// Wait for JWT to expire.
+	// Wait for JWT to expire for 1st subscription.
 	time.Sleep(10 * time.Second)
 
-	// Add another TODO for jatin which we should get in the latest update.
+	// Add another TODO for jatin which 1st subscription shouldn't get.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -758,7 +754,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	// Add another TODO for pawan which we should get in the latest update.
+	// Add another TODO for pawan which we should get in the latest update of 2nd subscription.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -791,7 +787,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	//add delay for 2nd subscription  to timeout
 	// Wait for JWT to expire.
 	time.Sleep(10 * time.Second)
-	// Add another TODO for pawan which we should get in the latest update.
+	// Add another TODO for pawan which 2nd subscription shouldn't get.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [

@@ -20,7 +20,6 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"time"
 
@@ -156,7 +155,6 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}
-	fmt.Printf("expires new %+v\n", customClaims.StandardClaims.ExpiresAt)
 
 	req := &schema.Request{
 		OperationName: operationName,
