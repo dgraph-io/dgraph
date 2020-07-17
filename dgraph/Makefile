@@ -14,7 +14,6 @@
 # limitations under the License.
 #
 
-<<<<<<< HEAD
 BIN             = dgraph
 BUILD          ?= $(shell git rev-parse --short HEAD)
 BUILD_CODENAME  = unnamed
