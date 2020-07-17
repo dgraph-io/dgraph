@@ -66,7 +66,7 @@ func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload
 	if err != nil {
 		return nil, err
 	}
-
+	fmt.Printf("%v", subscriptionPayload)
 	// Initialize subscription.
 	init := operationMessage{
 		Type:    initMsg,

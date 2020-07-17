@@ -156,7 +156,7 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}
-	fmt.Printf("expires %+v\n", customClaims.StandardClaims.ExpiresAt)
+	fmt.Printf("expires new %+v\n", customClaims.StandardClaims.ExpiresAt)
 
 	req := &schema.Request{
 		OperationName: operationName,
