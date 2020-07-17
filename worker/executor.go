@@ -20,7 +20,6 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -51,12 +50,13 @@ type executor struct {
 
 func newExecutor(applied *y.WaterMark) *executor {
 	ex := &executor{
-		predChan: make(map[string]chan *subMutation),
-		closer:   y.NewCloser(0),
-		applied:  applied,
+		predChan:   make(map[string]chan *subMutation),
+		closer:     y.NewCloser(0),
+		applied:    applied,
+		workerChan: make(chan *mutation, 10000),
 	}
 
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 8; i++ {
 		go ex.worker()
 	}
 
@@ -137,13 +137,17 @@ func (e *executor) worker() {
 			arr := mutation.graph.conflicts[c]
 
 			for _, x := range arr {
-				if x != mutation {
+				if x.m.startTs != mutation.m.startTs {
 					arr[i] = x
 					i++
 				}
 			}
 
-			mutation.graph.conflicts[c] = arr[:i]
+			if i == 0 {
+				delete(mutation.graph.conflicts, c)
+			} else {
+				mutation.graph.conflicts[c] = arr[:i]
+			}
 		}
 		mutation.graph.Unlock()
 
@@ -153,6 +157,7 @@ func (e *executor) worker() {
 				e.workerChan <- dependent
 			}
 		}
+
 	}
 }
 
@@ -162,16 +167,14 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 	g := newGraph()
 
 	for payload := range ch {
-		fmt.Println("here")
-
 		conflicts := generateConflictKeys(payload)
 		m := mutation{m: payload, keys: conflicts, outEdges: make([]*mutation, 0), graph: g}
 
 		g.Lock()
-		fmt.Println("here1")
 		for _, c := range conflicts {
 			l, ok := g.conflicts[c]
 			if !ok {
+				l = append(l, &m)
 				continue
 			}
 
@@ -179,11 +182,10 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 			for _, dependent := range l {
 				dependent.outEdges = append(dependent.outEdges, &m)
 			}
+
+			l = append(l, &m)
 		}
 		g.Unlock()
-
-		fmt.Println("here3")
-		fmt.Println(m.inDeg)
 
 		if m.inDeg == 0 {
 			e.workerChan <- &m
