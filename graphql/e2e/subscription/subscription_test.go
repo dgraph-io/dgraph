@@ -218,7 +218,7 @@ func TestSubscriptionAuth(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	jwtToken, err := metaInfo.GetSignedToken("secret")
+	jwtToken, err := metaInfo.GetSignedToken("secret", 100*time.Second)
 	require.NoError(t, err)
 
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -308,6 +308,104 @@ func TestSubscriptionAuth(t *testing.T) {
 		Variables: map[string]interface{}{"sch": sch},
 	}
 	addResult = add.ExecuteAsPost(t, adminEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	res, err = subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+	require.Nil(t, res)
+}
+
+func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
+	add := &common.GraphQLParams{
+		Query: `mutation updateGQLSchema($sch: String!) {
+			updateGQLSchema(input: { set: { schema: $sch }}) {
+				gqlSchema {
+					schema
+				}
+			}
+		}`,
+		Variables: map[string]interface{}{"sch": schAuth},
+	}
+	addResult := add.ExecuteAsPost(t, adminEndpoint)
+	require.Nil(t, addResult.Errors)
+	time.Sleep(time.Second * 2)
+
+	metaInfo := &testutil.AuthMeta{
+		PublicKey: "secret",
+		Namespace: "https://dgraph.io",
+		Algo:      "HS256",
+		Header:    "Authorization",
+	}
+	metaInfo.AuthVars = map[string]interface{}{
+		"USER": "bob",
+		"ROLE": "USER",
+	}
+
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "GraphQL is exciting!!",
+                  owner : "bob"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
+	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
+	require.NoError(t, err)
+
+	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
+	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint,
+		&schema.Request{
+			Query: `subscription{
+			queryTodo{
+                owner
+                text
+			}
+		}`,
+		}, payload)
+	require.Nil(t, err)
+
+	res, err := subscriptionClient.RecvMsg()
+	require.NoError(t, err)
+
+	var resp common.GraphQLResponse
+	err = json.Unmarshal(res, &resp)
+	require.NoError(t, err)
+
+	require.Nil(t, resp.Errors)
+	require.JSONEq(t, `{"queryTodo":[{"owner":"bob","text":"GraphQL is exciting!!"}]}`,
+		string(resp.Data))
+
+	// Wait for JWT to expire.
+	time.Sleep(10 * time.Second)
+
+	// Add another TODO for bob but this should not be visible as the subscription should have
+	// ended.
+	add = &common.GraphQLParams{
+		Query: `mutation{
+              addTodo(input: [
+                 {text : "Dgraph is exciting!!",
+                  owner : "bob"}
+               ])
+             {
+               todo{
+                    text
+                    owner
+               }
+           }
+         }`,
+	}
+
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient.RecvMsg()
