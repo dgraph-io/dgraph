@@ -26,6 +26,7 @@ import (
 	"github.com/dgraph-io/badger/v2/y"
 	"github.com/dgraph-io/dgraph/posting"
 	"github.com/dgraph-io/dgraph/protos/pb"
+	"github.com/dgraph-io/dgraph/x"
 	"github.com/golang/glog"
 )
 
@@ -56,6 +57,22 @@ func newExecutor(applied *y.WaterMark) *executor {
 	return ex
 }
 
+func generateConflictKeys(p *subMutation) []uint64 {
+	keys := make([]uint64, 0)
+
+	for _, edge := range p.edges {
+		key := x.DataKey(edge.Attr, edge.Entity)
+		pk, err := x.Parse(key)
+		if err != nil {
+			continue
+		}
+
+		keys = append(keys, posting.GetConflictKeys(pk, key, edge))
+	}
+
+	return keys
+}
+
 func (e *executor) processMutationCh(ch chan *subMutation) {
 	defer e.closer.Done()
 
@@ -79,7 +96,7 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		if err := ptxn.CommitToDisk(writer, payload.startTs); err != nil {
 			glog.Errorf("Error while commiting to disk: %v", err)
 		}
-		// TODO(Animesh): We might not need this wait.
+
 		if err := writer.Wait(); err != nil {
 			glog.Errorf("Error while waiting for writes: %v", err)
 		}

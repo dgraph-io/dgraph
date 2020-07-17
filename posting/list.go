@@ -426,18 +426,65 @@ func (l *List) addMutation(ctx context.Context, txn *Txn, t *pb.DirectedEdge) er
 	return l.addMutationInternal(ctx, txn, t)
 }
 
-func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
-	l.AssertLock()
-
-	if txn.ShouldAbort() {
-		return zero.ErrConflict
-	}
-
+func GetConflictKeys(pk x.ParsedKey, key []byte, t *pb.DirectedEdge) uint64 {
 	getKey := func(key []byte, uid uint64) uint64 {
 		// Instead of creating a string first and then doing a fingerprint, let's do a fingerprint
 		// here to save memory allocations.
 		// Not entirely sure about effect on collision chances due to this simple XOR with uid.
 		return farm.Fingerprint64(key) ^ uid
+	}
+
+	var conflictKey uint64
+	switch {
+	case schema.State().HasNoConflict(t.Attr):
+		break
+	case schema.State().HasUpsert(t.Attr):
+		// Consider checking to see if a email id is unique. A user adds:
+		// <uid> <email> "email@email.org", and there's a string equal tokenizer
+		// and upsert directive on the schema.
+		// Then keys are "<email> <uid>" and "<email> email@email.org"
+		// The first key won't conflict, because two different UIDs can try to
+		// get the same email id. But, the second key would. Thus, we ensure
+		// that two users don't set the same email id.
+		conflictKey = getKey(key, 0)
+
+	case pk.IsData() && schema.State().IsList(t.Attr):
+		// Data keys, irrespective of whether they are UID or values, should be judged based on
+		// whether they are lists or not. For UID, t.ValueId = UID. For value, t.ValueId =
+		// fingerprint(value) or could be fingerprint(lang) or something else.
+		//
+		// For singular uid predicate, like partner: uid // no list.
+		// a -> b
+		// a -> c
+		// Run concurrently, only one of them should succeed.
+		// But for friend: [uid], both should succeed.
+		//
+		// Similarly, name: string
+		// a -> "x"
+		// a -> "y"
+		// This should definitely have a conflict.
+		// But, if name: [string], then they can both succeed.
+		conflictKey = getKey(key, t.ValueId)
+
+	case pk.IsData(): // NOT a list. This case must happen after the above case.
+		conflictKey = getKey(key, 0)
+
+	case pk.IsIndex() || pk.IsCountOrCountRev():
+		// Index keys are by default of type [uid].
+		conflictKey = getKey(key, t.ValueId)
+
+	default:
+		// Don't assign a conflictKey.
+	}
+
+	return conflictKey
+}
+
+func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.DirectedEdge) error {
+	l.AssertLock()
+
+	if txn.ShouldAbort() {
+		return zero.ErrConflict
 	}
 
 	mpost := NewPosting(t)
@@ -470,49 +517,7 @@ func (l *List) addMutationInternal(ctx context.Context, txn *Txn, t *pb.Directed
 	// We ensure that commit marks are applied to posting lists in the right
 	// order. We can do so by proposing them in the same order as received by the Oracle delta
 	// stream from Zero, instead of in goroutines.
-	var conflictKey uint64
-	switch {
-	case schema.State().HasNoConflict(t.Attr):
-		break
-	case schema.State().HasUpsert(t.Attr):
-		// Consider checking to see if a email id is unique. A user adds:
-		// <uid> <email> "email@email.org", and there's a string equal tokenizer
-		// and upsert directive on the schema.
-		// Then keys are "<email> <uid>" and "<email> email@email.org"
-		// The first key won't conflict, because two different UIDs can try to
-		// get the same email id. But, the second key would. Thus, we ensure
-		// that two users don't set the same email id.
-		conflictKey = getKey(l.key, 0)
-
-	case pk.IsData() && schema.State().IsList(t.Attr):
-		// Data keys, irrespective of whether they are UID or values, should be judged based on
-		// whether they are lists or not. For UID, t.ValueId = UID. For value, t.ValueId =
-		// fingerprint(value) or could be fingerprint(lang) or something else.
-		//
-		// For singular uid predicate, like partner: uid // no list.
-		// a -> b
-		// a -> c
-		// Run concurrently, only one of them should succeed.
-		// But for friend: [uid], both should succeed.
-		//
-		// Similarly, name: string
-		// a -> "x"
-		// a -> "y"
-		// This should definitely have a conflict.
-		// But, if name: [string], then they can both succeed.
-		conflictKey = getKey(l.key, t.ValueId)
-
-	case pk.IsData(): // NOT a list. This case must happen after the above case.
-		conflictKey = getKey(l.key, 0)
-
-	case pk.IsIndex() || pk.IsCountOrCountRev():
-		// Index keys are by default of type [uid].
-		conflictKey = getKey(l.key, t.ValueId)
-
-	default:
-		// Don't assign a conflictKey.
-	}
-	txn.addConflictKey(conflictKey)
+	txn.addConflictKey(GetConflictKeys(pk, l.key, t))
 	return nil
 }
 
