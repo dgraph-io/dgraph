@@ -59,7 +59,31 @@ type Restaurant @auth(
 }
 
 type Cuisine @auth(
-    query: { rule: "{$Role: { eq: \"ADMIN\" }}" },
+    query: { and: [
+        { rule: "{$Role: { eq: \"ADMIN\" }}" },
+        { or: [
+            { rule: """
+            query($RCurr: String!) {
+                queryCuisine {
+                    restaurants(filter: { currency: { eq: $RCurr } }) {
+                        __typename
+                    }
+                }
+            }
+            """
+            },
+            { rule: """
+            query($RName: String!) {
+                queryCuisine {
+                    restaurants(filter: { currency: { eq: $RName } }) {
+                        __typename
+                    }
+                }
+            }
+            """
+            }
+        ]}
+    ]},
 ) {
     id: ID!
     name: String! @id

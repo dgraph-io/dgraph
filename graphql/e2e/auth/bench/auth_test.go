@@ -61,11 +61,11 @@ func getAuthMeta(schema string) *testutil.AuthMeta {
 //	goarch: amd64
 //	pkg: github.com/dgraph-io/dgraph/graphql/e2e/auth/bench
 // Auth
-//	BenchmarkNestedQuery-8                51        1290944683 ns/op
-//	BenchmarkOneLevelQuery-8             363         200150600 ns/op
+//	BenchmarkNestedQuery-8                88         815315761 ns/op
+//	BenchmarkOneLevelQuery-8            4357          15626384 ns/op
 // Non-Auth
-//	BenchmarkNestedQuery-8                22        3490372469 ns/op
-//	BenchmarkOneLevelQuery-8             142         511427734 ns/op
+//	BenchmarkNestedQuery-8                33        2218877846 ns/op
+//	BenchmarkOneLevelQuery-8            4446          16100509 ns/op
 
 // Auth Extension (BenchmarkNestedQuery)
 //"extensions": {
@@ -175,13 +175,15 @@ func BenchmarkOneLevelQuery(b *testing.B) {
 
 	metaInfo := getAuthMeta(string(schema))
 	metaInfo.AuthVars = map[string]interface{}{
+		"Role":  "ADMIN",
+		"Dish":  "Dish",
 		"RName": "Restaurant",
 		"RCurr": "$",
 	}
 
 	query := `
 	query {
-		queryRestaurant (first: 10000) {
+		queryCuisine (first: 300000) {
 	  		id 
 	  		name
 	  	}
