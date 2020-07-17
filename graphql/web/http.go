@@ -20,10 +20,12 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
+	"fmt"
 	"strconv"
 	"time"
+
+	"github.com/dgrijalva/jwt-go/v4"
+	"google.golang.org/grpc/metadata"
 
 	"io"
 	"io/ioutil"
@@ -128,7 +130,11 @@ func (gs *graphqlSubscription) Subscribe(
 	//And we are extracting the Auth JWT from those and passing them along.
 
 	header, _ := ctx.Value("Header").(json.RawMessage)
-	var customClaims *authorization.CustomClaims
+	customClaims := &authorization.CustomClaims{
+		StandardClaims: jwt.StandardClaims{
+			ExpiresAt: jwt.At(time.Time{}),
+		},
+	}
 	if len(header) > 0 {
 		payload := make(map[string]interface{})
 		if err := json.Unmarshal(header, &payload); err != nil {
@@ -150,11 +156,7 @@ func (gs *graphqlSubscription) Subscribe(
 			}
 		}
 	}
-	if customClaims == nil {
-		customClaims = &authorization.CustomClaims{
-			StandardClaims: jwt.StandardClaims{ExpiresAt: jwt.NewTime(float64(time.Time{}.Unix()))},
-		}
-	}
+	fmt.Printf("expires %+v\n", customClaims.StandardClaims.ExpiresAt)
 
 	req := &schema.Request{
 		OperationName: operationName,

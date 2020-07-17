@@ -19,7 +19,6 @@ package subscription
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -188,7 +187,6 @@ func (p *Poller) poll(req *pollRequest) error {
 				return nil
 			}
 			for _, subscriber := range subscribers {
-				fmt.Printf("%+v,%+v\n", subscriber.expiry, subscriber.expiry.IsZero())
 				if !subscriber.expiry.IsZero() && time.Now().After(subscriber.expiry) {
 					p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 				}
@@ -209,7 +207,6 @@ func (p *Poller) poll(req *pollRequest) error {
 		}
 
 		for _, subscriber := range subscribers {
-			fmt.Printf("%+v,%+v\n", subscriber.expiry, subscriber.expiry.IsZero())
 			if !subscriber.expiry.IsZero() && time.Now().After(subscriber.expiry) {
 				p.terminateSubscription(req.bucketID, subscriber.subscriptionID)
 			}
