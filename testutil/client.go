@@ -185,11 +185,11 @@ func RetryBadQuery(dg *dgo.Dgraph, q string) (*api.Response, error) {
 		resp, err := txn.Query(ctx, q)
 		if err == nil || strings.Contains(err.Error(), "Please retry") {
 			time.Sleep(10 * time.Millisecond)
-			txn.Discard(ctx)
+			_ = txn.Discard(ctx)
 			continue
 		}
 
-		txn.Discard(ctx)
+		_ = txn.Discard(ctx)
 		return resp, err
 	}
 }

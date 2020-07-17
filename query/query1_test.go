@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/dgraph-io/dgo/v200/protos/api"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/metadata"
 )
@@ -1037,81 +1038,208 @@ func TestUidInFunction2(t *testing.T) {
 		js)
 }
 
-func TestUidInFunction3a(t *testing.T) {
-	// query at top level with unsorted input UIDs
-	query := `
-	{
-		me(func: UID(1, 23, 24)) @filter(uid_in(school, [5001, 5000])) {
-			name
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
-}
+func TestUidInFunctionWithError(t *testing.T) {
 
-func TestUidInFunction3b(t *testing.T) {
-	// query at top level with sorted input UIDs
 	query := `
 	{
-		me(func: UID(1, 23, 24)) @filter(uid_in(school, [5000, 5001])) {
-			name
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`, js)
-}
-
-func TestUidInFunction3c(t *testing.T) {
-	// query at top level with no UIDs present in predicate
-	query := `
-	{
-		me(func: UID(1, 23, 24)) @filter(uid_in(school, [500, 501])) {
-			name
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[]}}`, js)
-}
-func TestUidInFunction4a(t *testing.T) {
-	// query inside with sorted input UIDs
-	query := `
-	{
-		me(func: uid(1, 23, 24 )) {
-			friend @filter(uid_in(school, [5000, 5001])) {
+		me(func: uid(1, 23, 24)) {
+			friend @filter(uid_in(school, foo)) {
 				name
 			}
 		}
 	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
-		js)
-}
-
-func TestUidInFunction4b(t *testing.T) {
-	// query inside with unsorted input UIDs + not all uids present in predicate
-	query := `
-	{
-		me(func: uid(1, 23, 24 )) {
-			friend @filter(uid_in(school, [5001, 500])) {
-				name
-			}
-		}
-	}`
-	js := processQueryNoErr(t, query)
-	require.JSONEq(t, `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
-		js)
-}
-func TestUidInFunctionAtRoot(t *testing.T) {
-
-	query := `
-	{
-		me(func: uid_in(school, 5000)) {
-				name
-		}
-	}`
-
+	expectedErr := errors.New(`Value "foo" in uid_in is not a number`)
 	_, err := processQuery(context.Background(), t, query)
-	require.Error(t, err)
+	require.Contains(t, err.Error(), expectedErr.Error())
+
+}
+
+func TestUidInFunction3(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expected    string
+		expectedErr error
+	}{
+		{
+			description: "query at top level with unsorted input UIDs",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [5001, 5000])) {
+					name
+				}
+			}`,
+			expected:    `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with nested UID variable",
+			query: `{
+				uidVar as var(func: uid(5001, 5000))
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with sorted input UIDs",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [5000, 5001])) {
+					name
+				}
+			}`,
+			expected:    `{"data": {"me":[{"name":"Michonne"},{"name":"Rick Grimes"},{"name":"Glenn Rhee"}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with no UIDs present in predicate",
+			query: `{
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, [500, 501])) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query at top level with with UID variables not present in predicate",
+			query: `{
+				uidVar as var(func: uid(500, 501))
+				me(func: UID(1, 23, 24)) @filter(uid_in(school, uid(uidVar))) {
+					name
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			js := processQueryNoErr(t, test.query)
+			require.JSONEq(t, test.expected, js)
+		})
+	}
+
+}
+
+func TestUidInFunction4(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expected    string
+		expectedErr error
+	}{
+		{
+			description: "query inside root with sorted input UIDs",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, [5000, 5001])) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data": {"me":[{"friend":[{"name":"Rick Grimes"}, {"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with unsorted and absent UIDs",
+			query: `{
+				me(func: uid(1, 23, 24 )) {
+					friend @filter(uid_in(school, [5001, 500])) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to two uids",
+			query: `{
+				var(func: uid( 31, 25)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Glenn Rhee"},{"name":"Daryl Dixon"},{"name":"Andrea"}]},{"friend":[{"name":"Michonne"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to one uid",
+			query: `{
+				var(func: uid(31)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[{"friend":[{"name":"Rick Grimes"},{"name":"Andrea"}]}]}}`,
+			expectedErr: nil,
+		},
+		{
+			description: "query inside root with nested uid variable which resolves to zero uids",
+			query: `{
+				var(func: uid(40)){
+					schoolsVar as school
+				}
+				me(func: uid(1, 23, 24 )){
+					friend @filter(uid_in(school, uid(schoolsVar))) {
+						name
+					}
+				}
+			}`,
+			expected:    `{"data":{"me":[]}}`,
+			expectedErr: nil,
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			js := processQueryNoErr(t, test.query)
+			require.JSONEq(t, test.expected, js)
+		})
+	}
+}
+
+func TestUidInFunctionAtRoot(t *testing.T) {
+	tcases := []struct {
+		description string
+		query       string
+		expectedErr error
+	}{
+		{
+			description: "query with uidIn at the root",
+			query: `{
+				me(func: uid_in(school, 5000)) {
+						name
+				}
+			}`,
+			expectedErr: errors.New("rpc error: code = Unknown desc = : uid_in function not allowed at root"),
+		},
+		{
+			description: "query with uid variable and uidIn at the root",
+			query: `{
+				uidVar as var(func: uid(5000))
+				me(func: uid_in(school, uid(uidVar))) {
+						name
+				}
+			}`,
+			expectedErr: errors.New("rpc error: code = Unknown desc = : uid_in function not allowed at root"),
+		},
+	}
+	for _, test := range tcases {
+		t.Run(test.description, func(t *testing.T) {
+			_, err := processQuery(context.Background(), t, test.query)
+			require.EqualError(t, err, test.expectedErr.Error())
+		})
+	}
 }
 
 func TestBinaryJSON(t *testing.T) {
