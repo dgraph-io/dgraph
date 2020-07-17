@@ -98,7 +98,8 @@ type ServiceConfig struct {
 	Keypair          *sr25519.Keypair
 	Runtime          *runtime.Runtime
 	AuthData         []*types.BABEAuthorityData
-	EpochThreshold   *big.Int // should only be used for testing
+	EpochThreshold   *big.Int // for development purposes
+	SlotDuration     uint64   // for development purposes; in milliseconds
 	StartSlot        uint64   // slot to start at
 }
 
@@ -142,7 +143,12 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, err
 	}
 
-	logger.Info("config", "SlotDuration (ms)", babeService.config.SlotDuration, "EpochLength (slots)", babeService.config.EpochLength)
+	// if slot duration is set via the config file, overwrite the runtime value
+	if cfg.SlotDuration > 0 {
+		babeService.config.SlotDuration = cfg.SlotDuration
+	}
+
+	logger.Info("config", "slot duration (ms)", babeService.config.SlotDuration, "epoch length (slots)", babeService.config.EpochLength)
 
 	if babeService.authorityData == nil {
 		logger.Info("setting authority data to genesis authorities", "authorities", babeService.config.GenesisAuthorities)
@@ -153,7 +159,6 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		}
 	}
 
-	// TODO: format this
 	logger.Info("created BABE service", "authorities", AuthorityData(babeService.authorityData))
 
 	babeService.randomness = babeService.config.Randomness
@@ -163,7 +168,7 @@ func NewService(cfg *ServiceConfig) (*Service, error) {
 		return nil, err
 	}
 
-	logger.Trace("created BABE service", "authority index", babeService.authorityIndex, "threshold", babeService.epochThreshold)
+	logger.Debug("created BABE service", "authority index", babeService.authorityIndex, "threshold", babeService.epochThreshold)
 
 	return babeService, nil
 }

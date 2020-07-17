@@ -91,6 +91,7 @@ type CoreConfig struct {
 	BabeAuthority    bool        `toml:"babe-authority"`
 	GrandpaAuthority bool        `toml:"grandpa-authority"`
 	BabeThreshold    interface{} `toml:"babe-threshold"`
+	SlotDuration     uint64      `toml:"slot-duration"`
 }
 
 // RPCConfig is to marshal/unmarshal toml RPC config vars

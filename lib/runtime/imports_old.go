@@ -150,13 +150,13 @@ func ext_get_storage_into(context unsafe.Pointer, keyData, keyLen, valueData, va
 		ret := 1<<32 - 1
 		return int32(ret)
 	} else if val == nil {
-		logger.Warn("[ext_get_storage_into]", "err", "value is nil")
+		logger.Debug("[ext_get_storage_into]", "err", "value is nil")
 		ret := 1<<32 - 1
 		return int32(ret)
 	}
 
 	if len(val) > int(valueLen) {
-		logger.Warn("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
+		logger.Debug("[ext_get_storage_into]", "error", "value exceeds allocated buffer length")
 		return 0
 	}
 
