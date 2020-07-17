@@ -101,30 +101,30 @@ func getAuthMeta(schema string) *testutil.AuthMeta {
 
 // Non Auth Extension (BenchmarkNestedQuery)
 //"extensions": {
-//	"touched_uids": 458610,
-//	"tracing": {
-//		"version": 1,
-//		"startTime": "2020-07-16T23:46:48.73641261+05:30",
-//		"endTime": "2020-07-16T23:46:50.281062742+05:30",
-//		"duration": 1544650302,
-//		"execution": {
-//			"resolvers": [{
-//				"path": [
-//					"queryCuisine"
-//				],
-//				"parentType": "Query",
-//				"fieldName": "queryCuisine",
-//				"returnType": "[Cuisine]",
-//				"startOffset": 154997,
-//				"duration": 1118614851,
-//				"dgraph": [{
-//					"label": "query",
-//					"startOffset": 256126,
-//					"duration": 823062710
-//				}]
-//			}]
-//		}
-//	}
+//  "touched_uids": 458610,
+//  "tracing": {
+//    "version": 1,
+//    "startTime": "2020-07-16T23:46:48.73641261+05:30",
+//    "endTime": "2020-07-16T23:46:50.281062742+05:30",
+//    "duration": 1544650302,
+//    "execution": {
+//      "resolvers": [{
+//        "path": [
+//          "queryCuisine"
+//        ],
+//        "parentType": "Query",
+//        "fieldName": "queryCuisine",
+//        "returnType": "[Cuisine]",
+//        "startOffset": 154997,
+//        "duration": 1118614851,
+//        "dgraph": [{
+//          "label": "query",
+//          "startOffset": 256126,
+//          "duration": 823062710
+//        }]
+//      }]
+//    }
+//  }
 //}
 
 func BenchmarkNestedQuery(b *testing.B) {
