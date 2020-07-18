@@ -102,7 +102,7 @@ branch="github.com/dgraph-io/dgraph/x.gitBranch"
 commitSHA1="github.com/dgraph-io/dgraph/x.lastCommitSHA"
 commitTime="github.com/dgraph-io/dgraph/x.lastCommitTime"
 
-go get src.techknowlogick.com/xgo
+go install src.techknowlogick.com/xgo
 
 basedir=$GOPATH/src/github.com/dgraph-io
 mkdir -p "$basedir"
