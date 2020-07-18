@@ -29,6 +29,16 @@ check_command_exists() {
     fi
 }
 
+if [ "$#" -lt 1 ]; then
+    exit_error "Usage: $0 git_ref [docker_tag]
+
+Examples:
+Build v1.2.3 release binaries
+  $0 v1.2.3
+Build dev/feature-branch branch and tag as dev-abc123 for the Docker image
+  $0 dev/feature-branch dev-abc123"
+fi
+
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
 [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
@@ -64,7 +74,7 @@ GOVERSION="1.14.4"
 TAG=$1
 # The Docker tag should not contain a slash e.g. feature/issue1234
 # The initial slash is taken from the repository name dgraph/dgraph:tag
-DOCKER_TAG=${DOCKER_TAG:-$(echo "$TAG" | tr '/' '-')}
+DOCKER_TAG=${2:-$(echo "$TAG" | tr '/' '-')}
 
 (
     cd "$repodir"
