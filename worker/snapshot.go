@@ -50,9 +50,7 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	c := pb.NewWorkerClient(con)
 
 	// Set my RaftContext on the snapshot, so it's easier to locate me.
-	ctx, cancel := context.WithCancel(n.ctx)
-	defer cancel()
-
+	ctx := n.ctx
 	snap.Context = n.RaftContext
 	stream, err := c.StreamSnapshot(ctx)
 	if err != nil {
