@@ -23,8 +23,6 @@ import (
 	"io"
 	"log"
 	"math"
-	"net/http"
-	_ "net/http/pprof"
 	"sort"
 	"strconv"
 	"strings"
@@ -67,17 +65,6 @@ type flagOptions struct {
 }
 
 func init() {
-	go func() {
-		for i := 8080; i < 9080; i++ {
-			fmt.Printf("Listening for /debug HTTP requests at port: %d\n", i)
-			if err := http.ListenAndServe(fmt.Sprintf("localhost:%d", i), nil); err != nil {
-				fmt.Println("Port busy. Trying another one...")
-				continue
-
-			}
-		}
-	}()
-
 	Debug.Cmd = &cobra.Command{
 		Use:   "debug",
 		Short: "Debug Dgraph instance",
