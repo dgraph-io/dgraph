@@ -504,7 +504,6 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	//2nd subscription
 	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
 	require.NoError(t, err)
-	fmt.Printf("expires new %+v\n", jwtToken)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient1, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
@@ -549,12 +548,7 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
-	require.Nil(t, resp.Errors)
-	//1st subscription should not get the update
-	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
-		string(resp.Data))
+	require.Nil(t, res) //1st subscription should get the empty response as subscriptio has expired
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
@@ -591,19 +585,7 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
-	//2nd one shouldn't get the  update because it has ended
-	require.JSONEq(t, `{"queryTodo": [
-	 {
-	   "owner": "jatin",
-	   "text": "GraphQL is exciting!!"
-	 },
-	{
-	   "owner" : "jatin",
-	   "text" : "Dgraph is awesome!!"
-	}]}`, string(resp.Data))
-
+	require.Nil(t, res) //2nd subscription should get the empty response as subscriptio has expired
 }
 
 func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
@@ -746,13 +728,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	require.Nil(t, addResult.Errors)
 
 	res, err = subscriptionClient.RecvMsg()
-	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
-	require.Nil(t, resp.Errors)
-	//1st subscription should not get the update
-	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
-		string(resp.Data))
+	require.Nil(t, res) //1st subscription should get the empty response as subscriptio has expired
 
 	// Add another TODO for pawan which we should get in the latest update of 2nd subscription.
 	add = &common.GraphQLParams{
@@ -805,17 +781,6 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	err = json.Unmarshal(res, &resp)
-	require.NoError(t, err)
-	//2nd one shouldn't get the  update because it has ended
-	require.JSONEq(t, `{"queryTodo": [
-	 {
-	   "owner": "pawan",
-	   "text": "GraphQL is exciting!!"
-	 },
-	{
-	   "owner" : "pawan",
-	   "text" : "Dgraph is awesome!!"
-	}]}`, string(resp.Data))
+	require.Nil(t, res) //2nd subscription should get the empty response as subscriptio has expired
 
 }
