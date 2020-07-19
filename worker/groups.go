@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -79,8 +80,10 @@ func StartRaftNodes(walStore *badger.DB, bindall bool) {
 		x.WorkerConfig.MyAddr = fmt.Sprintf("localhost:%d", workerPort())
 	} else {
 		// check if address is valid or not
-		ok := x.ValidateAddress(x.WorkerConfig.MyAddr)
-		x.AssertTruef(ok, "%s is not valid address", x.WorkerConfig.MyAddr)
+		err := x.ValidateAddress(x.WorkerConfig.MyAddr)
+		if err != nil {
+			log.Fatalf("%v", err)
+		}
 		if !bindall {
 			glog.Errorln("--my flag is provided without bindall, Did you forget to specify bindall?")
 		}

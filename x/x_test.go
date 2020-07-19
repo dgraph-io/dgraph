@@ -78,7 +78,7 @@ func TestValidateAddress(t *testing.T) {
 		for _, subtest := range testData {
 			st := subtest
 			t.Run(st.name, func(t *testing.T) {
-				require.Equal(t, st.isValid, ValidateAddress(st.address))
+				require.Equal(t, st.isValid, ValidateAddress(st.address) == nil)
 			})
 		}
 
@@ -97,7 +97,7 @@ func TestValidateAddress(t *testing.T) {
 		for _, subtest := range testData {
 			st := subtest
 			t.Run(st.name, func(t *testing.T) {
-				require.Equal(t, st.isValid, ValidateAddress(st.address))
+				require.Equal(t, st.isValid, ValidateAddress(st.address) == nil)
 			})
 		}
 	})
