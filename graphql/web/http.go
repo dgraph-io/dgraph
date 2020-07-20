@@ -125,8 +125,8 @@ func (gs *graphqlSubscription) Subscribe(
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
 
-	//library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
-	//And we are extracting the Auth JWT from those and passing them along.
+	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
+	// And we are extracting the Auth JWT from those and passing them along.
 
 	header, _ := ctx.Value("Header").(json.RawMessage)
 	customClaims := &authorization.CustomClaims{

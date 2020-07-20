@@ -152,7 +152,7 @@ type pollRequest struct {
 	authVariables map[string]interface{}
 }
 
-func (p *Poller) poll(req *pollRequest) error {
+func (p *Poller) poll(req *pollRequest) {
 	resolver := p.resolver
 	pollID := uint64(0)
 	for {
@@ -165,7 +165,6 @@ func (p *Poller) poll(req *pollRequest) error {
 			// We'll terminate all the subscription for this bucket. So, that all client can
 			// reconnect and listen for new schema.
 			p.terminateSubscriptions(req.bucketID)
-			return nil
 		}
 
 		ctx := context.WithValue(context.Background(), authorization.AuthVariables, req.authVariables)
@@ -184,7 +183,7 @@ func (p *Poller) poll(req *pollRequest) error {
 			subscribers, ok := p.pollRegistry[req.bucketID]
 			if !ok || len(subscribers) == 0 {
 				p.Unlock()
-				return nil
+				return
 			}
 			for _, subscriber := range subscribers {
 				if !subscriber.expiry.IsZero() && time.Now().After(subscriber.expiry) {
@@ -203,7 +202,7 @@ func (p *Poller) poll(req *pollRequest) error {
 			// There is no subscribers to push the update. So, kill the current polling
 			// go routine.
 			p.Unlock()
-			return nil
+			return
 		}
 
 		for _, subscriber := range subscribers {

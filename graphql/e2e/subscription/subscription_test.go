@@ -427,7 +427,7 @@ func TestSubscriptionWithAuthShouldExpireWithJWT(t *testing.T) {
 	require.Nil(t, res)
 }
 
-func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
+func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndependently(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
@@ -478,7 +478,7 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
 	require.NoError(t, err)
 
-	//first subscription
+	// first subscription
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
@@ -496,12 +496,11 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	var resp common.GraphQLResponse
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
-
 	require.Nil(t, resp.Errors)
 	require.JSONEq(t, `{"queryTodo":[{"owner":"jatin","text":"GraphQL is exciting!!"}]}`,
 		string(resp.Data))
 
-	//2nd subscription
+	// 2nd subscription
 	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
 	require.NoError(t, err)
 	payload = fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
@@ -548,13 +547,13 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	res, err = subscriptionClient.RecvMsg()
 	require.NoError(t, err)
-	require.Nil(t, res) //1st subscription should get the empty response as subscriptio has expired
+	require.Nil(t, res) // 1st subscription should get the empty response as subscription has expired.
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
-	//2nd one still running and should get the  update
+	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
 	 {
 	   "owner": "jatin",
@@ -565,9 +564,9 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 	   "text" : "Dgraph is awesome!!"
 	}]}`, string(resp.Data))
 
-	//add extra delay for 2nd subscription to timeout
+	// add extra delay for 2nd subscription to timeout
 	time.Sleep(10 * time.Second)
-	// Add another TODO for jatin which 2nd subscription shouldn't get.
+	// Add another TODO for jatin for which 2nd subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -585,10 +584,10 @@ func TestTwoSubscriptionAuthDifferentExpirysamejWt(t *testing.T) {
 
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	require.Nil(t, res) //2nd subscription should get the empty response as subscriptio has expired
+	require.Nil(t, res) // 2nd subscription should get the empty response as subscription has expired.
 }
 
-func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
+func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndependently(t *testing.T) {
 	dg, err := testutil.DgraphClient(groupOnegRPC)
 	require.NoError(t, err)
 	testutil.DropAll(t, dg)
@@ -681,7 +680,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
-	//2nd subscription
+	// 2nd subscription
 	metaInfo.AuthVars["USER"] = "pawan"
 	jwtToken, err = metaInfo.GetSignedToken("secret", 20*time.Second)
 	require.NoError(t, err)
@@ -726,7 +725,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	}
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
-
+	require.NoError(t, err)
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
 	require.Nil(t, res)
