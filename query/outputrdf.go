@@ -61,54 +61,62 @@ func castToRDF(output *string, sg *SubGraph) error {
 	}
 
 	if sg.SrcUIDs != nil {
-		for i, uid := range sg.SrcUIDs.Uids {
-
-			if sg.Params.IgnoreResult {
-				// Skip ignored values.
-				continue
-			}
-
-			if sg.IsInternal() {
-				if sg.Params.Expand != "" {
-					continue
-				}
-				// Check if we have val for the given uid. If you got uid then populate
-				// the rdf.
-				val, ok := sg.Params.UidToVal[uid]
-				if !ok && val.Value == nil {
-					continue
-				}
-				outputval, err := valToBytes(val)
-				if err != nil {
-					return err
-				}
-				*output += fmt.Sprintf("<%#x> <%s> %s\n", uid, sg.aggWithVarFieldName(),
-					string(outputval))
-				continue
-			}
-
-			switch {
-			case len(sg.counts) > 0:
-				// Add count rdf.
-				rdfForCount(output, uid, sg.counts[i], sg)
-			case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0:
-				// Add posting list relation.
-				rdfForUIDList(output, uid, sg.uidMatrix[i], sg)
-			case i < len(sg.valueMatrix):
-				// TODO: add facet.
-				rdfForValueList(output, uid, sg.valueMatrix[i], sg.fieldName())
-			}
+		// Get RDF for the given subgraph.
+		if err := rdfForSubgraph(output, sg); err != nil {
+			return err
 		}
 	}
 
-	// Recursively cast the RDF of childrens.
+	// Recursively cnvert RDF for the children graph.
 	for _, child := range sg.Children {
 		err := castToRDF(output, child)
 		if err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
+// rdfForSubgraph generates RDF and appends to the output parameter.
+func rdfForSubgraph(output *string, sg *SubGraph) error {
+	for i, uid := range sg.SrcUIDs.Uids {
+
+		if sg.Params.IgnoreResult {
+			// Skip ignored values.
+			continue
+		}
+
+		if sg.IsInternal() {
+			if sg.Params.Expand != "" {
+				continue
+			}
+			// Check if we have val for the given uid. If you got uid then populate
+			// the rdf.
+			val, ok := sg.Params.UidToVal[uid]
+			if !ok && val.Value == nil {
+				continue
+			}
+			outputval, err := valToBytes(val)
+			if err != nil {
+				return err
+			}
+			*output += fmt.Sprintf("<%#x> <%s> %s\n", uid, sg.aggWithVarFieldName(),
+				string(outputval))
+			continue
+		}
+
+		switch {
+		case len(sg.counts) > 0:
+			// Add count rdf.
+			rdfForCount(output, uid, sg.counts[i], sg)
+		case i < len(sg.uidMatrix) && len(sg.uidMatrix[i].Uids) != 0:
+			// Add posting list relation.
+			rdfForUIDList(output, uid, sg.uidMatrix[i], sg)
+		case i < len(sg.valueMatrix):
+			// TODO: add facet.
+			rdfForValueList(output, uid, sg.valueMatrix[i], sg.fieldName())
+		}
+	}
 	return nil
 }
 
