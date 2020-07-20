@@ -527,7 +527,7 @@ func TestSubscriptionAuth_SameQueryAndClaimsButDifferentExpiry_ShouldExpireIndep
 	// Wait for JWT to expire for first subscription.
 	time.Sleep(10 * time.Second)
 
-	// Add another TODO for jatin which 1st subscription shouldn't get.
+	// Add another TODO for jatin for which 1st subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -708,7 +708,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	// Wait for JWT to expire for 1st subscription.
 	time.Sleep(10 * time.Second)
 
-	// Add another TODO for jatin which 1st subscription shouldn't get.
+	// Add another TODO for jatin for which 1st subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
@@ -766,7 +766,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	// add delay for 2nd subscription  to timeout
 	// Wait for JWT to expire.
 	time.Sleep(10 * time.Second)
-	// Add another TODO for pawan which 2nd subscription shouldn't get.
+	// Add another TODO for pawan for which 2nd subscription shouldn't get updates.
 	add = &common.GraphQLParams{
 		Query: `mutation{
 	         addTodo(input: [
