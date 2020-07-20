@@ -134,8 +134,9 @@ they form a Raft group and provide synchronous replication.
 
 	flag.StringP("wal", "w", "w", "Directory to store raft write-ahead logs.")
 	flag.String("whitelist", "",
-		"A comma separated list of IP ranges you wish to whitelist for performing admin "+
-			"actions (i.e., --whitelist 127.0.0.1:127.0.0.3,0.0.0.7:0.0.0.9)")
+		"A comma separated list of IP addresses, IP ranges, CIDR blocks, or hostnames you "+
+			"wish to whitelist for performing admin actions (i.e., --whitelist 144.142.126.254,"+
+			"127.0.0.1:127.0.0.3,192.168.0.0/16,host.docker.internal)")
 	flag.String("export", "export", "Folder in which to store exports.")
 	flag.Int("pending_proposals", 256,
 		"Number of pending mutation proposals. Useful for rate limiting.")
