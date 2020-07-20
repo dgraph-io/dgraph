@@ -728,6 +728,7 @@ func TestSubscriptionAuth_SameQueryDifferentClaimsAndExpiry_ShouldExpireIndepend
 	require.NoError(t, err)
 	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
+	require.NoError(t, err)
 	require.Nil(t, res)
 
 	// Add another TODO for pawan which we should get in the latest update of 2nd subscription.
