@@ -587,10 +587,10 @@ func ValidateAddress(addr string) error {
 	if len(strings.Replace(host, ".", "", -1)) > 255 {
 		return fmt.Errorf("hostname: %s should be less than or equal to 255 characters", host)
 	}
-	if regExpHostName.MatchString(host) == false {
-		return fmt.Errorf("hostname: %s is not valid", host)
-	} else {
+	if regExpHostName.MatchString(host) {
 		return nil
+	} else {
+		return fmt.Errorf("hostname: %s is not valid", host)
 	}
 }
 
