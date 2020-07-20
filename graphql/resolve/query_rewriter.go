@@ -76,9 +76,14 @@ func (qr *queryRewriter) Rewrite(
 		return &gql.GraphQuery{Attr: gqlQuery.ResponseName() + "()"}, nil
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
-	if err != nil {
-		return nil, err
+	authVariables, _ := ctx.Value(authorization.AuthVariables).(map[string]interface{})
+
+	if authVariables == nil {
+		customClaims, err := authorization.ExtractCustomClaims(ctx)
+		if err != nil {
+			return nil, err
+		}
+		authVariables = customClaims.AuthVariables
 	}
 
 	authRw := &authRewriter{
