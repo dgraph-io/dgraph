@@ -90,8 +90,7 @@ func (p *Poller) AddSubscriber(
 	p.Lock()
 	defer p.Unlock()
 
-	ctx := context.WithValue(context.Background(), authorization.AuthVariables,
-		customClaims.AuthVariables)
+	ctx := context.WithValue(context.Background(), authorization.AuthVariables, customClaims.AuthVariables)
 	res := p.resolver.Resolve(ctx, req)
 	if len(res.Errors) != 0 {
 		return nil, res.Errors

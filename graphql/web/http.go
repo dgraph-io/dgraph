@@ -143,6 +143,7 @@ func (gs *graphqlSubscription) Subscribe(
 		name := authorization.GetHeader()
 		val, ok := payload[name].(string)
 		if ok {
+
 			md := metadata.New(map[string]string{
 				"authorizationJwt": val,
 			})
@@ -196,28 +197,20 @@ func (gh *graphqlHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		x.Panic(errors.New("graphqlHandler not initialised"))
 	}
 
+	ctx = authorization.AttachAuthorizationJwt(ctx, r)
+	ctx = x.AttachAccessJwt(ctx, r)
+	// Add remote addr as peer info so that the remote address can be logged
+	// inside Server.Login
+	ctx = x.AttachRemoteIP(ctx, r)
+
 	var res *schema.Response
-	actx := authorization.ExtractAuthJWT(r)
-	cc, err := authorization.ExtractCustomClaims(actx)
+	gqlReq, err := getRequest(ctx, r)
+
 	if err != nil {
 		res = schema.ErrorResponse(err)
 	} else {
-		// Lets attach the auth variables to the context so tha queries can access it.
-		ctx = context.WithValue(ctx, authorization.AuthVariables, cc.AuthVariables)
-
-		ctx = x.AttachAccessJwt(ctx, r)
-		// Add remote addr as peer info so that the remote address can be logged
-		// inside Server.Login
-		ctx = x.AttachRemoteIP(ctx, r)
-
-		gqlReq, err := getRequest(ctx, r)
-
-		if err != nil {
-			res = schema.ErrorResponse(err)
-		} else {
-			gqlReq.Header = r.Header
-			res = gh.resolver.Resolve(ctx, gqlReq)
-		}
+		gqlReq.Header = r.Header
+		res = gh.resolver.Resolve(ctx, gqlReq)
 	}
 
 	write(w, res, strings.Contains(r.Header.Get("Accept-Encoding"), "gzip"))

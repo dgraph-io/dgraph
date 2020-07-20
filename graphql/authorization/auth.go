@@ -125,18 +125,21 @@ func GetAuthMeta() AuthMeta {
 	return metainfo
 }
 
-// ExtractAuthJWT returns a context with the JWT attached as metadata.
-func ExtractAuthJWT(r *http.Request) context.Context {
-	ctx := context.Background()
+// AttachAuthorizationJwt adds any incoming JWT authorization data into the grpc context metadata.
+func AttachAuthorizationJwt(ctx context.Context, r *http.Request) context.Context {
 	authorizationJwt := r.Header.Get(metainfo.Header)
 	if authorizationJwt == "" {
 		return ctx
 	}
 
-	md := metadata.New(map[string]string{
-		string(AuthJwtCtxKey): authorizationJwt,
-	})
-	return metadata.NewIncomingContext(ctx, md)
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		md = metadata.New(nil)
+	}
+
+	md.Append(string(AuthJwtCtxKey), authorizationJwt)
+	ctx = metadata.NewIncomingContext(ctx, md)
+	return ctx
 }
 
 type CustomClaims struct {

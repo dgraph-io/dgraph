@@ -171,11 +171,12 @@ func TestStringCustomClaim(t *testing.T) {
 
 	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	require.NoError(t, err)
+	authVar := customClaims.AuthVariables
 	result := map[string]interface{}{
 		"ROLE": "ADMIN",
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 	}
-	require.Equal(t, customClaims.AuthVariables, result)
+	require.Equal(t, authVar, result)
 }
 
 func TestAudienceClaim(t *testing.T) {
@@ -230,11 +231,12 @@ func TestAudienceClaim(t *testing.T) {
 				return
 			}
 
+			authVar := customClaims.AuthVariables
 			result := map[string]interface{}{
 				"ROLE": "ADMIN",
 				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 			}
-			require.Equal(t, customClaims.AuthVariables, result)
+			require.Equal(t, authVar, result)
 		})
 	}
 }

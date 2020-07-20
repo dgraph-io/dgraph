@@ -58,8 +58,7 @@ type GraphQLSubscriptionClient struct {
 }
 
 // NewGraphQLSubscription returns graphql subscription client.
-func NewGraphQLSubscription(url string, req *schema.Request,
-	initPayload string) (*GraphQLSubscriptionClient, error) {
+func NewGraphQLSubscription(url string, req *schema.Request, subscriptionPayload string) (*GraphQLSubscriptionClient, error) {
 	header := http.Header{
 		"Sec-WebSocket-Protocol": []string{protocolGraphQLWS},
 	}
@@ -70,7 +69,7 @@ func NewGraphQLSubscription(url string, req *schema.Request,
 	// Initialize subscription.
 	init := operationMessage{
 		Type:    initMsg,
-		Payload: []byte(initPayload),
+		Payload: []byte(subscriptionPayload),
 	}
 
 	// Send Intialization message to the graphql server.

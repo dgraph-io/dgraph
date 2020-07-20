@@ -379,8 +379,9 @@ func authorizeNewNodes(
 	if err != nil {
 		return schema.GQLWrapf(err, "authorization failed")
 	}
+	authVariables := customClaims.AuthVariables
 	newRw := &authRewriter{
-		authVariables: customClaims.AuthVariables,
+		authVariables: authVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      addAuthSelector,
 		hasAuthRules:  true,
