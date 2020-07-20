@@ -436,7 +436,7 @@ func setDotRPCConfig(ctx *cli.Context, cfg *dot.RPCConfig) {
 
 	if wsenabled := ctx.GlobalBool(WSEnabledFlag.Name); wsenabled {
 		cfg.WSEnabled = true
-	} else {
+	} else if ctx.IsSet(WSEnabledFlag.Name) && !wsenabled {
 		cfg.WSEnabled = false
 	}
 
