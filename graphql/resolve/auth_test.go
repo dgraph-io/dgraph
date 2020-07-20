@@ -169,9 +169,9 @@ func TestStringCustomClaim(t *testing.T) {
 	md := metadata.New(map[string]string{"authorizationJwt": token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
-	customClaims, err := authorization.ExtractCustomClaims(ctx)
+	authVar, err := authorization.ExtractAuthVariables(ctx)
 	require.NoError(t, err)
-	authVar := customClaims.AuthVariables
+
 	result := map[string]interface{}{
 		"ROLE": "ADMIN",
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
@@ -225,13 +225,13 @@ func TestAudienceClaim(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			authVar, err := authorization.ExtractAuthVariables(ctx)
 			require.Equal(t, tcase.err, err)
+
 			if err != nil {
 				return
 			}
 
-			authVar := customClaims.AuthVariables
 			result := map[string]interface{}{
 				"ROLE": "ADMIN",
 				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",

@@ -21,10 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"strconv"
-	"time"
-
-	"github.com/dgrijalva/jwt-go/v4"
-	"google.golang.org/grpc/metadata"
 
 	"io"
 	"io/ioutil"
@@ -38,19 +34,15 @@ import (
 	"github.com/dgraph-io/dgraph/graphql/schema"
 	"github.com/dgraph-io/dgraph/graphql/subscription"
 	"github.com/dgraph-io/dgraph/x"
-	"github.com/dgraph-io/graphql-transport-ws/graphqlws"
 	"github.com/golang/glog"
+	"github.com/graph-gophers/graphql-transport-ws/graphqlws"
 	"github.com/pkg/errors"
 	"go.opencensus.io/trace"
 )
 
-type Headerkey string
+const touchedUidsHeader = "Graphql-TouchedUids"
 
-const (
-	touchedUidsHeader = "Graphql-TouchedUids"
-)
-
-// An IServeGraphQL can serve a GraphQL endpoint (currently only ons http)
+// An IServeGraphQL can serve a GraphQL endpoint (currently only on http)
 type IServeGraphQL interface {
 
 	// After ServeGQL is called, this IServeGraphQL serves the new resolvers.
@@ -124,45 +116,12 @@ func (gs *graphqlSubscription) Subscribe(
 	operationName string,
 	variableValues map[string]interface{}) (payloads <-chan interface{},
 	err error) {
-
-	// library (graphql-transport-ws) passes the headers which are part of the INIT payload to us in the context.
-	// And we are extracting the Auth JWT from those and passing them along.
-
-	header, _ := ctx.Value("Header").(json.RawMessage)
-	customClaims := &authorization.CustomClaims{
-		StandardClaims: jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Time{}),
-		},
-	}
-	if len(header) > 0 {
-		payload := make(map[string]interface{})
-		if err := json.Unmarshal(header, &payload); err != nil {
-			return nil, err
-		}
-
-		name := authorization.GetHeader()
-		val, ok := payload[name].(string)
-		if ok {
-
-			md := metadata.New(map[string]string{
-				"authorizationJwt": val,
-			})
-			ctx = metadata.NewIncomingContext(ctx, md)
-
-			customClaims, err = authorization.ExtractCustomClaims(ctx)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
 	req := &schema.Request{
 		OperationName: operationName,
 		Query:         document,
 		Variables:     variableValues,
 	}
-
-	res, err := gs.graphqlHandler.poller.AddSubscriber(req, customClaims)
+	res, err := gs.graphqlHandler.poller.AddSubscriber(req)
 	if err != nil {
 		return nil, err
 	}

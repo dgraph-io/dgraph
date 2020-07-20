@@ -152,13 +152,12 @@ type AuthMeta struct {
 	AuthVars  map[string]interface{}
 }
 
-func (a *AuthMeta) GetSignedToken(privateKeyFile string,
-	expireAfter time.Duration) (string, error) {
+func (a *AuthMeta) GetSignedToken(privateKeyFile string) (string, error) {
 	claims := clientCustomClaims{
 		a.Namespace,
 		a.AuthVars,
 		jwt.StandardClaims{
-			ExpiresAt: jwt.At(time.Now().Add(expireAfter)),
+			ExpiresAt: jwt.At(time.Now().Add(time.Minute * 5)),
 			Issuer:    "test",
 		},
 	}
@@ -189,7 +188,7 @@ func (a *AuthMeta) GetSignedToken(privateKeyFile string,
 }
 
 func (a *AuthMeta) AddClaimsToContext(ctx context.Context) (context.Context, error) {
-	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem", 5*time.Minute)
+	token, err := a.GetSignedToken("../e2e/auth/sample_private_key.pem")
 	if err != nil {
 		return ctx, err
 	}
