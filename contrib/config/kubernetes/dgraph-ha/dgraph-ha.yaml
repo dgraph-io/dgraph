@@ -20,10 +20,10 @@ spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: zero-grpc
+    name: grpc-zero
   - port: 6080
     targetPort: 6080
-    name: zero-http
+    name: http-zero
   selector:
     app: dgraph-zero
 ---
@@ -39,10 +39,10 @@ spec:
   ports:
   - port: 8080
     targetPort: 8080
-    name: alpha-http
+    name: http-alpha
   - port: 9080
     targetPort: 9080
-    name: alpha-grpc
+    name: grpc-alpha
   selector:
     app: dgraph-alpha
 ---
@@ -57,7 +57,7 @@ spec:
   ports:
   - port: 8000
     targetPort: 8000
-    name: ratel-http
+    name: http-ratel
   selector:
     app: dgraph-ratel
 ---
@@ -73,7 +73,7 @@ spec:
   ports:
   - port: 5080
     targetPort: 5080
-    name: zero-grpc
+    name: grpc-zero
   clusterIP: None
   # We want all pods in the StatefulSet to have their addresses published for
   # the sake of the other Dgraph Zero pods even before they're ready, since they
@@ -94,7 +94,7 @@ spec:
   ports:
   - port: 7080
     targetPort: 7080
-    name: alpha-grpc-int
+    name: grpc-alpha-int
   clusterIP: None
   # We want all pods in the StatefulSet to have their addresses published for
   # the sake of the other Dgraph alpha pods even before they're ready, since they
@@ -137,9 +137,9 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 5080
-          name: zero-grpc
+          name: grpc-zero
         - containerPort: 6080
-          name: zero-http
+          name: http-zero
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -274,11 +274,11 @@ spec:
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 7080
-          name: alpha-grpc-int
+          name: grpc-alpha-int
         - containerPort: 8080
-          name: alpha-http
+          name: http-alpha
         - containerPort: 9080
-          name: alpha-grpc
+          name: grpc-alpha
         volumeMounts:
         - name: datadir
           mountPath: /dgraph
@@ -290,12 +290,17 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+        # dgraph versions earlier than v1.2.3 and v20.03.0 can only support one zero:
+        #  `dgraph alpha --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080`
+        # dgraph-alpha versions greater than or equal to v1.2.3 or v20.03.1 can support
+        #  a comma-separated list of zeros.  The value below supports 3 zeros
+        #  (set according to number of replicas)
         command:
           - bash
           - "-c"
           - |
             set -ex
-            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
+            dgraph alpha --my=$(hostname -f):7080 --lru_mb 2048 --zero dgraph-zero-0.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-1.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080,dgraph-zero-2.dgraph-zero.${POD_NAMESPACE}.svc.cluster.local:5080
         livenessProbe:
           httpGet:
             path: /health?live=1

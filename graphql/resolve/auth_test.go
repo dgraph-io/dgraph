@@ -19,6 +19,7 @@ package resolve
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -168,14 +169,76 @@ func TestStringCustomClaim(t *testing.T) {
 	md := metadata.New(map[string]string{"authorizationJwt": token})
 	ctx := metadata.NewIncomingContext(context.Background(), md)
 
-	authVar, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	require.NoError(t, err)
-
+	authVar := customClaims.AuthVariables
 	result := map[string]interface{}{
 		"ROLE": "ADMIN",
 		"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
 	}
 	require.Equal(t, authVar, result)
+}
+
+func TestAudienceClaim(t *testing.T) {
+	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
+	require.NoError(t, err, "Unable to read schema file")
+
+	authSchema, err := testutil.AppendAuthInfo(sch, authorization.HMAC256, "")
+	require.NoError(t, err)
+
+	test.LoadSchemaFromString(t, string(authSchema))
+
+	// Verify that authorization information is set correctly.
+	metainfo := authorization.GetAuthMeta()
+	require.Equal(t, metainfo.Algo, authorization.HMAC256)
+	require.Equal(t, metainfo.Header, "X-Test-Auth")
+	require.Equal(t, metainfo.Namespace, "https://xyz.io/jwt/claims")
+	require.Equal(t, metainfo.VerificationKey, "secretkey")
+	require.Equal(t, metainfo.Audience, []string{"aud1", "63do0q16n6ebjgkumu05kkeian", "aud5"})
+
+	testCases := []struct {
+		name  string
+		token string
+		err   error
+	}{
+		{
+			name:  `Token with valid audience: { "aud": "63do0q16n6ebjgkumu05kkeian" }`,
+			token: "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImF1ZCI6IjYzZG8wcTE2bjZlYmpna3VtdTA1a2tlaWFuIiwiZXZlbnRfaWQiOiIzMWM5ZDY4NC0xZDQ1LTQ2ZjctOGMyYi1jYzI3YjFmNmYwMWIiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTU5MDMzMzM1NiwibmFtZSI6IkRhdmlkIFBlZWsiLCJleHAiOjk1OTAzNzYwMzIsImlhdCI6MTU5MDM3MjQzMiwiZW1haWwiOiJkYXZpZEB0eXBlam9pbi5jb20ifQ.whgQ9QVMOa0jFYBKhCytlm25-dJiIxcfUFligjav0K0",
+		},
+		{
+			name:  `Token with invalid audience: { "aud": "invalidAudience" }`,
+			token: "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImF1ZCI6ImludmFsaWRBdWRpZW5jZSIsImV2ZW50X2lkIjoiMzFjOWQ2ODQtMWQ0NS00NmY3LThjMmItY2MyN2IxZjZmMDFiIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE1OTAzMzMzNTYsIm5hbWUiOiJEYXZpZCBQZWVrIiwiZXhwIjo5NTkwMzc2MDMyLCJpYXQiOjE1OTAzNzI0MzIsImVtYWlsIjoiZGF2aWRAdHlwZWpvaW4uY29tIn0.b-K-NtNAswh3_YwYmvEMd0IkghbDQbw2w9kFkCJ3tuM",
+			err:   fmt.Errorf("JWT `aud` value doesn't match with the audience"),
+		},
+		{
+			name:  "Token without audience field",
+			token: "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImV2ZW50X2lkIjoiMzFjOWQ2ODQtMWQ0NS00NmY3LThjMmItY2MyN2IxZjZmMDFiIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE1OTAzMzMzNTYsIm5hbWUiOiJEYXZpZCBQZWVrIiwiZXhwIjo5NTkwMzc2MDMyLCJpYXQiOjE1OTAzNzI0MzIsImVtYWlsIjoiZGF2aWRAdHlwZWpvaW4uY29tIn0.rWLwxa_IyQcQITVu7dVDYNygipfpQt9t2IimrmQ_BJo",
+		},
+		{
+			name:  `Token with multiple audience: {"aud": ["aud1", "aud2", "aud3"]}`,
+			token: "eyJraWQiOiIyRWplN2tIRklLZS92MFRVT3JRYlVJWWJxSWNNUHZ2TFBjM3RSQ25EclBBPSIsImFsZyI6IkhTMjU2In0.eyJzdWIiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJjb2duaXRvOmdyb3VwcyI6WyJBRE1JTiJdLCJlbWFpbF92ZXJpZmllZCI6dHJ1ZSwiaXNzIjoiaHR0cHM6Ly9jb2duaXRvLWlkcC5hcC1zb3V0aGVhc3QtMi5hbWF6b25hd3MuY29tL2FwLXNvdXRoZWFzdC0yX0dmbWVIZEZ6NCIsImNvZ25pdG86dXNlcm5hbWUiOiI1MDk1MGI0MC0yNjJmLTRiMjYtODhhNy1jYmJiNzgwYjIxNzYiLCJodHRwczovL3h5ei5pby9qd3QvY2xhaW1zIjoie1wiVVNFUlwiOiBcIjUwOTUwYjQwLTI2MmYtNGIyNi04OGE3LWNiYmI3ODBiMjE3NlwiLCBcIlJPTEVcIjogXCJBRE1JTlwifSIsImF1ZCI6WyJhdWQxIiwiYXVkMiIsImF1ZDMiXSwiZXZlbnRfaWQiOiIzMWM5ZDY4NC0xZDQ1LTQ2ZjctOGMyYi1jYzI3YjFmNmYwMWIiLCJ0b2tlbl91c2UiOiJpZCIsImF1dGhfdGltZSI6MTU5MDMzMzM1NiwibmFtZSI6IkRhdmlkIFBlZWsiLCJleHAiOjk1OTAzNzYwMzIsImlhdCI6MTU5MDM3MjQzMiwiZW1haWwiOiJkYXZpZEB0eXBlam9pbi5jb20ifQ.gDI-4e9v15643CjxoSCjE_UJ-ext8eiP-OUMsaZmOdw",
+		},
+	}
+
+	for _, tcase := range testCases {
+		t.Run(tcase.name, func(t *testing.T) {
+			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
+			ctx := metadata.NewIncomingContext(context.Background(), md)
+
+			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			require.Equal(t, tcase.err, err)
+			if err != nil {
+				return
+			}
+
+			authVar := customClaims.AuthVariables
+			result := map[string]interface{}{
+				"ROLE": "ADMIN",
+				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
+			}
+			require.Equal(t, authVar, result)
+		})
+	}
 }
 
 // Tests showing that the query rewriter produces the expected Dgraph queries
@@ -586,7 +649,7 @@ func TestAuthQueryRewriting(t *testing.T) {
 
 		authMeta, err := authorization.Parse(strSchema)
 		metaInfo := &testutil.AuthMeta{
-			PublicKey: authMeta.PublicKey,
+			PublicKey: authMeta.VerificationKey,
 			Namespace: authMeta.Namespace,
 			Algo:      authMeta.Algo,
 		}

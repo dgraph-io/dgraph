@@ -75,22 +75,6 @@ func (m *Manifest) getPredsInGroup(gid uint32) predicateSet {
 	return predSet
 }
 
-// Credentials holds the credentials needed to perform a backup operation.
-// If these credentials are missing the default credentials will be used.
-type Credentials struct {
-	AccessKey    string
-	SecretKey    string
-	SessionToken string
-	Anonymous    bool
-}
-
-func (creds *Credentials) isAnonymous() bool {
-	if creds == nil {
-		return false
-	}
-	return creds.Anonymous
-}
-
 // GetCredentialsFromRequest extracts the credentials from a backup request.
 func GetCredentialsFromRequest(req *pb.BackupRequest) *Credentials {
 	return &Credentials{

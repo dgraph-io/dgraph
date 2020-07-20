@@ -357,12 +357,13 @@ func (mrw *AddRewriter) FromMutationResult(
 		errs = schema.AsGQLErrors(errors.Errorf("no new node was created"))
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
@@ -410,12 +411,13 @@ func (urw *UpdateRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		selector:      updateAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
@@ -556,12 +558,13 @@ func (urw *UpdateRewriter) FromMutationResult(
 		}
 	}
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
+
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        NewVariableGenerator(),
 		selector:      queryAuthSelector,
 		parentVarName: mutation.MutatedType().Name() + "Root",
@@ -616,7 +619,7 @@ func checkResult(frags []*mutationFragment, result map[string]interface{}) error
 	return err
 }
 
-func extractFilter(m schema.Mutation) map[string]interface{} {
+func extractMutationFilter(m schema.Mutation) map[string]interface{} {
 	var filter map[string]interface{}
 	mutationType := m.MutationType()
 	if mutationType == schema.UpdateMutation {
@@ -653,13 +656,13 @@ func RewriteUpsertQueryFromMutation(m schema.Mutation, authRw *authRewriter) *gq
 	})
 
 	// TODO - Cache this instead of this being a loop to find the IDField.
-	if ids := idFilter(m, m.MutatedType().IDField()); ids != nil {
+	filter := extractMutationFilter(m)
+	if ids := idFilter(filter, m.MutatedType().IDField()); ids != nil {
 		addUIDFunc(dgQuery, ids)
 	} else {
 		addTypeFunc(dgQuery, m.MutatedType().DgraphName())
 	}
 
-	filter := extractFilter(m)
 	addFilter(dgQuery, m.MutatedType(), filter)
 
 	dgQuery = authRw.addAuthQueries(m.MutatedType(), dgQuery, rbac)
@@ -679,13 +682,13 @@ func (drw *deleteRewriter) Rewrite(
 
 	varGen := NewVariableGenerator()
 
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	authRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		selector:      deleteAuthSelector,
 		parentVarName: m.MutatedType().Name() + "Root",
@@ -743,7 +746,7 @@ func (drw *deleteRewriter) Rewrite(
 	// is later added to delete mutation result.
 	if queryField := m.QueryField(); queryField.SelectionSet() != nil {
 		queryAuthRw := &authRewriter{
-			authVariables: authVariables,
+			authVariables: customClaims.AuthVariables,
 			varGen:        varGen,
 			selector:      queryAuthSelector,
 			filterByUid:   true,
@@ -1495,14 +1498,15 @@ func addDelete(
 	// then we need update permission on Author1
 
 	// grab the auth for Author1
-	authVariables, err := authorization.ExtractAuthVariables(ctx)
+	customClaims, err := authorization.ExtractCustomClaims(ctx)
 	if err != nil {
 		frag.check =
 			checkQueryResult("auth.failed", nil, schema.GQLWrapf(err, "authorization failed"))
 		return
 	}
+
 	newRw := &authRewriter{
-		authVariables: authVariables,
+		authVariables: customClaims.AuthVariables,
 		varGen:        varGen,
 		varName:       targetVar,
 		selector:      updateAuthSelector,

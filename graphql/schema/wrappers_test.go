@@ -816,7 +816,7 @@ func TestAllowedHeadersList(t *testing.T) {
         username: String! @id
         userRole: String @search(by: [hash])
 	  }
-	  # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims RS256 "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----"
+	  # Dgraph.Authorization  {"VerificationKey":"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsppQMzPRyYP9KcIAg4CG\nUV3NGCIRdi2PqkFAWzlyo0mpZlHf5Hxzqb7KMaXBt8Yh+1fbi9jcBbB4CYgbvgV0\n7pAZY/HE4ET9LqnjeF2sjmYiGVxLARv8MHXpNLcw7NGcL0FgSX7+B2PB2WjBPnJY\ndvaJ5tsT+AuZbySaJNS1Ha77lW6gy/dmBDybZ1UU+ixRjDWEqPmtD71g2Fpk8fgr\nReNm2h/ZQsJ19onFaGPQN6L6uJR+hfYN0xmOdTC21rXRMUJT8Pw9Xsi6wSt+tI4T\nKxDfMTxKksfjv93dnnof5zJtIcMFQlSKLOrgDC0WP07gVTR2b85tFod80ykevvgu\nAQIDAQAB\n-----END PUBLIC KEY-----","Header":"X-Test-Dgraph","Namespace":"https://dgraph.io/jwt/claims","Algo":"RS256"}
 	`,
 			"X-Test-Dgraph",
 		},
@@ -927,7 +927,7 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			 # Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
+			# Dgraph.Secret  GITHUB_API_TOKEN   "some-super-secret-token"
 			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
 			`,
 			map[string]string{"GITHUB_API_TOKEN": "some-super-secret-token",
@@ -969,7 +969,7 @@ func TestParseSecrets(t *testing.T) {
 				"be `# Dgraph.Secret key value`"),
 		},
 		{
-			"should work along with authorization",
+			"Dgraph.Authorization old format",
 			`
 			type User {
 				id: ID!
@@ -986,6 +986,22 @@ func TestParseSecrets(t *testing.T) {
 			nil,
 		},
 		{
+			"Dgraph.Authorization old format error",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Secret  "GITHUB_API_TOKEN"   "some-super-secret-token"
+			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims "key"
+			# Dgraph.Secret STRIPE_API_KEY "stripe-api-key-value"
+			`,
+			nil,
+			"",
+			errors.New("input: Invalid `Dgraph.Authorization` format: # Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims \"key\""),
+		},
+		{
 			"should throw an error if multiple authorization values are specified",
 			`
 			type User {
@@ -993,14 +1009,55 @@ func TestParseSecrets(t *testing.T) {
 				name: String!
 			}
 
-			# Dgraph.Authorization random https://dgraph.io/jwt/claims HS256 "key"
-			# Dgraph.Authorization X-Test-Dgraph https://dgraph.io/jwt/claims HS256 "key"
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
 			`,
 			nil,
 			"",
 			errors.New(`Dgraph.Authorization should be only be specified once in a schema` +
-				`, found second mention: # Dgraph.Authorization X-Test-Dgraph` +
-				` https://dgraph.io/jwt/claims HS256 "key"`),
+				`, found second mention: # Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}`),
+		},
+		{
+			"Should throw an error if required fields are missing in Authorizaiton Information",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {}
+			`,
+			nil,
+			"",
+			errors.New("required field missing in Dgraph.Authorization: `Verification key` `Header` `Namespace` `Algo`"),
+		},
+		{
+			"Valid Dgraph.Authorization with audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256","Audience":["aud1","63do0q16n6ebjgkumu05kkeian","aud5"]}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
+		},
+		{
+			"Valid Dgraph.Authorization without audience field",
+			`
+			type User {
+				id: ID!
+				name: String!
+			}
+
+			# Dgraph.Authorization {"VerificationKey":"secretkey","Header":"X-Test-Auth","Namespace":"https://xyz.io/jwt/claims","Algo":"HS256"}
+			`,
+			map[string]string{},
+			"X-Test-Auth",
+			nil,
 		},
 	}
 	for _, test := range tcases {
