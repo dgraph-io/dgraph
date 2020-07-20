@@ -63,6 +63,17 @@ func processQuery(ctx context.Context, t *testing.T, query string) (string, erro
 	return string(jsonResponse), err
 }
 
+func processQueryRDF(ctx context.Context, t *testing.T, query string) (string, error) {
+	txn := client.NewTxn()
+	defer txn.Discard(ctx)
+
+	res, err := txn.Do(ctx, &api.Request{
+		Query:     query,
+		RdfFormat: true,
+	})
+	return string(res.Rdf), err
+}
+
 func processQueryNoErr(t *testing.T, query string) string {
 	res, err := processQuery(context.Background(), t, query)
 	require.NoError(t, err)
