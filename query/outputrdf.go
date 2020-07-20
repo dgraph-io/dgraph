@@ -80,7 +80,6 @@ func castToRDF(output *string, sg *SubGraph) error {
 // rdfForSubgraph generates RDF and appends to the output parameter.
 func rdfForSubgraph(output *string, sg *SubGraph) error {
 	for i, uid := range sg.SrcUIDs.Uids {
-
 		if sg.Params.IgnoreResult {
 			// Skip ignored values.
 			continue
