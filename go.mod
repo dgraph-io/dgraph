@@ -34,7 +34,6 @@ require (
 	github.com/golang/snappy v0.0.1
 	github.com/google/codesearch v1.0.0
 	github.com/google/go-cmp v0.4.0
-	github.com/google/gops v0.3.10 // indirect
 	github.com/google/uuid v1.0.0
 	github.com/gorilla/websocket v1.4.1
 	github.com/graph-gophers/graphql-go v0.0.0-20200309224638-dae41bde9ef9
