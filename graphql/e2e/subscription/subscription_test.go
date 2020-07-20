@@ -639,7 +639,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	jwtToken, err := metaInfo.GetSignedToken("secret", 10*time.Second)
 	require.NoError(t, err)
 
-	//first subscription
+	// first subscription
 	payload := fmt.Sprintf(`{"Authorization": "%s"}`, jwtToken)
 	subscriptionClient, err := common.NewGraphQLSubscription(subscriptionEndpoint, &schema.Request{
 		Query: `subscription{
@@ -670,7 +670,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
                   owner : "pawan"}
                ])
              {
-               todo{
+               todo {
                     text
                     owner
                }
@@ -727,8 +727,9 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
 	require.Nil(t, addResult.Errors)
 
+	// 1st subscription should get the empty response as subscription has expired
 	res, err = subscriptionClient.RecvMsg()
-	require.Nil(t, res) //1st subscription should get the empty response as subscriptio has expired
+	require.Nil(t, res)
 
 	// Add another TODO for pawan which we should get in the latest update of 2nd subscription.
 	add = &common.GraphQLParams{
@@ -745,11 +746,14 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	      }
 	    }`,
 	}
+	addResult = add.ExecuteAsPost(t, graphQLEndpoint)
+	require.Nil(t, addResult.Errors)
+
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
 	err = json.Unmarshal(res, &resp)
 	require.NoError(t, err)
-	//2nd one still running and should get the  update
+	// 2nd one still running and should get the  update
 	require.JSONEq(t, `{"queryTodo": [
 	 {
 	   "owner": "pawan",
@@ -760,7 +764,7 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	   "text" : "Dgraph is awesome!!"
 	}]}`, string(resp.Data))
 
-	//add delay for 2nd subscription  to timeout
+	// add delay for 2nd subscription  to timeout
 	// Wait for JWT to expire.
 	time.Sleep(10 * time.Second)
 	// Add another TODO for pawan which 2nd subscription shouldn't get.
@@ -779,8 +783,8 @@ func TestTwoSubscriptionAuthDifferentExpirydiffjWt(t *testing.T) {
 	    }`,
 	}
 
+	// 2nd subscription should get the empty response as subscriptio has expired
 	res, err = subscriptionClient1.RecvMsg()
 	require.NoError(t, err)
-	require.Nil(t, res) //2nd subscription should get the empty response as subscriptio has expired
-
+	require.Nil(t, res)
 }
