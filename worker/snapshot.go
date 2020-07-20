@@ -49,8 +49,12 @@ func (n *node) populateSnapshot(snap pb.Snapshot, pl *conn.Pool) (int, error) {
 	con := pl.Get()
 	c := pb.NewWorkerClient(con)
 
+	// We should absolutely cancel the context when we return from this function, that way, the
+	// leader who is sending the snapshot would stop sending.
+	ctx, cancel := context.WithCancel(n.ctx)
+	defer cancel()
+
 	// Set my RaftContext on the snapshot, so it's easier to locate me.
-	ctx := n.ctx
 	snap.Context = n.RaftContext
 	stream, err := c.StreamSnapshot(ctx)
 	if err != nil {
