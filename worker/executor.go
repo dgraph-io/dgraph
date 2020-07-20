@@ -43,7 +43,7 @@ type executor struct {
 
 	sync.RWMutex
 	predChan   map[string]chan *subMutation
-	workerChan chan *mutation
+	workerChan map[string]chan *mutation
 	closer     *y.Closer
 	applied    *y.WaterMark
 }
@@ -53,11 +53,7 @@ func newExecutor(applied *y.WaterMark) *executor {
 		predChan:   make(map[string]chan *subMutation),
 		closer:     y.NewCloser(0),
 		applied:    applied,
-		workerChan: make(chan *mutation, 10000),
-	}
-
-	for i := 0; i < 8; i++ {
-		go ex.worker()
+		workerChan: make(map[string]chan *mutation),
 	}
 
 	go ex.shutdown()
@@ -99,9 +95,9 @@ func newGraph() *graph {
 	return &graph{conflicts: make(map[uint64][]*mutation)}
 }
 
-func (e *executor) worker() {
+func (e *executor) worker(ch chan *mutation) {
 	writer := posting.NewTxnWriter(pstore)
-	for mutation := range e.workerChan {
+	for mutation := range ch {
 		payload := mutation.m
 
 		var esize int64
@@ -154,14 +150,14 @@ func (e *executor) worker() {
 		for _, dependent := range mutation.outEdges {
 			dependent.inDeg -= 1
 			if dependent.inDeg == 0 {
-				e.workerChan <- dependent
+				ch <- dependent
 			}
 		}
 
 	}
 }
 
-func (e *executor) processMutationCh(ch chan *subMutation) {
+func (e *executor) processMutationCh(ch chan *subMutation, workerCh chan *mutation) {
 	defer e.closer.Done()
 
 	g := newGraph()
@@ -188,7 +184,7 @@ func (e *executor) processMutationCh(ch chan *subMutation) {
 		g.Unlock()
 
 		if m.inDeg == 0 {
-			e.workerChan <- &m
+			workerCh <- &m
 		}
 	}
 }
@@ -209,9 +205,13 @@ func (e *executor) getChannel(pred string) (ch chan *subMutation) {
 		return ch
 	}
 	ch = make(chan *subMutation, 1000)
+	workerCh := make(chan *mutation, 1000)
 	e.predChan[pred] = ch
 	e.closer.AddRunning(1)
-	go e.processMutationCh(ch)
+	go e.processMutationCh(ch, workerCh)
+	for i := 0; i < 2; i++ {
+		go e.worker(workerCh)
+	}
 	return ch
 }
 
