@@ -23,7 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func BenchmarkSingleLevel_QueryRestaurant(t *testing.T) {
+const (
+	graphqlURL = "http://localhost:8080/graphql"
+)
+
+func BenchmarkSingleLevel_QueryRestaurant(b *testing.B) {
 	query := `
 	query($offset: Int) {
 	  queryRestaurant (first: 100, offset: $offset) {
