@@ -62,7 +62,7 @@ func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 	testutil.CompareJSONMaps(t, wantMap, gotMap)
 }
 
-func checkUpsertLoadedData(t *testing.T, newUids bool) {
+func checkUpsertLoadedData(t *testing.T) {
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
 			q(func: eq(xid, "m.1234")) {
@@ -111,7 +111,7 @@ func TestLiveLoadUpsert(t *testing.T) {
 	_, err = testutil.Pipeline(pipeline)
 	require.NoError(t, err, "live loading JSON file exited with error")
 
-	checkUpsertLoadedData(t, false)
+	checkUpsertLoadedData(t)
 }
 
 func checkLoadedData(t *testing.T, newUids bool) {
