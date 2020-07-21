@@ -62,6 +62,58 @@ func checkDifferentUid(t *testing.T, wantMap, gotMap map[string]interface{}) {
 	testutil.CompareJSONMaps(t, wantMap, gotMap)
 }
 
+func checkUpsertLoadedData(t *testing.T, newUids bool) {
+	resp, err := dg.NewTxn().Query(context.Background(), `
+		{
+			q(func: eq(xid, "m.1234")) {
+				xid
+				name
+				value
+			}
+		}
+	`)
+	require.NoError(t, err)
+
+	gotMap := testutil.UnmarshalJSON(t, string(resp.GetJson()))
+	wantMap := testutil.UnmarshalJSON(t, `
+		{
+		    "q": [
+			    {
+					"xid": "m.1234",
+					"name": "name 1234",
+					"value": "value 1234"
+			    }
+			]
+		}
+	`)
+
+	testutil.CompareJSONMaps(t, wantMap, gotMap)
+}
+
+func TestLiveLoadUpsert(t *testing.T) {
+	testutil.DropAll(t, dg)
+
+	pipeline := [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_a.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err := testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	pipeline = [][]string{
+		{testutil.DgraphBinaryPath(), "live",
+			"--schema", testDataDir + "/xid.schema", "--files", testDataDir + "/xid_b.rdf",
+			"--alpha", alphaService, "--zero", zeroService, "-u", "groot", "-p", "password",
+			"-U", "xid"},
+	}
+	_, err = testutil.Pipeline(pipeline)
+	require.NoError(t, err, "live loading JSON file exited with error")
+
+	checkUpsertLoadedData(t, false)
+}
+
 func checkLoadedData(t *testing.T, newUids bool) {
 	resp, err := dg.NewTxn().Query(context.Background(), `
 		{
