@@ -241,6 +241,7 @@ func TestAudienceClaim(t *testing.T) {
 	}
 }
 
+// TODO(arijit): Generate the JWT token instead of using pre generated token.
 func TestJWTExpiry(t *testing.T) {
 	sch, err := ioutil.ReadFile("../e2e/auth/schema.graphql")
 	require.NoError(t, err, "Unable to read schema file")
