@@ -1847,7 +1847,7 @@ func getVar(key string, variables map[string]interface{}) (interface{}, error) {
 	}
 	val, ok := variables[key[1:]]
 	if !ok {
-		return nil, errors.Errorf("couldn't find variable: %s in variables map", key)
+		return nil, nil
 	}
 
 	return val, nil
@@ -1871,6 +1871,9 @@ func substituteVarInMapInBody(object, variables map[string]interface{}) error {
 			vval, err := getVar(val, variables)
 			if err != nil {
 				return err
+			}
+			if err == nil && vval == nil {
+				return nil
 			}
 			object[k] = vval
 		case map[string]interface{}:
