@@ -25,6 +25,7 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/rpc"
 	"github.com/ChainSafe/gossamer/dot/state"
+	"github.com/ChainSafe/gossamer/dot/sync"
 	"github.com/ChainSafe/gossamer/dot/system"
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/babe"
@@ -164,7 +165,7 @@ func createBABEService(cfg *Config, rt *runtime.Runtime, st *state.Service, ks *
 // Core Service
 
 // createCoreService creates the core service from the provided core configuration
-func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*core.Service, error) {
+func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime, ks *keystore.Keystore, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message) (*core.Service, error) {
 	logger.Info(
 		"creating core service...",
 		"authority", cfg.Core.Authority,
@@ -182,11 +183,6 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		handler = grandpa.NewMessageHandler(nil, stateSrvc.Block)
 	}
 
-	threshold, ok := cfg.Core.BabeThreshold.(*big.Int)
-	if !ok && threshold != nil {
-		return nil, errors.New("invalid BabeThreshold in configuration")
-	}
-
 	// set core configuration
 	coreConfig := &core.Config{
 		LogLvl:                  lvl,
@@ -202,8 +198,6 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 		MsgSend:                 coreMsgs,    // message channel from core service to network service
 		IsBlockProducer:         cfg.Core.BabeAuthority,
 		IsFinalityAuthority:     cfg.Core.GrandpaAuthority,
-		SyncChan:                syncChan,
-		BabeThreshold:           threshold,
 	}
 
 	// create new core service
@@ -219,7 +213,7 @@ func createCoreService(cfg *Config, bp BlockProducer, fg core.FinalityGadget, rt
 // Network Service
 
 // createNetworkService creates a network service from the command configuration and genesis data
-func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncChan chan *big.Int) (*network.Service, error) {
+func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan network.Message, networkMsgs chan network.Message, syncer *sync.Service) (*network.Service, error) {
 	logger.Info(
 		"creating network service...",
 		"roles", cfg.Core.Roles,
@@ -249,7 +243,7 @@ func createNetworkService(cfg *Config, stateSrvc *state.Service, coreMsgs chan n
 		NoMDNS:       cfg.Network.NoMDNS,
 		MsgRec:       coreMsgs,    // message channel from core service to network service
 		MsgSend:      networkMsgs, // message channel from network service to core service
-		SyncChan:     syncChan,
+		Syncer:       syncer,
 	}
 
 	networkSrvc, err := network.NewService(&networkConfig)
@@ -334,4 +328,72 @@ func createGRANDPAService(cfg *Config, rt *runtime.Runtime, st *state.Service, k
 	}
 
 	return grandpa.NewService(gsCfg)
+}
+
+func createSyncService(cfg *Config, st *state.Service, bp BlockProducer, fg core.FinalityGadget, rt *runtime.Runtime) (*sync.Service, error) {
+	var dh *core.DigestHandler
+	var err error
+	if cfg.Core.BabeAuthority || cfg.Core.GrandpaAuthority {
+		dh, err = core.NewDigestHandler(st.Block, bp, fg)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	// load BABE verification data from runtime
+	// TODO: authority data may change
+	babeCfg, err := rt.BabeConfiguration()
+	if err != nil {
+		return nil, err
+	}
+
+	ad, err := types.BABEAuthorityDataRawToAuthorityData(babeCfg.GenesisAuthorities)
+	if err != nil {
+		return nil, err
+	}
+
+	var threshold *big.Int
+	var ok bool
+	if cfg.Core.BabeThreshold != nil {
+		threshold, ok = cfg.Core.BabeThreshold.(*big.Int)
+		if !ok {
+			return nil, errors.New("invalid BabeThreshold in configuration")
+		}
+	} else {
+		threshold, err = babe.CalculateThreshold(babeCfg.C1, babeCfg.C2, len(babeCfg.GenesisAuthorities))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	descriptor := &babe.EpochDescriptor{
+		AuthorityData: ad,
+		Randomness:    babeCfg.Randomness,
+		Threshold:     threshold,
+	}
+
+	// TODO: load current epoch from database chain head
+	ver, err := babe.NewVerificationManager(st.Block, 1, descriptor)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Info("verifier", "threshold", threshold)
+
+	lvl, err := log.LvlFromString(cfg.Log.SyncLvl)
+	if err != nil {
+		return nil, err
+	}
+
+	syncCfg := &sync.Config{
+		LogLvl:           lvl,
+		BlockState:       st.Block,
+		TransactionQueue: st.TransactionQueue,
+		BlockProducer:    bp,
+		Verifier:         ver,
+		Runtime:          rt,
+		DigestHandler:    dh,
+	}
+
+	return sync.NewService(syncCfg)
 }

@@ -75,7 +75,7 @@ func (status *status) handleConn(conn network.Conn) {
 	if status.hostMessage != nil {
 
 		// send initial host status message to peer upon connection
-		err := status.host.send(remotePeer, status.hostMessage)
+		err := status.host.send(remotePeer, "", status.hostMessage)
 		if err != nil {
 			status.logger.Error(
 				"Failed to send status message to peer",
@@ -170,7 +170,7 @@ func (status *status) sendNextMessage(ctx context.Context, peer peer.ID) {
 	if status.host.peerConnected(peer) {
 
 		// send host status message to peer
-		err := status.host.send(peer, status.hostMessage)
+		err := status.host.send(peer, "", status.hostMessage)
 		if err != nil {
 			status.logger.Error(
 				"Failed to send host status message to peer",

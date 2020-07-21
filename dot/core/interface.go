@@ -34,19 +34,9 @@ type BlockState interface {
 	BestBlockHeader() (*types.Header, error)
 	BestBlockNumber() (*big.Int, error)
 	BestBlock() (*types.Block, error)
-	SubChain(start, end common.Hash) ([]common.Hash, error)
 	AddBlock(*types.Block) error
 	GetAllBlocksAtDepth(hash common.Hash) []common.Hash
 	AddBlockWithArrivalTime(*types.Block, uint64) error
-	CompareAndSetBlockData(bd *types.BlockData) error
-	GetBlockBody(common.Hash) (*types.Body, error)
-	SetHeader(*types.Header) error
-	GetHeader(common.Hash) (*types.Header, error)
-	HasHeader(hash common.Hash) (bool, error)
-	GetReceipt(common.Hash) ([]byte, error)
-	GetMessageQueue(common.Hash) ([]byte, error)
-	GetJustification(common.Hash) ([]byte, error)
-	GetBlockByNumber(*big.Int) (*types.Block, error)
 	GetBlockByHash(common.Hash) (*types.Block, error)
 	GetArrivalTime(common.Hash) (uint64, error)
 	GenesisHash() common.Hash
@@ -112,8 +102,6 @@ type ConsensusMessageHandler interface {
 type BlockProducer interface {
 	GetBlockChannel() <-chan types.Block
 	SetRuntime(*runtime.Runtime) error
-	Pause() error
-	Resume() error
 	Authorities() []*types.BABEAuthorityData
 	SetAuthorities(a []*types.BABEAuthorityData)
 }

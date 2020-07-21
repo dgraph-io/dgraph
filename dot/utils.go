@@ -64,6 +64,7 @@ func NewTestConfig(t *testing.T) *Config {
 		},
 		Log: LogConfig{
 			CoreLvl:           "info",
+			SyncLvl:           "info",
 			NetworkLvl:        "info",
 			RPCLvl:            "info",
 			StateLvl:          "info",

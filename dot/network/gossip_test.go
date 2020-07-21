@@ -122,7 +122,7 @@ func TestGossip(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	err = nodeA.host.send(addrInfosB[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}

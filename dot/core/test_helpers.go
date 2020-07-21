@@ -24,7 +24,6 @@ import (
 	"github.com/ChainSafe/gossamer/dot/network"
 	"github.com/ChainSafe/gossamer/dot/state"
 	"github.com/ChainSafe/gossamer/dot/types"
-	"github.com/ChainSafe/gossamer/lib/babe"
 	"github.com/ChainSafe/gossamer/lib/crypto/sr25519"
 	"github.com/ChainSafe/gossamer/lib/genesis"
 	"github.com/ChainSafe/gossamer/lib/keystore"
@@ -35,8 +34,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var maxRetries = 12
-
 // testMessageTimeout is the wait time for messages to be exchanged
 var testMessageTimeout = time.Second
 
@@ -46,33 +43,9 @@ var testGenesisHeader = &types.Header{
 	StateRoot: trie.EmptyHash,
 }
 
-// mockVerifier implements the Verifier interface
-type mockVerifier struct{}
-
-// VerifyBlock mocks verifying a block
-func (v *mockVerifier) VerifyBlock(header *types.Header) (bool, error) {
-	return true, nil
-}
-
-// IncrementEpoch mocks incrementing an epoch
-func (v *mockVerifier) IncrementEpoch() (*babe.NextEpochDescriptor, error) {
-	return &babe.NextEpochDescriptor{}, nil
-}
-
-// EpochNumber mocks an epoch number
-func (v *mockVerifier) EpochNumber() uint64 {
-	return 1
-}
-
 // mockBlockProducer implements the BlockProducer interface
 type mockBlockProducer struct {
 	auths []*types.BABEAuthorityData
-}
-
-func newMockBlockProducer() *mockBlockProducer {
-	return &mockBlockProducer{
-		auths: []*types.BABEAuthorityData{},
-	}
 }
 
 // Start mocks starting
@@ -82,16 +55,6 @@ func (bp *mockBlockProducer) Start() error {
 
 // Stop mocks stopping
 func (bp *mockBlockProducer) Stop() error {
-	return nil
-}
-
-// Pause mocks pausing
-func (bp *mockBlockProducer) Pause() error {
-	return nil
-}
-
-// Resume mocks resuming
-func (bp *mockBlockProducer) Resume() error {
 	return nil
 }
 
@@ -210,11 +173,6 @@ func NewTestService(t *testing.T, cfg *Config) *Service {
 		cfg.MsgSend = make(chan network.Message, 10)
 	}
 
-	if cfg.SyncChan == nil {
-		cfg.SyncChan = make(chan *big.Int, 10)
-	}
-
-	cfg.Verifier = &mockVerifier{}
 	cfg.LogLvl = 3
 
 	stateSrvc := state.NewService("", log.LvlInfo)

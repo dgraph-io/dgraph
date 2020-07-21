@@ -64,6 +64,7 @@ func TestExportCommand(t *testing.T) {
 				},
 				Log: dot.LogConfig{
 					CoreLvl:           "info",
+					SyncLvl:           "info",
 					NetworkLvl:        "info",
 					RPCLvl:            "info",
 					StateLvl:          "info",
@@ -97,6 +98,7 @@ func TestExportCommand(t *testing.T) {
 				},
 				Log: dot.LogConfig{
 					CoreLvl:           "info",
+					SyncLvl:           "info",
 					NetworkLvl:        "info",
 					RPCLvl:            "info",
 					StateLvl:          "info",
@@ -127,6 +129,7 @@ func TestExportCommand(t *testing.T) {
 				},
 				Log: dot.LogConfig{
 					CoreLvl:           "info",
+					SyncLvl:           "info",
 					NetworkLvl:        "info",
 					RPCLvl:            "info",
 					StateLvl:          "info",

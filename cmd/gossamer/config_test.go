@@ -49,6 +49,7 @@ func TestConfigFromChainFlag(t *testing.T) {
 	gssmrCfg := dot.GssmrConfig()
 	gssmrCfg.Log = dot.LogConfig{
 		CoreLvl:           gssmr.DefaultLvl,
+		SyncLvl:           gssmr.DefaultLvl,
 		NetworkLvl:        gssmr.DefaultLvl,
 		RPCLvl:            gssmr.DefaultLvl,
 		StateLvl:          gssmr.DefaultLvl,
@@ -561,6 +562,7 @@ func TestUpdateConfigFromGenesisJSON(t *testing.T) {
 		},
 		Log: dot.LogConfig{
 			CoreLvl:           "info",
+			SyncLvl:           "info",
 			NetworkLvl:        "info",
 			RPCLvl:            "info",
 			StateLvl:          "info",
@@ -613,6 +615,7 @@ func TestUpdateConfigFromGenesisJSON_Default(t *testing.T) {
 		},
 		Log: dot.LogConfig{
 			CoreLvl:           "info",
+			SyncLvl:           "info",
 			NetworkLvl:        "info",
 			RPCLvl:            "info",
 			StateLvl:          "info",
@@ -662,6 +665,7 @@ func TestUpdateConfigFromGenesisData(t *testing.T) {
 		},
 		Log: dot.LogConfig{
 			CoreLvl:           "info",
+			SyncLvl:           "info",
 			NetworkLvl:        "info",
 			RPCLvl:            "info",
 			StateLvl:          "info",

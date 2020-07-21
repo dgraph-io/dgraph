@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package sync
 
 import (
 	"bytes"
 	"encoding/hex"
 	"math/big"
-	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -43,42 +41,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
-	if cfg == nil {
-		cfg = &SyncerConfig{}
-	}
+var maxRetries = 8 //nolint
 
-	cfg.ChanLock = &sync.Mutex{}
+var testGenesisHeader = &types.Header{
+	Number:    big.NewInt(0),
+	StateRoot: trie.EmptyHash,
+}
+
+func newTestSyncer(t *testing.T, cfg *Config) *Service {
+	if cfg == nil {
+		cfg = &Config{}
+	}
 
 	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
 	genesisData := new(genesis.Data)
-
 	err := stateSrvc.Initialize(genesisData, testGenesisHeader, trie.NewEmptyTrie())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	err = stateSrvc.Start()
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	if cfg.BlockState == nil {
 		cfg.BlockState = stateSrvc.Block
-	}
-
-	if cfg.BlockNumIn == nil {
-		cfg.BlockNumIn = make(chan *big.Int)
-	}
-
-	if cfg.RespIn == nil {
-		cfg.RespIn = make(chan *network.BlockResponseMessage)
-	}
-
-	if cfg.MsgOut == nil {
-		cfg.MsgOut = make(chan network.Message)
 	}
 
 	if cfg.Runtime == nil {
@@ -93,267 +81,82 @@ func newTestSyncer(t *testing.T, cfg *SyncerConfig) *Syncer {
 		cfg.Verifier = &mockVerifier{}
 	}
 
-	if cfg.logger == nil {
-		cfg.logger = log.New("pkg", "core")
+	if cfg.LogLvl == 0 {
+		cfg.LogLvl = log.LvlInfo
 	}
 
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer, err := NewSyncer(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	syncer, err := NewService(cfg)
+	require.NoError(t, err)
 	return syncer
 }
 
-func TestWatchForBlocks(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-	msgOut := make(chan network.Message)
-
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-		MsgOut:     msgOut,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
-
+func TestHandleSeenBlocks(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
 	number := big.NewInt(12)
-	blockNumberIn <- number
-
-	var msg network.Message
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	req, ok := msg.(*network.BlockRequestMessage)
-	if !ok {
-		t.Fatal("did not get BlockRequestMessage")
-	}
-
-	if req.StartingBlock.Value().(uint64) != 1 {
-		t.Fatalf("Fail: got %d expected %d", req.StartingBlock.Value(), 1)
-	}
-
-	if syncer.requestStart != 1 {
-		t.Fatalf("Fail: got %d expected %d", syncer.requestStart, 1)
-	}
-
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
+	req := syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, uint64(1), req.StartingBlock.Value().(uint64))
+	require.Equal(t, int64(1), syncer.requestStart)
+	require.Equal(t, number, syncer.highestSeenBlock)
 }
 
-func TestWatchForBlocks_NotHighestSeen(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
+func TestHandleSeenBlocks_NotHighestSeen(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
 
 	number := big.NewInt(12)
-	blockNumberIn <- number
+	req := syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
 
-	cmp := 0
-	for i := 0; i < maxRetries; i++ {
-		cmp = syncer.highestSeenBlock.Cmp(number)
-		if cmp == 0 {
-			break
-		}
-
-		time.Sleep(time.Millisecond * 10)
-	}
-
-	if cmp != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
-
-	blockNumberIn <- big.NewInt(11)
-
-	for i := 0; i < maxRetries; i++ {
-		cmp = syncer.highestSeenBlock.Cmp(number)
-		if cmp == 0 {
-			break
-		}
-
-		time.Sleep(time.Millisecond * 10)
-	}
-
-	if cmp != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
+	lower := big.NewInt(11)
+	req = syncer.HandleSeenBlocks(lower)
+	require.Nil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
 }
 
-func TestWatchForBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-	msgOut := make(chan network.Message)
-
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-		MsgOut:     msgOut,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
+func TestHandleSeenBlocks_GreaterThanHighestSeen_NotSynced(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
 
 	number := big.NewInt(12)
-	blockNumberIn <- number
-
-	cmp := 0
-	for i := 0; i < maxRetries; i++ {
-		cmp = syncer.highestSeenBlock.Cmp(number)
-		if cmp == 0 {
-			break
-		}
-
-		time.Sleep(time.Millisecond * 10)
-	}
-
-	if cmp != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
-
-	var msg network.Message
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
+	req := syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
 
 	number = big.NewInt(16)
-	blockNumberIn <- number
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
-
-	req, ok := msg.(*network.BlockRequestMessage)
-	if !ok {
-		t.Fatal("did not get BlockRequestMessage")
-	}
-
-	if req.StartingBlock.Value().(uint64) != 12 {
-		t.Fatalf("Fail: got %d expected %d", req.StartingBlock.Value(), 12)
-	}
+	req = syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
+	require.Equal(t, req.StartingBlock.Value().(uint64), uint64(12))
 }
 
-func TestWatchForBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-	msgOut := make(chan network.Message)
-
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-		MsgOut:     msgOut,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
+func TestHandleSeenBlocks_GreaterThanHighestSeen_Synced(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
 
 	number := big.NewInt(12)
-	blockNumberIn <- number
-
-	var msg network.Message
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
+	req := syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
 
 	// synced to block 12
 	syncer.synced = true
 
 	number = big.NewInt(16)
-	blockNumberIn <- number
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	if syncer.highestSeenBlock.Cmp(number) != 0 {
-		t.Fatalf("Fail: highestSeenBlock=%d expected %d", syncer.highestSeenBlock, number)
-	}
-
-	req, ok := msg.(*network.BlockRequestMessage)
-	if !ok {
-		t.Fatal("did not get BlockRequestMessage")
-	}
-
-	if req.StartingBlock.Value().(uint64) != 13 {
-		t.Fatalf("Fail: got %d expected %d", req.StartingBlock.Value(), 13)
-	}
+	req = syncer.HandleSeenBlocks(number)
+	require.NotNil(t, req)
+	require.Equal(t, number, syncer.highestSeenBlock)
+	require.Equal(t, uint64(13), req.StartingBlock.Value().(uint64))
 }
 
-func TestWatchForResponses(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-	respIn := make(chan *network.BlockResponseMessage)
-	msgOut := make(chan network.Message)
+func TestHandleBlockResponse(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
+	syncer.highestSeenBlock = big.NewInt(20)
 
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-		RespIn:     respIn,
-		MsgOut:     msgOut,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
-
-	syncer.highestSeenBlock = big.NewInt(16)
-
-	coreSrv := NewTestService(t, nil)
-	addTestBlocksToState(t, 16, coreSrv.blockState)
+	responder := newTestSyncer(t, nil)
+	addTestBlocksToState(t, 16, responder.blockState)
 
 	startNum := 1
 	start, err := variadic.NewUint64OrHash(startNum)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req := &network.BlockRequestMessage{
 		ID:            1,
@@ -361,83 +164,34 @@ func TestWatchForResponses(t *testing.T) {
 		StartingBlock: start,
 	}
 
-	resp, err := coreSrv.createBlockResponse(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, err := responder.CreateBlockResponse(req)
+	require.NoError(t, err)
 
-	syncer.synced = false
+	req2 := syncer.HandleBlockResponse(resp)
+	require.NotNil(t, req2)
 
-	respIn <- resp
-	time.Sleep(time.Second)
+	// msg should contain blocks 1 to 13 (maxResponseSize # of blocks)
+	require.Equal(t, uint64(startNum+int(maxResponseSize)), req2.StartingBlock.Value().(uint64))
 
-	var msg network.Message
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	// msg should contain blocks 1 to 8 (maxResponseSize # of blocks)
-	if syncer.synced {
-		t.Fatal("Fail: not yet synced")
-	}
-
-	req2, ok := msg.(*network.BlockRequestMessage)
-	if !ok {
-		t.Fatal("did not get BlockRequestMessage")
-	}
-
-	if req2.StartingBlock.Value().(uint64) != uint64(startNum+int(maxResponseSize)) {
-		t.Fatalf("Fail: got %d expected %d", req2.StartingBlock.Value(), startNum+int(maxResponseSize))
-	}
-
-	resp2, err := coreSrv.createBlockResponse(req2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	respIn <- resp2
-	time.Sleep(time.Second)
-
-	// response should contain blocks 9 to 16, and we should be synced
-	if !syncer.synced {
-		t.Fatal("Fail: should be synced")
-	}
+	resp2, err := responder.CreateBlockResponse(req)
+	require.NoError(t, err)
+	syncer.HandleBlockResponse(resp2)
+	// response should contain blocks 13 to 20, and we should be synced
+	require.True(t, syncer.synced)
 }
 
-func TestWatchForResponses_MissingBlocks(t *testing.T) {
-	blockNumberIn := make(chan *big.Int)
-	respIn := make(chan *network.BlockResponseMessage)
-	msgOut := make(chan network.Message)
+func TestHandleBlockResponse_MissingBlocks(t *testing.T) {
+	syncer := newTestSyncer(t, nil)
+	syncer.highestSeenBlock = big.NewInt(20)
 
-	cfg := &SyncerConfig{
-		logger:     log.New("pkg", "core"),
-		BlockNumIn: blockNumberIn,
-		RespIn:     respIn,
-		MsgOut:     msgOut,
-	}
-
-	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
-	cfg.logger.SetHandler(log.LvlFilterHandler(4, h))
-
-	syncer := newTestSyncer(t, cfg)
-	err := syncer.Start()
-	require.Nil(t, err)
-
-	syncer.highestSeenBlock = big.NewInt(16)
-
-	coreSrv := NewTestService(t, nil)
-	addTestBlocksToState(t, 16, coreSrv.blockState)
+	responder := newTestSyncer(t, nil)
+	addTestBlocksToState(t, 16, responder.blockState)
 
 	startNum := 16
 	syncer.requestStart = int64(startNum)
 
 	start, err := variadic.NewUint64OrHash(startNum)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	req := &network.BlockRequestMessage{
 		ID:            1,
@@ -445,43 +199,17 @@ func TestWatchForResponses_MissingBlocks(t *testing.T) {
 		StartingBlock: start,
 	}
 
-	resp, err := coreSrv.createBlockResponse(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	resp, err := responder.CreateBlockResponse(req)
+	require.NoError(t, err)
 	syncer.synced = false
 
-	respIn <- resp
-	time.Sleep(time.Second)
-
-	var msg network.Message
-
-	select {
-	case msg = <-msgOut:
-	case <-time.After(testMessageTimeout):
-		t.Error("timeout waiting for message")
-	}
-
-	// msg should contain block 16 (maxResponseSize # of blocks)
-	if syncer.synced {
-		t.Fatal("Fail: not yet synced")
-	}
-
-	req2, ok := msg.(*network.BlockRequestMessage)
-	if !ok {
-		t.Fatal("did not get BlockRequestMessage")
-	}
-
-	if req2.StartingBlock.Value().(uint64) != uint64(startNum-int(maxResponseSize)) {
-		t.Fatalf("Fail: got %d expected %d", req2.StartingBlock.Value(), startNum-int(maxResponseSize))
-	}
+	req2 := syncer.HandleBlockResponse(resp)
+	require.NotNil(t, req2)
+	require.Equal(t, uint64(startNum-int(maxResponseSize)), req2.StartingBlock.Value().(uint64))
 }
 
 func TestRemoveIncludedExtrinsics(t *testing.T) {
 	syncer := newTestSyncer(t, nil)
-	err := syncer.Start()
-	require.Nil(t, err)
 
 	ext := []byte("nootwashere")
 	tx := &transaction.ValidTransaction{
@@ -493,9 +221,7 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 
 	exts := []types.Extrinsic{ext}
 	body, err := types.NewBodyFromExtrinsics(exts)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	bd := &types.BlockData{
 		Body: body.AsOptional(),
@@ -506,15 +232,10 @@ func TestRemoveIncludedExtrinsics(t *testing.T) {
 	}
 
 	_, err = syncer.processBlockResponseData(msg)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	inQueue := syncer.transactionQueue.Pop()
-	if inQueue != nil {
-		t.Log(inQueue)
-		t.Fatal("Fail: queue should be empty")
-	}
+	require.Nil(t, inQueue, "queue should be empty")
 }
 
 func TestCoreExecuteBlockData_bytes(t *testing.T) {
@@ -603,7 +324,7 @@ func TestHandleBlockResponse_BlockData(t *testing.T) {
 	require.Equal(t, int64(0), res)
 }
 
-func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service {
+func newBlockBuilder(t *testing.T, cfg *babe.ServiceConfig) *babe.Service { //nolint
 	if cfg.Runtime == nil {
 		cfg.Runtime = runtime.NewTestRuntime(t, runtime.SUBSTRATE_TEST_RUNTIME)
 	}
@@ -642,7 +363,7 @@ func TestExecuteBlock(t *testing.T) {
 	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.NoError(t, err)
 
-	cfg := &SyncerConfig{
+	cfg := &Config{
 		Runtime: rt,
 	}
 
@@ -652,12 +373,12 @@ func TestExecuteBlock(t *testing.T) {
 		Runtime:          syncer.runtime,
 		TransactionQueue: syncer.transactionQueue,
 		Keypair:          kp,
-		BlockState:       syncer.blockState,
+		BlockState:       syncer.blockState.(*state.BlockState),
 		EpochThreshold:   babe.MaxThreshold,
 	}
 
 	builder := newBlockBuilder(t, bcfg)
-	parent, err := syncer.blockState.BestBlockHeader()
+	parent, err := syncer.blockState.(*state.BlockState).BestBlockHeader()
 	require.NoError(t, err)
 
 	var block *types.Block
@@ -690,7 +411,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	err = tt.Put(runtime.TestAuthorityDataKey, append([]byte{4}, pubkey...))
 	require.NoError(t, err)
 
-	cfg := &SyncerConfig{
+	cfg := &Config{
 		Runtime: rt,
 	}
 
@@ -700,7 +421,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 		Runtime:          syncer.runtime,
 		TransactionQueue: syncer.transactionQueue,
 		Keypair:          kp,
-		BlockState:       syncer.blockState,
+		BlockState:       syncer.blockState.(*state.BlockState),
 		EpochThreshold:   babe.MaxThreshold,
 	}
 
@@ -715,7 +436,7 @@ func TestExecuteBlock_WithExtrinsic(t *testing.T) {
 	require.NoError(t, err)
 
 	builder := newBlockBuilder(t, bcfg)
-	parent, err := syncer.blockState.BestBlockHeader()
+	parent, err := syncer.blockState.(*state.BlockState).BestBlockHeader()
 	require.NoError(t, err)
 
 	var block *types.Block

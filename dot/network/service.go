@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"math/big"
 	"os"
 	"sync"
 	"time"
@@ -35,24 +36,26 @@ import (
 
 // NetworkStateTimeout is the set time interval that we update network state
 const NetworkStateTimeout = time.Minute
+const syncID = "/sync/2"
 
 var _ services.Service = &Service{}
 var logger = log.New("pkg", "network")
 
 // Service describes a network service
 type Service struct {
-	logger log.Logger
-	ctx    context.Context
-	cfg    *Config
-	host   *host
-	mdns   *mdns
-	status *status
-	gossip *gossip
-	syncer *syncer
+	logger         log.Logger
+	ctx            context.Context
+	cfg            *Config
+	host           *host
+	mdns           *mdns
+	status         *status
+	gossip         *gossip
+	requestTracker *requestTracker
 
-	// State interfaces
+	// Service interfaces
 	blockState   BlockState
 	networkState NetworkState
+	syncer       Syncer
 
 	// Channels for inter-process communication
 	// as well as a lock for safe channel closures
@@ -90,8 +93,8 @@ func NewService(cfg *Config) (*Service, error) {
 		return nil, errors.New("MsgSend is nil")
 	}
 
-	if cfg.SyncChan == nil {
-		return nil, errors.New("SyncChan is nil")
+	if cfg.Syncer == nil {
+		return nil, errors.New("cannot have nil Syncer")
 	}
 
 	// create a new host instance
@@ -101,22 +104,23 @@ func NewService(cfg *Config) (*Service, error) {
 	}
 
 	network := &Service{
-		logger:       logger,
-		ctx:          ctx,
-		cfg:          cfg,
-		host:         host,
-		mdns:         newMDNS(host),
-		status:       newStatus(host),
-		gossip:       newGossip(host),
-		syncer:       newSyncer(host, cfg.BlockState, cfg.SyncChan),
-		blockState:   cfg.BlockState,
-		networkState: cfg.NetworkState,
-		msgRec:       cfg.MsgRec,
-		msgSend:      cfg.MsgSend,
-		closed:       false,
-		noBootstrap:  cfg.NoBootstrap,
-		noMDNS:       cfg.NoMDNS,
-		noStatus:     cfg.NoStatus,
+		logger:         logger,
+		ctx:            ctx,
+		cfg:            cfg,
+		host:           host,
+		mdns:           newMDNS(host),
+		status:         newStatus(host),
+		gossip:         newGossip(host),
+		requestTracker: newRequestTracker(host.logger),
+		blockState:     cfg.BlockState,
+		networkState:   cfg.NetworkState,
+		msgRec:         cfg.MsgRec,
+		msgSend:        cfg.MsgSend,
+		closed:         false,
+		noBootstrap:    cfg.NoBootstrap,
+		noMDNS:         cfg.NoMDNS,
+		noStatus:       cfg.NoStatus,
+		syncer:         cfg.Syncer,
 	}
 
 	return network, err
@@ -131,7 +135,8 @@ func (s *Service) Start() error {
 	go s.receiveCoreMessages()
 
 	s.host.registerConnHandler(s.handleConn)
-	s.host.registerStreamHandler(s.handleStream)
+	s.host.registerStreamHandler("", s.handleStream)
+	s.host.registerStreamHandler(syncID, s.handleSyncStream)
 
 	// log listening addresses to console
 	for _, addr := range s.host.multiaddrs() {
@@ -215,11 +220,6 @@ func (s *Service) receiveCoreMessages() {
 			return // exit
 		}
 
-		// if block request message, add block id to syncer's requestedBlockIds
-		if msg.GetType() == BlockRequestMsgType {
-			s.syncer.addRequestedBlockID(msg.(*BlockRequestMessage).ID)
-		}
-
 		s.logger.Debug(
 			"Broadcasting message from core service",
 			"host", s.host.id(),
@@ -272,8 +272,7 @@ func (s *Service) handleConn(conn network.Conn) {
 	}
 }
 
-// handleStream starts reading from the inbound message stream (substream with
-// a matching protocol id that was opened by the connected peer) and continues
+// handleStream starts reading from the inbound message stream and continues
 // reading until the inbound message stream is closed or reset.
 func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 	conn := stream.Conn()
@@ -287,11 +286,28 @@ func (s *Service) handleStream(stream libp2pnetwork.Stream) {
 	// create buffer stream for non-blocking read
 	r := bufio.NewReader(stream)
 
-	go s.readStream(r, peer)
+	go s.readStream(r, peer, s.handleMessage)
 	// the stream stays open until closed or reset
 }
 
-func (s *Service) readStream(r *bufio.Reader, peer peer.ID) {
+// handleSyncStream handles streams with the <protcol-id>/sync/2 protocol ID
+func (s *Service) handleSyncStream(stream libp2pnetwork.Stream) {
+	conn := stream.Conn()
+	if conn == nil {
+		s.logger.Error("Failed to get connection from stream")
+		return
+	}
+
+	peer := conn.RemotePeer()
+
+	// create buffer stream for non-blocking read
+	r := bufio.NewReader(stream)
+
+	go s.readStream(r, peer, s.handleSyncMessage)
+	// the stream stays open until closed or reset
+}
+
+func (s *Service) readStream(r *bufio.Reader, peer peer.ID, handler func(peer peer.ID, msg Message)) {
 	for {
 		length, err := readLEB128ToUint64(r)
 		if err != nil {
@@ -319,9 +335,43 @@ func (s *Service) readStream(r *bufio.Reader, peer peer.ID) {
 		}
 
 		// handle message based on peer status and message type
-		s.handleMessage(peer, msg)
+		handler(peer, msg)
+	}
+}
+
+// handleSyncMessage handles synchronization message types (BlockRequest and BlockResponse)
+func (s *Service) handleSyncMessage(peer peer.ID, msg Message) {
+	if msg == nil {
+		return
 	}
 
+	// if it's a BlockResponse with an ID corresponding to a BlockRequest we sent, forward
+	// message to the sync service
+	if resp, ok := msg.(*BlockResponseMessage); ok && s.requestTracker.hasRequestedBlockID(resp.ID) {
+		s.requestTracker.removeRequestedBlockID(resp.ID)
+		req := s.syncer.HandleBlockResponse(resp)
+		if req != nil {
+			s.requestTracker.addRequestedBlockID(req.ID)
+			err := s.host.send(peer, syncID, req)
+			if err != nil {
+				s.logger.Error("failed to send BlockRequest message", "peer", peer)
+			}
+		}
+	}
+
+	// if it's a BlockRequest, call core for processing
+	if req, ok := msg.(*BlockRequestMessage); ok {
+		resp, err := s.syncer.CreateBlockResponse(req)
+		if err != nil {
+			s.logger.Debug("cannot create response for request", "id", req.ID)
+			return
+		}
+
+		err = s.host.send(peer, syncID, resp)
+		if err != nil {
+			s.logger.Error("failed to send BlockResponse message", "peer", peer)
+		}
+	}
 }
 
 // handleMessage handles the message based on peer status and message type
@@ -337,17 +387,14 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 
 		// check if status is disabled or peer status is confirmed
 		if s.noStatus || s.status.confirmed(peer) {
-
-			if resp, ok := msg.(*BlockResponseMessage); ok {
-				if s.syncer.hasRequestedBlockID(resp.ID) {
-					err := s.safeMsgSend(msg)
+			if an, ok := msg.(*BlockAnnounceMessage); ok {
+				req := s.syncer.HandleBlockAnnounce(an)
+				if req != nil {
+					s.requestTracker.addRequestedBlockID(req.ID)
+					err := s.host.send(peer, syncID, req)
 					if err != nil {
-						s.logger.Error("Failed to send message", "ID", resp.ID, "error", err)
+						s.logger.Error("failed to send BlockRequest message", "peer", peer)
 					}
-
-					s.syncer.removeRequestedBlockID(resp.ID)
-				} else {
-					// ignore for now, but eventually we want to re-gossip once gossip is improved
 				}
 			} else {
 				err := s.safeMsgSend(msg)
@@ -355,7 +402,6 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 					s.logger.Error("Failed to send message", "error", err)
 				}
 			}
-
 		}
 
 		// check if gossip is enabled
@@ -377,10 +423,38 @@ func (s *Service) handleMessage(peer peer.ID, msg Message) {
 			if s.status.confirmed(peer) {
 
 				// send a block request message if peer best block number is greater than host best block number
-				s.syncer.handleStatusMesssage(msg.(*StatusMessage))
+				req := s.handleStatusMesssage(msg.(*StatusMessage))
+				if req != nil {
+					s.requestTracker.addRequestedBlockID(req.ID)
+					err := s.host.send(peer, syncID, req)
+					if err != nil {
+						s.logger.Error("failed to send BlockRequest message", "peer", peer)
+					}
+				}
 			}
 		}
 	}
+}
+
+// handleStatusMesssage returns a block request message if peer best block
+// number is greater than host best block number
+func (s *Service) handleStatusMesssage(statusMessage *StatusMessage) *BlockRequestMessage {
+	// get latest block header from block state
+	latestHeader, err := s.blockState.BestBlockHeader()
+	if err != nil {
+		s.logger.Error("Failed to get best block header from block state", "error", err)
+		return nil
+	}
+
+	bestBlockNum := big.NewInt(int64(statusMessage.BestBlockNumber))
+
+	// check if peer block number is greater than host block number
+	if latestHeader.Number.Cmp(bestBlockNum) == -1 {
+		s.logger.Debug("sending new block to syncer", "number", statusMessage.BestBlockNumber)
+		return s.syncer.HandleSeenBlocks(bestBlockNum)
+	}
+
+	return nil
 }
 
 // Health returns information about host needed for the rpc server

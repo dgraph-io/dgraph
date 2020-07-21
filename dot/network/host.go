@@ -127,9 +127,9 @@ func (h *host) registerConnHandler(handler func(libp2pnetwork.Conn)) {
 	h.h.Network().SetConnHandler(handler)
 }
 
-// registerStreamHandler registers the stream handler (see handleStream)
-func (h *host) registerStreamHandler(handler func(libp2pnetwork.Stream)) {
-	h.h.SetStreamHandler(h.protocolID, handler)
+// registerStreamHandler registers the stream handler, appending the given sub-protocol to the main protocol ID
+func (h *host) registerStreamHandler(sub protocol.ID, handler func(libp2pnetwork.Stream)) {
+	h.h.SetStreamHandler(h.protocolID+sub, handler)
 }
 
 // connect connects the host to a specific peer address
@@ -156,16 +156,16 @@ func (h *host) ping(peer peer.ID) error {
 
 // send writes the given message to the outbound message stream for the given
 // peer (gets the already opened outbound message stream or opens a new one).
-func (h *host) send(p peer.ID, msg Message) (err error) {
+func (h *host) send(p peer.ID, sub protocol.ID, msg Message) (err error) {
 
 	// get outbound stream for given peer
-	s := h.getStream(p)
+	s := h.getStream(p, sub)
 
 	// check if stream needs to be opened
 	if s == nil {
 
 		// open outbound stream with host protocol id
-		s, err = h.h.NewStream(h.ctx, p, h.protocolID)
+		s, err = h.h.NewStream(h.ctx, p, h.protocolID+sub)
 		if err != nil {
 			return err
 		}
@@ -205,7 +205,7 @@ func (h *host) send(p peer.ID, msg Message) (err error) {
 // broadcast sends a message to each connected peer
 func (h *host) broadcast(msg Message) {
 	for _, p := range h.peers() {
-		err := h.send(p, msg)
+		err := h.send(p, "", msg)
 		if err != nil {
 			h.logger.Error("Failed to broadcast message to peer", "peer", p, "error", err)
 		}
@@ -216,7 +216,7 @@ func (h *host) broadcast(msg Message) {
 func (h *host) broadcastExcluding(msg Message, peer peer.ID) {
 	for _, p := range h.peers() {
 		if p != peer {
-			err := h.send(p, msg)
+			err := h.send(p, "", msg)
 			if err != nil {
 				h.logger.Error("Failed to send message during broadcast", "peer", p, "err", err)
 			}
@@ -227,7 +227,7 @@ func (h *host) broadcastExcluding(msg Message, peer peer.ID) {
 // getStream returns the outbound message stream for the given peer or returns
 // nil if no outbound message stream exists. For each peer, each host opens an
 // outbound message stream and writes to the same stream until closed or reset.
-func (h *host) getStream(p peer.ID) (stream libp2pnetwork.Stream) {
+func (h *host) getStream(p peer.ID, sub protocol.ID) (stream libp2pnetwork.Stream) {
 	conns := h.h.Network().ConnsToPeer(p)
 
 	// loop through connections (only one for now)
@@ -238,7 +238,7 @@ func (h *host) getStream(p peer.ID) (stream libp2pnetwork.Stream) {
 		for _, stream := range streams {
 
 			// return stream with matching host protocol id and stream direction outbound
-			if stream.Protocol() == h.protocolID && stream.Stat().Direction == libp2pnetwork.DirOutbound {
+			if stream.Protocol() == h.protocolID+sub && stream.Stat().Direction == libp2pnetwork.DirOutbound {
 				return stream
 			}
 		}

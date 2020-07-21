@@ -199,6 +199,10 @@ func setLogConfig(ctx *cli.Context, globalCfg *dot.GlobalConfig, logCfg *dot.Log
 		logCfg.CoreLvl = globalCfg.LogLevel
 	}
 
+	if logCfg.SyncLvl == "" {
+		logCfg.SyncLvl = globalCfg.LogLevel
+	}
+
 	if logCfg.NetworkLvl == "" {
 		logCfg.NetworkLvl = globalCfg.LogLevel
 	}

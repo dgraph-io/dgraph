@@ -1,10 +1,10 @@
 [global]
 name = "gssmr"
 id = "gssmr"
-log = "crit"
+log = "info"
 
 [log]
-core = "info"
+sync = "info"
 
 [init]
 genesis = "./chain/gssmr/genesis.json"

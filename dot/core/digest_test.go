@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *digestHandler { //nolint
+func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *DigestHandler { //nolint
 	stateSrvc := state.NewService("", log.LvlInfo)
 	stateSrvc.UseMemDB()
 
@@ -55,15 +55,15 @@ func newTestDigestHandler(t *testing.T, withBABE, withGrandpa bool) *digestHandl
 	}
 
 	time.Sleep(time.Second)
-	dh, err := newDigestHandler(stateSrvc.Block, bp, fg)
+	dh, err := NewDigestHandler(stateSrvc.Block, bp, fg)
 	require.NoError(t, err)
 	return dh
 }
 
 func TestDigestHandler_BABEScheduledChange(t *testing.T) {
 	handler := newTestDigestHandler(t, true, false)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestDigestHandler_BABEScheduledChange(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	headers := addTestBlocksToState(t, 2, handler.blockState)
@@ -107,8 +107,8 @@ func TestDigestHandler_BABEScheduledChange(t *testing.T) {
 
 func TestDigestHandler_BABEForcedChange(t *testing.T) {
 	handler := newTestDigestHandler(t, true, false)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
@@ -128,7 +128,7 @@ func TestDigestHandler_BABEForcedChange(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	addTestBlocksToState(t, 2, handler.blockState)
@@ -144,8 +144,8 @@ func TestDigestHandler_BABEForcedChange(t *testing.T) {
 
 func TestDigestHandler_BABEOnDisabled(t *testing.T) {
 	handler := newTestDigestHandler(t, true, false)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
@@ -167,7 +167,7 @@ func TestDigestHandler_BABEOnDisabled(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	auths := handler.babe.Authorities()
@@ -186,7 +186,7 @@ func TestDigestHandler_BABEOnDisabled(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	auths = handler.babe.Authorities()
@@ -195,8 +195,8 @@ func TestDigestHandler_BABEOnDisabled(t *testing.T) {
 
 func TestDigestHandler_BABEPauseAndResume(t *testing.T) {
 	handler := newTestDigestHandler(t, true, false)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewSr25519Keyring()
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestDigestHandler_BABEPauseAndResume(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	headers := addTestBlocksToState(t, 3, handler.blockState)
@@ -241,7 +241,7 @@ func TestDigestHandler_BABEPauseAndResume(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	addTestBlocksToState(t, 3, handler.blockState)
@@ -252,8 +252,8 @@ func TestDigestHandler_BABEPauseAndResume(t *testing.T) {
 
 func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 	handler := newTestDigestHandler(t, false, true)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 	require.True(t, handler.isFinalityAuthority)
 
 	kr, err := keystore.NewEd25519Keyring()
@@ -274,7 +274,7 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	headers := addTestBlocksToState(t, 2, handler.blockState)
@@ -298,8 +298,8 @@ func TestDigestHandler_GrandpaScheduledChange(t *testing.T) {
 
 func TestDigestHandler_GrandpaForcedChange(t *testing.T) {
 	handler := newTestDigestHandler(t, false, true)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -319,7 +319,7 @@ func TestDigestHandler_GrandpaForcedChange(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	addTestBlocksToState(t, 2, handler.blockState)
@@ -335,8 +335,8 @@ func TestDigestHandler_GrandpaForcedChange(t *testing.T) {
 
 func TestDigestHandler_GrandpaOnDisabled(t *testing.T) {
 	handler := newTestDigestHandler(t, false, true)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -358,7 +358,7 @@ func TestDigestHandler_GrandpaOnDisabled(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	auths := handler.grandpa.Authorities()
@@ -377,7 +377,7 @@ func TestDigestHandler_GrandpaOnDisabled(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	auths = handler.grandpa.Authorities()
@@ -386,8 +386,8 @@ func TestDigestHandler_GrandpaOnDisabled(t *testing.T) {
 
 func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 	handler := newTestDigestHandler(t, false, true)
-	handler.start()
-	defer handler.stop()
+	handler.Start()
+	defer handler.Stop()
 
 	kr, err := keystore.NewEd25519Keyring()
 	require.NoError(t, err)
@@ -408,7 +408,7 @@ func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	headers := addTestBlocksToState(t, 3, handler.blockState)
@@ -432,7 +432,7 @@ func TestDigestHandler_GrandpaPauseAndResume(t *testing.T) {
 		Data:              data,
 	}
 
-	err = handler.handleConsensusDigest(d)
+	err = handler.HandleConsensusDigest(d)
 	require.NoError(t, err)
 
 	addTestBlocksToState(t, 3, handler.blockState)

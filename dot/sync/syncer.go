@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the gossamer library. If not, see <http://www.gnu.org/licenses/>.
 
-package core
+package sync
 
 import (
 	"errors"
 	"math/big"
 	mrand "math/rand"
-	"sync"
-	"sync/atomic"
+	"os"
 	"time"
 
 	"github.com/ChainSafe/gossamer/dot/network"
@@ -36,13 +35,8 @@ import (
 	"golang.org/x/exp/rand"
 )
 
-// Verifier deals with block verification
-type Verifier interface {
-	VerifyBlock(header *types.Header) (bool, error)
-}
-
-// Syncer deals with chain syncing by sending block request messages and watching for responses.
-type Syncer struct {
+// Service deals with chain syncing by sending block request messages and watching for responses.
+type Service struct {
 	logger log.Logger
 
 	// State interfaces
@@ -50,59 +44,37 @@ type Syncer struct {
 	transactionQueue TransactionQueue
 	blockProducer    BlockProducer
 
-	// Synchronization channels and variables
-	blockNumIn       <-chan *big.Int                      // incoming block numbers seen from other nodes that are higher than ours
-	msgOut           chan<- network.Message               // channel to send BlockRequest messages to network service
-	respIn           <-chan *network.BlockResponseMessage // channel to receive BlockResponse messages from
+	// Synchronization variables
 	synced           bool
 	requestStart     int64    // block number from which to begin block requests
 	highestSeenBlock *big.Int // highest block number we have seen
 	runtime          *runtime.Runtime
 
-	// Core service control
-	chanLock *sync.Mutex
-	started  atomic.Value
-
 	// BABE verification
 	verifier Verifier
 
 	// Consensus digest handling
-	digestHandler *digestHandler
+	digestHandler DigestHandler
 
 	// Benchmarker
 	benchmarker *benchmarker
 }
 
-// SyncerConfig is the configuration for the Syncer.
-// TODO: unexport these or separate syncer into another package
-type SyncerConfig struct {
-	logger           log.Logger
+// Config is the configuration for the sync Service.
+type Config struct {
+	LogLvl           log.Lvl
 	BlockState       BlockState
 	BlockProducer    BlockProducer
-	BlockNumIn       <-chan *big.Int
-	RespIn           <-chan *network.BlockResponseMessage
-	MsgOut           chan<- network.Message
-	ChanLock         *sync.Mutex
 	TransactionQueue TransactionQueue
 	Runtime          *runtime.Runtime
 	Verifier         Verifier
-	DigestHandler    *digestHandler
+	DigestHandler    DigestHandler
 }
 
-var responseTimeout = 6 * time.Second
-
-// NewSyncer returns a new Syncer
-func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
+// NewService returns a new *sync.Service
+func NewService(cfg *Config) (*Service, error) {
 	if cfg.BlockState == nil {
 		return nil, ErrNilBlockState
-	}
-
-	if cfg.BlockNumIn == nil {
-		return nil, ErrNilChannel("BlockNumIn")
-	}
-
-	if cfg.MsgOut == nil {
-		return nil, ErrNilChannel("MsgOut")
 	}
 
 	if cfg.Verifier == nil {
@@ -117,14 +89,14 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		cfg.BlockProducer = newMockBlockProducer()
 	}
 
-	return &Syncer{
-		logger:           cfg.logger.New("module", "sync"),
+	logger := log.New("pkg", "sync")
+	h := log.StreamHandler(os.Stdout, log.TerminalFormat())
+	logger.SetHandler(log.LvlFilterHandler(cfg.LogLvl, h))
+
+	return &Service{
+		logger:           logger,
 		blockState:       cfg.BlockState,
 		blockProducer:    cfg.BlockProducer,
-		blockNumIn:       cfg.BlockNumIn,
-		respIn:           cfg.RespIn,
-		msgOut:           cfg.MsgOut,
-		chanLock:         cfg.ChanLock,
 		synced:           true,
 		requestStart:     1,
 		highestSeenBlock: big.NewInt(0),
@@ -132,156 +104,140 @@ func NewSyncer(cfg *SyncerConfig) (*Syncer, error) {
 		runtime:          cfg.Runtime,
 		verifier:         cfg.Verifier,
 		digestHandler:    cfg.DigestHandler,
-		benchmarker:      newBenchmarker(cfg.logger),
+		benchmarker:      newBenchmarker(logger),
 	}, nil
 }
 
-// Start begins the syncer
-func (s *Syncer) Start() error {
-	if s == nil {
-		return errors.New("nil syncer")
+// HandleSeenBlocks handles a block that is newly "seen" ie. a block that a peer claims to have through a StatusMessage
+func (s *Service) HandleSeenBlocks(blockNum *big.Int) *network.BlockRequestMessage {
+	if blockNum == nil || s.highestSeenBlock.Cmp(blockNum) != -1 {
+		return nil
 	}
 
-	s.started.Store(true)
+	// need to sync
+	if s.synced {
+		s.requestStart = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
+		s.synced = false
 
-	go s.watchForBlocks()
-	go s.watchForResponses()
+		err := s.blockProducer.Pause()
+		if err != nil {
+			s.logger.Warn("failed to pause block production")
+		}
+	} else {
+		s.requestStart = s.highestSeenBlock.Int64()
+	}
+
+	s.highestSeenBlock = blockNum
+	s.benchmarker.begin(uint64(s.requestStart))
+	return s.createBlockRequest()
+}
+
+// HandleBlockAnnounce creates a block request message from the block
+// announce messages (block announce messages include the header but the full
+// block is required to execute `core_execute_block`).
+func (s *Service) HandleBlockAnnounce(msg *network.BlockAnnounceMessage) *network.BlockRequestMessage {
+	s.logger.Debug("received BlockAnnounceMessage")
+
+	// create header from message
+	header, err := types.NewHeader(
+		msg.ParentHash,
+		msg.Number,
+		msg.StateRoot,
+		msg.ExtrinsicsRoot,
+		msg.Digest,
+	)
+	if err != nil {
+		s.logger.Error("failed to handle BlockAnnounce", "error", err)
+		return nil
+	}
+
+	// check if block header is stored in block state
+	has, err := s.blockState.HasHeader(header.Hash())
+	if err != nil {
+		s.logger.Error("failed to handle BlockAnnounce", "error", err)
+	}
+
+	// save block header if we don't have it already
+	if !has {
+		err = s.blockState.SetHeader(header)
+		if err != nil {
+			s.logger.Error("failed to handle BlockAnnounce", "error", err)
+		}
+		s.logger.Debug(
+			"saved block header to block state",
+			"number", header.Number,
+			"hash", header.Hash(),
+		)
+	}
+
+	// check if block body is stored in block state (ie. if we have the full block already)
+	_, err = s.blockState.GetBlockBody(header.Hash())
+	if err != nil && err.Error() == "Key not found" {
+		s.logger.Debug(
+			"sending block number to syncer",
+			"number", msg.Number,
+		)
+
+		// create block request to send
+		s.requestStart = header.Number.Int64()
+		return s.createBlockRequest()
+	} else if err != nil {
+		s.logger.Error("failed to handle BlockAnnounce", "error", err)
+	}
 
 	return nil
 }
 
-// Stop stops the syncer
-func (s *Syncer) Stop() error {
-	s.started.Store(false)
-	return nil
-}
-
-func (s *Syncer) watchForBlocks() {
-	for {
-		if !s.started.Load().(bool) {
-			return
-		}
-
-		blockNum, ok := <-s.blockNumIn
-		if !ok || blockNum == nil {
-			s.logger.Warn("Failed to receive from blockNumIn channel")
-			continue
-		}
-
-		if blockNum != nil && s.highestSeenBlock.Cmp(blockNum) == -1 {
-			// need to sync
-			if s.synced {
-				s.requestStart = s.highestSeenBlock.Add(s.highestSeenBlock, big.NewInt(1)).Int64()
-				s.synced = false
-
-				err := s.blockProducer.Pause()
-				if err != nil {
-					s.logger.Warn("failed to pause block production")
-				}
-			} else {
-				s.requestStart = s.highestSeenBlock.Int64()
-			}
-
-			s.highestSeenBlock = blockNum
-			s.benchmarker.begin(uint64(s.requestStart))
-			go s.sendBlockRequest()
-		}
-	}
-}
-
-func (s *Syncer) watchForResponses() {
-	for {
-		if !s.started.Load().(bool) {
-			return
-		}
-
-		var msg *network.BlockResponseMessage
-		var ok bool
-
-		select {
-		case msg, ok = <-s.respIn:
-			// handle response
-			if !ok || msg == nil {
-				s.logger.Warn("Failed to receive from respIn channel")
-				continue
-			}
-
-			s.processBlockResponse(msg)
-		case <-time.After(responseTimeout):
-			s.logger.Debug("timeout waiting for BlockResponse")
-			if !s.synced {
-				err := s.blockProducer.Resume()
-				if err != nil {
-					s.logger.Warn("failed to resume block production")
-				}
-				s.synced = true
-			}
-		}
-	}
-}
-
-func (s *Syncer) processBlockResponse(msg *network.BlockResponseMessage) {
+// HandleBlockResponse handles a BlockResponseMessage by processing the blocks found in it and adding them to the BlockState if necessary.
+// If the node is still not synced after processing, it creates and returns the next BlockRequestMessage to send.
+func (s *Service) HandleBlockResponse(msg *network.BlockResponseMessage) *network.BlockRequestMessage {
 	// highestInResp will be the highest block in the response
 	// it's set to 0 if err != nil
 	highestInResp, err := s.processBlockResponseData(msg)
+
+	// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
+	// blocks from farther back in the chain
+	if err == blocktree.ErrParentNotFound {
+		// set request start
+		s.requestStart = s.requestStart - maxResponseSize
+		if s.requestStart <= 0 {
+			s.requestStart = 1
+		}
+		s.logger.Trace("Retrying block request", "start", s.requestStart)
+		return s.createBlockRequest()
+	} else if err != nil {
+		s.logger.Error("failed to process block response", "error", err)
+		return nil
+	}
+
+	// TODO: max retries before unlocking BlockProducer, in case no response is received
+	bestNum, err := s.blockState.BestBlockNumber()
 	if err != nil {
-
-		// if we cannot find the parent block in our blocktree, we are missing some blocks, and need to request
-		// blocks from farther back in the chain
-		if err == blocktree.ErrParentNotFound {
-			// set request start
-			s.requestStart = s.requestStart - maxResponseSize
-			if s.requestStart <= 0 {
-				s.requestStart = 1
-			}
-			s.logger.Trace("Retrying block request", "start", s.requestStart)
-			go s.sendBlockRequest()
-		} else {
-			s.logger.Error("failed to process block response", "error", err)
-		}
-
-	} else {
-		// TODO: max retries before unlocking, in case no response is received
-
-		bestNum, err := s.blockState.BestBlockNumber()
-		if err != nil {
-			s.logger.Crit("failed to get best block number", "error", err)
-		} else {
-
-			// check if we are synced or not
-			if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
-				s.logger.Debug("all synced up!", "number", bestNum)
-				s.benchmarker.end(uint64(bestNum.Int64()))
-
-				if !s.synced {
-					err = s.blockProducer.Resume()
-					if err != nil {
-						s.logger.Warn("failed to resume block production")
-					}
-					s.synced = true
-				}
-			} else {
-				// not yet synced, send another block request for the following blocks
-				s.requestStart = highestInResp + 1
-				go s.sendBlockRequest()
-			}
-		}
-	}
-}
-
-func (s *Syncer) safeMsgSend(msg network.Message) error {
-	s.chanLock.Lock()
-	defer s.chanLock.Unlock()
-
-	if !s.started.Load().(bool) {
-		return ErrServiceStopped
+		s.logger.Error("failed to get best block number", "error", err)
+		bestNum = big.NewInt(0)
 	}
 
-	s.msgOut <- msg
-	return nil
+	// check if we are synced or not
+	if bestNum.Cmp(s.highestSeenBlock) >= 0 && bestNum.Cmp(big.NewInt(0)) != 0 {
+		s.logger.Debug("all synced up!", "number", bestNum)
+		s.benchmarker.end(uint64(bestNum.Int64()))
+
+		if !s.synced {
+			err = s.blockProducer.Resume()
+			if err != nil {
+				s.logger.Warn("failed to resume block production")
+			}
+			s.synced = true
+		}
+		return nil
+	}
+
+	// not yet synced, send another block request for the following blocks
+	s.requestStart = highestInResp + 1
+	return s.createBlockRequest()
 }
 
-func (s *Syncer) sendBlockRequest() {
+func (s *Service) createBlockRequest() *network.BlockRequestMessage {
 	// generate random ID
 	s1 := rand.NewSource(uint64(time.Now().UnixNano()))
 	seed := rand.New(s1).Uint64()
@@ -290,7 +246,7 @@ func (s *Syncer) sendBlockRequest() {
 	start, err := variadic.NewUint64OrHash(uint64(s.requestStart))
 	if err != nil {
 		s.logger.Error("failed to create block request start block", "error", err)
-		return
+		return nil
 	}
 
 	s.logger.Trace("sending block request", "start", start)
@@ -304,14 +260,10 @@ func (s *Syncer) sendBlockRequest() {
 		Max:           optional.NewUint32(false, 0),
 	}
 
-	// send block request message to network service
-	err = s.safeMsgSend(blockRequest)
-	if err != nil {
-		s.logger.Error("Failed to send block request", "error", err)
-	}
+	return blockRequest
 }
 
-func (s *Syncer) processBlockResponseData(msg *network.BlockResponseMessage) (int64, error) {
+func (s *Service) processBlockResponseData(msg *network.BlockResponseMessage) (int64, error) {
 	blockData := msg.BlockData
 	highestInResp := int64(0)
 
@@ -372,7 +324,7 @@ func (s *Syncer) processBlockResponseData(msg *network.BlockResponseMessage) (in
 }
 
 // handleHeader handles headers included in BlockResponses
-func (s *Syncer) handleHeader(header *types.Header) (int64, error) {
+func (s *Service) handleHeader(header *types.Header) (int64, error) {
 	highestInResp := int64(0)
 
 	// get block header; if exists, return
@@ -407,7 +359,7 @@ func (s *Syncer) handleHeader(header *types.Header) (int64, error) {
 }
 
 // handleHeader handles block bodies included in BlockResponses
-func (s *Syncer) handleBody(body *types.Body) error {
+func (s *Service) handleBody(body *types.Body) error {
 	exts, err := body.AsExtrinsics()
 	if err != nil {
 		s.logger.Error("cannot parse body as extrinsics", "error", err)
@@ -422,7 +374,7 @@ func (s *Syncer) handleBody(body *types.Body) error {
 }
 
 // handleHeader handles blocks (header+body) included in BlockResponses
-func (s *Syncer) handleBlock(block *types.Block) error {
+func (s *Service) handleBlock(block *types.Block) error {
 	// TODO: needs to be fixed by #941
 	// _, err := s.executeBlock(block)
 	// if err != nil {
@@ -459,7 +411,7 @@ func (s *Syncer) handleBlock(block *types.Block) error {
 // runs the block through runtime function Core_execute_block
 //  It doesn't seem to return data on success (although the spec say it should return
 //  a boolean value that indicate success.  will error if the call isn't successful
-func (s *Syncer) executeBlock(block *types.Block) ([]byte, error) {
+func (s *Service) executeBlock(block *types.Block) ([]byte, error) {
 	// copy block since we're going to modify it
 	b := block.DeepCopy()
 
@@ -472,11 +424,11 @@ func (s *Syncer) executeBlock(block *types.Block) ([]byte, error) {
 	return s.runtime.Exec(runtime.CoreExecuteBlock, bdEnc)
 }
 
-func (s *Syncer) executeBlockBytes(bd []byte) ([]byte, error) {
+func (s *Service) executeBlockBytes(bd []byte) ([]byte, error) {
 	return s.runtime.Exec(runtime.CoreExecuteBlock, bd)
 }
 
-func (s *Syncer) handleDigests(header *types.Header) error {
+func (s *Service) handleDigests(header *types.Header) error {
 	for _, d := range header.Digest {
 		dg, err := types.DecodeDigestItem(d)
 		if err != nil {
@@ -489,7 +441,7 @@ func (s *Syncer) handleDigests(header *types.Header) error {
 				return errors.New("cannot cast invalid consensus digest item")
 			}
 
-			err = s.digestHandler.handleConsensusDigest(cd)
+			err = s.digestHandler.HandleConsensusDigest(cd)
 			if err != nil {
 				return err
 			}

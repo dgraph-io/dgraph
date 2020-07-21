@@ -17,6 +17,8 @@
 package network
 
 import (
+	"math/big"
+
 	"github.com/ChainSafe/gossamer/dot/types"
 	"github.com/ChainSafe/gossamer/lib/common"
 )
@@ -33,4 +35,21 @@ type NetworkState interface {
 	SetHealth(common.Health)
 	SetNetworkState(common.NetworkState)
 	SetPeers([]common.PeerInfo)
+}
+
+// Syncer is implemented by the syncing service
+type Syncer interface {
+	// CreateBlockResponse is called upon receipt of a BlockRequestMessage to create the response
+	CreateBlockResponse(*BlockRequestMessage) (*BlockResponseMessage, error)
+
+	// HandleBlockResponse is called upon receipt of BlockResponseMessage to process it.
+	// If another request needs to be sent to the peer, this function will return it.
+	HandleBlockResponse(*BlockResponseMessage) *BlockRequestMessage
+
+	// HandleBlockAnnounce is called upon receipt of a BlockAnnounceMessage to process it.
+	// If a request needs to be sent to the peer to retrieve the full block, this function will return it.
+	HandleBlockAnnounce(*BlockAnnounceMessage) *BlockRequestMessage
+
+	// HandleSeenBlocks is called upon receiving a StatusMessage from a peer that has a higher chain head than us
+	HandleSeenBlocks(*big.Int) *BlockRequestMessage
 }

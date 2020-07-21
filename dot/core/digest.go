@@ -24,7 +24,8 @@ import (
 	"github.com/ChainSafe/gossamer/lib/scale"
 )
 
-type digestHandler struct {
+// DigestHandler is used to handle consensus messages and relevant authority updates to BABE and GRANDPA
+type DigestHandler struct {
 	// interfaces
 	blockState          BlockState
 	grandpa             FinalityGadget
@@ -74,7 +75,8 @@ type resume struct {
 	atBlock *big.Int
 }
 
-func newDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget) (*digestHandler, error) {
+// NewDigestHandler returns a new DigestHandler
+func NewDigestHandler(blockState BlockState, babe BlockProducer, grandpa FinalityGadget) (*DigestHandler, error) {
 	imported := make(chan *types.Block)
 	finalized := make(chan *types.Header)
 	iid, err := blockState.RegisterImportedChannel(imported)
@@ -90,7 +92,7 @@ func newDigestHandler(blockState BlockState, babe BlockProducer, grandpa Finalit
 	isFinalityAuthority := grandpa != nil
 	isBlockProducer := babe != nil
 
-	return &digestHandler{
+	return &DigestHandler{
 		blockState:          blockState,
 		grandpa:             grandpa,
 		babe:                babe,
@@ -104,13 +106,15 @@ func newDigestHandler(blockState BlockState, babe BlockProducer, grandpa Finalit
 	}, nil
 }
 
-func (h *digestHandler) start() {
+// Start starts the DigestHandler
+func (h *DigestHandler) Start() {
 	go h.handleBlockImport()
 	go h.handleBlockFinalization()
 	h.stopped = false
 }
 
-func (h *digestHandler) stop() {
+// Stop stops the DigestHandler
+func (h *DigestHandler) Stop() {
 	h.stopped = true
 	h.blockState.UnregisterImportedChannel(h.importedID)
 	h.blockState.UnregisterFinalizedChannel(h.finalizedID)
@@ -118,106 +122,8 @@ func (h *digestHandler) stop() {
 	close(h.finalized)
 }
 
-func (h *digestHandler) handleBlockImport() {
-	for block := range h.imported {
-		if h.stopped {
-			return
-		}
-
-		if h.isFinalityAuthority {
-			h.handleGrandpaChangesOnImport(block.Header.Number)
-		}
-
-		if h.isBlockProducer {
-			h.handleBABEChangesOnImport(block.Header.Number)
-		}
-	}
-}
-
-func (h *digestHandler) handleBlockFinalization() {
-	for header := range h.finalized {
-		if h.stopped {
-			return
-		}
-
-		if h.isFinalityAuthority {
-			h.handleGrandpaChangesOnFinalization(header.Number)
-		}
-
-		if h.isBlockProducer {
-			h.handleBABEChangesOnFinalization(header.Number)
-		}
-	}
-}
-
-func (h *digestHandler) handleBABEChangesOnImport(num *big.Int) {
-	resume := h.babeResume
-	if resume != nil && num.Cmp(resume.atBlock) == 0 {
-		h.babe.SetAuthorities(h.babeAuths)
-		h.babeResume = nil
-	}
-
-	fc := h.babeForcedChange
-	if fc != nil && num.Cmp(fc.atBlock) == 0 {
-		h.babe.SetAuthorities(fc.auths)
-		h.babeForcedChange = nil
-	}
-}
-
-func (h *digestHandler) handleBABEChangesOnFinalization(num *big.Int) {
-	pause := h.babePause
-	if pause != nil && num.Cmp(pause.atBlock) == 0 {
-		// save authority data for Resume
-		h.babeAuths = h.babe.Authorities()
-		h.babe.SetAuthorities([]*types.BABEAuthorityData{})
-		h.babePause = nil
-	}
-
-	sc := h.babeScheduledChange
-	if sc != nil && num.Cmp(sc.atBlock) == 0 {
-		h.babe.SetAuthorities(sc.auths)
-		h.babeScheduledChange = nil
-	}
-
-	// if blocks get finalized before forced change takes place, disregard it
-	h.babeForcedChange = nil
-}
-
-func (h *digestHandler) handleGrandpaChangesOnImport(num *big.Int) {
-	resume := h.grandpaResume
-	if resume != nil && num.Cmp(resume.atBlock) == 0 {
-		h.grandpa.UpdateAuthorities(h.grandpaAuths)
-		h.grandpaResume = nil
-	}
-
-	fc := h.grandpaForcedChange
-	if fc != nil && num.Cmp(fc.atBlock) == 0 {
-		h.grandpa.UpdateAuthorities(fc.auths)
-		h.grandpaForcedChange = nil
-	}
-}
-
-func (h *digestHandler) handleGrandpaChangesOnFinalization(num *big.Int) {
-	pause := h.grandpaPause
-	if pause != nil && num.Cmp(pause.atBlock) == 0 {
-		// save authority data for Resume
-		h.grandpaAuths = h.grandpa.Authorities()
-		h.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{})
-		h.grandpaPause = nil
-	}
-
-	sc := h.grandpaScheduledChange
-	if sc != nil && num.Cmp(sc.atBlock) == 0 {
-		h.grandpa.UpdateAuthorities(sc.auths)
-		h.grandpaScheduledChange = nil
-	}
-
-	// if blocks get finalized before forced change takes place, disregard it
-	h.grandpaForcedChange = nil
-}
-
-// handleConsensusDigest is the function used by the syncer to handler a consensus digest
-func (h *digestHandler) handleConsensusDigest(d *types.ConsensusDigest) error {
+// HandleConsensusDigest is the function used by the syncer to handle a consensus digest
+func (h *DigestHandler) HandleConsensusDigest(d *types.ConsensusDigest) error {
 	t := d.DataType()
 
 	switch t {
@@ -236,7 +142,105 @@ func (h *digestHandler) handleConsensusDigest(d *types.ConsensusDigest) error {
 	}
 }
 
-func (h *digestHandler) handleScheduledChange(d *types.ConsensusDigest) error {
+func (h *DigestHandler) handleBlockImport() {
+	for block := range h.imported {
+		if h.stopped {
+			return
+		}
+
+		if h.isFinalityAuthority {
+			h.handleGrandpaChangesOnImport(block.Header.Number)
+		}
+
+		if h.isBlockProducer {
+			h.handleBABEChangesOnImport(block.Header.Number)
+		}
+	}
+}
+
+func (h *DigestHandler) handleBlockFinalization() {
+	for header := range h.finalized {
+		if h.stopped {
+			return
+		}
+
+		if h.isFinalityAuthority {
+			h.handleGrandpaChangesOnFinalization(header.Number)
+		}
+
+		if h.isBlockProducer {
+			h.handleBABEChangesOnFinalization(header.Number)
+		}
+	}
+}
+
+func (h *DigestHandler) handleBABEChangesOnImport(num *big.Int) {
+	resume := h.babeResume
+	if resume != nil && num.Cmp(resume.atBlock) == 0 {
+		h.babe.SetAuthorities(h.babeAuths)
+		h.babeResume = nil
+	}
+
+	fc := h.babeForcedChange
+	if fc != nil && num.Cmp(fc.atBlock) == 0 {
+		h.babe.SetAuthorities(fc.auths)
+		h.babeForcedChange = nil
+	}
+}
+
+func (h *DigestHandler) handleBABEChangesOnFinalization(num *big.Int) {
+	pause := h.babePause
+	if pause != nil && num.Cmp(pause.atBlock) == 0 {
+		// save authority data for Resume
+		h.babeAuths = h.babe.Authorities()
+		h.babe.SetAuthorities([]*types.BABEAuthorityData{})
+		h.babePause = nil
+	}
+
+	sc := h.babeScheduledChange
+	if sc != nil && num.Cmp(sc.atBlock) == 0 {
+		h.babe.SetAuthorities(sc.auths)
+		h.babeScheduledChange = nil
+	}
+
+	// if blocks get finalized before forced change takes place, disregard it
+	h.babeForcedChange = nil
+}
+
+func (h *DigestHandler) handleGrandpaChangesOnImport(num *big.Int) {
+	resume := h.grandpaResume
+	if resume != nil && num.Cmp(resume.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(h.grandpaAuths)
+		h.grandpaResume = nil
+	}
+
+	fc := h.grandpaForcedChange
+	if fc != nil && num.Cmp(fc.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(fc.auths)
+		h.grandpaForcedChange = nil
+	}
+}
+
+func (h *DigestHandler) handleGrandpaChangesOnFinalization(num *big.Int) {
+	pause := h.grandpaPause
+	if pause != nil && num.Cmp(pause.atBlock) == 0 {
+		// save authority data for Resume
+		h.grandpaAuths = h.grandpa.Authorities()
+		h.grandpa.UpdateAuthorities([]*types.GrandpaAuthorityData{})
+		h.grandpaPause = nil
+	}
+
+	sc := h.grandpaScheduledChange
+	if sc != nil && num.Cmp(sc.atBlock) == 0 {
+		h.grandpa.UpdateAuthorities(sc.auths)
+		h.grandpaScheduledChange = nil
+	}
+
+	// if blocks get finalized before forced change takes place, disregard it
+	h.grandpaForcedChange = nil
+}
+
+func (h *DigestHandler) handleScheduledChange(d *types.ConsensusDigest) error {
 	curr, err := h.blockState.BestBlockHeader()
 	if err != nil {
 		return err
@@ -283,7 +287,7 @@ func (h *digestHandler) handleScheduledChange(d *types.ConsensusDigest) error {
 	return nil
 }
 
-func (h *digestHandler) handleForcedChange(d *types.ConsensusDigest) error {
+func (h *DigestHandler) handleForcedChange(d *types.ConsensusDigest) error {
 	curr, err := h.blockState.BestBlockHeader()
 	if err != nil {
 		return err
@@ -330,7 +334,7 @@ func (h *digestHandler) handleForcedChange(d *types.ConsensusDigest) error {
 	return nil
 }
 
-func (h *digestHandler) handleOnDisabled(d *types.ConsensusDigest) error {
+func (h *DigestHandler) handleOnDisabled(d *types.ConsensusDigest) error {
 	od := &types.OnDisabled{}
 	dec, err := scale.Decode(d.Data[1:], od)
 	if err != nil {
@@ -365,7 +369,7 @@ func (h *digestHandler) handleOnDisabled(d *types.ConsensusDigest) error {
 	return nil
 }
 
-func (h *digestHandler) handlePause(d *types.ConsensusDigest) error {
+func (h *DigestHandler) handlePause(d *types.ConsensusDigest) error {
 	curr, err := h.blockState.BestBlockHeader()
 	if err != nil {
 		return err
@@ -393,7 +397,7 @@ func (h *digestHandler) handlePause(d *types.ConsensusDigest) error {
 	return nil
 }
 
-func (h *digestHandler) handleResume(d *types.ConsensusDigest) error {
+func (h *DigestHandler) handleResume(d *types.ConsensusDigest) error {
 	curr, err := h.blockState.BestBlockHeader()
 	if err != nil {
 		return err

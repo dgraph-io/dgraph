@@ -286,7 +286,7 @@ func TestSend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	err = nodeA.host.send(addrInfosB[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -487,13 +487,13 @@ func TestExistingStream(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	stream := nodeA.host.getStream(nodeB.host.id())
+	stream := nodeA.host.getStream(nodeB.host.id(), "")
 	if stream != nil {
 		t.Error("node A should not have an outbound stream")
 	}
 
 	// node A opens the stream to send the first message
-	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	err = nodeA.host.send(addrInfosB[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -504,13 +504,13 @@ func TestExistingStream(t *testing.T) {
 		t.Error("node B timeout waiting for message from node A")
 	}
 
-	stream = nodeA.host.getStream(nodeB.host.id())
+	stream = nodeA.host.getStream(nodeB.host.id(), "")
 	if stream == nil {
 		t.Error("node A should have an outbound stream")
 	}
 
 	// node A uses the stream to send a second message
-	err = nodeA.host.send(addrInfosB[0].ID, TestMessage)
+	err = nodeA.host.send(addrInfosB[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -521,18 +521,18 @@ func TestExistingStream(t *testing.T) {
 		t.Error("node B timeout waiting for message from node A")
 	}
 
-	stream = nodeA.host.getStream(nodeB.host.id())
+	stream = nodeA.host.getStream(nodeB.host.id(), "")
 	if stream == nil {
 		t.Error("node A should have an outbound stream")
 	}
 
-	stream = nodeB.host.getStream(nodeA.host.id())
+	stream = nodeB.host.getStream(nodeA.host.id(), "")
 	if stream != nil {
 		t.Error("node B should not have an outbound stream")
 	}
 
 	// node B opens the stream to send the first message
-	err = nodeB.host.send(addrInfosA[0].ID, TestMessage)
+	err = nodeB.host.send(addrInfosA[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,13 +543,13 @@ func TestExistingStream(t *testing.T) {
 		t.Error("node A timeout waiting for message from node B")
 	}
 
-	stream = nodeB.host.getStream(nodeA.host.id())
+	stream = nodeB.host.getStream(nodeA.host.id(), "")
 	if stream == nil {
 		t.Error("node B should have an outbound stream")
 	}
 
 	// node B uses the stream to send a second message
-	err = nodeB.host.send(addrInfosA[0].ID, TestMessage)
+	err = nodeB.host.send(addrInfosA[0].ID, "", TestMessage)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -560,7 +560,7 @@ func TestExistingStream(t *testing.T) {
 		t.Error("node A timeout waiting for message from node B")
 	}
 
-	stream = nodeB.host.getStream(nodeA.host.id())
+	stream = nodeB.host.getStream(nodeA.host.id(), "")
 	if stream == nil {
 		t.Error("node B should have an outbound stream")
 	}

@@ -18,7 +18,6 @@ package dot
 
 import (
 	"flag"
-	"math/big"
 	"net/url"
 	"testing"
 	"time"
@@ -29,8 +28,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/stretchr/testify/require"
 )
-
-// State Service
 
 // TestCreateStateService tests the createStateService method
 func TestCreateStateService(t *testing.T) {
@@ -53,8 +50,6 @@ func TestCreateStateService(t *testing.T) {
 	// TODO: improve dot tests #687
 	require.NotNil(t, stateSrvc)
 }
-
-// Core Service
 
 // TestCreateCoreService tests the createCoreService method
 func TestCreateCoreService(t *testing.T) {
@@ -85,16 +80,40 @@ func TestCreateCoreService(t *testing.T) {
 
 	coreMsgs := make(chan network.Message)
 	networkMsgs := make(chan network.Message)
-	syncChan := make(chan *big.Int)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
 	require.NotNil(t, coreSrvc)
 }
 
-// Network Service
+func TestCreateSyncService(t *testing.T) {
+	cfg := NewTestConfig(t)
+	require.NotNil(t, cfg)
+
+	genFile := NewTestGenesisFile(t, cfg)
+	require.NotNil(t, genFile)
+
+	defer utils.RemoveTestDir(t)
+
+	cfg.Init.Genesis = genFile.Name()
+
+	err := InitNode(cfg)
+	require.Nil(t, err)
+
+	stateSrvc, err := createStateService(cfg)
+	require.NoError(t, err)
+
+	ks := keystore.NewKeystore()
+	require.NotNil(t, ks)
+	rt, err := createRuntime(cfg, stateSrvc, ks)
+	require.NoError(t, err)
+
+	cfg.Core.BabeThreshold = nil
+	_, err = createSyncService(cfg, stateSrvc, nil, nil, rt)
+	require.NoError(t, err)
+}
 
 // TestCreateNetworkService tests the createNetworkService method
 func TestCreateNetworkService(t *testing.T) {
@@ -116,16 +135,13 @@ func TestCreateNetworkService(t *testing.T) {
 
 	coreMsgs := make(chan network.Message)
 	networkMsgs := make(chan network.Message)
-	syncChan := make(chan *big.Int)
 
-	networkSrvc, err := createNetworkService(cfg, stateSrvc, coreMsgs, networkMsgs, syncChan)
+	networkSrvc, err := createNetworkService(cfg, stateSrvc, coreMsgs, networkMsgs, nil)
 	require.Nil(t, err)
 
 	// TODO: improve dot tests #687
 	require.NotNil(t, networkSrvc)
 }
-
-// RPC Service
 
 // TestCreateRPCService tests the createRPCService method
 func TestCreateRPCService(t *testing.T) {
@@ -156,7 +172,7 @@ func TestCreateRPCService(t *testing.T) {
 	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{} // TODO: rpc service without network service
@@ -275,7 +291,7 @@ func TestNewWebSocketServer(t *testing.T) {
 	rt, err := createRuntime(cfg, stateSrvc, ks)
 	require.NoError(t, err)
 
-	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs, make(chan *big.Int))
+	coreSrvc, err := createCoreService(cfg, nil, nil, rt, ks, stateSrvc, coreMsgs, networkMsgs)
 	require.Nil(t, err)
 
 	networkSrvc := &network.Service{}

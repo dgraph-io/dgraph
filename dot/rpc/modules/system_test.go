@@ -37,6 +37,24 @@ var (
 	testPeers = []common.PeerInfo{}
 )
 
+type mockSyncer struct{}
+
+func (s *mockSyncer) CreateBlockResponse(msg *network.BlockRequestMessage) (*network.BlockResponseMessage, error) {
+	return nil, nil
+}
+
+func (s *mockSyncer) HandleBlockResponse(msg *network.BlockResponseMessage) *network.BlockRequestMessage {
+	return nil
+}
+
+func (s *mockSyncer) HandleBlockAnnounce(msg *network.BlockAnnounceMessage) *network.BlockRequestMessage {
+	return nil
+}
+
+func (s *mockSyncer) HandleSeenBlocks(num *big.Int) *network.BlockRequestMessage {
+	return nil
+}
+
 func newNetworkService(t *testing.T) *network.Service {
 	testDir := path.Join(os.TempDir(), "test_data")
 
@@ -46,7 +64,7 @@ func newNetworkService(t *testing.T) *network.Service {
 		BasePath:     testDir,
 		MsgRec:       make(chan network.Message),
 		MsgSend:      make(chan network.Message),
-		SyncChan:     make(chan *big.Int),
+		Syncer:       &mockSyncer{},
 	}
 
 	srv, err := network.NewService(cfg)
