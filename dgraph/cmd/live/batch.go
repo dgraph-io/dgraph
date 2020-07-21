@@ -86,9 +86,11 @@ type loader struct {
 	uidsLock  sync.RWMutex
 
 	reqNum   uint64
-	reqs     chan request
+	reqs     chan *request
 	zeroconn *grpc.ClientConn
 	schema   *schema
+
+	conflictGenerator func(string) (uint64, error)
 }
 
 // Counter keeps a track of various parameters about a batch mutation. Running totals are printed
@@ -135,9 +137,9 @@ func handleError(err error, isRetry bool) {
 	}
 }
 
-func (l *loader) infinitelyRetry(req request) {
+func (l *loader) infinitelyRetry(req *request) {
 	defer l.retryRequestsWg.Done()
-	defer l.deregister(&req)
+	defer l.deregister(req)
 	nretries := 1
 	for i := time.Millisecond; ; i *= 2 {
 		txn := l.dc.NewTxn()
@@ -162,7 +164,7 @@ func (l *loader) infinitelyRetry(req request) {
 	}
 }
 
-func (l *loader) request(req request) {
+func (l *loader) request(req *request) {
 	atomic.AddUint64(&l.reqNum, 1)
 	txn := l.dc.NewTxn()
 	req.CommitNow = true
@@ -171,7 +173,7 @@ func (l *loader) request(req request) {
 	if err == nil {
 		atomic.AddUint64(&l.nquads, uint64(len(req.Set)))
 		atomic.AddUint64(&l.txns, 1)
-		l.deregister(&req)
+		l.deregister(req)
 		return
 	}
 	handleError(err, false)
@@ -242,6 +244,14 @@ func fingerprintEdge(t *pb.DirectedEdge, pred *predicate) uint64 {
 	return id
 }
 
+func fingerPrintUid(uid string) (uint64, error) {
+	return farm.Fingerprint64([]byte(uid)), nil
+}
+
+func parseUid(uid string) (uint64, error) {
+	return strconv.ParseUint(uid, 0, 64)
+}
+
 func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	pred, found := l.schema.preds[nq.Predicate]
 
@@ -254,7 +264,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 
 	// Calculates the conflict keys, inspired by the logic in
 	// addMutationInteration in posting/list.go.
-	sid, err := strconv.ParseUint(nq.Subject, 0, 64)
+	sid, err := l.conflictGenerator(nq.Subject)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +273,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	var de *pb.DirectedEdge
 
 	if nq.ObjectValue == nil {
-		oid, _ = strconv.ParseUint(nq.ObjectId, 0, 64)
+		oid, _ = l.conflictGenerator(nq.ObjectId)
 		de = createUidEdge(nq, sid, oid)
 	} else {
 		var err error
@@ -284,7 +294,7 @@ func (l *loader) conflictKeysForNQuad(nq *api.NQuad) ([]uint64, error) {
 	}
 
 	if pred.Reverse {
-		oi, err := strconv.ParseUint(nq.ObjectId, 0, 64)
+		oi, err := l.conflictGenerator(nq.ObjectId)
 		if err != nil {
 			return keys, err
 		}
@@ -375,14 +385,14 @@ func (l *loader) deregister(req *request) {
 func (l *loader) makeRequests() {
 	defer l.requestsWg.Done()
 
-	buffer := make([]request, 0, l.opts.bufferSize)
+	buffer := make([]*request, 0, l.opts.bufferSize)
 	drain := func(maxSize int) {
 		for len(buffer) > maxSize {
 			i := 0
 			for _, req := range buffer {
 				// If there is no conflict in req, we will use it
 				// and then it would shift all the other reqs in buffer
-				if !l.addConflictKeys(&req) {
+				if !l.addConflictKeys(req) {
 					buffer[i] = req
 					i++
 					continue
@@ -395,8 +405,8 @@ func (l *loader) makeRequests() {
 	}
 
 	for req := range l.reqs {
-		req.conflicts = l.conflictKeysForReq(&req)
-		if l.addConflictKeys(&req) {
+		req.conflicts = l.conflictKeysForReq(req)
+		if l.addConflictKeys(req) {
 			l.request(req)
 		} else {
 			buffer = append(buffer, req)

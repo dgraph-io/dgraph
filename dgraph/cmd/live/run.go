@@ -68,6 +68,7 @@ type options struct {
 	httpAddr       string
 	bufferSize     int
 	ludicrousMode  bool
+	upsert         string
 	key            x.SensitiveByteSlice
 }
 
@@ -93,6 +94,7 @@ type schema struct {
 type request struct {
 	*api.Mutation
 	conflicts []uint64
+	query     string
 }
 
 func (l *schema) init() {
@@ -149,7 +151,9 @@ func init() {
 	flag.StringP("user", "u", "", "Username if login is required.")
 	flag.StringP("password", "p", "", "Password of the user.")
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
-	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should only be done when alpha is under ludicrous mode)")
+	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
+		"only be done when alpha is under ludicrous mode)")
+	flag.StringP("upsert", "u", "", "run in upsert mode, would be slower")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -272,6 +276,31 @@ func (l *loader) processFile(ctx context.Context, filename string, key x.Sensiti
 	return l.processLoadFile(ctx, rd, chunker.NewChunker(loadType, opt.batchSize))
 }
 
+func (l *loader) addUpsert(req *request) {
+	ids := make(map[string]struct{})
+
+	for _, i := range req.Mutation.Set {
+		ids[i.Subject] = struct{}{}
+		i.Subject = fmt.Sprintf("uid(%s)", i.Subject)
+		if len(i.ObjectId) > 0 {
+			ids[i.ObjectId] = struct{}{}
+			i.ObjectId = fmt.Sprintf("uid(%s)", i.ObjectId)
+		}
+	}
+
+	query := ""
+	for i, _ := range ids {
+		query += fmt.Sprintf(`uid(%s) <%s> "%s" . \n`, i, opt.upsert, i)
+		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
+			Subject:     fmt.Sprintf("uid(%s)", i),
+			Predicate:   opt.upsert,
+			ObjectValue: &api.Value{Val: &api.Value_StrVal{StrVal: i}},
+		})
+	}
+
+	req.query = "query {\n" + query + "}"
+}
+
 func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunker.Chunker) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -308,7 +337,12 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				if len(buffer) < opt.batchSize {
 					sz = len(buffer)
 				}
-				mu := request{Mutation: &api.Mutation{Set: buffer[:sz]}}
+
+				mu := &request{Mutation: &api.Mutation{Set: buffer[:sz]}}
+				if opt.upsert != "" {
+					l.addUpsert(mu)
+				}
+
 				l.reqs <- mu
 				buffer = buffer[sz:]
 			}
@@ -319,11 +353,13 @@ func (l *loader) processLoadFile(ctx context.Context, rd *bufio.Reader, ck chunk
 				continue
 			}
 
-			l.allocateUids(nqs)
-			for _, nq := range nqs {
-				nq.Subject = l.uid(nq.Subject)
-				if len(nq.ObjectId) > 0 {
-					nq.ObjectId = l.uid(nq.ObjectId)
+			if opt.upsert == "" {
+				l.allocateUids(nqs)
+				for _, nq := range nqs {
+					nq.Subject = l.uid(nq.Subject)
+					if len(nq.ObjectId) > 0 {
+						nq.ObjectId = l.uid(nq.ObjectId)
+					}
 				}
 			}
 
@@ -422,6 +458,7 @@ func run() error {
 		httpAddr:       Live.Conf.GetString("http"),
 		bufferSize:     Live.Conf.GetInt("bufferSize"),
 		ludicrousMode:  Live.Conf.GetBool("ludicrous_mode"),
+		upsert:         Live.Conf.GetString("upsert"),
 	}
 	if opt.key, err = enc.ReadKey(Live.Conf); err != nil {
 		fmt.Printf("unable to read key %v", err)
@@ -447,6 +484,12 @@ func run() error {
 
 	l := setup(bmOpts, dg)
 	defer l.zeroconn.Close()
+
+	if opt.upsert == "" {
+		l.conflictGenerator = parseUid
+	} else {
+		l.conflictGenerator = fingerPrintUid
+	}
 
 	if len(opt.schemaFile) > 0 {
 		err := processSchemaFile(ctx, opt.schemaFile, opt.key, dg)
