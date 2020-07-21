@@ -279,13 +279,12 @@ func TestJWTExpiry(t *testing.T) {
 			md := metadata.New(map[string]string{"authorizationJwt": tcase.token})
 			ctx := metadata.NewIncomingContext(context.Background(), md)
 
-			customClaims, err := authorization.ExtractCustomClaims(ctx)
+			authVar, err := authorization.ExtractAuthVariables(ctx)
 			if tcase.invalid {
 				require.True(t, strings.Contains(err.Error(), "token is expired"))
 				return
 			}
 
-			authVar := customClaims.AuthVariables
 			result := map[string]interface{}{
 				"ROLE": "ADMIN",
 				"USER": "50950b40-262f-4b26-88a7-cbbb780b2176",
