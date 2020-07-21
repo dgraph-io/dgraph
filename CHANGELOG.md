@@ -20,7 +20,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Sentry opt out banner. ([#5727][]) 
 - Replace shutdownCh and wait groups to a y.Closer for shutting down Alpha. ([#5560][])
 - Update badger to commit [e7b6e76f96e8][]. ([#5537][])
-- Update Badger ([#5661][])
+- Update Badger ([#5661][], [#6034][])
   - Fix assert in background compression and encryption. ([dgraph-io/badger#1366][])
   - GC: Consider size of value while rewriting ([dgraph-io/badger#1357][])
   - Restore: Account for value size as well ([dgraph-io/badger#1358][])
@@ -76,6 +76,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 ### Fixed
 
 - GraphQL
+  - Validate JWT Claims and test JWT expiry. ([#6050][])
   - Validate subscriptions in Operation function. ([#5983][]) 	
   - Nested auth queries no longer search through all possible records. ([#5950][])	
   - Apply auth rules on type having @dgraph directive. ([#5863][])	
@@ -134,7 +135,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Fix val queries when ACL is enabled. Fixes [#5687][]. ([#5995][])
 - Return error if server is not ready. ([#6020][]) 	
 - Reduce memory consumption of the map. ([#5957][]) 	
-- vault_format support for online restore and gql ([#5758][])	
+- Cancel the context when opening connection to leader for streaming snapshot. ([#6045][])
 - **Breaking changes**
   - [BREAKING] Namespace dgraph internal types/predicates with `dgraph.` Fixes [#4878][]. ([#5185][])
   - [BREAKING] Remove shorthand for store_xids in bulk loader.  ([#5148][])
@@ -142,9 +143,11 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Enterprise:
   - Backup: Change groupId from int to uint32. ([#5605][])
   - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
+  - Backup: - Fix segmentation fault when calling the /admin/backup edpoint. ([#6043][])
   - Restore: Make backupId optional in restore GraphQL interface. ([#5685][])
   - Restore: Move tablets to right group when restoring a backup. ([#5682][])
   - Restore: Only processes backups for the alpha's group. ([#5588][])
+  - vault_format support for online restore and gql ([#5758][])	
 
 [#5661]: https://github.com/dgraph-io/dgraph/issues/5661
 [dgraph-io/badger#1366]: https://github.com/dgraph-io/badger/issues/1366
@@ -158,6 +161,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [dgraph-io/badger#1328]: https://github.com/dgraph-io/badger/issues/1328
 [dgraph-io/badger#1341]: https://github.com/dgraph-io/badger/issues/1341
 [dgraph-io/badger#1345]: https://github.com/dgraph-io/badger/issues/1345
+[#6050]: https://github.com/dgraph-io/dgraph/issues/6050
+[#6045]: https://github.com/dgraph-io/dgraph/issues/6045
 [#5725]: https://github.com/dgraph-io/dgraph/issues/5725
 [#5579]: https://github.com/dgraph-io/dgraph/issues/5579
 [#5685]: https://github.com/dgraph-io/dgraph/issues/5685
@@ -296,6 +301,8 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 [#6020]: https://github.com/dgraph-io/dgraph/issues/6020
 [#5950]: https://github.com/dgraph-io/dgraph/issues/5950
 [#5809]: https://github.com/dgraph-io/dgraph/issues/5809
+[#6034]: https://github.com/dgraph-io/dgraph/issues/6034
+[#6043]: https://github.com/dgraph-io/dgraph/issues/6043
 
 ## [20.03.4] - Unreleased
 [20.03.4]: https://github.com/dgraph-io/dgraph/compare/v20.03.3...v20.03.4
