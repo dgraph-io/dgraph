@@ -153,7 +153,7 @@ func init() {
 	flag.StringP("bufferSize", "m", "100", "Buffer for each thread")
 	flag.Bool("ludicrous_mode", false, "Run live loader in ludicrous mode (Should "+
 		"only be done when alpha is under ludicrous mode)")
-	flag.StringP("upsert", "u", "", "run in upsert mode, would be slower")
+	flag.StringP("upsert", "U", "", "run in upsert mode, would be slower")
 
 	// Encryption and Vault options
 	enc.RegisterFlags(flag)
@@ -290,7 +290,8 @@ func (l *loader) addUpsert(req *request) {
 
 	query := ""
 	for i, _ := range ids {
-		query += fmt.Sprintf(`uid(%s) <%s> "%s" . \n`, i, opt.upsert, i)
+		query += fmt.Sprintf(`    %s as var(func: eq(%s, "%s"))`, i, opt.upsert, i)
+		query += "\n"
 		req.Mutation.Set = append(req.Mutation.Set, &api.NQuad{
 			Subject:     fmt.Sprintf("uid(%s)", i),
 			Predicate:   opt.upsert,
@@ -424,7 +425,7 @@ func setup(opts batchMutationOptions, dc *dgo.Dgraph) *loader {
 		opts:      opts,
 		dc:        dc,
 		start:     time.Now(),
-		reqs:      make(chan request, opts.Pending*2),
+		reqs:      make(chan *request, opts.Pending*2),
 		conflicts: make(map[uint64]struct{}),
 		alloc:     alloc,
 		db:        db,
