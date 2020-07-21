@@ -144,7 +144,7 @@ and this project will adhere to [Calendar Versioning](https://calver.org/) start
 - Enterprise:
   - Backup: Change groupId from int to uint32. ([#5605][])
   - Backup: Use a sync.Pool to allocate KVs during backup. ([#5579][])
-  - Backup: - Fix segmentation fault when calling the /admin/backup edpoint. ([#6043][])
+  - Backup: Fix segmentation fault when calling the /admin/backup edpoint. ([#6043][])
   - Restore: Make backupId optional in restore GraphQL interface. ([#5685][])
   - Restore: Move tablets to right group when restoring a backup. ([#5682][])
   - Restore: Only processes backups for the alpha's group. ([#5588][])
