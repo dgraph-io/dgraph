@@ -258,7 +258,7 @@ createTar darwin
 createTar linux
 
 echo "Release $TAG is ready."
-docker run -it dgraph/dgraph:$DOCKER_TAG dgraph
+docker run dgraph/dgraph:$DOCKER_TAG dgraph
 ls -alh $TMP
 
 set +o xtrace
